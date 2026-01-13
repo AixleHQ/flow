@@ -1,0 +1,39 @@
+{
+  "quality_issues": [
+    {
+      "title": "N+1 Network Calls in Inventory Operations",
+      "severity": "high",
+      "evidence": "for (OrderItemRequest itemRequest : request.getItems()) { if (!inventoryService.isAvailable(...)) ... } (lines 54-56) and for (OrderItem item : savedOrder.getItems()) { inventoryService.reserveInventory(...) } (lines 73-75)",
+      "why_it_matters": "Executing remote service calls inside a loop leads to linear performance degradation as order size increases. This can cause connection pool exhaustion and high latency during checkout, as each item requires a separate network round-trip.",
+      "suggested_fix": "Refactor InventoryService to support bulk availability checks and bulk reservations, passing the entire list of items in a single call."
+    },
+    {
+      "title": "Potential Distributed Data Inconsistency (Dual Write)",
+      "severity": "high",
+      "evidence": "shippingService.createShippingLabel(order); order.setStatus(OrderStatus.SHIPPED); orderRepository.save(order); (lines 114-116)",
+      "why_it_matters": "The method is marked @Transactional, but shippingService.createShippingLabel likely involves an external side effect. If the subsequent orderRepository.save() fails or the transaction fails to commit, the shipping label has already been created in an external system while the local database rolls back, leading to 'ghost' shipments.",
+      "suggested_fix": "Use the Transactional Outbox pattern or publish an event after the transaction commits to trigger external side effects like shipping."
+    },
+    {
+      "title": "Generic Exception Swallowing in Payment Flow",
+      "severity": "medium",
+      "evidence": "catch (Exception e) { order.setStatus(OrderStatus.PAYMENT_FAILED); orderRepository.save(order); releaseInventory(order); throw new OrderException(\"Payment processing failed\", e); } (lines 95-100)",
+      "why_it_matters": "Catching the base 'Exception' class includes RuntimeExceptions (like NullPointerException). If a bug exists in the success logic, it will be incorrectly treated as a payment failure, and inventory will be released even if the payment actually succeeded.",
+      "suggested_fix": "Catch specific checked exceptions from the paymentService and allow RuntimeExceptions to propagate naturally to trigger a standard transaction rollback."
+    },
+    {
+      "title": "Field Injection via @Autowired",
+      "severity": "low",
+      "evidence": "@Autowired private OrderRepository orderRepository; (lines 30-41)",
+      "why_it_matters": "Field injection makes unit testing harder (requires reflection) and hides dependencies. It also prevents the use of 'final' for immutable service dependencies, which is a best practice for thread safety and clarity.",
+      "suggested_fix": "Use constructor-based injection to ensure dependencies are provided at instantiation time and allow for final fields."
+    }
+  ],
+  "opportunities": [
+    "Implement a State Machine pattern for OrderStatus transitions to prevent invalid state jumps (e.g., PENDING -> SHIPPED without payment).",
+    "Move the total amount calculation logic into the Order entity or a Domain Service to follow Domain-Driven Design principles and improve encapsulation.",
+    "Use Spring's @Validated or JSR-303 annotations on CreateOrderRequest instead of manual validation in the service layer.",
+    "Implement idempotency keys for the processPayment method to prevent double-charging if the client retries a timed-out request.",
+    "Inject a java.time.Clock bean for LocalDateTime.now() to improve the testability of time-dependent logic."
+  ]
+}

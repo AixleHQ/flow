@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+
+# Start Ruby Temporal worker
+
+require_relative "../config/environment"
+
+logger = Logger.new($stdout)
+
+begin
+  logger.info("Ruby worker - registered workflows: [#{TemporalService.workflows.map{|wf| wf.new.name }.join(', ')}]")
+  logger.info("Ruby worker - registered activities: [#{TemporalService.activities.map{|act| act.new.name }.join(', ')}]")
+
+  logger.info("Ruby worker - start syncing schedules")
+  TemporalService.sync_schedules
+  logger.info("Ruby worker - schedules synced")
+
+  logger.info("Ruby worker - listening for tasks")
+  TemporalService.worker.run(shutdown_signals: ['SIGINT', 'SIGTERM'])
+rescue Interrupt
+  logger.info("Ruby worker - interrupted")
+  exit 0
+rescue StandardError => e
+  logger.error("Ruby worker - fatal error: #{e.message}")
+  logger.error(e.backtrace.join("\n"))
+  exit 1
+end
+

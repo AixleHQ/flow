@@ -1,0 +1,145 @@
+---
+description: This rule governs the process of creating and modifying Makefiles. It should be applied whenever: (1) The user requests to create a new Makefile, (2) The user asks to modify an existing Makefile, (3) New components or dependencies are added to the project that may require Makefile updates, or (4) The user needs help understanding the available commands in a Makefile. This rule ensures consistent Makefile structure, comprehensive command documentation, and proper integration of testing and maintenance tasks. It is particularly important for maintaining project build processes, simplifying development workflows, and ensuring all team members can easily understand and use the build system.
+globs:
+alwaysApply: false
+---
+- Implement linting and formatting check commands to ensure code quality
+- When new dependencies or components are added to the project, proactively suggest appropriate Makefile commands
+- Use consistent naming conventions for all Makefile targets
+- Include comments above each command to explain its purpose
+- Group related commands together (e.g., development, testing, deployment)
+- Ensure all commands have proper dependency chains to avoid redundant operations
+- Use variables for paths, tools, and configuration to make the Makefile maintainable
+- For complex commands, break them down into smaller sub-commands
+- Add `.PHONY` directive for targets that don't represent files
+
+<example>
+.PHONY: setup lint test
+setup:
+	docker-compose build
+	docker-compose run --rm web make deps db-prepare
+shell:
+	docker-compose run --rm web bash
+deps:
+	bundle install
+	yarn install
+db-prepare:
+	bundle exec rails db:create db:migrate
+db-reset:
+	bundle exec rails db:drop db:create db:migrate
+db-seed:
+	bundle exec rails db:seed
+check: lint test
+lint:  fsd eslint-fix rubocop-fix brakeman
+test: db-prepare rails-test
+rails-test:
+	bundle exec rails test
+rubocop:
+	bundle exec rubocop
+rubocop-fix:
+	bundle exec rubocop -a
+eslint:
+	yarn lint
+eslint-fix:
+	yarn lint:fix
+fsd:
+	yarn run steiger app/frontend
+fsd-fix:
+	yarn run steiger app/frontend --fix
+brakeman:
+	bundle exec brakeman -q -z --no-pager
+default: check
+help:
+	@echo "Available commands:"
+	@echo "  make setup      - Install dependencies"
+	@echo "  make db-prepare - Prepare database (create, migrate, seed)"
+	@echo "  make db-reset   - Reset database (drop, create, migrate, seed)"
+	@echo "  make check      - Run all linters and tests"
+	@echo "  make lint       - Run all linters (rubocop, eslint, brakeman)"
+	@echo "  make test       - Run all tests"
+	@echo "  make rails-test - Run Rails tests"
+	@echo "  make rubocop    - Run Rubocop"
+	@echo "  make rubocop-fix- Run Rubocop with auto-correction"
+	@echo "  make eslint     - Run ESLint"
+	@echo "  make eslint-fix - Run ESLint with auto-correction"
+	@echo "  make brakeman   - Run Brakeman security analysis"
+	@echo "  make default    - Same as 'check'"
+	@echo "  make help       - Show this help message"
+</example>
+<example>
+INSIDE_CONTAINER := $(shell if [ -f "/.dockerenv" ]; then echo "true"; else echo "false"; fi)
+ifeq ($(INSIDE_CONTAINER),true)
+  # INFRASTRUCTURE CONTAINER VARIABLES
+  WORKSPACE := $(shell terraform workspace show)
+  BUCKET := $(shell cat backend.tf | grep bucket | awk '{print $$3}' | tr -d '"')
+  TABLE := $(shell cat backend.tf | grep dynamodb_table | awk '{print $$3}' | tr -d '"')
+  ifeq ($(WORKSPACE),default)
+    REMOTE_TFVARS_PATH := "s3://$(BUCKET)/terraform.tfvars"
+    LOCAL_TFVARS_PATH := "../tfvars/terraform.tfvars"
+    REMOTE_STATE_PATH := "$(BUCKET)/terraform.tfstate"
+  else
+    REMOTE_TFVARS_PATH := "s3://$(BUCKET)/env:/$(WORKSPACE)/terraform.tfvars"
+    LOCAL_TFVARS_PATH := "tfvars/$(WORKSPACE)/terraform.tfvars"
+    REMOTE_STATE_PATH := "$(BUCKET)/env:/$(WORKSPACE)/terraform.tfstate"
+  endif
+endif
+.PHONY: push_vars pull_vars unlock rollback_state fmt
+push_vars:
+	aws s3 cp --sse="AES256" $(LOCAL_TFVARS_PATH) $(REMOTE_TFVARS_PATH)
+pull_vars:
+	aws s3 cp --sse="AES256" $(REMOTE_TFVARS_PATH) $(LOCAL_TFVARS_PATH)
+unlock:
+	@LOCK_ID=$$(aws dynamodb get-item --table-name $(TABLE) --key '{"LockID":{"S":$(REMOTE_STATE_PATH)}}' --output json | jq -r '.Item.Info.S | fromjson.ID // empty'); \
+	if [ -n "$$LOCK_ID" ]; then \
+		echo "Found lock: $$LOCK_ID"; \
+		terraform force-unlock -force $$LOCK_ID; \
+	else \
+		echo "No lock found"; \
+	fi
+rollback_state:
+	$(eval REMOTE_STATE_PREFIX := $(shell if [ "$(WORKSPACE)" = "default" ]; then echo "terraform.tfstate"; else echo "env:/$(WORKSPACE)/terraform.tfstate"; fi))
+	$(eval STATE_VERSIONS := '$(shell aws s3api list-object-versions --bucket $(BUCKET) --prefix $(REMOTE_STATE_PREFIX) --max-items 10 | jq -rc .Versions)')
+	$(eval PREVIOUS_VERSION := '$(shell echo $(STATE_VERSIONS) | jq -rc '.[1]')')
+	$(eval PREVIOUS_VERSION_ID := '$(shell echo $(PREVIOUS_VERSION) | jq -rc '.VersionId')')
+	$(eval PREVIOUS_VERSION_HASH := $(shell echo $(PREVIOUS_VERSION) | jq -rc '.ETag'))
+	$(eval TMP_FILE_STATE := $(shell mktemp))
+	aws s3api get-object --bucket $(BUCKET) --key $(REMOTE_STATE_PREFIX) --version-id $(PREVIOUS_VERSION_ID) $(TMP_FILE_STATE)
+	aws s3api put-object --bucket $(BUCKET) --key $(REMOTE_STATE_PREFIX) --body $(TMP_FILE_STATE)
+	$(eval TMP_FILE_LOCK := $(shell mktemp))
+	echo '{"LockID":{"S":"'$(BUCKET)/$(REMOTE_STATE_PREFIX)'-md5"},"Digest":{"S":"'$(PREVIOUS_VERSION_HASH)'"}}' > $(TMP_FILE_LOCK)
+	aws dynamodb put-item --table=$(TABLE) --item=file://$(TMP_FILE_LOCK)
+fmt:
+	terragrunt hclfmt
+	terraform fmt -recursive .
+.PHONY: login_aws shell
+login_aws:
+ifeq ($(INSIDE_CONTAINER),true)
+	@echo "Error: This command should be run on the host, not inside the container"
+	@exit 1
+else
+	aws-vault login terraform@palad -t $(shell op item get "terraform palad" --otp)
+endif
+shell:
+ifeq ($(INSIDE_CONTAINER),true)
+	@echo "Error: This command should be run on the host, not inside the container"
+	@exit 1
+else
+	aws-vault exec terraform@palad -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm infra bash
+endif
+help:
+	@echo "Available commands:"
+	@echo "  make shell      - Open a shell in the infrastructure container (requires aws-vault login and 1Password)"
+	@echo "  make login_aws  - Login to AWS using aws-vault and 1Password"
+	@echo "  make fmt        - Format the Terraform code"
+	@echo "  make push_vars  - Push the Terraform variables to the S3 bucket"
+	@echo "  make pull_vars  - Pull the Terraform variables from the S3 bucket"
+	@echo "  make unlock     - Unlock the Terraform state"
+	@echo "  make rollback_state - Restore the previous state version"
+</example>
+- When creating or modifying a Makefile, first analyze any existing commands to understand the current structure and naming conventions
+- Always include a `help` command that lists and describes all available commands
+- Implement linting and formatting check commands to ensure code quality
+- When new dependencies or components are added to the project, proactively suggest appropriate Makefile commands
+- Use consistent naming conventions for all Makefile targets
+- include comments above each command to explain its purpose
+- avoid comments inside commands

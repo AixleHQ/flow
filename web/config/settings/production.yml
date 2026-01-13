@@ -1,0 +1,9 @@
+authorization:
+  otp_enabled: true
+
+temporal:
+  enabled: true
+  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.palad.com' %>
+
+redis:
+  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.palad.com' %>

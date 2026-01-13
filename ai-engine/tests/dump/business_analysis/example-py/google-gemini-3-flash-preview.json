@@ -1,0 +1,48 @@
+{
+  "business_logic_factor": 0.8,
+  "primary_responsibility": "Manages user authentication workflows and session lifecycle, including credential verification, secure token generation, and session validation.",
+  "functional_group_candidates": [
+    {
+      "name": "User Authentication",
+      "user_goal": "Securely verify user identity and track login activity",
+      "operations": [
+        "authenticate",
+        "verify",
+        "update",
+        "hash"
+      ],
+      "entities": [
+        "User",
+        "Password"
+      ],
+      "business_rules": [
+        "User must exist in the system to authenticate",
+        "Password must match the stored hash using SHA-256",
+        "Last login timestamp must be updated upon successful authentication"
+      ],
+      "confidence": 0.95,
+      "business_domain_hint": "identity_and_access_management"
+    },
+    {
+      "name": "Session Management",
+      "user_goal": "Maintain and validate secure user sessions for persistent access",
+      "operations": [
+        "create",
+        "validate",
+        "read"
+      ],
+      "entities": [
+        "UserSession",
+        "User",
+        "Token"
+      ],
+      "business_rules": [
+        "Sessions expire after 24 hours",
+        "Session tokens must be cryptographically secure (URL-safe)",
+        "Validation requires the session to be non-expired relative to current UTC time"
+      ],
+      "confidence": 0.95,
+      "business_domain_hint": "identity_and_access_management"
+    }
+  ]
+}

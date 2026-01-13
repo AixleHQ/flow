@@ -1,0 +1,718 @@
+interactions:
+- request:
+    body: '{"messages": [{"content": "\nYou are a vector search query generator for
+      feature-level retrieval.\n\nInput:\n- A \"Task Context\" that describes a domain
+      and a specific feature in business language.\n- The feature may include a field
+      named \"technical_description\" (or similar) listing the key technical artifacts\n  (classes,
+      functions, methods, models, tables, endpoints, events) that implement this feature.\n\nGoal:\n-
+      Produce ONE short keyword-style query (6\u201312 tokens) that will retrieve
+      the most relevant technical artifacts\n  (source code, SQL, models, specs) for
+      this feature.\n\nHow to choose tokens:\n\n1. Technical tokens (primary source):\n   -
+      Locate the feature''s technical description section (e.g. a line or block starting
+      with \"technical_description\" or \"technical description\").\n   - Extract
+      the names of technical artifacts from that section: identifiers that look like
+      code symbols\n     (class names, function/method names, models, tables, endpoints,
+      events).\n   - From these, select several of the most specific and distinctive
+      identifiers.\n   - Each technical token in the query MUST be an exact substring
+      taken from the technical description\n     (case-insensitive). You may split
+      on dots or punctuation (e.g. from \"Module.Class.method\" you can use\n     \"Module\",
+      \"Class\", or \"method\"), but you MUST NOT invent new identifier names.\n\n2.
+      Business tokens (secondary):\n   - Optionally add 1\u20133 short business words
+      from the feature name or feature description\n     to reflect the main purpose
+      of the feature (for example, main actions or entities).\n   - Each business
+      token MUST be taken directly from the feature name or feature description\n     (case-insensitive),
+      without synonyms or rephrasing.\n\n3. Constraints:\n   - When a technical description
+      is present and non-empty, at least half of the tokens in the query\n     should
+      come from the technical description.\n   - Do NOT introduce new business concepts,
+      actor types, or resource types that are not present in the input.\n   - Do NOT
+      introduce names of technologies, protocols, standards, libraries, or frameworks
+      that do not appear in the input.\n   - Do NOT add generic buzzwords such as
+      \"pipeline\", \"module\", \"service\", \"orchestration\", \"microservice\",\n     \"governance\",
+      \"policy\", \"entitlement\", \"telemetry\", etc., unless they are explicitly
+      present.\n   - Do NOT create new joined identifier-style tokens (with underscores
+      or camel case) unless that exact form\n     is present in the technical description.\n\n4.
+      Fallback:\n   - If no technical description is present or it is clearly empty,
+      build the query only from the feature name\n     and feature description by
+      selecting the most informative nouns and verbs.\n\nOutput:\n- Return only the
+      final query as a space-separated list of tokens.\n", "role": "system"}, {"content":
+      "\n## Task Context\nDomain Name: User Authentication\nDomain Description: Description
+      for User Authentication\n\nFeature Name: User Login\nFeature Description: Allow
+      users to authenticate with email and password\nFeature technical description:
+      Technical implementation for User Login\n\n## Generate Search Query\nCreate
+      an optimal vector search query to find relevant documents for completing this
+      task.\nFocus on key domain concepts, entities, and technical terms.\n", "role":
+      "user"}], "model": "google/gemini-3-flash-preview", "reasoning_effort": "low",
+      "stream": false, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '3513'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+        HT42sPQT8FM6f/zxPwAAAP//AwB5QyRWDiMAAA==
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a655328a4e24d-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:51:50 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "You are a document relevance analyst for task
+      completion assessment.\n\nTask: Evaluate if the provided documents contain sufficient
+      information to successfully complete the specified task.\n\nContext: Consider
+      both the breadth and depth of information needed. The documents should provide
+      enough context, examples, and domain knowledge to execute the task effectively.\n\nOutput:
+      \"sufficient\" if documents provide adequate context for task completion, \"insufficient\"
+      if more information is needed\n\nRule: Focus on task completion capability rather
+      than general document relevance.", "role": "system"}, {"content": "\n## Task
+      Information\nTask Prompt: \nYou are an expert business analyst tasked with reconstructing
+      essential user stories for a specific feature. Your goal is to identify only
+      the PRIMARY, DIRECTLY RELATED user stories while maintaining strict feature
+      boundaries.\n\nCore Analysis Framework:\n0. SOURCE PRIORITISATION:\n   - When
+      both business-level artifacts (domain descriptions, feature descriptions, specifications,
+      BA documentation, diagrams) and technical artifacts (code, schemas, logs, data
+      models) are available in the retrieved context, always:\n     - Use business-level
+      artifacts as the primary source of truth for user goals, actors, and business
+      value.\n     - Use technical artifacts only as supporting evidence to confirm
+      or refine the behavior implied by the business-level artifacts.\n   - If there
+      is a conflict between a business document and technical implementation details,
+      follow the business document for defining user stories, and treat technical
+      details as implementation constraints that belong in justification, not in the
+      user story description.\n\n1. PRIMARY OWNERSHIP VALIDATION:\n   - This feature
+      belongs PRIMARILY to the target domain defined in context.\n   - Exclude any
+      user stories that would be better suited for other FEATURES in the same domain
+      (e.g., separate \"History\", \"View/Export\", \"Reporting\" features), even
+      if the domain is the same.\n   - Exclude any user stories that would be better
+      suited for other DOMAINS.\n   - Focus only on stories where this specific feature
+      is the primary business owner of the user goal.\n\n2. BUSINESS OBJECT CENTRALITY:\n   -
+      Identify the core business objects this feature manages.\n   - Generate stories
+      around complete business object lifecycles and complete user workflows involving
+      these objects.\n   - Avoid fragmenting one business goal into multiple stories
+      by data slices if they are all part of ONE coherent snapshot or workflow.\n   -
+      If multiple stories differ only by the type of data stored or retrieved but
+      share the same actor, goal, and business value, MERGE them into a single user
+      story.\n   - Do not create separate user stories for validation, eligibility,
+      permissions, or errors if they happen within the same user interaction. Keep
+      them as rules and behavior inside a single user story.\n\n3. USER STORY RECONSTRUCTION
+      RULES:\n   - Each story must represent a complete, valuable user workflow, not
+      a single technical step.\n   - Combine related CRUD operations into cohesive
+      business capabilities (e.g., \"capture a complete historical snapshot for an
+      algorithm run\", not separate stories for each table or entity involved).\n   -
+      Ensure each story delivers standalone business value from the user''s perspective,
+      not from the persistence layer perspective.\n   - Avoid atomic or purely technical
+      operations as separate stories if they cannot provide independent user value
+      without the rest of the workflow.    \n   - Do NOT create separate user stories
+      that only describe:\n     - data validation within an operation,\n     - parsing,
+      normalization, or transformation of input data that does not represent a distinct
+      user goal,\n     - enforcement of business rules or eligibility,\n     - permission
+      checks,\n     - error handling or surfacing inconsistencies,\n    when these
+      behaviors occur inside the same user workflow (same screen / same operation).
+      These aspects must be treated as part of one user story rather than separate
+      stories.\n\n\n4. SCOPE BOUNDARIES:\n   - Stories must directly contribute to
+      the feature''s PRIMARY purpose as described in the feature definition.\n   -
+      If the feature describes CREATION / EXECUTION (e.g., \"Trigger Run\", \"Create
+      Snapshots\"), do NOT add stories primarily about VIEWING, SEARCHING, or EXPORTING
+      results or history. Treat viewing / export / reporting as separate features
+      unless explicitly stated in the feature description.\n   - Exclude cross-cutting
+      concerns (logging, security, monitoring, infrastructure) unless they are explicitly
+      core to this feature.\n   - Maintain strict domain and feature boundaries: no
+      stories that span multiple domains or clearly separate features.\n   - Each
+      story should map to a distinct user goal that this feature alone is responsible
+      for.\n\n## User Story Structure Requirements\nFor each user story, provide:\n-
+      **name**: Clear, business-focused title that captures the user goal\n- **description**:
+      As a [user type], I want [goal] so that [business value]\n\n  USER TYPE RULES:\n  -
+      The [user type] MUST be a real business or technical role (e.g., product admin,
+      auditor, data analyst, operations engineer, system integrator).\n  - NEVER use
+      systems, services, or components as user types (e.g., \"data persistence system\",
+      \"backend service\", \"API gateway\").\n  - If the behavior describes purely
+      technical persistence or infrastructure, choose the closest human owner of that
+      behavior (e.g., \"data platform engineer\", \"compliance auditor\").\n\n- **justification**:
+      Internal analysis field. Provide an evidence-based justification for this user
+      story tied to feature context (business or technical). Maximum 300 words.\n\n##
+      User Story Structure Requirements\nFor each user story, provide:\n- **name**:
+      Clear, business-focused title that captures the user goal.\n- **description**:
+      As a [user type], I want [goal] so that [business value].\n\n  USER TYPE RULES:\n  -
+      The [user type] MUST be a real business or technical role (e.g., product admin,
+      auditor, data analyst, operations engineer, system integrator).\n  - NEVER use
+      systems, services, or components as user types (e.g., \"data persistence system\",
+      \"backend service\", \"API gateway\").\n  - If the behavior describes purely
+      technical persistence or infrastructure, choose the closest human owner of that
+      behavior (e.g., \"data platform engineer\", \"compliance auditor\").\n\n  NAMING
+      / TERMINOLOGY RULES:\n  - In **name** and **description**, use business terminology
+      taken from the domain and feature descriptions (for example, the way business
+      stakeholders would describe the concepts).\n  - Avoid internal technical identifiers
+      such as class names, table names, column names, abbreviations used only in code,
+      or other low-level implementation labels in the **name** and **description**.\n  -
+      Technical identifiers and implementation details may be referenced in the **justification**
+      field if they are helpful as supporting evidence.\n\n- **justification**: Internal
+      analysis field. Provide an evidence-based justification for this user story
+      tied to feature context (business or technical). Maximum 300 words.\n- **technical_description**:
+      brief note listing the key technical artifacts (models, classes, functions,
+      tables, endpoints, events) that implement this user story, using their exact
+      names from the retrieved context only.\n\n## Quality Guidelines\n- Each story
+      should be independently deliverable as a business capability.\n- Business value
+      should be clearly articulated.\n- Stories should follow the INVEST principles
+      (Independent, Negotiable, Valuable, Estimable, Small, Testable).\n- Focus on
+      user outcomes rather than system features or internal implementation details
+      in the description. Technical details and references belong in the justification.\n\n##
+      Output Requirements\nExtract only user stories that:\n1. Directly support the
+      feature''s primary purpose (not neighboring features like \"history\", \"reporting\",
+      \"view/export\", unless explicitly part of the feature description).\n2. Have
+      clear business value for the target domain defined in context and for a real
+      user role (not a system or component).\n3. Are supported by evidence in the
+      retrieved context. Prefer domain-level artifacts (domain and feature descriptions
+      and justifications, BA documentation) when available. \n   - Prefer domain-level
+      and business-level artifacts (domain descriptions, feature descriptions, specifications,
+      BA documentation, diagrams) as the primary source for defining actors, goals,
+      and business value.\n   - Use technical artifacts (code, schemas, logs, database
+      models) as secondary, supporting evidence: to confirm, refine, or constrain
+      the behavior implied by business documentation.\n   - If only technical artifacts
+      are available, infer the domain-level behavior from them and make this explicit
+      in the justification.\n4. Represent complete user workflows, not isolated technical
+      persistence operations.\n5. Can be independently implemented and tested as business
+      capabilities.\n6. Would NOT be more naturally grouped into a single broader
+      story with the same actor, goal, and value. If they would, merge them into that
+      broader story instead of keeping them separate.\n7. Do not fragment one user
+      workflow into multiple stories that differ only by technical concerns (validation,
+      error handling, partial steps, internal components). Each story must correspond
+      to a distinct, understandable goal for the user.\n\n## Domain & Feature Alignment
+      Filter (MANDATORY POST-PROCESSING)\nBefore returning the final list of user
+      stories, apply the following filter to each candidate story:\n- Domain ownership
+      check:\n  - Using only the domain description (ignore technical context), ask:
+      \u201cWould business stakeholders naturally consider this user goal part of
+      this domain\u2019s responsibilities?\u201d\n  - If the main goal, actor, or
+      business outcome clearly belongs to an upstream or downstream process (for example,
+      execution/operations, optimization, reporting/analytics, billing, or other separate
+      processes) rather than to this domain, EXCLUDE this story from the output.\n-
+      Feature ownership check:\n  - The core verb and outcome of the story must be
+      a direct paraphrase or small refinement of the feature description.\n  - If
+      the story\u2019s main goal introduces a new primary capability (for example,
+      assignment, optimization, reporting, configuration) that is not present in the
+      feature description, treat it as a different feature and EXCLUDE this story.\n-
+      Ambiguity rule:\n  - If you are uncertain whether the story belongs to this
+      feature or to another feature/domain, prefer to EXCLUDE it. Err on the side
+      of fewer, more tightly aligned stories.\n- Quantity rule:\n  - Do NOT add extra
+      stories just to cover all technical behaviors observed in the retrieved context.\n\nHuman
+      Prompt: \n## Context\n\n### Domain\n- name: User Authentication\n- description:
+      Description for User Authentication\n\n### Feature\n- name: User Login\n- description:
+      Allow users to authenticate with email and password\n\n\n## Task\nReconstruct
+      the essential user stories for this feature, following the analysis framework
+      and output requirements.\nUse the domain and feature descriptions and their
+      business rationales as the primary source of truth for user goals and responsibilities.
+      Use the retrieved context (business documents, diagrams, code, models) as supporting
+      evidence.\n\n\n## Documents to Evaluate\n[''\\n--- Document 1 ---\\nUser Authentication
+      Domain Overview:\\n\\nThe User Authentication domain handles all aspects of
+      user identity management including registration, login, password management,
+      multi-factor authentication, and session handling. This domain ensures secure
+      access to the system and manages user credentials.\\n\\n\\n--- Document 2 ---\\nAuthentication
+      Technical Specifications:\\n\\n- OAuth 2.0 and OpenID Connect integration\\n-
+      JWT token generation and validation\\n- Password hashing using bcrypt\\n- Session
+      management with Redis\\n- Rate limiting for login attempts\\n- Account lockout
+      mechanisms\\n- Password reset workflows\\n\\n\\n--- Document 3 ---\\nAuthentication
+      Features and Requirements:\\n\\n- User registration with email verification\\n-
+      Login with username/password or social providers\\n- Password strength validation\\n-
+      Two-factor authentication (2FA)\\n- Password reset via email\\n- Session timeout
+      and refresh\\n- Role-based access control (RBAC)\\n- Account management (profile
+      updates, deletion)'']\n\n## Assessment\nEvaluate if these documents provide
+      sufficient information to complete the task effectively.\nConsider domain knowledge,
+      examples, context, and completeness of information needed.\n\nRespond with exactly:
+      \"sufficient\" or \"insufficient\"\n", "role": "user"}], "model": "google/gemini-3-flash-preview",
+      "reasoning_effort": "low", "stream": false, "temperature": 0.1, "usage": {"include":
+      true}, "max_tokens": 8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '13019'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIA
+        AAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAA
+        AP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA
+        //9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD/
+        /2yRwW7bMBBE/2XOVCpZtYPwllN6KNoC7a0oBJpayRtTpMql7LSG/r1QVBlK4Ovs4vHN8gKuodGS
+        z4r73W5bPGyLMms/vRy/pEd6On/+XfzdfbTnUwmFPoYT1xSh8RRC6wgKXajJTYTX4ENLHXvOyqxx
+        Rg5ZH+nEdIZC2D+TTdCwB5PubOh6R4mDh4KNZBLV0IvB5l7BHgJbEuifF7jQ9jHsBdoPzik07FkO
+        VSQjwUNDUuih4E3iE1Xvp99/fP0GBfY1vUDnCh2JmJagL4jBETSMCEsyPk02wSfyk6kMTcOW6TWO
+        1Axi3KIw09m3czCOvxSGhdrH0PWpSuFIXqA323IzcZfK10GhkEIybr1ZTpuSoPO7PC82uwcFlmr/
+        JxyhG+OE1Ft8VVMy7GR61xp7oPpKyxXMUHNYB9P/rYJxfm0NGXpJkUxXsW8okrdUzUJz8Rvj/z5v
+        tHfqNmi5gazW8zwvxxsHWltd770uw51paVVmHP8BAAD//wMAfHt2KUUEAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a65714eece24d-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:52:03 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "\nYou are an expert business analyst tasked
+      with reconstructing essential user stories for a specific feature. Your goal
+      is to identify only the PRIMARY, DIRECTLY RELATED user stories while maintaining
+      strict feature boundaries.\n\nCore Analysis Framework:\n0. SOURCE PRIORITISATION:\n   -
+      When both business-level artifacts (domain descriptions, feature descriptions,
+      specifications, BA documentation, diagrams) and technical artifacts (code, schemas,
+      logs, data models) are available in the retrieved context, always:\n     - Use
+      business-level artifacts as the primary source of truth for user goals, actors,
+      and business value.\n     - Use technical artifacts only as supporting evidence
+      to confirm or refine the behavior implied by the business-level artifacts.\n   -
+      If there is a conflict between a business document and technical implementation
+      details, follow the business document for defining user stories, and treat technical
+      details as implementation constraints that belong in justification, not in the
+      user story description.\n\n1. PRIMARY OWNERSHIP VALIDATION:\n   - This feature
+      belongs PRIMARILY to the target domain defined in context.\n   - Exclude any
+      user stories that would be better suited for other FEATURES in the same domain
+      (e.g., separate \"History\", \"View/Export\", \"Reporting\" features), even
+      if the domain is the same.\n   - Exclude any user stories that would be better
+      suited for other DOMAINS.\n   - Focus only on stories where this specific feature
+      is the primary business owner of the user goal.\n\n2. BUSINESS OBJECT CENTRALITY:\n   -
+      Identify the core business objects this feature manages.\n   - Generate stories
+      around complete business object lifecycles and complete user workflows involving
+      these objects.\n   - Avoid fragmenting one business goal into multiple stories
+      by data slices if they are all part of ONE coherent snapshot or workflow.\n   -
+      If multiple stories differ only by the type of data stored or retrieved but
+      share the same actor, goal, and business value, MERGE them into a single user
+      story.\n   - Do not create separate user stories for validation, eligibility,
+      permissions, or errors if they happen within the same user interaction. Keep
+      them as rules and behavior inside a single user story.\n\n3. USER STORY RECONSTRUCTION
+      RULES:\n   - Each story must represent a complete, valuable user workflow, not
+      a single technical step.\n   - Combine related CRUD operations into cohesive
+      business capabilities (e.g., \"capture a complete historical snapshot for an
+      algorithm run\", not separate stories for each table or entity involved).\n   -
+      Ensure each story delivers standalone business value from the user''s perspective,
+      not from the persistence layer perspective.\n   - Avoid atomic or purely technical
+      operations as separate stories if they cannot provide independent user value
+      without the rest of the workflow.    \n   - Do NOT create separate user stories
+      that only describe:\n     - data validation within an operation,\n     - parsing,
+      normalization, or transformation of input data that does not represent a distinct
+      user goal,\n     - enforcement of business rules or eligibility,\n     - permission
+      checks,\n     - error handling or surfacing inconsistencies,\n    when these
+      behaviors occur inside the same user workflow (same screen / same operation).
+      These aspects must be treated as part of one user story rather than separate
+      stories.\n\n\n4. SCOPE BOUNDARIES:\n   - Stories must directly contribute to
+      the feature''s PRIMARY purpose as described in the feature definition.\n   -
+      If the feature describes CREATION / EXECUTION (e.g., \"Trigger Run\", \"Create
+      Snapshots\"), do NOT add stories primarily about VIEWING, SEARCHING, or EXPORTING
+      results or history. Treat viewing / export / reporting as separate features
+      unless explicitly stated in the feature description.\n   - Exclude cross-cutting
+      concerns (logging, security, monitoring, infrastructure) unless they are explicitly
+      core to this feature.\n   - Maintain strict domain and feature boundaries: no
+      stories that span multiple domains or clearly separate features.\n   - Each
+      story should map to a distinct user goal that this feature alone is responsible
+      for.\n\n## User Story Structure Requirements\nFor each user story, provide:\n-
+      **name**: Clear, business-focused title that captures the user goal\n- **description**:
+      As a [user type], I want [goal] so that [business value]\n\n  USER TYPE RULES:\n  -
+      The [user type] MUST be a real business or technical role (e.g., product admin,
+      auditor, data analyst, operations engineer, system integrator).\n  - NEVER use
+      systems, services, or components as user types (e.g., \"data persistence system\",
+      \"backend service\", \"API gateway\").\n  - If the behavior describes purely
+      technical persistence or infrastructure, choose the closest human owner of that
+      behavior (e.g., \"data platform engineer\", \"compliance auditor\").\n\n- **justification**:
+      Internal analysis field. Provide an evidence-based justification for this user
+      story tied to feature context (business or technical). Maximum 300 words.\n\n##
+      User Story Structure Requirements\nFor each user story, provide:\n- **name**:
+      Clear, business-focused title that captures the user goal.\n- **description**:
+      As a [user type], I want [goal] so that [business value].\n\n  USER TYPE RULES:\n  -
+      The [user type] MUST be a real business or technical role (e.g., product admin,
+      auditor, data analyst, operations engineer, system integrator).\n  - NEVER use
+      systems, services, or components as user types (e.g., \"data persistence system\",
+      \"backend service\", \"API gateway\").\n  - If the behavior describes purely
+      technical persistence or infrastructure, choose the closest human owner of that
+      behavior (e.g., \"data platform engineer\", \"compliance auditor\").\n\n  NAMING
+      / TERMINOLOGY RULES:\n  - In **name** and **description**, use business terminology
+      taken from the domain and feature descriptions (for example, the way business
+      stakeholders would describe the concepts).\n  - Avoid internal technical identifiers
+      such as class names, table names, column names, abbreviations used only in code,
+      or other low-level implementation labels in the **name** and **description**.\n  -
+      Technical identifiers and implementation details may be referenced in the **justification**
+      field if they are helpful as supporting evidence.\n\n- **justification**: Internal
+      analysis field. Provide an evidence-based justification for this user story
+      tied to feature context (business or technical). Maximum 300 words.\n- **technical_description**:
+      brief note listing the key technical artifacts (models, classes, functions,
+      tables, endpoints, events) that implement this user story, using their exact
+      names from the retrieved context only.\n\n## Quality Guidelines\n- Each story
+      should be independently deliverable as a business capability.\n- Business value
+      should be clearly articulated.\n- Stories should follow the INVEST principles
+      (Independent, Negotiable, Valuable, Estimable, Small, Testable).\n- Focus on
+      user outcomes rather than system features or internal implementation details
+      in the description. Technical details and references belong in the justification.\n\n##
+      Output Requirements\nExtract only user stories that:\n1. Directly support the
+      feature''s primary purpose (not neighboring features like \"history\", \"reporting\",
+      \"view/export\", unless explicitly part of the feature description).\n2. Have
+      clear business value for the target domain defined in context and for a real
+      user role (not a system or component).\n3. Are supported by evidence in the
+      retrieved context. Prefer domain-level artifacts (domain and feature descriptions
+      and justifications, BA documentation) when available. \n   - Prefer domain-level
+      and business-level artifacts (domain descriptions, feature descriptions, specifications,
+      BA documentation, diagrams) as the primary source for defining actors, goals,
+      and business value.\n   - Use technical artifacts (code, schemas, logs, database
+      models) as secondary, supporting evidence: to confirm, refine, or constrain
+      the behavior implied by business documentation.\n   - If only technical artifacts
+      are available, infer the domain-level behavior from them and make this explicit
+      in the justification.\n4. Represent complete user workflows, not isolated technical
+      persistence operations.\n5. Can be independently implemented and tested as business
+      capabilities.\n6. Would NOT be more naturally grouped into a single broader
+      story with the same actor, goal, and value. If they would, merge them into that
+      broader story instead of keeping them separate.\n7. Do not fragment one user
+      workflow into multiple stories that differ only by technical concerns (validation,
+      error handling, partial steps, internal components). Each story must correspond
+      to a distinct, understandable goal for the user.\n\n## Domain & Feature Alignment
+      Filter (MANDATORY POST-PROCESSING)\nBefore returning the final list of user
+      stories, apply the following filter to each candidate story:\n- Domain ownership
+      check:\n  - Using only the domain description (ignore technical context), ask:
+      \u201cWould business stakeholders naturally consider this user goal part of
+      this domain\u2019s responsibilities?\u201d\n  - If the main goal, actor, or
+      business outcome clearly belongs to an upstream or downstream process (for example,
+      execution/operations, optimization, reporting/analytics, billing, or other separate
+      processes) rather than to this domain, EXCLUDE this story from the output.\n-
+      Feature ownership check:\n  - The core verb and outcome of the story must be
+      a direct paraphrase or small refinement of the feature description.\n  - If
+      the story\u2019s main goal introduces a new primary capability (for example,
+      assignment, optimization, reporting, configuration) that is not present in the
+      feature description, treat it as a different feature and EXCLUDE this story.\n-
+      Ambiguity rule:\n  - If you are uncertain whether the story belongs to this
+      feature or to another feature/domain, prefer to EXCLUDE it. Err on the side
+      of fewer, more tightly aligned stories.\n- Quantity rule:\n  - Do NOT add extra
+      stories just to cover all technical behaviors observed in the retrieved context.\n",
+      "role": "system"}, {"content": "\n## Human Instructions\n\n## Context\n\n###
+      Domain\n- name: User Authentication\n- description: Description for User Authentication\n\n###
+      Feature\n- name: User Login\n- description: Allow users to authenticate with
+      email and password\n\n\n## Task\nReconstruct the essential user stories for
+      this feature, following the analysis framework and output requirements.\nUse
+      the domain and feature descriptions and their business rationales as the primary
+      source of truth for user goals and responsibilities. Use the retrieved context
+      (business documents, diagrams, code, models) as supporting evidence.\n\n\n##
+      Retrieved Context\n\n--- Document 1 ---\nUser Authentication Domain Overview:\n\nThe
+      User Authentication domain handles all aspects of user identity management including
+      registration, login, password management, multi-factor authentication, and session
+      handling. This domain ensures secure access to the system and manages user credentials.\n\n\n---
+      Document 2 ---\nAuthentication Technical Specifications:\n\n- OAuth 2.0 and
+      OpenID Connect integration\n- JWT token generation and validation\n- Password
+      hashing using bcrypt\n- Session management with Redis\n- Rate limiting for login
+      attempts\n- Account lockout mechanisms\n- Password reset workflows\n\n\n---
+      Document 3 ---\nAuthentication Features and Requirements:\n\n- User registration
+      with email verification\n- Login with username/password or social providers\n-
+      Password strength validation\n- Two-factor authentication (2FA)\n- Password
+      reset via email\n- Session timeout and refresh\n- Role-based access control
+      (RBAC)\n- Account management (profile updates, deletion)\n\n## Execute Task\nReturn
+      ONLY the JSON response exactly as specified in the Output Requirements. \nDo
+      not include explanations or extra text.\n", "role": "user"}], "model": "google/gemini-3-flash-preview",
+      "reasoning_effort": "low", "response_format": {"type": "json_schema", "json_schema":
+      {"schema": {"$defs": {"UserStoryItem": {"additionalProperties": false, "properties":
+      {"name": {"description": "The name of the user story.", "title": "Name", "type":
+      "string"}, "description": {"description": "The user story in the ''As a, I want,
+      so that'' format.", "title": "Description", "type": "string"}, "justification":
+      {"description": "Evidence-based justification for this user story tied to feature
+      context. Maximum 300 words.", "title": "Justification", "type": "string"}, "technical_description":
+      {"description": "A detailed technical description of the user story.", "title":
+      "Technical Description", "type": "string"}}, "required": ["name", "description",
+      "justification", "technical_description"], "title": "UserStoryItem", "type":
+      "object"}}, "additionalProperties": false, "properties": {"user_stories": {"description":
+      "A list of user stories extracted from the context.", "items": {"$ref": "#/$defs/UserStoryItem"},
+      "title": "User Stories", "type": "array"}}, "required": ["user_stories"], "title":
+      "UserStoryExtractionResult", "type": "object"}, "name": "UserStoryExtractionResult",
+      "strict": true}}, "stream": false, "temperature": 0.1, "usage": {"include":
+      true}, "max_tokens": 8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '13433'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-helper-method:
+      - chat.completions.parse
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a65cc2cc3e24d-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:52:09 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

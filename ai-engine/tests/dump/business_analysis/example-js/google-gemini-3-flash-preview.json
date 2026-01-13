@@ -1,0 +1,57 @@
+{
+  "business_logic_factor": 0.8,
+  "primary_responsibility": "Manages the shopping cart lifecycle, including item quantity adjustments, stock validation, price monitoring, and the transition to the checkout process.",
+  "functional_group_candidates": [
+    {
+      "name": "Shopping Cart Management",
+      "user_goal": "Manage items intended for purchase and prepare for checkout",
+      "operations": [
+        "read",
+        "update",
+        "delete",
+        "validate",
+        "calculate",
+        "clear"
+      ],
+      "entities": [
+        "Cart",
+        "CartItem",
+        "User",
+        "Product"
+      ],
+      "business_rules": [
+        "Minimum item quantity is 1; quantities less than 1 trigger item removal",
+        "Maximum item quantity is 99",
+        "Items must be in stock to proceed to checkout",
+        "Quantity cannot exceed available stock (maxQuantity)",
+        "Price consistency must be validated before checkout (current price must match added price)",
+        "User must be authenticated to initiate checkout",
+        "Cart must contain items to enable checkout"
+      ],
+      "confidence": 0.95,
+      "business_domain_hint": "e-commerce"
+    },
+    {
+      "name": "Checkout Initiation",
+      "user_goal": "Transition from shopping cart to a formal order payment process",
+      "operations": [
+        "create",
+        "validate",
+        "notify"
+      ],
+      "entities": [
+        "Checkout",
+        "Order",
+        "User",
+        "PriceBreakdown"
+      ],
+      "business_rules": [
+        "Checkout requires valid cart items and subtotal/tax/shipping calculations",
+        "Checkout initiation triggers event tracking for analytics",
+        "Successful initiation redirects user to a unique checkout session URL"
+      ],
+      "confidence": 0.9,
+      "business_domain_hint": "order_management"
+    }
+  ]
+}

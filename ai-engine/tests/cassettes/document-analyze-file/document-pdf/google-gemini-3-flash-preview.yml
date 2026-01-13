@@ -1,0 +1,330 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "system", "content": "\nAct as a senior document
+      analyst, your task is to analyze documents and create comprehensive summaries
+      that capture the essential information while maintaining the original content
+      for vector indexing.\n\n## Key Responsibilities\n\n**Document Analysis and Summary
+      Generation**: For each document, provide a comprehensive analysis with focus
+      on:\n\n1. **Summary Generation**: Create a concise but comprehensive summary
+      that captures:\n   - Main topic and purpose of the document\n   - Key points
+      and important information\n   - Document structure and organization\n   - Critical
+      insights and conclusions\n\n2. **Content Quality Assessment**: Evaluate the
+      document''s:\n   - Readability and clarity\n   - Information density\n   - Relevance
+      and usefulness\n   - Technical or business value\n\n3. **Key Points Extraction**:
+      Identify the most important:\n   - Facts and data points\n   - Arguments and
+      conclusions\n   - Recommendations and actions\n   - Technical specifications
+      or requirements\n\n## Analysis Guidelines\n\n**Summary Structure**:\n- Start
+      with a brief overview of the document''s purpose and scope\n- Include the main
+      topic and primary objectives\n- Highlight key findings and conclusions\n- Mention
+      important data, statistics, or technical details\n- Note the document''s structure
+      and organization\n- End with any critical insights or implications\n\n**Content
+      Assessment**:\n- Evaluate the document''s clarity and comprehensibility\n- Assess
+      the quality and relevance of information\n- Identify the document''s primary
+      audience and purpose\n- Determine the document''s business or technical value\n\n**Key
+      Points Identification**:\n- Focus on actionable information\n- Include important
+      data, statistics, or metrics\n- Highlight conclusions and key insights\n- Note
+      any technical specifications or requirements\n- Identify critical insights or
+      implications\n\n## Output Requirements\n\nProvide analysis in structured format
+      with all required fields:\n- **summary**: Comprehensive document summary (max
+      2000 characters)\n- **key_points**: List of most important points from the document\n-
+      **document_type**: Classification of document type\n- **content_quality**: Assessment
+      of document quality (1-10 scale)\n- **business_value**: Assessment of business
+      value (1-10 scale)\n- **technical_value**: Assessment of technical value (1-10
+      scale)\n\nFocus on creating summaries that are:\n- Comprehensive but concise\n-
+      Accurate to the original content\n- Useful for understanding the document''s
+      key information\n- Suitable for both human reading and AI processing\n\nBe thorough
+      but focused, ensuring the summary provides maximum value for understanding the
+      document''s content and purpose.\n\n\n        As a genius expert, your task
+      is to understand the content and provide\n        the parsed objects in json
+      that match the following json_schema:\n\n\n        {\n  \"description\": \"Schema
+      for document analysis result.\",\n  \"properties\": {\n    \"summary\": {\n      \"description\":
+      \"Comprehensive document summary capturing key information\",\n      \"title\":
+      \"Summary\",\n      \"type\": \"string\"\n    },\n    \"key_points\": {\n      \"description\":
+      \"List of most important points from the document\",\n      \"items\": {\n        \"type\":
+      \"string\"\n      },\n      \"title\": \"Key Points\",\n      \"type\": \"array\"\n    },\n    \"document_type\":
+      {\n      \"description\": \"Classification of document type (e.g., report, manual,
+      specification)\",\n      \"title\": \"Document Type\",\n      \"type\": \"string\"\n    },\n    \"content_quality\":
+      {\n      \"description\": \"Assessment of document quality on a 1-10 scale\",\n      \"maximum\":
+      10,\n      \"minimum\": 1,\n      \"title\": \"Content Quality\",\n      \"type\":
+      \"integer\"\n    },\n    \"business_value\": {\n      \"description\": \"Assessment
+      of business value on a 1-10 scale\",\n      \"maximum\": 10,\n      \"minimum\":
+      1,\n      \"title\": \"Business Value\",\n      \"type\": \"integer\"\n    },\n    \"technical_value\":
+      {\n      \"description\": \"Assessment of technical value on a 1-10 scale\",\n      \"maximum\":
+      10,\n      \"minimum\": 1,\n      \"title\": \"Technical Value\",\n      \"type\":
+      \"integer\"\n    }\n  },\n  \"required\": [\n    \"summary\",\n    \"key_points\",\n    \"document_type\",\n    \"content_quality\",\n    \"business_value\",\n    \"technical_value\"\n  ],\n  \"title\":
+      \"DocumentAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "Document: document.pdf\nPath: document.pdf\n\nContent:\nBrand Guidelines\n2
+      Dualboot Partners Brand Guidelines 2\nContents\n Introduction\nWho we are\nBrand
+      voiceBrand positioning\nLogo\nLogo lockupLogo backgroundsLogo downloadsMinimum
+      size and clearspacePartnershipPreferred backgroundPlacementBlack and whiteIncorrect
+      usageTaglineColor palette\nOur colorsDo\u2019s Dont\u2019s\nTypography\nInterLibre
+      BaskervilleSF Mono\nGraphic elements\nDoodlesPictogramsPhotographySocial Media\nLinkedInInstagram\nMarketing
+      assets\nBusiness cardsPresentations\n3\n26\n324441\n821\nIntroduction3 Dualboot
+      Partners Brand Guidelines\n4 Dualboot Partners Brand Guidelines\nWe are an energetic,
+      experienced \nand innovative team that aims to provide solutions that really
+      work.\n5 Dualboot Partners Brand Guidelines\nWho we are\nOur brand is based
+      on these core principles and \nwill be reflected across our marketing strategy.\nt
+      e c h  e x p e r t i s e\nWe build great  \nsoftwareb u s i n e s s  g r ow
+      t h\nWe help customers grow  \ntheir businesss e r va n t  l e a d e r s h i
+      p\nWe focus on the growth \nand well-being of people \nand communities we \nbelong
+      to\n6 Dualboot Partners Brand Guidelines\nBrand voice\nAt Dualboot we speak
+      as an experienced \nbusiness partner to our community. Our voice is trustworthy,
+      professional, collaborative, and community-driven. We speak as partners not
+      only to our clients but to our team members.Potential & current clients\n\u2022
+      Professional\n\u2022 Respectful\n\u2022 Informative\n\u2022 Trustworthy\n\u2022
+      Matter-of-factRecruiting\n\u2022 Casual\n\u2022 Sympathetic\n\u2022 Cheerful\n\u2022
+      Conversational\n\u2022 Professional\n\u2022 Friendly\n\u2022 Smart\n\u2022 Enthusiastic\n\n7
+      Dualboot Partners Brand Guidelines\nHeadlines\n1. We build software that builds
+      your \nbottom line.\n2. We provide on-demand product design \nand software engineering.\n3.
+      Our goal is to build your company, not \njust your software.Brand voice examples\nBody
+      copy\nExample 1\nDualboot is a business and software development company. When
+      we build your software, it builds your bottom line. Our founders have 25 years
+      of experience starting, leading and selling tech companies and products. We
+      know what it takes - and will do whatever it takes - to help you succeed, too.\nExample
+      2\nWe believe being honest and trustworthy are at the heart of our business.
+      Our clients feel genuine collaboration because they know they can trust that
+      our goal is the betterment and success of their business.\nLogo8 Dualboot Partners
+      Brand Guidelines\n9 Dualboot Partners Brand Guidelines\nOur logo is designed
+      to reflect connection \nand our commitment to working together as a team and
+      with our partners \u2014 and we take pride in that.\n10 Dualboot Partners Brand
+      Guidelines\nOur color logo is our main logo and it \nis used only on a white
+      background.\n\n11 Dualboot Partners Brand Guidelines\nLogo lockup\nFor the immediate
+      future, we will use our \nsymbol and wordmark together to build brand recognition.\n\n12\nDualboot
+      Partners Brand Guidelines\nHorizontal logo\nDownload Download Download\nFile
+      types provided are .png, .jpg and .svg.; .png being the preferred format since
+      it \nsupports transparency. If you find .png to be too heavy, jpg is the next
+      best option.If you need any additional formats get in touch with the Marketing
+      team.\n13\nDualboot Partners Brand Guidelines\nVertical logo\nDownload Download
+      Download\n\n14\nDualboot Partners Brand Guidelines\nIcon or mark\nWhile our
+      horizontal and vertical logos \nare preferred, sometimes a smaller, less detailed
+      version is needed. Use our icon in those cases and on internal communications
+      only.\nDownload Download Download\n15 Dualboot Partners Brand Guidelines\nLogo
+      backgrounds\nWhen using our logo over non corporate \nor photographic backgrounds,
+      we should always use our logo in either black or white, depending on the lightness
+      of     the background.\nLight photographic backgroundDark, non corporate color
+      background Light, non corporate color background\nDark photographic background\n16
+      Dualboot Partners Brand Guidelines\nOn screen In printMinimum size \nand clearspace\nMinimum
+      size\nPlease don\u2019t scale our logo below these sizes.\nClearspace\nThis
+      diagram shows the formula for creating the minimum margin of space around our
+      logo. Its applicable to all of our logos.\n130 px100 px\n4 cm | 1,5 in3,5 cm
+      | 1,3 in\n\n17 Dualboot Partners Brand Guidelines\nPartnerships\nThese diagrams
+      show how to create \npartner lockups.\nThe top and the bottom of the logos \nalign
+      with the ascender and baseline of the Dualboot logo.\n \npa r t n e r  lo g
+      o\n\n18 Dualboot Partners Brand Guidelines\nPreferred background\nThe Dualboot
+      logo should be used \non a white background. \nPlacement\nWe use the logo either
+      on the upper right, or down in the middle.\nBlack and white\nThe black and white
+      logos should only be used when colored logos are not an option. These logos
+      must have sufficient contrast between them and the background.\n\n19 Dualboot
+      Partners Brand Guidelines\nIncorrect usage\nDon\u2019t change our logo lockup\nDon\u2019t
+      apply effects to our logo\nDon\u2019t use our logo in a sentence Don\u2019t
+      add any elements to our logo Don\u2019t use our colored logo over dark \nbackgroundsDon\u2019t
+      tilt our logo Don\u2019t alter our wordmarkDon\u2019t use unapproved color ways
+      Don\u2019t distort our logo\ndualboot  \npartners\ng r ow  yo u r  b u s i n
+      e s s\nw i t h\n.com\n\n20 Dualboot Partners Brand Guidelines\nWE BUILD GREAT
+      SOFTWARETagline\nWe are not just a company that develops \nsoftware based on
+      success. We have a vision, a culture of innovation and a passion for excellence
+      that drives our team to create technology solutions      that really work.Building
+      long lasting relationships with our clients is our primary goal, so we go the
+      extra mile to make sure your satisfaction is fulfilled. Every experience has
+      the potential to change someone\u2019s life in some way \u2014 whether it\u2019s
+      a big transformation or a daily task.\n21 Dualboot Partners Brand Guidelines\nColor
+      palette\n22 Dualboot Partners Brand Guidelines\nThe boldness of the blue is
+      highlighted \nby the simplicity of black and white. Our colors represent a bold
+      and driven company that\u2019s committed to going the extra mile.\nDualboot
+      Partners Brand Guidelines\nColor palette - hierarchy\nBlue is our main color,
+      followed \nclosely by light blue and black.\nWe use accent colors mostly \non
+      our designs for Social Media and Internal Communication, and on charts and graphics
+      where a wider variety of colors is needed.\nPantone\nPMS 1505 C\nCMYK\n0, 60,
+      80, 0\nRGB\n255, 100, 54\nHEX#\nFF6633Pantone1235 C\nCMYK\n0, 26, 77, 0\nRGB\n255,
+      188, 58\nHEX#\nFFCC33Pantone7739 C\nCMYK\n67 , 0, 52, 26\nRGB\n63, 190, 91\nHEX#\n33CC66Pantone2725
+      C\nCMYK\n16, 49, 0, 16\nRGB\n108, 109, 214\nHEX#\nCC66CCPantoneBright white\nCMYK\n0,
+      0, 0, 0\nRGB\n255, 255, 255\nHEX#\nFFFFFFPantonePMS 2728 C\nCMYK\n95, 60, 0,
+      0RGB0, 90, 240\nHEX#\n0066FFPantone2925 C\nCMYK\n100, 0, 0, 0RGB0, 171, 255\nHEX#\n0099FFPantoneBlack
+      C\nCMYK\n0, 0, 0, 100RGB0, 0, 0\nHEX#\n000000\n24\nDualboot Partners Brand Guidelines\nTypographic
+      color - Dos\nTypography is always set in Blue, \nBlack, or White to ensure that
+      our brand impression is iconic. Please avoid mixing tones.\nABC\nABCABC\nABC\nABC\nABCABCABCABC\nABC\nABCABC\n25\nDualboot
+      Partners Brand Guidelines\nTypographic color - \nDonts\nABC\nABCABC\nABC\nABC\nABCABC\nABC\nABC\nTypography26
+      Dualboot Partners Brand Guidelines\n27 Dualboot Partners Brand Guidelines\nTypography\nTypography
+      is a core component. \nWe use Google Fonts: no compatibility problems, no fuss.
+      Cloud based and can be up and running in no time at all.Feri solum rest, quasper
+      ibusam autatet \ndempos num inveliqui ut licimi none si ditatet.\nExtra light
+      | Thin | Light | Regular | Medium | Semibold | Bold | Extrabold | BlackInter
+      typeface\nAaBbCc123\nFeri solum rest, quasper ibusam autatet dempos num inveliqui
+      ut licimi none si ditatet.\nItalicLibre Baskerville typeface\nAaBbCc123\nFeri
+      solum rest, quasper ibusam autatet dempos num inveliqui ut licimi none si ditatet.\nLight
+      | Regular |  Medium | Semibold | Bold | HeavySF Mono typeface\nAaBbCc123Typography\n28\nDualboot
+      Partners Brand Guidelines\nSoftware\nSoftwareSoftwareSoftwareSoftwareABCDEFGHIJKLMNOPQRSTUVXYZ
+      \nabcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ abcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ
+      abcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ \nabcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ
+      \nabcdefghijklmnopqrstuvwxyz1234567890Inter typeface family\nInter is a typeface
+      carefully crafted \nand designed for computer screens and it\u2019s our main
+      font.\n29\nDualboot Partners Brand Guidelines\nSoftwareABCDEFGHIJKLMNOPQRSTUVXYZ
+      \nabcdefghijklmnopqrstuvwxyz1234567890Libre Baskerville typeface family\nLibre
+      Baskerville is a web font optimized \nfor body text. It is based on the American
+      Type Founder\u2019s Baskerville from 1941. We use italics to emphasize a word
+      in a sentence, and it\u2019s our signature style. \n30\nDualboot Partners Brand
+      Guidelines\nSoftware\nSoftwareSoftwareSoftwareSoftwareABCDEFGHIJKLMNOPQRSTUVXYZ
+      \nabcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ abcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ
+      abcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ \nabcdefghijklmnopqrstuvwxyz1234567890\nABCDEFGHIJKLMNOPQRSTUVXYZ
+      \nabcdefghijklmnopqrstuvwxyz1234567890SF Mono typeface family\nThis monospaced
+      variant of the San \nFrancisco typeface was created by Apple Inc. and it is
+      used in coding environments like Xcode.\nWe use it less frequently, usually
+      on \nsmall caps.\n31 Dualboot Partners Brand Guidelines\nHierarchy\nHere is
+      how our fonts can complement one other. For the scale type, use these ratios
+      as a guide. Keep in mind that depending on the situation, the sizes may need
+      to be changed.\nHeadline 1\nHeadline 2\nCaptionInter Bold\nInter Medium\nSF
+      Mono Regular or \nLibre Baskerville italic\nInter Regular\nInter Regular\nInter
+      RegularX\nX/2\nX/3\nX/3\nX/4.5\nX/3Subheadline 1\nSubheadline 2. Lorem ipsum
+      dolor sit amet, \nconsectetur adipiscing elit. Phasellus ac lectus lacinia,
+      lobortis orci eu, varius nulla. \nBody text. Lorem ipsum dolor sit amet, consectetur
+      adipiscing elit. Phasellus ac lectus lacinia, lobortis orci eu, varius nulla.
+      Donec consequat eros vitae nisi facilisis, et tempus libero aliquet. Nulla a
+      lorem tellus. Interdum et malesuada fames ac ante ipsum primis in faucibus.
+      Aliquam imperdiet, ipsum non eleifend dapibus, eros ex porta augue, vel molestie
+      ex ante id sem. Maecenas vel vulputate tortor. Nunc tempus pharetra ante in
+      convallis.\nGraphic elements32 Dualboot Partners Brand Guidelines\n33 Dualboot
+      Partners Brand Guidelines\nDoodles\nWe use manual doodles to highlight \nand
+      clarify information in our internal communication in order to bring out the
+      human side of the brand.\nDoodles\n34\nDualboot Partners Brand Guidelines\nPictograms\nIn
+      practical situations, pictograms \ncan be a helpful component to swiftly represent
+      an idea visually. Iconography should never be the main component of brand collateral.
+      \nThe thick strokes, geometric \nshapes, and sharp edges of our iconography
+      are inspired by the light and airy qualities of our font. Simple, descriptive,
+      and direct icons are preferred.\nIf more pictograms are required, \nthey can
+      either be created from scratch to match the design or purchased from related
+      collections.Guidance for use:\n\u2022 Scale the pictogram to fit \nthe thickness
+      of the font\u2019s strokes. \n\u2022 When using multiple pictograms, all line
+      weights should be uniform\n\u2022 Align pictograms to the grid\n\u2022 Use light-colored
+      pictograms on dark backgrounds, and vice versa\n\u2022 Never overlap text or
+      use as a watermark.\nPictograms\n35\nDualboot Partners Brand Guidelines\nPhotography\nPhotography
+      can be a powerful tool \nfor any brand to convey its message and identity. Our
+      photography should reflect Dualboot\u2019s technological expertise and should
+      be modern, and clean to complement the brand\u2019s focus on software development.\nEach
+      country is encouraged to \nhave their own photoshoot at their local offices
+      so that their marketing materials feature real people working at Dualboot.o
+      u r  p h oto g r a p h y  i s: o u r  p h oto g r a p h y  i s n ot :\nDynamic\nSpontaneousBrightRealNaturalVintagePosedClinicalBasicStudio-like\nPhotography\n36\nDualboot
+      Partners Brand Guidelines\nPhotography tiers\nCollaborators Still life Environment\n\n37
+      Dualboot Partners Brand Guidelines\nCollaborators\nWe want to showcase the brand\u2019s
+      \nteam of experts at work. This allows the brand to highlight its human-centered
+      approach to software development, putting the focus on the people behind the
+      technology. Photographs of the team working on various projects, collaborating,
+      and brainstorming could give potential clients a glimpse into the brand\u2019s
+      innovative process.\nCleanActiveProfessional\n38 Dualboot Partners Brand Guidelines\nStill
+      life\nWe use minimalist compositions with \na focus on our own merchandising,
+      technology hardware and software interfaces. This allows the brand to showcase
+      its products and services in a clear and concise way. The use of electronic
+      devices, branded products and wide angles can further enhance this style, creating
+      a high-tech look.\nBoldDetailedContextual\n39 Dualboot Partners Brand Guidelines\nEnvironment\nWe
+      aim to showcase our workspace \nin a way that reflects Dualboot\u2019s culture,
+      values, and brand identity. Our office photographs should give potential clients
+      and employees a glimpse into the work environment and atmosphere. We use wide-angle
+      shots to capture the overall layout of our offices. When it comes to lighting,
+      it\u2019s important to mimic natural light, as this can create a warm and inviting
+      atmosphere.\nWide angleWelcomingContextual\n40 Dualboot Partners Brand Guidelines\nIncorrect\nDon\u2019t
+      use images that feel \nclearly staged or posed\nDo not use images with a glossy
+      reflectionDon\u2019t silhouette people Don\u2019t shoot images with a deep depth
+      of field\nDon\u2019t have subjects looking directly at the camera Do not use
+      overexposed images\nSocial Media41 Dualboot Partners Brand Guidelines\n42 Dualboot
+      Partners Brand Guidelines\nLinkedIn\n43 Dualboot Partners Brand Guidelines\nInstagram\nMarketing
+      assets44 Dualboot Partners Brand Guidelines\n45 Dualboot Partners Brand Guidelines\nBusiness
+      cards\nTemplate\n46 Dualboot Partners Brand Guidelines\nLetter template\n47
+      Dualboot Partners Brand Guidelines\nSlides template\nwww.dualbootpartners.com"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      4000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '19578'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+        AAD//wMAQs1lJ5AKAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a5fa4e8767dfc-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:47:57 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

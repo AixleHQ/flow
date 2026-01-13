@@ -1,0 +1,59 @@
+name: Reusable Code Check
+
+on:
+  workflow_call:
+    inputs:
+      check_command:
+        required: true
+        type: string
+        description: "Command to run for the check (e.g. 'make test', 'make rubocop')"
+      toolbox_image:
+        required: false
+        type: string
+        description: 'Toolbox container image'
+        default: 'ghcr.io/artempartos/ecs_toolbox:latest'
+      docker_compose_file:
+        required: false
+        type: string
+        description: 'Docker compose file'
+        default: 'docker-compose.ci.yml'
+      container_name:
+        required: false
+        type: string
+        description: 'Container name'
+        default: 'web'
+    secrets:
+      aws_role_arn:
+        required: true
+        description: 'AWS IAM Role ARN for assuming role'
+      aws_region:
+        required: true
+        description: 'AWS region'
+
+jobs:
+  check:
+    container: ${{ inputs.toolbox_image }}
+    runs-on: self-hosted
+    continue-on-error: true
+    env:
+      ENVIRONMENT: test
+      RAILS_ENV: test
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_OHIO }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+
+      - name: Download docker-compose config
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-compose-config
+          path: .
+
+      - name: Login to Amazon ECR
+        run: ecs_helper ecr_login
+
+      - name: Run check
+        run: |
+          docker compose -f ${{ inputs.docker_compose_file }} run --rm ${{ inputs.container_name }} ${{ inputs.check_command }}

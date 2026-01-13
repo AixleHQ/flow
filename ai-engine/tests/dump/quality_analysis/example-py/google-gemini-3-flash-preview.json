@@ -1,0 +1,38 @@
+{
+  "quality_issues": [
+    {
+      "title": "Insecure Password Hashing Algorithm",
+      "severity": "high",
+      "evidence": "hashlib.sha256(password.encode()).hexdigest() (Lines 63, 67)",
+      "why_it_matters": "SHA-256 is a fast cryptographic hash function, making it vulnerable to high-speed brute-force and hardware-accelerated (GPU/ASIC) cracking attacks. Furthermore, this implementation lacks a salt, making it susceptible to rainbow table attacks where identical passwords result in identical hashes.",
+      "suggested_fix": "Replace hashlib.sha256 with a dedicated password hashing library like 'argon2-cffi' or 'bcrypt' which handles salting and adaptive work factors automatically."
+    },
+    {
+      "title": "Timing Attack Vulnerability in Password Verification",
+      "severity": "medium",
+      "evidence": "return hashlib.sha256(password.encode()).hexdigest() == password_hash (Line 63)",
+      "why_it_matters": "The standard '==' operator performs a character-by-character comparison and returns as soon as a mismatch is found. This allows an attacker to infer the correct hash by measuring the time taken for the comparison.",
+      "suggested_fix": "Use 'secrets.compare_digest()' or 'hmac.compare_digest()' for constant-time string comparison."
+    },
+    {
+      "title": "Transaction Mismanagement and Lack of Error Handling",
+      "severity": "medium",
+      "evidence": "self.db.commit() (Lines 31, 46)",
+      "why_it_matters": "The service performs commits internally without handling rollbacks in case of failures. If an error occurs during or after a partial database operation, the session might be left in an inconsistent state. Additionally, hardcoded commits inside a service prevent the caller from managing larger atomic transactions.",
+      "suggested_fix": "Wrap database operations in try/except blocks with 'self.db.rollback()' on failure, or move the commit responsibility to the caller/unit-of-work pattern."
+    },
+    {
+      "title": "Inconsistent Timezone Handling and Deprecated Methods",
+      "severity": "low",
+      "evidence": "datetime.utcnow() (Lines 31, 41, 42, 51)",
+      "why_it_matters": "Using 'datetime.utcnow()' creates naive datetime objects (without timezone info), which can lead to subtle bugs when comparing times across different system configurations. Furthermore, 'utcnow()' is deprecated in Python 3.12+.",
+      "suggested_fix": "Use 'datetime.now(timezone.utc)' to ensure all datetime objects are timezone-aware and future-proof."
+    }
+  ],
+  "opportunities": [
+    "Implement a 'logout' or 'revoke_session' method to allow users to manually invalidate tokens.",
+    "Implement 'sliding expiration' in 'validate_session' by updating the 'expires_at' timestamp upon successful use.",
+    "Add an 'is_active' or 'is_locked' check on the User model during authentication to prevent disabled accounts from logging in.",
+    "Dependency inject the hashing logic to improve testability and allow for easier algorithm migrations in the future."
+  ]
+}

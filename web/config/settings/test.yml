@@ -1,0 +1,11 @@
+protocol: "http"
+
+integrations:
+  github:
+    private_pem: <%= OpenSSL::PKey::RSA.new(2048).to_pem.gsub("\n", '\n') %>
+
+archive_extractor:
+  max_file_size: <%= ENV['MAX_FILE_SIZE'] || 1.megabyte %>
+
+authorization:
+  otp_enabled: false

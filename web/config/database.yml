@@ -1,0 +1,26 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  database: <%= Settings.database.name %>
+  host: <%= Settings.database.host %>
+  port: <%= Settings.database.port %>
+  pool: <%= Settings.database.pool %>
+  username: <%= Settings.database.username %>
+  password: <%= Settings.database.password %>
+
+development:
+  <<: *default
+  database:  <%= Settings.project_name.downcase %>_development
+
+test:
+  <<: *default
+  database:  <%= Settings.project_name.downcase %>_test
+
+qa:
+  <<: *default
+
+uat:
+  <<: *default
+
+production:
+  <<: *default

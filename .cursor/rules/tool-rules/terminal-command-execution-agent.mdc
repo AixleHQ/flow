@@ -1,0 +1,33 @@
+---
+description: This rule governs ALL terminal/console command executions. It MUST be applied whenever any terminal command is about to be run, regardless of command type or purpose. The rule ensures proper command execution context.
+globs:
+alwaysApply: false
+---
+# Consider docker container
+
+## Critical Rules
+- ALWAYS fetch this rule BEFORE using the run_terminal_cmd tool
+- Check if docker and docker-compose files exist.
+- Usually there is a main service in docker-compose file with tag `build: .` which uses Dockerfile, remember the name of this service
+- Run command inside container
+`docker-compose run --rm [service] [command]`
+- Sometimes command will work both on the host machine and inside docker environment, but it's always better to use docker container
+- It's a common situation that developer don't want to install everything on host machine, that's why we are using docker.
+- In case there is no docker and docker-compose files - try to run on the host machine
+
+## Examples
+
+After you finished some functionality you want to check if it's working properly
+For example we finished some backend rails controllers, added tests and want to check that with command `rails tests`
+
+<example>
+First thing you do before running a terminal command is:
+fetch_rules(["tool-rules/terminal-command-execution-agent"])
+
+Then you check for docker files:
+you found docker and docker-compose files
+you find the name of this service with `build .` tag, it was 'web'
+Run command inside this service
+`docker-compose run --rm [service] [command]`
+`docker-compose run --rm web rails test`
+</example>

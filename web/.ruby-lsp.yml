@@ -1,0 +1,61 @@
+# Ruby LSP configuration file
+# This file configures the Ruby LSP server for better IDE support
+
+# Enable all features for better IDE experience
+enabledFeatures:
+  - codeActions
+  - diagnostics  
+  - documentHighlights
+  - documentLink
+  - documentSymbol
+  - foldingRange
+  - formatting
+  - hover
+  - inlayHint
+  - onTypeFormatting
+  - selectionRange
+  - semanticHighlighting
+  - completion
+  - definition
+  - typeDefinition
+  - implementation
+  - references
+  - rename
+  - workspaceSymbol
+
+# Index configuration for better performance
+indexing:
+  # Include additional paths for indexing
+  includedPatterns:
+    - "**/*.rb"
+    - "**/*.rake"
+    - "**/*.ru"
+    - "**/Gemfile"
+    - "**/Rakefile"
+    - "**/*.erb"
+  
+  # Exclude patterns to improve performance
+  excludedPatterns:
+    - "**/node_modules/**"
+    - "**/tmp/**"
+    - "**/log/**"
+    - "**/coverage/**"
+    - "**/vendor/**"
+    - "**/.git/**"
+    - "**/storage/**"
+
+# Formatter configuration (use RuboCop)
+formatter: rubocop
+
+# Linter configuration
+linters:
+  rubocop: true
+
+# Rails specific configuration
+rails:
+  enabled: true
+  
+# Bundler configuration
+bundler:
+  enabled: false
+  gemfile: "Gemfile" 

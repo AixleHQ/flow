@@ -1,0 +1,46 @@
+---
+description: This rule governs the usage of BrowserTools MCP for debugging and UI analysis. It should be applied whenever: (1) Debugging browser-based applications, (2) Analyzing console logs or network errors, (3) Working with UI elements in a browser environment, (4) Taking or analyzing UI screenshots, or (5) Any tasks requiring interaction with browser debugging information. This rule ensures that all browser debugging tools are properly utilized to gather information about errors, page states, and UI elements. It is particularly important when troubleshooting JavaScript applications, analyzing network requests, or working with complex UI components.
+globs:
+alwaysApply: false
+---
+# BrowserTools MCP Usage Guidelines
+
+## Critical Rules
+
+- Always check for console logs and errors before attempting other debugging methods
+- Use `Get Console Logs` to review recent console output when debugging
+- Use `Get Console Errors` to isolate specific error messages
+- Use `Get XHR Network Logs` to examine successful API requests (200/300 responses)
+- Use `Get XHR Network Errors` to identify failing API requests (400/500 responses)
+- Use `Wipe Logs` when starting a new debugging session to clear previous noise
+- Use `Capture Screenshot` when analyzing UI issues or when the user mentions visual problems
+- Use `Get currently selected element` when working with a specific UI component
+- Always analyze both JavaScript errors and network issues when troubleshooting
+- Clearly report findings from browser tools in a structured, easy-to-read format
+
+## Tool Usage Patterns
+
+- When debugging, first check console errors, then network errors, then general logs
+- When analyzing UI issues, first capture screenshot, then examine selected element
+- Use log wiping before starting complex operations to ensure clean data collection
+- When examining network issues, check both successful and error responses for comparison
+
+## Examples
+
+<example>
+User: "My login form isn't working, the submit button doesn't do anything when clicked."
+
+I'll help you debug this issue. First, let me check for any errors in the console that might explain why the login button isn't responding.
+
+*Uses BrowserTools MCP: Get Console Errors*
+
+I can see there's a JavaScript error in the console: "Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')" on line 42 of login.js. This suggests the code is trying to add an event listener to an element that doesn't exist or isn't loaded yet.
+
+Let me also check if there are any failed network requests related to the login.
+
+*Uses BrowserTools MCP: Get XHR Network Errors*
+
+There are no failed network requests yet since the button click event isn't being properly registered.
+
+Based on the console error, I'll need to fix the JavaScript code that attaches the event listener to your login button. The issue is likely that the script is running before the DOM is fully loaded or the selector isn't matching the button element.
+</example>

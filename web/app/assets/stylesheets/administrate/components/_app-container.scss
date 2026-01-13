@@ -1,0 +1,20 @@
+.app-container {
+  align-items: stretch;
+  display: flex;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 100rem;
+  min-height: 100vh;
+  padding: $base-spacing;
+}
+
+.user-header {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 2rem 0 0;
+}
+
+.user-info {
+  margin: 0;
+}

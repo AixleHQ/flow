@@ -1,0 +1,17 @@
+---
+description: Run this rule only when you asked to provide a summary of current state
+globs:
+alwaysApply: false
+---
+# Summary
+
+## Critical Rules
+
+- Describe in a few paragraphs
+  - what we did
+  - what didn't work
+  - which files were created/deleted/modified
+  - what mistakes to avoid
+  - any key/insights we have learned
+  - which problems/errors we are facing
+  - anything else programmer might need to work productively on this project

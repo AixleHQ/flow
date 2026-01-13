@@ -1,0 +1,220 @@
+name: Palad CI/CD Pipeline
+
+on: [push]
+
+env:
+  # ECS helper working based on these variables
+  PROJECT: palad
+  APPLICATION: app  # Base app name for ECR pattern matching (palad-app-*)
+  WEB_CONTAINER: web
+  AI_ENGINE_CONTAINER: ai-engine
+  USE_IMAGE_TAG_ENV_PREFIX: true
+  # Mapping from gitlab variables to github variables, need to be improved on gem side
+  CI_COMMIT_BRANCH: ${{ github.ref_name }}
+  CI_COMMIT_SHA: ${{ github.sha }}
+
+# AWS_ROLE_ARN
+# AWS_REGION
+
+permissions:
+  id-token: write
+  contents: read
+  packages: read
+
+jobs:
+  build:
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/artempartos/ecs_toolbox:latest
+    env:
+      ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'qa' && 'qa' || 'dev' }}
+    strategy:
+      matrix:
+        service:
+          - web
+          - ai-engine
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+
+      - name: Build and push ${{ matrix.service }}
+        run: |
+          ecs_helper build_and_push --image=${{ matrix.service }} \
+            --file ./${{ matrix.service }}/Dockerfile \
+            --build-arg="APP_VERSION=${{ github.sha }} \
+            --build-arg="AUTHOR_NAME=${{ github.event.pusher.name }} \
+            --build-arg="AUTHOR_EMAIL=${{ github.event.pusher.email }}"
+
+  prepare_artifact:
+    runs-on: self-hosted
+    container:
+      image: ghcr.io/artempartos/ecs_toolbox:latest
+    env:
+      ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || github.ref_name == 'qa' && 'qa' || 'dev' }}
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+
+      - name: Prepare docker-compose.ci.yml artefact
+        id: export_images
+        run: |
+          eval $(ecs_helper export_images)
+          echo "=== Exported IMAGE variables ==="
+          env | grep "IMAGE"
+          echo "=== Processing docker-compose.ci.yml ==="
+          env | grep "IMAGE" | while read -r line; do var_name=$(echo "$line" | cut -d= -f1); var_value=$(echo "$line" | cut -d= -f2-); if grep -q "\${$var_name}" docker-compose.ci.yml; then escaped_value=$(echo "$var_value" | sed -e 's/[\/&]/\\&/g'); sed -i "s|\${$var_name}|$escaped_value|g" docker-compose.ci.yml; fi; done
+          echo "=== Final docker-compose.ci.yml ==="
+          cat docker-compose.ci.yml
+
+      - name: Upload docker-compose file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-config
+          path: docker-compose.ci.yml
+          retention-days: 1
+
+  web_be_test:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make db-prepare test
+      container_name: web
+
+  web_be_lint:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make rubocop
+      container_name: web
+
+  web_be_security:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make brakeman
+      container_name: web
+
+  web_fe_lint:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make eslint
+      container_name: web
+
+  web_fe_test:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make fe-test
+      container_name: web
+
+  web_fe_ts:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make typescript
+      container_name: web
+
+  web_fe_fsd:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make fsd
+      container_name: web
+
+  ai_engine_test:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make test
+      container_name: ai-engine
+
+  ai_engine_ruff_lint:
+    needs: [prepare_artifact]
+    uses: ./.github/workflows/code-check.yml
+    secrets: inherit
+    with:
+      check_command: make lint-ruff
+      container_name: ai-engine
+
+  web_db_migration:
+    runs-on: self-hosted
+    container: ghcr.io/artempartos/ecs_toolbox:latest
+    needs: [web_be_test, web_be_lint, web_be_security, web_fe_lint, web_fe_fsd, web_fe_test, web_fe_ts, ai_engine_test, ai_engine_ruff_lint]
+    if: github.ref_name == 'main' || github.ref_name == 'qa'
+    env:
+      ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+      APPLICATION: web
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_OHIO }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+
+      - name: Run db migration
+        run: |
+          ecs_helper run_command --command "make db-prepare" --name 'db-migrate'
+
+  deploy:
+    runs-on: self-hosted
+    container: ghcr.io/artempartos/ecs_toolbox:latest
+    if: github.ref_name == 'main' || github.ref_name == 'qa'
+    env:
+      ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+    needs: [web_db_migration]
+    strategy:
+      matrix:
+        service:
+          - web
+          - worker-ruby
+          - worker-python
+      max-parallel: 3
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_OHIO }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+
+      - name: Deploy ${{ matrix.service }}
+        run: APPLICATION=${{ matrix.service }} ecs_helper deploy --timeout 3600
+
+  post_deploy:
+    runs-on: self-hosted
+    container: ghcr.io/artempartos/ecs_toolbox:latest
+    if: github.ref_name == 'main' || github.ref_name == 'qa'
+    env:
+      ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || 'qa' }}
+      APPLICATION: web
+    needs: [deploy]
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_OHIO }}
+          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+      - name: Post deploy
+        run: |
+          ecs_helper run_command --command "rake rollbar:deploy" --name 'rollbar-deploy'

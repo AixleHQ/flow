@@ -1,0 +1,36 @@
+{
+  "category": [
+    {
+      "name": "Services",
+      "confidence": 1.0
+    },
+    {
+      "name": "Workflows",
+      "confidence": 0.8
+    }
+  ],
+  "language": "Java",
+  "framework": "Spring",
+  "exports": [
+    "OrderService"
+  ],
+  "dependencies": [
+    "java.math.BigDecimal",
+    "java.time.LocalDateTime",
+    "java.util.ArrayList",
+    "java.util.List",
+    "java.util.UUID",
+    "org.springframework.beans.factory.annotation.Autowired",
+    "org.springframework.stereotype.Service",
+    "org.springframework.transaction.annotation.Transactional",
+    "com.example.inventory.InventoryService",
+    "com.example.payment.PaymentService",
+    "com.example.shipping.ShippingService"
+  ],
+  "reads_from": [
+    "database:orders"
+  ],
+  "writes_to": [
+    "database:orders"
+  ]
+}

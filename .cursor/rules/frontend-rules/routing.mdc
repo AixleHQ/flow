@@ -1,0 +1,8 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# Routing
+- Use tanstack router for navigation
+- Use routes object from shared/router for paths and links

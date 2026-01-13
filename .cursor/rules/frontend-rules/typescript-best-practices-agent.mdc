@@ -1,0 +1,129 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# TypeScript Best Practices
+
+## Type System
+- Prefer interfaces over types for object definitions
+- Prefer interfaces over type aliases for object definitions that may be extended
+- Start interfaces names from big letter I
+- Use type for unions, intersections, and mapped types
+- Use union types instead of enums for simple flag values
+- Use Pick, Omit, Partial and other utility types when appropriate
+- Avoid using `any`, prefer `unknown` for unknown types
+- Use strict TypeScript configuration
+- Leverage TypeScript's built-in utility types
+- Leverage discriminated unions for complex state management
+- Use generics for reusable type patterns
+- Keep generics simple and well-constrained
+
+## Naming Conventions
+- Use PascalCase for type names and interfaces
+- Use camelCase for variables and functions
+- Use UPPER_CASE for constants
+- Enum keys should start with capsed letter
+- Enum name should be singular
+- Use descriptive names with auxiliary verbs (e.g., isLoading, hasError)
+- Prefix interfaces for React props with 'Props' (e.g., IButtonProps)
+
+## Code Organization
+- Keep type definitions close to where they're used
+- Export types and interfaces from dedicated type files when shared
+- Co-locate component props with their components in the same file
+
+## Functions
+- Use explicit return types for public functions
+- Use arrow functions for callbacks and methods
+- Implement proper error handling with custom error types
+- Use function overloads for complex type scenarios
+- Prefer async/await over Promises
+
+## Best Practices
+- Enable strict mode in tsconfig.json
+- Use readonly modifiers for immutable properties and arrays
+- Leverage discriminated unions for type safety
+- Use type guards for runtime type checking
+- Implement proper null checking
+- Avoid type assertions unless necessary
+- Always handle null and undefined cases explicitly
+
+## Error Handling
+- Create custom error types for domain-specific errors
+- Use Result types for operations that can fail
+- Implement proper error boundaries
+- Use try-catch blocks with typed catch clauses
+- Handle Promise rejections properly
+
+## Examples
+
+<example>
+// Good - Using interface with explicit types
+interface IUserState {
+  readonly id: string;
+  name: string;
+  email: string | null;
+  preferences: ReadonlyArray<string>;
+}
+
+// Good - Discriminated union with type guard
+interface IRequestPending {
+  status: 'pending';
+}
+
+interface IRequestSuccess {
+  status: 'success';
+  data: UserState;
+}
+
+interface IRequestError {
+  status: 'error';
+  error: Error;
+}
+
+type RequestState = IRequestPending | IRequestSuccess | IRequestError;
+
+function isSuccess(state: RequestState): state is IRequestSuccess {
+  return state.status === 'success';
+}
+
+// Good - Generic with constraints
+function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+</example>
+
+<example>
+// Use proper type safety with unknown and type guards
+function processData(data: unknown) {
+  if (typeof data === 'object' && data !== null && 'someProperty' in data) {
+    return (data as { someProperty: unknown }).someProperty;
+  }
+  throw new Error('Invalid data structure');
+}
+
+// Handle null cases explicitly with proper type checking
+function getUserName(user: { name: string | null }): string {
+  if (user.name === null) {
+    throw new Error('User name is null');
+  }
+  return user.name.toUpperCase();
+}
+
+// Use type guards instead of type assertions
+function processResponse(response: unknown): number {
+  if (typeof response === 'object' && response !== null && 'id' in response) {
+    const data = response as { id: unknown };
+    if (typeof data.id === 'number') {
+      return data.id;
+    }
+  }
+  throw new Error('Invalid response structure');
+}
+
+// Use typed arrays for type safety
+const items: number[] = [];
+items.push(123);
+// items.push('string'); // TypeScript will prevent this
+</example> 

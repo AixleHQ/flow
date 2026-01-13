@@ -1,0 +1,3 @@
+# Database dumps
+db_dumps/*.sql.gz
+

@@ -1,0 +1,14 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+
+# Common communication approach
+
+## Critical Rules
+
+  - in the answer use the same language you were asked, the only exception is a code.
+  - answer short unless you asked to explain something
+  - use a directory ./ai to write and read usefull and important information about the project. Like architecture diagram, or prd
+  - start with writing a few reasoning paragraphs, consider different options and approaches. Avoid jumping to fast conclusions.

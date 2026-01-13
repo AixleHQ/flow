@@ -1,0 +1,723 @@
+interactions:
+- request:
+    body: '{"messages": [{"content": "You are a vector search query generator.\n\nInput:\n-
+      A \"Task Context\" describing a domain in business language.\n\nGoal:\n- Produce
+      ONE short keyword-style query (6\u20138 tokens) that will retrieve the most
+      relevant technical artifacts\n  (source code, SQL, models, specs) for this domain.\n\nHow
+      to choose tokens:\n1. Read the domain name and description.\n2. Select the most
+      important nouns and verbs that describe what the domain does and which entities
+      it manages.\n   Reuse these words as much as possible and ignore very generic
+      words that add little meaning.\n3. You MAY also include a very small number
+      (1\u20133) of generic implementation-level terms\n   when they clearly match
+      the described behavior.\n   These terms must NOT introduce new business entities,
+      actor types, or resource types\n   that are not explicitly mentioned in the
+      domain description; they should only make\n   already mentioned concepts more
+      implementation-oriented.\n4. Do NOT introduce names of technologies, protocols,
+      standards, libraries, or frameworks\n   if they do not appear in the input text.\n5.
+      Do NOT create new joined identifier-style tokens (with underscores or camel
+      case)\n   unless that exact form is present in the input; prefer separate words.\n\nOutput:\n-
+      Return only the final query as a space-separated list of tokens.\n", "role":
+      "system"}, {"content": "\n## Task Context\nDomain Name: User Authentication\n\nUser
+      Story name: User Login\nUser Story description: As a user, I want to log in
+      with email and password, so that I can access my account\nUser Story Technical
+      Description: Technical implementation for User Login\n\n## Generate Search Query\nCreate
+      an optimal vector search query to find relevant documents for generating use
+      cases for the given domain and user story.\n", "role": "user"}], "model": "google/gemini-3-flash-preview",
+      "reasoning_effort": "low", "stream": false, "temperature": 0.1, "usage": {"include":
+      true}, "max_tokens": 8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '1991'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIA
+        AAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAA
+        AP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA
+        //9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD/
+        /0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//
+        QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9C
+        YgIAAAD//+x6V8/r1pLlXxH00oD1+ZAU8wHmgWISgygGUQzjhkGRm0HMOVz4vzf0BfvY7TvANOZl
+        AD8J2txVtfZaVcWSyH/ts2j/fZ+A6meEJAgcoXGY/hlNBzI42kNAb0vPStHqZ/7+bd909ZRFoNt/
+        34t1nRRg/7Yv6wgULw/vC1ACyqzKfkZ/jougT39uOjBlYN6/7evHE4TD/vs+TIPhW1iXTQGGrK72
+        b/uwA8EAov33PxC87cO0zkLQ77//73/tizppuvrR779XY1G87eOsyvr01w4EfV3tv+/7oW72b/sq
+        GLIJ/PrXq9btqu/f9lkVgWX/HX7bl6DvgwTsv/9r39UF2H/fB32f9UNQDS80dTWA6oV07EG3C8Yh
+        BdWQhcEL7a6ok6zagTLIil0T9P1cd9EuCMN6rIbXJ+j73RQUWRQML3Y6EI99UHwB/8CUVcn++/6n
+        n/gleJFVJTvmz0GEop77n376pfqlkv6j3IVj14FqKNZdXIdjD6JdXe2GFOzeAX4garr6PXZc/xXy
+        t93LR9NldZcN2fYK97IdQJhWWRgUu+wlRQmq4SN4BIYgKz48DWkw7JqgG7JwLILuI2A/1N36bXdZ
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a65532f99c032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:51:53 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "You are a document relevance analyst for task
+      completion assessment.\n\nTask: Evaluate if the provided documents contain sufficient
+      information to successfully complete the specified task.\n\nContext: Consider
+      both the breadth and depth of information needed. The documents should provide
+      enough context, examples, and domain knowledge to execute the task effectively.\n\nOutput:
+      \"sufficient\" if documents provide adequate context for task completion, \"insufficient\"
+      if more information is needed\n\nRule: Focus on task completion capability rather
+      than general document relevance.", "role": "system"}, {"content": "\n## Task
+      Information\nTask Prompt: # Domain-Specific Technical Use Case Reconstructor\n\n##
+      Purpose\nTo systematically analyze source code and reconstruct comprehensive
+      use cases that document actual implemented functionality, strictly tied to a
+      provided user story AND validated against domain boundaries.\nTo systematically
+      analyze source code and reconstruct comprehensive use cases that document actual
+      implemented functionality, strictly derived from a single provided user story
+      AND also validated to be within the responsibilities of the domain. \nEvery
+      use case MUST simultaneously satisfy both the user story scope and the domain
+      boundaries.\n\n## Core Objectives\n- Extract use cases explicitly derived from
+      the provided user story (treat the user story as the primary scope)\n- Validate
+      use cases belong PRIMARY to the specified domain\n- Reject any use case that
+      is domain-specific but not clearly required to fulfill the provided user story\n-
+      Focus on domain-specific business mechanics and behavior\n- Maintain strict
+      domain boundaries to exclude cross-cutting concerns that are not part of the
+      user story\n\n## Domain-Specific Use Case Identification\n\n### Primary Domain
+      Validation Criteria\n1. Use case delivers PRIMARY value to {domain_name} domain\n2.
+      Business mechanics are core to domain responsibilities\n3. User interactions
+      are domain-specific, not generic\n4. Business outcomes align with domain objectives\n5.
+      Implementation evidence shows domain ownership\n\n### Use Case Identification
+      Criteria (Domain-Focused)\n1. Distinct user goals explicitly stated in the provided
+      user story AND relevant to provided domain. Ignore any goals or workflows that
+      are not stated or clearly implied by this user story, even if they are domain-specific.\n2.
+      Each use case must implement exactly one primary user goal or variation of that
+      goal from this user story.\n\n2. Domain-specific operation types (single vs
+      batch) as defined in user story\n3. User roles with domain-specific responsibilities
+      from user story\n4. Domain-relevant authorization requirements from user story\n5.
+      API endpoints that primarily serve {domain_name} functionality\n6. Error handling
+      paths requiring domain-specific user interaction\n7. Alternative flows with
+      domain-specific business outcomes\n8. Data processing paths requiring domain-specific
+      user decisions\n\n### Domain Boundary Rules\n- Group operations only if inseparable
+      within domain''s business scope\n- Each use case must map to domain-specific
+      user goal from user story\n- Exclude scenarios that span multiple domains\n-
+      Maintain strict domain functionality boundaries\n- Validate against domain responsibilities
+      to eliminate cross-cutting concerns\n\n## Enhanced Business Focus (Domain-Specific)\n1.
+      Articulate business value specific to {domain_name} from user story\n2. Connect
+      to domain-specific business objectives from user story\n3. Include measurable
+      success criteria relevant to domain from user story\n4. Analyze domain-specific
+      business process impact from user story\n5. Identify stakeholder benefits within
+      domain context from user story\n\n## Output Requirements\n\n**CRITICAL**: Return
+      response as a structured object with the following format:\n\n### Required Fields
+      for Each Use Case:\n- **name**: Clear, domain-specific action name that reflects
+      {domain_name} responsibilities\n- **description**: Detailed workflow covering
+      domain-specific business logic including actors, preconditions, main flow, alternative
+      flows, and postconditions\n- **data**: Structured object with the following
+      markdown-formatted fields:\n  * **Acceptance Criteria**: Specific, testable
+      conditions for completion (Markdown-formatted)\n  * **Business Notes**: Critical
+      business context and domain-specific considerations (Markdown-formatted)\n  *
+      **Success Metrics**: Measurable outcomes specific to {domain_name} (Markdown-formatted)\n  *
+      **Stakeholder Impact**: How this use case benefits domain stakeholders (Markdown-formatted)\n-
+      **justification**: \"Evidence from {domain_name} context: [specific source evidence
+      tied to user story and domain]\"\n- **gherkin_syntax**: Domain-specific business
+      mechanics using Gherkin format with domain context\n\n### Domain-Specific Gherkin
+      Guidelines\n\n**Domain Business Context**: Frame all scenarios within {domain_name}
+      business context\n**Domain-Specific Roles**: Use roles that are relevant to
+      {domain_name} operations\n**Domain Business Rules**: Detail variations in domain-specific
+      business logic\n**Domain Outcomes**: Every Then clause must state measurable
+      domain-specific business results\n**Domain Terminology**: Use business terms
+      specific to {domain_name}, avoid generic language\n\n### Required Domain-Specific
+      Scenario Structure\n\n```gherkin\nBackground:\n  Given the {domain_name} system
+      is operational\n  And [domain-specific business preconditions from user story]\n\nScenario:
+      [domain-specific business scenario name from user story]\n  Given [domain business
+      context from user story]\n  When [domain-specific business action by domain
+      user]\n  Then [domain-specific business outcome achieved]\n  And [domain business
+      verification or impact]\n\nScenario Template: [domain business variation from
+      user story]\n  Given [domain business context from user story]\n  When [domain
+      business action] with <domain business parameter>\n  Then [domain business outcome]
+      should reflect <domain business result>\n\n  Examples:\n    | domain business
+      parameter | domain business result |\n    | domain_value1            | domain_output1         |\n    |
+      domain_value2            | domain_output2         |\n```\n\n## Domain Validation
+      Checklist\n\u2705 Use cases are PRIMARY to {domain_name} domain\n\u2705 Business
+      mechanics are domain-specific\n\u2705 User interactions serve domain objectives\n\u2705
+      Implementation evidence supports domain ownership\n\u2705 No cross-domain concerns
+      included\n\u2705 Gherkin scenarios use domain-specific terminology\n\n## Response
+      Protocol\n- Deliver complete structure in valid structured format\n- Provide
+      domain-specific \"data\" in markdown format\n- Include only use cases PRIMARY
+      to {domain_name} tied to user story\n- Ensure all content validates against
+      domain boundaries\n- Focus Gherkin syntax on domain-specific business mechanics\n\n##
+      Evidence-Based Validation\n- Reference specific vector search evidence that
+      supports the use case\n- Validate against actual implementation patterns found
+      in the code\n- Ensure use case aligns with domain boundaries established in
+      the evidence\n- Exclude use cases that lack supporting implementation evidence\n\nExtract
+      only use cases that:\n1. Are explicitly supported by the provided user story\n2.
+      Have PRIMARY ownership in {domain_name} domain\n3. Show clear implementation
+      evidence in vector search results\n4. Represent complete domain-specific business
+      workflows\n5. Maintain strict domain boundaries\nHuman Prompt: \n## Domain Context\nDomain
+      Name: User Authentication \nUser Story Context: User Login: As a user, I want
+      to log in with email and password, so that I can access my account\n\n## Task\nExtract
+      only the PRIMARY, DIRECTLY RELATED use cases for this domain using the context
+      above. \nUse the User Story as the primary source. \nVector Search Context is
+      supplementary evidence to support extraction.\n\n\n## Documents to Evaluate\n[''\\n---
+      Document 1 ---\\nUser Authentication Domain Overview:\\n\\nThe User Authentication
+      domain handles all aspects of user identity management including registration,
+      login, password management, multi-factor authentication, and session handling.
+      This domain ensures secure access to the system and manages user credentials.\\n\\n\\n---
+      Document 2 ---\\nAuthentication Technical Specifications:\\n\\n- OAuth 2.0 and
+      OpenID Connect integration\\n- JWT token generation and validation\\n- Password
+      hashing using bcrypt\\n- Session management with Redis\\n- Rate limiting for
+      login attempts\\n- Account lockout mechanisms\\n- Password reset workflows\\n\\n\\n---
+      Document 3 ---\\nAuthentication Features and Requirements:\\n\\n- User registration
+      with email verification\\n- Login with username/password or social providers\\n-
+      Password strength validation\\n- Two-factor authentication (2FA)\\n- Password
+      reset via email\\n- Session timeout and refresh\\n- Role-based access control
+      (RBAC)\\n- Account management (profile updates, deletion)'']\n\n## Assessment\nEvaluate
+      if these documents provide sufficient information to complete the task effectively.\nConsider
+      domain knowledge, examples, context, and completeness of information needed.\n\nRespond
+      with exactly: \"sufficient\" or \"insufficient\"\n", "role": "user"}], "model":
+      "google/gemini-3-flash-preview", "reasoning_effort": "low", "stream": false,
+      "temperature": 0.1, "usage": {"include": true}, "max_tokens": 8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '9459'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a65d71c86c032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:52:11 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"content": "# Domain-Specific Technical Use Case Reconstructor\n\n##
+      Purpose\nTo systematically analyze source code and reconstruct comprehensive
+      use cases that document actual implemented functionality, strictly tied to a
+      provided user story AND validated against domain boundaries.\nTo systematically
+      analyze source code and reconstruct comprehensive use cases that document actual
+      implemented functionality, strictly derived from a single provided user story
+      AND also validated to be within the responsibilities of the domain. \nEvery
+      use case MUST simultaneously satisfy both the user story scope and the domain
+      boundaries.\n\n## Core Objectives\n- Extract use cases explicitly derived from
+      the provided user story (treat the user story as the primary scope)\n- Validate
+      use cases belong PRIMARY to the specified domain\n- Reject any use case that
+      is domain-specific but not clearly required to fulfill the provided user story\n-
+      Focus on domain-specific business mechanics and behavior\n- Maintain strict
+      domain boundaries to exclude cross-cutting concerns that are not part of the
+      user story\n\n## Domain-Specific Use Case Identification\n\n### Primary Domain
+      Validation Criteria\n1. Use case delivers PRIMARY value to {domain_name} domain\n2.
+      Business mechanics are core to domain responsibilities\n3. User interactions
+      are domain-specific, not generic\n4. Business outcomes align with domain objectives\n5.
+      Implementation evidence shows domain ownership\n\n### Use Case Identification
+      Criteria (Domain-Focused)\n1. Distinct user goals explicitly stated in the provided
+      user story AND relevant to provided domain. Ignore any goals or workflows that
+      are not stated or clearly implied by this user story, even if they are domain-specific.\n2.
+      Each use case must implement exactly one primary user goal or variation of that
+      goal from this user story.\n\n2. Domain-specific operation types (single vs
+      batch) as defined in user story\n3. User roles with domain-specific responsibilities
+      from user story\n4. Domain-relevant authorization requirements from user story\n5.
+      API endpoints that primarily serve {domain_name} functionality\n6. Error handling
+      paths requiring domain-specific user interaction\n7. Alternative flows with
+      domain-specific business outcomes\n8. Data processing paths requiring domain-specific
+      user decisions\n\n### Domain Boundary Rules\n- Group operations only if inseparable
+      within domain''s business scope\n- Each use case must map to domain-specific
+      user goal from user story\n- Exclude scenarios that span multiple domains\n-
+      Maintain strict domain functionality boundaries\n- Validate against domain responsibilities
+      to eliminate cross-cutting concerns\n\n## Enhanced Business Focus (Domain-Specific)\n1.
+      Articulate business value specific to {domain_name} from user story\n2. Connect
+      to domain-specific business objectives from user story\n3. Include measurable
+      success criteria relevant to domain from user story\n4. Analyze domain-specific
+      business process impact from user story\n5. Identify stakeholder benefits within
+      domain context from user story\n\n## Output Requirements\n\n**CRITICAL**: Return
+      response as a structured object with the following format:\n\n### Required Fields
+      for Each Use Case:\n- **name**: Clear, domain-specific action name that reflects
+      {domain_name} responsibilities\n- **description**: Detailed workflow covering
+      domain-specific business logic including actors, preconditions, main flow, alternative
+      flows, and postconditions\n- **data**: Structured object with the following
+      markdown-formatted fields:\n  * **Acceptance Criteria**: Specific, testable
+      conditions for completion (Markdown-formatted)\n  * **Business Notes**: Critical
+      business context and domain-specific considerations (Markdown-formatted)\n  *
+      **Success Metrics**: Measurable outcomes specific to {domain_name} (Markdown-formatted)\n  *
+      **Stakeholder Impact**: How this use case benefits domain stakeholders (Markdown-formatted)\n-
+      **justification**: \"Evidence from {domain_name} context: [specific source evidence
+      tied to user story and domain]\"\n- **gherkin_syntax**: Domain-specific business
+      mechanics using Gherkin format with domain context\n\n### Domain-Specific Gherkin
+      Guidelines\n\n**Domain Business Context**: Frame all scenarios within {domain_name}
+      business context\n**Domain-Specific Roles**: Use roles that are relevant to
+      {domain_name} operations\n**Domain Business Rules**: Detail variations in domain-specific
+      business logic\n**Domain Outcomes**: Every Then clause must state measurable
+      domain-specific business results\n**Domain Terminology**: Use business terms
+      specific to {domain_name}, avoid generic language\n\n### Required Domain-Specific
+      Scenario Structure\n\n```gherkin\nBackground:\n  Given the {domain_name} system
+      is operational\n  And [domain-specific business preconditions from user story]\n\nScenario:
+      [domain-specific business scenario name from user story]\n  Given [domain business
+      context from user story]\n  When [domain-specific business action by domain
+      user]\n  Then [domain-specific business outcome achieved]\n  And [domain business
+      verification or impact]\n\nScenario Template: [domain business variation from
+      user story]\n  Given [domain business context from user story]\n  When [domain
+      business action] with <domain business parameter>\n  Then [domain business outcome]
+      should reflect <domain business result>\n\n  Examples:\n    | domain business
+      parameter | domain business result |\n    | domain_value1            | domain_output1         |\n    |
+      domain_value2            | domain_output2         |\n```\n\n## Domain Validation
+      Checklist\n\u2705 Use cases are PRIMARY to {domain_name} domain\n\u2705 Business
+      mechanics are domain-specific\n\u2705 User interactions serve domain objectives\n\u2705
+      Implementation evidence supports domain ownership\n\u2705 No cross-domain concerns
+      included\n\u2705 Gherkin scenarios use domain-specific terminology\n\n## Response
+      Protocol\n- Deliver complete structure in valid structured format\n- Provide
+      domain-specific \"data\" in markdown format\n- Include only use cases PRIMARY
+      to {domain_name} tied to user story\n- Ensure all content validates against
+      domain boundaries\n- Focus Gherkin syntax on domain-specific business mechanics\n\n##
+      Evidence-Based Validation\n- Reference specific vector search evidence that
+      supports the use case\n- Validate against actual implementation patterns found
+      in the code\n- Ensure use case aligns with domain boundaries established in
+      the evidence\n- Exclude use cases that lack supporting implementation evidence\n\nExtract
+      only use cases that:\n1. Are explicitly supported by the provided user story\n2.
+      Have PRIMARY ownership in {domain_name} domain\n3. Show clear implementation
+      evidence in vector search results\n4. Represent complete domain-specific business
+      workflows\n5. Maintain strict domain boundaries", "role": "system"}, {"content":
+      "\n## Human Instructions\n\n## Domain Context\nDomain Name: User Authentication
+      \nUser Story Context: User Login: As a user, I want to log in with email and
+      password, so that I can access my account\n\n## Task\nExtract only the PRIMARY,
+      DIRECTLY RELATED use cases for this domain using the context above. \nUse the
+      User Story as the primary source. \nVector Search Context is supplementary evidence
+      to support extraction.\n\n\n## Retrieved Context\n\n--- Document 1 ---\nUser
+      Authentication Domain Overview:\n\nThe User Authentication domain handles all
+      aspects of user identity management including registration, login, password
+      management, multi-factor authentication, and session handling. This domain ensures
+      secure access to the system and manages user credentials.\n\n\n--- Document
+      2 ---\nAuthentication Technical Specifications:\n\n- OAuth 2.0 and OpenID Connect
+      integration\n- JWT token generation and validation\n- Password hashing using
+      bcrypt\n- Session management with Redis\n- Rate limiting for login attempts\n-
+      Account lockout mechanisms\n- Password reset workflows\n\n\n--- Document 3 ---\nAuthentication
+      Features and Requirements:\n\n- User registration with email verification\n-
+      Login with username/password or social providers\n- Password strength validation\n-
+      Two-factor authentication (2FA)\n- Password reset via email\n- Session timeout
+      and refresh\n- Role-based access control (RBAC)\n- Account management (profile
+      updates, deletion)\n\n## Execute Task\nReturn ONLY the JSON response exactly
+      as specified in the Output Requirements. \nDo not include explanations or extra
+      text.\n", "role": "user"}], "model": "google/gemini-3-flash-preview", "reasoning_effort":
+      "low", "response_format": {"type": "json_schema", "json_schema": {"schema":
+      {"$defs": {"UseCaseData": {"additionalProperties": false, "properties": {"acceptance_criteria":
+      {"description": "Specific, testable conditions for completion", "items": {"type":
+      "string"}, "title": "Acceptance Criteria", "type": "array"}, "business_notes":
+      {"description": "Critical business context and domain-specific considerations",
+      "items": {"type": "string"}, "title": "Business Notes", "type": "array"}, "success_metrics":
+      {"description": "Measurable outcomes specific to the domain", "items": {"type":
+      "string"}, "title": "Success Metrics", "type": "array"}, "stakeholder_impact":
+      {"description": "How this use case benefits domain stakeholders", "items": {"type":
+      "string"}, "title": "Stakeholder Impact", "type": "array"}}, "required": ["acceptance_criteria",
+      "business_notes", "success_metrics", "stakeholder_impact"], "title": "UseCaseData",
+      "type": "object"}, "UseCaseItem": {"additionalProperties": false, "properties":
+      {"name": {"description": "The name of the use case.", "title": "Name", "type":
+      "string"}, "description": {"description": "A detailed description of the use
+      case workflow and business logic.", "title": "Description", "type": "string"},
+      "data": {"description": "Structured acceptance criteria, notes, metrics, and
+      stakeholder impact.", "additionalProperties": false, "properties": {"acceptance_criteria":
+      {"description": "Specific, testable conditions for completion", "items": {"type":
+      "string"}, "title": "Acceptance Criteria", "type": "array"}, "business_notes":
+      {"description": "Critical business context and domain-specific considerations",
+      "items": {"type": "string"}, "title": "Business Notes", "type": "array"}, "success_metrics":
+      {"description": "Measurable outcomes specific to the domain", "items": {"type":
+      "string"}, "title": "Success Metrics", "type": "array"}, "stakeholder_impact":
+      {"description": "How this use case benefits domain stakeholders", "items": {"type":
+      "string"}, "title": "Stakeholder Impact", "type": "array"}}, "required": ["acceptance_criteria",
+      "business_notes", "success_metrics", "stakeholder_impact"], "title": "UseCaseData",
+      "type": "object"}, "justification": {"description": "Evidence-based justification
+      for this use case tied to domain context.", "title": "Justification", "type":
+      "string"}, "gherkin_syntax": {"description": "Domain-specific business mechanics
+      in Gherkin syntax format.", "title": "Gherkin Syntax", "type": "string"}}, "required":
+      ["name", "description", "data", "justification", "gherkin_syntax"], "title":
+      "UseCaseItem", "type": "object"}}, "additionalProperties": false, "properties":
+      {"use_cases": {"description": "A list of use cases extracted from the context.",
+      "items": {"$ref": "#/$defs/UseCaseItem"}, "title": "Use Cases", "type": "array"}},
+      "required": ["use_cases"], "title": "UseCaseExtractionResult", "type": "object"},
+      "name": "UseCaseExtractionResult", "strict": true}}, "stream": false, "temperature":
+      0.1, "usage": {"include": true}, "max_tokens": 8000}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '11644'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-helper-method:
+      - chat.completions.parse
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-raw-response:
+      - 'true'
+      x-stainless-read-timeout:
+      - '300.0'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a65f9cc46c032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:52:16 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

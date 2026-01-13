@@ -1,0 +1,43 @@
+{
+  "category": [
+    {
+      "name": "Services",
+      "confidence": 1.0
+    },
+    {
+      "name": "Workflows",
+      "confidence": 0.8
+    },
+    {
+      "name": "Data",
+      "confidence": 0.7
+    }
+  ],
+  "language": "Ruby",
+  "framework": "Rails",
+  "exports": [
+    "SubscriptionService"
+  ],
+  "dependencies": [
+    "Serviceable",
+    "StripeService",
+    "NotificationService",
+    "SubscriptionPlan",
+    "ActiveRecord::Base",
+    "SubscriptionUsage",
+    "Rails"
+  ],
+  "reads_from": [
+    "database:subscription_plans",
+    "database:users",
+    "database:subscriptions",
+    "database:feature_access"
+  ],
+  "writes_to": [
+    "database:subscriptions",
+    "database:subscription_usage",
+    "database:feature_access",
+    "file:rails_logger",
+    "api:stripe_service"
+  ]
+}

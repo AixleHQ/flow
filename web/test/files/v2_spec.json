@@ -1,0 +1,73 @@
+{
+  "epics": [
+    {
+      "id": 1,
+      "name": "Test Document Management System",
+      "description": "A test system for managing and processing various types of documents with accessibility features.",
+      "features": [
+        {
+          "id": 101,
+          "name": "Process Standard Document",
+          "description": "This feature processes and formats standard documents for various output formats including PDF and text.",
+          "user_stories": [
+            {
+              "id": 501,
+              "name": "Create Standard Document Files",
+              "data": "",
+              "description": " - As a document services team member,\n - I want to create standard document files for each customer\n - so that I can ensure each customer receives their documents in the correct format.",
+              "acceptance_criteria": "",
+              "use_cases": [
+                {
+                  "id": 1001,
+                  "name": "Create Standard Document Files",
+                  "data": "## Acceptance Criteria\n- Standard document files are created for each customer.\n- Each file is named according to the customer's document ID.\n- The content of each file accurately reflects the customer's document data.\n- Any issues with formatting are logged appropriately.\n- Error handling is implemented for file creation failures.\n\n## Business Notes\n- The system must maintain document integrity.\n- The output must be secure and maintain customer privacy.",
+                  "description": "As a document services team member, I want to create standard document files for each customer so that I can ensure each customer receives their documents in the correct format.",
+                  "gherkin_syntax": "Background:\n  Given the document services team is ready to process customer documents\n  And the document data is available in the required format\n\nScenario: Create standard document file for a customer\n  Given a customer with document ID <docid>\n  When the team processes the document\n  Then a standard document file named <docid>.pdf is created\n  And the file contains the correct document information\n  And any formatting issues are logged\n  And if there are file creation errors, appropriate error messages are logged\n\nScenario Template: Handle formatting issues\n  Given a customer with document ID <docid>\n  When the document has formatting issues\n  Then log \"Document <docid> has formatting problems\"\n\n  Examples:\n    | docid | \n    | DOC01 | \n    | DOC02 | \n\nScenario Template: Handle file creation errors\n  Given a customer with document ID <docid>\n  When the system attempts to create the document file\n  Then if the file creation fails\n  Then log an error message indicating the failure\n\n  Examples:\n    | docid | \n    | DOC01 | \n    | DOC02 |"
+                }
+              ]
+            },
+            {
+              "id": 502,
+              "name": "Validate Document Headers",
+              "data": "",
+              "description": " - As a document services team member,\n - I want to validate document headers for correctness\n - so that I can ensure compliance with document standards.",
+              "acceptance_criteria": "",
+              "use_cases": [
+                {
+                  "id": 1002,
+                  "name": "Validate Document Headers",
+                  "data": "## Acceptance Criteria\n- The system validates document headers starting from page 1.\n- If a document header is missing or incorrect, a message is logged indicating the specific document ID and the issue.\n- The validation process must handle multiple pages and report issues for each relevant page header.\n\n## Business Notes\n- Ensuring the correctness of document headers is crucial for compliance with document standards.",
+                  "description": "As a document services team member, I want to validate document headers for correctness so that I can ensure compliance with document standards.",
+                  "gherkin_syntax": "Background:\n  Given the document processing system is active\n  And the document services team has access to the document files\n\nScenario: Validate document headers for correctness\n  Given a document with multiple pages\n  When the system validates the document headers starting from page 1\n  Then the system checks each header for correctness\n  And if a header is missing or incorrect, it logs \"Document <docid> has header problems\"\n\nScenario: Correctly formatted document headers\n  Given a document with correctly formatted headers\n  When the system validates the document headers\n  Then no issues are logged\n\nScenario: Missing document header on page 1\n  Given a document where page 1 is missing a header\n  When the system validates the document headers\n  Then it logs \"Document <docid> has header problems\"\n\nScenario: Incorrect document header format\n  Given a document where page 1 has an incorrectly formatted header\n  When the system validates the document headers\n  Then it logs \"Document <docid> has header problems\""
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 102,
+          "name": "Generate Report Summary",
+          "description": "This feature generates summary reports for processed documents, including statistics and processing results.",
+          "user_stories": [
+            {
+              "id": 503,
+              "name": "Create Processing Summary Report",
+              "data": "",
+              "description": " - As a document services team member,\n - I want to generate a summary report of all processed documents\n - so that I can track processing statistics and identify any issues.",
+              "acceptance_criteria": "",
+              "use_cases": [
+                {
+                  "id": 1003,
+                  "name": "Create Processing Summary Report",
+                  "data": "## Acceptance Criteria\n- The summary report must include the total number of documents processed.\n- The report should include a count of successful and failed processing attempts.\n- The system must generate the report in a readable format.\n\n## Business Notes\n- The summary report helps track system performance and identify processing issues.",
+                  "description": "As a document services team member, generate a summary report of all processed documents to track statistics.",
+                  "gherkin_syntax": "Background:\n  Given the document services team is logged in to the reporting system\n  And the system has processed multiple documents\n\nScenario: Generate a processing summary report\n  Given documents have been processed\n  When the system generates a summary report\n  Then the report includes the total number of documents processed\n  And the report includes counts of successful and failed processing attempts\n  And the report is generated in a readable format\n\nScenario: Handle empty processing queue\n  Given no documents have been processed\n  When the system generates a summary report\n  Then the report indicates zero documents processed\n  And the system logs this information for review\n\nScenario: Handle report generation errors\n  Given an error occurs during report generation\n  When the system attempts to generate the summary report\n  Then an error message is generated indicating the issue\n  And the user is notified of the error"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+} 

@@ -1,0 +1,2426 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert software
+      architect analyzing code files. Your goal is to understand the technical structure,
+      dependencies, and architectural role of this file.\n\nAnalyze the provided file
+      content and extract:\n\n1. **Language**: Primary programming language\n   Examples:
+      Python, JavaScript, TypeScript, Java, Ruby, PHP, Go, C#, Kotlin, Swift, Rust\n\n2.
+      **Framework**: Primary framework or library (if applicable)\n   Examples: React,
+      Vue, Angular, Django, Flask, Rails, Spring, Laravel, Express, .NET\n\n3. **Category**:
+      Technical categorization using layered architecture. Return as list of objects
+      with category name and confidence.\n\n   **Interface Layer:**\n   - **API**:
+      REST endpoints, GraphQL schemas, RPC interfaces, OpenAPI specs\n   - **UI**:
+      Visual components, templates, client-side presentation, stylesheets\n   - **CLI**:
+      Command-line interfaces, scripts, terminal tools\n\n   **Application Layer:**\n   -
+      **Controllers**: HTTP controllers, route handlers, request/response processing\n   -
+      **Services**: Application services, orchestration, workflow coordination\n   -
+      **Workflows**: Business process implementations, multi-step operations\n\n   **Domain
+      Layer:**\n   - **Models**: Business entities with behavior, domain objects,
+      value objects (not plain DTOs)\n   - **Logic**: Core business rules, domain
+      services, business calculations\n   - **Events**: Domain events, business event
+      handlers, event sourcing\n\n   **Infrastructure Layer:**\n   - **Data**: Repositories,
+      database access, persistence, migrations, embedded SQL\n   - **Integration**:
+      External service adapters, message queues, webhooks, API clients\n   - **Security**:
+      Authentication, authorization, encryption, access control\n\n   **Support Layer:**\n   -
+      **Configuration**: Settings, environment variables, build configs, feature flags\n   -
+      **Utilities**: Helper functions, shared libraries, background workers, plain
+      DTOs\n   - **Testing**: Test files, mocks, fixtures, testing utilities\n\n   **Multi-category
+      assignment:**\n   - Assign multiple categories when file has significant code
+      (>20%) in each role\n   - Assign primary category with high confidence (0.9),
+      secondary with medium (0.5-0.7)\n   - Examples with confidence:\n     * React
+      component with state management \u2192 [{\"name\": \"UI\", \"confidence\": 0.9},
+      {\"name\": \"Controllers\", \"confidence\": 0.6}]\n     * PHP controller with
+      embedded SQL \u2192 [{\"name\": \"Controllers\", \"confidence\": 0.9}, {\"name\":
+      \"Data\", \"confidence\": 0.7}]\n     * Domain service publishing events \u2192
+      [{\"name\": \"Logic\", \"confidence\": 0.9}, {\"name\": \"Events\", \"confidence\":
+      0.6}]\n\n4. **Exports**: Public interface this file provides (for dependency
+      graph construction)\n   - List up to 20 most significant exports: classes, main
+      functions, public APIs\n   - For classes: list class name only (not methods)\n   -
+      For wildcard exports: note as \"re-exports from [module_name]\"\n   - Empty
+      list valid for files with no public exports\n\n5. **Dependencies**: External
+      modules/packages this file imports (for dependency graph construction)\n   -
+      List package names and local module paths imported by THIS file\n   - Include
+      both external packages (e.g., \"express\", \"lodash\") and local imports (e.g.,
+      \"./user-service\", \"../utils/logger\")\n   - Empty list valid for files with
+      no imports\n\n6. **Reads From**: Data sources THIS file directly reads from
+      (list as strings in format \"type:resource\")\n   **Scope**: Direct reads by
+      THIS file only - exclude reads through service calls to other files\n   **Format
+      Examples**:\n   - \"database.users\", \"database.orders\" (table-level)\n   -
+      \"cache:sessions\", \"cache:user_profiles\" (namespace)\n   - \"api.stripe.com\",
+      \"api.github.com\" (external API domain)\n   - \"file:/config/settings.yml\",
+      \"file:/uploads/*\" (file path)\n   - \"queue:incoming_orders\" (queue name)\n   -
+      \"env:DATABASE_URL\", \"env:API_KEY\" (environment variable)\n   Empty list
+      valid\n\n7. **Writes To**: Data sinks THIS file directly writes to (list as
+      strings in format \"type:resource\")\n   **Scope**: Direct writes by THIS file
+      only - exclude writes through service calls to other files\n   **Format Examples**:\n   -
+      \"database.orders\", \"database.audit_log\" (table-level)\n   - \"cache:products\",
+      \"cache:sessions\" (namespace)\n   - \"api.stripe.com\", \"api.sendgrid.com\"
+      (external API domain)\n   - \"file:/logs/app.log\", \"file:/exports/*\" (file
+      path)\n   - \"queue:notifications\", \"queue:analytics\" (queue name)\n   -
+      \"events:order.created\", \"events:user.updated\" (event name)\n   Empty list
+      valid\n\nExtract technical structure observable in THIS file''s code.\n\n**CRITICAL**:
+      Output ONLY valid JSON in the exact schema format specified. No additional text,
+      explanations, or excessive whitespace.\n\n\n        As a genius expert, your
+      task is to understand the content and provide\n        the parsed objects in
+      json that match the following json_schema:\n\n\n        {\n  \"$defs\": {\n    \"CategoryAssignment\":
+      {\n      \"additionalProperties\": false,\n      \"description\": \"Category
+      assignment with confidence level.\",\n      \"properties\": {\n        \"name\":
+      {\n          \"description\": \"Category name (e.g., Controllers, Models, API)\",\n          \"title\":
+      \"Name\",\n          \"type\": \"string\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence level (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        }\n      },\n      \"required\": [\n        \"name\",\n        \"confidence\"\n      ],\n      \"title\":
+      \"CategoryAssignment\",\n      \"type\": \"object\"\n    }\n  },\n  \"description\":
+      \"Result of technical analysis for a code file.\",\n  \"properties\": {\n    \"category\":
+      {\n      \"description\": \"Technical categorization with confidence levels\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/CategoryAssignment\"\n      },\n      \"title\":
+      \"Category\",\n      \"type\": \"array\"\n    },\n    \"language\": {\n      \"description\":
+      \"Primary programming language (use ''Unknown'' if cannot determine)\",\n      \"title\":
+      \"Language\",\n      \"type\": \"string\"\n    },\n    \"framework\": {\n      \"description\":
+      \"Primary framework (use ''None'' if no framework detected)\",\n      \"title\":
+      \"Framework\",\n      \"type\": \"string\"\n    },\n    \"exports\": {\n      \"description\":
+      \"Public interface: functions, classes, constants (max 20, empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Exports\",\n      \"type\":
+      \"array\"\n    },\n    \"dependencies\": {\n      \"description\": \"Imports
+      from external modules and local files (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Dependencies\",\n      \"type\":
+      \"array\"\n    },\n    \"reads_from\": {\n      \"description\": \"Data sources
+      directly read by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Reads From\",\n      \"type\":
+      \"array\"\n    },\n    \"writes_to\": {\n      \"description\": \"Data sinks
+      directly written by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Writes To\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"category\",\n    \"language\",\n    \"framework\",\n    \"exports\",\n    \"dependencies\",\n    \"reads_from\",\n    \"writes_to\"\n  ],\n  \"title\":
+      \"FileTechnicalAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make
+      sure to return an instance of the JSON, not the schema itself\n"}, {"role":
+      "user", "content": "File: example.py\n\n\"\"\"User authentication service for
+      managing login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom
+      datetime import datetime, timedelta\n\nfrom models.session import UserSession\nfrom
+      models.user import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10375'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//pJTB
+        btswDIZfJeBZyZxmSVPdWhTboRvWIdsudWEwMm1rlSVXlNMGgd99UJ2kzlAUA3YSwJ/6+FOitAOd
+        g4SS7Hh6vljMp8uzxWJ8tTrb3qyvVp8eb+b1V3f9EX/dgoDGu43OyYOEz86VhkBA7XIykfAS+FBS
+        ra0ez8aFQa7GjaeNpicQ4Na/SQWQoCoME+XqxlDQzoIA5QkD5SBfHQhQldOKGOTdDowrG+/WDNK2
+        xggotNVcZZ6QnQUJHFwDAiwGvaHsb3X141s0r21OzyATATUxY0kgd+CdIZCAzJoD2hDdOBvIRqe7
+        1I5GKRi0ZYslpSBHKdxuQ+VsCqIXC481PTn/0Kur718ujaqo3h4zFAYqnd/GhLsYGo12/RJVi/Ue
+        vCK/iR3vN/aycrbQOVn1kpRMLnqpE++CVOt12L4LWv4D6BoDvgs530Picr9vl54b5wMPuk3hsg0V
+        2aAVxhvfN5rCcFtODdmI1nS6t0KujF4ffaTApDwFHkRyDBR0tH0MvYwlT5iY9fG6BkLL5IfMR4P9
+        vU2cr0+tecKcs8K7+sRYjgHXyDT5eYo6ia8O9YfAJ68DcRbc//JS24EAT0XLaPrH0XX3AtrDeDfe
+        1U3IgnsgyyDPZhfnccAPb+9VmE4FBBfQvIYWyTLmcgCZTJJkupxN5wI0Z+utewBZoGESpxWynAJq
+        w7G0QlVRfsQlArDNtRsG4l8yCHR9uSGkbTh4wjrTtiAfBy/rHfX/wBvy3s/A9/RiORdvkw7nwIP8
+        ZDGbdW8c0tBW/7VoWw670TWWNOim6/4AAAD//wMAgsWfbZMFAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a46fcc939c23e-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:07 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert software
+      architect analyzing code files. Your goal is to understand the technical structure,
+      dependencies, and architectural role of this file.\n\nAnalyze the provided file
+      content and extract:\n\n1. **Language**: Primary programming language\n   Examples:
+      Python, JavaScript, TypeScript, Java, Ruby, PHP, Go, C#, Kotlin, Swift, Rust\n\n2.
+      **Framework**: Primary framework or library (if applicable)\n   Examples: React,
+      Vue, Angular, Django, Flask, Rails, Spring, Laravel, Express, .NET\n\n3. **Category**:
+      Technical categorization using layered architecture. Return as list of objects
+      with category name and confidence.\n\n   **Interface Layer:**\n   - **API**:
+      REST endpoints, GraphQL schemas, RPC interfaces, OpenAPI specs\n   - **UI**:
+      Visual components, templates, client-side presentation, stylesheets\n   - **CLI**:
+      Command-line interfaces, scripts, terminal tools\n\n   **Application Layer:**\n   -
+      **Controllers**: HTTP controllers, route handlers, request/response processing\n   -
+      **Services**: Application services, orchestration, workflow coordination\n   -
+      **Workflows**: Business process implementations, multi-step operations\n\n   **Domain
+      Layer:**\n   - **Models**: Business entities with behavior, domain objects,
+      value objects (not plain DTOs)\n   - **Logic**: Core business rules, domain
+      services, business calculations\n   - **Events**: Domain events, business event
+      handlers, event sourcing\n\n   **Infrastructure Layer:**\n   - **Data**: Repositories,
+      database access, persistence, migrations, embedded SQL\n   - **Integration**:
+      External service adapters, message queues, webhooks, API clients\n   - **Security**:
+      Authentication, authorization, encryption, access control\n\n   **Support Layer:**\n   -
+      **Configuration**: Settings, environment variables, build configs, feature flags\n   -
+      **Utilities**: Helper functions, shared libraries, background workers, plain
+      DTOs\n   - **Testing**: Test files, mocks, fixtures, testing utilities\n\n   **Multi-category
+      assignment:**\n   - Assign multiple categories when file has significant code
+      (>20%) in each role\n   - Assign primary category with high confidence (0.9),
+      secondary with medium (0.5-0.7)\n   - Examples with confidence:\n     * React
+      component with state management \u2192 [{\"name\": \"UI\", \"confidence\": 0.9},
+      {\"name\": \"Controllers\", \"confidence\": 0.6}]\n     * PHP controller with
+      embedded SQL \u2192 [{\"name\": \"Controllers\", \"confidence\": 0.9}, {\"name\":
+      \"Data\", \"confidence\": 0.7}]\n     * Domain service publishing events \u2192
+      [{\"name\": \"Logic\", \"confidence\": 0.9}, {\"name\": \"Events\", \"confidence\":
+      0.6}]\n\n4. **Exports**: Public interface this file provides (for dependency
+      graph construction)\n   - List up to 20 most significant exports: classes, main
+      functions, public APIs\n   - For classes: list class name only (not methods)\n   -
+      For wildcard exports: note as \"re-exports from [module_name]\"\n   - Empty
+      list valid for files with no public exports\n\n5. **Dependencies**: External
+      modules/packages this file imports (for dependency graph construction)\n   -
+      List package names and local module paths imported by THIS file\n   - Include
+      both external packages (e.g., \"express\", \"lodash\") and local imports (e.g.,
+      \"./user-service\", \"../utils/logger\")\n   - Empty list valid for files with
+      no imports\n\n6. **Reads From**: Data sources THIS file directly reads from
+      (list as strings in format \"type:resource\")\n   **Scope**: Direct reads by
+      THIS file only - exclude reads through service calls to other files\n   **Format
+      Examples**:\n   - \"database.users\", \"database.orders\" (table-level)\n   -
+      \"cache:sessions\", \"cache:user_profiles\" (namespace)\n   - \"api.stripe.com\",
+      \"api.github.com\" (external API domain)\n   - \"file:/config/settings.yml\",
+      \"file:/uploads/*\" (file path)\n   - \"queue:incoming_orders\" (queue name)\n   -
+      \"env:DATABASE_URL\", \"env:API_KEY\" (environment variable)\n   Empty list
+      valid\n\n7. **Writes To**: Data sinks THIS file directly writes to (list as
+      strings in format \"type:resource\")\n   **Scope**: Direct writes by THIS file
+      only - exclude writes through service calls to other files\n   **Format Examples**:\n   -
+      \"database.orders\", \"database.audit_log\" (table-level)\n   - \"cache:products\",
+      \"cache:sessions\" (namespace)\n   - \"api.stripe.com\", \"api.sendgrid.com\"
+      (external API domain)\n   - \"file:/logs/app.log\", \"file:/exports/*\" (file
+      path)\n   - \"queue:notifications\", \"queue:analytics\" (queue name)\n   -
+      \"events:order.created\", \"events:user.updated\" (event name)\n   Empty list
+      valid\n\nExtract technical structure observable in THIS file''s code.\n\n**CRITICAL**:
+      Output ONLY valid JSON in the exact schema format specified. No additional text,
+      explanations, or excessive whitespace.\n\n\n        As a genius expert, your
+      task is to understand the content and provide\n        the parsed objects in
+      json that match the following json_schema:\n\n\n        {\n  \"$defs\": {\n    \"CategoryAssignment\":
+      {\n      \"additionalProperties\": false,\n      \"description\": \"Category
+      assignment with confidence level.\",\n      \"properties\": {\n        \"name\":
+      {\n          \"description\": \"Category name (e.g., Controllers, Models, API)\",\n          \"title\":
+      \"Name\",\n          \"type\": \"string\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence level (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        }\n      },\n      \"required\": [\n        \"name\",\n        \"confidence\"\n      ],\n      \"title\":
+      \"CategoryAssignment\",\n      \"type\": \"object\"\n    }\n  },\n  \"description\":
+      \"Result of technical analysis for a code file.\",\n  \"properties\": {\n    \"category\":
+      {\n      \"description\": \"Technical categorization with confidence levels\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/CategoryAssignment\"\n      },\n      \"title\":
+      \"Category\",\n      \"type\": \"array\"\n    },\n    \"language\": {\n      \"description\":
+      \"Primary programming language (use ''Unknown'' if cannot determine)\",\n      \"title\":
+      \"Language\",\n      \"type\": \"string\"\n    },\n    \"framework\": {\n      \"description\":
+      \"Primary framework (use ''None'' if no framework detected)\",\n      \"title\":
+      \"Framework\",\n      \"type\": \"string\"\n    },\n    \"exports\": {\n      \"description\":
+      \"Public interface: functions, classes, constants (max 20, empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Exports\",\n      \"type\":
+      \"array\"\n    },\n    \"dependencies\": {\n      \"description\": \"Imports
+      from external modules and local files (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Dependencies\",\n      \"type\":
+      \"array\"\n    },\n    \"reads_from\": {\n      \"description\": \"Data sources
+      directly read by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Reads From\",\n      \"type\":
+      \"array\"\n    },\n    \"writes_to\": {\n      \"description\": \"Data sinks
+      directly written by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Writes To\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"category\",\n    \"language\",\n    \"framework\",\n    \"exports\",\n    \"dependencies\",\n    \"reads_from\",\n    \"writes_to\"\n  ],\n  \"title\":
+      \"FileTechnicalAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make
+      sure to return an instance of the JSON, not the schema itself\n"}, {"role":
+      "user", "content": "File: example.py\n\n\"\"\"User authentication service for
+      managing login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom
+      datetime import datetime, timedelta\n\nfrom models.session import UserSession\nfrom
+      models.user import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.2, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10375'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//6SUb2vbMBDGv0q4
+        10rmNGva+F2hMAZl68j2ZnUxF/lsa5UlT3dOG4K/+1Cdps4oZbBXgntOv3tOf24PpoAUKnLT+cVy
+        eT6/PFteTj9+oQt7U13XxUWThJvFz2uxoKANfmsKCpDCJ+8rS5Orz5O1dIXxoKDxBdnIepY+VNQY
+        Z6aLaWmR62kbaGvoERT4zS/SAinoGmWmfdNaEuMdKNCBUKiA9OhlpUDX3mhiSO/2YH3VBr9hSF1n
+        rYLSOMN1HgjZO0iBxbegwKGYLeV/q+vvX29BgXEFPUGaKGiIGSuCdA/BW4IUkNmwoJPoxjshF53u
+        MzeZZGDRVR1WlEE6yeB2J7V3GahBLAM29OjDw6Cuv91cWV1TsztmaBSqfNjFhLsYmkz2wxJVh80B
+        vKawjR0fNg6y9q40BTn9nJTMVoPUq3dBugtGdu+CLv8BdI2C70KWB0hc7g/t0lPrg/Co2wyuOqnJ
+        idEYb/zQaAbjbQW15CLa0OneGrm2ZnP0kQGTDiQ8ihQoJCbaPoaenyXPmJjN8bpGQscUxszfFod7
+        m/nQnFoLhAXnZfDNibECBTfINPtxijqJr1/qj4GPwQhxLv5/eZnrQUGgsmO0w+fo+3sF3cvzboNv
+        WsnFP5BjSM8Wq/izjn/vVZjPFYgXtK+h5TyJuSyQJrMkmV8uzs4VGM43O/8AaYmWSZ1WyAsSNJZj
+        aY26puKISxRgnBjjQJwqo0A/lBtDupYlEDa5cSWF+PDywdEwB96QD35Gvuer1bl6m/RyDjzKT5aL
+        Rf/GIY1tDaPFuGrcjWmwolE3ff8HAAD//wMAiP8BnZIFAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a470cf84cc23e-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:09 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert software
+      architect analyzing code files. Your goal is to understand the technical structure,
+      dependencies, and architectural role of this file.\n\nAnalyze the provided file
+      content and extract:\n\n1. **Language**: Primary programming language\n   Examples:
+      Python, JavaScript, TypeScript, Java, Ruby, PHP, Go, C#, Kotlin, Swift, Rust\n\n2.
+      **Framework**: Primary framework or library (if applicable)\n   Examples: React,
+      Vue, Angular, Django, Flask, Rails, Spring, Laravel, Express, .NET\n\n3. **Category**:
+      Technical categorization using layered architecture. Return as list of objects
+      with category name and confidence.\n\n   **Interface Layer:**\n   - **API**:
+      REST endpoints, GraphQL schemas, RPC interfaces, OpenAPI specs\n   - **UI**:
+      Visual components, templates, client-side presentation, stylesheets\n   - **CLI**:
+      Command-line interfaces, scripts, terminal tools\n\n   **Application Layer:**\n   -
+      **Controllers**: HTTP controllers, route handlers, request/response processing\n   -
+      **Services**: Application services, orchestration, workflow coordination\n   -
+      **Workflows**: Business process implementations, multi-step operations\n\n   **Domain
+      Layer:**\n   - **Models**: Business entities with behavior, domain objects,
+      value objects (not plain DTOs)\n   - **Logic**: Core business rules, domain
+      services, business calculations\n   - **Events**: Domain events, business event
+      handlers, event sourcing\n\n   **Infrastructure Layer:**\n   - **Data**: Repositories,
+      database access, persistence, migrations, embedded SQL\n   - **Integration**:
+      External service adapters, message queues, webhooks, API clients\n   - **Security**:
+      Authentication, authorization, encryption, access control\n\n   **Support Layer:**\n   -
+      **Configuration**: Settings, environment variables, build configs, feature flags\n   -
+      **Utilities**: Helper functions, shared libraries, background workers, plain
+      DTOs\n   - **Testing**: Test files, mocks, fixtures, testing utilities\n\n   **Multi-category
+      assignment:**\n   - Assign multiple categories when file has significant code
+      (>20%) in each role\n   - Assign primary category with high confidence (0.9),
+      secondary with medium (0.5-0.7)\n   - Examples with confidence:\n     * React
+      component with state management \u2192 [{\"name\": \"UI\", \"confidence\": 0.9},
+      {\"name\": \"Controllers\", \"confidence\": 0.6}]\n     * PHP controller with
+      embedded SQL \u2192 [{\"name\": \"Controllers\", \"confidence\": 0.9}, {\"name\":
+      \"Data\", \"confidence\": 0.7}]\n     * Domain service publishing events \u2192
+      [{\"name\": \"Logic\", \"confidence\": 0.9}, {\"name\": \"Events\", \"confidence\":
+      0.6}]\n\n4. **Exports**: Public interface this file provides (for dependency
+      graph construction)\n   - List up to 20 most significant exports: classes, main
+      functions, public APIs\n   - For classes: list class name only (not methods)\n   -
+      For wildcard exports: note as \"re-exports from [module_name]\"\n   - Empty
+      list valid for files with no public exports\n\n5. **Dependencies**: External
+      modules/packages this file imports (for dependency graph construction)\n   -
+      List package names and local module paths imported by THIS file\n   - Include
+      both external packages (e.g., \"express\", \"lodash\") and local imports (e.g.,
+      \"./user-service\", \"../utils/logger\")\n   - Empty list valid for files with
+      no imports\n\n6. **Reads From**: Data sources THIS file directly reads from
+      (list as strings in format \"type:resource\")\n   **Scope**: Direct reads by
+      THIS file only - exclude reads through service calls to other files\n   **Format
+      Examples**:\n   - \"database.users\", \"database.orders\" (table-level)\n   -
+      \"cache:sessions\", \"cache:user_profiles\" (namespace)\n   - \"api.stripe.com\",
+      \"api.github.com\" (external API domain)\n   - \"file:/config/settings.yml\",
+      \"file:/uploads/*\" (file path)\n   - \"queue:incoming_orders\" (queue name)\n   -
+      \"env:DATABASE_URL\", \"env:API_KEY\" (environment variable)\n   Empty list
+      valid\n\n7. **Writes To**: Data sinks THIS file directly writes to (list as
+      strings in format \"type:resource\")\n   **Scope**: Direct writes by THIS file
+      only - exclude writes through service calls to other files\n   **Format Examples**:\n   -
+      \"database.orders\", \"database.audit_log\" (table-level)\n   - \"cache:products\",
+      \"cache:sessions\" (namespace)\n   - \"api.stripe.com\", \"api.sendgrid.com\"
+      (external API domain)\n   - \"file:/logs/app.log\", \"file:/exports/*\" (file
+      path)\n   - \"queue:notifications\", \"queue:analytics\" (queue name)\n   -
+      \"events:order.created\", \"events:user.updated\" (event name)\n   Empty list
+      valid\n\nExtract technical structure observable in THIS file''s code.\n\n**CRITICAL**:
+      Output ONLY valid JSON in the exact schema format specified. No additional text,
+      explanations, or excessive whitespace.\n\n\n        As a genius expert, your
+      task is to understand the content and provide\n        the parsed objects in
+      json that match the following json_schema:\n\n\n        {\n  \"$defs\": {\n    \"CategoryAssignment\":
+      {\n      \"additionalProperties\": false,\n      \"description\": \"Category
+      assignment with confidence level.\",\n      \"properties\": {\n        \"name\":
+      {\n          \"description\": \"Category name (e.g., Controllers, Models, API)\",\n          \"title\":
+      \"Name\",\n          \"type\": \"string\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence level (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        }\n      },\n      \"required\": [\n        \"name\",\n        \"confidence\"\n      ],\n      \"title\":
+      \"CategoryAssignment\",\n      \"type\": \"object\"\n    }\n  },\n  \"description\":
+      \"Result of technical analysis for a code file.\",\n  \"properties\": {\n    \"category\":
+      {\n      \"description\": \"Technical categorization with confidence levels\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/CategoryAssignment\"\n      },\n      \"title\":
+      \"Category\",\n      \"type\": \"array\"\n    },\n    \"language\": {\n      \"description\":
+      \"Primary programming language (use ''Unknown'' if cannot determine)\",\n      \"title\":
+      \"Language\",\n      \"type\": \"string\"\n    },\n    \"framework\": {\n      \"description\":
+      \"Primary framework (use ''None'' if no framework detected)\",\n      \"title\":
+      \"Framework\",\n      \"type\": \"string\"\n    },\n    \"exports\": {\n      \"description\":
+      \"Public interface: functions, classes, constants (max 20, empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Exports\",\n      \"type\":
+      \"array\"\n    },\n    \"dependencies\": {\n      \"description\": \"Imports
+      from external modules and local files (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Dependencies\",\n      \"type\":
+      \"array\"\n    },\n    \"reads_from\": {\n      \"description\": \"Data sources
+      directly read by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Reads From\",\n      \"type\":
+      \"array\"\n    },\n    \"writes_to\": {\n      \"description\": \"Data sinks
+      directly written by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Writes To\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"category\",\n    \"language\",\n    \"framework\",\n    \"exports\",\n    \"dependencies\",\n    \"reads_from\",\n    \"writes_to\"\n  ],\n  \"title\":
+      \"FileTechnicalAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make
+      sure to return an instance of the JSON, not the schema itself\n"}, {"role":
+      "user", "content": "File: example.py\n\n\"\"\"User authentication service for
+      managing login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom
+      datetime import datetime, timedelta\n\nfrom models.session import UserSession\nfrom
+      models.user import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10375'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//pJRv
+        a9swEMa/SrjXSmY35E/9rqzQN4O1ZIN1czEX+WyrkSVPJ6cJwd99qE5SZ5Qy2CvBPaffPSeddACV
+        QwIlmXG8mM9n8fJqEY1/tptcyscfn3ezxx3ePdzePDyDgMbZrcrJQQJ31paaQEBtc9KB8Br4VFKt
+        jBpPx4VGrsaNo62iFxBg188kPSQgK/QTaetGk1fWgADpCD3lkLw5ECArqyQxJL8OoG3ZOLtmSEyr
+        tYBCGcVV5gjZGkiAvW1AgEGvtpT9ra6+fb0HAcrktIMkElATM5YEyQGc1QQJILNij8YHN9Z4MsHp
+        ITWjUQoaTdliSSkkoxTu976yJgXRi4XDml6s2/Tq6uHLjZYV1ftzhkRPpXX7kPArhEajQ78E1WB9
+        BK/IbUPHx429LK0pVE5GviZFk+te6sSHINk65fcfgpb/ALpFjx9CFkdIWJ6O7dKusc7zoNsUblpf
+        kfFKYrjxY6MpDLfl1JAJaEWXeyvkSqv12UcKTNKR50EkR09eBdvn0OtY8oSJWZ2vayC0TG7I/K2x
+        v7eJdfWlNUeYc1Y4W18Yy9HjGpkm3y9RF/HVqf4Q+OKUJ868/V9eajoQ4KhoGXX/OLruSUB7Gu/G
+        2brxmbcbMgzJ1fR6EQb89PbehDgW4K1H/RaaR8uQyx6SaBJF8XIazwQoztZ7u4GkQM0kLitkOXlU
+        mkNpibKi/IyLBGCbKzsMhL9kEOj6ckNI27B3hHWmTEEuDF7WO+r/gXfko5+B7/h6ORPvk07nwIP8
+        aD6ddu8c0tBW/7UoUw67UTWWNOim6/4AAAD//wMAbvTT4pMFAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47197a19c23e-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:12 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a consensus judge
+      reviewing multiple technical analysis reports for a code file.\n\nBased on the
+      original file content and the expert analyses provided, create a final consensus
+      technical analysis that combines the best insights from all experts.\n\nRequirements:\n1.
+      **Synthesize insights**: Combine the most accurate technical observations from
+      all experts\n2. **Resolve conflicts**: When experts disagree, choose the most
+      evidence-based technical conclusion\n3. **Technical precision**: Ensure technical
+      details are accurate and well-founded\n4. **Architectural focus**: Prioritize
+      insights that help understand system architecture\n\nCreate a comprehensive
+      technical analysis that represents the collective expert judgment.\n\n**CRITICAL**:
+      Output ONLY valid JSON in the exact schema format specified. No additional text,
+      explanations, or excessive whitespace.\n\n\n        As a genius expert, your
+      task is to understand the content and provide\n        the parsed objects in
+      json that match the following json_schema:\n\n\n        {\n  \"$defs\": {\n    \"CategoryAssignment\":
+      {\n      \"additionalProperties\": false,\n      \"description\": \"Category
+      assignment with confidence level.\",\n      \"properties\": {\n        \"name\":
+      {\n          \"description\": \"Category name (e.g., Controllers, Models, API)\",\n          \"title\":
+      \"Name\",\n          \"type\": \"string\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence level (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        }\n      },\n      \"required\": [\n        \"name\",\n        \"confidence\"\n      ],\n      \"title\":
+      \"CategoryAssignment\",\n      \"type\": \"object\"\n    }\n  },\n  \"description\":
+      \"Result of technical analysis for a code file.\",\n  \"properties\": {\n    \"category\":
+      {\n      \"description\": \"Technical categorization with confidence levels\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/CategoryAssignment\"\n      },\n      \"title\":
+      \"Category\",\n      \"type\": \"array\"\n    },\n    \"language\": {\n      \"description\":
+      \"Primary programming language (use ''Unknown'' if cannot determine)\",\n      \"title\":
+      \"Language\",\n      \"type\": \"string\"\n    },\n    \"framework\": {\n      \"description\":
+      \"Primary framework (use ''None'' if no framework detected)\",\n      \"title\":
+      \"Framework\",\n      \"type\": \"string\"\n    },\n    \"exports\": {\n      \"description\":
+      \"Public interface: functions, classes, constants (max 20, empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Exports\",\n      \"type\":
+      \"array\"\n    },\n    \"dependencies\": {\n      \"description\": \"Imports
+      from external modules and local files (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Dependencies\",\n      \"type\":
+      \"array\"\n    },\n    \"reads_from\": {\n      \"description\": \"Data sources
+      directly read by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Reads From\",\n      \"type\":
+      \"array\"\n    },\n    \"writes_to\": {\n      \"description\": \"Data sinks
+      directly written by THIS file in format ''type:resource'' (empty list valid)\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Writes To\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"category\",\n    \"language\",\n    \"framework\",\n    \"exports\",\n    \"dependencies\",\n    \"reads_from\",\n    \"writes_to\"\n  ],\n  \"title\":
+      \"FileTechnicalAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make
+      sure to return an instance of the JSON, not the schema itself\n"}, {"role":
+      "user", "content": "Original Content:\n```\nFile: example.py\n\n\"\"\"User authentication
+      service for managing login and session handling.\"\"\"\n\nimport hashlib\nimport
+      secrets\nfrom datetime import datetime, timedelta\n\nfrom models.session import
+      UserSession\nfrom models.user import User\nfrom sqlalchemy.orm import Session\n\n\nclass
+      AuthenticationService:\n    \"\"\"Handles user authentication and session management.\"\"\"\n\n    def
+      __init__(self, db: Session):\n        self.db = db\n        self.session_timeout
+      = timedelta(hours=24)\n\n    def authenticate_user(self, email: str, password:
+      str) -> User | None:\n        \"\"\"Authenticate user with email and password.\"\"\"\n        user
+      = self.db.query(User).filter(User.email == email).first()\n        if not user:\n            return
+      None\n\n        if not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n```\n\nExpert
+      Analyses:\nExpert Analysis 1:\n{\n  \"category\": [\n    {\n      \"name\":
+      \"Services\",\n      \"confidence\": 0.9\n    },\n    {\n      \"name\": \"Security\",\n      \"confidence\":
+      0.8\n    },\n    {\n      \"name\": \"Data\",\n      \"confidence\": 0.7\n    }\n  ],\n  \"language\":
+      \"Python\",\n  \"framework\": \"SQLAlchemy\",\n  \"exports\": [\n    \"AuthenticationService\"\n  ],\n  \"dependencies\":
+      [\n    \"hashlib\",\n    \"secrets\",\n    \"datetime\",\n    \"models.session\",\n    \"models.user\",\n    \"sqlalchemy.orm\"\n  ],\n  \"reads_from\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ],\n  \"writes_to\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ]\n}\n\nExpert Analysis
+      2:\n{\n  \"category\": [\n    {\n      \"name\": \"Services\",\n      \"confidence\":
+      0.9\n    },\n    {\n      \"name\": \"Security\",\n      \"confidence\": 0.8\n    },\n    {\n      \"name\":
+      \"Data\",\n      \"confidence\": 0.6\n    }\n  ],\n  \"language\": \"Python\",\n  \"framework\":
+      \"SQLAlchemy\",\n  \"exports\": [\n    \"AuthenticationService\"\n  ],\n  \"dependencies\":
+      [\n    \"hashlib\",\n    \"secrets\",\n    \"datetime\",\n    \"models.session\",\n    \"models.user\",\n    \"sqlalchemy.orm\"\n  ],\n  \"reads_from\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ],\n  \"writes_to\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ]\n}\n\nExpert Analysis
+      3:\n{\n  \"category\": [\n    {\n      \"name\": \"Services\",\n      \"confidence\":
+      0.9\n    },\n    {\n      \"name\": \"Security\",\n      \"confidence\": 0.8\n    },\n    {\n      \"name\":
+      \"Data\",\n      \"confidence\": 0.7\n    }\n  ],\n  \"language\": \"Python\",\n  \"framework\":
+      \"SQLAlchemy\",\n  \"exports\": [\n    \"AuthenticationService\"\n  ],\n  \"dependencies\":
+      [\n    \"hashlib\",\n    \"secrets\",\n    \"datetime\",\n    \"models.session\",\n    \"models.user\",\n    \"sqlalchemy.orm\"\n  ],\n  \"reads_from\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ],\n  \"writes_to\":
+      [\n    \"database.User\",\n    \"database.UserSession\"\n  ]\n}"}], "model":
+      "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '8568'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//6SUb2vbMBDGv0q4
+        10rmNG3S6l2gUMYG7cg2xupiLvbZViNLrk5OGoK/+1CdP84oZbBXgnvOPz13Pt0OVAYSCjLD8Ww6
+        vRpfX8wmw0l0N25+/h5/MauXX/fz7fN0cwsCamfXKiMHEu6sLTQN5p8HC99kyoKAymakA+tN+lRQ
+        pYwaToa5Ri6HtaO1og0IsMtnSj1ISEv0o9RWtSavrAEBqSP0lIE8eRGQllalxCAfd6BtUTu7ZJCm
+        0VpAroziMnGEbA1IYG9rEGDQqzUlf6uL7/cPIECZjF5BRgIqYsaCQO7AWU0gAZkVezQ+uLHGkwlO
+        d7EZDGJI0VNh3TYGOXgMocFg1x1BNVhRUGJYkFsHyzGIk5xak6uMTPqWFI1uOqkVH4LSxim//RB0
+        /Q+gW/T4IWS2h4TjSXTlajRFg8Ue8bD1pTV7SAy5w4o21q32Tr99neu0pGp7zKDX2jrPvWbFMG98
+        ScarFMMf3/cphv6tGdVkgjNF59+WyKVWy2MZMTCljjz3Ihl68ipUfQy9jSWPmJjV0X9PaJhcn/mi
+        sStkZF11bs0RZpzkzlZnxjL0uEQm+eMcdRZfHO7vAzdOeeLE2//lxaYFAY7yhlF3j6NtnwQ0h/Gu
+        na1qn3i7IsMgL6KbyzDgh7d3EsZjAd561KfQJLoKuexBRqMoGk+vBShOllu7ApmjZhLn/CQjj0pz
+        uDjFtKTsCIsEYNgX/UDYKb1A213WhzQ1e0dYJcrk5MLUJp2fbgu8I+/99FxHlzPxPujQBO6lR9PJ
+        pH2nQ31X3V5RpugXoyosqFdM2/4BAAD//wMApUNvyo8FAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47281a3bc23e-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:14 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert business
+      analyst analyzing code files. Your goal is to understand the business purpose
+      and functional responsibilities of this file.\n\nAnalyze the provided file content
+      and extract:\n\n1. **Primary Responsibility**: What is the main business function
+      this file serves? (one sentence)\n\n2. **Business Logic Factor**: Rate how much
+      business logic this file contains (0.0-1.0):\n   - **0.9-1.0**: Core business
+      rules, domain logic, critical business processes\n     Examples: Order validation
+      rules, pricing calculations, inventory management logic\n   - **0.7-0.8**: Business
+      workflow orchestration, business features with user interaction\n     Examples:
+      Checkout process, user registration flow, report generation orchestration\n   -
+      **0.5-0.6**: Business data processing, business validation, business calculations\n     Examples:
+      Data transformations for business metrics, notification triggers, business reporting\n   -
+      **0.3-0.4**: Business data presentation, business configuration with business
+      impact\n     Examples: Dashboard views, business email templates, feature flags
+      affecting business flows\n   - **0.1-0.2**: Business utilities, business helpers,
+      light business configuration\n     Examples: Business constants, formatting
+      utilities for business data, business ID generators\n   - **0.0**: Pure technical
+      infrastructure with no business value\n     Examples: Database connection pooling,
+      logging configuration, build scripts, HTTP middleware\n\n3. **Functional Group
+      Candidates**: What functional groups could this file belong to?\n\n   **Definition**:
+      A Functional Group is the smallest cohesive unit of functionality serving a
+      specific user goal.\n\n   **When to return empty list:**\n   - Infrastructure
+      files (BL factor < 0.3): configs, middleware, utilities with no business logic\n   -
+      Pure technical files: database connections, logging, build scripts, HTTP handlers\n   -
+      No business entities or domain concepts present\n   - No business rules or constraints
+      visible\n\n   **When to extract groups:**\n   - Business logic present (BL factor
+      \u2265 0.3)\n   - Contains domain entities (Order, Customer, Product, Payment)\n   -
+      Implements business rules or constraints\n   - Operations serve user goals (not
+      just system maintenance like logging, caching, connection pooling)\n\n   **Validation
+      Criteria** - Each group must:\n   - Serve a single user goal (describable in
+      one sentence)\n   - Contain 2+ operations working toward the same user goal\n   -
+      Have clear boundaries (functionality either belongs or doesn''t)\n   - Focus
+      on business concepts (Order, Payment) not technical concepts (Connection, Thread)\n   -
+      If removed, a specific user action becomes impossible\n\n   For each candidate
+      provide:\n   - **name**: Descriptive name (e.g., \"Order Status Management\",
+      \"Contact Information Entry\")\n   - **user_goal**: What user goal this serves
+      (e.g., \"Update order status through workflow\", \"Capture customer contact
+      details\")\n   - **operations**: Supported operations as list (e.g., [\"create\",
+      \"validate\", \"save\"], [\"search\", \"filter\", \"sort\"])\n     Common: create,
+      read, update, delete, search, filter, sort, validate, calculate, notify, approve,
+      export, import\n   - **entities**: Key business entities as list (e.g., [\"Order\",
+      \"Status\"], [\"Contact\", \"Email\", \"Phone\"])\n     Use business terminology
+      visible in code - class names, model names, domain objects\n   - **business_rules**:
+      Observable business rules as list (e.g., [\"Status transitions must be sequential\",
+      \"Email validation required\"])\n     Only list rules visible in THIS file -
+      no assumptions about external logic. Empty list is valid.\n   - **confidence**:
+      Your confidence level (0.0 = unsure, 0.5 = moderate, 0.9 = very confident)\n   -
+      **business_domain_hint**: Business domain (e.g., \"order_management\", \"contact_management\")
+      or empty string if unclear\n\nFocus on observable functionality in this file.
+      Extract semantic information (operations, entities, rules) to enable accurate
+      cross-source clustering.\n\n**CRITICAL**: Output ONLY valid JSON in the exact
+      schema format specified. No additional text, explanations, or excessive whitespace.\n\n\n        As
+      a genius expert, your task is to understand the content and provide\n        the
+      parsed objects in json that match the following json_schema:\n\n\n        {\n  \"$defs\":
+      {\n    \"FunctionalGroupCandidate\": {\n      \"additionalProperties\": false,\n      \"description\":
+      \"Per-file functional group candidate with semantic context for clustering.\",\n      \"properties\":
+      {\n        \"name\": {\n          \"description\": \"Name of the functional
+      group\",\n          \"title\": \"Name\",\n          \"type\": \"string\"\n        },\n        \"user_goal\":
+      {\n          \"description\": \"User goal served by this group\",\n          \"title\":
+      \"User Goal\",\n          \"type\": \"string\"\n        },\n        \"operations\":
+      {\n          \"description\": \"Supported operations (e.g., create, read, update,
+      delete, search, validate, calculate)\",\n          \"items\": {\n            \"type\":
+      \"string\"\n          },\n          \"title\": \"Operations\",\n          \"type\":
+      \"array\"\n        },\n        \"entities\": {\n          \"description\": \"Key
+      business entities involved (e.g., Order, User, Payment, Contact)\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Entities\",\n          \"type\":
+      \"array\"\n        },\n        \"business_rules\": {\n          \"description\":
+      \"Observable business rules or constraints in THIS file only\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Business
+      Rules\",\n          \"type\": \"array\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence score (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        },\n        \"business_domain_hint\": {\n          \"description\":
+      \"Hint for business domain (use empty string if unknown)\",\n          \"title\":
+      \"Business Domain Hint\",\n          \"type\": \"string\"\n        }\n      },\n      \"required\":
+      [\n        \"name\",\n        \"user_goal\",\n        \"operations\",\n        \"entities\",\n        \"business_rules\",\n        \"confidence\",\n        \"business_domain_hint\"\n      ],\n      \"title\":
+      \"FunctionalGroupCandidate\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of business analysis for a code file.\",\n  \"properties\":
+      {\n    \"business_logic_factor\": {\n      \"description\": \"Business logic
+      factor (0.0-1.0)\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0,\n      \"title\":
+      \"Business Logic Factor\",\n      \"type\": \"number\"\n    },\n    \"primary_responsibility\":
+      {\n      \"description\": \"Primary business responsibility of the file\",\n      \"title\":
+      \"Primary Responsibility\",\n      \"type\": \"string\"\n    },\n    \"functional_group_candidates\":
+      {\n      \"description\": \"Functional groups in this file. Empty list for infrastructure
+      files (BL factor < 0.3) with no business functionality.\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/FunctionalGroupCandidate\"\n      },\n      \"title\":
+      \"Functional Group Candidates\",\n      \"type\": \"array\"\n    }\n  },\n  \"required\":
+      [\n    \"business_logic_factor\",\n    \"primary_responsibility\",\n    \"functional_group_candidates\"\n  ],\n  \"title\":
+      \"FileBusinessAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\n\n\"\"\"User authentication service for managing
+      login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime
+      import datetime, timedelta\n\nfrom models.session import UserSession\nfrom models.user
+      import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10296'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//90VE1v20oM/CsLnuXUdvNV3XrqJcULkL4CRR0I9IqS2KyWwnLXqWv4vxdrOYni53cSMFwO
+        ZwYUd8A1lNCSny1urq+vFrfLm6vZw/rmM+F3L/Irfbv78fRwv7mDAoYgG64pQAlfRFpHUEAvNbnM
+        cAA+tNSz59nHWeNQu9kQaMP0DAXI+hfZCCXYDuOFlX5wFFk8FGADYaQayjcFBdhO2JJC+XMHTtoh
+        yFqh9Mm5Ahr2rF0VCFU8lKBRBijAY+QNVafVh2//3EMB7Gv6DeW8gJ5UsSUodxDEEZSAqqwRfcxq
+        xEfyWelu5Y1ZwTope1KtnLRsqwZtlLCC0swvbovxyRC4x7CtAukgXnnNjuM2v1nBV/TYkpqkFAym
+        2JGPbDF7N88Snhonz2rQ10ZJNaOOG7Jb68hEMeQ1BTJKNn/QWlLNeOzI6FYj9RcrOMpokreZF13V
+        BklDZdHXXGMkzVp+5lfG7MZPbvDY06jy36zu83t1o/KefDxOGJuykaoVdGPndwrcbEd7XOf2uD3Y
+        6Q/tJ8qPHvUdowwUDiOnMsfSJDCa9OTSBt3B2wk8btPp24PIFbxgj5PpB8lM/52dMznhydDDaOGk
+        co+qzxLq8zNedygkd2bSkVIN/R44h9VECmZ5aTpJQU8m3aFGk3fRm8g9acR+MH3SaNZk0pAjqU0a
+        xBtNh9Cb5E4W73+06yvNIS+m2mCL7DUajRKoNh1qR6eCjupNlCfybxw2bIcobcChY4vObY+rcD4h
+        K77J62Np/LU+nUuvlh7ZVx3nlSzfrweLr9DXVYYk8J+j0ZFlnz+PK7+HAgI1SdGNx2S/fywgvZyD
+        IUg/xGo0AuVyeb3IB+HlVk0KlwVEiejeoMvbfLVEI5Tzi/l8cTtfXhXAWq238gRlg06peD+hqiki
+        O82jLdqO6le6eQGYapYpkG/vBNiP46YkadAYCPuKfUMhh1mNisa7eaZ81DPRvfg4vyrOM73koJP3
+        8+ub5f5MSFNZ4ylm307dcI8tTdzs938BAAD//wMA5ct5O84GAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47364ac5ce1a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:16 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert business
+      analyst analyzing code files. Your goal is to understand the business purpose
+      and functional responsibilities of this file.\n\nAnalyze the provided file content
+      and extract:\n\n1. **Primary Responsibility**: What is the main business function
+      this file serves? (one sentence)\n\n2. **Business Logic Factor**: Rate how much
+      business logic this file contains (0.0-1.0):\n   - **0.9-1.0**: Core business
+      rules, domain logic, critical business processes\n     Examples: Order validation
+      rules, pricing calculations, inventory management logic\n   - **0.7-0.8**: Business
+      workflow orchestration, business features with user interaction\n     Examples:
+      Checkout process, user registration flow, report generation orchestration\n   -
+      **0.5-0.6**: Business data processing, business validation, business calculations\n     Examples:
+      Data transformations for business metrics, notification triggers, business reporting\n   -
+      **0.3-0.4**: Business data presentation, business configuration with business
+      impact\n     Examples: Dashboard views, business email templates, feature flags
+      affecting business flows\n   - **0.1-0.2**: Business utilities, business helpers,
+      light business configuration\n     Examples: Business constants, formatting
+      utilities for business data, business ID generators\n   - **0.0**: Pure technical
+      infrastructure with no business value\n     Examples: Database connection pooling,
+      logging configuration, build scripts, HTTP middleware\n\n3. **Functional Group
+      Candidates**: What functional groups could this file belong to?\n\n   **Definition**:
+      A Functional Group is the smallest cohesive unit of functionality serving a
+      specific user goal.\n\n   **When to return empty list:**\n   - Infrastructure
+      files (BL factor < 0.3): configs, middleware, utilities with no business logic\n   -
+      Pure technical files: database connections, logging, build scripts, HTTP handlers\n   -
+      No business entities or domain concepts present\n   - No business rules or constraints
+      visible\n\n   **When to extract groups:**\n   - Business logic present (BL factor
+      \u2265 0.3)\n   - Contains domain entities (Order, Customer, Product, Payment)\n   -
+      Implements business rules or constraints\n   - Operations serve user goals (not
+      just system maintenance like logging, caching, connection pooling)\n\n   **Validation
+      Criteria** - Each group must:\n   - Serve a single user goal (describable in
+      one sentence)\n   - Contain 2+ operations working toward the same user goal\n   -
+      Have clear boundaries (functionality either belongs or doesn''t)\n   - Focus
+      on business concepts (Order, Payment) not technical concepts (Connection, Thread)\n   -
+      If removed, a specific user action becomes impossible\n\n   For each candidate
+      provide:\n   - **name**: Descriptive name (e.g., \"Order Status Management\",
+      \"Contact Information Entry\")\n   - **user_goal**: What user goal this serves
+      (e.g., \"Update order status through workflow\", \"Capture customer contact
+      details\")\n   - **operations**: Supported operations as list (e.g., [\"create\",
+      \"validate\", \"save\"], [\"search\", \"filter\", \"sort\"])\n     Common: create,
+      read, update, delete, search, filter, sort, validate, calculate, notify, approve,
+      export, import\n   - **entities**: Key business entities as list (e.g., [\"Order\",
+      \"Status\"], [\"Contact\", \"Email\", \"Phone\"])\n     Use business terminology
+      visible in code - class names, model names, domain objects\n   - **business_rules**:
+      Observable business rules as list (e.g., [\"Status transitions must be sequential\",
+      \"Email validation required\"])\n     Only list rules visible in THIS file -
+      no assumptions about external logic. Empty list is valid.\n   - **confidence**:
+      Your confidence level (0.0 = unsure, 0.5 = moderate, 0.9 = very confident)\n   -
+      **business_domain_hint**: Business domain (e.g., \"order_management\", \"contact_management\")
+      or empty string if unclear\n\nFocus on observable functionality in this file.
+      Extract semantic information (operations, entities, rules) to enable accurate
+      cross-source clustering.\n\n**CRITICAL**: Output ONLY valid JSON in the exact
+      schema format specified. No additional text, explanations, or excessive whitespace.\n\n\n        As
+      a genius expert, your task is to understand the content and provide\n        the
+      parsed objects in json that match the following json_schema:\n\n\n        {\n  \"$defs\":
+      {\n    \"FunctionalGroupCandidate\": {\n      \"additionalProperties\": false,\n      \"description\":
+      \"Per-file functional group candidate with semantic context for clustering.\",\n      \"properties\":
+      {\n        \"name\": {\n          \"description\": \"Name of the functional
+      group\",\n          \"title\": \"Name\",\n          \"type\": \"string\"\n        },\n        \"user_goal\":
+      {\n          \"description\": \"User goal served by this group\",\n          \"title\":
+      \"User Goal\",\n          \"type\": \"string\"\n        },\n        \"operations\":
+      {\n          \"description\": \"Supported operations (e.g., create, read, update,
+      delete, search, validate, calculate)\",\n          \"items\": {\n            \"type\":
+      \"string\"\n          },\n          \"title\": \"Operations\",\n          \"type\":
+      \"array\"\n        },\n        \"entities\": {\n          \"description\": \"Key
+      business entities involved (e.g., Order, User, Payment, Contact)\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Entities\",\n          \"type\":
+      \"array\"\n        },\n        \"business_rules\": {\n          \"description\":
+      \"Observable business rules or constraints in THIS file only\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Business
+      Rules\",\n          \"type\": \"array\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence score (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        },\n        \"business_domain_hint\": {\n          \"description\":
+      \"Hint for business domain (use empty string if unknown)\",\n          \"title\":
+      \"Business Domain Hint\",\n          \"type\": \"string\"\n        }\n      },\n      \"required\":
+      [\n        \"name\",\n        \"user_goal\",\n        \"operations\",\n        \"entities\",\n        \"business_rules\",\n        \"confidence\",\n        \"business_domain_hint\"\n      ],\n      \"title\":
+      \"FunctionalGroupCandidate\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of business analysis for a code file.\",\n  \"properties\":
+      {\n    \"business_logic_factor\": {\n      \"description\": \"Business logic
+      factor (0.0-1.0)\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0,\n      \"title\":
+      \"Business Logic Factor\",\n      \"type\": \"number\"\n    },\n    \"primary_responsibility\":
+      {\n      \"description\": \"Primary business responsibility of the file\",\n      \"title\":
+      \"Primary Responsibility\",\n      \"type\": \"string\"\n    },\n    \"functional_group_candidates\":
+      {\n      \"description\": \"Functional groups in this file. Empty list for infrastructure
+      files (BL factor < 0.3) with no business functionality.\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/FunctionalGroupCandidate\"\n      },\n      \"title\":
+      \"Functional Group Candidates\",\n      \"type\": \"array\"\n    }\n  },\n  \"required\":
+      [\n    \"business_logic_factor\",\n    \"primary_responsibility\",\n    \"functional_group_candidates\"\n  ],\n  \"title\":
+      \"FileBusinessAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\n\n\"\"\"User authentication service for managing
+      login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime
+      import datetime, timedelta\n\nfrom models.session import UserSession\nfrom models.user
+      import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.2, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10296'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//dJTd
+        buM4DIVfReC1081Pm3Z8t1cD7A6wBTo7WGBSGIxE25rKkiBKmQmCvPtCVpK62eyVDZLi+XhA6QBa
+        QQ0d2dnicb1+WDwtH59m5v6fl9XDvfr2h/9svw7y7cuPP6ECH9xOKwpQw2fnOkNQweAUmdxhDPzW
+        0aCtnq1mrUHuZz7QTtNPqMBtf5CMUIPsMd5JN3hDUTsLFchAGElB/U5QgeydlsRQfz+AcZ0PbstQ
+        22RMBa22mvsmELKzUANH56ECi1HvqLnOvnz96xkq0FbRL6jnFQzEjB1BfYDgDEENyKw5oo2ZxtlI
+        NpMeNlaIDWwTa0vMjXGdlk2LMrqwgVrM756qUuKDHjDsm0DsnWW91UbHfa7ZwHMxjUViCgJT7MlG
+        LTEPL9AqwcSc/we02NFANgqmsMvTi+gEk0yBBHpvLqekJOa7DZzk22RlTqBpuuCSbyRapRVG4szw
+        PVcJcSiffMDiQIXu7wz1+weoU9tSmaGbzqEp5d8o6HZfRtEqn4n7cYgCf4EdAc+T8YeOzlMYdaZs
+        JTUxhyZncmqHZhzoKlxW57p2hNzAOfY6UR+RNf1XOxtx1SeHXsoIV5lnZP7pgrqtcVmYkMwNpVNL
+        FvTL62xWGymI5b3oXQp8pfQFOYq8eFZEPRBHHLwYEkexJZF8tkSJ5J0VnEbT22Sulux/2PnSZvRL
+        kxLYobYcBUcXSIkeuadroBO9iO6N7HsPGfY+ui6g77VEY/anVbjtkHS2zesjqdyjT7fcU25AbZte
+        21iW77xwDVrVlBVr3i/NWemYP68be4QKArWJ0ZR343h8rSCdb74PbvCxKWNAvVyuF/nun5+lSWJR
+        QXQRzXvo/mmZazlCPb+bzxePn1YPFWhutnv3BnWLhqn6qNAoiqgNZ2mJsid1aTevAJPSbhrIL8Yk
+        cCxy0ybJcwyEQ6NtSyFb2RSi8kTeSJ94JtyL1fyhut3p7ANP6ufr9ep4w6QpVnl1te2m0+gBO5pM
+        czz+CwAA//8DADZ7bcOuBgAA
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47479dd4ce1a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:19 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are an expert business
+      analyst analyzing code files. Your goal is to understand the business purpose
+      and functional responsibilities of this file.\n\nAnalyze the provided file content
+      and extract:\n\n1. **Primary Responsibility**: What is the main business function
+      this file serves? (one sentence)\n\n2. **Business Logic Factor**: Rate how much
+      business logic this file contains (0.0-1.0):\n   - **0.9-1.0**: Core business
+      rules, domain logic, critical business processes\n     Examples: Order validation
+      rules, pricing calculations, inventory management logic\n   - **0.7-0.8**: Business
+      workflow orchestration, business features with user interaction\n     Examples:
+      Checkout process, user registration flow, report generation orchestration\n   -
+      **0.5-0.6**: Business data processing, business validation, business calculations\n     Examples:
+      Data transformations for business metrics, notification triggers, business reporting\n   -
+      **0.3-0.4**: Business data presentation, business configuration with business
+      impact\n     Examples: Dashboard views, business email templates, feature flags
+      affecting business flows\n   - **0.1-0.2**: Business utilities, business helpers,
+      light business configuration\n     Examples: Business constants, formatting
+      utilities for business data, business ID generators\n   - **0.0**: Pure technical
+      infrastructure with no business value\n     Examples: Database connection pooling,
+      logging configuration, build scripts, HTTP middleware\n\n3. **Functional Group
+      Candidates**: What functional groups could this file belong to?\n\n   **Definition**:
+      A Functional Group is the smallest cohesive unit of functionality serving a
+      specific user goal.\n\n   **When to return empty list:**\n   - Infrastructure
+      files (BL factor < 0.3): configs, middleware, utilities with no business logic\n   -
+      Pure technical files: database connections, logging, build scripts, HTTP handlers\n   -
+      No business entities or domain concepts present\n   - No business rules or constraints
+      visible\n\n   **When to extract groups:**\n   - Business logic present (BL factor
+      \u2265 0.3)\n   - Contains domain entities (Order, Customer, Product, Payment)\n   -
+      Implements business rules or constraints\n   - Operations serve user goals (not
+      just system maintenance like logging, caching, connection pooling)\n\n   **Validation
+      Criteria** - Each group must:\n   - Serve a single user goal (describable in
+      one sentence)\n   - Contain 2+ operations working toward the same user goal\n   -
+      Have clear boundaries (functionality either belongs or doesn''t)\n   - Focus
+      on business concepts (Order, Payment) not technical concepts (Connection, Thread)\n   -
+      If removed, a specific user action becomes impossible\n\n   For each candidate
+      provide:\n   - **name**: Descriptive name (e.g., \"Order Status Management\",
+      \"Contact Information Entry\")\n   - **user_goal**: What user goal this serves
+      (e.g., \"Update order status through workflow\", \"Capture customer contact
+      details\")\n   - **operations**: Supported operations as list (e.g., [\"create\",
+      \"validate\", \"save\"], [\"search\", \"filter\", \"sort\"])\n     Common: create,
+      read, update, delete, search, filter, sort, validate, calculate, notify, approve,
+      export, import\n   - **entities**: Key business entities as list (e.g., [\"Order\",
+      \"Status\"], [\"Contact\", \"Email\", \"Phone\"])\n     Use business terminology
+      visible in code - class names, model names, domain objects\n   - **business_rules**:
+      Observable business rules as list (e.g., [\"Status transitions must be sequential\",
+      \"Email validation required\"])\n     Only list rules visible in THIS file -
+      no assumptions about external logic. Empty list is valid.\n   - **confidence**:
+      Your confidence level (0.0 = unsure, 0.5 = moderate, 0.9 = very confident)\n   -
+      **business_domain_hint**: Business domain (e.g., \"order_management\", \"contact_management\")
+      or empty string if unclear\n\nFocus on observable functionality in this file.
+      Extract semantic information (operations, entities, rules) to enable accurate
+      cross-source clustering.\n\n**CRITICAL**: Output ONLY valid JSON in the exact
+      schema format specified. No additional text, explanations, or excessive whitespace.\n\n\n        As
+      a genius expert, your task is to understand the content and provide\n        the
+      parsed objects in json that match the following json_schema:\n\n\n        {\n  \"$defs\":
+      {\n    \"FunctionalGroupCandidate\": {\n      \"additionalProperties\": false,\n      \"description\":
+      \"Per-file functional group candidate with semantic context for clustering.\",\n      \"properties\":
+      {\n        \"name\": {\n          \"description\": \"Name of the functional
+      group\",\n          \"title\": \"Name\",\n          \"type\": \"string\"\n        },\n        \"user_goal\":
+      {\n          \"description\": \"User goal served by this group\",\n          \"title\":
+      \"User Goal\",\n          \"type\": \"string\"\n        },\n        \"operations\":
+      {\n          \"description\": \"Supported operations (e.g., create, read, update,
+      delete, search, validate, calculate)\",\n          \"items\": {\n            \"type\":
+      \"string\"\n          },\n          \"title\": \"Operations\",\n          \"type\":
+      \"array\"\n        },\n        \"entities\": {\n          \"description\": \"Key
+      business entities involved (e.g., Order, User, Payment, Contact)\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Entities\",\n          \"type\":
+      \"array\"\n        },\n        \"business_rules\": {\n          \"description\":
+      \"Observable business rules or constraints in THIS file only\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Business
+      Rules\",\n          \"type\": \"array\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence score (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        },\n        \"business_domain_hint\": {\n          \"description\":
+      \"Hint for business domain (use empty string if unknown)\",\n          \"title\":
+      \"Business Domain Hint\",\n          \"type\": \"string\"\n        }\n      },\n      \"required\":
+      [\n        \"name\",\n        \"user_goal\",\n        \"operations\",\n        \"entities\",\n        \"business_rules\",\n        \"confidence\",\n        \"business_domain_hint\"\n      ],\n      \"title\":
+      \"FunctionalGroupCandidate\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of business analysis for a code file.\",\n  \"properties\":
+      {\n    \"business_logic_factor\": {\n      \"description\": \"Business logic
+      factor (0.0-1.0)\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0,\n      \"title\":
+      \"Business Logic Factor\",\n      \"type\": \"number\"\n    },\n    \"primary_responsibility\":
+      {\n      \"description\": \"Primary business responsibility of the file\",\n      \"title\":
+      \"Primary Responsibility\",\n      \"type\": \"string\"\n    },\n    \"functional_group_candidates\":
+      {\n      \"description\": \"Functional groups in this file. Empty list for infrastructure
+      files (BL factor < 0.3) with no business functionality.\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/FunctionalGroupCandidate\"\n      },\n      \"title\":
+      \"Functional Group Candidates\",\n      \"type\": \"array\"\n    }\n  },\n  \"required\":
+      [\n    \"business_logic_factor\",\n    \"primary_responsibility\",\n    \"functional_group_candidates\"\n  ],\n  \"title\":
+      \"FileBusinessAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\n\n\"\"\"User authentication service for managing
+      login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime
+      import datetime, timedelta\n\nfrom models.session import UserSession\nfrom models.user
+      import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10296'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA///EVU1vG0cM/SsDnleuJMcf2Zt7aBOkboM67SUyFtQMd5f17MxmOCtbEPTfi9FI9lpRgiKX
+        nlbgx+Mj9TjcABsooSE3mV1dXl7MrufX08mHd1c/v//lT24+dLP5uze/3zxePUIBffArNhSghF+9
+        byypm/fqLg6GPRTQeUM2Ye1cPzXUsePJ+aS2KO2kD7RiSih++Q/pCCXoFuOZ9l1vKbJ3UIAOhJEM
+        lC9cCtCtZ00C5ecNWN/0wS8FSjdYW0DNjqWtAqF4ByVI9D0U4DDyiqpj792nPz5CAewMPUE5LaAj
+        EWwIyg0EbwlKQBGWiC4mNt5FconpZuGUWsByEHYkUlnfsK5q1NGHBZRqenZd5JA+cIdhXQWS3jvh
+        JVuO6xSzgFt02JCoQSgoHGJLLrLG1LtCZ5SQSPptuSa91pYUO20Hw65ROpBJ4WjVigLX47zoH8ip
+        FVo2O+PZAvZs6sHpZEFbNcEPfaXRmRRFkih9TlFKbfInJTjsKJP9K5G8eUVyD5sjUxNV49Hm8DvS
+        QyC7zuzWuUfeUY7rzDKgflBpck6hjrzazWWE6HsKuzpjbtk1GhaNcpIr1zsyDr35OrJFaRdwsNyP
+        Ku9YMn1dNw3hCOUjijz6YE4jPSskDPYbeKobJCp6YomKnYotKVlLpE5Fr77T6KFwzu8w6jYnRx/I
+        qNzdq4zfUOJ+4JE7kohdn7OXpPKIjBp675QMWpNIPdgjXZ7uUntXp/9WUxb/21MTML5DdlXLLmaJ
+        HNRQoTMV7gpW3W4lOkoxGWNbfEeUd/sNuR2lfVuTt8guIucl2a8HKdkpNQt0v3Giah9UTyHtPrmo
+        Mrv/qs78ah3rcl/vyBwIzQ+IcN/4EdgJeX5Kb8EPafPuMAt66jmQwjpSUPM3qvVDkKMyhz9i9/TI
+        i6gcfxlo/5ilMR+l/f38RqlAXwYOJFnDz3AJxXk3ySTM/6C/9LlfuC0UEKgeBG0+NtvtfQHD4Vz0
+        wXd9rHL/UM7nl+fpYBxu2bPjPNmjj2hfYi/nlylWIpTTs+l0Pp9PLwpgqZZr/wBljVaoeF2hMhSR
+        raTSGnVL5hluWgCmCzw2pCs9MmxzuTHI0EsMhF3FrqaQRlllRvmunnDv+bzwns3OZxfFaaTDHGQc
+        P71+uz0xpDGtfKrZNeNuuMOGRt1st/8CAAD//wMALAgeTvgIAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a475678afce1a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:21 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a consensus judge
+      reviewing multiple business analysis reports for a code file.\n\nBased on the
+      original file content and the expert analyses provided, create a final consensus
+      business analysis that combines the best insights from all experts.\n\nRequirements:\n1.
+      **Synthesize insights**: Combine the most accurate observations from all experts\n2.
+      **Resolve conflicts**: When experts disagree, choose the most evidence-based
+      conclusion\n3. **Business focus**: Prioritize business value and functional
+      understanding\n4. **Practical output**: Ensure the result is useful for software
+      architects and business stakeholders\n\nCreate a comprehensive business analysis
+      that represents the collective expert judgment.\n\n**CRITICAL**: Output ONLY
+      valid JSON in the exact schema format specified. No additional text, explanations,
+      or excessive whitespace.\n\n\n        As a genius expert, your task is to understand
+      the content and provide\n        the parsed objects in json that match the following
+      json_schema:\n\n\n        {\n  \"$defs\": {\n    \"FunctionalGroupCandidate\":
+      {\n      \"additionalProperties\": false,\n      \"description\": \"Per-file
+      functional group candidate with semantic context for clustering.\",\n      \"properties\":
+      {\n        \"name\": {\n          \"description\": \"Name of the functional
+      group\",\n          \"title\": \"Name\",\n          \"type\": \"string\"\n        },\n        \"user_goal\":
+      {\n          \"description\": \"User goal served by this group\",\n          \"title\":
+      \"User Goal\",\n          \"type\": \"string\"\n        },\n        \"operations\":
+      {\n          \"description\": \"Supported operations (e.g., create, read, update,
+      delete, search, validate, calculate)\",\n          \"items\": {\n            \"type\":
+      \"string\"\n          },\n          \"title\": \"Operations\",\n          \"type\":
+      \"array\"\n        },\n        \"entities\": {\n          \"description\": \"Key
+      business entities involved (e.g., Order, User, Payment, Contact)\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Entities\",\n          \"type\":
+      \"array\"\n        },\n        \"business_rules\": {\n          \"description\":
+      \"Observable business rules or constraints in THIS file only\",\n          \"items\":
+      {\n            \"type\": \"string\"\n          },\n          \"title\": \"Business
+      Rules\",\n          \"type\": \"array\"\n        },\n        \"confidence\":
+      {\n          \"description\": \"Confidence score (0.0-1.0)\",\n          \"maximum\":
+      1.0,\n          \"minimum\": 0.0,\n          \"title\": \"Confidence\",\n          \"type\":
+      \"number\"\n        },\n        \"business_domain_hint\": {\n          \"description\":
+      \"Hint for business domain (use empty string if unknown)\",\n          \"title\":
+      \"Business Domain Hint\",\n          \"type\": \"string\"\n        }\n      },\n      \"required\":
+      [\n        \"name\",\n        \"user_goal\",\n        \"operations\",\n        \"entities\",\n        \"business_rules\",\n        \"confidence\",\n        \"business_domain_hint\"\n      ],\n      \"title\":
+      \"FunctionalGroupCandidate\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of business analysis for a code file.\",\n  \"properties\":
+      {\n    \"business_logic_factor\": {\n      \"description\": \"Business logic
+      factor (0.0-1.0)\",\n      \"maximum\": 1.0,\n      \"minimum\": 0.0,\n      \"title\":
+      \"Business Logic Factor\",\n      \"type\": \"number\"\n    },\n    \"primary_responsibility\":
+      {\n      \"description\": \"Primary business responsibility of the file\",\n      \"title\":
+      \"Primary Responsibility\",\n      \"type\": \"string\"\n    },\n    \"functional_group_candidates\":
+      {\n      \"description\": \"Functional groups in this file. Empty list for infrastructure
+      files (BL factor < 0.3) with no business functionality.\",\n      \"items\":
+      {\n        \"$ref\": \"#/$defs/FunctionalGroupCandidate\"\n      },\n      \"title\":
+      \"Functional Group Candidates\",\n      \"type\": \"array\"\n    }\n  },\n  \"required\":
+      [\n    \"business_logic_factor\",\n    \"primary_responsibility\",\n    \"functional_group_candidates\"\n  ],\n  \"title\":
+      \"FileBusinessAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "Original Content:\n```\nFile: example.py\n\n\"\"\"User authentication
+      service for managing login and session handling.\"\"\"\n\nimport hashlib\nimport
+      secrets\nfrom datetime import datetime, timedelta\n\nfrom models.session import
+      UserSession\nfrom models.user import User\nfrom sqlalchemy.orm import Session\n\n\nclass
+      AuthenticationService:\n    \"\"\"Handles user authentication and session management.\"\"\"\n\n    def
+      __init__(self, db: Session):\n        self.db = db\n        self.session_timeout
+      = timedelta(hours=24)\n\n    def authenticate_user(self, email: str, password:
+      str) -> User | None:\n        \"\"\"Authenticate user with email and password.\"\"\"\n        user
+      = self.db.query(User).filter(User.email == email).first()\n        if not user:\n            return
+      None\n\n        if not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n```\n\nExpert
+      Analyses:\nExpert Analysis 1:\n{\n  \"business_logic_factor\": 0.8,\n  \"primary_responsibility\":
+      \"Manages user authentication workflows and session lifecycle to ensure secure
+      access to the system.\",\n  \"functional_group_candidates\": [\n    {\n      \"name\":
+      \"User Authentication Management\",\n      \"user_goal\": \"Verify user identity
+      and manage secure access sessions\",\n      \"operations\": [\n        \"authenticate\",\n        \"validate\",\n        \"create\",\n        \"verify\"\n      ],\n      \"entities\":
+      [\n        \"User\",\n        \"UserSession\",\n        \"Password\"\n      ],\n      \"business_rules\":
+      [\n        \"Sessions expire after 24 hours\",\n        \"Last login timestamp
+      must be updated upon successful authentication\",\n        \"Passwords must
+      be verified against stored hashes\",\n        \"Session tokens must be cryptographically
+      secure\"\n      ],\n      \"confidence\": 0.9,\n      \"business_domain_hint\":
+      \"authentication_and_authorization\"\n    }\n  ]\n}\n\nExpert Analysis 2:\n{\n  \"business_logic_factor\":
+      0.8,\n  \"primary_responsibility\": \"Provides user authentication and session
+      management services to secure application access.\",\n  \"functional_group_candidates\":
+      [\n    {\n      \"name\": \"User Authentication\",\n      \"user_goal\": \"Verify
+      user identity and manage secure access sessions\",\n      \"operations\": [\n        \"authenticate\",\n        \"validate\",\n        \"create\",\n        \"verify\"\n      ],\n      \"entities\":
+      [\n        \"User\",\n        \"UserSession\",\n        \"Password\"\n      ],\n      \"business_rules\":
+      [\n        \"Sessions expire after 24 hours\",\n        \"Last login timestamp
+      must be updated upon successful authentication\",\n        \"Passwords must
+      be verified against stored hashes\",\n        \"Session tokens must be cryptographically
+      secure\"\n      ],\n      \"confidence\": 0.9,\n      \"business_domain_hint\":
+      \"identity_and_access_management\"\n    }\n  ]\n}\n\nExpert Analysis 3:\n{\n  \"business_logic_factor\":
+      0.8,\n  \"primary_responsibility\": \"Manages user authentication and session
+      lifecycle including credential verification and token validation.\",\n  \"functional_group_candidates\":
+      [\n    {\n      \"name\": \"User Authentication\",\n      \"user_goal\": \"Securely
+      verify user identity and track login activity\",\n      \"operations\": [\n        \"authenticate\",\n        \"verify\",\n        \"update\",\n        \"hash\"\n      ],\n      \"entities\":
+      [\n        \"User\",\n        \"Password\"\n      ],\n      \"business_rules\":
+      [\n        \"User must exist in the system to authenticate\",\n        \"Password
+      must match the stored hash\",\n        \"Last login timestamp must be updated
+      upon successful authentication\"\n      ],\n      \"confidence\": 0.9,\n      \"business_domain_hint\":
+      \"identity_and_access_management\"\n    },\n    {\n      \"name\": \"Session
+      Management\",\n      \"user_goal\": \"Maintain and validate secure user sessions
+      for persistent access\",\n      \"operations\": [\n        \"create\",\n        \"validate\",\n        \"read\"\n      ],\n      \"entities\":
+      [\n        \"UserSession\",\n        \"User\",\n        \"Token\"\n      ],\n      \"business_rules\":
+      [\n        \"Sessions expire after 24 hours\",\n        \"Session tokens must
+      be unique and secure\",\n        \"Validation requires the session to be non-expired\"\n      ],\n      \"confidence\":
+      0.9,\n      \"business_domain_hint\": \"identity_and_access_management\"\n    }\n  ]\n}"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '10533'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA///EVttu4zYQ/RVinlpATm1nnaR6C3pJF03QYJ20KNaBMCZHEhuK1HIoJ0bgfy8o2o7i9S6K
+        femTgLmcOTM85OgFtIIcKrKjyfnZ2WxyMb04Hc1/19Pr+ervT+/VX7/8fDX/1d9eQQatdyutyEMO
+        V85VhsTlezEPndIOMmicIhOxetcPFTXa6tHpqDTI9aj1tNL0BBm45T8kA+Qgawwn0jWtoaCdhQyk
+        JwykIH/lkoGsnZbEkH98AeOq1rslQ247YzIotdVcF56QnYUcOLgWMrAY9IqKQ+/87o9byEBbRc+Q
+        jzNoiBkrgvwFvDMEOSCz5oA2RDbOBrKR6cvCCrGAZcfaEnNhXKVlUaIMzi8gF+OTiyyFtF436NeF
+        J26dZb3URod1jFnADVqsiEXH5AV2oSYbtMTYu3hy/rE07okFWiWYmKPV6JLkWhrKhLbSdErbSkhP
+        KmaiESvyutxCZIJJdp5EcI9kRUWW/NYxhFyh0aq3nyxgS7rsrIwWNEXlXdcWEq2KUcSR+ccYJcRL
+        +sQEiw2lnu5jL5dvetnCpsjYa1E5NCl83lM068R8nUah+3bCuucZPMpHEQdsBcqgV/34Boiu3fY1
+        5JZcg5nSICe6Ur0DY9eqzyNr5HoBO8vDoHLPUtPndeMQDlBukfnJeXUcaS8k35kv4Imm4yDoWXMQ
+        2opQk+A1B2pEcOIrje4Kp/wGg6xTcnCelIjdiVi9EvPfLkfT2dlB/jVy2I4/6IY4YNMmrCWJNDAl
+        utZZwZ2UxFx25kDMx3uWzpbxpCWlG/Pj7NhAlGtQ26LWNiTF7MRRoFUF9hWLpr9IDcWYhLHJvqLR
+        +Vb6N4O0L0v0BrUNGNVn1e620O5u9XrdXiUWpfOiJR9fDLJBJHb/VazprTuU6bbegdkTqm/Q5Lbx
+        A7Ajar2LT8Y3SXW+mwU9t9qTwDKQF9N3onad54Myu4PoXyjeq0r6dRtc5bGttURj1rtpf3f/4XrE
+        WNL3B0B/7h8x4elTpz1xEvm+QMS1zo4SLSU8mX4nRJfsvI/ndX/3U6/x/0Ov8fOwsBvIwFPZMZq0
+        0jabhwy63VJqvWvaUKR5QT49PYv7cL8x947Ti/MMggtoXmPPZ+MYywHy8cl4PD19N51loLlYrt0j
+        5CUapuxthUJRQG04lpYoa1J7uHEGGPf80BD/BQaGTSo3BOlaDp6wKbQtycdZFolR2t5H3Fs+r7wn
+        k4vJLDuOtJsDv4k/m2yODGlIK/0QaFsNu9ENVjToZrP5FwAA//8DAOAAm2ReCQAA
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47697d9fce1a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:24 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a senior code reviewer
+      preparing a production-readiness assessment.\n\nTask: Identify concrete quality
+      issues and improvement opportunities for this file.\n\n**SCOPE: Review THIS
+      FILE ONLY. Do not assume problems in other files, configs, or infrastructure.**\nIf
+      a potential issue depends on external code/config, record it as an opportunity
+      (not an issue).\n\nContext: Focus ONLY on correctness, security, performance,
+      reliability, and maintainability in this file.\nIgnore formatting/naming/style
+      unless it directly causes bugs or harms readability.\nAll claims MUST include
+      concrete code evidence from THIS FILE (path + line ranges or exact quotes).\nIf
+      unsure, omit from issues.\n\nApply a strict evidence contract:\n- Security claim:
+      show Source \u2192 (missing/insufficient Guard) \u2192 Sink with quoted lines
+      FROM THIS FILE\n- Performance claim: show hot path AND an expensive operation
+      in that path (e.g., loop + query/IO) FROM THIS FILE\n- Maintainability claim:
+      cite measurable threshold (e.g., >150 LOC function, \u22654 nesting) FROM THIS
+      FILE\n\n**AVOID SUBJECTIVE ASSESSMENTS:**\n- \u274c \"Missing documentation\"
+      - Only report if unclear code causes bugs\n- \u274c \"Multiple responsibilities\"
+      - Only report measurable complexity thresholds\n- \u274c \"Should use X pattern\"
+      - Only report if current code has concrete issues\n- \u274c Architectural opinions
+      - Focus on file-level technical issues only\n\nOutput Structure:\n- **quality_issues**:
+      List of concrete problems with title, severity (high/medium/low), evidence,
+      why_it_matters, suggested_fix\n- **opportunities**: List of improvement suggestions
+      (refactoring, patterns, optimizations)\n\nReturn concise, high-impact results
+      with concrete evidence only.\n\n**CRITICAL**: Output ONLY valid JSON in the
+      exact schema format specified. No additional text, explanations, or excessive
+      whitespace.\n\n**Python Context for Quality Analysis:**\n\n**Language Understanding:**\nThis
+      is Python code following PEP 8 style guidelines. Python emphasizes readability,
+      explicit is better than implicit, and \"Pythonic\" idioms for common patterns.\n\n**Python
+      Security Context:**\nConsider common Python security vulnerabilities including
+      injection attacks through eval/exec, subprocess misuse, unsafe deserialization,
+      and improper input validation. Follow secure coding practices for file operations
+      and external system interaction.\n\n**Python Performance Context:**\nPython
+      performance issues often involve inefficient data structures, blocking I/O operations,
+      and memory management problems. Consider algorithmic complexity, proper use
+      of generators vs lists, and async/await patterns for I/O-bound operations.\n\n**Python
+      Reliability Context:**\nPython applications should use proper exception handling
+      (avoid bare except), follow async/await patterns correctly, and handle resource
+      cleanup appropriately. Consider thread safety for concurrent code and proper
+      error propagation.\n\n\n        As a genius expert, your task is to understand
+      the content and provide\n        the parsed objects in json that match the following
+      json_schema:\n\n\n        {\n  \"$defs\": {\n    \"QualityIssue\": {\n      \"additionalProperties\":
+      false,\n      \"description\": \"Represents a single quality issue found in
+      the code.\",\n      \"properties\": {\n        \"title\": {\n          \"description\":
+      \"Title of the quality issue\",\n          \"title\": \"Title\",\n          \"type\":
+      \"string\"\n        },\n        \"severity\": {\n          \"description\":
+      \"Severity of the issue (high, medium, low)\",\n          \"title\": \"Severity\",\n          \"type\":
+      \"string\"\n        },\n        \"evidence\": {\n          \"description\":
+      \"Evidence for the issue\",\n          \"title\": \"Evidence\",\n          \"type\":
+      \"string\"\n        },\n        \"why_it_matters\": {\n          \"description\":
+      \"Explanation of why the issue matters\",\n          \"title\": \"Why It Matters\",\n          \"type\":
+      \"string\"\n        },\n        \"suggested_fix\": {\n          \"description\":
+      \"Suggested minimal fix for the issue\",\n          \"title\": \"Suggested Fix\",\n          \"type\":
+      \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"severity\",\n        \"evidence\",\n        \"why_it_matters\",\n        \"suggested_fix\"\n      ],\n      \"title\":
+      \"QualityIssue\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of quality analysis for a code file.\",\n  \"properties\":
+      {\n    \"quality_issues\": {\n      \"description\": \"List of quality issues
+      found in the code\",\n      \"items\": {\n        \"$ref\": \"#/$defs/QualityIssue\"\n      },\n      \"title\":
+      \"Quality Issues\",\n      \"type\": \"array\"\n    },\n    \"opportunities\":
+      {\n      \"description\": \"List of improvement opportunities\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Opportunities\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"quality_issues\",\n    \"opportunities\"\n  ],\n  \"title\":
+      \"FileQualityAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\nLanguage: Python\nFramework: SQLAlchemy\n\n\"\"\"User
+      authentication service for managing login and session handling.\"\"\"\n\nimport
+      hashlib\nimport secrets\nfrom datetime import datetime, timedelta\n\nfrom models.session
+      import UserSession\nfrom models.user import User\nfrom sqlalchemy.orm import
+      Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles user authentication
+      and session management.\"\"\"\n\n    def __init__(self, db: Session):\n        self.db
+      = db\n        self.session_timeout = timedelta(hours=24)\n\n    def authenticate_user(self,
+      email: str, password: str) -> User | None:\n        \"\"\"Authenticate user
+      with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      BUSINESS CONTEXT ===\nPrimary Responsibility: Manages user authentication workflows
+      and session lifecycle, including credential verification, secure token generation,
+      and session validation.\nBusiness Logic Factor: 0.8\n\n=== TECHNICAL CONTEXT
+      ===\nCategories: Services, Security, Data\nLanguage: Python\nFramework: SQLAlchemy"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '8191'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a477ceab8446a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:27 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a senior code reviewer
+      preparing a production-readiness assessment.\n\nTask: Identify concrete quality
+      issues and improvement opportunities for this file.\n\n**SCOPE: Review THIS
+      FILE ONLY. Do not assume problems in other files, configs, or infrastructure.**\nIf
+      a potential issue depends on external code/config, record it as an opportunity
+      (not an issue).\n\nContext: Focus ONLY on correctness, security, performance,
+      reliability, and maintainability in this file.\nIgnore formatting/naming/style
+      unless it directly causes bugs or harms readability.\nAll claims MUST include
+      concrete code evidence from THIS FILE (path + line ranges or exact quotes).\nIf
+      unsure, omit from issues.\n\nApply a strict evidence contract:\n- Security claim:
+      show Source \u2192 (missing/insufficient Guard) \u2192 Sink with quoted lines
+      FROM THIS FILE\n- Performance claim: show hot path AND an expensive operation
+      in that path (e.g., loop + query/IO) FROM THIS FILE\n- Maintainability claim:
+      cite measurable threshold (e.g., >150 LOC function, \u22654 nesting) FROM THIS
+      FILE\n\n**AVOID SUBJECTIVE ASSESSMENTS:**\n- \u274c \"Missing documentation\"
+      - Only report if unclear code causes bugs\n- \u274c \"Multiple responsibilities\"
+      - Only report measurable complexity thresholds\n- \u274c \"Should use X pattern\"
+      - Only report if current code has concrete issues\n- \u274c Architectural opinions
+      - Focus on file-level technical issues only\n\nOutput Structure:\n- **quality_issues**:
+      List of concrete problems with title, severity (high/medium/low), evidence,
+      why_it_matters, suggested_fix\n- **opportunities**: List of improvement suggestions
+      (refactoring, patterns, optimizations)\n\nReturn concise, high-impact results
+      with concrete evidence only.\n\n**CRITICAL**: Output ONLY valid JSON in the
+      exact schema format specified. No additional text, explanations, or excessive
+      whitespace.\n\n**Python Context for Quality Analysis:**\n\n**Language Understanding:**\nThis
+      is Python code following PEP 8 style guidelines. Python emphasizes readability,
+      explicit is better than implicit, and \"Pythonic\" idioms for common patterns.\n\n**Python
+      Security Context:**\nConsider common Python security vulnerabilities including
+      injection attacks through eval/exec, subprocess misuse, unsafe deserialization,
+      and improper input validation. Follow secure coding practices for file operations
+      and external system interaction.\n\n**Python Performance Context:**\nPython
+      performance issues often involve inefficient data structures, blocking I/O operations,
+      and memory management problems. Consider algorithmic complexity, proper use
+      of generators vs lists, and async/await patterns for I/O-bound operations.\n\n**Python
+      Reliability Context:**\nPython applications should use proper exception handling
+      (avoid bare except), follow async/await patterns correctly, and handle resource
+      cleanup appropriately. Consider thread safety for concurrent code and proper
+      error propagation.\n\n\n        As a genius expert, your task is to understand
+      the content and provide\n        the parsed objects in json that match the following
+      json_schema:\n\n\n        {\n  \"$defs\": {\n    \"QualityIssue\": {\n      \"additionalProperties\":
+      false,\n      \"description\": \"Represents a single quality issue found in
+      the code.\",\n      \"properties\": {\n        \"title\": {\n          \"description\":
+      \"Title of the quality issue\",\n          \"title\": \"Title\",\n          \"type\":
+      \"string\"\n        },\n        \"severity\": {\n          \"description\":
+      \"Severity of the issue (high, medium, low)\",\n          \"title\": \"Severity\",\n          \"type\":
+      \"string\"\n        },\n        \"evidence\": {\n          \"description\":
+      \"Evidence for the issue\",\n          \"title\": \"Evidence\",\n          \"type\":
+      \"string\"\n        },\n        \"why_it_matters\": {\n          \"description\":
+      \"Explanation of why the issue matters\",\n          \"title\": \"Why It Matters\",\n          \"type\":
+      \"string\"\n        },\n        \"suggested_fix\": {\n          \"description\":
+      \"Suggested minimal fix for the issue\",\n          \"title\": \"Suggested Fix\",\n          \"type\":
+      \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"severity\",\n        \"evidence\",\n        \"why_it_matters\",\n        \"suggested_fix\"\n      ],\n      \"title\":
+      \"QualityIssue\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of quality analysis for a code file.\",\n  \"properties\":
+      {\n    \"quality_issues\": {\n      \"description\": \"List of quality issues
+      found in the code\",\n      \"items\": {\n        \"$ref\": \"#/$defs/QualityIssue\"\n      },\n      \"title\":
+      \"Quality Issues\",\n      \"type\": \"array\"\n    },\n    \"opportunities\":
+      {\n      \"description\": \"List of improvement opportunities\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Opportunities\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"quality_issues\",\n    \"opportunities\"\n  ],\n  \"title\":
+      \"FileQualityAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\nLanguage: Python\nFramework: SQLAlchemy\n\n\"\"\"User
+      authentication service for managing login and session handling.\"\"\"\n\nimport
+      hashlib\nimport secrets\nfrom datetime import datetime, timedelta\n\nfrom models.session
+      import UserSession\nfrom models.user import User\nfrom sqlalchemy.orm import
+      Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles user authentication
+      and session management.\"\"\"\n\n    def __init__(self, db: Session):\n        self.db
+      = db\n        self.session_timeout = timedelta(hours=24)\n\n    def authenticate_user(self,
+      email: str, password: str) -> User | None:\n        \"\"\"Authenticate user
+      with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      BUSINESS CONTEXT ===\nPrimary Responsibility: Manages user authentication workflows
+      and session lifecycle, including credential verification, secure token generation,
+      and session validation.\nBusiness Logic Factor: 0.8\n\n=== TECHNICAL CONTEXT
+      ===\nCategories: Services, Security, Data\nLanguage: Python\nFramework: SQLAlchemy"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.2, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '8191'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+        0XCHDZ2geX7+LwAAAP//AwAvkyfpHw0AAA==
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47a08a92446a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:33 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a senior code reviewer
+      preparing a production-readiness assessment.\n\nTask: Identify concrete quality
+      issues and improvement opportunities for this file.\n\n**SCOPE: Review THIS
+      FILE ONLY. Do not assume problems in other files, configs, or infrastructure.**\nIf
+      a potential issue depends on external code/config, record it as an opportunity
+      (not an issue).\n\nContext: Focus ONLY on correctness, security, performance,
+      reliability, and maintainability in this file.\nIgnore formatting/naming/style
+      unless it directly causes bugs or harms readability.\nAll claims MUST include
+      concrete code evidence from THIS FILE (path + line ranges or exact quotes).\nIf
+      unsure, omit from issues.\n\nApply a strict evidence contract:\n- Security claim:
+      show Source \u2192 (missing/insufficient Guard) \u2192 Sink with quoted lines
+      FROM THIS FILE\n- Performance claim: show hot path AND an expensive operation
+      in that path (e.g., loop + query/IO) FROM THIS FILE\n- Maintainability claim:
+      cite measurable threshold (e.g., >150 LOC function, \u22654 nesting) FROM THIS
+      FILE\n\n**AVOID SUBJECTIVE ASSESSMENTS:**\n- \u274c \"Missing documentation\"
+      - Only report if unclear code causes bugs\n- \u274c \"Multiple responsibilities\"
+      - Only report measurable complexity thresholds\n- \u274c \"Should use X pattern\"
+      - Only report if current code has concrete issues\n- \u274c Architectural opinions
+      - Focus on file-level technical issues only\n\nOutput Structure:\n- **quality_issues**:
+      List of concrete problems with title, severity (high/medium/low), evidence,
+      why_it_matters, suggested_fix\n- **opportunities**: List of improvement suggestions
+      (refactoring, patterns, optimizations)\n\nReturn concise, high-impact results
+      with concrete evidence only.\n\n**CRITICAL**: Output ONLY valid JSON in the
+      exact schema format specified. No additional text, explanations, or excessive
+      whitespace.\n\n**Python Context for Quality Analysis:**\n\n**Language Understanding:**\nThis
+      is Python code following PEP 8 style guidelines. Python emphasizes readability,
+      explicit is better than implicit, and \"Pythonic\" idioms for common patterns.\n\n**Python
+      Security Context:**\nConsider common Python security vulnerabilities including
+      injection attacks through eval/exec, subprocess misuse, unsafe deserialization,
+      and improper input validation. Follow secure coding practices for file operations
+      and external system interaction.\n\n**Python Performance Context:**\nPython
+      performance issues often involve inefficient data structures, blocking I/O operations,
+      and memory management problems. Consider algorithmic complexity, proper use
+      of generators vs lists, and async/await patterns for I/O-bound operations.\n\n**Python
+      Reliability Context:**\nPython applications should use proper exception handling
+      (avoid bare except), follow async/await patterns correctly, and handle resource
+      cleanup appropriately. Consider thread safety for concurrent code and proper
+      error propagation.\n\n\n        As a genius expert, your task is to understand
+      the content and provide\n        the parsed objects in json that match the following
+      json_schema:\n\n\n        {\n  \"$defs\": {\n    \"QualityIssue\": {\n      \"additionalProperties\":
+      false,\n      \"description\": \"Represents a single quality issue found in
+      the code.\",\n      \"properties\": {\n        \"title\": {\n          \"description\":
+      \"Title of the quality issue\",\n          \"title\": \"Title\",\n          \"type\":
+      \"string\"\n        },\n        \"severity\": {\n          \"description\":
+      \"Severity of the issue (high, medium, low)\",\n          \"title\": \"Severity\",\n          \"type\":
+      \"string\"\n        },\n        \"evidence\": {\n          \"description\":
+      \"Evidence for the issue\",\n          \"title\": \"Evidence\",\n          \"type\":
+      \"string\"\n        },\n        \"why_it_matters\": {\n          \"description\":
+      \"Explanation of why the issue matters\",\n          \"title\": \"Why It Matters\",\n          \"type\":
+      \"string\"\n        },\n        \"suggested_fix\": {\n          \"description\":
+      \"Suggested minimal fix for the issue\",\n          \"title\": \"Suggested Fix\",\n          \"type\":
+      \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"severity\",\n        \"evidence\",\n        \"why_it_matters\",\n        \"suggested_fix\"\n      ],\n      \"title\":
+      \"QualityIssue\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of quality analysis for a code file.\",\n  \"properties\":
+      {\n    \"quality_issues\": {\n      \"description\": \"List of quality issues
+      found in the code\",\n      \"items\": {\n        \"$ref\": \"#/$defs/QualityIssue\"\n      },\n      \"title\":
+      \"Quality Issues\",\n      \"type\": \"array\"\n    },\n    \"opportunities\":
+      {\n      \"description\": \"List of improvement opportunities\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Opportunities\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"quality_issues\",\n    \"opportunities\"\n  ],\n  \"title\":
+      \"FileQualityAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "File: example.py\nLanguage: Python\nFramework: SQLAlchemy\n\n\"\"\"User
+      authentication service for managing login and session handling.\"\"\"\n\nimport
+      hashlib\nimport secrets\nfrom datetime import datetime, timedelta\n\nfrom models.session
+      import UserSession\nfrom models.user import User\nfrom sqlalchemy.orm import
+      Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles user authentication
+      and session management.\"\"\"\n\n    def __init__(self, db: Session):\n        self.db
+      = db\n        self.session_timeout = timedelta(hours=24)\n\n    def authenticate_user(self,
+      email: str, password: str) -> User | None:\n        \"\"\"Authenticate user
+      with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      BUSINESS CONTEXT ===\nPrimary Responsibility: Manages user authentication workflows
+      and session lifecycle, including credential verification, secure token generation,
+      and session validation.\nBusiness Logic Factor: 0.8\n\n=== TECHNICAL CONTEXT
+      ===\nCategories: Services, Security, Data\nLanguage: Python\nFramework: SQLAlchemy"}],
+      "model": "google/gemini-3-flash-preview", "parallel_tool_calls": false, "response_format":
+      {"type": "json_object"}, "temperature": 0.1, "usage": {"include": true}, "max_tokens":
+      8000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '8191'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+        GlNsTquhzjZ4Us3T038BAAD//wMAL3mjjpUMAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47c35e35446a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:39 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a consensus judge
+      reviewing multiple code quality analysis reports for a code file.\n\nBased on
+      the original file content and the expert analyses provided, create a final consensus
+      quality analysis that combines the best insights from all experts.\n\nRequirements:\n1.
+      **Synthesize insights**: Combine the most accurate quality observations from
+      all experts\n2. **Resolve conflicts**: When experts disagree, choose the most
+      evidence-based conclusion\n3. **Prioritize actionable feedback**: Focus on issues
+      that can realistically be addressed\n4. **Quality focus**: Ensure all identified
+      issues are genuine quality concerns\n\nCreate a comprehensive quality analysis
+      that represents the collective expert judgment.\n\n**CRITICAL**: Output ONLY
+      valid JSON in the exact schema format specified. No additional text, explanations,
+      or excessive whitespace.\n\n\n        As a genius expert, your task is to understand
+      the content and provide\n        the parsed objects in json that match the following
+      json_schema:\n\n\n        {\n  \"$defs\": {\n    \"QualityIssue\": {\n      \"additionalProperties\":
+      false,\n      \"description\": \"Represents a single quality issue found in
+      the code.\",\n      \"properties\": {\n        \"title\": {\n          \"description\":
+      \"Title of the quality issue\",\n          \"title\": \"Title\",\n          \"type\":
+      \"string\"\n        },\n        \"severity\": {\n          \"description\":
+      \"Severity of the issue (high, medium, low)\",\n          \"title\": \"Severity\",\n          \"type\":
+      \"string\"\n        },\n        \"evidence\": {\n          \"description\":
+      \"Evidence for the issue\",\n          \"title\": \"Evidence\",\n          \"type\":
+      \"string\"\n        },\n        \"why_it_matters\": {\n          \"description\":
+      \"Explanation of why the issue matters\",\n          \"title\": \"Why It Matters\",\n          \"type\":
+      \"string\"\n        },\n        \"suggested_fix\": {\n          \"description\":
+      \"Suggested minimal fix for the issue\",\n          \"title\": \"Suggested Fix\",\n          \"type\":
+      \"string\"\n        }\n      },\n      \"required\": [\n        \"title\",\n        \"severity\",\n        \"evidence\",\n        \"why_it_matters\",\n        \"suggested_fix\"\n      ],\n      \"title\":
+      \"QualityIssue\",\n      \"type\": \"object\"\n    }\n  },\n  \"additionalProperties\":
+      false,\n  \"description\": \"Result of quality analysis for a code file.\",\n  \"properties\":
+      {\n    \"quality_issues\": {\n      \"description\": \"List of quality issues
+      found in the code\",\n      \"items\": {\n        \"$ref\": \"#/$defs/QualityIssue\"\n      },\n      \"title\":
+      \"Quality Issues\",\n      \"type\": \"array\"\n    },\n    \"opportunities\":
+      {\n      \"description\": \"List of improvement opportunities\",\n      \"items\":
+      {\n        \"type\": \"string\"\n      },\n      \"title\": \"Opportunities\",\n      \"type\":
+      \"array\"\n    }\n  },\n  \"required\": [\n    \"quality_issues\",\n    \"opportunities\"\n  ],\n  \"title\":
+      \"FileQualityAnalysisResult\",\n  \"type\": \"object\"\n}\n\n        Make sure
+      to return an instance of the JSON, not the schema itself\n"}, {"role": "user",
+      "content": "Original Content:\n```\nFile: example.py\nLanguage: Python\nFramework:
+      SQLAlchemy\n\n\"\"\"User authentication service for managing login and session
+      handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime import datetime,
+      timedelta\n\nfrom models.session import UserSession\nfrom models.user import
+      User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      BUSINESS CONTEXT ===\nPrimary Responsibility: Manages user authentication workflows
+      and session lifecycle, including credential verification, secure token generation,
+      and session validation.\nBusiness Logic Factor: 0.8\n\n=== TECHNICAL CONTEXT
+      ===\nCategories: Services, Security, Data\nLanguage: Python\nFramework: SQLAlchemy\n```\n\nExpert
+      Analyses:\nExpert Analysis 1:\n{\n  \"quality_issues\": [\n    {\n      \"title\":
+      \"Insecure Password Hashing Algorithm\",\n      \"severity\": \"high\",\n      \"evidence\":
+      \"hashlib.sha256(password.encode()).hexdigest() (Lines 63, 67)\",\n      \"why_it_matters\":
+      \"SHA-256 is a fast cryptographic hash function, making it vulnerable to high-speed
+      brute-force and dictionary attacks. Modern password hashing requires a slow,
+      adaptive algorithm with a salt (e.g., Argon2, bcrypt) to mitigate hardware-accelerated
+      cracking.\",\n      \"suggested_fix\": \"Replace hashlib.sha256 with a dedicated
+      password hashing library like ''argon2-cffi'' or ''bcrypt'' which handles salting
+      and work factors automatically.\"\n    },\n    {\n      \"title\": \"Missing
+      Salt in Password Hashing\",\n      \"severity\": \"high\",\n      \"evidence\":
+      \"hashlib.sha256(password.encode()).hexdigest() (Lines 63, 67)\",\n      \"why_it_matters\":
+      \"The implementation does not use a unique salt per user. This allows attackers
+      to use precomputed Rainbow Tables to crack passwords and makes identical passwords
+      result in identical hashes, leaking information about user credentials.\",\n      \"suggested_fix\":
+      \"Use a hashing function that incorporates a unique, random salt for every password
+      hash generated.\"\n    },\n    {\n      \"title\": \"Potential Timing Attack
+      in Password Verification\",\n      \"severity\": \"medium\",\n      \"evidence\":
+      \"return hashlib.sha256(password.encode()).hexdigest() == password_hash (Line
+      63)\",\n      \"why_it_matters\": \"The standard ''=='' operator for strings
+      performs a character-by-character comparison and returns as soon as a mismatch
+      is found. This allows an attacker to infer the correct hash by measuring the
+      time taken for the comparison.\",\n      \"suggested_fix\": \"Use ''secrets.compare_digest()''
+      or ''hmac.compare_digest()'' for constant-time string comparison.\"\n    },\n    {\n      \"title\":
+      \"Inconsistent Timezone Handling\",\n      \"severity\": \"low\",\n      \"evidence\":
+      \"datetime.utcnow() (Lines 31, 41, 42, 51)\",\n      \"why_it_matters\": \"Using
+      ''datetime.utcnow()'' creates naive datetime objects (without timezone info).
+      This can lead to subtle bugs when comparing times across different system configurations
+      or when the Python community moves toward ''datetime.now(timezone.utc)'' as
+      ''utcnow'' is deprecated in newer Python versions.\",\n      \"suggested_fix\":
+      \"Use ''datetime.now(timezone.utc)'' to ensure all datetime objects are timezone-aware.\"\n    }\n  ],\n  \"opportunities\":
+      [\n    \"Consider implementing a ''logout'' or ''revoke_session'' method to
+      allow users to manually invalidate tokens before they expire.\",\n    \"The
+      ''validate_session'' method could implement a sliding window expiration (refreshing
+      ''expires_at'' on use) to improve user experience.\",\n    \"Dependency injection
+      of the hashing logic would make the service more testable and allow for easier
+      algorithm migrations in the future.\",\n    \"Consider adding a ''is_active''
+      check on the User model during authentication to prevent disabled accounts from
+      logging in.\"\n  ]\n}\n\nExpert Analysis 2:\n{\n  \"quality_issues\": [\n    {\n      \"title\":
+      \"Insecure Password Hashing Algorithm\",\n      \"severity\": \"high\",\n      \"evidence\":
+      \"hashlib.sha256(password.encode()).hexdigest() (lines 62, 66)\",\n      \"why_it_matters\":
+      \"SHA-256 is a fast cryptographic hash function, making it vulnerable to high-speed
+      brute-force and hardware-accelerated (GPU/ASIC) cracking attacks. It also lacks
+      a salt in this implementation, making it susceptible to rainbow table attacks.\",\n      \"suggested_fix\":
+      \"Use a dedicated password hashing library like Argon2 (argon2-cffi) or bcrypt
+      which include built-in salting and configurable work factors.\"\n    },\n    {\n      \"title\":
+      \"Timing Attack Vulnerability in Password Verification\",\n      \"severity\":
+      \"medium\",\n      \"evidence\": \"return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash (line 62)\",\n      \"why_it_matters\": \"The standard ''==''
+      operator for strings performs a character-by-character comparison and returns
+      as soon as a mismatch is found. This allows an attacker to infer the correct
+      hash through precise timing measurements.\",\n      \"suggested_fix\": \"Use
+      hmac.compare_digest() for constant-time string comparison.\"\n    },\n    {\n      \"title\":
+      \"Potential Database Connection Leak or Transaction Mismanagement\",\n      \"severity\":
+      \"medium\",\n      \"evidence\": \"self.db.commit() (lines 31, 46)\",\n      \"why_it_matters\":
+      \"The service performs commits internally but does not handle rollbacks in case
+      of failures. If an error occurs between database operations or during commit,
+      the session might be left in an inconsistent state. Furthermore, committing
+      inside a service method prevents the caller from managing a larger atomic transaction.\",\n      \"suggested_fix\":
+      \"Remove internal commits and allow the caller to manage the transaction lifecycle,
+      or wrap operations in a try/except block with self.db.rollback().\"\n    }\n  ],\n  \"opportunities\":
+      [\n    \"Consider using timezone-aware datetimes (datetime.now(timezone.utc))
+      instead of datetime.utcnow() to avoid issues with naive datetime objects in
+      modern Python.\",\n    \"The validate_session method could implement ''sliding
+      expiration'' by updating the expires_at timestamp upon successful validation.\",\n    \"Add
+      a logout/revoke_session method to allow manual invalidation of session tokens.\",\n    \"Implement
+      a more robust password hashing strategy that includes a unique salt per user
+      if not migrating to a library like bcrypt.\"\n  ]\n}\n\nExpert Analysis 3:\n{\n  \"quality_issues\":
+      [\n    {\n      \"title\": \"Insecure Password Hashing Algorithm\",\n      \"severity\":
+      \"high\",\n      \"evidence\": \"hashlib.sha256(password.encode()).hexdigest()
+      (lines 61, 65)\",\n      \"why_it_matters\": \"SHA-256 is a fast cryptographic
+      hash function, making it vulnerable to high-speed brute-force and dictionary
+      attacks. It also lacks a salt in this implementation, allowing for rainbow table
+      attacks.\",\n      \"suggested_fix\": \"Use a dedicated password hashing library
+      like Argon2 (argon2-cffi) or bcrypt which include built-in salting and configurable
+      work factors.\"\n    },\n    {\n      \"title\": \"Timing Attack Vulnerability
+      in Password Verification\",\n      \"severity\": \"medium\",\n      \"evidence\":
+      \"return hashlib.sha256(password.encode()).hexdigest() == password_hash (line
+      61)\",\n      \"why_it_matters\": \"The standard ''=='' operator performs a
+      short-circuiting string comparison. This allows an attacker to infer the correct
+      hash character by character based on the time taken to return a result.\",\n      \"suggested_fix\":
+      \"Use ''secrets.compare_digest()'' for constant-time comparison of hashes.\"\n    },\n    {\n      \"title\":
+      \"Potential Race Condition in Session Validation\",\n      \"severity\": \"low\",\n      \"evidence\":
+      \"UserSession.expires_at > datetime.utcnow() (line 50)\",\n      \"why_it_matters\":
+      \"The session validation relies on application-side time checks against the
+      database. While common, in high-concurrency environments or distributed systems
+      with clock skew, this can lead to inconsistent session termination.\",\n      \"suggested_fix\":
+      \"Consider using database-level expiration logic or ensuring the DB server and
+      App server clocks are synchronized via NTP.\"\n    }\n  ],\n  \"opportunities\":
+      [\n    \"Implement a ''logout'' or ''revoke_session'' method to allow manual
+      invalidation of tokens before they expire.\",\n    \"Add a ''refresh_session''
+      capability to extend the ''expires_at'' timestamp upon successful validation
+      to improve user experience.\",\n    \"Transition from ''datetime.utcnow()''
+      to timezone-aware datetimes (e.g., ''datetime.now(timezone.utc)'') as ''utcnow()''
+      is deprecated in newer Python versions.\",\n    \"Consider using a scoped session
+      or context manager for database operations to ensure ''db.commit()'' or ''db.rollback()''
+      is handled reliably in case of unexpected errors.\"\n  ]\n}"}], "model": "google/gemini-3-flash-preview",
+      "parallel_tool_calls": false, "response_format": {"type": "json_object"}, "temperature":
+      0.1, "usage": {"include": true}, "max_tokens": 8000, "reasoning": {"effort":
+      "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '14228'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmICAAAA//9CYgIA
+        AAD//6RX224bORL9lQJfZGNbii9rZyIgD5lLJllMsMEmmcFiHAglsrq71myyl8WWrAn874Niq205
+        EzhZ7IMgqXk7derUYfUnw84sTUNhfvr08vLi9Lvzk/P5Hy9f+jf/+OH7013z079Pvu/ebG9OTGX6
+        FDfsKJml+TnGxpOpTBcded2hPHjSUMeB5+fz2qO08z7RhmlrKhPX/yGbzdLYFvPCxq73lDkGUxmb
+        CDM5s7xHUBnbRrYkZvn7J+Nj06e4FrMMg/eVqTmwtKtEKDGYpZEce1OZgJk3tPp89N37f741leHg
+        6MYsTyrTkQg2ZJafTIqezNKgCEvGkBVNDJmCIv10FQCuzH8H9Jx3KxYZSK7MEn7XAYBP45fOyZw9
+        6dCVeR2E7JAI3qLINiYHr1BaDg288E1MnNvuylT3S4U2lDjvxtUtN+2DYVLGg91v3qK0ntcLafHs
+        4vKo3x+xoGCjo6Pj40VLN44bknx0DEe/cCCBy/MKLp8eP9h22+5WnFcd5kxJxs3fvXoxP7u4BBZA
+        qFEy2LTrc2wS9i1b0MOhHoLVvFXQ4bVGxRk2gw+UcO0JcgQNYS49kYN1GjLN65gsAQYHLSa3xURz
+        tJY8JU07HP389sOTF+9e/3AMNqEtm2LOaK9lAS+HlFtKXUxUQW5ZgFU5HYWMCgO8zgMEQZ8PMckg
+        lvrMe1AJOazjFnJBud8eti0lAiU4s0UPE58CiWTwGTgcjGr8JIuH2RsaJZvcquabkcZ/Ue/REjzM
+        FWw5t4DgyLEtcU+HlYmK2vM6YdqB52uCGaYmhrO5rWueQUwwW5dszGDbsm2hxeA8SYm7MBYcoMNe
+        SwC2MV1DjTbHJIBDjh2WEPxucWVG8LfVYyJ+z11RbOEJft3nl7UOlJM7af9KiWuNh2N4RNUdOR66
+        R3SdKA8pwP8m7+fP7zhcFW0WvcPl+del/r4l0IJ3mBzMnj+fQexVjjFBT6mOqVNN2RYT2kxpvt7N
+        7/6AmhcmlhgK6yN2ARSQqM90acfSYbatFlMdh+AW8F7Vi97HrQCGvQYpqTo51PqjJbAxJbJ5rLX1
+        DjpCGZLmQkczdwQZrylAHacFE5ivCvODEMyEbKIsi3EdrSY2R421HdovDOlhNoZikfMCQnIB9eD0
+        bxJWwiBYHATeKEcBm1LNhcpfVG2xhp9SigleqcQ5NP+PsIR8vXBrjanjA088P63g75ffKBRKG7Z0
+        r4xxMwEOmVLQsirVHYc8lqUyk6L362IyHMCikMZVI/shkSzgda0aoBJntHZIAm7Mc0yAtcoMoceU
+        GT04zLguWxSRFvfNBZiIEtlx02ZYE3iqi2dhAA6aMBa9y1TqmRbwwjnW1Yq4KmasZeUO4hF2pGY6
+        RZxoo+uL0NB7SlCn2EFJW7EsTI1CzbFjC/k+uV+3yd8S9l+IrPCV0+4J3ah/w9rH4tTqnrMpmxO5
+        RbZhorVS7rq4oakwOs5q5L0SsTevHA+CeTIEzvNYz4tf9iXv3yrk14f8vueO/oiB7iRb1Pwj9YlG
+        r39DuY1OHlGyj9tHZOwwk9bdYsg2xO1nOtbPWQUXp1/X8wdRdLO/7DeDsQsTCKg3yDQBxr5N4GhS
+        eJ5i5VDH42p/HVkM4AmdEizDOnuC9dCUGzZMLqEmxh0JoE1RBBzXNaWiz51k6tRiam6GvRA+u/xn
+        91BZwN1zq/fRLrcxwPni9Oxv32aDdwTollNIysbxTEOgINrCofd/ZQIT3ZEwR21nSrbrIQ+J5n2K
+        sb7XkH59rMZGMvZ9TFk1xw/6yCvzeuppAGHmYxOHPPpxok28ptW+0GfQFR0pwnKRwCCURP92GIZi
+        RBw26FlBQ47XdFiIh+fMxLPTjNBNzyPhM2VyNq2+P3O9g6F3mKdLaFaWkKwwz8aEZux6GPoYQAZr
+        SaQevEI7PPqFc2pLM5aVOsSGxgBZVlrg5GZgW1L3D+WQD0Jay4785Is45HbsxMrlkeOdOzkW7eoc
+        oLVxCFlGk/KxKR7F4RDHj9RT0MpSqjSh5bi7Fiw26mNRu8xUnESj23tHabEK7XofEgqr9U1Nvbrw
+        oYW1tJfEXgwfr8KtqUyiehD046vM7e3HygzTy0ifYtfn1Zg2szw/O32mryPTm9LdwNOLk8rkmNHf
+        z312WeZKNsuTxcnJ+XcXzy4qw7Ja7+K1WdbohaqHJ6wcZWQverRF25K72+6kMjg4jocP1I8OHtyO
+        xx1uMvSSE2G3Ku2MmtdqRDS+tX1heI/nHvfp5Yni/uJOEw9yMP/s7OL2CxwdohrfAzk0h8Fwhw0d
+        BHN7+ycAAAD//wMAkJtZIpgPAAA=
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a47e30c65446a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:31:44 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

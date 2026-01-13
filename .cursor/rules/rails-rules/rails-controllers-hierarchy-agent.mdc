@@ -1,0 +1,89 @@
+---
+description: This rule governs the organization and structure of Rails controllers within a project. It should be applied whenever: (1) Creating new controllers, (2) Setting up routes for controllers, or (3) Organizing API endpoints. This rule ensures consistent controller organization, proper separation of concerns, and maintainable routing structure. It is particularly important for large applications with multiple interfaces (web, API, admin) and when establishing project architecture patterns that will scale with the application growth.
+globs:
+alwaysApply: false
+---
+# Rails Controllers Hierarchy Rules
+
+## Critical Rules
+
+- Organize controllers in a hierarchical structure using namespaces
+- Place main namespaces at the top level: web, mobile, api, feeds, and others
+- Place the admin module inside the web namespace
+- Separate API by versions (v1, v2) through nested modules
+- Create a separate ApplicationController for each namespace
+- In routing, define Web as a scope, other namespaces as namespace
+- For nested resources, create corresponding modules with their ApplicationController
+- Create home controller on the top web namespace
+- Use root :to => 'home#show' on the top web namespace
+- Always ask for confirmation if you want to refactor or reorganize existing controllers
+- If uncertain about proper controller placement or namespace structure, ask for clarification before implementing
+
+## Examples
+
+<example>
+# Controllers structure
+app/controllers/
+  web/
+    application_controller.rb
+    home_controller.rb
+    users_controller.rb
+    admin/
+      application_controller.rb
+      posts_controller.rb
+  api/
+    application_controller.rb
+    v1/
+      application_controller.rb
+      users_controller.rb
+
+# Controller for namespace
+# app/controllers/web/application_controller.rb
+class Web::ApplicationController < ::ApplicationController
+  respond_to :html
+end
+
+# app/controllers/api/application_controller.rb
+class Api::ApplicationController < ::ApplicationController
+  respond_to :json
+end
+
+# Controller for nested resource
+# app/controllers/web/users/posts_controller.rb
+class Web::Users::PostsController < Web::Users::ApplicationController
+  def index
+    @posts = current_user.posts.all
+  end
+
+  def show
+    @post = current_user.posts.find(params[:id])
+  end
+end
+
+# Routing
+# config/routes.rb
+Rails.application.routes.draw do
+  # Web as scope
+  scope :module => :web do
+    root :to => 'welcome#index'
+    resources :users do
+      scope :module => :users do
+        resources :posts
+      end
+    end
+
+    namespace :admin do
+      root :to => 'welcome#index'
+      resources :posts
+    end
+  end
+
+  # API as namespace
+  namespace :api do
+    namespace :v1 do
+      root :to => 'welcome#index'
+      resources :users
+    end
+  end
+end
+</example>

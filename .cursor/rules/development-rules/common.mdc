@@ -1,0 +1,16 @@
+---
+description: This rule governs the process when you touch any code in the repo
+globs:
+alwaysApply: false
+---
+
+# Common development principes
+
+## Critical Rules
+
+  - suggest the simplest, short and smart decision
+  - avoid overcomplications
+  - follow the same standards you see in the project. follow the directory structure. Ask first if you think you have better ideas than what's implemented in the project before actually making change -
+  - act as a the best developer from FAANG
+  - use code commenting if it's really nessasry
+  - use The Philosophy of Python

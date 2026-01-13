@@ -1,0 +1,7 @@
+protocol: "http"
+
+authorization:
+  otp_enabled: false
+
+temporal:
+  enabled: true

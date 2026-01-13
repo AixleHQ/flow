@@ -1,0 +1,197 @@
+x-web-volumes: &web-volumes
+  - ./web:/app:cached
+  - ./config/workflows.yml:/app/app/temporal/workflows.yml:cached
+  - ~/.bash_history:/root/.bash_history
+  - bundle_cache:/bundle_cache
+  - ./docker/remote/db_dumps:/db_dumps:cached
+
+x-ai-engine-volumes: &ai-engine-volumes
+  - ~/.bash_history:/root/.bash_history
+  - ./ai-engine:/app:cached
+  - ./config/workflows.yml:/app/app/workflows/workflows.yml:cached
+  - uv_cache:/root/.cache/uv
+  - py_venv:/app/.venv
+
+x-db-environment: &db-environment
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_USERNAME: postgres
+  DB_NAME: palad_development
+
+x-web-environment: &web-environment
+  <<: *db-environment
+  APP_VERSION: dev
+  AUTHOR_NAME: author
+  AUTHOR_EMAIL: email
+  BUNDLE_PATH: /bundle_cache
+  GEM_HOME: /bundle_cache
+  GEM_PATH: /bundle_cache
+  RAILS_LOG_TO_STDOUT: 'true'
+  PORT: 4000
+  REDIS_URL: redis://redis:6379/1
+
+x-ai-engine-environment: &ai-engine-environment
+  <<: *db-environment
+  ENVIRONMENT: development
+
+x-toolbox-environment: &toolbox-environment
+  - PROJECT=palad
+  - APPLICATION=app-web
+  - AWS_REGION
+  - AWS_DEFAULT_REGION
+  - AWS_ACCESS_KEY_ID
+  - AWS_SECRET_ACCESS_KEY
+  - AWS_SESSION_TOKEN
+  - AWS_SECURITY_TOKEN
+  - AWS_SESSION_EXPIRATION
+  - AWS_SESSION_TOKEN_TTL=24h
+  - AWS_CHAINED_SESSION_TOKEN_TTL=24h
+  - AWS_ASSUME_ROLE_TTL=24h
+
+services:
+  temporal:
+    build:
+      context: ./docker/temporal
+      dockerfile: Dockerfile
+    image: temporal
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PWD=postgres
+      - POSTGRES_SEEDS=db
+      - LOG_LEVEL=error
+    volumes:
+      - ./docker/temporal/dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/docker.yaml
+    depends_on:
+      - db
+    attach: false
+
+  temporal-ui:
+    image: temporalio/ui:2.43.3
+    ports:
+      - 8080:8080
+    depends_on:
+      - temporal
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_UI_PORT=8080
+    restart: on-failure:5
+    attach: false
+
+  web:
+    build:
+      dockerfile: ./web/Dockerfile
+    image: web
+    volumes: *web-volumes
+    ports:
+      - '4000:4000'
+      - '4001:4001'
+    depends_on:
+      - db
+      - redis
+    environment:
+      <<: *web-environment
+    command: dev
+
+  worker-ruby:
+    profiles: [worker]
+    image: web
+    volumes: *web-volumes
+    environment:
+      <<: *web-environment
+      TEMPORAL_ENABLED: 'true'
+      TEMPORAL_DEBUG: 'true'
+    command: bin/temporal_worker
+    depends_on:
+      - temporal
+      - db
+    restart: on-failure:5
+
+  worker-python:
+    profiles: [worker]
+    build:
+      dockerfile: ./ai-engine/Dockerfile
+    volumes: *ai-engine-volumes
+    environment:
+      <<: *ai-engine-environment
+      TEMPORAL_DEBUG: 'true'
+    command: python app/temporal/worker.py
+    depends_on:
+      - temporal
+      - qdrant
+      - db
+    restart: on-failure:5
+
+  db:
+    image: postgres:15.3-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    attach: false
+
+  redis:
+    image: redis:7.2-alpine
+    volumes:
+      - redis_data:/data
+
+    attach: false
+
+  redis-ui:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - 8081:8081
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    attach: false
+
+  browser-tools-server:
+    profiles: [cursor]
+    build:
+      context: ./docker/browser_tools_server
+    ports:
+      - '3025:3025'
+
+  remote:
+    profiles: [infra]
+    build:
+      context: ./docker/remote
+      args:
+        platform: '${PLATFORM:-linux_arm64}'
+    entrypoint: ''
+    environment: *toolbox-environment
+    volumes:
+      - ./docker/remote:/app:cached
+      - .aws:/root/.aws
+
+  toolbox:
+    profiles: [infra]
+    image: ghcr.io/artempartos/ecs_toolbox:latest
+    environment: *toolbox-environment
+    volumes:
+      - .:/app:cached
+      - /var/run/docker.sock:/var/run/docker.sock
+
+
+
+volumes:
+  bundle_cache:
+  redis_data:
+  qdrant_data:
+  py_venv:
+  uv_cache:

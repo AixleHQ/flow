@@ -1,0 +1,45 @@
+services:
+  web:
+    image: ${WEB_IMAGE}
+    depends_on:
+      - db
+      - redis
+    environment:
+      APP_VERSION: dev
+      AUTHOR_NAME: author
+      AUTHOR_EMAIL: email
+      RAILS_LOG_TO_STDOUT: 'true'
+      PORT: 4000
+      DB_HOST: db
+      DEBUG: 'true'
+      REDIS_URL: redis://redis:6379/1
+      ENVIRONMENT: test
+      RAILS_ENV: test
+
+  ai-engine:
+    image: ${AI_ENGINE_IMAGE}
+    depends_on:
+      - qdrant
+      - db
+    environment:
+      ENVIRONMENT: test
+      LOG_LEVEL: DEBUG
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_NAME: palad_test
+    command: python app/temporal/worker.py
+
+  db:
+    image: quay.io/debezium/postgres:15-alpine
+    environment:
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  redis:
+    image: ghcr.io/redisgrafana/redis-opencv:latest
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"

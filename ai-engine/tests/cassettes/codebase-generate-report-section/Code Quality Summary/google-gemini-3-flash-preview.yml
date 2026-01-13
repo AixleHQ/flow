@@ -1,0 +1,675 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a code quality auditor
+      specializing in technical debt assessment.\n\n**Task:** Analyze code quality
+      across the codebase and provide a comprehensive quality summary in markdown
+      format.\n\n**Context:** Files may contain quality_issues in metadata with severity
+      levels, evidence, and suggested fixes. Also analyze code patterns, testing coverage,
+      documentation quality, and overall code health.\n\n**Output Format:** Structured
+      markdown with:\n- Overall quality score assessment\n- Issue breakdown by severity\n-
+      Top priority fixes with file references\n- Quality recommendations with timeline\n\n**Example
+      Output:**\n```markdown\n## Code Quality Summary\n\n**Overall Score: 6.5/10**\n\n###
+      Issue Distribution\n- \ud83d\udd34 High Severity: 12 issues (immediate attention)\n-
+      \ud83d\udfe1 Medium Severity: 28 issues (plan fixes)\n- \ud83d\udfe2 Low Severity:
+      45 issues (technical debt)\n\n### Critical Issues (High Severity)\n1. **Security**:
+      Hardcoded credentials in config files (3 files)\n   - Impact: Data breach risk\n   -
+      Files: `config/database.py`, `docker-compose.yml`\n   \n2. **Performance**:
+      N+1 database queries (5 files)\n   - Impact: Slow response times\n   - Files:
+      `services/user_service.py`, `api/orders.py`\n\n### Recommendations\n1. Implement
+      secret management (1 week)\n2. Add database query optimization (2 weeks)\n3.
+      Increase test coverage from 45% to 80% (1 month)\n\n### Positive Highlights\n\u2705
+      Strong type hinting coverage (90%)\n\u2705 Consistent code style across codebase\n\u2705
+      Good documentation in core modules\n```\n\n**Guidelines:**\n- Prioritize high-severity
+      issues with specific file citations\n- Include business impact assessment\n-
+      Provide actionable recommendations with estimated effort\n- Balance criticism
+      with positive observations\n"}, {"role": "user", "content": "\n\n=== example.py
+      ===\nFile: example.py\nCategories: Services, Security, Data\nLanguage: Python\nFramework:
+      SQLAlchemy\n\n\"\"\"User authentication service for managing login and session
+      handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime import datetime,
+      timedelta\n\nfrom models.session import UserSession\nfrom models.user import
+      User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      example.java ===\nFile: example.java\nCategories: Services, Workflows\nLanguage:
+      Java\nFramework: Spring\n\npackage com.example.order;\n\nimport java.math.BigDecimal;\nimport
+      java.time.LocalDateTime;\nimport java.util.ArrayList;\nimport java.util.List;\nimport
+      java.util.UUID;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport
+      org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport
+      com.example.inventory.InventoryService;\nimport com.example.payment.PaymentService;\nimport
+      com.example.shipping.ShippingService;\n\n/**\n * Service for managing e-commerce
+      orders including creation, validation, and fulfillment.\n */\n@Service\n@Transactional\npublic
+      class OrderService {\n\n    @Autowired\n    private OrderRepository orderRepository;\n\n    @Autowired\n    private
+      InventoryService inventoryService;\n\n    @Autowired\n    private PaymentService
+      paymentService;\n\n    @Autowired\n    private ShippingService shippingService;\n\n    /**\n     *
+      Creates a new order with validation and inventory checking.\n     */\n    public
+      Order createOrder(CreateOrderRequest request) throws OrderException {\n        validateOrderRequest(request);\n\n        Order
+      order = new Order();\n        order.setId(UUID.randomUUID().toString());\n        order.setCustomerId(request.getCustomerId());\n        order.setStatus(OrderStatus.PENDING);\n        order.setCreatedAt(LocalDateTime.now());\n        order.setItems(new
+      ArrayList<>());\n\n        BigDecimal totalAmount = BigDecimal.ZERO;\n\n        for
+      (OrderItemRequest itemRequest : request.getItems()) {\n            if (!inventoryService.isAvailable(itemRequest.getProductId(),
+      itemRequest.getQuantity())) {\n                throw new OrderException(\"Insufficient
+      inventory for product: \" + itemRequest.getProductId());\n            }\n\n            OrderItem
+      item = new OrderItem();\n            item.setProductId(itemRequest.getProductId());\n            item.setQuantity(itemRequest.getQuantity());\n            item.setUnitPrice(itemRequest.getUnitPrice());\n            item.setTotalPrice(itemRequest.getUnitPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));\n\n            order.getItems().add(item);\n            totalAmount
+      = totalAmount.add(item.getTotalPrice());\n        }\n\n        order.setTotalAmount(totalAmount);\n\n        Order
+      savedOrder = orderRepository.save(order);\n\n        // Reserve inventory\n        for
+      (OrderItem item : savedOrder.getItems()) {\n            inventoryService.reserveInventory(item.getProductId(),
+      item.getQuantity());\n        }\n\n        return savedOrder;\n    }\n\n    /**\n     *
+      Processes payment and updates order status.\n     */\n    public void processPayment(String
+      orderId, PaymentRequest paymentRequest) throws OrderException {\n        Order
+      order = findOrderById(orderId);\n\n        if (order.getStatus() != OrderStatus.PENDING)
+      {\n            throw new OrderException(\"Order is not in pending status\");\n        }\n\n        try
+      {\n            PaymentResult result = paymentService.processPayment(paymentRequest,
+      order.getTotalAmount());\n\n            if (result.isSuccessful()) {\n                order.setStatus(OrderStatus.PAID);\n                order.setPaymentId(result.getPaymentId());\n                orderRepository.save(order);\n\n                initiateShipping(order);\n            }
+      else {\n                order.setStatus(OrderStatus.PAYMENT_FAILED);\n                orderRepository.save(order);\n                releaseInventory(order);\n            }\n        }
+      catch (Exception e) {\n            order.setStatus(OrderStatus.PAYMENT_FAILED);\n            orderRepository.save(order);\n            releaseInventory(order);\n            throw
+      new OrderException(\"Payment processing failed\", e);\n        }\n    }\n\n    private
+      void validateOrderRequest(CreateOrderRequest request) throws OrderException
+      {\n        if (request.getCustomerId() == null || request.getCustomerId().trim().isEmpty())
+      {\n            throw new OrderException(\"Customer ID is required\");\n        }\n\n        if
+      (request.getItems() == null || request.getItems().isEmpty()) {\n            throw
+      new OrderException(\"Order must contain at least one item\");\n        }\n    }\n\n    private
+      Order findOrderById(String orderId) throws OrderException {\n        return
+      orderRepository.findById(orderId)\n            .orElseThrow(() -> new OrderException(\"Order
+      not found: \" + orderId));\n    }\n\n    private void initiateShipping(Order
+      order) {\n        shippingService.createShippingLabel(order);\n        order.setStatus(OrderStatus.SHIPPED);\n        orderRepository.save(order);\n    }\n\n    private
+      void releaseInventory(Order order) {\n        for (OrderItem item : order.getItems())
+      {\n            inventoryService.releaseInventory(item.getProductId(), item.getQuantity());\n        }\n    }\n}\n\n\n===
+      example.rb ===\nFile: example.rb\nCategories: Services, Workflows, Data\nLanguage:
+      Ruby\nFramework: Rails\n\n# frozen_string_literal: true\n\n# Service for managing
+      user subscriptions and billing in a SaaS application\nclass SubscriptionService\n  include
+      Serviceable\n\n  attr_reader :stripe_service, :notification_service\n\n  def
+      initialize(stripe_service: StripeService.new, notification_service: NotificationService.new)\n    @stripe_service
+      = stripe_service\n    @notification_service = notification_service\n  end\n\n  #
+      Creates a new subscription for a user with plan validation\n  def create_subscription(user,
+      plan_id, payment_method_id = nil)\n    return error_result(''User already has
+      active subscription'') if user.subscription&.active?\n\n    plan = SubscriptionPlan.find_by(id:
+      plan_id)\n    return error_result(''Invalid subscription plan'') unless plan&.available?\n\n    subscription
+      = nil\n\n    ActiveRecord::Base.transaction do\n      subscription = user.create_subscription!(\n        plan:
+      plan,\n        status: ''pending'',\n        started_at: Time.current,\n        next_billing_date:
+      calculate_next_billing_date(plan)\n      )\n\n      if plan.paid?\n        stripe_subscription
+      = create_stripe_subscription(user, plan, payment_method_id)\n\n        if stripe_subscription[:success]\n          subscription.update!(\n            status:
+      ''active'',\n            external_id: stripe_subscription[:subscription_id]\n          )\n\n          create_subscription_usage_record(subscription)\n          grant_plan_features(user,
+      plan)\n\n          notification_service.send_subscription_confirmation(user,
+      subscription)\n        else\n          raise ActiveRecord::Rollback, stripe_subscription[:error]\n        end\n      else\n        #
+      Free plan\n        subscription.update!(status: ''active'')\n        grant_plan_features(user,
+      plan)\n      end\n    end\n\n    success_result(subscription)\n  rescue StandardError
+      => e\n    Rails.logger.error \"Subscription creation failed: #{e.message}\"\n    error_result(\"Failed
+      to create subscription: #{e.message}\")\n  end\n\n  # Cancels a subscription
+      with optional immediate or end-of-period cancellation\n  def cancel_subscription(subscription,
+      immediate: false)\n    return error_result(''Subscription not found'') unless
+      subscription\n    return error_result(''Subscription already cancelled'') if
+      subscription.cancelled?\n\n    ActiveRecord::Base.transaction do\n      if subscription.external_id.present?\n        cancellation_result
+      = stripe_service.cancel_subscription(\n          subscription.external_id,\n          at_period_end:
+      !immediate\n        )\n\n        return error_result(cancellation_result[:error])
+      unless cancellation_result[:success]\n      end\n\n      cancellation_date =
+      immediate ? Time.current : subscription.next_billing_date\n\n      subscription.update!(\n        status:
+      ''cancelled'',\n        cancelled_at: cancellation_date,\n        cancellation_reason:
+      ''user_requested''\n      )\n\n      revoke_plan_features(subscription.user,
+      subscription.plan) if immediate\n\n      notification_service.send_cancellation_confirmation(subscription.user,
+      subscription)\n    end\n\n    success_result(subscription)\n  rescue StandardError
+      => e\n    Rails.logger.error \"Subscription cancellation failed: #{e.message}\"\n    error_result(\"Failed
+      to cancel subscription: #{e.message}\")\n  end\n\n  # Processes subscription
+      renewal and handles payment\n  def process_renewal(subscription)\n    return
+      error_result(''Subscription not eligible for renewal'') unless subscription.renewable?\n\n    if
+      subscription.plan.paid?\n      payment_result = stripe_service.process_subscription_payment(subscription.external_id)\n\n      unless
+      payment_result[:success]\n        handle_payment_failure(subscription, payment_result[:error])\n        return
+      error_result(\"Payment failed: #{payment_result[:error]}\")\n      end\n    end\n\n    subscription.update!(\n      next_billing_date:
+      calculate_next_billing_date(subscription.plan),\n      last_billed_at: Time.current\n    )\n\n    create_subscription_usage_record(subscription)\n    notification_service.send_renewal_confirmation(subscription.user,
+      subscription)\n\n    success_result(subscription)\n  end\n\n  private\n\n  def
+      create_stripe_subscription(user, plan, payment_method_id)\n    stripe_service.create_subscription(\n      customer_id:
+      user.stripe_customer_id,\n      price_id: plan.stripe_price_id,\n      payment_method_id:
+      payment_method_id\n    )\n  end\n\n  def calculate_next_billing_date(plan)\n    case
+      plan.billing_interval\n    when ''monthly''\n      1.month.from_now\n    when
+      ''yearly''\n      1.year.from_now\n    when ''weekly''\n      1.week.from_now\n    else\n      raise
+      ArgumentError, \"Unsupported billing interval: #{plan.billing_interval}\"\n    end\n  end\n\n  def
+      grant_plan_features(user, plan)\n    plan.features.each do |feature|\n      user.feature_access.find_or_create_by(feature:
+      feature) do |access|\n        access.granted_at = Time.current\n      end\n    end\n  end\n\n  def
+      revoke_plan_features(user, plan)\n    plan.features.each do |feature|\n      user.feature_access.find_by(feature:
+      feature)&.destroy\n    end\n  end\n\n  def create_subscription_usage_record(subscription)\n    SubscriptionUsage.create!(\n      subscription:
+      subscription,\n      period_start: subscription.last_billed_at || subscription.started_at,\n      period_end:
+      subscription.next_billing_date,\n      usage_data: {}\n    )\n  end\n\n  def
+      handle_payment_failure(subscription, error_message)\n    subscription.update!(\n      status:
+      ''past_due'',\n      last_payment_error: error_message\n    )\n\n    notification_service.send_payment_failure_notification(subscription.user,
+      subscription)\n  end\nend\n"}], "model": "google/gemini-3-flash-preview", "parallel_tool_calls":
+      false, "temperature": 0.1, "usage": {"include": true}, "max_tokens": 4000, "reasoning":
+      {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '15089'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75b56802c032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:01 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a code quality auditor
+      specializing in technical debt assessment.\n\n**Task:** Analyze code quality
+      across the codebase and provide a comprehensive quality summary in markdown
+      format.\n\n**Context:** Files may contain quality_issues in metadata with severity
+      levels, evidence, and suggested fixes. Also analyze code patterns, testing coverage,
+      documentation quality, and overall code health.\n\n**Output Format:** Structured
+      markdown with:\n- Overall quality score assessment\n- Issue breakdown by severity\n-
+      Top priority fixes with file references\n- Quality recommendations with timeline\n\n**Example
+      Output:**\n```markdown\n## Code Quality Summary\n\n**Overall Score: 6.5/10**\n\n###
+      Issue Distribution\n- \ud83d\udd34 High Severity: 12 issues (immediate attention)\n-
+      \ud83d\udfe1 Medium Severity: 28 issues (plan fixes)\n- \ud83d\udfe2 Low Severity:
+      45 issues (technical debt)\n\n### Critical Issues (High Severity)\n1. **Security**:
+      Hardcoded credentials in config files (3 files)\n   - Impact: Data breach risk\n   -
+      Files: `config/database.py`, `docker-compose.yml`\n   \n2. **Performance**:
+      N+1 database queries (5 files)\n   - Impact: Slow response times\n   - Files:
+      `services/user_service.py`, `api/orders.py`\n\n### Recommendations\n1. Implement
+      secret management (1 week)\n2. Add database query optimization (2 weeks)\n3.
+      Increase test coverage from 45% to 80% (1 month)\n\n### Positive Highlights\n\u2705
+      Strong type hinting coverage (90%)\n\u2705 Consistent code style across codebase\n\u2705
+      Good documentation in core modules\n```\n\n**Guidelines:**\n- Prioritize high-severity
+      issues with specific file citations\n- Include business impact assessment\n-
+      Provide actionable recommendations with estimated effort\n- Balance criticism
+      with positive observations\n"}, {"role": "user", "content": "\n\n=== example.js
+      ===\nFile: example.js\nCategories: UI, Controllers, Logic\nLanguage: JavaScript\nFramework:
+      React\n\n/**\n * React component for managing shopping cart functionality in
+      an e-commerce application.\n * Handles item management, quantity updates, price
+      calculations, and checkout initiation.\n */\n\nimport React, { useState, useEffect,
+      useCallback } from ''react'';\nimport { useDispatch, useSelector } from ''react-redux'';\nimport
+      { toast } from ''react-toastify'';\n\nimport {\n  addItemToCart,\n  removeItemFromCart,\n  updateItemQuantity,\n  clearCart,\n  fetchCartItems\n}
+      from ''../store/slices/cartSlice'';\nimport { initiateCheckout } from ''../store/slices/checkoutSlice'';\nimport
+      { formatCurrency } from ''../utils/currency'';\nimport { trackEvent } from ''../analytics/tracking'';\n\nimport
+      CartItem from ''./CartItem'';\nimport PriceBreakdown from ''./PriceBreakdown'';\nimport
+      CheckoutButton from ''./CheckoutButton'';\nimport EmptyCart from ''./EmptyCart'';\n\nconst
+      ShoppingCart = ({ isOpen, onClose, className = '''' }) => {\n  const dispatch
+      = useDispatch();\n  const { items, totalItems, subtotal, shipping, tax, total,
+      loading, error } = useSelector(state => state.cart);\n  const { user } = useSelector(state
+      => state.auth);\n\n  const [localLoading, setLocalLoading] = useState(false);\n  const
+      [validationErrors, setValidationErrors] = useState({});\n\n  useEffect(() =>
+      {\n    if (isOpen && user) {\n      dispatch(fetchCartItems(user.id));\n    }\n  },
+      [isOpen, user, dispatch]);\n\n  const handleQuantityChange = useCallback(async
+      (itemId, newQuantity) => {\n    if (newQuantity < 1) {\n      handleRemoveItem(itemId);\n      return;\n    }\n\n    if
+      (newQuantity > 99) {\n      toast.error(''Maximum quantity is 99'');\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(updateItemQuantity({ itemId, quantity: newQuantity })).unwrap();\n      trackEvent(''cart_item_quantity_updated'',
+      { itemId, newQuantity });\n    } catch (error) {\n      toast.error(''Failed
+      to update quantity'');\n      console.error(''Quantity update error:'', error);\n    }
+      finally {\n      setLocalLoading(false);\n    }\n  }, [dispatch]);\n\n  const
+      handleRemoveItem = useCallback(async (itemId) => {\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(removeItemFromCart(itemId)).unwrap();\n      toast.success(''Item
+      removed from cart'');\n      trackEvent(''cart_item_removed'', { itemId });\n    }
+      catch (error) {\n      toast.error(''Failed to remove item'');\n      console.error(''Remove
+      item error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [dispatch]);\n\n  const handleClearCart = useCallback(async () => {\n    if
+      (!window.confirm(''Are you sure you want to clear your cart?'')) {\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(clearCart()).unwrap();\n      toast.success(''Cart cleared'');\n      trackEvent(''cart_cleared'');\n    }
+      catch (error) {\n      toast.error(''Failed to clear cart'');\n      console.error(''Clear
+      cart error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [dispatch]);\n\n  const handleCheckout = useCallback(async () => {\n    const
+      errors = validateCartItems(items);\n    setValidationErrors(errors);\n\n    if
+      (Object.keys(errors).length > 0) {\n      toast.error(''Please resolve cart
+      issues before checkout'');\n      return;\n    }\n\n    if (!user) {\n      toast.error(''Please
+      sign in to proceed with checkout'');\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      const checkoutData = {\n        items: items.map(item => ({\n          productId:
+      item.productId,\n          quantity: item.quantity,\n          price: item.price\n        })),\n        userId:
+      user.id,\n        subtotal,\n        shipping,\n        tax,\n        total\n      };\n\n      const
+      result = await dispatch(initiateCheckout(checkoutData)).unwrap();\n\n      trackEvent(''checkout_initiated'',
+      {\n        totalItems,\n        totalAmount: total,\n        userId: user.id\n      });\n\n      //
+      Redirect to checkout page\n      window.location.href = `/checkout/${result.checkoutId}`;\n    }
+      catch (error) {\n      toast.error(''Failed to initiate checkout'');\n      console.error(''Checkout
+      error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [items, user, subtotal, shipping, tax, total, totalItems, dispatch]);\n\n  const
+      validateCartItems = (cartItems) => {\n    const errors = {};\n\n    cartItems.forEach(item
+      => {\n      if (!item.inStock) {\n        errors[item.id] = ''Item is out of
+      stock'';\n      } else if (item.quantity > item.maxQuantity) {\n        errors[item.id]
+      = `Maximum available quantity is ${item.maxQuantity}`;\n      } else if (item.price
+      !== item.currentPrice) {\n        errors[item.id] = ''Price has changed since
+      item was added'';\n      }\n    });\n\n    return errors;\n  };\n\n  const isCartValid
+      = Object.keys(validationErrors).length === 0;\n  const isCheckoutDisabled =
+      loading || localLoading || !isCartValid || totalItems === 0;\n\n  if (!isOpen)
+      return null;\n\n  return (\n    <div className={`shopping-cart ${className}`}>\n      <div
+      className=\"cart-header\">\n        <h2>Shopping Cart ({totalItems} items)</h2>\n        <button\n          className=\"close-button\"\n          onClick={onClose}\n          aria-label=\"Close
+      cart\"\n        >\n          \u00d7\n        </button>\n      </div>\n\n      <div
+      className=\"cart-content\">\n        {error && (\n          <div className=\"error-message\">\n            {error}\n          </div>\n        )}\n\n        {loading
+      ? (\n          <div className=\"loading-state\">\n            Loading cart items...\n          </div>\n        )
+      : items.length === 0 ? (\n          <EmptyCart onContinueShopping={onClose}
+      />\n        ) : (\n          <>\n            <div className=\"cart-items\">\n              {items.map(item
+      => (\n                <CartItem\n                  key={item.id}\n                  item={item}\n                  onQuantityChange={handleQuantityChange}\n                  onRemove={handleRemoveItem}\n                  error={validationErrors[item.id]}\n                  disabled={localLoading}\n                />\n              ))}\n            </div>\n\n            <PriceBreakdown\n              subtotal={subtotal}\n              shipping={shipping}\n              tax={tax}\n              total={total}\n            />\n\n            <div
+      className=\"cart-actions\">\n              <button\n                className=\"clear-cart-button\"\n                onClick={handleClearCart}\n                disabled={localLoading}\n              >\n                Clear
+      Cart\n              </button>\n\n              <CheckoutButton\n                onClick={handleCheckout}\n                disabled={isCheckoutDisabled}\n                loading={localLoading}\n                total={total}\n              />\n            </div>\n          </>\n        )}\n      </div>\n    </div>\n  );\n};\n\nexport
+      default ShoppingCart;\n"}], "model": "google/gemini-3-flash-preview", "parallel_tool_calls":
+      false, "temperature": 0.1, "usage": {"include": true}, "max_tokens": 4000, "reasoning":
+      {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '9066'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75dd394dc032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:07 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are aggregating multiple
+      analysis summaries into a single comprehensive markdown report.\n\nYour task:\n1.
+      Merge the provided summaries into one cohesive, well-structured report\n2. Remove
+      redundant and duplicate information\n3. Consolidate similar findings into unified
+      sections\n4. Preserve all key insights and important findings\n5. Maintain the
+      same analysis style as the original prompt (quality_summary)\n\nOutput format:
+      Clean, well-structured markdown with clear sections, tables where appropriate,
+      and bullet points.\n\nFocus on creating a professional, comprehensive report
+      that synthesizes all the information effectively.\n"}, {"role": "user", "content":
+      "## Summary 1\n\n## Code Quality Summary\n\n**Overall Score: 5.8/10**\n\nThe
+      codebase demonstrates strong architectural patterns (Service Layer, Transactional
+      management) and consistent documentation. However, it is significantly hampered
+      by **critical security vulnerabilities** in the authentication logic and **architectural
+      fragility** in the order fulfillment workflow. While the Ruby implementation
+      shows high maturity, the Python and Java components require immediate remediation
+      to meet production safety standards.\n\n### Issue Distribution\n- \ud83d\udd34
+      **High Severity**: 3 issues (Immediate security & data integrity risk)\n- \ud83d\udfe1
+      **Medium Severity**: 5 issues (Logic flaws & maintainability debt)\n- \ud83d\udfe2
+      **Low Severity**: 8 issues (Style & minor optimization)\n\n### Critical Issues
+      (High Severity)\n\n1. **Security: Broken Cryptography (Python)**\n   - **Impact**:
+      High risk of credential theft. Using `SHA-256` without a salt for password hashing
+      is vulnerable to rainbow table attacks.\n   - **File**: `example.py` (Lines
+      70-76)\n   - **Fix**: Replace `hashlib.sha256` with a dedicated password hashing
+      algorithm like `argon2-cffi` or `bcrypt`.\n\n2. **Data Integrity: Distributed
+      State Inconsistency (Java)**\n   - **Impact**: Financial/Inventory loss. The
+      `processPayment` method updates the database status to `SHIPPED` *before* ensuring
+      the shipping service successfully processed the request. If `shippingService`
+      fails, the order remains in a \"Shipped\" state incorrectly.\n   - **File**:
+      `example.java` (Lines 118-122)\n   - **Fix**: Wrap shipping initiation in a
+      try-catch or move it to an asynchronous event-driven pattern.\n\n3. **Performance:
+      N+1 Query Pattern (Ruby)**\n   - **Impact**: Database performance degradation
+      as user feature sets grow.\n   - **File**: `example.rb` (Lines 145-157)\n   -
+      **Fix**: Use `includes(:features)` when fetching the plan to eager-load associations.\n\n###
+      Top Priority Fixes\n\n| Priority | Issue | File Reference | Estimated Effort
+      |\n| :--- | :--- | :--- | :--- |\n| 1 | **Implement Secure Hashing** (Argon2/Bcrypt)
+      | `example.py` | 1 day |\n| 2 | **Fix Order State Machine** (Shipping logic)
+      | `example.java` | 2 days |\n| 3 | **Add Idempotency Keys** for Stripe/Payments
+      | `example.rb` | 3 days |\n| 4 | **Standardize Timezones** (Use UTC consistently)
+      | `example.py`, `example.java` | 1 day |\n\n### Quality Recommendations\n\n1.
+      **Security Hardening (Immediate)**: Audit all authentication entry points. Replace
+      manual hashing with industry-standard libraries and implement rate limiting
+      on the `authenticate_user` method.\n2. **Resilience Engineering (2-4 Weeks)**:
+      Implement the \"Outbox Pattern\" or a message queue for the Java `OrderService`
+      to handle external service calls (Shipping/Inventory) reliably.\n3. **Observability
+      (1 Month)**: Standardize logging across languages. The Ruby service has good
+      error logging, but the Python service lacks any telemetry for failed logins
+      or session issues.\n\n### Positive Highlights\n\u2705 **Consistent Documentation**:
+      All files use appropriate docstrings/Javadocs explaining business logic.\n\u2705
+      **Transaction Management**: Good use of `@Transactional` (Java) and `ActiveRecord::Base.transaction`
+      (Ruby) to ensure local data atomicity.\n\u2705 **Clean Dependency Injection**:
+      All services use constructor injection, making them highly testable with mocks.\n\u2705
+      **Strong Typing**: Excellent use of Python type hints and Java generics.\n\n---\n\n##
+      Summary 2\n\n## Code Quality Summary\n\n**Overall Score: 7.5/10**\n\nThe codebase
+      demonstrates a mature understanding of React and Redux patterns. The logic is
+      well-structured, utilizes modern hooks (`useCallback`, `useSelector`), and includes
+      essential features like analytics tracking and error handling. However, there
+      are architectural concerns regarding the mixing of business logic with UI components
+      and a reliance on legacy browser behaviors.\n\n### Issue Distribution\n- \ud83d\udd34
+      High Severity: 1 issue (immediate attention)\n- \ud83d\udfe1 Medium Severity:
+      4 issues (plan fixes)\n- \ud83d\udfe2 Low Severity: 3 issues (technical debt)\n\n###
+      Critical Issues (High Severity)\n1. **Logic/UX**: Hard Redirect during State
+      Management\n   - **Impact**: Using `window.location.href` in a Single Page Application
+      (SPA) causes a full page reload, wiping the Redux state and providing a jarring
+      user experience.\n   - **Files**: `example.js` (Line 135)\n\n### Significant
+      Issues (Medium Severity)\n1. **Architectural**: Business Logic Leakage\n   -
+      **Impact**: The `validateCartItems` and checkout data construction logic are
+      defined inside the UI component. This makes the logic non-reusable and difficult
+      to unit test in isolation.\n   - **Files**: `example.js` (Lines 112-130, 144-158)\n   \n2.
+      **UX/Accessibility**: Native Browser Dialogs\n   - **Impact**: `window.confirm`
+      is blocking and cannot be styled, leading to a poor brand experience and potential
+      accessibility issues on mobile devices.\n   - **Files**: `example.js` (Line
+      84)\n\n3. **Reliability**: Missing Dependency in `useCallback`\n   - **Impact**:
+      `handleRemoveItem` is used inside `handleQuantityChange`, but it is not listed
+      in the dependency array of the latter, potentially leading to stale closure
+      issues if the reference changes.\n   - **Files**: `example.js` (Line 69)\n\n###
+      Recommendations\n1. **Refactor Routing (Immediate)**: Replace `window.location.href`
+      with a routing hook (e.g., `useNavigate` from react-router-dom) to maintain
+      SPA state. (1 day)\n2. **Decouple Logic (1-2 weeks)**: Move `validateCartItems`
+      and checkout object construction into a separate utility file or a Redux Thunk
+      to improve testability. (3 days)\n3. **UI Modernization (2 weeks)**: Replace
+      `window.confirm` with a custom Modal component for a consistent design language.
+      (2 days)\n4. **State Management (1 month)**: Consider moving `localLoading`
+      into the Redux store if other components need to react to cart mutation states.
+      (1 week)\n\n### Positive Highlights\n\u2705 **Excellent Documentation**: The
+      component includes clear JSDoc and descriptive variable naming.\n\u2705 **Robust
+      Error Handling**: Use of `.unwrap()` with `try/catch` blocks ensures that asynchronous
+      failures are caught and reported to the user via `toast`.\n\u2705 **Performance
+      Optimized**: Effective use of `useCallback` to prevent unnecessary re-renders
+      of child components (`CartItem`, `CheckoutButton`).\n\u2705 **Strong UX Patterns**:
+      Includes loading states, empty states, and validation feedback."}], "model":
+      "google/gemini-3-flash-preview", "parallel_tool_calls": false, "temperature":
+      0.1, "usage": {"include": true}, "max_tokens": 4000, "reasoning": {"effort":
+      "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '7444'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75feb92cc032-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:13 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

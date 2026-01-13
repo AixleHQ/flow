@@ -1,0 +1,91 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# Material UI
+
+## Imports
+```typescript
+// Use single line imports for Material UI components
+import { Button, Stack } from '@mui/material';
+```
+
+## Typography
+- Use Typography variants instead of fontFamily key in sxProps objects
+- Use Typography variants instead of direct font styling
+- Match typography variants from Figma with the existing file content /shared/theme/baseTheme/typography.ts
+
+## Modals
+- Use @ebay/nice-modal-react approach for modal management
+
+## SxProps usage
+- Use external objects for sx props instead of inline styles
+- Use full written css-in-js keys (paddingTop instead of pt, etc.) instead of abbreviated
+- Use only variant prop for Button components
+
+### Use sxProps in a separate styles object next to the component
+```typescript
+// Component with sxProps usage
+const styles = {
+  root: {
+    color: 'primary.main',
+  },
+} satisfies sxProps;
+
+const MyComponent = () => {
+  return <Box sx={styles.root}></Box>;
+}
+```
+
+### Use mui-sx library for styles composition
+```typescript
+import muiSx from 'mui-sx';
+…
+<Slider sx={muiSx({ styles.slider, { sx: styles.sliderActive, condition: isActive } )} } />
+```
+
+### Use px instead of spacing
+```typescript
+// Set values in pixels for consistent sizing
+const styles = {
+  box: {
+    width: '24px',
+    height: '10px',
+  },
+} satisfies SxProps;
+```
+
+## Theme usage
+
+### Use colors from palette
+```typescript
+// Use theme palette colors for consistent theming
+const styles = {
+  box: {
+    color: 'success.main',
+  },
+} satisfies SxProps;
+```
+
+### Use media queries breakpoints in a properly way
+```typescript
+const styles = {
+  box: {
+    width: {
+      sx: '100%',
+      md: '280px',
+    },
+  },
+} satisfies SxProps;
+```
+
+### Use z-index only from the theme values
+```typescript
+// Use theme-defined z-index values for consistent layering
+const styles = {
+  box: {
+    zIndex: 'tooltip',
+  },
+} satisfies SxProps;
+```

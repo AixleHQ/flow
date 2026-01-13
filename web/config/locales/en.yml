@@ -1,0 +1,68 @@
+# Files in the config/locales directory are used for internationalization and
+# are automatically loaded by Rails. If you want to use locales other than
+# English, add the necessary files in this directory.
+#
+# To use the locales, use `I18n.t`:
+#
+#     I18n.t "hello"
+#
+# In views, this is aliased to just `t`:
+#
+#     <%= t("hello") %>
+#
+# To use a different locale, set it with `I18n.locale`:
+#
+#     I18n.locale = :es
+#
+# This would use the information in config/locales/es.yml.
+#
+# To learn more about the API, please read the Rails Internationalization guide
+# at https://guides.rubyonrails.org/i18n.html.
+#
+# Be aware that YAML interprets the following case-insensitive strings as
+# booleans: `true`, `false`, `on`, `off`, `yes`, `no`. Therefore, these strings
+# must be quoted to be interpreted as strings. For example:
+#
+#     en:
+#       "yes": yup
+#       enabled: "ON"
+
+en:
+  activemodel:
+    errors:
+      models:
+        user_sign_in_form:
+          attributes:
+            email:
+              email_or_password_incorrect: "Email or password is incorrect"
+            password:
+              email_or_password_incorrect: "Email or password is incorrect"
+  errors:
+    messages:
+      invalid_min_length: "must be at least %{min} characters long"
+      invalid_max_length: "must be at most %{max} characters long"
+      at_least_one_digit: "must contain at least one digit"
+      at_least_one_lowercase: "must contain at least one lowercase letter"
+      at_least_one_uppercase: "must contain at least one uppercase letter"
+      at_least_one_special: "must contain at least one special character"
+
+  user_mailer:
+    invite:
+      subject: "You're invited to join %{account_name} on Palad"
+    otp:
+      subject: "Your Palad one-time password"
+
+  administrate:
+    actions:
+      batch_delete_resource: "Delete Selected"
+      batch_delete_resource_confirmation: "Are you sure you want to delete the selected %{name}?"
+      impersonate: "Impersonate"
+      stop_impersonate: "Stop Impersonate"
+
+  admin:
+    integration:
+      repos:
+        collection:
+          start_processing: Start processing
+        show:
+          start_processing: Start processing

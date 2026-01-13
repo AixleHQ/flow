@@ -1,0 +1,12 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+# Forms
+- Use react-hook-form package for form management
+- Use FormProvider for form context
+- Use zod resolver for validation
+- Store zod schemas in lib segment's folder
+- Use control components from MaterialUI theme without custom styles
+- Use Typography with variant labelLarge above TextField instead of labels

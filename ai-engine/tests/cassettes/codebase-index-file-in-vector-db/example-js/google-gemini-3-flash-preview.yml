@@ -1,0 +1,1063 @@
+interactions:
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      host:
+      - qdrant:6333
+      user-agent:
+      - python-client/1.15.1 python/3.13.9
+    method: GET
+    uri: http://qdrant:6333
+  response:
+    body:
+      string: !!binary |
+        KLUv/QBYLQMAAkcYG3DHOoWJVsHW0hEpK9P//9vSBzLWD2rIp/8bAofzqkKOtA01x0slpDiFEfOm
+        lZJ1qIA6RS3Zs8+3LJFPHGAgaujZYXyM7ObEGz4B7DNguc0cGSd3c4oz4cpWOHsT5ps3BAA=
+    headers:
+      content-encoding:
+      - zstd
+      content-type:
+      - application/json
+      date:
+      - Tue, 23 Dec 2025 19:41:11 GMT
+      transfer-encoding:
+      - chunked
+      vary:
+      - accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      host:
+      - qdrant:6333
+      user-agent:
+      - python-client/1.15.1 python/3.13.9
+    method: GET
+    uri: http://qdrant:6333/collections
+  response:
+    body:
+      string: !!binary |
+        KLUv/QBYZQMAsoYWGnBp2ygYtl9fuk0u6UQhAHCXAKhQ1++r+r+ETzAABPAgooF5ZUffHNnneenU
+        fPMQ7wXDQc3a5p2AuilLdqlCE0hVShhRdvG8stTuDnlue7TStVbd5XstrMpdBQBGcQDKCYELP5XS
+        JlFQ
+    headers:
+      content-encoding:
+      - zstd
+      content-type:
+      - application/json
+      date:
+      - Tue, 23 Dec 2025 19:41:11 GMT
+      transfer-encoding:
+      - chunked
+      vary:
+      - accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      host:
+      - qdrant:6333
+      user-agent:
+      - python-client/1.15.1 python/3.13.9
+    method: GET
+    uri: http://qdrant:6333/collections
+  response:
+    body:
+      string: !!binary |
+        KLUv/QBYTQMAgsYVGoC5OdOImjBhstsszUQYGbImgX0eDEUdRX0E7xQ/ggMw0GfH2hhJo3XZtGrz
+        DM8GIYBWv+Z5gLadJbmO+AFdpUQRJRNGn6VmV0Bry2PV10plh9616BW7BQBGcQDKCYELP5XSJlFQ
+    headers:
+      content-encoding:
+      - zstd
+      content-type:
+      - application/json
+      date:
+      - Tue, 23 Dec 2025 19:41:11 GMT
+      transfer-encoding:
+      - chunked
+      vary:
+      - accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"input": ["/** * React component for managing shopping cart functionality
+      in an e-commerce application. * Handles item management, quantity updates, price
+      calculations, and checkout initiation. */ import React, { useState, useEffect,
+      useCallback } from ''react''; import { useDispatch, useSelector } from ''react-redux'';
+      import { toast } from ''react-toastify''; import { addItemToCart, removeItemFromCart,
+      updateItemQuantity, clearCart, fetchCartItems } from ''../store/slices/cartSlice'';
+      import { initiateCheckout } from ''../store/slices/checkoutSlice''; import {
+      formatCurrency } from ''../utils/currency''; import { trackEvent } from ''../analytics/tracking'';
+      import CartItem from ''./CartItem''; import PriceBreakdown from ''./PriceBreakdown'';
+      import CheckoutButton from ''./CheckoutButton''; import EmptyCart from ''./EmptyCart'';",
+      "const ShoppingCart = ({ isOpen, onClose, className = '''' }) => { const dispatch
+      = useDispatch(); const { items, totalItems, subtotal, shipping, tax, total,
+      loading, error } = useSelector(state => state.cart); const { user } = useSelector(state
+      => state.auth); const [localLoading, setLocalLoading] = useState(false); const
+      [validationErrors, setValidationErrors] = useState({}); useEffect(() => { if
+      (isOpen && user) { dispatch(fetchCartItems(user.id)); } }, [isOpen, user, dispatch]);
+      const handleQuantityChange = useCallback(async (itemId, newQuantity) => { if
+      (newQuantity < 1) { handleRemoveItem(itemId); return; } if (newQuantity > 99)
+      { toast.error(''Maximum quantity is 99''); return; } setLocalLoading(true);
+      try { await dispatch(updateItemQuantity({ itemId, quantity: newQuantity })).unwrap();
+      trackEvent(''cart_item_quantity_updated'', { itemId, newQuantity }); } catch
+      (error) { toast.error(''Failed to update quantity''); console.error(''Quantity
+      update error:'', error); } finally { setLocalLoading(false); } }, [dispatch]);
+      const handleRemoveItem = useCallback(async (itemId) => { setLocalLoading(true);
+      try { await dispatch(removeItemFromCart(itemId)).unwrap(); toast.success(''Item
+      removed from cart''); trackEvent(''cart_item_removed'', { itemId }); } catch
+      (error) { toast.error(''Failed to remove item''); console.error(''Remove item
+      error:'', error); } finally { setLocalLoading(false); } }, [dispatch]); const
+      handleClearCart = useCallback(async () => { if (!window.confirm(''Are you sure
+      you want to clear your cart?'')) { return; }", "const handleClearCart = useCallback(async
+      () => { if (!window.confirm(''Are you sure you want to clear your cart?''))
+      { return; } setLocalLoading(true); try { await dispatch(clearCart()).unwrap();
+      toast.success(''Cart cleared''); trackEvent(''cart_cleared''); } catch (error)
+      { toast.error(''Failed to clear cart''); console.error(''Clear cart error:'',
+      error); } finally { setLocalLoading(false); } }, [dispatch]); const handleCheckout
+      = useCallback(async () => { const errors = validateCartItems(items); setValidationErrors(errors);
+      if (Object.keys(errors).length > 0) { toast.error(''Please resolve cart issues
+      before checkout''); return; } if (!user) { toast.error(''Please sign in to proceed
+      with checkout''); return; } setLocalLoading(true); try { const checkoutData
+      = { items: items.map(item => ({ productId: item.productId, quantity: item.quantity,
+      price: item.price })), userId: user.id, subtotal, shipping, tax, total }; const
+      result = await dispatch(initiateCheckout(checkoutData)).unwrap(); trackEvent(''checkout_initiated'',
+      { totalItems, totalAmount: total, userId: user.id }); // Redirect to checkout
+      page window.location.href = `/checkout/${result.checkoutId}`; } catch (error)
+      { toast.error(''Failed to initiate checkout''); console.error(''Checkout error:'',
+      error); } finally { setLocalLoading(false); } }, [items, user, subtotal, shipping,
+      tax, total, totalItems, dispatch]); const validateCartItems = (cartItems) =>
+      { const errors = {};", "const validateCartItems = (cartItems) => { const errors
+      = {}; cartItems.forEach(item => { if (!item.inStock) { errors[item.id] = ''Item
+      is out of stock''; } else if (item.quantity > item.maxQuantity) { errors[item.id]
+      = `Maximum available quantity is ${item.maxQuantity}`; } else if (item.price
+      !== item.currentPrice) { errors[item.id] = ''Price has changed since item was
+      added''; } }); return errors; }; const isCartValid = Object.keys(validationErrors).length
+      === 0; const isCheckoutDisabled = loading || localLoading || !isCartValid ||
+      totalItems === 0; if (!isOpen) return null; return ( <div className={`shopping-cart
+      ${className}`}> <div className=\"cart-header\"> <h2>Shopping Cart ({totalItems}
+      items)</h2> <button className=\"close-button\" onClick={onClose} aria-label=\"Close
+      cart\" > \u00d7 </button> </div> <div className=\"cart-content\"> {error &&
+      ( <div className=\"error-message\"> {error} </div> )} {loading ? ( <div className=\"loading-state\">
+      Loading cart items... </div> ) : items.length === 0 ? ( <EmptyCart onContinueShopping={onClose}
+      /> ) : ( <> <div className=\"cart-items\"> {items.map(item => ( <CartItem key={item.id}
+      item={item} onQuantityChange={handleQuantityChange} onRemove={handleRemoveItem}
+      error={validationErrors[item.id]} disabled={localLoading} /> ))} </div> <PriceBreakdown
+      subtotal={subtotal} shipping={shipping} tax={tax} total={total} />", "<PriceBreakdown
+      subtotal={subtotal} shipping={shipping} tax={tax} total={total} /> <div className=\"cart-actions\">
+      <button className=\"clear-cart-button\" onClick={handleClearCart} disabled={localLoading}
+      > Clear Cart </button> <CheckoutButton onClick={handleCheckout} disabled={isCheckoutDisabled}
+      loading={localLoading} total={total} /> </div> </> )} </div> </div> ); }; export
+      default ShoppingCart;"], "model": "text-embedding-3-small", "encoding_format":
+      "float"}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '5655'
+      content-type:
+      - application/json
+      host:
+      - api.openai.com
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://api.openai.com/v1/embeddings
+  response:
+    body:
+      string: !!binary |
+        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
+        TC52jSVi53XZhi18z+kwMMBCupAbdYX/XezFlndTiFbcVpcOztKqI67bIhiaxxwm6awYPJUGdvW8
+        Vg4NW49dKErv69WX5UAFM2HPgcWYPzRh+pNw1p306+olvClQL2ija2jDa9J1DfzNe1JL1I9802fk
+        guDLHsaGuNnucepFffHPoGzOMjz+W9KcXjsoJ5VqwyuFu91B8LjDXC2I7xQGbSGbz8t/jioZd27A
+        C7o2Io9K/bB3xGNljGq4mBMbaRkv55wvZpQl9CA0vvYq8AIcbpnU0LvsRPjkTxnNa7Yfqo6I8RWi
+        4c0+Af37HVuY99pPn0sazZ5ffNsPY4KBnnYeJ5RbFlcbQrAelKjWLPn4tvIJ8jXMwIXcSCsTpurt
+        S/Lvr34+tgFFzyhS/9nWkn/F6S8o+fSN5xdY2wYNo5lpAzRRMZv0yh3T1fnOHa/YM6Z+fTiGm9st
+        b3a3kmvRan21xvjMqI3OBLaizikQTOkIybLannsVC9xHMsOzZMypLzzXDO2WQrlzpVULcC/3xw3R
+        f49sfP/wH8///s9/+O23f+Tv/fjzX//0+7/++MNvP/72+7//7efvf/7j73/607/85Z9/9p//9ud/
+        +td//XH+0v//b//0z7//+MNv/3H+n3/8n//vr3/+P3/7n3/76//7+1/+7ccffqv/tav58be//u2f
+        /vXj/+Uf+M/95z/8XwAAAP//AwCChsx/9ocCAA==
+    headers:
+      CF-RAY:
+      - 9b2a55c9ef78ce1a-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 19:41:12 GMT
+      Server:
+      - cloudflare
+      Set-Cookie:
+      - __cf_bm=3op.R2dMZ7hiT8_pWUiF2jLug3MJgyCbpso73H.jcRM-1766518872-1.0.1.1-uJm7DOVLe5cxt31LO8giAQzs34_rYuD1vLNHIUnDYBce7iMPWrKTOYv1CdjmE_DdwzVPt_W_XKS9IYF0XbztEdz7wmwiuMnvEV7l2d8IWEQ;
+        path=/; expires=Tue, 23-Dec-25 20:11:12 GMT; domain=.api.openai.com; HttpOnly;
+        Secure; SameSite=None
+      - _cfuvid=BU4LJAZJaJSsYe5sUHyVEkfcBUdkQot4DD0MB7sl11g-1766518872997-0.0.1.1-604800000;
+        path=/; domain=.api.openai.com; HttpOnly; Secure; SameSite=None
+      Transfer-Encoding:
+      - chunked
+      X-Content-Type-Options:
+      - nosniff
+      access-control-allow-origin:
+      - '*'
+      access-control-expose-headers:
+      - X-Request-ID
+      alt-svc:
+      - h3=":443"; ma=86400
+      cf-cache-status:
+      - DYNAMIC
+      openai-model:
+      - text-embedding-3-small
+      openai-organization:
+      - dualboot-partners-6sw25s
+      openai-processing-ms:
+      - '80'
+      openai-project:
+      - proj_hUXxNGsRAFPvBfWAJltbF3Pt
+      openai-version:
+      - '2020-10-01'
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      via:
+      - envoy-router-canary-7bd6b74556-rqb55
+      x-envoy-upstream-service-time:
+      - '100'
+      x-openai-proxy-wasm:
+      - v0.1
+      x-ratelimit-limit-requests:
+      - '10000'
+      x-ratelimit-limit-tokens:
+      - '10000000'
+      x-ratelimit-remaining-requests:
+      - '9999'
+      x-ratelimit-remaining-tokens:
+      - '9998616'
+      x-ratelimit-reset-requests:
+      - 6ms
+      x-ratelimit-reset-tokens:
+      - 8ms
+      x-request-id:
+      - req_8a2cbccb23824df1b735ba83894a5de6
+    status:
+      code: 200
+      message: OK
+- request:
+    body: "{\"points\":[{\"id\":70368744177664,\"vector\":[-0.04433571,-0.006306373,-0.05679108,0.019773457,0.061557394,-0.007880156,-0.024663426,0.016401066,0.005570067,-0.020110697,0.056251496,-0.045842048,-0.023471847,0.0006263515,0.086872816,0.04811279,0.0082736015,-0.014568733,0.008206153,0.04447061,0.014096598,-0.0099935215,0.020492902,-0.022988472,-0.0062501663,-0.024326187,0.0026206295,0.022707438,0.015782794,-0.048067827,-0.0012435695,-0.027653614,0.057105836,0.021605792,0.022583785,0.0034848049,-0.0069583687,0.022831094,-0.0129499845,-0.013759359,-0.034016192,-0.027181478,0.03030656,0.038445268,0.013028674,0.00011794589,-0.04802286,0.0054098787,-0.031003524,-0.0044037816,-0.041457936,-0.009532628,-0.017244164,0.023269504,0.014861007,0.0011262384,-0.021560825,0.034263503,0.025922453,0.01626617,0.022066684,-0.022965988,-0.03183538,-0.029901875,-0.018008573,0.042289793,-0.018357053,0.0044712294,-0.03046394,0.029047536,0.021313516,-0.033454128,0.022864817,-0.026147278,0.058814514,0.0052918447,-0.016209964,0.017232923,0.026619414,0.030576354,-0.028777745,0.06695322,-0.0016904115,-0.057645418,-0.0038923023,-0.050226156,-0.05737563,0.044627987,-0.044065922,-0.009296561,-0.030014288,0.03055387,-0.0059691337,0.03320682,-0.015771553,-0.0051766215,-0.03707383,-0.000920382,0.02607983,0.03819796,0.033341713,-0.010072211,-0.0062333043,-0.02814823,0.040131465,-0.0104768975,-0.0038220442,-0.014422596,-0.026686862,-0.01402915,-0.034308467,0.03968181,-0.03313937,0.047393348,0.0003709631,-0.038939886,0.053283792,0.040558632,-0.030958558,-0.009543869,-0.0023901828,0.010566828,0.060028575,-0.021448413,0.006430027,-0.024078878,-0.04345889,-0.007812708,-0.037028864,0.0040581115,0.05386834,-0.027181478,0.007273125,-0.041682765,-0.03536515,0.06834714,-0.0058960654,-0.0050304844,-0.049012095,0.05962389,0.019346287,-0.019683527,0.028418023,-0.03624197,-0.026327139,-0.035769835,-0.0048393826,0.0025419404,-0.05121539,-0.015670381,0.0057246354,-0.03259979,0.012860054,-0.07041554,0.015782794,-0.015333142,0.017390301,0.0104768975,-0.0010861913,-0.046853766,-0.034960464,0.0003983638,-0.023876535,-0.011769648,-0.016277412,-0.015310659,-0.042312276,0.04208745,-0.03107097,-0.04568467,0.021650756,-0.020245593,0.0017241354,0.0023803466,-0.03174545,0.012275507,0.0021133656,-0.015085833,0.041615315,0.027743544,0.014298942,-0.01591769,-0.033071924,-0.0007559779,0.004024388,-0.024168808,-0.008234257,0.002950843,0.004802848,0.0012751857,-0.031093454,0.022066684,-0.024663426,-0.0010805706,0.021740686,-0.06299628,0.01806478,0.046494044,0.018143468,0.011477374,-0.010521863,-0.0082511185,0.0259899,0.014737353,0.0073180906,-0.048832234,-0.03073373,0.0142877,0.008408497,-0.019065255,0.019930836,-0.024191292,-0.033049442,0.046314184,-0.05224959,-0.010729827,0.020920072,0.056476325,-0.007346194,0.06016347,-0.026889205,0.017356576,0.06672839,-0.063580826,0.03435343,0.029654566,0.09069486,-0.011645993,0.00077073206,-0.02297723,-0.002211727,0.026237208,-0.024708392,0.03716376,0.015434314,0.022426406,0.013365913,-0.016929407,0.009296561,0.008357911,-0.007115747,0.0141865285,-0.037388586,-0.033409163,0.042986754,0.04431323,-0.021774411,-0.030261597,-0.024303705,0.01523197,0.037388586,0.024685908,0.034623224,0.0043503856,-0.0056094117,-0.034982946,0.046404112,0.028080784,0.05773535,0.06938134,-0.037815753,-0.026844239,0.012174334,-0.009521387,0.0040075257,0.024753356,0.027001617,0.03131828,0.008571496,0.0132535,0.037051346,0.062096976,0.018716775,0.01935753,0.013039915,-0.00045070614,-0.020324282,0.001286427,-0.0124553675,0.029766979,-0.041457936,-0.009009907,0.012275507,0.021527102,0.008880632,0.062681526,-0.008897494,-0.009729351,0.026484517,0.029811945,0.0686619,-0.03433095,-0.010049728,-0.0612876,0.031565588,0.017615126,-0.006317614,-0.008206153,-0.0063119936,-0.025180526,-0.007132609,0.03417357,-0.0072675045,0.002426717,0.049776506,-0.03675907,0.055127367,0.03606211,0.010336381,0.0003446163,0.003338668,0.031340763,0.027721062,-0.027001617,-0.048832234,-0.008734495,0.018817946,0.007031437,0.012129369,-0.05688101,0.036152042,-0.011679717,-0.045369912,0.010774792,0.03813051,0.0126914345,-0.0063625793,-0.008919977,0.016524721,-0.0067953696,-0.00003152835,-0.029339809,0.06110774,0.015389348,0.019683527,-0.026574448,0.029339809,-0.019312564,-0.0034848049,0.018559396,0.054273028,-0.058319896,0.014107839,-0.021054966,0.03871506,0.05292407,-0.015288177,-0.0034370294,0.00020568077,-0.032757167,-0.028552918,-0.007205677,-0.015501762,-0.015636656,-0.025540248,0.019548632,0.0072956076,-0.00077213725,-0.008593978,0.010875964,0.010786033,0.026731826,0.026439553,0.026439553,0.034375913,0.007520434,-0.025540248,-0.0023241402,-0.0042548343,-0.03880499,0.063131176,0.031453174,-0.015029627,-0.036017146,-0.06834714,-0.051170427,-0.010993998,0.014568733,-0.008026293,-0.008560255,0.048202723,-0.018716775,0.0053030862,0.028867675,0.022471372,-0.03098104,0.017187957,0.033184335,0.023336953,-0.007992568,0.0109827565,-0.0023199245,0.009408973,0.0010433338,-0.003968181,-0.008700771,0.025090596,0.026821757,0.009431456,0.00063970056,0.028328093,0.01565914,0.006087167,-0.0055054296,-0.012770124,0.02994684,0.046943694,0.044110887,0.026237208,0.005946651,0.06029837,-0.021853099,0.029654566,0.04698866,0.05737563,0.00019514206,0.011409926,-0.008655806,0.034960464,0.01634486,-0.0073686764,-0.023988947,-0.040086497,-0.032914545,-0.0634909,0.022415165,0.056431357,0.0047887964,-0.034803085,-0.011252548,-0.019267598,-0.007363056,0.05422806,0.008610841,0.016097551,-0.06519958,-0.029362293,0.023876535,0.0046595214,-0.044875294,-0.014816042,-0.011505477,0.055711914,0.022988472,-0.024618462,0.020998761,-0.010667999,-0.048742305,-0.021133656,-0.053373724,-0.023629226,0.027428787,-0.04026636,-0.008121843,-0.043886058,0.03021663,0.00037201698,-0.025203008,0.041255593,0.0029396017,0.024236256,0.06457006,-0.021392206,0.032667235,0.028687814,0.042020004,-0.0042042485,0.002461846,0.038175475,0.023089644,0.0074810893,-0.041120697,0.011645993,0.0036843382,-0.024461083,-0.005387396,-0.02918243,0.035522528,-0.046404112,-0.009150423,-0.009926073,0.0059859958,-0.018705534,0.0012084404,0.008903115,0.042896826,-0.038063064,-0.035927214,0.000023690174,0.013804324,-0.009892349,0.018885395,0.007992568,-0.009302181,-0.005488568,0.014411354,-0.019492425,-0.019200152,0.04653901,-0.024213774,0.01798609,-0.06834714,-0.0031869104,0.007874535,0.016322376,-0.0026796465,-0.028642848,0.00028718024,0.015557968,-0.038332853,-0.03777079,0.004252024,-0.014006668,-0.007908259,0.010505001,-0.010797274,-0.018435743,-0.008234257,-0.01841326,-0.026979135,-0.010268933,-0.013231018,-0.023359435,0.008200533,-0.0011009454,0.0038445268,0.015052109,-0.076890536,-0.026619414,0.011882061,-0.023269504,-0.03073373,0.019054014,-0.004682004,0.013073639,0.0065424405,-0.018132227,0.009021148,-0.016760787,-0.041368008,0.033184335,-0.004105887,-0.020875106,-0.0285754,-0.008667047,0.024371153,0.032397445,-0.0091335615,-0.0042548343,0.04017643,0.023876535,-0.017165475,-0.010415071,-0.003897923,0.014658663,-0.0119607495,-0.004785986,-0.044043437,-0.014523768,-0.025270456,0.019942077,0.017772505,0.0060365815,0.042177383,-0.0042323517,-0.021246068,0.009493283,-0.013039915,-0.046673905,0.020863865,-0.017884918,0.026979135,-0.003122273,0.012421643,0.015692864,0.0015203867,0.0038557681,-0.021077449,-0.034375913,0.009566352,-0.023943983,-0.046404112,0.0112188235,0.022763645,-0.07468724,0.055307228,0.033858813,-0.010505001,-0.017480232,0.03073373,-0.0076553295,-0.0013897065,0.021099932,0.053688478,-0.03466819,0.033948746,0.00080937403,0.028462987,0.008425359,0.006559302,-0.008976183,-0.0063288556,-0.020728968,-0.004038439,-0.010757931,-0.015805276,0.01703058,0.0018688672,-0.014995903,0.03235248,-0.010847861,0.020875106,0.023651708,-0.040671047,-0.01471487,-0.018705534,-0.03648928,0.009257216,-0.011297513,0.026192244,-0.0285754,-0.023764122,-0.0014852576,-0.029991806,0.011994474,0.016884442,0.009105458,-0.023314469,-0.00093373103,-0.016097551,0.016198723,0.01798609,0.01721044,0.011123273,-0.0006772887,-0.011319996,0.030666284,0.016288653,0.026844239,0.026844239,0.03246489,0.010589311,0.03882747,-0.021414688,0.023786604,0.049866434,-0.021729445,0.030059254,-0.009408973,0.005342431,0.001328582,0.0037068208,0.019087737,-0.030823661,0.010212727,0.0051344666,-0.0050810706,0.041098215,-0.007194436,0.016142515,-0.018795464,-0.0076440885,-0.03828789,0.0063288556,-0.0070258165,0.028193196,0.010201486,0.034285985,0.03759093,-0.022786127,-0.028193196,0.0036253212,0.03165552,0.022628749,-0.00093864906,0.000035831665,-0.025630178,-0.009217871,-0.016198723,0.010336381,0.043031722,-0.010561207,-0.004535867,-0.027069066,0.013377154,-0.053508617,0.0088862525,-0.009881108,0.019054014,-0.014119081,-0.0122193,0.03259979,0.042874344,0.008768219,-0.05395827,0.005300276,0.013703153,-0.0244386,0.017929884,-0.045887012,0.017053062,0.003476374,0.01489473,-0.039546914,0.005963513,0.02693417,-0.0047719344,0.040333807,0.00044613934,-0.0059410306,-0.011645993,0.028080784,-0.00031089238,-0.0088750115,0.0032150135,0.010926549,-0.008324187,-0.00056101143,0.0076384675,-0.06214194,-0.04860741,0.023404399,-0.03228503,-0.022550061,-0.010757931,-0.0048393826,-0.012781365,0.018289605,-0.050136227,0.016727064,0.01419777,0.032217585,0.0009793988,0.018076021,0.014411354,0.011494236,-0.026889205,0.009094217,0.03693893,-0.010589311,-0.06146746,-0.009903591,0.0037405447,0.007835191,-0.020706486,-0.052519385,0.011882061,-0.028193196,-0.017064303,0.005016433,-0.00774526,0.005741497,0.002839835,0.04896713,-0.025517765,-0.052339524,-0.008549013,-0.016963132,-0.0028075161,0.03655673,0.016940648,0.038670093,-0.0111120315,0.033431645,-0.0119607495,-0.044762883,-0.0026388967,0.005311517,-0.00782957,0.07144974,0.035522528,0.018132227,-0.029969323,-0.022313993,-0.0088862525,-0.004974278,-0.021549584,0.01737906,0.006059064,0.005783652,-0.0025110268,0.0127364,0.00015772958,-0.016479755,0.004682004,-0.03484805,0.015254453,0.00023185194,-0.010032866,-0.019526148,0.0058735823,-0.014445079,-0.024056396,-0.033341713,-0.027406305,0.017918643,0.005662808,-0.058185,-0.00017397678,0.038872436,-0.014175287,0.024483565,-0.013332189,-0.014107839,0.020200627,0.022055443,0.016299894,0.0012449747,0.0007559779,-0.026214726,0.0027428786,0.0117246825,0.01419777,0.004454368,0.03457826,-0.041997522,-0.012410402,0.022842335,0.009999142,-0.038939886,0.045235015,-0.020279316,0.0030688767,-0.014557492,0.022876058,0.03174545,0.0040721633,0.003467943,-0.010443173,-0.031565588,0.018368294,0.0006319722,0.0060646846,0.025450317,0.033566542,0.0013342026,0.0009189768,0.036511764,-0.0019419356,-0.031880345,-0.035567492,0.0134446025,-0.03612956,-0.0129612265,0.027158996,-0.010617414,0.0041311802,0.004898399,-0.052024767,0.011758407,-0.016243687,0.001230923,-0.008133085,-0.015198247,0.051620077,0.010381347,-0.011246927,0.00083396444,0.027338857,-0.0025784746,-0.015670381,0.032757167,-0.019919595,-0.06403048,0.021898065,0.025944935,0.06722301,0.04139049,0.011145756,0.017345335,0.00018056348,-0.024416117,0.024865769,-0.03457826,-0.0032740305,0.010712964,-0.004682004,0.022358958,0.0011796346,0.03941202,0.018660568,-0.022527577,-0.013534533,-0.0035438219,0.04089587,0.035005428,0.00249557,-0.011679717,-0.03657921,0.054722678,-0.028957605,0.04226731,-0.0020164093,0.006289511,-0.016547203,-0.005258121,-0.026124796,0.013231018,-0.00016141814,0.03538763,-0.006772887,-0.025720108,-0.016131274,-0.018402018,-0.037545964,0.0069134035,0.0139392195,-0.0018997808,-0.030059254,-0.016120033,0.040491186,-0.005317138,0.013534533,-0.017660093,0.013557015,0.036714107,0.0035915973,-0.00061897445,0.013129846,0.025090596,-0.016524721,-0.029766979,-0.033746403,-0.017570162,-0.012905019,0.045235015,0.008919977,0.030958558,-0.002176598,0.0029677048,0.01772754,0.026619414,0.02401143,0.05018119,0.023899017,-0.03889492,-0.018019814,-0.032419927,-0.00012664034,-0.0010686266,0.027766027,0.014366389,0.008993045,-0.023089644,0.027496235,-0.009824902,0.004637039,0.020796416,0.024888253,0.020830141,-0.0018098503,0.015400589,0.04431323,-0.024775838,-0.025585214,0.026844239,0.004024388,0.04964161,0.014827283,0.04130056,-0.031048488,0.00799819,-0.014501285,-0.023809087,-0.019436218,-0.015097074,-0.021347241,0.0005357185,0.017570162,-0.005617843,0.012073163,0.026394587,0.033364195,0.026057348,0.00015000119,0.0146811465,0.0004633526,0.0011002428,-0.0045808326,0.011067066,0.027810993,0.009156044,0.019492425,0.013096122,-0.041952554,0.028597884,0.03381385,0.0063963034,-0.008526531,0.03259979,0.024843287,-0.015715346,0.004757883,-0.026462035,-0.03089111,0.00002254848,0.0057246354,0.019177668,0.015681623,0.022662474,-0.04433571,0.00008672492,0.019762216,-0.005912927,0.010409449,-0.014062874,0.036961414,0.017817471,-0.016063826,-0.028170714,0.033431645,0.015029627,-0.0028468608,-0.06308621,0.005817376,-0.03572487,-0.024416117,0.014164046,-0.009493283,-0.055756878,-0.0048140893,-0.03003677,0.031273313,-0.03338668,-0.024888253,0.0043419544,0.029497188,-0.030149184,0.032060206,-0.00087049865,-0.03046394,0.024416117,-0.018165952,0.009942936,-0.022932265,0.038152993,0.005010812,-0.02641707,0.011145756,-0.0034960462,-0.03417357,-0.025427835,0.0037658375,-0.0050642085,0.0054239305,0.0034960462,0.011589787,-0.016783271,0.010381347,0.0070258165,-0.033768885,0.011201962,-0.016187482,-0.015760312,-0.009403353,-0.0036534246,-0.0067953696,0.009914832,-0.00009133561,-0.020976277,-0.040558632,0.0005357185,0.0017873677,0.013051157,-0.010460036,-0.009937315,0.016524721,0.019155186,0.0039035436,0.0035213393,-0.0006122999,0.045257498,0.0020726158,-0.016985614,-0.05688101,-0.041188147,-0.007835191,-0.008228636,0.015647897,0.027293893,0.0054857573,0.057780314,-0.021583308,-0.0018857291,-0.017322853,0.011848337,-0.0027948697,0.010145279,-0.017851194,-0.026686862,0.009695627,0.034623224,-0.004842193,-0.031228349,-0.020245593,0.020987518,0.003071687,-0.007857673,0.007503572,-0.006688577,0.020987518,0.030059254,-0.009066113,0.0019573926,-0.020728968,0.026124796,-0.0030744972,-0.00851529,0.027945887,0.019683527,-0.0057527386,0.034106124,0.021302275,0.024798322,-0.034308467,-0.009858626,-0.009976659,0.022246545,-0.0075935023,-0.0054773265,0.0311609,0.007346194,0.009656282,0.019649804,0.0073405732,-0.055037435,-0.0153219,0.043391444,-0.025135562,-0.027361339,-0.010167762,0.0073012286,-0.0096169375,-0.018177193,-0.006272649,0.008110602,0.015434314,0.025944935,-0.023359435,-0.0068122316,0.0066829566,0.016614651,-0.00078970176,0.000023075416,-0.03518529,0.0075597786,-0.023786604,0.0499114,0.00032687612,0.027855957,0.029879393,0.026102314,0.0017634799,-0.016446032,0.068032384,0.018132227,-0.012826331,0.00008940351,-0.0048506237,0.013646946,0.011488615,-0.0010124202,0.0013356077,-0.021572066,-0.016535962,0.0074586067,-0.0011775269,0.024371153,-0.011190721,0.030149184,0.035500046,0.012084404,-0.035477564,-0.0005834941,0.00056417304,0.0044515575,0.013500809,0.04397599,0.010443173,0.009060493,0.0036478038,0.008841287,0.004712918,-0.040064014,-0.0027260168,0.02918243,-0.015850242,0.0008269386,0.019492425,-0.007149471,-0.011915784,0.012781365,-0.000664291,0.0023438123,-0.01867181,-0.030778697,-0.014838524,-0.013972944,-0.0065986468,-0.0048478134,-0.016389824,0.012354196,0.0006024638,0.024573496,0.059174236,0.021493377,-0.0296096,-0.036444314,0.041345526,-0.010965894,0.026754308,-0.016996855,0.03399371,-0.024078878,-0.012466609,-0.019458702,-0.015164522,-0.022055443,0.03657921,0.038400304,-0.010802896,0.0024969752,0.05085567,-0.0015597312,0.0054183095,0.011488615,0.00020901804,0.021392206,-0.008099361,0.03143069,0.012522815,-0.010881584,0.009054872,-0.012387919,0.019233875,0.019503666,0.050361052,0.010926549,-0.016412307,0.013478327,0.000999071,0.00052131555,-0.02848547,-0.0311609,0.0026599742,0.019121462,-0.03347661,-0.012095646,0.03914223,0.014422596,-0.04087339,-0.019323805,-0.013703153,0.016063826,0.013871772,-0.012151852,-0.052699246,-0.011803372,0.0065705436,-0.03298199,0.023651708,-0.03779327,-0.03424102,0.002012194,-0.023696674,-0.050630845,-0.016277412,0.0023508382,-0.030329045,-0.005437982,-0.012118128,0.009740592,0.017424025,0.021347241,-0.0024463893,0.016063826,-0.009060493,0.00021902983,0.02866533,-0.0059916163,-0.021369724,0.0026810516,0.021470895,-0.0137706,0.003889492,0.007908259,-0.013815565,0.0064693717,-0.0075597786,0.021302275,0.0015344383,0.021279793,0.020110697,-0.0012442721,0.009763074,-0.0016679289,0.013624463,0.005069829,-0.043908544,0.019492425,-0.021021243,-0.026439553,-0.033184335,-0.00084801606,-0.027136514,0.026462035,-0.006126512,-0.031970274,-0.0136919115,-0.047842998,-0.039367054,0.022077926,0.02039173,0.0072956076,0.0040918356,-0.024865769,0.016704582,0.010617414,0.025405353,-0.0039906637,-0.01996456,0.042469654,-0.023022195,0.0003114193,-0.0066211293,-0.014748594,-0.014591215,-0.056251496,-0.0046876245,-0.0066660945,0.0016299894,0.034803085,0.03493798,-0.000044570024,0.004266076,-0.011735924,0.0024534152,0.0029255499,-0.00047389133,0.037973132,0.015007144,-0.011870819,0.027069066,0.024191292,-0.0509456,-0.014579974,0.036376867,0.025585214,0.011415547,0.0019672287,0.028890157,0.009538248,0.0014374821,-0.011016481,-0.0024056395,0.03365647,0.0027147755,-0.0028665331,0.0013060992,0.034285985,0.029834427,0.03579232,0.03630942,0.003965371,0.015771553,0.020009525,-0.009504524,-0.014411354,0.025000665,0.04534743,-0.005957892,-0.0042716963,0.0073180906,0.0003857173,-0.031183384,0.014849765,-0.020582832,0.040243875,-0.016637133,-0.004344765,0.008464703,0.027293893,0.014658663,-0.030014288,0.0076834327,0.011915784,-0.028732779,-0.0060984087,0.0041958177,-0.030576354,0.015052109,-0.026529483,0.0038782507,-0.013714394,0.010083452,-0.017187957,-0.0017691005,-0.019380013,-0.00008878876,0.012297989,0.02745127,-0.026799275,-0.027406305,0.016052585,-0.013838048,0.02900257,-0.022684956,0.031970274,-0.02659693,-0.018368294,-0.00070644583,0.007795846,-0.009931694,0.003380823,-0.020942554,-0.0010503596,0.0009906401,0.006430027,0.009245974,-0.026821757,0.054183096,-0.025225492,-0.007840811,-0.031880345,-0.018491948,0.014793559,-0.035927214,-0.0018309278,0.017424025,0.021010002,-0.0019110221,0.006834714,0.010949032,-0.023629226,-0.0009597265,-0.011601028,0.005255311,-0.011713441,0.058994375,-0.0004949688,0.006373821,0.008981803,0.025090596,0.019132704,-0.035657424,-0.008284843,-0.014276459,-0.0064806133,-0.010645517,-0.0285754,-0.014175287,0.0043082307,0.0008459083,-0.006216442,-0.023112126,0.0052918447,0.026304657,0.036331903,0.017334094,0.017794987,-0.024033913,-0.006059064,-0.03527522,-0.01754768,-0.0032937028,0.016243687,0.019301323,0.021448413,-0.019908354,0.018210916,0.016760787,-0.04604439,-0.010639897,0.0035157185,-0.024326187,0.0027667666,0.018053537,0.010235209,0.0033246162,0.0018674621,0.0017283509,0.006919024,0.031340763,-0.013624463,0.05620653,0.008970562,-0.022257786,0.00060211244,0.00019549334,0.0082511185,-0.005033295,0.061737254,0.012331713,0.0025967418,-0.014591215,-0.031678002,0.008341049,0.008060017,-0.006205201,-0.029227396,-0.011162617,-0.001859031,0.021639515,0.019683527,0.0059691337,0.044290747,-0.037051346,-0.0048337616,-0.0076103644,0.002314304,0.0066379914,0.0039204056,0.006857197,-0.014624939,0.042537104,0.024595978,-0.0015527054,0.018491948,-0.022729922,-0.015243212,-0.0063288556,-0.047123555,0.011690958,-0.067133084,-0.0127139175,-0.03965933,-0.03545508,0.020301798,-0.032554824,0.023696674,0.008734495,-0.0057218247,0.003200962,0.04689873,-0.015782794,0.0015133609],\"payload\":{\"document_id\":\"doc_1_1\",\"chunk_id\":\"code_chunk_0\",\"content\":\"/**\\n
+      * React component for managing shopping cart functionality in an e-commerce
+      application.\\n * Handles item management, quantity updates, price calculations,
+      and checkout initiation.\\n */\\n\\nimport React, { useState, useEffect, useCallback
+      } from 'react';\\nimport { useDispatch, useSelector } from 'react-redux';\\nimport
+      { toast } from 'react-toastify';\\n\\nimport {\\n  addItemToCart,\\n  removeItemFromCart,\\n
+      \ updateItemQuantity,\\n  clearCart,\\n  fetchCartItems\\n} from '../store/slices/cartSlice';\\nimport
+      { initiateCheckout } from '../store/slices/checkoutSlice';\\nimport { formatCurrency
+      } from '../utils/currency';\\nimport { trackEvent } from '../analytics/tracking';\\n\\nimport
+      CartItem from './CartItem';\\nimport PriceBreakdown from './PriceBreakdown';\\nimport
+      CheckoutButton from './CheckoutButton';\\nimport EmptyCart from './EmptyCart';\",\"workspace_id\":1,\"asset_id\":1,\"asset_type\":\"codebase\",\"content_type\":\"code\",\"vector_name\":\"semantic_description\",\"token_count\":206,\"chunk_index\":0,\"total_chunks\":5,\"detected_language\":\"javascript\"}},{\"id\":35184372088832,\"vector\":[-0.017728545,0.015806919,-0.028836777,0.021881735,0.05073091,-0.023357047,-0.011021451,-0.015868906,0.002400482,-0.015583762,0.05638421,-0.02893596,-0.023716576,0.019786542,0.060599387,0.03934993,-0.00027991418,0.008201001,-0.009068832,0.061392833,0.023257867,-0.027324272,0.01774094,-0.020394024,-0.048697706,-0.044234578,0.017021881,0.007345568,0.023022313,-0.057227243,0.031043548,-0.014244823,0.02226606,0.021472614,-0.023815757,0.028216898,0.008641115,0.018683158,0.0033473475,-0.020840337,-0.04478007,-0.047433153,0.0003054842,0.011734312,0.054598957,0.0050303196,-0.026332466,-0.0011870685,-0.04021776,-0.010643325,0.015187039,-0.0034992178,-0.0123108,0.027795382,-0.003868046,-0.016587967,-0.033473473,0.03451487,0.04862332,0.016662352,0.02478277,-0.034762822,-0.046044625,0.010767301,-0.031638633,0.021621386,-0.023369445,-0.0078476705,-0.025712587,0.015261425,-0.019910518,-0.043986626,0.019935314,-0.03297757,0.041209567,0.012378987,0.003933133,0.039250746,0.03210974,0.03791181,-0.011071042,0.047581922,-0.006868261,-0.036721643,-0.023381842,-0.05073091,-0.097147465,0.04956554,-0.023319853,-0.023357047,-0.024125697,0.019575784,-0.0024547214,0.010847885,0.011145427,-0.022575999,-0.0064033517,-0.003688281,0.014381196,0.050061442,0.06818671,-0.021770155,0.008963453,-0.024125697,0.0007264209,0.0013528862,-0.028117718,0.0037626664,-0.04601983,-0.0451272,-0.033299908,0.014393594,-0.032159332,0.036225736,-0.002493464,0.0062297857,0.022191674,0.0037099768,-0.034415692,-0.0074447487,-0.02620849,0.01661276,0.051970668,-0.051078044,0.0017015683,-0.044383347,-0.022179276,-0.012657932,-0.029208707,-0.0054363403,0.05035898,-0.016798725,-0.005256575,-0.060599387,-0.0010638676,0.03882923,-0.016042473,0.01595569,-0.030795597,0.036448896,0.0100420425,-0.017480591,0.031415477,-0.0119512705,-0.041829444,-0.058962904,0.024150493,0.03682082,-0.046813276,-0.022166878,-0.03374622,-0.0082072,0.011033849,-0.020394024,0.027398659,-0.017716147,0.03322552,0.01785252,-0.027373863,-0.030200513,-0.03823415,-0.022737168,-0.021968517,-0.051226813,-0.026258081,0.0050954064,-0.0076245135,0.0140340645,-0.030448465,-0.05509486,0.0075377305,-0.025588611,-0.0029521745,-0.050061442,-0.038556483,0.014282016,0.02697714,-0.027398659,0.0024221777,0.0072091944,0.0065397252,0.02524148,-0.025514226,-0.0077174953,-0.012868691,-0.0006357636,-0.007773285,-0.005941542,-0.028068129,-0.022699974,-0.022761963,0.012397584,0.0012730769,0.006744285,0.035010774,-0.037118364,0.025043119,0.054450184,0.0076245135,0.0055231233,0.011690921,0.000036563186,0.039697062,-0.0031660327,0.003821555,-0.037564676,-0.027150707,0.011566945,0.028811984,-0.02292313,0.016079666,0.009992452,-0.039424315,0.038358122,-0.04713561,0.024757974,0.015125051,0.03806058,-0.026927551,0.06635187,-0.012205421,0.014629148,0.0435899,-0.06446743,0.046664502,0.029307887,0.08177446,-0.012323198,0.0049280394,-0.04631737,0.0102094095,0.03959788,0.006607912,0.020753555,0.043664288,0.009620525,0.042077396,-0.0014063509,-0.018918712,-0.0058609573,-0.024038915,-0.0042957626,-0.03753988,-0.049540743,0.025786974,0.0077484893,-0.02826649,-0.027249888,-0.02123706,-0.0070046345,0.017815327,0.017480591,0.016302822,-0.010122627,-0.013860498,-0.031737812,0.05499568,0.004088103,0.048300985,0.067690805,-0.02246442,-0.05365674,0.008287785,-0.027572226,0.018732749,0.0364241,0.060500205,0.025129901,0.014864702,0.00548903,0.03272962,0.04807783,0.010166018,0.030274898,-0.0023136989,-0.010128825,-0.02498113,-0.00045677344,-0.019501397,0.006812472,-0.033721425,-0.02481996,0.0023508917,0.030101331,0.029109525,0.06426907,-0.009205205,0.011009054,0.010122627,0.01226121,0.08192323,-0.059905123,-0.011889283,-0.06709572,0.039052386,0.04021776,-0.030845188,-0.008337375,-0.017406207,-0.03000215,0.0069984356,0.026605213,-0.021199867,-0.025191888,0.031589042,-0.024187684,0.060301844,0.015311015,0.0017620065,0.020394024,-0.022737168,0.031836994,-0.01087888,-0.008603923,-0.030051742,-0.048920862,0.014455582,0.00235864,0.023803359,-0.05365674,0.04626778,-0.0100420425,-0.039895423,0.022191674,0.0021618286,-0.007190598,0.003806058,0.0058640568,-0.02087753,0.014108449,0.010345783,-0.040540095,0.052317802,-0.0028065029,-0.0022129687,-0.0133026065,0.024138095,-0.021943722,-0.010345783,0.007432351,0.028117718,-0.032804005,-0.010475958,0.005569614,0.042449325,-0.0029304787,0.020741157,0.003688281,0.024596805,-0.03801099,-0.024968732,-0.007277381,-0.0047978647,-0.00061174325,-0.036548074,0.019203857,0.011219813,-0.027200297,-0.012639336,0.010172217,0.0144307865,0.042697277,0.0153854005,0.008312579,0.0323081,0.011641331,0.011827295,-0.012881089,0.013042257,-0.011207415,0.041110385,0.01821205,-0.0037626664,-0.013996871,-0.04482966,-0.029357476,-0.023716576,0.018633567,0.030820392,0.0017294629,0.049168814,-0.008665911,-0.009787892,0.06124406,0.033944584,-0.021175072,0.02426207,0.033051956,0.011901679,-0.04354031,0.018695556,-0.04842496,-0.023877745,0.020071687,0.008182405,-0.015484582,0.051623534,0.04785467,-0.005529322,-0.00091897085,0.0405153,0.00020320414,-0.0043887445,0.01056894,-0.022377638,0.023208275,0.021150276,0.0147655215,0.022761963,0.0035302117,0.072203524,-0.013005065,0.04879689,0.023790961,0.02128665,-0.010736307,0.027125912,-0.026332466,0.029283091,0.030324489,-0.006818671,-0.03391979,-0.02395213,-0.009502747,-0.041631084,0.0040757055,0.043317154,-0.013476172,-0.02508031,-0.06912892,-0.050706115,-0.0051418976,0.018224448,0.035779424,0.039002795,-0.063872345,-0.053408787,0.025638202,0.013414185,-0.060401026,-0.018794736,-0.021410625,0.02893596,0.011833493,-0.006775279,0.024001721,-0.016699545,-0.011461565,-0.025662998,-0.01636481,-0.038035784,0.013215824,-0.008554332,0.028564032,-0.0702695,0.02498113,-0.008597724,-0.048201803,0.020270048,0.012781908,0.008027435,0.061392833,0.00420588,0.031886585,0.06149201,0.035382703,-0.029159116,0.0029351278,0.035952993,0.03920116,0.00482266,-0.040019397,0.047061227,0.006115108,-0.018447604,-0.041432723,-0.017914508,0.015038269,-0.015571364,0.01492669,-0.038035784,0.0075377305,-0.033374295,0.013612546,0.008194802,0.067343675,-0.015373003,-0.034589257,-0.00779808,0.02108829,-0.0140340645,0.027993742,0.023034709,-0.0131910285,-0.016835919,0.033051956,-0.0076307124,-0.030398874,0.017678954,-0.021918926,0.024510022,-0.09382491,0.0031272904,0.0021432322,-0.016711943,-0.021199867,-0.02754743,-0.026382057,0.021485012,-0.030051742,-0.060301844,0.00057997444,-0.0348868,-0.04678848,-0.015658148,-0.010525548,-0.01886912,0.00053580804,-0.009719705,0.0021168874,-0.022786757,-0.011814897,0.005671894,-0.021100687,0.006059319,0.0032450673,0.0049838284,-0.05241698,-0.012422378,0.008498543,-0.0054673343,-0.022166878,-0.012149631,0.021423023,0.015707739,-0.023604998,-0.035878606,-0.016972292,0.009794091,-0.036746435,0.0069612428,-0.024348853,0.0043763467,-0.006843466,-0.0074571464,0.024547214,0.043069202,0.00039207356,-0.0008678308,0.0246216,0.0014536167,0.0107734995,-0.02744825,0.009570934,0.022861144,-0.014083655,0.017455798,-0.01348857,-0.030101331,-0.034738027,-0.007779483,0.02395213,0.035630655,0.033771016,-0.00088410266,-0.023096697,-0.005476632,0.0061554,-0.030969163,0.022637988,-0.031043548,0.045672696,0.0138109075,0.021472614,0.022290854,0.014505172,-0.0064591407,-0.022439625,-0.010730108,-0.0026267378,-0.023270264,-0.019402217,0.0047575724,0.0461686,-0.094519176,0.059458807,0.02990297,0.034663644,-0.0048133614,0.033820607,-0.011858288,-0.017939303,0.023679383,0.029431863,-0.0018239944,0.022972722,0.0042492715,0.032233715,-0.008095622,-0.014170437,-0.015038269,-0.00083761173,-0.021150276,0.0009546139,-0.020443615,-0.018844327,0.0037812628,-0.012279806,-0.01723264,0.033944584,0.027423454,0.031762607,0.020778349,-0.06382276,-0.013910089,-0.029778995,-0.02118747,0.010048241,-0.002293553,0.021261856,-0.054797318,-0.035308316,0.013897691,-0.009725904,0.01338939,0.011287999,0.01031479,-0.009626723,0.011659927,-0.047259588,0.020703964,0.016030075,-0.009794091,-0.021559397,0.013315004,-0.0021633783,0.018249242,0.0076617063,0.016426798,0.029580634,0.024386046,-0.004109799,0.06600473,-0.0241133,0.03364704,0.051921077,-0.014195233,0.014790317,-0.017864916,0.022898337,-0.003057554,-0.0072153932,0.0033969379,-0.0312915,0.010643325,-0.025415046,-0.007760887,0.018497193,-0.028588826,0.04468089,-0.027770586,-0.00031129556,-0.037043978,0.0044290368,0.0030606533,0.0124037815,0.003976525,0.033721425,0.055689942,-0.014815112,-0.017455798,-0.003985823,0.043837853,0.0054611354,0.019092279,0.0048040636,-0.0007636136,-0.012031854,-0.027349068,0.025563816,0.033721425,0.013277812,-0.029357476,0.0005764876,0.002042502,-0.037316725,0.00800264,0.014071257,0.00035352484,0.041680675,-0.025886154,0.027795382,0.057227243,-0.005420843,-0.049119223,0.019637771,0.039002795,-0.02754743,0.026952345,-0.048449755,0.001789901,-0.010649524,0.01938982,-0.034862004,0.005972536,0.019836133,-0.009409766,0.025043119,0.0109408675,-0.009329181,-0.006139903,0.027200297,-0.0011924925,0.0013350648,-0.016340015,-0.001851889,-0.005213184,-0.013897691,0.032927983,-0.040639278,-0.017046677,0.0123108,-0.036696848,-0.001200241,-0.023828154,-0.008864272,-0.00795305,0.044135395,-0.030795597,0.02605972,0.021063494,0.0014946836,0.022328047,0.007202996,-0.005365054,-0.00953994,-0.03277921,0.015025871,0.025935743,-0.013141438,-0.04678848,0.0010499203,0.009347778,0.014505172,0.004580907,-0.036895208,0.014182835,0.0048753493,-0.03302716,0.010203211,-0.009893271,0.008504742,-0.020034494,0.033771016,-0.0037471694,-0.041308746,-0.013352197,-0.0150506655,0.0024144293,0.051921077,0.025154697,0.0046552923,-0.014418389,0.02759702,0.004379446,-0.0146539435,-0.01728223,-0.01236039,-0.019873327,0.036746435,0.02707632,0.000053513006,0.0024345755,-0.00084768474,0.011300397,0.017393809,-0.01924105,-0.018732749,-0.01764176,-0.008455152,-0.016265629,0.02534066,0.014988678,-0.01826164,0.004128395,-0.066153504,0.015893701,-0.009465555,-0.008275387,-0.01636481,0.008380766,-0.022439625,-0.02539025,-0.05216903,-0.0323081,0.034291714,0.0079592485,-0.06709572,-0.0025771477,0.051722717,-0.02344383,0.02970461,0.0028173507,-0.03047326,-0.0044755274,0.018137664,0.009905669,0.004980729,0.016984688,-0.049342383,0.001349012,0.00044863753,0.001082464,0.039126772,0.020815542,-0.021385832,-0.010581337,0.005464235,0.0016163349,-0.03272962,0.045548722,0.0018131465,-0.0038277537,-0.006211189,0.0348868,0.02246442,-0.02529107,0.018794736,-0.0052534756,-0.021931324,0.002302851,-0.013054655,-0.025415046,0.021410625,0.021063494,0.01066812,-0.011473963,0.02749784,-0.023121493,-0.02072876,-0.00810802,-0.0024764172,-0.041060794,-0.03186179,0.018968303,-0.020232856,-0.019092279,-0.0069550443,-0.035878606,0.02548943,-0.017678954,0.009527543,-0.013637342,-0.0108850775,0.044135395,0.0034930191,-0.026357261,-0.0078042787,0.028836777,-0.034415692,-0.02179495,0.041928627,-0.030200513,-0.061194472,0.020332037,0.014083655,0.063178085,0.0152738225,0.042870842,0.03766386,0.038035784,-0.030944368,0.04549913,-0.030969163,0.0008724799,0.013141438,0.0018472399,0.008374567,-0.0126269385,0.0713109,0.032283306,-0.019402217,-0.0073889596,-0.012193023,0.029977355,0.017381411,-0.0146539435,-0.015868906,-0.004900145,0.04267248,-0.026481237,0.03302716,0.003415534,-0.0042399736,-0.0037626664,0.010420169,-0.0031675824,-0.03575463,0.0008027435,0.026654804,-0.038134966,-0.031018753,0.00063770066,-0.01564575,-0.030026946,0.02344383,0.02985338,0.00082753866,-0.0074447487,0.0030234605,0.049342383,0.004776169,0.005910548,-0.0077174953,0.024497624,0.02092712,-0.010246603,0.0108292885,0.050507754,0.0026902754,0.009223802,-0.035060365,0.0013218923,-0.012131035,-0.009205205,0.029109525,0.012633137,0.020889927,-0.0016442295,0.0016039374,0.023580203,0.043689083,0.01667475,0.046813276,0.026084514,-0.0477059,-0.007711297,-0.00430816,0.012397584,-0.049168814,0.00005632183,0.042920433,0.01780293,0.0017465096,0.02524148,-0.017827725,0.010110229,0.012453373,0.023865348,0.02375377,0.00867211,0.0062266863,0.054797318,-0.049491152,-0.04339154,-0.0044259373,0.0045127203,0.026704393,0.025067912,0.030746005,-0.039424315,0.0018255442,-0.022935528,-0.011938873,-0.010494554,-0.027274683,-0.014344004,-0.013848101,-0.008529537,0.009614326,-0.010116428,0.018695556,0.031960968,0.01107724,-0.0022129687,0.014170437,-0.0075501283,0.012546354,0.0025508027,0.011145427,-0.006266978,0.04867291,0.026481237,0.017654158,-0.017827725,0.018373217,0.013104245,0.014294413,-0.0065397252,0.019427013,0.027671406,0.020356832,0.012013258,-0.042523712,-0.018187255,0.000024843594,0.014976281,0.021782553,-0.004010618,-0.0042337747,-0.04354031,-0.0039672265,0.014058859,-0.00994906,0.03243208,-0.0071472065,0.03062203,0.008064628,-0.016439196,-0.016116858,0.02677878,-0.0026561823,0.008058429,-0.045573514,0.02108829,-0.048573732,-0.046193395,-0.004745175,0.0007202221,-0.051623534,0.012930679,-0.025662998,-0.005833063,-0.021410625,-0.00928579,-0.022898337,0.039424315,-0.02591095,0.03067162,-0.00095383904,-0.01969976,0.016984688,-0.015682943,0.017604569,-0.02066677,0.043416336,0.005935343,0.0014559411,0.0022238165,-0.0012715271,-0.026530828,0.007314574,0.017728545,-0.037515085,0.00072719576,0.016463991,0.014505172,-0.017269833,-0.006319668,0.0039579286,-0.011647529,0.011455366,-0.015707739,-0.019550988,-0.019550988,-0.023741372,0.0074695437,0.0012537056,-0.009831283,-0.011207415,-0.022650385,0.0017310126,-0.003610796,0.0017666556,0.0323081,-0.018026086,0.008424157,0.041953422,0.007767086,-0.0004339154,0.025960539,0.039101977,0.010004849,-0.00687446,-0.01262074,-0.02980379,-0.0013497869,-0.004267868,0.0070666224,0.0052410783,-0.0058206655,0.039771445,-0.01934023,0.0036045972,-0.0016349313,0.015434991,-0.010407771,0.036300123,-0.03297757,-0.021001507,0.017728545,-0.016649954,-0.013265414,-0.018534387,0.014220028,-0.0020936418,0.0070294295,-0.017393809,-0.008560531,-0.01764176,0.0040602083,0.048251394,-0.040044192,-0.0036510883,-0.01610446,0.03605217,0.0039920215,0.015968086,0.0130794505,0.01657557,-0.025377853,0.046689298,0.03580422,-0.00251361,-0.028340874,-0.0071534053,0.014728329,0.01667475,-0.013761317,-0.0058051683,0.010246603,-0.00040137174,0.013376992,0.009050236,0.000636151,-0.01554657,-0.025935743,0.03657287,-0.015100257,-0.016959894,-0.002031654,-0.0054363403,-0.0110524455,-0.04314359,-0.004900145,0.0024764172,0.02816731,0.0055169244,-0.01461675,-0.0062855748,0.007810477,-0.017554978,-0.02836567,-0.002180425,-0.019203857,-0.00041919327,-0.0189807,0.07304656,-0.020282445,0.0051852893,0.009521344,0.018745145,-0.017480591,-0.016798725,0.01903029,0.004630497,-0.039672267,-0.02036923,0.012688926,0.004478627,0.022836348,0.008684507,0.009360176,-0.025043119,-0.011263205,0.0055727134,-0.027671406,0.041209567,-0.008504742,0.027968947,0.009106025,0.0130794505,-0.02985338,0.01262074,0.019575784,0.005888852,0.039746653,0.042598095,-0.004704883,0.0045127203,-0.019513795,-0.010959463,0.007190598,-0.010358181,-0.016501183,0.00353951,-0.022228867,0.0013660587,0.024224877,0.0015992882,-0.0064157494,0.00938497,0.007339369,0.005206985,-0.0064033517,-0.02046841,-0.010506951,-0.0001931311,0.013649739,-0.011318994,-0.032481667,0.003083899,-0.0072091944,0.009068832,0.011858288,-0.012664131,-0.007494339,-0.029828586,0.005262774,-0.01816246,0.026506033,0.023927335,0.021720566,-0.022402432,-0.021782553,-0.013116643,0.013277812,-0.020579988,0.042151783,0.012273607,0.004115998,0.02369178,0.053111248,-0.027944153,0.005458036,-0.010953264,0.0021277352,0.019315435,-0.0013722575,0.026605213,-0.015831714,-0.017331822,0.008287785,-0.009577133,0.025811767,0.03258085,0.024658794,0.0017666556,-0.03000215,0.029357476,-0.021100687,0.006167798,-0.02457201,-0.04661491,-0.015038269,0.011318994,-0.036275327,-0.006421948,0.025229082,0.04482966,-0.02707632,-0.005702888,-0.001554347,0.024299262,0.015980484,-0.011151626,-0.06134324,-0.02185694,-0.00038258167,-0.016042473,0.034093354,-0.011963667,-0.03315114,0.010289994,-0.011982264,-0.03201056,-0.010457361,0.0004036963,-0.017765736,-0.025018323,0.010079235,-0.028440056,0.010537946,0.0061770957,0.009124621,0.001425722,-0.019612977,-0.013104245,0.008659712,0.0037409707,0.006570719,0.009062633,0.014715931,-0.0098188855,-0.009527543,0.006744285,-0.01420763,0.013067053,-0.0006160049,0.030646825,0.0131910285,0.006638906,0.035109956,-0.013600148,-0.004649094,0.011356186,-0.0020812443,0.004227576,-0.016042473,0.0130794505,-0.024534818,-0.03749029,-0.00282045,0.0153854005,0.017294629,0.027299479,0.027621815,-0.051921077,0.0045840065,-0.046069417,-0.020542795,0.01621604,0.028291285,-0.0047823675,0.0030653025,0.0014381197,0.00743855,0.012657932,-0.002544604,-0.0080708265,-0.024386046,0.045275975,-0.010754904,-0.00045871056,0.005529322,-0.00061639235,-0.010947066,-0.037440702,-0.005755578,0.0044600307,-0.007860067,0.03322552,0.021546999,-0.009075031,-0.0025244579,-0.0015690691,0.012831499,-0.009279591,0.00805223,0.045623105,-0.01005444,-0.018943507,-0.008845676,0.040713664,-0.04963992,-0.017369013,0.05821905,0.038134966,-0.011287999,-0.028142514,0.015782123,0.007909658,-0.018509591,-0.018906314,0.01056894,0.02231565,0.008262989,0.021175072,0.01800129,0.05360715,0.02749784,0.03677123,0.028489646,-0.018906314,0.023481023,0.0006125181,0.010562741,-0.0056656953,0.017071472,0.028390465,0.016897906,-0.013786113,0.0089138625,0.018906314,-0.051425174,0.011064843,-0.019303037,0.0063227676,0.020480808,-0.0012025656,-0.0018410411,0.024658794,0.00928579,-0.040192965,0.0126269385,0.015162244,-0.033572655,-0.021423023,0.00023206726,-0.043069202,-0.00021986339,-0.020989109,-0.012806703,0.0074199536,-0.0012684277,-0.009192808,-0.031564247,0.00012300727,0.033324704,0.031514656,0.000060486647,-0.015360606,-0.0015380752,0.0068558636,-0.028762393,0.006831068,-0.035258725,0.025377853,0.0045158197,0.009000645,0.014939087,0.008089423,-0.0026499834,-0.014356401,-0.005733882,0.0024764172,-0.011449168,-0.041432723,-0.015881304,-0.030026946,0.04319318,-0.014864702,-0.030274898,-0.025613407,-0.0074447487,0.014344004,-0.0384821,0.011808698,0.012000861,0.020183265,0.00579587,0.030101331,0.005293768,-0.015819317,-0.015682943,-0.0008182405,0.020443615,-0.01523663,0.039523493,-0.013376992,0.031018753,0.027621815,-0.0024671191,0.021708168,-0.027919358,0.007351767,-0.013054655,0.014381196,-0.028613621,-0.024671191,-0.008467549,0.004447633,-0.020270048,-0.004509621,-0.015658148,0.0005435565,0.028762393,0.01886912,0.019674964,0.018509591,0.009775494,-0.034341305,-0.019526193,-0.012087643,0.005569614,0.0039672265,-0.0035147148,0.0364241,-0.006319668,0.0124037815,0.024423238,-0.04108559,0.0035271123,-0.0029196308,-0.029481452,-0.0019898121,0.0079034595,0.008380766,-0.009614326,0.022377638,-0.0035271123,0.015881304,0.03887882,-0.0003264051,0.0451272,-0.007872465,-0.019253446,0.00058152416,0.007928254,0.0058206655,-0.00023167983,0.030746005,0.03272962,0.02908473,-0.0074695437,-0.043788265,0.014096052,0.016811123,-0.008089423,-0.045474336,0.02478277,0.038705256,0.016129255,0.01924105,0.019365026,0.055838715,-0.021819746,-0.019489001,-0.016749134,-0.013612546,-0.0065397252,-0.019365026,0.02118747,-0.022501614,0.024224877,-0.0010359731,-0.015992882,0.016178846,-0.013885293,-0.02548943,0.0012072147,-0.019873327,-0.0027212694,-0.037118364,-0.027101116,-0.036300123,-0.019005494,0.016662352,-0.01886912,0.02179495,0.01107724,0.00030199738,-0.008281586,0.011709517,-0.042399734,-0.033175934],\"payload\":{\"document_id\":\"doc_1_1\",\"chunk_id\":\"code_chunk_1\",\"content\":\"const
+      ShoppingCart = ({ isOpen, onClose, className = '' }) => {\\n  const dispatch
+      = useDispatch();\\n  const { items, totalItems, subtotal, shipping, tax, total,
+      loading, error } = useSelector(state => state.cart);\\n  const { user } = useSelector(state
+      => state.auth);\\n\\n  const [localLoading, setLocalLoading] = useState(false);\\n
+      \ const [validationErrors, setValidationErrors] = useState({});\\n\\n  useEffect(()
+      => {\\n    if (isOpen && user) {\\n      dispatch(fetchCartItems(user.id));\\n
+      \   }\\n  }, [isOpen, user, dispatch]);\\n\\n  const handleQuantityChange =
+      useCallback(async (itemId, newQuantity) => {\\n    if (newQuantity < 1) {\\n
+      \     handleRemoveItem(itemId);\\n      return;\\n    }\\n\\n    if (newQuantity
+      > 99) {\\n      toast.error('Maximum quantity is 99');\\n      return;\\n    }\\n\\n
+      \   setLocalLoading(true);\\n    try {\\n      await dispatch(updateItemQuantity({
+      itemId, quantity: newQuantity })).unwrap();\\n      trackEvent('cart_item_quantity_updated',
+      { itemId, newQuantity });\\n    } catch (error) {\\n      toast.error('Failed
+      to update quantity');\\n      console.error('Quantity update error:', error);\\n
+      \   } finally {\\n      setLocalLoading(false);\\n    }\\n  }, [dispatch]);\\n\\n
+      \ const handleRemoveItem = useCallback(async (itemId) => {\\n    setLocalLoading(true);\\n
+      \   try {\\n      await dispatch(removeItemFromCart(itemId)).unwrap();\\n      toast.success('Item
+      removed from cart');\\n      trackEvent('cart_item_removed', { itemId });\\n
+      \   } catch (error) {\\n      toast.error('Failed to remove item');\\n      console.error('Remove
+      item error:', error);\\n    } finally {\\n      setLocalLoading(false);\\n    }\\n
+      \ }, [dispatch]);\\n\\n  const handleClearCart = useCallback(async () => {\\n
+      \   if (!window.confirm('Are you sure you want to clear your cart?')) {\\n      return;\\n
+      \   }\",\"workspace_id\":1,\"asset_id\":1,\"asset_type\":\"codebase\",\"content_type\":\"code\",\"vector_name\":\"semantic_description\",\"token_count\":435,\"chunk_index\":1,\"total_chunks\":5,\"detected_language\":\"javascript\"}},{\"id\":17592186044416,\"vector\":[-0.01280444,0.013152184,-0.03355732,0.012605729,0.021150302,-0.013326056,-0.019237708,-0.0029123581,0.048237097,-0.004672813,0.05981201,0.025534363,-0.02028094,0.009829985,0.01061241,0.047119346,-0.014990261,0.03465023,0.0168035,0.044238035,0.019274967,0.0038872838,0.021547724,-0.018442864,-0.06020943,-0.058818456,0.007103918,0.016232206,0.04592708,-0.05653328,0.013040409,-0.015027519,0.02514936,0.005740885,-0.0025770334,0.041232534,0.023795642,0.010413698,0.011705319,-0.017039469,-0.054794557,-0.03775509,0.023050476,-0.030427622,0.02514936,-0.008321023,-0.026180174,0.00793602,-0.02470226,0.00093301025,-0.015499458,0.0020802557,0.0065202047,0.056831345,-0.040288653,0.012866537,-0.0072777905,0.037680574,0.014257514,0.014568,0.023932256,-0.039021872,-0.022603376,-0.02849019,-0.014493483,0.025559202,-0.026503079,-0.011320317,-0.011500399,0.045753207,-0.035420235,-0.038450576,0.017387213,-0.06507785,0.02938439,0.0057750386,0.014269933,0.03999059,0.037158955,0.00046922188,0.021783693,0.013822834,-0.027720185,-0.06110363,-0.007600696,-0.059066843,-0.12667826,0.054198425,-0.014406547,0.001159665,-0.02560888,0.031967632,-0.022168696,0.03576798,0.001347509,-0.024565646,-0.012431857,-0.02009465,0.012599519,0.04567869,0.08648896,-0.030676011,0.0013964105,-0.015996234,0.009382885,0.00474112,-0.027670506,0.010562732,-0.044536103,-0.018020604,-0.038674127,0.018728511,-0.041580275,0.047814835,0.0282418,0.012667826,0.015412522,0.01768528,-0.02762083,-0.021808531,-0.04105866,0.022926282,0.052807447,-0.052857127,0.018393187,-0.034327324,-0.007904972,-0.0141209,-0.014468645,0.00859425,0.07744761,-0.023981934,0.054893915,-0.06299139,-0.012115161,0.060358465,-0.02142353,-0.00081735424,-0.0029791126,0.044536103,0.01279202,-0.023572093,0.045132235,-0.00053908123,-0.04371642,-0.03708444,0.0028983862,0.029210517,-0.048187416,-0.023261607,-0.04056188,-0.001524486,0.0094946595,-0.036016367,-0.011003622,0.003909018,0.044734813,0.006427059,-0.024429033,-0.018803028,-0.03176892,-0.038475417,0.00148878,-0.025782753,0.0013839911,-0.020231264,-0.0030225806,0.009972808,-0.052857127,-0.051317114,-0.02034304,-0.004641765,-0.013450251,-0.02117514,-0.0058774985,0.00992934,0.0052223736,-0.021969985,0.019883519,0.023609351,-0.010823539,0.011202333,-0.01654269,-0.01877819,-0.064978495,0.039419293,0.032489248,-0.015375263,-0.016902855,-0.021274496,-0.009140706,0.006451898,-0.0101653095,-0.0051726955,0.03328409,-0.045330945,0.025261136,0.04793903,-0.005582537,0.0033687723,0.0033967162,-0.02406887,0.021199979,0.041828666,0.027645668,-0.02759599,-0.029458905,0.010041115,0.008488686,-0.0038282915,0.021373851,0.00793602,-0.021522885,0.07645406,-0.072430156,0.01946126,0.006954885,0.036786374,-0.00017280482,0.042871896,-0.03261344,0.009302159,0.057725545,-0.07049273,0.055738434,0.026229851,0.068754,-0.021920307,0.016033493,-0.019175611,0.0155615555,0.023534834,-0.0033190947,0.02826664,0.03979188,0.0028549181,0.05116808,-0.007569647,0.014779131,0.006576092,-0.00016843862,0.00320111,-0.050845176,-0.053105514,0.000055159766,0.02116272,-0.025658557,-0.046299662,0.013884931,-0.0016968056,0.05057195,0.011264429,0.022218373,-0.03949381,-0.0028782047,-0.010978783,0.065624304,-0.012556051,0.0037661945,0.058818456,-0.017834311,-0.028465351,-0.02849019,-0.026751468,0.021088205,0.01920045,0.0141209,0.022019662,-0.0069673043,0.026329208,0.05429778,0.013326056,0.050000656,0.017051887,0.004169826,-0.0020538645,-0.0066257697,0.0068555293,-0.0072777905,0.021237237,-0.047293216,-0.006812061,0.013077668,0.0031157264,0.013711059,0.054993268,-0.021299334,0.007911182,-0.0044927313,0.038972195,0.06482946,-0.049578395,-0.020218844,-0.048435807,0.029185677,0.048783552,-0.005691207,-0.004992614,0.0029635883,-0.028192123,0.026527919,0.03179376,-0.039543487,-0.03333377,0.0300302,-0.007892553,0.024751939,-0.0011006726,0.033731192,0.013884931,-0.032812152,-0.0002976784,-0.01585962,0.0037879285,-0.0136365425,-0.03221602,0.0013009361,-0.021945145,0.01851738,-0.07466566,0.020926751,-0.012667826,-0.038351223,0.019622711,0.03507249,0.013971867,0.004893258,0.007035611,0.015971396,0.036314435,-0.011140236,-0.034575712,0.043095447,-0.026453402,-0.022119017,0.005582537,0.013288798,-0.061848797,-0.012953473,0.01813238,0.053701647,-0.02382048,-0.0038438158,0.01701463,0.03380571,0.009979018,0.033706352,-0.007228113,0.008308603,-0.0088178,-0.014443805,-0.012171049,-0.009184174,0.00042032034,-0.059265554,0.04433739,-0.00815957,-0.027024696,-0.007613115,0.016430916,-0.0037692992,0.030874722,0.040984143,0.020231264,0.025807591,0.011891611,-0.020144327,-0.026577596,0.04503288,0.0031824808,0.041828666,0.0040145833,0.0050453963,-0.034352165,-0.0481129,-0.008333443,-0.036786374,0.046498373,0.029831488,0.026751468,0.011823304,-0.023100154,0.005675683,0.022367407,0.048584837,0.004834266,0.03221602,0.015462199,0.029036645,-0.029906005,0.0108297495,-0.027844379,-0.023038056,0.020206425,0.03537056,-0.00029903676,0.020492071,0.047566444,-0.013611703,-0.014096062,0.042524155,0.015549135,-0.0008794514,-0.004036317,0.012642987,0.024987908,0.0145928385,0.01679108,0.015735427,-0.015102036,0.048982263,0.0036326854,0.047591284,-0.0056415293,0.050646465,-0.0058122966,0.04704483,-0.014493483,0.027223406,0.0040487368,-0.0151144555,-0.017287856,-0.021584982,-0.016207365,-0.04793903,0.0102398265,0.046026435,0.030427622,0.000051181665,-0.06771077,-0.075659215,-0.009786516,0.00794844,0.030353105,0.006427059,-0.04056188,-0.047193862,0.009531918,-0.003558169,-0.06661786,-0.047566444,-0.022007244,0.019958036,0.050199367,0.0030986497,0.038376063,-0.013797995,-0.017474148,-0.021932727,-0.017958507,-0.028415672,-0.03350764,-0.008289974,0.00001564558,-0.061699767,0.022603376,-0.0038903889,-0.02072804,0.018504962,0.028813094,0.009761678,0.040114783,0.012388389,0.029955683,0.039667685,0.058371354,-0.016008655,0.0023348543,0.02052933,0.017834311,0.009786516,-0.033209577,0.02362177,0.025807591,-0.019424,-0.019809002,-0.014294772,0.030626332,-0.012400808,0.009674742,0.0076627927,0.030998915,-0.018604318,0.024317259,0.028465351,0.039419293,-0.015400102,-0.035693463,-0.03152053,0.033929903,0.0040021637,0.04371642,0.022690313,-0.013127346,-0.025087263,-0.011879192,-0.01566091,-0.03822703,0.025248716,0.00639601,0.004588982,-0.062246222,-0.0007568095,-0.0010758338,0.021783693,0.018281411,-0.026999857,-0.015275908,0.02541017,-0.020814978,-0.071337245,0.015424942,-0.030055039,-0.023547253,-0.033234414,-0.0027633249,-0.014766711,0.014568,-0.024640163,-0.015201392,-0.033209577,-0.003688573,-0.006594721,-0.010419908,0.0007265371,0.0036171612,-0.012965892,-0.060855243,-0.03355732,0.010668296,-0.004365432,-0.018877545,0.021311754,0.012506373,0.022615796,-0.003551959,-0.016207365,0.018231735,-0.011767417,-0.03623992,0.035718303,-0.012661616,-0.0016952532,-0.011618383,-0.012978312,0.009513289,0.013711059,0.010674506,-0.0038127673,0.026006302,0.021448368,0.006150726,-0.00431265,0.0020072917,0.025882108,-0.01588446,0.01567333,-0.039940912,-0.03931994,0.009935549,-0.0027229616,0.006119678,0.028142445,0.0073398873,-0.010854588,-0.008867478,0.013301217,-0.0015237097,-0.0034153452,0.01787157,-0.010196358,0.06438237,0.012332501,0.024019191,0.027695345,0.023547253,-0.007979489,-0.035047654,-0.049851622,-0.0022028978,-0.047318056,-0.02849019,0.014903325,0.03204215,-0.05434746,0.054446813,0.0300302,0.004480312,-0.00018144022,-0.010643458,0.0004342922,-0.003269417,0.019684808,0.033656675,-0.011382414,0.039146066,-0.018107539,0.052708093,0.005650844,-0.016530272,0.0051758005,-0.020256102,-0.0004595192,-0.025559202,-0.011171284,-0.0045641433,0.007898762,-0.006011008,0.0062997597,0.004616926,0.007923601,0.022367407,0.023261607,-0.04307061,-0.0027229616,-0.04615063,-0.039742198,0.026975019,0.0009865691,0.00452378,-0.028291479,-0.02826664,0.021013688,-0.0009050665,-0.00041566303,0.005501811,0.01213379,-0.011059509,0.0038965985,-0.03619024,0.025559202,0.017536245,0.02893729,-0.0021175141,0.0026391305,-0.010761443,0.019722067,0.013090087,0.0009578491,0.0069859335,0.025857268,-0.009134497,0.04500804,-0.033830546,0.018107539,0.052608736,-0.0009671637,0.04321964,-0.023907417,0.014915744,-0.013077668,-0.012481535,0.014642517,-0.036985084,0.027397279,-0.050373238,-0.011941289,0.04791419,-0.03246441,0.025112102,-0.027571151,0.0017790844,-0.051714536,0.030129556,-0.016455755,0.0064146393,-0.0021702966,0.048609678,0.048212256,-0.025335653,-0.024242742,0.02426758,0.046026435,0.015412522,0.016604789,0.018306252,-0.0008460742,-0.014282353,-0.0026608645,0.039046712,0.040760595,0.008066424,-0.025025167,-0.0050795497,0.003964905,-0.03599153,0.03643863,-0.012313873,-0.011171284,0.02933471,-0.014170578,0.017809473,0.042399958,0.032166343,-0.05563908,0.02406887,0.024466291,-0.022876604,0.03176892,-0.044461586,-0.0011759655,-0.013698639,0.023472738,-0.02692534,-0.0011604412,0.020144327,0.017349955,0.033035703,0.035171848,0.001430564,-0.011512819,0.021647079,-0.012705085,-0.018268993,-0.014654936,-0.0037848235,-0.006097944,-0.0039214375,0.029657617,-0.04038801,-0.020603847,0.03755638,-0.03686089,0.0060793147,0.01413332,-0.0048280563,-0.004020793,0.021100624,-0.030974077,0.02844051,0.014754292,0.00043273976,0.0016036598,0.009854823,-0.039742198,-0.009885872,-0.025484685,-0.01811996,0.036513146,-0.012344921,-0.059911367,-0.0064208494,-0.0017790844,0.00087479415,-0.009115867,-0.049479038,0.007842875,-0.016132848,-0.022988379,0.016033493,0.010562732,0.008482476,-0.01764802,0.03509733,0.0062780255,-0.045802884,0.01807028,-0.017536245,0.0012675588,0.030502139,0.026080819,0.027024696,-0.016666885,0.04282222,-0.0039431714,-0.007352307,0.0032787314,0.008973043,-0.006343228,0.047169022,0.009004092,-0.01148177,-0.003797243,0.013611703,0.019225288,0.016381238,-0.013313637,0.01279202,-0.011823304,-0.0034805473,-0.027571151,0.014990261,-0.0078739235,-0.01636882,0.007153596,-0.030949239,0.014518322,-0.024404194,-0.019995295,-0.017921248,-0.012686456,-0.02384532,-0.007575857,-0.027024696,-0.028539866,0.026180174,0.0034060306,-0.078490846,0.0327128,0.009581596,-0.027720185,0.009476031,0.0051571713,-0.008265136,0.02362177,0.0027866112,0.0062593967,0.029136,0.01081733,-0.042772543,-0.010749023,0.011214752,-0.0054800767,0.03770541,-0.0012442723,-0.023149831,-0.009444982,0.008122312,0.002460601,-0.02010707,0.07128757,-0.0022153172,-0.02406887,-0.025906947,0.019125933,0.016468175,-0.03070085,0.018343508,0.00794223,-0.0075634373,-0.019188032,-0.027024696,-0.025484685,-0.001984005,0.012394599,0.010947734,-0.012990732,0.037183795,-0.008935785,-0.02737244,-0.022864183,-0.0057284655,-0.03199247,-0.018144798,0.0008910946,-0.015834782,-0.019958036,-0.017486569,-0.024205483,0.016741402,-0.0233858,-0.011332736,0.014195417,-0.027695345,0.017523827,-0.009656113,-0.022193534,-0.027347602,0.023348542,-0.029955683,-0.0053403582,0.048957422,-0.00071567006,-0.06453139,0.06666754,0.021212399,0.046026435,-0.0044741025,0.040636398,0.054397136,0.016890435,-0.013524767,0.045753207,-0.04706967,0.008706026,0.021833371,-0.01368622,0.017846731,0.020479653,0.04903194,0.029458905,-0.014654936,-0.022466762,-0.024578067,-0.010935315,-0.00023538715,-0.026552757,-0.008215458,-0.03537056,0.022653054,0.003067601,0.04816258,-0.009115867,-0.010643458,-0.020429974,0.0104571665,-0.009196593,-0.01787157,-0.008302394,0.014965422,-0.0076938416,-0.0052999947,0.00076263107,-0.019299805,-0.034724746,0.0119350795,-0.006231453,0.0025444322,0.010755233,-0.0067934324,0.038475417,-0.04165479,0.024342097,-0.012692665,0.01877819,0.025050005,-0.01588446,0.020417554,0.043865453,0.018256573,0.01768528,-0.025174199,-0.0032942558,-0.04391513,-0.0043840613,0.023659028,-0.00314367,-0.010121842,-0.00904135,-0.015499458,0.036935408,0.050870016,-0.004992614,0.050149687,0.019188032,-0.06905207,-0.0106807165,-0.016381238,0.020454813,-0.06935014,0.012475325,0.020926751,0.019560615,-0.005141647,0.021945145,-0.0045144656,0.033358607,0.0120095955,0.019722067,0.0038872838,0.038251866,-0.015300747,0.053701647,-0.015188972,-0.019125933,-0.019225288,0.00927111,0.03909639,0.008898526,0.04796387,-0.024205483,-0.0005670249,0.00012011924,-0.013350896,-0.017511407,-0.0062128236,-0.037779927,-0.00286889,0.017598342,0.01856706,0.0062997597,0.033259254,0.03971736,0.0044430536,-0.0077373097,0.011810885,0.0057564094,0.02205692,0.018306252,-0.014332031,0.03380571,0.026552757,0.019622711,0.0047876933,-0.018144798,0.028986966,0.0046262406,0.035221525,0.0074019847,0.010090793,0.04254899,-0.008004327,-0.0059954836,-0.018033024,-0.030750526,-0.018293831,0.011829514,-0.0048684194,-0.00034405722,-0.010537893,-0.022441924,0.007284,0.007998117,0.013537187,0.012015806,-0.027471796,0.027496634,-0.0016362609,-0.020889495,-0.01720092,0.010395069,-0.0021485626,0.000028816976,-0.067462385,0.013164604,-0.040238976,-0.033184737,-0.030825043,0.0060855243,-0.02603114,0.038723804,-0.024416614,0.0100162765,-0.03152053,-0.02516178,0.0036482096,0.023994353,-0.026205013,0.023795642,0.017623182,-0.022615796,0.013996706,-0.006231453,0.017983345,0.0120095955,0.023236766,-0.008302394,0.012605729,0.007911182,-0.024478711,-0.019958036,0.0009229194,0.017523827,-0.028539866,-0.0044927313,0.0058185062,0.02844051,-0.0135620255,0.008470057,0.034252807,-0.00220445,0.0011185256,-0.007259161,-0.0055514886,-0.016194947,-0.021945145,0.01631914,0.002218422,0.017561084,-0.0019296701,-0.031048594,0.001347509,0.009227642,-0.0025397749,0.032836992,-0.004297125,-0.013425412,0.038574774,-0.0016129744,-0.002330197,0.010314343,0.020169167,0.004946041,-0.007091499,-0.035047654,-0.03221602,0.010177729,-0.012630568,-0.0072032735,0.00014030084,-0.0071411766,0.030129556,-0.03864929,-0.018219315,-0.0030039514,0.011407253,-0.0022354987,0.021311754,-0.02844051,-0.019610291,0.0159093,-0.006538834,0.016008655,-0.008116103,0.003045867,0.0002918568,0.000354148,-0.022975959,-0.012394599,-0.027993413,0.006246977,0.036314435,-0.00970579,0.010891846,-0.017536245,0.045728367,-0.0012745447,-0.011568706,0.02337338,0.012282823,-0.013189442,0.034625392,0.022156276,0.0023690078,-0.019150773,-0.0113451565,0.0040891,-0.0011953708,0.0028192124,0.004371642,-0.0055980613,0.014965422,0.021299334,-0.015772685,0.0017573504,-0.021771275,-0.01833109,0.027471796,-0.0295831,-0.009625064,-0.019349484,0.0036171612,0.0229387,-0.027993413,0.0035612737,-0.012680246,0.03171924,0.021075785,-0.0013319846,-0.009985228,0.012866537,0.009413933,-0.0131149255,-0.008302394,-0.02009465,0.009314578,0.004464788,0.07521211,-0.021336593,0.008668767,-0.004961565,0.01500268,-0.0022308414,-0.014307192,0.022764828,0.010792491,-0.017064307,-0.009972808,0.0077310996,-0.027422117,0.018790608,0.014145739,0.019436419,-0.0476658,-0.009320788,0.018740932,-0.009805146,0.038450576,0.009233852,0.013251539,-0.0038034527,-0.0043157544,-0.034997974,-0.018678835,0.014046384,-0.010202568,0.05404939,0.019486098,0.023957094,-0.022901442,-0.010482005,-0.0025863477,0.009674742,-0.005163381,-0.012941054,0.009519499,-0.04105866,-0.00818441,0.02010707,-0.012313873,-0.017598342,-0.00029379732,0.0058091916,0.009767887,-0.004902573,-0.01017152,-0.009612644,0.0176356,-0.013052829,-0.006026532,-0.037680574,-0.015400102,0.004610716,0.016878016,0.016194947,0.018380767,-0.02074046,-0.023336124,0.013947028,-0.019622711,0.0037910333,0.0105316825,0.0049832994,-0.030402783,-0.025099684,-0.011525238,0.0105316825,-0.013201862,0.037283152,0.023981934,0.010904266,0.0061662504,0.029160839,-0.011506609,0.010984993,-0.033060543,0.007588276,0.02539775,0.01807028,0.034923457,-0.00640222,-0.029533422,0.01876577,0.013624122,0.012431857,0.02251644,0.031421177,0.00419777,-0.03892252,0.03614056,-0.027968572,0.01081733,-0.01301557,-0.029160839,-0.015971396,-0.010072163,-0.024925811,-0.0009516394,0.016194947,0.02539775,-0.046498373,-0.014083642,-0.025124522,0.009861033,0.0029185677,-0.026105657,-0.0467716,-0.011562496,-0.00072537275,-0.014704614,0.02980665,-0.027422117,-0.01701463,0.014580419,-0.011655642,-0.053801004,-0.023100154,0.012456696,-0.038748644,-0.023572093,-0.0068182712,-0.0006364962,0.006250082,0.0027431431,0.016691724,0.00198711,-0.023808062,-0.008873688,0.038972195,-0.0019203555,0.0007179987,0.013487509,0.006812061,0.0018551535,-0.035718303,0.0014445358,-0.042921577,-0.005349673,-0.00067181396,0.021398691,0.010041115,0.0036140564,0.0295831,-0.02603114,-0.01789641,0.0119350795,-0.007364726,0.013127346,-0.025857268,0.008209248,0.0005235569,-0.026503079,-0.013052829,-0.010922895,0.0037072022,0.0014817942,0.014245095,-0.041431244,-0.0015547583,-0.0564836,-0.0025320128,-0.012071693,0.0361654,0.005213059,0.025906947,0.0114941895,0.008439008,0.0050640255,-0.012605729,-0.00056818925,0.0062966547,0.043294158,-0.024776777,-0.006330808,0.017797053,-0.027422117,-0.0040735756,-0.023609351,-0.020790137,0.0055732224,-0.014853647,0.04217641,-0.003579903,0.002618949,-0.0051571713,0.0022836241,0.026503079,-0.01147556,0.003219739,0.04925549,0.008811591,-0.0056632636,0.012829279,0.030974077,-0.030949239,-0.01965997,0.039940912,0.036513146,-0.0015198287,-0.010519263,0.01568575,-0.004321964,-0.010550312,-0.03263828,-0.007656583,0.013624122,0.005101284,-0.00518201,0.0037661945,0.06631979,0.057228766,0.029682456,0.019374322,-0.018281411,0.027943734,-0.0019032788,-0.0062128236,-0.023435479,0.039419293,0.034302484,-0.02118756,-0.027024696,0.008128522,-0.001080491,-0.025807591,0.016381238,-0.021969985,-0.001192266,0.0034184502,0.014953002,-0.012630568,0.005449028,0.0048715244,-0.042499315,0.009463611,0.004921202,-0.021386271,-0.013748317,-0.007364726,-0.029657617,0.016393658,-0.029235356,0.011618383,-0.015611233,0.007364726,-0.01721334,-0.006343228,-0.011990967,0.024578067,0.013959448,-0.013226701,-0.024441453,0.003642,0.018877545,-0.033234414,-0.02317467,-0.040537044,0.040263817,-0.006274921,0.0053714067,0.015089616,0.009600225,-0.00082511635,0.00793602,-0.0061941943,-0.0145928385,0.00019686749,-0.034153454,-0.0036264758,-0.040537044,0.03646347,-0.0011519028,-0.019349484,-0.030576656,-0.015424942,0.0133384755,-0.04078543,-9.951317e-6,0.030328266,0.012866537,-0.017548665,0.013835253,-0.009401514,-0.0056322147,-0.009376675,-0.0014724795,0.007861504,0.0031886906,0.0555894,-0.023000797,0.024031611,0.015710589,0.0068058516,0.021435948,-0.03378087,-0.0046697087,0.005427294,0.009544338,0.005430399,-0.008935785,-0.023050476,0.019510936,-0.03643863,-0.0030784681,-0.0023472738,-0.007159806,0.04021414,0.01764802,0.01656753,0.032986026,0.011456931,-0.029508583,-0.036513146,-0.0069176266,-0.0076627927,0.027496634,0.0031234885,0.04831161,-0.022044502,-0.0110532995,0.023274025,-0.0019451944,-0.0059489105,-0.011953709,-0.020628685,-0.0007789316,0.00078358885,0.008879898,-0.007352307,0.01964755,-0.011550077,-0.0044834167,0.013760736,0.010773862,0.02206934,0.00044166626,-0.02318709,-0.011872983,0.015102036,0.007824246,0.003995954,0.018740932,0.0451074,0.011102977,-0.018033024,-0.01610801,0.016952531,0.015822364,0.004241238,-0.02737244,0.008556993,0.012717504,0.029508583,0.022367407,0.024453873,0.06860497,-0.010550312,-0.026776306,-0.02605598,-0.0031762712,0.008743284,-0.0034805473,0.020852236,-0.0042660767,0.014021545,0.014692195,0.00451757,0.017759796,-0.022466762,-0.03221602,0.022392245,-0.026354047,0.0125312125,-0.031446017,0.019138353,-0.039021872,-0.021249657,0.027943734,-0.017362373,0.048063222,-0.0005899233,0.0029868747,0.0026515499,0.028167283,-0.033433124,-0.032340214],\"payload\":{\"document_id\":\"doc_1_1\",\"chunk_id\":\"code_chunk_2\",\"content\":\"const
+      handleClearCart = useCallback(async () => {\\n    if (!window.confirm('Are you
+      sure you want to clear your cart?')) {\\n      return;\\n    }\\n\\n    setLocalLoading(true);\\n
+      \   try {\\n      await dispatch(clearCart()).unwrap();\\n      toast.success('Cart
+      cleared');\\n      trackEvent('cart_cleared');\\n    } catch (error) {\\n      toast.error('Failed
+      to clear cart');\\n      console.error('Clear cart error:', error);\\n    }
+      finally {\\n      setLocalLoading(false);\\n    }\\n  }, [dispatch]);\\n\\n
+      \ const handleCheckout = useCallback(async () => {\\n    const errors = validateCartItems(items);\\n
+      \   setValidationErrors(errors);\\n\\n    if (Object.keys(errors).length > 0)
+      {\\n      toast.error('Please resolve cart issues before checkout');\\n      return;\\n
+      \   }\\n\\n    if (!user) {\\n      toast.error('Please sign in to proceed with
+      checkout');\\n      return;\\n    }\\n\\n    setLocalLoading(true);\\n    try
+      {\\n      const checkoutData = {\\n        items: items.map(item => ({\\n          productId:
+      item.productId,\\n          quantity: item.quantity,\\n          price: item.price\\n
+      \       })),\\n        userId: user.id,\\n        subtotal,\\n        shipping,\\n
+      \       tax,\\n        total\\n      };\\n\\n      const result = await dispatch(initiateCheckout(checkoutData)).unwrap();\\n\\n
+      \     trackEvent('checkout_initiated', {\\n        totalItems,\\n        totalAmount:
+      total,\\n        userId: user.id\\n      });\\n\\n      // Redirect to checkout
+      page\\n      window.location.href = `/checkout/${result.checkoutId}`;\\n    }
+      catch (error) {\\n      toast.error('Failed to initiate checkout');\\n      console.error('Checkout
+      error:', error);\\n    } finally {\\n      setLocalLoading(false);\\n    }\\n
+      \ }, [items, user, subtotal, shipping, tax, total, totalItems, dispatch]);\\n\\n
+      \ const validateCartItems = (cartItems) => {\\n    const errors = {};\",\"workspace_id\":1,\"asset_id\":1,\"asset_type\":\"codebase\",\"content_type\":\"code\",\"vector_name\":\"semantic_description\",\"token_count\":441,\"chunk_index\":2,\"total_chunks\":5,\"detected_language\":\"javascript\"}},{\"id\":8796093022208,\"vector\":[0.00538942,0.04003569,-0.009183572,0.015361386,0.030427124,-0.027174994,-0.02441561,-0.034664746,0.019771472,0.0038280278,0.062726684,0.0024929915,-0.022419985,-0.001810845,0.026879346,0.066915035,-0.014745452,0.0074897534,-0.02535183,0.061691917,0.044051576,-0.0020864753,0.032447387,-0.012558888,-0.022185931,-0.043213908,0.02665761,0.011634987,0.07391204,-0.049792077,-0.006713677,-0.028185125,0.02702717,0.00058205734,-0.009368352,0.031905364,0.024083007,-0.0025391865,0.036758922,-0.023011282,-0.028037302,-0.01272519,0.010513988,-0.00020595282,0.041489292,0.0003333741,-0.022715634,0.01068029,-0.028209763,-0.010064356,-0.007914748,0.019463504,0.007298814,0.047673266,-0.037374858,0.0056111556,-0.067752704,0.04690951,0.03678356,0.015669353,0.031314068,-0.025154732,-0.04772254,0.012959245,-0.033211146,0.012589685,-0.03323578,-0.04237624,-0.024748215,0.008733939,0.0041359947,-0.026682246,0.05173843,-0.04782109,0.016051231,0.008974154,0.024156919,0.028185125,0.04700806,0.005811334,0.008715462,0.037842967,-0.02100334,-0.059770204,-0.021508405,-0.033753164,-0.08894082,0.028160488,-0.017086001,-0.026879346,-0.061741192,0.019155538,0.0062548066,0.032102462,0.0032829265,-0.01738165,-0.027396731,-0.023430116,-0.0107542025,0.020190306,0.070709184,-0.0028409942,0.016827308,-0.01003356,0.008573797,0.022998964,-0.020535229,-0.012109256,-0.051294956,-0.062726684,-0.043263182,0.033580706,-0.048412386,0.056271702,0.019056989,-0.0023266894,0.009522335,0.0069600507,-0.013144025,-0.025746029,-0.022235205,-0.014548354,0.05415289,-0.069033846,-0.004376209,-0.038532812,-0.017529473,-0.0037695142,-0.046145752,-0.0026315767,0.019796109,0.0072864955,0.03222565,-0.045184895,-0.018798295,0.042105228,-0.0017030566,-0.0025130094,-0.023848953,0.04336173,-0.0029226053,-0.02293737,0.030254662,-0.019537417,0.006137779,-0.037128482,0.020769283,0.01736933,-0.04486461,-0.010261456,-0.01458531,-0.006806067,0.0032336519,-0.0071448307,-0.027840203,-0.016790353,0.037103847,0.030870596,-0.02266636,-0.017036725,-0.040700898,-0.035453144,-0.0055618812,-0.0464414,0.008832489,-0.017443242,-0.024846764,0.0001532135,-0.026682246,-0.02675616,0.016950496,-0.014991825,-0.021212757,-0.031289432,0.00575898,0.031708267,0.019586692,-0.028456137,0.041119732,0.022654042,-0.029712642,0.02917062,0.0007556736,-0.000113562775,-0.03799079,-0.013045476,0.02461271,-0.0284315,-0.015176606,-0.037029933,-0.030205388,-0.03557633,0.006205532,0.017775847,0.024132282,-0.07470044,0.018441055,0.068344004,0.017911352,0.023553304,0.01448676,-0.03269376,0.045529816,-0.006211691,-0.0018123848,-0.043780565,-0.04513562,-0.008259671,-0.0014428246,-0.01634688,0.016605573,-0.003686363,-0.037079208,0.041119732,-0.013735321,0.031043058,0.016236013,0.021323625,-0.00947306,0.057799216,-0.0480921,0.050457288,0.061987568,-0.07248308,0.0423516,0.047155883,0.09766244,-0.0110621685,0.024920678,-0.028037302,0.015915727,0.01364909,0.0017076761,0.029663365,0.025770666,-0.0010640254,0.039542943,0.009146615,-0.0072125834,0.014388211,-0.012786783,0.03225029,-0.030476399,-0.043435644,-0.010261456,-0.012226284,-0.026632972,-0.026386598,0.008228874,0.004865876,0.043337096,0.0027455245,0.008986472,-0.041390743,-0.013920101,-0.021964196,0.027446005,0.0070278035,0.01867511,0.019278724,-0.057799216,-0.020448998,-0.033112597,-0.044987798,0.01050167,0.023750402,0.049447156,0.04003569,0.022370711,-0.017812802,0.03259521,0.025672115,0.024785172,0.0034677067,0.020375086,0.0041483133,-0.034122728,0.020584503,-0.00058244227,0.018601198,-0.048363112,-0.03225029,0.009602406,0.032053187,0.011339339,0.062283214,0.0044901567,-0.02786484,0.006806067,0.014412848,0.103772506,-0.04811674,-0.0054202164,-0.035674877,0.05035874,0.027101083,-0.0111484,0.014388211,-0.011622668,-0.020042483,-0.018453373,0.061544094,-0.037473407,-0.012460339,0.0050506564,0.0052446756,0.039444394,0.031166244,-0.0027147278,-0.01738165,-0.023540985,0.025893852,-0.003791072,0.0036617257,-0.06119917,-0.05459636,-0.0014813205,-0.019980889,0.034418374,-0.054399263,0.012873014,0.017640341,-0.023577942,0.016482385,-0.023380842,0.003047332,0.012244762,0.020683054,0.017541792,-0.0016984371,-0.021101888,-0.027790928,0.05760212,-0.0007306513,-0.008967995,-0.021569997,0.036808196,-0.031067695,-0.034024175,0.015299792,0.034886483,-0.049003683,0.0012395666,0.026632972,0.05760212,-0.032816947,0.004560989,0.024723578,-0.0020264217,-0.036758922,-0.009226686,0.0062948423,0.0013512045,0.030722773,-0.042967536,0.024772853,0.0074466383,0.0105386255,0.0043330933,0.01698745,0.023023602,0.027347455,0.025130095,0.026411237,0.0063194796,0.02312215,0.00024290885,-0.016543979,0.023577942,-0.00078993494,0.02340548,0.0109697785,-0.0074959127,-0.018071495,-0.03409809,-0.049151506,-0.015312111,0.031560443,0.02155768,0.0021573077,0.04198204,0.0031936162,-0.0037725938,0.041809577,0.06804835,-0.0012603543,0.02293737,0.032940134,0.026953258,-0.018317867,-0.011363977,-0.028653234,-0.04200668,-0.0066274465,0.03138798,0.008124165,0.022764908,0.038434263,-0.009503856,-0.0038311076,0.025844578,-0.003787992,-0.038557447,0.030895233,0.004283819,0.0008330503,0.021200437,0.012774465,0.0110621685,0.010255296,0.03390099,-0.01671644,0.026238775,-0.016704122,0.054103617,0.01606355,0.03986323,-0.0017862077,0.013525904,-0.01040928,-0.029688004,-0.019857703,-0.010255296,-0.008191918,-0.035650242,-0.00034665517,0.06371218,0.0068676607,-0.030772047,-0.056419525,-0.05272392,0.0001328107,0.00334452,0.025327193,0.0019848463,-0.06780198,-0.037916876,0.0036894428,0.0129962005,-0.061691917,-0.016827308,-0.027840203,0.031560443,0.008432132,0.025992401,0.039444394,-0.017159913,-0.007970182,-0.015176606,-0.02655906,-0.035650242,0.008321264,-0.036537185,-0.026953258,-0.05814414,0.020732328,-0.0073419297,-0.017393967,0.004995222,0.005823653,-0.010748043,0.06459913,0.0071571493,0.025622841,0.044889245,0.036192264,-0.033137232,0.010193703,0.044076215,0.0008422893,-0.015398342,-0.033925626,0.028505411,0.027396731,0.02275259,-0.02786484,-0.021668548,-0.005626554,-0.01597732,-0.002739365,-0.023048239,0.0019848463,-0.05287175,-0.012386426,0.0105879,0.075488836,-0.004256102,-0.035182133,-0.030895233,0.023922864,-0.005863689,0.015028782,0.01885989,-0.012509613,-0.02786484,-0.024390973,-0.036167625,-0.013217937,0.0050568157,-0.03286622,0.029515542,-0.072680175,0.009319076,0.035625603,-0.011302383,-0.016272968,-0.026066314,-0.03752268,0.021951877,0.00046772463,-0.06809763,0.021754777,-0.022617085,-0.02636196,-0.036266174,-0.012183168,-0.0020880152,0.012232443,-0.048289202,0.016112825,-0.009319076,-0.0030319334,-0.004662618,-0.0039050195,-0.007458957,-0.039715406,-0.0039912504,-0.039542943,-0.024317062,0.011394774,-0.018231638,-0.031412616,0.014868639,0.015817177,0.013254893,-0.009294439,-0.02961409,0.021471448,0.0034338303,-0.041809577,0.031043058,-0.004071322,-0.004022047,-0.0019586692,-0.00030142255,0.027692378,0.022038108,0.012712872,-0.027248906,0.03974004,-0.013341123,-0.022038108,-0.014289661,0.016543979,-0.0072125834,-0.0036340088,-0.0034584675,-0.023972139,-0.049397882,-0.0064057102,-0.00043577308,0.028283674,0.051048584,0.005192321,-0.0072495393,-0.0046102637,0.006436507,0.017862076,-0.033137232,0.04318927,-0.0069970065,0.053364493,0.016691802,0.010206021,0.023627216,0.004280739,0.021040294,-0.034147363,-0.0403067,-0.0015282854,-0.052329727,0.0011687342,0.0036524867,0.040084966,-0.085787244,0.05932673,0.052822474,0.007914748,-0.0017708093,-0.004114437,-0.009011109,0.005863689,0.021064932,0.0044131647,0.0015844894,0.041415382,-0.014289661,0.03427055,-0.0043392526,-0.020387406,-0.00026889355,0.0046656975,-0.0057097054,-0.0030889073,-0.009349873,0.0069415728,0.0016968973,0.01738165,0.009448423,0.008684665,-0.01996857,0.011493322,0.024354018,-0.054103617,-0.008555319,-0.053019572,-0.008345901,0.021496085,-0.0042006676,0.024169238,-0.060804974,-0.033827078,0.013353442,-0.028332949,0.010458554,0.020005526,0.036340088,-0.01661789,-0.008666187,-0.036167625,0.017418604,0.022309119,0.033580706,-0.0055772797,0.012460339,-0.004539431,0.007625259,0.018428735,0.00054125173,0.017024407,0.03259521,0.009811823,0.025967764,-0.024464887,0.026509786,0.037547316,0.006916935,0.011283905,-0.047550082,0.019931614,-0.017714253,-0.0024745136,-0.008696984,-0.03540387,-0.0092513235,-0.022604765,-0.0140679255,0.03222565,-0.048634123,0.021249712,-0.013451992,-0.01477009,-0.019069307,-0.007976341,-0.01096362,0.008506044,0.02173014,0.019118581,0.040331338,-0.0066274465,-0.030993784,-0.0019817667,0.01440053,0.00089541357,0.006063867,0.0065535344,-0.012386426,-0.032299563,-0.040380612,0.039050195,0.006621287,0.008198078,-0.041760303,-0.0071756276,-0.024834447,-0.018551923,0.032718398,0.020744646,-0.0010932822,0.041169006,-0.0011564154,0.03900092,0.023208382,0.027248906,-0.059918027,0.027815565,0.007040122,-0.032299563,0.041415382,-0.0605586,0.019796109,-0.021631591,0.007169468,-0.032545935,-0.005842131,0.02079392,-0.005925282,0.033753164,0.031683628,-0.002648515,-0.014917914,0.029367719,-0.0045455904,-0.032915495,-0.017603384,0.0043330933,0.01587877,-0.010384642,0.011419411,-0.030796684,-0.038927007,0.028899608,-0.034590837,-0.00417911,-0.013599816,-0.009885736,-0.010353846,0.055434033,-0.04375593,-0.001606047,0.016519342,-0.000016432918,-0.00038438113,0.0075451876,0.011037531,0.0076560555,-0.009510016,0.023257656,0.022025788,-0.01634688,-0.061149895,-0.012423382,0.018995395,-0.01978379,0.003381476,-0.02675616,-0.01847801,-0.008992632,-0.017664978,0.019118581,-0.014092563,0.008610753,-0.011727378,0.03872991,-0.02404605,-0.03725167,0.015127331,-0.016297605,0.0074897534,0.031683628,0.03540387,0.017504836,-0.022727953,0.028357588,0.006929254,-0.021902602,-0.019660603,0.01495487,-0.011825927,0.055877503,0.03249666,0.009614725,0.011203834,-0.0074959127,0.021397537,0.02292505,-0.013107069,-0.016482385,0.009134296,0.004653379,-0.026238775,0.020744646,-0.02006712,-0.008148802,0.029835828,-0.03685747,0.0028656314,-0.01356286,-0.008869445,-0.02006712,-0.0022142816,-0.031708267,-0.03111697,-0.028480774,-0.015804859,0.02062146,-0.013698366,-0.038557447,0.011770492,0.031314068,-0.022444623,0.0035077424,0.0033044843,-0.015521529,0.009349873,-0.01626065,0.008832489,0.00826583,0.02998365,-0.035798065,0.01773889,0.033309694,-0.002331309,0.03796615,0.021200437,-0.009454582,-0.02330693,0.010624856,-0.006713677,-0.028505411,0.046096478,-0.021890283,-0.005487969,-0.0058298125,0.011671944,0.015275155,-0.0073296106,0.021717822,-0.028456137,-0.00051237986,-0.0019648285,0.026903983,-0.046934146,0.011936795,-0.024083007,-0.002081856,-0.010618697,0.030205388,0.006122381,-0.036734287,0.00031162394,-0.007206424,-0.041464657,-0.03279231,0.019808426,-0.0005069904,-0.011727378,-0.003649407,-0.020338131,0.021114206,-0.024021413,-0.0054510133,0.01403097,-0.018601198,0.040553074,-0.0017015168,-0.015250518,-0.021151163,0.017073682,-0.050457288,-0.038927007,0.053807966,-0.017862076,-0.07405987,0.023762722,-0.001179513,0.044322588,0.0037140802,0.031437255,0.039715406,0.0039050195,-0.045653004,0.048289202,-0.01773889,-0.02712572,0.0058267326,0.0111484,0.021101888,0.028111214,0.06307161,0.034935758,-0.0061039026,-0.0054725707,-0.019155538,0.010088994,0.0051153293,-0.034024175,-0.0052415957,-0.006073106,0.02581994,-0.010390801,0.03771978,-0.0022789547,0.009676319,-0.027643103,0.013316486,-0.015065738,-0.01356286,0.017985264,0.018059175,-0.022863459,-0.01021218,-0.011554916,-0.010748043,-0.041415382,0.009768709,0.0022158215,0.011567235,-0.0018493409,0.000041768002,0.02786484,-0.026435874,0.010791158,0.0008007138,-0.011776652,0.041193645,-0.00049544167,0.0458501,0.030501036,-0.010347686,-0.021791734,-0.026805434,-0.008924879,-0.0077977204,-0.0015783301,0.0071633086,0.008647709,-0.004961346,-0.0013288769,-0.023257656,-0.010951301,0.0525761,0.014006332,0.044642873,0.025142413,-0.06159337,-0.0075020725,-0.009811823,0.0141911125,-0.03651255,-0.015373705,0.026435874,0.011967592,-0.008586115,0.024181556,0.00050198595,0.013735321,0.01950046,0.0035046628,0.024526479,0.012971563,0.004074401,0.041095097,-0.008333582,-0.016543979,-0.01849033,0.027593829,0.048264563,0.040380612,0.021619271,-0.048190653,0.0045117144,-0.031535804,-0.02164391,-0.021138843,0.0069354135,0.0029965173,0.013020838,-0.0068861386,0.015952682,-0.008389017,0.032398112,0.037547316,0.010926664,0.0022620165,0.011628828,0.017061364,0.0005393269,0.007742286,-0.01346431,0.01773889,0.027815565,0.010082834,0.018983075,-0.019377274,0.01959901,0.03808934,0.0055742,0.0077299676,0.030944508,0.018404098,-0.0007830057,0.006183974,-0.02535183,0.00007463384,0.02211202,0.024920678,-0.015780222,-0.010279933,0.007742286,-0.03789224,-0.011099125,0.0054448536,-0.004077481,-0.0025468857,-0.015115012,0.024661984,0.012971563,-0.006304081,0.01756643,0.012460339,0.016470067,0.034861848,-0.024489524,0.024735896,-0.029934376,-0.028554685,0.00058244227,0.002990358,-0.033038683,0.029490905,-0.010113631,0.010175224,-0.016494704,-0.016962813,-0.010920504,0.034245912,-0.027544554,0.04560373,-0.011388614,-0.027372094,0.0009962728,-0.024390973,0.012614322,0.012324833,0.01885989,-0.012737509,-0.008752418,0.012361789,-0.006448826,-0.004400846,0.0005289331,0.013193299,-0.01839178,0.0048874337,0.008259671,0.026164863,-0.03185609,0.010236817,0.0018508807,-0.0020387406,-0.016014276,0.0033599182,0.010113631,-0.025622841,-0.032570574,0.0075944625,0.01374764,0.00529395,0.004745769,-0.023848953,0.013427354,-0.015176606,-0.008992632,0.025524292,-0.014991825,0.0012680534,0.050186276,-0.011721218,0.0012149292,0.012737509,0.028406862,-0.009017269,-0.0016229852,-0.016679484,-0.034147363,-0.0063872323,-0.040011052,0.0016522422,0.024957633,0.008555319,0.04513562,-0.025672115,-0.005598837,-0.02591849,0.013033157,-0.010224499,0.03316187,-0.022185931,-0.02665761,0.010982098,0.003492344,-0.003800311,-0.021471448,0.010021241,0.01597732,0.0018170044,-0.00027178074,-0.022863459,-0.006399551,0.0010578661,0.01374764,-0.044987798,-0.020830877,-0.01040928,0.042105228,-0.012934607,0.012361789,0.011203834,0.019635966,-0.014696178,0.041809577,0.021015657,0.009719433,0.002434478,-0.021200437,0.005743582,0.012330992,-0.019537417,0.0044809175,-0.011764334,0.004046684,0.027593829,0.00044616696,0.0037263988,-0.022962008,-0.026903983,0.013488947,0.0012457259,0.01142557,-0.018638153,-0.009023429,0.002767082,-0.030328576,-0.016420793,-0.023947502,0.004570228,0.041661754,0.015090375,-0.0056357933,0.019340318,-0.026066314,-0.019241769,0.0039912504,-0.015201244,-0.025031544,-0.026435874,0.07568593,-0.012183168,0.00808105,0.033186506,0.014154156,-0.019475823,-0.005672749,0.026632972,0.015965002,-0.008333582,-0.004289978,0.009984285,-0.0028379145,0.02060914,-0.0011733536,-0.0045548296,-0.023824316,0.005321667,0.006750633,0.0108157955,0.045554455,-0.016457748,0.034615472,0.0065596937,0.0211758,-0.031363342,-0.006910776,0.011573394,0.0033968743,0.06730923,0.021225074,0.02062146,-0.005811334,-0.006473463,0.012084619,-0.016667165,-0.04523417,-0.015299792,0.015324431,-0.04708197,-0.007458957,0.035921253,-0.015324431,-0.007582144,0.0020833956,0.025770666,0.009731752,-0.014683859,0.010273774,-0.03269376,-0.011407092,0.009959647,-0.027544554,-0.024748215,-0.0034892643,-0.002944163,0.013759959,0.024969952,-0.0046749366,-0.0016614811,-0.02498227,0.013944739,-0.013476629,0.01717223,0.016654847,0.023775041,-0.010353846,-0.019562054,-0.039050195,0.014092563,-0.025006907,0.03222565,0.013427354,-0.012614322,0.0036771242,0.021348262,-0.008044094,0.0014335857,-0.039247293,0.0060607875,0.0042314646,-0.027569192,0.014708497,-0.009146615,-0.028505411,0.0093745105,-0.016679484,-0.008579956,0.017763527,0.031708267,0.021249712,-0.008789374,0.040011052,-0.0017400127,0.015225881,-0.0062240097,-0.047500804,-0.013957057,0.031930003,-0.024871401,0.007606781,0.019956252,0.012250921,-0.031683628,0.0006602039,-0.033506792,0.012023025,0.0043669697,-0.024083007,-0.048781946,0.0090973405,0.0044716788,-0.013082432,0.028850334,-0.028751785,-0.010834274,-0.013895464,-0.011345498,-0.027446005,-0.024686622,0.0026069393,-0.012275558,-0.026115589,0.0016830388,0.009337555,0.026460512,-0.011598031,0.029737279,-0.005343225,-0.047155883,0.003295245,0.035551693,-0.0002852543,0.0035323796,-0.00023270745,0.0072310613,0.012072301,-0.031092333,-0.01086507,-0.02675616,0.023011282,-0.017455561,0.009713274,0.0014328157,0.021114206,0.020867834,-0.024575753,-0.0021727062,-0.0014643823,0.00817344,-0.009023429,-0.031043058,0.0058082547,-0.002061838,-0.031930003,0.000612854,0.0011872122,0.0014913294,0.00520156,0.01904467,-0.043041445,0.0057990155,-0.045184895,0.0038126295,0.013267212,0.0043916074,-0.002545346,0.0029826588,0.0033475996,0.021606954,-0.0011748935,-0.003091987,0.0054694912,0.0025207086,0.0302793,0.011505641,-0.0070955562,0.01272519,0.018083813,-0.005654271,-0.017677296,-0.023417799,-0.011838245,-0.02860396,0.033186506,-0.011887521,0.01606355,-0.01290997,-0.00029911278,-0.0002617718,-0.010415439,0.0013912402,0.057749942,0.009867257,-0.018096132,0.01849033,0.041390743,-0.054842737,-0.005555722,0.05888326,0.023233019,-0.032545935,-0.0069230944,-0.0071941055,-0.00260078,-0.018009901,-0.02961409,0.012232443,0.020313492,0.017578747,0.022727953,-0.009202049,0.062529586,0.023393162,0.026115589,0.017110638,-0.0057743783,0.017036725,0.002888729,-0.0067875893,-0.0053155078,0.045406632,0.02981119,0.0048905136,-0.0106310155,0.01337808,0.00095700694,-0.057552844,0.004431643,-0.017652659,-0.00548181,0.019931614,-0.009158934,0.0009554671,0.028505411,0.020917108,-0.036290813,0.026485149,0.017591067,-0.033654615,-0.03362998,0.009694796,-0.024551116,0.008733939,-0.03362998,-0.0063687544,-0.014597628,0.00984262,0.0044100853,-0.013488947,0.0020372006,0.016186737,0.011080647,-0.004474758,-0.027938752,-0.015238199,0.019118581,-0.009343714,-0.022148976,-0.047057334,0.013242574,-0.019007713,0.005697387,0.02461271,0.017615704,0.007625259,-0.0038773026,-0.01661789,0.0032767672,-0.046515312,-0.01950046,-0.011788971,-0.01458531,0.03316187,-0.00030353983,-0.031806815,-0.039789315,-0.030106839,0.011462525,-0.035699517,-0.0080256155,0.041169006,0.024637347,-0.0062301694,0.033285055,0.019118581,-0.021939557,-0.017196868,-0.011308542,-0.0036617257,-0.015484572,0.03446765,-0.007582144,0.039296567,0.018687429,0.0112777455,0.020448998,-0.008672346,0.0013943199,-0.012078459,0.004856637,-0.034960397,-0.010347686,-0.014794727,0.015780222,-0.012651278,0.010902027,-0.014289661,0.002462195,0.020177988,0.0161621,0.021483768,0.027322818,-0.014917914,-0.01950046,-0.0108465925,-0.02636196,-0.0005366322,0.028874971,-0.029219894,0.032915495,-0.029343082,0.0013773817,0.00016803441,-0.016088188,-0.01458531,-0.026608335,-0.013168662,-0.024538798,-0.0031597398,0.004299217,-0.037571955,0.001383541,-0.012337152,0.017147593,0.021853328,-0.011345498,0.03249666,0.0032398112,-0.01839178,0.004000489,0.012860695,0.011690421,0.007773083,0.003390715,0.016272968,0.059031084,-0.0405038,-0.011986069,0.031190882,0.024908358,0.027692378,-0.031215519,0.009583928,0.023898227,0.0051122494,0.019919295,0.04245015,0.02462503,-0.0046780165,-0.020498274,-0.017344693,-0.021163482,0.01077884,-0.020855514,0.0123802675,-0.0014574531,0.016297605,0.005176923,-0.001969448,0.010643334,-0.01624833,-0.040158875,0.008296627,-0.033679254,-0.0028533128,-0.035280682,-0.010384642,-0.039518304,-0.012010707,0.017159913,-0.031609718,0.024674304,-0.008820171,0.0031628194,0.008795533,0.033285055,-0.055384755,-0.018884527],\"payload\":{\"document_id\":\"doc_1_1\",\"chunk_id\":\"code_chunk_3\",\"content\":\"const
+      validateCartItems = (cartItems) => {\\n    const errors = {};\\n\\n    cartItems.forEach(item
+      => {\\n      if (!item.inStock) {\\n        errors[item.id] = 'Item is out of
+      stock';\\n      } else if (item.quantity > item.maxQuantity) {\\n        errors[item.id]
+      = `Maximum available quantity is ${item.maxQuantity}`;\\n      } else if (item.price
+      !== item.currentPrice) {\\n        errors[item.id] = 'Price has changed since
+      item was added';\\n      }\\n    });\\n\\n    return errors;\\n  };\\n\\n  const
+      isCartValid = Object.keys(validationErrors).length === 0;\\n  const isCheckoutDisabled
+      = loading || localLoading || !isCartValid || totalItems === 0;\\n\\n  if (!isOpen)
+      return null;\\n\\n  return (\\n    <div className={`shopping-cart ${className}`}>\\n
+      \     <div className=\\\"cart-header\\\">\\n        <h2>Shopping Cart ({totalItems}
+      items)</h2>\\n        <button\\n          className=\\\"close-button\\\"\\n
+      \         onClick={onClose}\\n          aria-label=\\\"Close cart\\\"\\n        >\\n
+      \         \xD7\\n        </button>\\n      </div>\\n\\n      <div className=\\\"cart-content\\\">\\n
+      \       {error && (\\n          <div className=\\\"error-message\\\">\\n            {error}\\n
+      \         </div>\\n        )}\\n\\n        {loading ? (\\n          <div className=\\\"loading-state\\\">\\n
+      \           Loading cart items...\\n          </div>\\n        ) : items.length
+      === 0 ? (\\n          <EmptyCart onContinueShopping={onClose} />\\n        )
+      : (\\n          <>\\n            <div className=\\\"cart-items\\\">\\n              {items.map(item
+      => (\\n                <CartItem\\n                  key={item.id}\\n                  item={item}\\n
+      \                 onQuantityChange={handleQuantityChange}\\n                  onRemove={handleRemoveItem}\\n
+      \                 error={validationErrors[item.id]}\\n                  disabled={localLoading}\\n
+      \               />\\n              ))}\\n            </div>\\n\\n            <PriceBreakdown\\n
+      \             subtotal={subtotal}\\n              shipping={shipping}\\n              tax={tax}\\n
+      \             total={total}\\n            />\",\"workspace_id\":1,\"asset_id\":1,\"asset_type\":\"codebase\",\"content_type\":\"code\",\"vector_name\":\"semantic_description\",\"token_count\":483,\"chunk_index\":3,\"total_chunks\":5,\"detected_language\":\"javascript\"}},{\"id\":4398046511104,\"vector\":[-0.042719834,-0.022599936,-0.033067144,0.021116776,0.031583987,-0.013141759,-0.01535434,0.000010969828,0.0060238126,-0.035620123,0.027110197,0.01395628,-0.016399845,-0.0040513333,0.06652331,0.049236007,-0.028350214,-0.013968437,0.011859191,0.060298912,0.03666563,-0.016059447,0.040823337,-0.015986506,-0.045005355,-0.07124025,0.015524538,-0.012157039,0.06243855,-0.03632523,-0.01383471,-0.028885124,0.043668084,0.0124427285,0.01630259,-0.013640197,-0.020083427,-0.0005816383,0.027815305,-0.00730638,-0.035522867,-0.045661837,0.019341849,0.028009817,0.018332815,0.033140086,-0.00985328,0.013178229,0.0011495999,-0.013530784,-0.012296844,-0.007902075,-0.015913563,0.022077182,-0.02093442,-0.014576289,-0.029784745,0.05169173,0.063022085,-0.0040878044,0.027936874,-0.03625229,-0.016314745,-0.013761767,-0.01920812,0.018454384,-0.02274582,-0.01580415,-0.02447212,0.0050087,0.020411668,-0.03296989,0.01748182,-0.043497883,0.051497214,-0.0058961636,0.0093913125,0.039315864,0.017153582,0.0039662337,0.0146613885,0.03744368,0.0015006345,-0.029249834,0.009543275,-0.054949813,-0.05981263,0.053636853,-0.03566875,-0.013615883,-0.03192438,-0.02191914,0.0043856516,0.0049236007,0.011348596,-0.01872184,-0.02582155,-0.011299968,0.0023675833,0.024034465,0.07065671,-0.03255655,0.008905031,-0.03496364,0.017870847,0.019901073,-0.043570828,-0.022721505,-0.035279725,-0.030878877,-0.036033463,0.06452956,-0.02540821,0.042962976,-0.030805936,0.0039419197,0.045734778,0.015743366,-0.038610753,-0.036179345,0.010965649,0.015196298,0.070948474,-0.04831207,0.00013287264,-0.06268169,-0.0005949351,-0.006753235,-0.04865247,0.01133036,0.055436097,-0.0032763218,0.013178229,-0.06365425,-0.0028173937,0.047509708,-0.0044069267,0.024180349,-0.019135179,0.035109527,0.022916017,-0.0047199703,0.050378766,-0.007130103,-0.043206114,0.011117612,0.050086997,0.016655143,-0.037905645,-0.03858644,-0.0064553875,-0.0010333483,0.011403302,-0.02122619,0.003230733,-0.012096253,0.027207453,0.015074728,-0.017870847,-0.005941753,-0.03214321,-0.02939572,-0.002598567,-0.029006694,-0.025554094,0.00031532318,-0.040993534,0.008224237,-0.044762217,-0.049211692,0.005814104,-0.02311053,0.0032550471,-0.03797859,-0.0013866622,0.01063133,-0.0066499,-0.0062487177,0.0067228423,0.05514433,0.036811512,0.017068483,-0.0068687266,0.012509593,0.009439941,0.0073246155,0.0029131304,-0.013579412,0.005394686,0.01416295,-0.021979926,-0.0031273982,-0.009488569,-0.00021540753,0.026137633,-0.024897614,-0.0027490105,0.06375151,0.03703034,0.033747938,0.017822219,-0.017493978,0.051399957,0.03970489,-0.03119496,-0.035255414,-0.049770914,-0.015998663,0.027304709,0.0019891954,0.019524204,-0.005327822,-0.023949366,0.014880215,-0.038221728,0.017153582,0.0063824453,0.060931075,0.022563463,0.055192955,-0.000353124,0.007130103,0.0644323,-0.06783628,0.05747848,0.013713139,0.071045734,-0.004236728,-0.002118364,-0.024520747,0.04724225,0.03632523,0.011792327,0.04079902,0.023377985,0.0018600269,0.008607184,-0.0035984835,-0.026842741,-0.010558388,-0.031948697,0.0051576234,0.0023721422,-0.050184254,0.007816976,0.023706226,-0.008856403,-0.020083427,-0.011543108,-0.0041972175,-0.0020925303,0.042160608,0.008321493,-0.0006382445,-0.026672542,-0.01481943,0.025991749,0.025748607,0.025238013,0.029736117,-0.022551306,-0.034185592,0.009640532,-0.010965649,0.013080973,0.02368191,0.044835158,0.03083025,0.027888246,0.0062608747,0.030854564,0.044810843,0.022757975,0.009342684,0.0033918137,-0.03296989,-0.028933752,-0.00763462,0.012138803,-0.012813519,-0.057040825,-0.024739573,0.012764891,0.044567704,0.015123356,0.04909012,0.019755188,0.016691614,0.02347524,0.006008616,0.09978497,-0.031948697,-0.0133484285,-0.045880664,0.023730539,0.0601044,-0.0015515421,-0.0013699463,0.010996042,-0.025432525,-0.02381564,0.014770802,-0.009816809,0.0028082759,0.02844747,-0.028058445,0.053831365,0.004826344,-0.010625252,-0.0016609554,-0.04014254,0.012157039,0.016983382,-0.04240375,0.014175107,-0.030732993,0.0073246155,-0.007336773,-0.0041546677,-0.05874281,0.06112559,0.007859525,-0.018016731,-0.006789706,-0.020764222,0.00517282,0.015694737,-0.009178564,-0.010394268,-0.0010804568,-0.001054623,-0.045248497,0.05645729,0.005783711,0.004552811,-0.034574617,0.02779099,-0.020521082,-0.028617669,0.01929322,0.021517958,-0.04622106,0.0009368518,-0.017676335,0.024885457,0.01727515,0.027450593,0.0061696973,-0.01190782,-0.027110197,0.0035893656,-0.026988626,0.03165693,0.021445015,-0.011208789,0.008759147,0.022235224,-0.06170913,0.00038978504,0.03744368,0.01633906,0.029857686,0.016691614,0.011263496,0.014381777,0.01678887,-0.044470448,-0.00340701,0.06185501,0.010102499,0.07892349,0.014977472,-0.015390811,-0.0029374445,-0.039802145,-0.09526256,0.016873969,0.01785869,0.009300134,-0.030441225,0.029565917,-0.004315749,-0.033674996,0.055533353,0.04675597,-0.017931633,0.04075039,0.05261566,0.011676836,-0.05903458,0.00035559337,-0.0022110613,0.0003985229,-0.0014436484,0.00039054485,0.0045680073,0.07342851,0.023596812,-0.033553425,0.02647803,0.017056325,0.0087348325,-0.005394686,-0.005844496,0.005488903,0.026623914,0.01580415,-0.0071908883,0.018381443,-0.018673211,0.036835827,-0.037297793,0.031462416,-0.007871683,0.052032124,-0.0060238126,-0.016351217,-0.01461276,0.045126926,0.017226523,-0.00751305,-0.01514767,-0.021943454,0.0136766685,-0.045175556,0.044421818,0.051254075,-0.026210574,-0.053247828,-0.06336249,-0.018053202,-0.0047473237,0.0704622,0.008789538,0.0398994,-0.0495764,-0.07435245,0.01654573,0.0027398926,-0.026988626,-0.036714256,-0.011233103,0.04323043,0.01872184,-0.0021077266,0.011415459,-0.0123941,-0.02898238,-0.018442227,-0.045734778,-0.014734331,0.011719385,-0.054414906,0.020861479,-0.06112559,0.023171315,-0.0065587224,-0.033334598,0.0059447917,0.013384899,0.042622577,0.06506447,0.003792996,0.02803413,0.00952504,0.026405089,-0.026745485,0.008540319,0.051497214,0.022818761,0.009500725,-0.016983382,0.017421037,0.018369285,-0.035060897,-0.005722926,-0.03267812,0.00915425,-0.034136966,-0.022210909,-0.025675666,0.0008935423,-0.063557,-0.013919809,0.0034921092,0.07950703,0.02007127,-0.019451262,-0.039753515,0.0044099656,-0.0030347006,0.024447804,0.03853781,-0.011956448,-0.049673658,0.011385066,-0.040871963,0.0073914793,0.043741025,-0.049454834,0.049600717,-0.09098328,0.009300134,-0.002089491,0.005972145,-0.021700313,-0.03321303,-0.040920593,0.02191914,0.010114656,-0.05713808,0.012041546,-0.018417913,-0.008905031,-0.032362036,-0.009488569,-0.016193176,0.003826428,-0.019232435,-0.0059508705,-0.028277272,0.0030271027,-0.018150458,-0.028958065,0.029711802,-0.005990381,0.0076710912,-0.060785193,-0.01827203,0.00796286,-0.021894826,-0.030684365,0.018685369,0.011397224,0.022235224,0.00015167805,-0.035449926,0.02409525,0.000689532,-0.033553425,0.028617669,0.019730873,0.0062092072,-0.00476252,-0.007500893,0.01896498,0.018770467,-0.018113988,-0.0026775878,0.024326235,0.012078018,-0.026988626,-0.0047199703,-0.025067814,0.004273199,-0.028277272,0.012716263,-0.0058900854,-0.03233772,-0.033529114,0.0019284103,0.0039054486,0.029614545,0.0112574175,0.005267037,0.008461298,0.0029511212,-0.00049767876,0.0027398926,0.038270358,-0.022976803,0.02557841,0.0040087835,0.03744368,0.029857686,-0.021201875,0.007920311,-0.028180016,-0.019767344,-0.014235892,-0.035474237,-0.0010439857,0.021894826,0.036106404,-0.07940978,0.026405089,0.04758265,0.018016731,-0.028009817,0.028933752,0.0033553427,-0.0082303155,0.010728586,0.0628762,0.0010933736,0.017968103,-0.0013532303,0.00087378715,-0.015950035,-0.037054654,0.0029663173,-0.024289763,-0.017153582,0.0062000896,-0.015074728,-0.022283852,0.0028781788,-0.01695907,0.0032763218,0.046731655,-0.002188267,0.033602055,0.012570377,-0.033796567,0.010546231,-0.025627038,-0.03459893,-0.0045680073,0.0034799522,0.015548852,-0.042549636,-0.052761547,0.03535267,-0.029833373,0.0056256694,0.014260206,-0.004832423,-0.037954275,0.027863933,0.0027611675,0.026502345,0.021396387,0.058645554,-0.006625586,0.026356459,-0.019645775,0.018697524,0.015184141,-0.019220278,0.008844245,0.011439773,0.012035469,0.03559581,-0.032240465,0.011670757,0.055727866,0.0032793612,0.025845865,-0.02257562,0.010382111,0.022429736,0.019463418,0.0031638693,-0.022867389,-0.023706226,0.0024162114,0.0048536975,0.040993534,-0.04413005,0.008874638,-0.010503681,0.029954944,-0.050135627,0.0058110645,-0.0054281177,0.013202544,0.0123150805,0.030368282,0.040288426,-0.0016244843,-0.008467377,0.0097438665,0.03722485,0.017883005,0.00792639,0.0064128377,-0.021153247,-0.024557218,-0.028836496,0.019074393,0.023523869,0.0055891983,-0.030392596,-0.008011488,-0.0052761547,-0.04116373,0.0004080206,0.033334598,0.008540319,0.020508924,-0.007665013,0.030489853,0.052810177,0.008485612,-0.048579525,-0.008035802,0.029784745,0.0025362622,0.029979257,-0.032532234,0.0018813018,-0.0029617585,-0.0037534856,-0.0431818,-0.013992751,0.033358913,0.0047260486,0.0747901,0.009865437,-0.015621794,-0.009968772,0.022320323,-0.008041881,-0.025043499,-0.008959738,0.025845865,-0.03780839,-0.030635737,0.013093131,-0.033407543,-0.022697192,0.020545395,-0.018016731,-0.00094748917,0.0056104735,-0.011275653,0.0013304359,-0.0053764503,-0.02873924,0.0035133841,0.028155701,0.010789372,-0.03345617,0.022685034,0.0030058278,0.016655143,-0.032775376,0.019354006,0.044519074,-0.01740888,-0.018211244,-0.024484275,0.02409525,-0.0039601554,0.009458176,-0.02791256,-0.0012567339,-0.0143574625,-0.0021654726,0.021979926,0.0087105185,0.007774426,-0.003083329,0.03304283,0.0056104735,-0.03542561,-0.012254295,0.0011670757,0.008753068,0.029833373,0.027936874,0.017822219,0.005093799,0.05086505,0.0057077296,-0.03041691,-0.038440555,-0.007701484,-0.018041044,0.033845194,0.038489185,0.020204999,-0.0058718496,-0.021128934,0.016351217,0.014795116,-0.008072274,0.011111533,-0.018794782,0.0003041159,-0.010515838,0.01559748,-0.004647028,-0.016436316,-0.01765202,-0.04639126,0.03321303,-0.035206784,0.00035122444,-0.005972145,0.013008031,-0.02114109,-0.02623489,-0.044032793,-0.00730638,0.025116442,0.010479367,-0.04806893,0.002200424,0.032824006,-0.018174773,-0.00016393006,0.0071361815,-0.032921262,0.009622296,-0.010880549,-0.00022186595,-0.0014664428,0.008218158,-0.01613239,0.0006781348,-0.018539485,0.0024207702,0.030319653,0.010527995,-0.025991749,-0.004820266,-0.0016320824,-0.0153664965,-0.020837164,0.03518247,-0.052226637,0.0070753964,-0.02499487,0.040020972,0.02791256,0.010157206,0.018174773,0.00054136815,-0.028836496,-0.0057533183,-0.006473623,-0.011111533,0.008303258,0.013141759,0.010515838,0.012126646,0.018733997,-0.026502345,-0.03501227,0.019974014,-0.022308165,-0.02737765,-0.00040460145,0.01695907,0.0009801612,-0.009233271,0.032410666,-0.039631944,0.03083025,-0.007093632,0.015500224,-0.017907318,-0.002849306,0.01613239,0.014564132,-0.022283852,-0.014551975,0.033358913,-0.032653805,-0.011476245,0.014320991,-0.028617669,-0.07303949,0.024216821,0.013093131,0.06720411,0.015524538,0.023390142,0.03846487,0.013713139,-0.027037254,0.03119496,-0.021700313,-0.011725464,-0.011719385,0.0060663624,0.005972145,0.017773591,0.05825653,0.04364377,-0.005677337,-0.011804485,-0.007269909,0.016837498,-0.0057502794,-0.03017377,-0.020253627,-0.0032611256,0.022526992,-0.016667299,0.025189383,0.018332815,-0.011974683,-0.016290432,0.017287308,-0.01810183,-0.002487634,0.001937528,0.021481488,-0.0042640814,-0.006905198,0.0035893656,-0.0024739574,-0.0047473237,0.011482323,-0.0125946915,0.009312292,-0.02007127,0.0052609583,0.03916998,-0.021457173,-0.0020211076,-0.03476913,0.008218158,0.027158825,-0.020265784,0.008959738,0.03041691,0.021128934,-0.018673211,-0.017457508,-0.004333984,-0.040920593,-0.015731208,0.018782625,0.028252957,0.00014075571,-0.019074393,-0.0017536528,0.012175274,0.040507253,0.033723626,0.050135627,0.02208934,-0.048287757,0.004230649,0.0051788986,-0.01633906,-0.034501676,0.00882601,0.014892372,0.028544726,0.012606849,0.025067814,-0.018806938,-0.0051089954,0.017676335,0.041650016,-0.018004574,-0.005698612,0.011622129,0.048798352,-0.024447804,-0.03321303,-0.015196298,0.02245405,0.01982813,0.028398842,0.037954275,-0.05529021,-0.003908488,-0.009294056,-0.032045953,-0.0316083,0.0034343633,-0.009500725,-0.019815972,0.0012476161,0.01206586,-0.013275486,0.042428065,0.02630783,0.015609638,0.011050748,0.0062973457,-0.016521415,0.017554764,0.000046277477,0.014406091,-0.010947413,0.020010486,0.01350647,0.010515838,-0.021979926,0.024411334,0.0153421825,0.0031699478,0.00009991566,0.023171315,-0.009865437,0.0146613885,-0.0014314913,-0.024836829,-0.0069355904,-0.0022323362,0.039948028,0.015220612,0.005136349,0.0030240633,-0.05426902,0.0003730691,0.03296989,-0.0057168473,0.020873636,0.015670422,0.04079902,0.016886126,-0.021785414,-0.0022232183,0.018685369,0.010491524,-0.0036136797,-0.03518247,0.028641982,-0.054414906,-0.013008031,0.015585324,0.0003440062,-0.010175441,-0.008418749,-0.009056994,-0.012017232,-0.014041379,-0.016290432,0.012369786,0.03481776,-0.006753235,0.044032793,0.0011450411,-0.011664678,0.0042093745,-0.03321303,0.005339979,-0.005856653,0.0070024543,-0.00611803,-0.015633952,0.0009117779,0.015196298,-0.009148171,0.00017257297,0.029687488,0.0045315363,0.012047625,0.014539818,0.01461276,-0.0024785162,0.012558221,0.0063520526,0.009458176,-0.005209291,-0.010783293,-0.0146613885,-0.0132998,-0.016241804,-0.011227025,0.020302255,0.010090342,0.009494647,-0.03304283,0.008266786,0.019451262,0.0029936708,0.027329022,-0.021809727,0.006777549,0.067641765,0.009597982,0.017737119,0.023013273,0.026964312,0.021785414,0.012339395,-0.013494313,-0.055192955,0.0021973846,0.0055557666,-0.0013220779,0.0045740856,-0.0017247798,0.04668303,-0.031754185,-0.0069599045,-0.00242229,0.02266072,-0.008941502,0.0316083,-0.034793444,-0.009020522,0.013725297,-0.0143574625,-0.008145216,-0.01428452,-0.0023128765,-0.011056826,0.013384899,0.0017050246,-0.008151295,-0.01428452,0.009245428,0.027961189,-0.013056659,-0.0025104284,0.0123941,0.045613207,-0.008503849,0.023013273,0.023572497,-0.0018737036,-0.026988626,0.017493978,0.027742362,-0.001424653,-0.005698612,-0.0034799522,0.0034586776,0.008473456,-0.013530784,-0.005525374,-0.0011868309,-0.00018112088,0.024192506,0.018490857,0.0074401074,0.0017597313,-0.025505466,0.029954944,-0.014904529,-0.0064128377,-0.0064432304,0.0033796567,0.0064432304,-0.03192438,-0.008977973,-0.016642986,-0.0013532303,0.027474906,-0.00030392598,-0.015767679,-0.009506804,-0.022940332,-0.019974014,0.007622463,-0.022065025,0.008546398,-0.026575286,0.08641223,-0.0028705806,0.015074728,0.027693734,0.026745485,-0.012412337,-0.020180684,0.012497435,-0.00048210257,0.011719385,-0.012959403,0.01568258,0.010448975,0.010157206,-0.0062912675,0.028301585,-0.0011488402,0.006777549,-0.02540821,-0.009014444,0.03710328,-0.016873969,0.039875086,0.025359582,0.0150139425,-0.028763553,0.018320657,0.019524204,0.003756525,0.037711132,0.027718049,0.012078018,0.021493644,0.017810062,0.0026897448,-0.0066802925,-0.056700427,-0.010108577,0.008935424,-0.03805153,-0.009926222,0.043254744,-0.0015317869,-0.010430739,0.010941335,-0.00619705,0.019560674,-0.010376032,-0.023499556,-0.01806536,-0.0084065925,-0.008759147,-0.01223606,-0.0215909,0.0034100492,0.008418749,-0.010686037,0.011622129,0.022964645,-0.0012544544,-0.041042164,0.0030559755,0.0011078102,0.0051788986,-0.0040574116,0.02200424,-0.027085882,-0.04634263,-0.00734893,0.0014748008,-0.007652856,0.043546513,0.016363373,0.024727417,0.02725608,0.01616886,-0.020314412,-0.004030058,-0.027863933,0.0010751381,0.014260206,-0.023791324,0.03362637,0.0052488013,-0.016351217,0.004169864,-0.02557841,0.017092796,0.023633283,0.046026547,0.008187765,-0.034744818,0.016424159,-0.009136015,0.004382612,-0.023791324,-0.029614545,-0.0053339005,0.031462416,-0.025067814,-0.00767717,0.026161946,-0.0032550471,-0.021165404,0.00050337735,-0.021992084,0.016715929,0.009841123,-0.009020522,-0.053636853,0.014126479,0.005488903,-0.013846867,0.025481153,-0.018284187,-0.026283517,-0.017433193,-0.0031425944,-0.042209238,-0.022830918,0.013214701,-0.040701766,-0.004704774,-0.002393417,0.020618338,0.017530449,0.010461132,0.011950369,0.011992918,-0.0017156621,0.012017232,0.027329022,0.0066742143,0.00018416013,-0.0111054545,0.019025765,-0.009044836,-0.009792495,0.0018159576,-0.0034951486,-0.002151796,-0.014734331,0.018831253,-0.0054372353,0.023487398,0.054609418,0.000061545004,0.0068626483,-0.005160663,-0.043352,0.0064432304,-0.021736786,0.011974683,0.00718481,-0.025359582,-0.0022186595,-0.0014003388,0.018563798,0.022283852,0.0070875534,-0.030271025,-0.006625586,-0.059764,-0.034696188,0.009348762,0.021566587,-0.00968916,0.0044190837,0.011567422,0.0039236844,0.009099543,-0.00018624963,0.010868393,-0.0044038873,0.04378965,0.015086885,-0.010765058,-0.0036379937,0.007245595,0.0019329691,-0.02791256,-0.03399108,-0.009439941,-0.0114336945,0.031462416,0.018563798,0.004643989,-0.03275106,0.0050755637,0.031243589,-0.00866189,-0.009859358,0.03481776,0.014017065,0.0009224153,0.014734331,0.022672877,-0.023548184,-0.009056994,0.0431818,0.04950346,-0.008838167,0.016241804,0.014782959,-0.000092602444,-0.0027535693,-0.00948249,-0.0021229228,0.02725608,0.015232769,0.03321303,0.02126266,0.05504707,0.027961189,0.061465986,0.010831921,-0.024630161,0.030003572,0.018770467,-0.025991749,0.025238013,0.047606964,0.022210909,0.027961189,-0.019524204,0.0070328466,-0.008959738,-0.016922597,-0.002755089,-0.0012506554,0.0067836274,0.024800358,0.0015971309,0.0071604955,0.021177562,0.009549354,-0.013482156,-0.0031365159,0.0047837947,-0.061028335,-0.023949366,-0.015877092,-0.034915015,-0.00046120764,-0.02939572,-0.007810897,-0.031219276,0.008327572,0.00763462,-0.020764222,-0.005078603,0.02910395,0.021979926,-0.015196298,0.0024937126,0.009324448,-0.010005243,-0.0300522,0.027329022,-0.042646892,0.014381777,0.00046234738,-0.001908655,0.010868393,0.027572164,0.00014635935,-0.01958499,-0.011154083,0.017117111,-0.0013076415,-0.009342684,-0.004674381,-0.029152578,0.026915682,-0.020010486,-0.03768682,-0.029590232,-0.007871683,0.003382696,-0.036835827,0.012801361,0.019657932,0.022514835,-0.008813853,0.02820433,-0.002393417,-0.036835827,0.01798026,-0.015111199,0.027426278,-0.02820433,0.03841624,-0.010679958,0.021505801,0.011214868,0.019791659,-0.00009165268,-0.023049746,-0.015196298,-0.030198084,0.040944904,-0.03970489,-0.028374529,-0.008133058,-0.002610724,0.0016184058,-0.007537364,-0.009901908,-0.0061089117,0.009245428,0.016387688,-0.0012020272,0.029833373,0.018393598,-0.0082303155,-0.03763819,-0.0140049085,-0.0017946828,0.018454384,-0.029541604,0.032045953,-0.0062000896,0.004826344,0.00509076,-0.03119496,-0.010412504,-0.022137968,-0.022028554,-0.012922932,0.00032577064,-0.022563463,-0.0059295953,0.031170648,-0.019852445,0.017518293,0.030878877,0.027401965,0.046974797,0.019609302,-0.032362036,-0.010236226,0.0033036752,-0.015257084,0.00021084864,0.029687488,0.03428285,0.011093298,-0.011093298,-0.017348094,0.010564467,0.013093131,0.0013661472,-0.014551975,0.009099543,0.0036957397,0.031170648,0.025870178,0.015427282,0.049479146,-0.0247882,-0.01223606,-0.0447379,-0.027766677,0.00784129,-0.026745485,-0.0036349546,-0.004774677,0.022502678,-0.0052153696,0.002236895,0.015062571,-0.0485309,-0.044859473,-0.01514767,-0.013372743,0.0044282014,-0.027037254,0.005887046,-0.016351217,-0.00730638,0.0005539051,-0.016083762,0.05747848,-0.00072144426,0.010357797,0.00092089566,0.01585278,-0.0024390058,0.0068687266],\"payload\":{\"document_id\":\"doc_1_1\",\"chunk_id\":\"code_chunk_4\",\"content\":\"<PriceBreakdown\\n
+      \             subtotal={subtotal}\\n              shipping={shipping}\\n              tax={tax}\\n
+      \             total={total}\\n            />\\n\\n            <div className=\\\"cart-actions\\\">\\n
+      \             <button\\n                className=\\\"clear-cart-button\\\"\\n
+      \               onClick={handleClearCart}\\n                disabled={localLoading}\\n
+      \             >\\n                Clear Cart\\n              </button>\\n\\n
+      \             <CheckoutButton\\n                onClick={handleCheckout}\\n
+      \               disabled={isCheckoutDisabled}\\n                loading={localLoading}\\n
+      \               total={total}\\n              />\\n            </div>\\n          </>\\n
+      \       )}\\n      </div>\\n    </div>\\n  );\\n};\\n\\nexport default ShoppingCart;\",\"workspace_id\":1,\"asset_id\":1,\"asset_type\":\"codebase\",\"content_type\":\"code\",\"vector_name\":\"semantic_description\",\"token_count\":180,\"chunk_index\":4,\"total_chunks\":5,\"detected_language\":\"javascript\"}}]}"
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate, zstd
+      connection:
+      - keep-alive
+      content-length:
+      - '104946'
+      content-type:
+      - application/json
+      host:
+      - qdrant:6333
+      user-agent:
+      - python-client/1.15.1 python/3.13.9
+    method: PUT
+    uri: http://qdrant:6333/collections/workspace_test_1/points?wait=true
+  response:
+    body:
+      string: !!binary |
+        KLUv/QBYXQIAooQQFpBXB6JQhqbbbyK3+/9SglW2/djkzkrToDOcQDAFKPptq09u8LzaXuYaF9fD
+        2KnhCTpGrxZx8Or01vGlvlmE+y4DAQCTxoQC
+    headers:
+      content-encoding:
+      - zstd
+      content-type:
+      - application/json
+      date:
+      - Tue, 23 Dec 2025 19:41:12 GMT
+      transfer-encoding:
+      - chunked
+      vary:
+      - accept-encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers
+    status:
+      code: 200
+      message: OK
+version: 1

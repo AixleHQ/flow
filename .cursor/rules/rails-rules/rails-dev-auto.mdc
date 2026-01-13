@@ -1,0 +1,46 @@
+---
+description: Ruby on Rails development guidelines and best practices. Apply when working with Ruby files, Rails architecture, database interactions, and backend development patterns for the application.
+globs: *.rb
+alwaysApply: false
+---
+# Ruby on Rails Development Rules
+
+## Critical Rules
+
+- Write concise, idiomatic Ruby code following the Ruby Style Guide
+- Follow Rails MVC conventions and naming patterns
+- Use snake_case for file names, methods, variables; CamelCase for classes
+- Implement proper error handling and validation using ActiveModel
+- Optimize database queries with indexing and eager loading
+- Follow RESTful routing conventions
+- Implement comprehensive tests with Minitest
+- DO NOT use gems 'devise' or 'cancancan'
+- Prioritize security with proper authentication, strong parameters, and CSRF protection
+- Use Ruby 3.x features when appropriate (pattern matching, endless methods)
+
+## Code Structure & Style
+
+- Structure files according to Rails conventions (models, controllers, views, concerns)
+- Use descriptive variable and method names (e.g., user_signed_in?, calculate_total)
+- Implement service objects for complex business logic
+- Use concerns for shared behavior across models or controllers
+- Prefer single quotes for strings unless interpolation is needed
+- Use ActiveRecord effectively and avoid N+1 queries
+
+## Development Modes
+
+- **Development mode**: Enables code reloading, detailed error pages, and extensive logging
+- **Test mode**: Optimized for running tests with test database configuration
+- **Production mode**: Optimized for performance with caching, compiled assets, and minimal logging
+- **Staging mode**: Mimics production settings but with additional debugging capabilities
+- Use environment-specific configurations in config/environments/*.rb files
+- Ensure proper database configuration for each environment in config/database.yml
+
+## Performance & Security
+
+- Use database indexing effectively
+- Implement caching strategies (fragment, Russian Doll caching)
+- Use background jobs for time-consuming tasks
+- Protect against common web vulnerabilities (XSS, CSRF, SQL injection)
+- Implement proper error logging with user-friendly messages
+

@@ -1,0 +1,3 @@
+# VCR cassettes directory
+# Cassettes (*.yaml files) should be committed to Git for CI/CD
+

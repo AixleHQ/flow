@@ -1,0 +1,17 @@
+---
+description: 
+globs: *.ts,*.tsx
+alwaysApply: false
+---
+- Use api backend routes from shared/routes object
+- Use @reduxjs/toolkit approach for state management
+- Use baseApi.injectEndpoints instead of createApi
+- Set QueryTag for different provided tags with names that repeat the entity
+- Use providesListTag fabric for generating cache tags
+- Use descriptive query names: workspaces instead of getWorkspaces
+- Show snackbar notifications for success mutations
+- Show snackbar notifications for errors in mutations and queries
+- Use types from shared/api: ApiResponse for single entities, ApiCollectionResponse for collections and ApiError types
+- Use isLoading state for queries and show LinearProgress during loading
+- Use isLoading state for mutations and disable form buttons or connected controls
+- Use RTKQuery hook destructuring for extracting values

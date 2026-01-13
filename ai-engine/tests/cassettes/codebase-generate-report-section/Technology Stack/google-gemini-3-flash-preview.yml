@@ -1,0 +1,589 @@
+interactions:
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a technical architect
+      specializing in technology stack assessment.\n\n**Task:** Identify and document
+      all technologies, frameworks, and tools used in the codebase from the provided
+      files.\n\n**Context:** Files contain metadata showing framework, language, dependencies,
+      and exports. Extract unique frameworks and dependencies to build complete technology
+      inventory. Group by purpose (Backend, Frontend, Infrastructure, Data).\n\n**Output
+      Format:** Categorized markdown report with:\n- Technology grouped by purpose\n-
+      Framework names with file counts\n- Primary use cases for each technology\n\n**Example
+      Output:**\n```markdown\n## Technology Stack\n\n### Backend\n- **FastAPI** (23
+      files)\n  - REST API implementation\n  - Primary web framework\n- **SQLModel**
+      (15 files)\n  - Database ORM and models\n\n### Frontend\n- **React** (38 files)\n  -
+      UI components and views\n- **TailwindCSS** (12 files)\n  - Styling framework\n\n###
+      Infrastructure\n- **Docker** (5 files)\n  - Containerization\n- **PostgreSQL**
+      (configuration)\n  - Primary database\n\n### Development Tools\n- **pytest**
+      (18 test files)\n- **ESLint** (configuration)\n```\n\n**Guidelines:**\n- List
+      frameworks with file counts and clear purpose descriptions\n- Group logically
+      by technology purpose\n- Identify both explicit and implicit technology usage\n-
+      Note version information if available in files\n"}, {"role": "user", "content":
+      "\n\n=== example.py ===\nFile: example.py\nCategories: Services, Security, Data\nLanguage:
+      Python\nFramework: SQLAlchemy\n\n\"\"\"User authentication service for managing
+      login and session handling.\"\"\"\n\nimport hashlib\nimport secrets\nfrom datetime
+      import datetime, timedelta\n\nfrom models.session import UserSession\nfrom models.user
+      import User\nfrom sqlalchemy.orm import Session\n\n\nclass AuthenticationService:\n    \"\"\"Handles
+      user authentication and session management.\"\"\"\n\n    def __init__(self,
+      db: Session):\n        self.db = db\n        self.session_timeout = timedelta(hours=24)\n\n    def
+      authenticate_user(self, email: str, password: str) -> User | None:\n        \"\"\"Authenticate
+      user with email and password.\"\"\"\n        user = self.db.query(User).filter(User.email
+      == email).first()\n        if not user:\n            return None\n\n        if
+      not self._verify_password(password, user.password_hash):\n            return
+      None\n\n        # Update last login\n        user.last_login = datetime.utcnow()\n        self.db.commit()\n        return
+      user\n\n    def create_session(self, user: User) -> str:\n        \"\"\"Create
+      a new user session and return session token.\"\"\"\n        token = secrets.token_urlsafe(32)\n        session
+      = UserSession(\n            token=token,\n            user_id=user.id,\n            expires_at=datetime.utcnow()
+      + self.session_timeout,\n            created_at=datetime.utcnow(),\n        )\n\n        self.db.add(session)\n        self.db.commit()\n        return
+      token\n\n    def validate_session(self, token: str) -> User | None:\n        \"\"\"Validate
+      session token and return associated user.\"\"\"\n        session = (\n            self.db.query(UserSession)\n            .filter(\n                UserSession.token
+      == token, UserSession.expires_at > datetime.utcnow()\n            )\n            .first()\n        )\n\n        if
+      not session:\n            return None\n\n        return session.user\n\n    def
+      _verify_password(self, password: str, password_hash: str) -> bool:\n        \"\"\"Verify
+      password against stored hash.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()
+      == password_hash\n\n    def _hash_password(self, password: str) -> str:\n        \"\"\"Hash
+      password for storage.\"\"\"\n        return hashlib.sha256(password.encode()).hexdigest()\n\n\n===
+      example.java ===\nFile: example.java\nCategories: Services, Workflows\nLanguage:
+      Java\nFramework: Spring\n\npackage com.example.order;\n\nimport java.math.BigDecimal;\nimport
+      java.time.LocalDateTime;\nimport java.util.ArrayList;\nimport java.util.List;\nimport
+      java.util.UUID;\n\nimport org.springframework.beans.factory.annotation.Autowired;\nimport
+      org.springframework.stereotype.Service;\nimport org.springframework.transaction.annotation.Transactional;\n\nimport
+      com.example.inventory.InventoryService;\nimport com.example.payment.PaymentService;\nimport
+      com.example.shipping.ShippingService;\n\n/**\n * Service for managing e-commerce
+      orders including creation, validation, and fulfillment.\n */\n@Service\n@Transactional\npublic
+      class OrderService {\n\n    @Autowired\n    private OrderRepository orderRepository;\n\n    @Autowired\n    private
+      InventoryService inventoryService;\n\n    @Autowired\n    private PaymentService
+      paymentService;\n\n    @Autowired\n    private ShippingService shippingService;\n\n    /**\n     *
+      Creates a new order with validation and inventory checking.\n     */\n    public
+      Order createOrder(CreateOrderRequest request) throws OrderException {\n        validateOrderRequest(request);\n\n        Order
+      order = new Order();\n        order.setId(UUID.randomUUID().toString());\n        order.setCustomerId(request.getCustomerId());\n        order.setStatus(OrderStatus.PENDING);\n        order.setCreatedAt(LocalDateTime.now());\n        order.setItems(new
+      ArrayList<>());\n\n        BigDecimal totalAmount = BigDecimal.ZERO;\n\n        for
+      (OrderItemRequest itemRequest : request.getItems()) {\n            if (!inventoryService.isAvailable(itemRequest.getProductId(),
+      itemRequest.getQuantity())) {\n                throw new OrderException(\"Insufficient
+      inventory for product: \" + itemRequest.getProductId());\n            }\n\n            OrderItem
+      item = new OrderItem();\n            item.setProductId(itemRequest.getProductId());\n            item.setQuantity(itemRequest.getQuantity());\n            item.setUnitPrice(itemRequest.getUnitPrice());\n            item.setTotalPrice(itemRequest.getUnitPrice().multiply(BigDecimal.valueOf(itemRequest.getQuantity())));\n\n            order.getItems().add(item);\n            totalAmount
+      = totalAmount.add(item.getTotalPrice());\n        }\n\n        order.setTotalAmount(totalAmount);\n\n        Order
+      savedOrder = orderRepository.save(order);\n\n        // Reserve inventory\n        for
+      (OrderItem item : savedOrder.getItems()) {\n            inventoryService.reserveInventory(item.getProductId(),
+      item.getQuantity());\n        }\n\n        return savedOrder;\n    }\n\n    /**\n     *
+      Processes payment and updates order status.\n     */\n    public void processPayment(String
+      orderId, PaymentRequest paymentRequest) throws OrderException {\n        Order
+      order = findOrderById(orderId);\n\n        if (order.getStatus() != OrderStatus.PENDING)
+      {\n            throw new OrderException(\"Order is not in pending status\");\n        }\n\n        try
+      {\n            PaymentResult result = paymentService.processPayment(paymentRequest,
+      order.getTotalAmount());\n\n            if (result.isSuccessful()) {\n                order.setStatus(OrderStatus.PAID);\n                order.setPaymentId(result.getPaymentId());\n                orderRepository.save(order);\n\n                initiateShipping(order);\n            }
+      else {\n                order.setStatus(OrderStatus.PAYMENT_FAILED);\n                orderRepository.save(order);\n                releaseInventory(order);\n            }\n        }
+      catch (Exception e) {\n            order.setStatus(OrderStatus.PAYMENT_FAILED);\n            orderRepository.save(order);\n            releaseInventory(order);\n            throw
+      new OrderException(\"Payment processing failed\", e);\n        }\n    }\n\n    private
+      void validateOrderRequest(CreateOrderRequest request) throws OrderException
+      {\n        if (request.getCustomerId() == null || request.getCustomerId().trim().isEmpty())
+      {\n            throw new OrderException(\"Customer ID is required\");\n        }\n\n        if
+      (request.getItems() == null || request.getItems().isEmpty()) {\n            throw
+      new OrderException(\"Order must contain at least one item\");\n        }\n    }\n\n    private
+      Order findOrderById(String orderId) throws OrderException {\n        return
+      orderRepository.findById(orderId)\n            .orElseThrow(() -> new OrderException(\"Order
+      not found: \" + orderId));\n    }\n\n    private void initiateShipping(Order
+      order) {\n        shippingService.createShippingLabel(order);\n        order.setStatus(OrderStatus.SHIPPED);\n        orderRepository.save(order);\n    }\n\n    private
+      void releaseInventory(Order order) {\n        for (OrderItem item : order.getItems())
+      {\n            inventoryService.releaseInventory(item.getProductId(), item.getQuantity());\n        }\n    }\n}\n\n\n===
+      example.rb ===\nFile: example.rb\nCategories: Services, Workflows, Data\nLanguage:
+      Ruby\nFramework: Rails\n\n# frozen_string_literal: true\n\n# Service for managing
+      user subscriptions and billing in a SaaS application\nclass SubscriptionService\n  include
+      Serviceable\n\n  attr_reader :stripe_service, :notification_service\n\n  def
+      initialize(stripe_service: StripeService.new, notification_service: NotificationService.new)\n    @stripe_service
+      = stripe_service\n    @notification_service = notification_service\n  end\n\n  #
+      Creates a new subscription for a user with plan validation\n  def create_subscription(user,
+      plan_id, payment_method_id = nil)\n    return error_result(''User already has
+      active subscription'') if user.subscription&.active?\n\n    plan = SubscriptionPlan.find_by(id:
+      plan_id)\n    return error_result(''Invalid subscription plan'') unless plan&.available?\n\n    subscription
+      = nil\n\n    ActiveRecord::Base.transaction do\n      subscription = user.create_subscription!(\n        plan:
+      plan,\n        status: ''pending'',\n        started_at: Time.current,\n        next_billing_date:
+      calculate_next_billing_date(plan)\n      )\n\n      if plan.paid?\n        stripe_subscription
+      = create_stripe_subscription(user, plan, payment_method_id)\n\n        if stripe_subscription[:success]\n          subscription.update!(\n            status:
+      ''active'',\n            external_id: stripe_subscription[:subscription_id]\n          )\n\n          create_subscription_usage_record(subscription)\n          grant_plan_features(user,
+      plan)\n\n          notification_service.send_subscription_confirmation(user,
+      subscription)\n        else\n          raise ActiveRecord::Rollback, stripe_subscription[:error]\n        end\n      else\n        #
+      Free plan\n        subscription.update!(status: ''active'')\n        grant_plan_features(user,
+      plan)\n      end\n    end\n\n    success_result(subscription)\n  rescue StandardError
+      => e\n    Rails.logger.error \"Subscription creation failed: #{e.message}\"\n    error_result(\"Failed
+      to create subscription: #{e.message}\")\n  end\n\n  # Cancels a subscription
+      with optional immediate or end-of-period cancellation\n  def cancel_subscription(subscription,
+      immediate: false)\n    return error_result(''Subscription not found'') unless
+      subscription\n    return error_result(''Subscription already cancelled'') if
+      subscription.cancelled?\n\n    ActiveRecord::Base.transaction do\n      if subscription.external_id.present?\n        cancellation_result
+      = stripe_service.cancel_subscription(\n          subscription.external_id,\n          at_period_end:
+      !immediate\n        )\n\n        return error_result(cancellation_result[:error])
+      unless cancellation_result[:success]\n      end\n\n      cancellation_date =
+      immediate ? Time.current : subscription.next_billing_date\n\n      subscription.update!(\n        status:
+      ''cancelled'',\n        cancelled_at: cancellation_date,\n        cancellation_reason:
+      ''user_requested''\n      )\n\n      revoke_plan_features(subscription.user,
+      subscription.plan) if immediate\n\n      notification_service.send_cancellation_confirmation(subscription.user,
+      subscription)\n    end\n\n    success_result(subscription)\n  rescue StandardError
+      => e\n    Rails.logger.error \"Subscription cancellation failed: #{e.message}\"\n    error_result(\"Failed
+      to cancel subscription: #{e.message}\")\n  end\n\n  # Processes subscription
+      renewal and handles payment\n  def process_renewal(subscription)\n    return
+      error_result(''Subscription not eligible for renewal'') unless subscription.renewable?\n\n    if
+      subscription.plan.paid?\n      payment_result = stripe_service.process_subscription_payment(subscription.external_id)\n\n      unless
+      payment_result[:success]\n        handle_payment_failure(subscription, payment_result[:error])\n        return
+      error_result(\"Payment failed: #{payment_result[:error]}\")\n      end\n    end\n\n    subscription.update!(\n      next_billing_date:
+      calculate_next_billing_date(subscription.plan),\n      last_billed_at: Time.current\n    )\n\n    create_subscription_usage_record(subscription)\n    notification_service.send_renewal_confirmation(subscription.user,
+      subscription)\n\n    success_result(subscription)\n  end\n\n  private\n\n  def
+      create_stripe_subscription(user, plan, payment_method_id)\n    stripe_service.create_subscription(\n      customer_id:
+      user.stripe_customer_id,\n      price_id: plan.stripe_price_id,\n      payment_method_id:
+      payment_method_id\n    )\n  end\n\n  def calculate_next_billing_date(plan)\n    case
+      plan.billing_interval\n    when ''monthly''\n      1.month.from_now\n    when
+      ''yearly''\n      1.year.from_now\n    when ''weekly''\n      1.week.from_now\n    else\n      raise
+      ArgumentError, \"Unsupported billing interval: #{plan.billing_interval}\"\n    end\n  end\n\n  def
+      grant_plan_features(user, plan)\n    plan.features.each do |feature|\n      user.feature_access.find_or_create_by(feature:
+      feature) do |access|\n        access.granted_at = Time.current\n      end\n    end\n  end\n\n  def
+      revoke_plan_features(user, plan)\n    plan.features.each do |feature|\n      user.feature_access.find_by(feature:
+      feature)&.destroy\n    end\n  end\n\n  def create_subscription_usage_record(subscription)\n    SubscriptionUsage.create!(\n      subscription:
+      subscription,\n      period_start: subscription.last_billed_at || subscription.started_at,\n      period_end:
+      subscription.next_billing_date,\n      usage_data: {}\n    )\n  end\n\n  def
+      handle_payment_failure(subscription, error_message)\n    subscription.update!(\n      status:
+      ''past_due'',\n      last_payment_error: error_message\n    )\n\n    notification_service.send_payment_failure_notification(subscription.user,
+      subscription)\n  end\nend\n"}], "model": "google/gemini-3-flash-preview", "parallel_tool_calls":
+      false, "temperature": 0.1, "usage": {"include": true}, "max_tokens": 4000, "reasoning":
+      {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '14681'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//9CYgIAAAD//0JiAgAAAP//hFZhUxs3EP0rO2ImBebsgEkg9ac6pW1oITiYTD+Ujr2W1ndb
+        dNJF0plcM/z3jk5n+wjJ9Ku0Wr339u1KXwQrMRY5mcHx2enp69HR8ZujAX9Qf0zMrzPbeHk2ev/v
+        z68v34hMVM6uWZETY/GbtbkmkYnSKtIxQ7vwMqeSDQ9OBiuNvhhUjtZMDyITdvkPySDGQhYYhtKW
+        labA1ohMSEcYSInxDkEmZGFZkhfjv74IbfPK2aUXY1NrnYkVG/bF3BF6a8RY+GArkQmDgdc0/3p3
+        dns9FZlgo+izGB9loiTvMScx/iKc1STGAr1nH9CEiMaaQCYi3duDW5KFsdrmDcwCynuYeE/el2TC
+        nbkze3t78BblPRl1ZwZweDirHJscfnVY0oN194eHsH8MK9Z0cGcABjB1XKJr4HdcI2BVaZYYZYDV
+        5sgwBX70pGBlHZxTRUaRkQ1cmKhhjN5f/DSpg31gR2pxkMGM3JolgcaGHCiKGmwCu70YhkbBrUPj
+        MaUp0WBOkU0M7O2gXhwME6WbetmANXCDrP0zPn/Scge9xRsKgvZMj13H6R0apcnDsvZsyHvQNmcJ
+        a0bwCaRvISoMuERPwCaQS4g8hMLZOi9gMZGxzjckrVOLDuXsw+VEy4LK5rnkTSisgdmHSwjW6nsO
+        7SXXrSHhhjQmxnCFVUUO9q9vrg6+rkKs+lPFMqg9OfhUk2Py2VPg0pYlB9+Ba4s9C2gUOgWXvHTo
+        nuPc3iWto680yoCN1LWK5lq85fycJJeoF238ig0ayahBopZ14pOUXHz8eHGeomrDn2oCVmQCr5hc
+        RJcsfI4B4QVMycU2ICMp4e4L/Qxu64cf4Prmqk2/pR52LvIZuPYwtC3O1iSZXKe5L7h64kEa5sMM
+        FrN66aXjKsZMNZrhio2aL5utJ6fWh9xRLOnLfgXPOxAR7EUZ7cehg/vWhgJ2Lmlx9PkBx4kUYXTy
+        sVHRvQS4xYt6R3OZ2j6ZI9i27aMhfLbxis/AOtWuxMt8j9RO+hnJ2nFo4AVM6lDE2qSW6Ygm775D
+        X2heft8yPqYhqND7h0imQF9ERPuzd5PB6PXpQQthTY5Xu5bsXTAj6Sj471+QkyGHIeaUrqmCzR1W
+        BUvUugEfnDU5ODTKlhDsPRn/na7ZEr8t2KnBFF2Icy1Q7pLuXTsHxxXBZHrxDNImmFQ7OBYpdDPk
+        gM1uAkmrKBZr+HT2drMmIexV5UlzV9i0nqyclZGFyVMZl6x1q0IjNe3qeGFWDn1wtQyxEC82E7nj
+        88sgTgRykuCKpbObcfcNo94WlF6HxXV0T49YmoUeHjgUQJ8DuejIDZt2f4WS/BgWF2ZNJljXbI5n
+        sJgmRruVdkDMCq4qNvlmufPFexu2VoFZ4wOV/1uJ/pkt7GChaMd+GpdRhtp0QckkG0WfN4nIhKNV
+        7VGnl//x8e9M1Ju3u3K2rMI82U2MT05Go/h6bz4W241Xo1eZCDag3sWevTqNsT6I8dHw6Gj048lJ
+        JtjPl429F+MVak/Z0wvmikKcePFmibIgtc12lAmsFdv+Qvwn9RYe0239JHXlgyMs52xW5OLQnSdA
+        6Y/zje0Ozw728enpcfbtRBsVfD98dDZ6/IZEfVTp18Qm75PhEnPqkXl8/A8AAP//AwAcm4HojwoA
+        AA==
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75b56b54e1e2-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:01 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are a technical architect
+      specializing in technology stack assessment.\n\n**Task:** Identify and document
+      all technologies, frameworks, and tools used in the codebase from the provided
+      files.\n\n**Context:** Files contain metadata showing framework, language, dependencies,
+      and exports. Extract unique frameworks and dependencies to build complete technology
+      inventory. Group by purpose (Backend, Frontend, Infrastructure, Data).\n\n**Output
+      Format:** Categorized markdown report with:\n- Technology grouped by purpose\n-
+      Framework names with file counts\n- Primary use cases for each technology\n\n**Example
+      Output:**\n```markdown\n## Technology Stack\n\n### Backend\n- **FastAPI** (23
+      files)\n  - REST API implementation\n  - Primary web framework\n- **SQLModel**
+      (15 files)\n  - Database ORM and models\n\n### Frontend\n- **React** (38 files)\n  -
+      UI components and views\n- **TailwindCSS** (12 files)\n  - Styling framework\n\n###
+      Infrastructure\n- **Docker** (5 files)\n  - Containerization\n- **PostgreSQL**
+      (configuration)\n  - Primary database\n\n### Development Tools\n- **pytest**
+      (18 test files)\n- **ESLint** (configuration)\n```\n\n**Guidelines:**\n- List
+      frameworks with file counts and clear purpose descriptions\n- Group logically
+      by technology purpose\n- Identify both explicit and implicit technology usage\n-
+      Note version information if available in files\n"}, {"role": "user", "content":
+      "\n\n=== example.js ===\nFile: example.js\nCategories: UI, Controllers, Logic\nLanguage:
+      JavaScript\nFramework: React\n\n/**\n * React component for managing shopping
+      cart functionality in an e-commerce application.\n * Handles item management,
+      quantity updates, price calculations, and checkout initiation.\n */\n\nimport
+      React, { useState, useEffect, useCallback } from ''react'';\nimport { useDispatch,
+      useSelector } from ''react-redux'';\nimport { toast } from ''react-toastify'';\n\nimport
+      {\n  addItemToCart,\n  removeItemFromCart,\n  updateItemQuantity,\n  clearCart,\n  fetchCartItems\n}
+      from ''../store/slices/cartSlice'';\nimport { initiateCheckout } from ''../store/slices/checkoutSlice'';\nimport
+      { formatCurrency } from ''../utils/currency'';\nimport { trackEvent } from ''../analytics/tracking'';\n\nimport
+      CartItem from ''./CartItem'';\nimport PriceBreakdown from ''./PriceBreakdown'';\nimport
+      CheckoutButton from ''./CheckoutButton'';\nimport EmptyCart from ''./EmptyCart'';\n\nconst
+      ShoppingCart = ({ isOpen, onClose, className = '''' }) => {\n  const dispatch
+      = useDispatch();\n  const { items, totalItems, subtotal, shipping, tax, total,
+      loading, error } = useSelector(state => state.cart);\n  const { user } = useSelector(state
+      => state.auth);\n\n  const [localLoading, setLocalLoading] = useState(false);\n  const
+      [validationErrors, setValidationErrors] = useState({});\n\n  useEffect(() =>
+      {\n    if (isOpen && user) {\n      dispatch(fetchCartItems(user.id));\n    }\n  },
+      [isOpen, user, dispatch]);\n\n  const handleQuantityChange = useCallback(async
+      (itemId, newQuantity) => {\n    if (newQuantity < 1) {\n      handleRemoveItem(itemId);\n      return;\n    }\n\n    if
+      (newQuantity > 99) {\n      toast.error(''Maximum quantity is 99'');\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(updateItemQuantity({ itemId, quantity: newQuantity })).unwrap();\n      trackEvent(''cart_item_quantity_updated'',
+      { itemId, newQuantity });\n    } catch (error) {\n      toast.error(''Failed
+      to update quantity'');\n      console.error(''Quantity update error:'', error);\n    }
+      finally {\n      setLocalLoading(false);\n    }\n  }, [dispatch]);\n\n  const
+      handleRemoveItem = useCallback(async (itemId) => {\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(removeItemFromCart(itemId)).unwrap();\n      toast.success(''Item
+      removed from cart'');\n      trackEvent(''cart_item_removed'', { itemId });\n    }
+      catch (error) {\n      toast.error(''Failed to remove item'');\n      console.error(''Remove
+      item error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [dispatch]);\n\n  const handleClearCart = useCallback(async () => {\n    if
+      (!window.confirm(''Are you sure you want to clear your cart?'')) {\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      await dispatch(clearCart()).unwrap();\n      toast.success(''Cart cleared'');\n      trackEvent(''cart_cleared'');\n    }
+      catch (error) {\n      toast.error(''Failed to clear cart'');\n      console.error(''Clear
+      cart error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [dispatch]);\n\n  const handleCheckout = useCallback(async () => {\n    const
+      errors = validateCartItems(items);\n    setValidationErrors(errors);\n\n    if
+      (Object.keys(errors).length > 0) {\n      toast.error(''Please resolve cart
+      issues before checkout'');\n      return;\n    }\n\n    if (!user) {\n      toast.error(''Please
+      sign in to proceed with checkout'');\n      return;\n    }\n\n    setLocalLoading(true);\n    try
+      {\n      const checkoutData = {\n        items: items.map(item => ({\n          productId:
+      item.productId,\n          quantity: item.quantity,\n          price: item.price\n        })),\n        userId:
+      user.id,\n        subtotal,\n        shipping,\n        tax,\n        total\n      };\n\n      const
+      result = await dispatch(initiateCheckout(checkoutData)).unwrap();\n\n      trackEvent(''checkout_initiated'',
+      {\n        totalItems,\n        totalAmount: total,\n        userId: user.id\n      });\n\n      //
+      Redirect to checkout page\n      window.location.href = `/checkout/${result.checkoutId}`;\n    }
+      catch (error) {\n      toast.error(''Failed to initiate checkout'');\n      console.error(''Checkout
+      error:'', error);\n    } finally {\n      setLocalLoading(false);\n    }\n  },
+      [items, user, subtotal, shipping, tax, total, totalItems, dispatch]);\n\n  const
+      validateCartItems = (cartItems) => {\n    const errors = {};\n\n    cartItems.forEach(item
+      => {\n      if (!item.inStock) {\n        errors[item.id] = ''Item is out of
+      stock'';\n      } else if (item.quantity > item.maxQuantity) {\n        errors[item.id]
+      = `Maximum available quantity is ${item.maxQuantity}`;\n      } else if (item.price
+      !== item.currentPrice) {\n        errors[item.id] = ''Price has changed since
+      item was added'';\n      }\n    });\n\n    return errors;\n  };\n\n  const isCartValid
+      = Object.keys(validationErrors).length === 0;\n  const isCheckoutDisabled =
+      loading || localLoading || !isCartValid || totalItems === 0;\n\n  if (!isOpen)
+      return null;\n\n  return (\n    <div className={`shopping-cart ${className}`}>\n      <div
+      className=\"cart-header\">\n        <h2>Shopping Cart ({totalItems} items)</h2>\n        <button\n          className=\"close-button\"\n          onClick={onClose}\n          aria-label=\"Close
+      cart\"\n        >\n          \u00d7\n        </button>\n      </div>\n\n      <div
+      className=\"cart-content\">\n        {error && (\n          <div className=\"error-message\">\n            {error}\n          </div>\n        )}\n\n        {loading
+      ? (\n          <div className=\"loading-state\">\n            Loading cart items...\n          </div>\n        )
+      : items.length === 0 ? (\n          <EmptyCart onContinueShopping={onClose}
+      />\n        ) : (\n          <>\n            <div className=\"cart-items\">\n              {items.map(item
+      => (\n                <CartItem\n                  key={item.id}\n                  item={item}\n                  onQuantityChange={handleQuantityChange}\n                  onRemove={handleRemoveItem}\n                  error={validationErrors[item.id]}\n                  disabled={localLoading}\n                />\n              ))}\n            </div>\n\n            <PriceBreakdown\n              subtotal={subtotal}\n              shipping={shipping}\n              tax={tax}\n              total={total}\n            />\n\n            <div
+      className=\"cart-actions\">\n              <button\n                className=\"clear-cart-button\"\n                onClick={handleClearCart}\n                disabled={localLoading}\n              >\n                Clear
+      Cart\n              </button>\n\n              <CheckoutButton\n                onClick={handleCheckout}\n                disabled={isCheckoutDisabled}\n                loading={localLoading}\n                total={total}\n              />\n            </div>\n          </>\n        )}\n      </div>\n    </div>\n  );\n};\n\nexport
+      default ShoppingCart;\n"}], "model": "google/gemini-3-flash-preview", "parallel_tool_calls":
+      false, "temperature": 0.1, "usage": {"include": true}, "max_tokens": 4000, "reasoning":
+      {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '8658'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        H4sIAAAAAAAAA+JSgAEuAAAAAP//4kIwAQAAAP//QmICAAAA//9CYgIAAAD//0JiAgAAAP//QmIC
+        AAAA//9CYgIAAAD//3xV23LbNhD9lR14JiO5pCz5kqR6cxw3cWeSeirnpXVHXIFLEhUuDLCUo2T8
+        7x2Aurl2+0QSAHfPnnMW+0OoUkxFTTafvHn9+uJ0PHl7nl+cLy7by+724fsfpx9Pu/fmDX8VmWi9
+        W6mSvJiKD87VmuDyBmbclcqJTBhXko6x0tZJTUZZlZ/llcbQ5K2nlaIHkQm3+Jski6mQDfJIOtNq
+        YuWsyIT0hEylmO6xZEI2TkkKYvrnD6Fd3Xq3CGJqO60zUSmrQjP3hMFZMRWBXSsyYZHViub/3p3d
+        /XYrMqFsSd/EdJwJQyFgTWL6Q3inSUwFhqACo+WIxlkmG5EeHcEdycY67eo1zBjl8t7e26OjI/jF
+        p1Plvc3h+Ph3QsnHxzCYQKU0De8tQA63Xhn0a/hyA1otfHytnIdFp3SpbA2RA2fJcr7AQCV0gTwo
+        y+QrlBRGfZQvrLT6TgEi0d7CR+eWAQZFF2jGyFRkEN+vq4okbz6uUOsFymUxTBlDPAdoS9CqIrmW
+        msCgxZoMWR5tayi7bzBYKYRUTp4Whs+q+qDdAvUm5j5KStSgLXUqDT1DiYwZYMcNWVYSo9r9f1kC
+        IxuSS9cxtN5JCmFX8k30RgwagBtKFb1XoUWWTZH+TMWTJsnOF9AiM3kbnhRy55xeKoaBMq1WVD4v
+        5EvkfE/PvQg6Gu5ewKCI+GfxMxK6xdkvDBMCDGsrG++s6yLIzi4BZSwwSWMfPLaDYTEcHfgjv3MY
+        WFXrZ0g+O1bVjqB1YDIJWN94kU9PqHNWhqAiKqO0MAidjKydkPfOw8bTYQjskpMiHb1X3yMjvILk
+        Fvi0U6yH9iuucCa9ahkG17PXPz3n6cp5ilBqj8ZEMBpt3WFNMU3PoHa1ktlTUlxLHjeMpI0TfEDF
+        w1776A1gjzZUzpt07ol8ievwDMsnV3Yat5KltAlAEixqFd1W9Cl2uhVQOoPK7hm5sZXHwL6T3HmC
+        V3BpUa9ZydBjuOoCO7Nf7fPSMzjXq+h89iiXkZiNdIMiraTNYtizxA6Ms4qd79t8QQ2uVDRfJxvA
+        AFhGoU88GbeKsRSTCakOZRUr5NRWm4q2VF3P7uDy9gZuLFPds/0/hn+Hckmx75wxnd36LdJXEctm
+        17f71JvGPEydlNtbi1akXZsugNhxW/5mMxi8u/50ki4vXoPUGPsb/hPbjNfp4lDb1u/BxduoSD9/
+        RkNFBNQGGNCoHmVQhMa1rbJ1vlU/PvOGsCS/672Nlj0S9YKnrjrvycp0ORvkRPTOoivUquyxNKTb
+        2FYiE56qLqDux9Hj41+Z6LYDpfXOtDxntyQbxPR0PJnEkbKddruNs7fjTLBj1PuzZz+ns4HFdDwa
+        j08n5xcXmVBhvli7pZhWqANlTzPMS2JUOsTUEmVD5S7cOBMYZ/ThQpzjBwuPfbrDIF0b2BOaubIV
+        RV5o3iPqJ+8L2xs8e9yT8TjifjHSlodweH5y/vgCR4eo+lmubH1YjDJY00Exj4//AAAA//8DAG7E
+        sykkCQAA
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75cee951e1e2-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:05 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"messages": [{"role": "system", "content": "You are aggregating multiple
+      analysis summaries into a single comprehensive markdown report.\n\nYour task:\n1.
+      Merge the provided summaries into one cohesive, well-structured report\n2. Remove
+      redundant and duplicate information\n3. Consolidate similar findings into unified
+      sections\n4. Preserve all key insights and important findings\n5. Maintain the
+      same analysis style as the original prompt (technology_stack)\n\nOutput format:
+      Clean, well-structured markdown with clear sections, tables where appropriate,
+      and bullet points.\n\nFocus on creating a professional, comprehensive report
+      that synthesizes all the information effectively.\n"}, {"role": "user", "content":
+      "## Summary 1\n\n## Technology Stack Assessment\n\n### Backend\n- **Spring Framework**
+      (1 file)\n  - Primary Java application framework.\n  - Used for Dependency Injection
+      (`@Autowired`), Service layer definition (`@Service`), and Transaction management
+      (`@Transactional`).\n- **Ruby on Rails** (1 file)\n  - Web framework for the
+      Ruby application.\n  - Handles business logic via services and database interactions
+      through `ActiveRecord`.\n- **SQLAlchemy** (1 file)\n  - Python SQL toolkit and
+      Object Relational Mapper (ORM).\n  - Used for session management, user queries,
+      and database commits.\n- **Java Standard Library** (1 file)\n  - Used for core
+      business logic, including `BigDecimal` for financial calculations and `UUID`
+      for unique identifiers.\n\n### Data & Persistence\n- **ActiveRecord** (1 file)\n  -
+      Rails'' ORM for database transactions, record creation, and relationship management
+      (e.g., `SubscriptionPlan.find_by`).\n- **PostgreSQL / Relational Database**
+      (Implicit)\n  - Both SQLAlchemy and ActiveRecord implementations indicate a
+      relational database backend for storing users, sessions, orders, and subscriptions.\n\n###
+      Security & Authentication\n- **Python Hashlib** (1 file)\n  - Used for secure
+      password hashing (SHA-256) and verification.\n- **Python Secrets** (1 file)\n  -
+      Used for generating cryptographically strong random tokens for session management.\n\n###
+      Third-Party Integrations\n- **Stripe API** (1 file)\n  - Integrated via `StripeService`
+      in the Ruby codebase.\n  - Primary service for subscription management, payment
+      processing, and billing cycles.\n\n### Infrastructure & Services\n- **E-commerce
+      Microservices** (Implicit)\n  - The Java `OrderService` interacts with external
+      service interfaces: `InventoryService`, `PaymentService`, and `ShippingService`.\n-
+      **Notification System** (1 file)\n  - Integrated via `NotificationService` to
+      handle user communications for billing and subscriptions.\n\n---\n\n## Summary
+      2\n\n## Technology Stack\n\n### Frontend\n- **React** (1 file)\n  - Primary
+      UI library for building component-based user interfaces.\n  - Utilizes modern
+      Hooks (`useState`, `useEffect`, `useCallback`) for state and lifecycle management.\n-
+      **Redux (via React-Redux)** (1 file)\n  - Global state management for handling
+      cart data, authentication state, and checkout processes.\n  - Implements the
+      `useDispatch` and `useSelector` patterns.\n- **Redux Toolkit (implied)** (1
+      file)\n  - Used for state \"slices\" (`cartSlice`, `checkoutSlice`) and asynchronous
+      thunk actions (`unwrap()`).\n- **React-Toastify** (1 file)\n  - Notification
+      system for providing real-time feedback (success/error messages) to users.\n\n###
+      Data & State Management\n- **JavaScript (ES6+)** (1 file)\n  - Core programming
+      language used for logic, asynchronous operations (async/await), and data transformation.\n-
+      **Redux Slices** (1 file)\n  - Modular state logic for `cart`, `auth`, and `checkout`
+      domains.\n\n### Infrastructure & Analytics\n- **Custom Analytics Module** (1
+      file)\n  - Event tracking system (`trackEvent`) used to monitor user behavior
+      such as adding/removing items and initiating checkout.\n- **REST API Integration
+      (implied)** (1 file)\n  - Backend communication for fetching cart items and
+      processing checkout data.\n\n### Development Tools\n- **CSS (BEM/Utility classes
+      implied)** (1 file)\n  - Styling implementation via `className` props (e.g.,
+      `shopping-cart`, `cart-header`).\n- **Custom Utilities** (1 file)\n  - Currency
+      formatting and data validation helpers."}], "model": "google/gemini-3-flash-preview",
+      "parallel_tool_calls": false, "temperature": 0.1, "usage": {"include": true},
+      "max_tokens": 4000, "reasoning": {"effort": "low", "exclude": true}}'
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate, zstd
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '4434'
+      content-type:
+      - application/json
+      host:
+      - openrouter.ai
+      user-agent:
+      - OpenAI/Python 1.109.1
+      x-stainless-arch:
+      - arm64
+      x-stainless-async:
+      - 'false'
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 1.109.1
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.13.9
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: !!binary |
+        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
+    headers:
+      Access-Control-Allow-Origin:
+      - '*'
+      CF-RAY:
+      - 9b2a75e4c8e0e1e2-VNO
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - gzip
+      Content-Type:
+      - application/json
+      Date:
+      - Tue, 23 Dec 2025 20:03:12 GMT
+      Permissions-Policy:
+      - payment=(self "https://checkout.stripe.com" "https://connect-js.stripe.com"
+        "https://js.stripe.com" "https://*.js.stripe.com" "https://hooks.stripe.com")
+      Referrer-Policy:
+      - no-referrer, strict-origin-when-cross-origin
+      Server:
+      - cloudflare
+      Transfer-Encoding:
+      - chunked
+      Vary:
+      - Accept-Encoding
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

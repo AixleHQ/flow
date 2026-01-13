@@ -1,0 +1,32 @@
+{
+  "quality_issues": [
+    {
+      "title": "Potential Race Condition in Quantity Updates",
+      "severity": "medium",
+      "evidence": "lines 55-66: handleQuantityChange uses localLoading state and async dispatch without checking if the component is still mounted or if a newer request is in flight.",
+      "why_it_matters": "If a user clicks '+' or '-' rapidly, multiple concurrent requests are sent. Since network responses may arrive out of order, the final state of the cart might not reflect the user's last intended action, leading to data inconsistency between the UI and the server.",
+      "suggested_fix": "Implement a debouncing mechanism for quantity updates or use an AbortController to cancel previous pending requests for the same item."
+    },
+    {
+      "title": "Hardcoded Navigation via window.location.href",
+      "severity": "medium",
+      "evidence": "line 135: window.location.href = `/checkout/${result.checkoutId}`;",
+      "why_it_matters": "Using window.location.href causes a full page reload, which wipes the React/Redux state and defeats the purpose of a Single Page Application (SPA). This results in a poor user experience, slower transitions, and potential Open Redirect vulnerabilities if the checkoutId is not strictly validated.",
+      "suggested_fix": "Use a routing hook like useNavigate from react-router-dom to perform client-side navigation."
+    },
+    {
+      "title": "Missing Dependency in handleQuantityChange Callback",
+      "severity": "low",
+      "evidence": "line 68: The dependency array for handleQuantityChange only includes [dispatch].",
+      "why_it_matters": "The handleQuantityChange function calls handleRemoveItem (line 46), which is defined within the component scope. Failing to include it in the dependency array can lead to stale closure issues if the logic in handleRemoveItem ever changes, and it violates the exhaustive-deps linting rule.",
+      "suggested_fix": "Add handleRemoveItem to the dependency array of handleQuantityChange on line 68."
+    }
+  ],
+  "opportunities": [
+    "Move validateCartItems outside the component or into a useMemo hook to prevent re-creating the function and re-running validation logic on every render.",
+    "Consider using a dedicated 'isUpdating' state object keyed by itemId to allow disabling only the specific item being updated rather than the entire cart UI (localLoading).",
+    "Add a cleanup function to the useEffect hook to cancel the fetchCartItems dispatch if the component unmounts or isOpen changes to false.",
+    "Replace window.confirm with a custom React modal component to ensure a consistent UI/UX and avoid blocking the browser's main thread.",
+    "Improve accessibility by adding aria-live regions for error messages and loading states to notify screen reader users of dynamic content changes."
+  ]
+}

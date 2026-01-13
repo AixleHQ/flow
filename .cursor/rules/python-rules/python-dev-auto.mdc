@@ -1,0 +1,270 @@
+---
+globs: **/*.py
+alwaysApply: false
+---
+# Python Development Rules
+
+## Critical Rules
+
+- Write concise, idiomatic Python code following PEP 8
+- Use type hints for all function signatures and class attributes
+- Follow Clean Code principles (DRY, YAGNI, KISS, SRP)
+- Use Pydantic for data validation and structured types
+- Prefer composition over inheritance
+- All imports at the top of file (no lazy imports unless absolutely necessary)
+
+## Documentation & Comments
+
+**Default Stance**: No documentation by default.
+
+**Exceptions** (require docstrings):
+- ✅ Complex algorithms with non-obvious business logic that cannot be made self-documenting through code structure alone
+
+**Never**:
+- ❌ Pydantic models (type hints are sufficient)
+- ❌ Private methods
+- ❌ Simple getters/setters
+- ❌ Obvious implementations
+- ❌ Inline, step-by-step, or explanatory comments
+- ❌ TODO/FIXME or placeholder comments
+
+**Rationale**: Junior-friendly means self-documenting code with clear names and simple structure, NOT extensive comments explaining obvious things. Code should read like well-written prose.
+
+## Naming Conventions
+
+**Function/Method Naming Pattern**:
+- Use `action_object` pattern for clarity: `retrieve_documents`, `generate_queries`, `activate_account`
+- Functions/methods: `snake_case`
+- Classes: `PascalCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Private: `_leading_underscore`
+- Type aliases: `PascalCase`
+- Pydantic models: `PascalCase` (e.g., `GenerateDomainsInput`, not `SpecificationGenerateDomainsInput`)
+
+**Consistency Contract**:
+- Same concepts use identical terminology throughout the codebase
+- Function signatures follow consistent patterns regardless of data size
+- Establish one naming pattern per concept and maintain it universally
+
+## Code Structure & Style
+
+- Constants at the top (UPPER_SNAKE_CASE)
+- Private methods start with underscore (_method_name)
+- Use meaningful, descriptive names
+- Prefer explicit over implicit
+- Keep functions small and focused (Single Responsibility)
+- Extract magic numbers and strings to constants
+
+## Type Safety
+
+- Type annotations everywhere (functions, methods, attributes)
+- Use `list[T]`, `dict[K, V]` (modern Python 3.10+ syntax)
+- Avoid `Any` unless absolutely necessary
+- Use Pydantic models for structured data
+- Validate inputs at boundaries (API, activities)
+
+## Fail-Fast Contract
+
+**Input Validation**:
+- Validate inputs immediately at function entry
+- Raise meaningful exceptions with context
+- Let configuration errors crash immediately
+- Specify concrete exception types in catch blocks
+
+**Error Handling**:
+- Use specific exceptions, not generic Exception
+- Log errors with context before raising
+- Let exceptions propagate (don't swallow errors)
+- Use try/except only when you can handle the error
+- Only catch exceptions when implementing intentional fallback behavior
+- Always specify exception types (no bare `except:`)
+- Include contextual information in exception messages
+- Use `raise from` for exception chaining to preserve context
+
+**Examples**:
+```python
+# Good - Fail fast with clear validation
+def process_document(self, doc_id: int) -> DocumentResult:
+    doc = self.session.get(Document, doc_id)
+    if not doc:
+        raise ValueError(f"Document {doc_id} not found")
+    
+    if not doc.content:
+        raise ValueError(f"Document {doc_id} has no content")
+    
+    return self.apply_analysis_pipeline(doc)
+
+# Good - Exception chaining with context
+try:
+    result = external_api_call()
+except ConnectionError as error:
+    logger.error(f"Failed to connect to API: {error}")
+    raise ServiceUnavailableError("API connection failed") from error
+
+# Good - Recovery scenario (only catch when you can recover)
+try:
+    result = validate_input(data)
+except ValidationError as error:
+    return self._handle_validation_failure(error)
+
+# Bad - Generic exception without context
+try:
+    result = external_api_call()
+except:  # ❌ No exception type
+    pass  # ❌ Swallowing error
+```
+
+## Architecture Patterns
+
+- Services: Business logic, NO database writes
+- Activities: Thin wrappers (3-5 lines), call services
+- Workflows: Pure orchestration, minimal imports (only from constants/)
+- Models: Data structures only (Pydantic BaseModel)
+- Use dependency injection (pass dependencies in __init__)
+
+## Abstraction Contract
+
+**When to Extract Shared Code**:
+- ✅ Extract ONLY when code is ACTUALLY used by 2+ components NOW
+- ✅ Must have clear, stable interface
+- ✅ Use composition patterns over inheritance hierarchies
+- ❌ Avoid premature abstraction (YAGNI)
+- ❌ Don't create abstractions for theoretical future use
+- ❌ Don't extract for single-use helpers
+
+**Examples**:
+```python
+# Good - Clear reuse by multiple components
+class DocumentAnalysisService:
+    def __init__(self, model: LLMNames):
+        self.model = model
+        self.vector_engine = VectorSearchEngine()  # Shared, stable interface
+    
+    def analyze_document(self, document: Document) -> DocumentAnalysis:
+        return self.coordinate_analysis_pipeline(document)
+
+# Bad - Premature abstraction
+class AbstractDocumentProcessor(ABC):  # ❌ Used by only 1 component
+    @abstractmethod
+    def process(self, doc: Document) -> Any:  # ❌ Unclear interface
+        pass
+```
+
+## External System Integration (Temporal)
+
+- NO database access in Python (use Ruby activities)
+
+## Clean Code Principles
+
+- Extract complex conditions to well-named variables
+- Use guard clauses instead of nested conditions
+- Prefer early returns
+- Use list/dict comprehensions for simple transformations
+
+## Quality Validation Criteria
+
+Validate each implementation against these criteria:
+
+- **Junior-friendly**: Would a newcomer understand this implementation immediately through clear naming and structure?
+- **Problem-focused**: Does this solve a concrete business problem?
+- **Explainable**: Can the implementation be explained in simple terms?
+- **Purpose-driven**: Does logic serve business needs rather than cosmetic preferences?
+- **Reuse justification**: Are abstractions genuinely used by 2+ components NOW?
+- **Error transparency**: Are errors handled explicitly without suppression?
+
+## What NOT to Do
+
+- ❌ NO docstrings for public/private methods (unless complex algorithm)
+- ❌ NO implementation comments (# This does...)
+- ❌ NO TODO/FIXME comments (use TODO list tool instead)
+- ❌ NO lazy imports inside functions (unless circular dependency)
+- ❌ NO database writes in Python (use Ruby activities)
+- ❌ NO `Any` type without strong justification
+- ❌ NO dead/commented code
+- ❌ NO bare `except:` clauses
+- ❌ NO premature abstractions
+- ❌ NO single-letter exception names (use descriptive names like `error`)
+
+## Examples
+
+### Good (Clean)
+```python
+class DomainGenerationService:
+    def __init__(self, model: LLMNames):
+        self.model = model
+        self.vector_engine = VectorSearchEngine()
+    
+    def generate_domains(
+        self,
+        workspace_id: int,
+        codebase_files_data: list[CodebaseFileData],
+    ) -> GenerateDomainsOutput:
+        if not codebase_files_data:
+            logger.warning("No codebase files provided")
+            return GenerateDomainsOutput(domains=[])
+        
+        content = self._prepare_content(codebase_files_data)
+        telemetry = TelemetryFactory.create_context(
+            entity_type="workspace",
+            entity_id=workspace_id,
+            operation_type="domain_generation",
+        )
+        
+        agent = DomainAnalysisAgent(telemetry=telemetry, domain_analysis_model=self.model)
+        result = agent.analyze_domain(content)
+        
+        return GenerateDomainsOutput(domains=result.domains)
+```
+
+### Bad (Avoid)
+```python
+class DomainGenerationService:
+    """Service for generating domains."""  # ❌ Redundant docstring
+    
+    def __init__(self, model: LLMNames):
+        """Initialize service with model."""  # ❌ Unnecessary docstring for simple __init__
+        self.model = model
+        self.vector_engine = VectorSearchEngine()
+    
+    def generate_domains(
+        self,
+        workspace_id: int,
+        codebase_files_data: list[CodebaseFileData],
+    ) -> GenerateDomainsOutput:
+        """Generate domain analysis based on codebase files."""  # ❌ Self-documenting method
+        # Check if we have data  # ❌ Explaining mechanics
+        if not codebase_files_data:
+            logger.warning("No codebase files provided")
+            # Return empty result  # ❌ Explaining mechanics
+            return GenerateDomainsOutput(domains=[])
+        
+        # Step 1: Prepare content  # ❌ Step-by-step comments
+        content = self._prepare_content(codebase_files_data)
+        
+        # TODO: Add error handling  # ❌ No TODOs in code
+        try:
+            result = agent.analyze_domain(content)
+        except Exception as e:  # ❌ Generic exception, single-letter name
+            pass  # ❌ Swallowing error
+```
+
+## Pydantic Models Best Practices
+
+```python
+class GenerateDomainsInput(BaseModel):
+    workspace_id: int
+    specification_asset_ids: list[int]
+    codebase_files_data: list[CodebaseFileData]
+    domain_analysis_model: LLMNames
+```
+
+- ✅ Minimal Field() usage (only for validation: ge, le, etc.)
+- ✅ Short, clear names
+- ✅ Use `model_config` only when specific validation is needed (not by default)
+
+## Testing
+
+- Use pytest for unit tests
+- Mock external dependencies (DB, API calls)
+- Test services independently from activities
+- Use factories for test data
