@@ -1,5 +1,5 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine browser-tools-server login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db help
+.PHONY: setup run shell-web shell-ai-engine browser-tools-server login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-claude-session help
 
 # Setup project in one command
 setup:
@@ -74,6 +74,10 @@ restore-dump:
 restore-qa-db: dump-qa fetch-qa-dump restore-dump
 
 restore-prod-db: dump-prod fetch-prod-dump restore-dump
+
+# Build Claude Code session image
+build-claude-session:
+	docker build -t palad-claude-session:latest -f docker/claude-session/Dockerfile docker/claude-session/
 
 # Help command
 help:

@@ -1,18 +1,10 @@
 module ApplicationCable
   class Connection < ActionCable::Connection::Base
-    identified_by :current_user
+    identified_by :session_id
 
     def connect
-      self.current_user = find_verified_user
-      reject unless current_user
-    end
-
-    def find_verified_user
-      if verified_user = User.find_by(id: cookies.encrypted["_palad_session"]["user_id"])
-        verified_user
-      else
-        reject_unauthorized_connection
-      end
+      self.session_id = request.params[:session_id] || SecureRandom.uuid
+      logger.info "[ActionCable] Connected: #{session_id}"
     end
   end
 end

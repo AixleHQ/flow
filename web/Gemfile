@@ -132,6 +132,9 @@ gem "minitar"
 
 gem "rotp", "~> 6.3"
 
+# Docker API for container management
+gem "docker-api", "~> 2.3"
+
 # Temporal (Ruby worker/client)
 # Note: temporal-ruby is early; validate in dev.
 # gem "temporal-ruby", "~> 0.1"

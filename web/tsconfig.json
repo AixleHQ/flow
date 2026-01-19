@@ -3,10 +3,13 @@
     "baseUrl": "./app/frontend",
     "target": "ES2023",
     "useDefineForClassFields": true,
-    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2023",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "module": "ESNext",
     "skipLibCheck": true,
-
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
@@ -15,14 +18,21 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "jsxImportSource": "react",
-
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["./app/frontend"],
-  "exclude": ["./node_modules/**"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": [
+    "./app/frontend"
+  ],
+  "exclude": [
+    "./node_modules/**"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
 }

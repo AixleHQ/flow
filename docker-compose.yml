@@ -4,6 +4,7 @@ x-web-volumes: &web-volumes
   - ~/.bash_history:/root/.bash_history
   - bundle_cache:/bundle_cache
   - ./docker/remote/db_dumps:/db_dumps:cached
+  - /var/run/docker.sock:/var/run/docker.sock
 
 x-ai-engine-volumes: &ai-engine-volumes
   - ~/.bash_history:/root/.bash_history
@@ -29,6 +30,8 @@ x-web-environment: &web-environment
   RAILS_LOG_TO_STDOUT: 'true'
   PORT: 4000
   REDIS_URL: redis://redis:6379/1
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
 
 x-ai-engine-environment: &ai-engine-environment
   <<: *db-environment
