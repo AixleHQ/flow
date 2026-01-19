@@ -193,7 +193,6 @@ class ContainerManager
         "HOME=/home/claude",
         "CLAUDE_HOME=/home/claude",
         "ANTHROPIC_API_KEY=#{Settings.anthropic.api_key}",
-        "MODEL=#{ENV.fetch('CLAUDE_MODEL', 'claude-sonnet-4-20250514')}",
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040"
       ]

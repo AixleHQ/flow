@@ -7,7 +7,7 @@
  *   - Real-time directory structure updates
  *
  * Ports:
- *   - HTTP/WS: 4000 (configurable via WATCHER_PORT)
+ *   - HTTP/WS: 4040 (configurable via WATCHER_PORT)
  *
  * WebSocket Messages:
  *   - { type: 'change', event: 'add|change|unlink|addDir|unlinkDir', path: string }
@@ -26,8 +26,79 @@ const { WebSocketServer } = require('ws');
 const chokidar = require('chokidar');
 
 // Configuration
-const PORT = parseInt(process.env.WATCHER_PORT || '4000', 10);
+const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
 const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
+
+/**
+ * Format file size to human readable string
+ */
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Determine file type category based on extension
+ */
+function getFileType(ext) {
+  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
+  const pdfExts = ['pdf'];
+  const binaryExts = ['zip', 'tar', 'gz', 'rar', '7z', 'exe', 'dll', 'so', 'dylib', 'bin', 'dat'];
+  const videoExts = ['mp4', 'webm', 'avi', 'mov', 'mkv'];
+  const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac'];
+
+  if (imageExts.includes(ext)) return 'image';
+  if (pdfExts.includes(ext)) return 'pdf';
+  if (videoExts.includes(ext)) return 'video';
+  if (audioExts.includes(ext)) return 'audio';
+  if (binaryExts.includes(ext)) return 'binary';
+  return 'text';
+}
+
+/**
+ * Get MIME type based on extension
+ */
+function getMimeType(ext) {
+  const mimeTypes = {
+    // Images
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'svg': 'image/svg+xml',
+    'ico': 'image/x-icon',
+    'bmp': 'image/bmp',
+    // Documents
+    'pdf': 'application/pdf',
+    // Video
+    'mp4': 'video/mp4',
+    'webm': 'video/webm',
+    'avi': 'video/x-msvideo',
+    'mov': 'video/quicktime',
+    // Audio
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    // Archives
+    'zip': 'application/zip',
+    'tar': 'application/x-tar',
+    'gz': 'application/gzip',
+    // Text/Code
+    'txt': 'text/plain',
+    'html': 'text/html',
+    'css': 'text/css',
+    'js': 'text/javascript',
+    'ts': 'text/typescript',
+    'json': 'application/json',
+    'xml': 'application/xml',
+    'md': 'text/markdown',
+    'yaml': 'text/yaml',
+    'yml': 'text/yaml',
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
 const MAX_DEPTH = parseInt(process.env.WATCHER_MAX_DEPTH || '10', 10);
 const IGNORE_PATTERNS = (process.env.WATCHER_IGNORE || '')
   .split(',')
@@ -125,6 +196,91 @@ function handleRequest(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // Handle /file endpoint with path parameter
+  if (url.pathname === '/file') {
+    const filePath = url.searchParams.get('path');
+    if (!filePath) {
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(400);
+      res.end(JSON.stringify({ error: 'Missing path parameter' }));
+      return;
+    }
+
+    // Resolve full path and ensure it's within WATCH_DIR (security)
+    const fullPath = path.resolve(WATCH_DIR, filePath);
+    if (!fullPath.startsWith(path.resolve(WATCH_DIR))) {
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(403);
+      res.end(JSON.stringify({ error: 'Access denied: path outside workspace' }));
+      return;
+    }
+
+    try {
+      const stats = fs.statSync(fullPath);
+      if (stats.isDirectory()) {
+        res.setHeader('Content-Type', 'application/json');
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'Path is a directory, not a file' }));
+        return;
+      }
+
+      // Check file size (limit to 10MB for safety)
+      const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+      if (stats.size > MAX_FILE_SIZE) {
+        res.setHeader('Content-Type', 'application/json');
+        res.writeHead(413);
+        res.end(JSON.stringify({
+          error: 'File too large to display',
+          message: `File size is ${formatFileSize(stats.size)}, maximum allowed is ${formatFileSize(MAX_FILE_SIZE)}`,
+          size: stats.size,
+          maxSize: MAX_FILE_SIZE
+        }));
+        return;
+      }
+
+      const ext = path.extname(fullPath).slice(1).toLowerCase();
+      const fileType = getFileType(ext);
+      const mimeType = getMimeType(ext);
+
+      let content;
+      let encoding = 'text';
+
+      if (fileType === 'binary' || fileType === 'image' || fileType === 'pdf') {
+        // Read as binary and encode to base64
+        const buffer = fs.readFileSync(fullPath);
+        content = buffer.toString('base64');
+        encoding = 'base64';
+      } else {
+        // Read as text
+        content = fs.readFileSync(fullPath, 'utf-8');
+      }
+
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        path: filePath,
+        name: path.basename(fullPath),
+        extension: ext,
+        size: stats.size,
+        content: content,
+        encoding: encoding,
+        fileType: fileType,
+        mimeType: mimeType,
+        mtime: stats.mtime.toISOString(),
+      }));
+    } catch (err) {
+      res.setHeader('Content-Type', 'application/json');
+      if (err.code === 'ENOENT') {
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: 'File not found' }));
+      } else {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: err.message }));
+      }
+    }
+    return;
+  }
 
   switch (url.pathname) {
     case '/tree':

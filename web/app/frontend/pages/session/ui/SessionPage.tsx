@@ -1,15 +1,21 @@
 import { Box, IconButton, Typography, Chip, Tooltip, CircularProgress } from '@mui/material';
 import { useParams, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useState, useEffect, useRef } from 'react';
+import { Panel, Group, Separator } from 'react-resizable-panels';
+
+import { FileTree, FileViewer } from 'features/file-tree';
 
 // Simple arrow and stop icons using unicode
 const ArrowBackIcon = () => <span style={{ fontSize: '20px' }}>←</span>;
 const StopIcon = () => <span style={{ fontSize: '20px' }}>■</span>;
+const SidebarIcon = () => <span style={{ fontSize: '18px' }}>☰</span>;
 
 interface ISessionRouterState {
   ttydPort?: number;
   watcherPort?: number;
 }
+
+const SIDEBAR_WIDTH = 260;
 
 const styles = {
   container: {
@@ -28,6 +34,7 @@ const styles = {
     paddingY: '8px',
     bgcolor: '#2d2d2d',
     borderBottom: '1px solid #3d3d3d',
+    flexShrink: 0,
   },
   headerLeft: {
     display: 'flex',
@@ -49,10 +56,51 @@ const styles = {
     fontFamily: 'monospace',
     fontSize: '12px',
   },
-  terminalContainer: {
+  mainContent: {
     flex: 1,
+    display: 'flex',
     overflow: 'hidden',
-    bgcolor: '#000',
+  },
+  sidebar: {
+    width: `${SIDEBAR_WIDTH}px`,
+    borderRight: '1px solid #3d3d3d',
+    flexShrink: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  sidebarHidden: {
+    display: 'none',
+  },
+  panelGroup: {
+    flex: 1,
+    display: 'flex',
+    overflow: 'hidden',
+  },
+  panel: {
+    height: '100%',
+    overflow: 'hidden',
+  },
+  fileViewerPanel: {
+    height: '100%',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  terminalPanel: {
+    height: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  resizeHandle: {
+    width: '4px',
+    backgroundColor: '#3d3d3d',
+    cursor: 'col-resize',
+    transition: 'background-color 0.15s ease',
+    '&:hover': {
+      backgroundColor: '#007acc',
+    },
   },
   loadingContainer: {
     flex: 1,
@@ -76,6 +124,19 @@ const styles = {
   },
 } as const;
 
+// Custom resize handle component
+const ResizeHandle = () => (
+  <Separator
+    style={{
+      width: '4px',
+      backgroundColor: '#3d3d3d',
+      cursor: 'col-resize',
+      transition: 'background-color 0.15s ease',
+    }}
+    className="resize-handle"
+  />
+);
+
 export function SessionPage() {
   const { sessionId } = useParams({ from: '/session/$sessionId' });
   const routerState = useRouterState({ select: (s) => s.location.state as ISessionRouterState });
@@ -83,15 +144,18 @@ export function SessionPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [stopping, setStopping] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   // Get ports from router state or fetch from API
   const [ttydPort, setTtydPort] = useState<number | null>(routerState?.ttydPort ?? null);
+  const [watcherPort, setWatcherPort] = useState<number | null>(routerState?.watcherPort ?? null);
   const [fetchingPort, setFetchingPort] = useState(!routerState?.ttydPort);
   const [portError, setPortError] = useState<string | null>(null);
 
   // Fetch session info if not provided in router state
   useEffect(() => {
-    if (ttydPort) {
+    if (ttydPort && watcherPort) {
       setFetchingPort(false);
       return;
     }
@@ -111,7 +175,9 @@ export function SessionPage() {
           setPortError('Terminal port not available');
         }
 
-        // TODO: Use data.watcher?.port for file tree component
+        if (data.watcher?.port) {
+          setWatcherPort(data.watcher.port);
+        }
       } catch (err) {
         setPortError(err instanceof Error ? err.message : 'Failed to fetch session info');
       } finally {
@@ -120,7 +186,7 @@ export function SessionPage() {
     };
 
     fetchSessionInfo();
-  }, [sessionId, ttydPort]);
+  }, [sessionId, ttydPort, watcherPort]);
 
   // Construct ttyd URL
   const ttydUrl = ttydPort ? `http://localhost:${ttydPort}` : null;
@@ -150,6 +216,18 @@ export function SessionPage() {
     }
   };
 
+  const handleToggleSidebar = () => {
+    setSidebarVisible((prev) => !prev);
+  };
+
+  const handleFileSelect = (path: string) => {
+    setSelectedFile(path);
+  };
+
+  const handleCloseFileViewer = () => {
+    setSelectedFile(null);
+  };
+
   const getStatusColor = () => {
     if (fetchingPort) return 'default';
     if (portError) return 'error';
@@ -164,14 +242,68 @@ export function SessionPage() {
     return 'Connected';
   };
 
+  // Render terminal content
+  const renderTerminal = () => {
+    if (portError) {
+      return (
+        <Box sx={styles.loadingContainer}>
+          <Typography sx={styles.errorText}>{portError}</Typography>
+        </Box>
+      );
+    }
+
+    if (fetchingPort) {
+      return (
+        <Box sx={styles.loadingContainer}>
+          <CircularProgress sx={{ color: '#4ec9b0' }} />
+          <Typography sx={styles.loadingText}>Loading session...</Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <div style={{ ...styles.terminalPanel, position: 'relative' }}>
+        {!iframeLoaded && (
+          <Box sx={{ ...styles.loadingContainer, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+            <CircularProgress sx={{ color: '#4ec9b0' }} />
+            <Typography sx={styles.loadingText}>Connecting to terminal...</Typography>
+          </Box>
+        )}
+        <iframe
+          ref={iframeRef}
+          src={ttydUrl || undefined}
+          style={styles.iframe}
+          title="Terminal"
+          onLoad={handleIframeLoad}
+        />
+      </div>
+    );
+  };
+
   return (
     <Box sx={styles.container}>
+      {/* Global styles for resize handle */}
+      <style>{`
+        .resize-handle:hover {
+          background-color: #007acc !important;
+        }
+        .resize-handle[data-resize-handle-active] {
+          background-color: #007acc !important;
+        }
+      `}</style>
+
       {/* Header */}
       <Box sx={styles.header}>
         <Box sx={styles.headerLeft}>
           <Tooltip title="Back to home">
             <IconButton onClick={handleBack} sx={{ color: '#d4d4d4' }}>
               <ArrowBackIcon />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title={sidebarVisible ? 'Hide sidebar' : 'Show sidebar'}>
+            <IconButton onClick={handleToggleSidebar} sx={{ color: '#d4d4d4' }}>
+              <SidebarIcon />
             </IconButton>
           </Tooltip>
 
@@ -195,33 +327,33 @@ export function SessionPage() {
         </Box>
       </Box>
 
-      {/* Terminal iframe or Loading */}
-      {portError ? (
-        <Box sx={styles.loadingContainer}>
-          <Typography sx={styles.errorText}>{portError}</Typography>
+      {/* Main content area */}
+      <Box sx={styles.mainContent}>
+        {/* Sidebar with FileTree */}
+        <Box sx={{ ...styles.sidebar, ...(sidebarVisible ? {} : styles.sidebarHidden) }}>
+          <FileTree watcherPort={watcherPort} onFileSelect={handleFileSelect} selectedPath={selectedFile} />
         </Box>
-      ) : fetchingPort ? (
-        <Box sx={styles.loadingContainer}>
-          <CircularProgress sx={{ color: '#4ec9b0' }} />
-          <Typography sx={styles.loadingText}>Loading session...</Typography>
-        </Box>
-      ) : (
-        <Box sx={styles.terminalContainer}>
-          {!iframeLoaded && (
-            <Box sx={{ ...styles.loadingContainer, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-              <CircularProgress sx={{ color: '#4ec9b0' }} />
-              <Typography sx={styles.loadingText}>Connecting to terminal...</Typography>
-            </Box>
-          )}
-          <iframe
-            ref={iframeRef}
-            src={ttydUrl || undefined}
-            style={styles.iframe}
-            title="Terminal"
-            onLoad={handleIframeLoad}
-          />
-        </Box>
-      )}
+
+        {/* Resizable panels for FileViewer and Terminal */}
+        {selectedFile ? (
+          <Group orientation="horizontal" style={{ flex: 1, display: 'flex' }}>
+            {/* File Viewer Panel */}
+            <Panel defaultSize={50} minSize={20} style={styles.fileViewerPanel}>
+              <FileViewer watcherPort={watcherPort} filePath={selectedFile} onClose={handleCloseFileViewer} />
+            </Panel>
+
+            <ResizeHandle />
+
+            {/* Terminal Panel */}
+            <Panel defaultSize={50} minSize={20} style={styles.terminalPanel}>
+              {renderTerminal()}
+            </Panel>
+          </Group>
+        ) : (
+          /* Terminal only when no file selected */
+          <div style={{ flex: 1, ...styles.terminalPanel }}>{renderTerminal()}</div>
+        )}
+      </Box>
     </Box>
   );
 }
