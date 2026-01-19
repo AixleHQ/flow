@@ -6,8 +6,9 @@ import { useState, useEffect, useRef } from 'react';
 const ArrowBackIcon = () => <span style={{ fontSize: '20px' }}>←</span>;
 const StopIcon = () => <span style={{ fontSize: '20px' }}>■</span>;
 
-interface SessionRouterState {
+interface ISessionRouterState {
   ttydPort?: number;
+  watcherPort?: number;
 }
 
 const styles = {
@@ -77,18 +78,18 @@ const styles = {
 
 export function SessionPage() {
   const { sessionId } = useParams({ from: '/session/$sessionId' });
-  const routerState = useRouterState({ select: (s) => s.location.state as SessionRouterState });
+  const routerState = useRouterState({ select: (s) => s.location.state as ISessionRouterState });
   const navigate = useNavigate();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [stopping, setStopping] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
 
-  // Get ttyd port from router state or fetch from API
+  // Get ports from router state or fetch from API
   const [ttydPort, setTtydPort] = useState<number | null>(routerState?.ttydPort ?? null);
   const [fetchingPort, setFetchingPort] = useState(!routerState?.ttydPort);
   const [portError, setPortError] = useState<string | null>(null);
 
-  // Fetch ttyd port if not provided in router state
+  // Fetch session info if not provided in router state
   useEffect(() => {
     if (ttydPort) {
       setFetchingPort(false);
@@ -97,18 +98,20 @@ export function SessionPage() {
 
     const fetchSessionInfo = async () => {
       try {
-        const response = await fetch(`/api/v1/terminal_sessions/${sessionId}?step_name=interactive`);
+        const response = await fetch(`/api/v1/terminal_sessions/${sessionId}?step_name=dev`);
         const data = await response.json();
 
         if (!response.ok) {
           throw new Error(data.error || 'Session not found');
         }
 
-        if (data.ttyd_port) {
-          setTtydPort(data.ttyd_port);
+        if (data.ttyd?.port) {
+          setTtydPort(data.ttyd.port);
         } else {
           setPortError('Terminal port not available');
         }
+
+        // TODO: Use data.watcher?.port for file tree component
       } catch (err) {
         setPortError(err instanceof Error ? err.message : 'Failed to fetch session info');
       } finally {
@@ -129,7 +132,7 @@ export function SessionPage() {
   const handleStop = async () => {
     setStopping(true);
     try {
-      await fetch(`/api/v1/terminal_sessions/${sessionId}?step_name=interactive`, {
+      await fetch(`/api/v1/terminal_sessions/${sessionId}?step_name=dev`, {
         method: 'DELETE',
       });
       navigate({ to: '/' });

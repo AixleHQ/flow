@@ -1,0 +1,13 @@
+{
+  "name": "claude-code-watcher",
+  "version": "1.0.0",
+  "description": "File system watcher with WebSocket streaming for Claude Code sessions",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "ws": "^8.18.0"
+  }
+}

@@ -80,7 +80,7 @@ const HomePage: React.FC = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          step_name: 'interactive',
+          step_name: 'dev',
         }),
       });
 
@@ -90,11 +90,14 @@ const HomePage: React.FC = () => {
         throw new Error(data.error || 'Failed to create session');
       }
 
-      // Navigate to session page with ttyd port in state
+      // Navigate to session page with ports in state
       navigate({
         to: '/session/$sessionId',
         params: { sessionId: data.id },
-        state: { ttydPort: data.ttyd_port },
+        state: {
+          ttydPort: data.ttyd?.port,
+          watcherPort: data.watcher?.port,
+        },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

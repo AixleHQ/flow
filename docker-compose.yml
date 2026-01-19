@@ -30,8 +30,6 @@ x-web-environment: &web-environment
   RAILS_LOG_TO_STDOUT: 'true'
   PORT: 4000
   REDIS_URL: redis://redis:6379/1
-  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-20250514}
 
 x-ai-engine-environment: &ai-engine-environment
   <<: *db-environment
@@ -53,10 +51,7 @@ x-toolbox-environment: &toolbox-environment
 
 services:
   temporal:
-    build:
-      context: ./docker/temporal
-      dockerfile: Dockerfile
-    image: temporal
+    image: temporalio/auto-setup:1.29.0
     ports:
       - "7233:7233"
     environment:
@@ -143,32 +138,24 @@ services:
 
     attach: false
 
-  redis-ui:
-    image: rediscommander/redis-commander:latest
-    ports:
-      - 8081:8081
-    depends_on:
-      - redis
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_DB=1
 
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    attach: false
-
-  browser-tools-server:
-    profiles: [cursor]
+  # Claude Code interactive session with ttyd + file watcher
+  claude-code:
+    profiles: [claude]
     build:
-      context: ./docker/browser_tools_server
+      context: ./docker/claude-code
+      dockerfile: Dockerfile
+    image: claude-code
     ports:
-      - '3025:3025'
+      - '7681:7681'   # ttyd web terminal
+      - '4042:4040'   # file watcher WebSocket + HTTP
+    environment:
+      - TTYD_PORT=7681
+      - WATCHER_PORT=4040
+    volumes:
+      - claude_workspace:/workspace
+    stdin_open: true
+    tty: true
 
   remote:
     profiles: [infra]
@@ -198,3 +185,4 @@ volumes:
   qdrant_data:
   py_venv:
   uv_cache:
+  claude_workspace:

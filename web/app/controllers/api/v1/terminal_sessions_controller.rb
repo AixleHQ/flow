@@ -7,28 +7,28 @@ module Api
       # Creates a new interactive terminal session with a Docker container
       def create
         session_id = SecureRandom.uuid
-        step_name = params[:step_name] || 'interactive'
+        step_name = params[:step_name] || "dev"
 
         begin
           ContainerManager.create_session(
             session_id: session_id,
             step_name: step_name,
             repo_url: params[:repo_url],
-            interactive: true
+            repo_branch: params[:repo_branch]
           )
 
-          # Wait a moment for container to start and ports to be assigned
-          sleep 0.5
+          # Wait for container to start and services to be ready
+          sleep 2
 
-          # Get ttyd URL for frontend connection
-          ttyd_info = ContainerManager.get_ttyd_url(session_id: session_id, step_name: step_name)
+          # Get service URLs for frontend connection
+          urls = ContainerManager.get_session_urls(session_id: session_id, step_name: step_name)
 
           render json: {
             id: session_id,
             step_name: step_name,
-            status: 'running',
-            ttyd_url: ttyd_info&.dig(:ws_url),
-            ttyd_port: ttyd_info&.dig(:port),
+            status: "running",
+            ttyd: urls&.dig(:ttyd),
+            watcher: urls&.dig(:watcher),
             created_at: Time.current.iso8601
           }, status: :created
         rescue ContainerManager::ApiKeyMissingError => e
@@ -45,22 +45,22 @@ module Api
       # Get terminal session status
       def show
         session_id = params[:id]
-        step_name = params[:step_name] || 'interactive'
+        step_name = params[:step_name] || "dev"
 
         running = ContainerManager.container_running?(session_id: session_id, step_name: step_name)
 
         if running
-          ttyd_info = ContainerManager.get_ttyd_url(session_id: session_id, step_name: step_name)
+          urls = ContainerManager.get_session_urls(session_id: session_id, step_name: step_name)
 
           render json: {
             id: session_id,
             step_name: step_name,
-            status: 'running',
-            ttyd_url: ttyd_info&.dig(:ws_url),
-            ttyd_port: ttyd_info&.dig(:port)
+            status: "running",
+            ttyd: urls&.dig(:ttyd),
+            watcher: urls&.dig(:watcher)
           }
         else
-          render json: { error: 'Terminal session not found or not running' }, status: :not_found
+          render json: { error: "Terminal session not found or not running" }, status: :not_found
         end
       end
 
@@ -68,11 +68,11 @@ module Api
       # Stop and remove terminal session container
       def destroy
         session_id = params[:id]
-        step_name = params[:step_name] || 'interactive'
+        step_name = params[:step_name] || "dev"
 
         ContainerManager.stop_session(session_id: session_id, step_name: step_name)
 
-        render json: { status: 'stopped' }
+        render json: { status: "stopped" }
       end
     end
   end

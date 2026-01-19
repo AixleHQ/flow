@@ -4,6 +4,9 @@ domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
 asset_host: <%= ENV['ASSET_HOST'] || "lvh.me:4000" %>
 protocol: "https"
 
+anthropic:
+  api_key: <%= ENV['ANTHROPIC_API_KEY'] %>
+
 rails:
   secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] || "secret" %>
   port: <%= ENV['RAILS_PORT'] || 4000 %>
@@ -52,33 +55,6 @@ aws:
   bucket:            <%= ENV['AWS_S3_BUCKET'] || 'fake' %>
   region:            <%= ENV['AWS_DEFAULT_REGION'] || 'fake' %>
 
-integrations:
-  bitbucket:
-    oauth_key:    <%= ENV['BITBUCKET_OAUTH_KEY'] %>
-    oauth_secret: <%= ENV['BITBUCKET_OAUTH_SECRET'] %>
-  github:
-    app_url: <%= ENV['GITHUB_APP_URL'] %>
-    private_pem: <%= ENV['GITHUB_PRIVATE_PEM'] %>
-    client_id: <%= ENV['GITHUB_CLIENT_ID'] %>
-    per_page: <%= ENV['GITHUB_PER_PAGE'] || 100 %>
-  gitlab:
-    api_endpoint: <%= ENV['GITLAB_API_ENDPOINT'] || "https://gitlab.com/api/v4" %>
-    app_id: <%= ENV['GITLAB_APP_ID'] %>
-    app_secret: <%= ENV['GITLAB_APP_SECRET'] %>
-  jira:
-    oauth_client_id: <%= ENV['JIRA_OAUTH_CLIENT_ID'] %>
-    oauth_client_secret: <%= ENV['JIRA_OAUTH_CLIENT_SECRET'] %>
-
-archive_extractor:
-  max_file_size: <%= ENV['MAX_FILE_SIZE'] || 50.megabytes %>
-
-assets:
-  supported_archive_formats: <%= %w[zip tar.gz tar tgz gz] %>
-  supported_image_formats: <%= %w[jpg jpeg png gif bmp webp] %>
-
-authorization:
-  otp_enabled: true
-
 mcp:
   name: palad-mcp-server
 
@@ -90,5 +66,3 @@ temporal:
   task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'palad_ruby' %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
 
-code_report:
-  confidence_threshold: <%= ENV['CODE_REPORT_CONFIDENCE_THRESHOLD'] || 0.8 %>
