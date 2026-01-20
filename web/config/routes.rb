@@ -9,8 +9,9 @@ Rails.application.routes.draw do
   get "up" => "rails/health#show", as: :rails_health_check
 
   # API routes
-  namespace :api do
+  namespace :api, defaults: { format: :json } do
     namespace :v1 do
+      resource :sessions, only: %i[create destroy]
       resources :terminal_sessions, only: [:create, :show, :destroy]
     end
   end

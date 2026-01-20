@@ -1,9 +1,12 @@
 import { LinearProgress } from '@mui/material';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { SnackbarProvider } from 'notistack';
 import React from 'react';
+import { Provider } from 'react-redux';
 
 import { ThemeProvider } from 'app/providers/ThemeProvider';
 import { routeTree } from 'app/routeTree';
+import { store } from 'shared/api/store';
 
 declare module '@tanstack/react-router' {
   interface Register {
@@ -21,11 +24,15 @@ const router = createRouter({
 
 function App() {
   return (
-    <ThemeProvider>
-      <React.Suspense fallback={<LinearProgress />}>
-        <RouterProvider router={router} defaultPreload="intent" defaultPreloadStaleTime={0} />
-      </React.Suspense>
-    </ThemeProvider>
+    <Provider store={store}>
+      <ThemeProvider>
+        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+          <React.Suspense fallback={<LinearProgress />}>
+            <RouterProvider router={router} defaultPreload="intent" defaultPreloadStaleTime={0} />
+          </React.Suspense>
+        </SnackbarProvider>
+      </ThemeProvider>
+    </Provider>
   );
 }
 

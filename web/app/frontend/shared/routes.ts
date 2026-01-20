@@ -15,6 +15,7 @@ const backend = {
 // Frontend routes are defined manually here to match the SPA routing
 const frontend = {
   rootPath: '/',
+  loginPath: '/login',
 } as const;
 
 // Combine both types of routes into a single export

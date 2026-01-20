@@ -38,6 +38,7 @@ web/public/assets
 # Ignore master key for decrypting credentials and more.
 web/config/master.key
 web/app/temporal/workflows.yml
+web_reference
 
 web/.yarn/*
 !web/.yarn/patches
