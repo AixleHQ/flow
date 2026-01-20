@@ -5,7 +5,7 @@
 
 project_name: app
 user_skill_level: expert
-planning_artifacts: "{project-root}/_bmad-output/planning-artifacts"
+planning_artifacts: "{project-root}/ai"
 implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
 project_knowledge: "{project-root}/ai"
 tea_use_mcp_enhancements: true

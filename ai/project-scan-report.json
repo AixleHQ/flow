@@ -1,0 +1,131 @@
+{
+  "workflow_version": "1.2.0",
+  "timestamps": {
+    "started": "2026-01-20T12:00:00Z",
+    "last_updated": "2026-01-20T12:30:00Z",
+    "completed": "2026-01-20T12:30:00Z"
+  },
+  "mode": "initial_scan",
+  "scan_level": "deep",
+  "project_root": "/Users/artem_petrov/projects/personal/app",
+  "output_folder": "/Users/artem_petrov/projects/personal/app/ai",
+  "project_classification": {
+    "repository_type": "multi-part",
+    "parts_count": 3,
+    "primary_language": "Ruby, Python, TypeScript"
+  },
+  "project_types": [
+    {
+      "part_id": "web",
+      "project_type_id": "web",
+      "display_name": "Web Part (Rails + React)",
+      "root_path": "/web"
+    },
+    {
+      "part_id": "ai-engine",
+      "project_type_id": "backend",
+      "display_name": "AI Engine Part (Python)",
+      "root_path": "/ai-engine"
+    },
+    {
+      "part_id": "docker",
+      "project_type_id": "infra",
+      "display_name": "Infrastructure (Docker)",
+      "root_path": "/docker"
+    }
+  ],
+  "completed_steps": [
+    {
+      "step": "step_1",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:05:00Z",
+      "summary": "Classified as multi-part with 3 parts"
+    },
+    {
+      "step": "step_2",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:08:00Z",
+      "summary": "Found 14 existing docs in kb/"
+    },
+    {
+      "step": "step_3",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:12:00Z",
+      "summary": "Tech stack: Rails 8, React 19, Python 3.13, Temporal"
+    },
+    {
+      "step": "step_4",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:16:00Z",
+      "summary": "Conditional analysis: 3 API endpoints, 14 Python activities, 8 agents"
+    },
+    {
+      "step": "step_5",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:18:00Z",
+      "summary": "Source tree documented"
+    },
+    {
+      "step": "step_6",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:20:00Z",
+      "summary": "Dev/deployment guides written"
+    },
+    {
+      "step": "step_7",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:22:00Z",
+      "summary": "Integration architecture: Temporal cross-queue workflows"
+    },
+    {
+      "step": "step_8",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:25:00Z",
+      "summary": "Architecture docs written for 2 parts"
+    },
+    {
+      "step": "step_9",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:27:00Z",
+      "summary": "Supporting docs written"
+    },
+    {
+      "step": "step_10",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:28:00Z",
+      "summary": "Master index generated"
+    },
+    {
+      "step": "step_11",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:29:00Z",
+      "summary": "Validation complete"
+    },
+    {
+      "step": "step_12",
+      "status": "completed",
+      "timestamp": "2026-01-20T12:30:00Z",
+      "summary": "Workflow complete"
+    }
+  ],
+  "current_step": "completed",
+  "findings": {
+    "project_classification": "Multi-part monorepo with 3 parts: web, ai-engine, docker",
+    "technology_stack": "Rails 8, React 19, Python 3.13, Temporal, PostgreSQL, Redis, Qdrant",
+    "api_count": 3,
+    "activities_count": 14,
+    "agents_count": 8,
+    "existing_docs_count": 14
+  },
+  "outputs_generated": [
+    "project-scan-report.json",
+    "project-overview.md",
+    "architecture-web.md",
+    "architecture-ai-engine.md",
+    "integration-architecture.md",
+    "source-tree-analysis.md",
+    "development-guide.md",
+    "index.md"
+  ],
+  "resume_instructions": "Workflow completed successfully"
+}
