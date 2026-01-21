@@ -1,37 +1,27 @@
 # =============================================================================
-# Claude Code Interactive Session Image
+# OpenAI Codex CLI Interactive Session Image
 #
 # Components:
-#   - Claude Code CLI (official installer)
+#   - OpenAI Codex CLI
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
 # =============================================================================
 FROM palad/agent-base:latest
 
 # -----------------------------------------------------------------------------
-# Claude Code CLI
+# OpenAI Codex CLI
 # -----------------------------------------------------------------------------
-RUN npm install -g @anthropic-ai/claude-code
+RUN npm install -g @openai/codex
 
 # -----------------------------------------------------------------------------
 # Create non-root user
 # -----------------------------------------------------------------------------
-RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /opt/watcher
-
-# -----------------------------------------------------------------------------
-# Claude Code managed settings (forces console/API key auth, no login prompts)
-# -----------------------------------------------------------------------------
-COPY config/claude-code/managed-settings.json /etc/claude-code/managed-settings.json
-
-# Default .claude.json (theme + onboarding state)
-RUN mkdir -p /home/claude/.claude \
-    && chown -R claude:claude /home/claude
+RUN useradd -m -d /home/codex -s /bin/bash codex \
+    && chown -R codex:codex /workspace /opt/watcher
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
-COPY prompts/ /prompts/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 

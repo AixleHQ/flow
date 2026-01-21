@@ -10,10 +10,24 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_20_201758) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_21_010002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "agent_credentials", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "agent_type", null: false
+    t.text "credentials_encrypted"
+    t.string "status", default: "pending", null: false
+    t.datetime "configured_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["status"], name: "index_agent_credentials_on_status"
+    t.index ["user_id", "agent_type"], name: "index_agent_credentials_on_user_id_and_agent_type", unique: true
+    t.index ["user_id"], name: "index_agent_credentials_on_user_id"
+  end
 
   create_table "companies", force: :cascade do |t|
     t.string "name", null: false
@@ -22,6 +36,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_20_201758) do
     t.string "status", default: "active", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "display_name"
+    t.string "logo_url"
+    t.string "primary_color", default: "#4785FF"
+    t.string "secondary_color", default: "#bb9af7"
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["status"], name: "index_companies_on_status"
@@ -62,12 +80,15 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_20_201758) do
     t.string "status", default: "active", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "onboarding_completed_at"
+    t.jsonb "selected_agents", default: [], null: false
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["status"], name: "index_users_on_status"
   end
 
+  add_foreign_key "agent_credentials", "users"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"

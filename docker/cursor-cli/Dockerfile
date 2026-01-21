@@ -1,37 +1,42 @@
 # =============================================================================
-# Claude Code Interactive Session Image
+# Cursor CLI Interactive Session Image
 #
 # Components:
-#   - Claude Code CLI (official installer)
+#   - Cursor CLI (official installer from cursor.com)
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
 # =============================================================================
 FROM palad/agent-base:latest
 
 # -----------------------------------------------------------------------------
-# Claude Code CLI
+# Create non-root user first
 # -----------------------------------------------------------------------------
-RUN npm install -g @anthropic-ai/claude-code
+RUN useradd -m -d /home/cursor -s /bin/bash cursor \
+    && chown -R cursor:cursor /workspace /opt/watcher
 
 # -----------------------------------------------------------------------------
-# Create non-root user
+# Cursor CLI Installation
+# Install via official script from https://cursor.com/cli
+# Install as cursor user so it goes to correct location
 # -----------------------------------------------------------------------------
-RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /opt/watcher
+USER cursor
+WORKDIR /home/cursor
+RUN curl https://cursor.com/install -fsS | bash
 
-# -----------------------------------------------------------------------------
-# Claude Code managed settings (forces console/API key auth, no login prompts)
-# -----------------------------------------------------------------------------
-COPY config/claude-code/managed-settings.json /etc/claude-code/managed-settings.json
+# Add agent to PATH via .bashrc
+RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
-# Default .claude.json (theme + onboarding state)
-RUN mkdir -p /home/claude/.claude \
-    && chown -R claude:claude /home/claude
+# Switch back to root for remaining setup
+USER root
+
+# Ensure cursor CLI is accessible and create symlink
+RUN mkdir -p /home/cursor/.cursor \
+    && chown -R cursor:cursor /home/cursor \
+    && ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent || true
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
-COPY prompts/ /prompts/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 

@@ -17,6 +17,20 @@ class Company < ApplicationRecord
   # Callbacks
   before_validation :generate_slug, on: :create
 
+  # White label / branding helpers
+  def branded_name
+    display_name.presence || name
+  end
+
+  def branding
+    {
+      name: branded_name,
+      logo_url: logo_url,
+      primary_color: primary_color || "#4785FF",
+      secondary_color: secondary_color || "#bb9af7"
+    }
+  end
+
   private
 
   def generate_slug

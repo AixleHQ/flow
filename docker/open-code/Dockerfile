@@ -1,37 +1,41 @@
 # =============================================================================
-# Claude Code Interactive Session Image
+# Open Code Interactive Session Image
 #
 # Components:
-#   - Claude Code CLI (official installer)
+#   - Open Code CLI (https://opencode.ai)
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
 # =============================================================================
 FROM palad/agent-base:latest
 
 # -----------------------------------------------------------------------------
-# Claude Code CLI
+# Create non-root user first
 # -----------------------------------------------------------------------------
-RUN npm install -g @anthropic-ai/claude-code
+RUN useradd -m -d /home/opencode -s /bin/bash opencode \
+    && chown -R opencode:opencode /workspace /opt/watcher
 
 # -----------------------------------------------------------------------------
-# Create non-root user
+# Open Code CLI Installation
+# Install via official script from https://opencode.ai
+# Install as opencode user so it goes to correct location
 # -----------------------------------------------------------------------------
-RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /opt/watcher
+USER opencode
+WORKDIR /home/opencode
+RUN curl -fsSL https://opencode.ai/install | bash
 
-# -----------------------------------------------------------------------------
-# Claude Code managed settings (forces console/API key auth, no login prompts)
-# -----------------------------------------------------------------------------
-COPY config/claude-code/managed-settings.json /etc/claude-code/managed-settings.json
+# Add opencode to PATH via .bashrc
+RUN echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
 
-# Default .claude.json (theme + onboarding state)
-RUN mkdir -p /home/claude/.claude \
-    && chown -R claude:claude /home/claude
+# Switch back to root for remaining setup
+USER root
+
+# Ensure opencode CLI is accessible and create symlink
+RUN chown -R opencode:opencode /home/opencode \
+    && ln -sf /home/opencode/.opencode/bin/opencode /usr/local/bin/opencode || true
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
-COPY prompts/ /prompts/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 

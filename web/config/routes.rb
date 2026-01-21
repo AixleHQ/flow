@@ -12,7 +12,13 @@ Rails.application.routes.draw do
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
       resource :sessions, only: %i[create destroy]
-      resources :terminal_sessions, only: [:create, :show, :destroy]
+      resource :current_user, only: [:show], controller: 'current_user'
+      resource :onboarding, only: %i[show create], controller: 'onboarding'
+      resources :terminal_sessions, only: [:create, :show, :destroy] do
+        collection do
+          get :agents
+        end
+      end
     end
   end
 

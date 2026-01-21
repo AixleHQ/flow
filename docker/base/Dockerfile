@@ -1,0 +1,66 @@
+# =============================================================================
+# Base Image for AI Coding Agents
+#
+# Components:
+#   - Node.js 22 (Debian slim for glibc compatibility)
+#   - ttyd (web terminal)
+#   - File watcher service (WebSocket streaming)
+#   - Common development tools
+# =============================================================================
+FROM node:22-slim
+
+# -----------------------------------------------------------------------------
+# System dependencies
+# -----------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Terminal & shell
+    bash \
+    bash-completion \
+    # Development tools
+    git \
+    ripgrep \
+    fd-find \
+    jq \
+    curl \
+    tree \
+    ca-certificates \
+    # Process management
+    tini \
+    # Build tools (for native npm modules)
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create fd symlink (fd-find installs as fdfind on Debian)
+RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
+
+# -----------------------------------------------------------------------------
+# Install ttyd from GitHub releases (not in Debian repos)
+# -----------------------------------------------------------------------------
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then TTYD_ARCH="x86_64"; else TTYD_ARCH="aarch64"; fi && \
+    curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${TTYD_ARCH}" -o /usr/local/bin/ttyd && \
+    chmod +x /usr/local/bin/ttyd
+
+# -----------------------------------------------------------------------------
+# File Watcher dependencies
+# -----------------------------------------------------------------------------
+WORKDIR /opt/watcher
+COPY watcher/package.json ./
+RUN npm install --production && npm cache clean --force
+
+# Copy watcher source
+COPY watcher/index.js ./
+
+# -----------------------------------------------------------------------------
+# Workspace setup
+# -----------------------------------------------------------------------------
+RUN mkdir -p /workspace/repo /workspace/output
+
+WORKDIR /workspace
+
+# Ports:
+#   7681 - ttyd web terminal
+#   4040 - file watcher WebSocket + HTTP API
+EXPOSE 7681 4040

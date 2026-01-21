@@ -16,6 +16,10 @@ const backend = {
 const frontend = {
   rootPath: '/',
   loginPath: '/login',
+  onboardingPath: '/onboarding',
+  setupPath: '/setup',
+  workspacePath: '/workspace',
+  homePath: '/home',
 } as const;
 
 // Combine both types of routes into a single export

@@ -139,21 +139,88 @@ services:
     attach: false
 
 
+  # Base image for all AI agents
+  agent-base:
+    profiles: [build]
+    build:
+      context: ./docker/base
+      dockerfile: Dockerfile
+    image: palad/agent-base:latest
+
   # Claude Code interactive session with ttyd + file watcher
   claude-code:
-    profiles: [claude]
+    profiles: [agents]
     build:
       context: ./docker/claude-code
       dockerfile: Dockerfile
-    image: claude-code
+    image: palad/claude-code:latest
     ports:
       - '7681:7681'   # ttyd web terminal
+      - '4040:4040'   # file watcher WebSocket + HTTP
+    environment:
+      - TTYD_PORT=7681
+      - WATCHER_PORT=4040
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - claude_workspace:/workspace
+    stdin_open: true
+    tty: true
+
+  # Cursor CLI interactive session
+  cursor-cli:
+    profiles: [agents]
+    build:
+      context: ./docker/cursor-cli
+      dockerfile: Dockerfile
+    image: palad/cursor-cli:latest
+    ports:
+      - '7682:7681'   # ttyd web terminal
+      - '4041:4040'   # file watcher WebSocket + HTTP
+    environment:
+      - TTYD_PORT=7681
+      - WATCHER_PORT=4040
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+    volumes:
+      - cursor_workspace:/workspace
+    stdin_open: true
+    tty: true
+
+  # OpenAI Codex CLI interactive session
+  codex:
+    profiles: [agents]
+    build:
+      context: ./docker/codex
+      dockerfile: Dockerfile
+    image: palad/codex:latest
+    ports:
+      - '7683:7681'   # ttyd web terminal
       - '4042:4040'   # file watcher WebSocket + HTTP
     environment:
       - TTYD_PORT=7681
       - WATCHER_PORT=4040
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
-      - claude_workspace:/workspace
+      - codex_workspace:/workspace
+    stdin_open: true
+    tty: true
+
+  # Open Code interactive session
+  open-code:
+    profiles: [agents]
+    build:
+      context: ./docker/open-code
+      dockerfile: Dockerfile
+    image: palad/open-code:latest
+    ports:
+      - '7684:7681'   # ttyd web terminal
+      - '4043:4040'   # file watcher WebSocket + HTTP
+    environment:
+      - TTYD_PORT=7681
+      - WATCHER_PORT=4040
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - opencode_workspace:/workspace
     stdin_open: true
     tty: true
 
@@ -186,3 +253,6 @@ volumes:
   py_venv:
   uv_cache:
   claude_workspace:
+  cursor_workspace:
+  codex_workspace:
+  opencode_workspace:
