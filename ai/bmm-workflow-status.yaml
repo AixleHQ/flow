@@ -35,7 +35,7 @@ workflow_status:
   create-ux-design: conditional  # if_has_ui - determined after PRD
 
   # Phase 3: Solutioning
-  create-architecture: required
+  create-architecture: "ai/architecture.md"  # completed 2026-01-21
   create-epics-and-stories: required
   test-design: optional
   implementation-readiness: required
