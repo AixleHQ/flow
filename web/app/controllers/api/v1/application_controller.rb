@@ -3,7 +3,9 @@
 module Api
   module V1
     class ApplicationController < ::ApplicationController
-      include AuthConcern
+      include Pundit::Authorization
+      include AuthorizationConcern
+      include PaginationConcern
 
       self.responder = JsonResponder
       respond_to :json

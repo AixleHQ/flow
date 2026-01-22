@@ -225,8 +225,10 @@ Since this is a brownfield project with an already established architecture, eva
 - Rails asset pipeline for backend assets
 
 **Testing Framework:**
-- Minitest for the Rails backend
-- Jest (planned) for the frontend
+- Minitest for the Rails backend (controllers only)
+- Mandatory use of factories for tests
+- Factories 
+- **Note:** Tests run in Docker. We write tests only for controllers, not for models.
 
 **Code Organization:**
 - Feature-Sliced Design for the frontend (`app/frontend/`)
@@ -549,9 +551,9 @@ Since this is a brownfield project with an already established architecture, eva
    - Code: PascalCase for components/classes, camelCase/snake_case for functions/variables
 
 2. **Maintain structure consistency:**
-   - Backend: Rails conventions (`test/`, `app/services/`, `lib/`)
+   - Backend: Rails conventions (`test/controllers/`, `app/services/`, `lib/`)
    - Frontend: Feature-Sliced Design structure
-   - Tests: Co-located for the frontend, `test/` for the backend
+   - Tests: Co-located for frontend, `test/controllers/` for backend (controllers only)
 
 3. **Use consistent formats:**
    - API responses: `{items: [...]}` for lists, `{data: {...}}` for single resources
@@ -715,6 +717,8 @@ app/                                    # Root directory
     ├── lib/                            # Shared libraries
     │   └── tasks/                     # Rake tasks
     ├── test/                           # Rails tests (Minitest)
+    │   ├── controllers/                # Controller tests only
+    │   └── integration/                # Integration tests (controllers)
     ├── public/                         # Static assets
     ├── Dockerfile                      # Web container
     ├── Gemfile                         # Ruby dependencies
@@ -952,9 +956,16 @@ app/                                    # Root directory
 - **Shared:** `lib/` for Ruby, `app/frontend/shared/` for TypeScript
 
 **Test Organization:**
-- **Backend:** `test/` directory (Minitest)
+- **Backend:** `test/controllers/` directory (Minitest) - controller tests only
 - **Frontend:** Co-located tests (`*.test.tsx` next to components)
-- **Integration:** `test/integration/` for Rails
+- **Integration:** `test/integration/` for Rails (controllers only)
+- **Note:** Tests run in Docker. We write tests only for controllers, not for models.
+
+**Testing Patterns:**
+- **Factories & Sequences:** Always use FactoryBot with sequences for data generation
+- **Factory Rules:** In factories, nothing should be written directly in fields, except `password_confirmation` which duplicates `password`
+- **Data Generation:** All values are generated via sequences (email, name, password, etc.)
+- **Traits:** Use traits for variations (for example, `:super_admin`, `:with_company`)
 
 **Asset Organization:**
 - **Rails assets:** `app/assets/` (SCSS, images)

@@ -5,7 +5,7 @@ module UserStateMachine
     include AASM
     include StateEventConcern
 
-    aasm :status do
+    aasm :state do
       state :draft, initial: true
       state :active
       state :archived

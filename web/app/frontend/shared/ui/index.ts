@@ -1,3 +1,4 @@
+export * from './Logo';
 export * from './RoutePendingIndicator';
 export * from './StatusBar';
 export * from './Terminal';

@@ -1,6 +1,10 @@
 FactoryBot.define do
   sequence :name do |n|
-    "Name #{n}"
+    "Company #{n}"
+  end
+
+  sequence :company_name do |n|
+    "Company #{n}"
   end
 
   sequence :password do |n|

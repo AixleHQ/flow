@@ -5,13 +5,13 @@ class CreateProjects < ActiveRecord::Migration[8.0]
       t.string :name, null: false
       t.text :description
       t.string :slug, null: false
-      t.string :status, null: false, default: "active"
+      t.string :state, null: false
       t.jsonb :settings, null: false, default: {}
 
       t.timestamps
     end
 
-    add_index :projects, :status
+    add_index :projects, :state
     add_index :projects, [:company_id, :slug], unique: true
     add_index :projects, [:company_id, :name], unique: true
   end

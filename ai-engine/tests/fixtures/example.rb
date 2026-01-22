@@ -23,7 +23,7 @@ class SubscriptionService
     ActiveRecord::Base.transaction do
       subscription = user.create_subscription!(
         plan: plan,
-        status: 'pending',
+        state: 'pending',
         started_at: Time.current,
         next_billing_date: calculate_next_billing_date(plan)
       )
@@ -33,7 +33,7 @@ class SubscriptionService
 
         if stripe_subscription[:success]
           subscription.update!(
-            status: 'active',
+            state: 'active',
             external_id: stripe_subscription[:subscription_id]
           )
 
@@ -75,7 +75,7 @@ class SubscriptionService
       cancellation_date = immediate ? Time.current : subscription.next_billing_date
 
       subscription.update!(
-        status: 'cancelled',
+        state: 'cancelled',
         cancelled_at: cancellation_date,
         cancellation_reason: 'user_requested'
       )
@@ -163,7 +163,7 @@ class SubscriptionService
 
   def handle_payment_failure(subscription, error_message)
     subscription.update!(
-      status: 'past_due',
+      state: 'past_due',
       last_payment_error: error_message
     )
 

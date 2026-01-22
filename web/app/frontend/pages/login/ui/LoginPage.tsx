@@ -4,9 +4,30 @@ import { useSnackbar } from 'notistack';
 import { FormProvider, useForm } from 'react-hook-form';
 
 import { setErrorsToForm } from 'shared/api';
+import { Logo } from 'shared/ui';
 
 import { useLoginMutation } from '../api/loginApi';
 import { LoginFormData, loginSchema } from '../lib/schema';
+
+// UX Design Specification colors
+const colors = {
+  background: {
+    base: '#09090B', // Page background
+    surface: '#18181B', // Cards, panels
+    elevated: '#27272A', // Hover, selected
+  },
+  border: {
+    default: '#3F3F46', // Borders, dividers
+  },
+  text: {
+    primary: '#D4D4D8', // Main text
+    secondary: '#A1A1AA', // Secondary text
+    muted: '#52525B', // Disabled, hints
+  },
+  accent: {
+    blue: '#3B82F6', // Primary actions, links
+  },
+} as const;
 
 const styles = {
   root: {
@@ -14,36 +35,16 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #1a1b26 0%, #24283b 50%, #1a1b26 100%)',
-    position: 'relative',
-    overflow: 'hidden',
-    '&::before': {
-      content: '""',
-      position: 'absolute',
-      top: '-50%',
-      left: '-50%',
-      width: '200%',
-      height: '200%',
-      background:
-        'radial-gradient(circle at 30% 30%, rgba(71, 133, 255, 0.08) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(187, 154, 247, 0.06) 0%, transparent 50%)',
-      animation: 'pulse 15s ease-in-out infinite',
-    },
-    '@keyframes pulse': {
-      '0%, 100%': { opacity: 1 },
-      '50%': { opacity: 0.7 },
-    },
+    backgroundColor: colors.background.base,
+    padding: '32px',
   },
   form: {
     width: '100%',
     maxWidth: '420px',
-    padding: '48px 40px',
-    borderRadius: '16px',
-    border: '1px solid rgba(71, 133, 255, 0.2)',
-    background: 'linear-gradient(180deg, rgba(36, 40, 59, 0.95) 0%, rgba(26, 27, 38, 0.98) 100%)',
-    boxShadow: '0px 24px 48px rgba(0, 0, 0, 0.4), 0px 0px 1px rgba(71, 133, 255, 0.3)',
-    backdropFilter: 'blur(20px)',
-    position: 'relative',
-    zIndex: 1,
+    padding: '24px',
+    borderRadius: '8px',
+    border: `1px solid ${colors.border.default}`,
+    backgroundColor: colors.background.surface,
   },
   logo: {
     display: 'flex',
@@ -51,38 +52,22 @@ const styles = {
     justifyContent: 'center',
     marginBottom: '32px',
   },
-  logoIcon: {
-    width: '48px',
-    height: '48px',
-    borderRadius: '12px',
-    background: 'linear-gradient(135deg, #4785FF 0%, #bb9af7 100%)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: '12px',
-    boxShadow: '0 4px 16px rgba(71, 133, 255, 0.3)',
-  },
-  logoText: {
-    fontFamily: '"JetBrains Mono", monospace',
-    fontSize: '28px',
-    fontWeight: 700,
-    background: 'linear-gradient(135deg, #ffffff 0%, #a9b1d6 100%)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    letterSpacing: '-0.5px',
-  },
   title: {
-    color: '#c0caf5',
+    color: colors.text.primary,
     marginBottom: '8px',
     textAlign: 'center',
+    fontFamily: '"Inter", sans-serif',
+    fontSize: '24px',
+    fontWeight: 600,
+    lineHeight: '32px',
   },
   subtitle: {
-    color: 'rgba(192, 202, 245, 0.6)',
+    color: colors.text.secondary,
     fontFamily: '"Inter", sans-serif',
     fontSize: '14px',
     fontWeight: 400,
-    letterSpacing: '0.01em',
-    marginBottom: '32px',
+    lineHeight: '24px',
+    marginBottom: '24px',
     textAlign: 'center',
   },
   fieldContainer: {
@@ -91,61 +76,70 @@ const styles = {
     gap: '8px',
   },
   fieldLabel: {
-    color: 'rgba(192, 202, 245, 0.8)',
-    fontSize: '13px',
+    color: colors.text.secondary,
+    fontFamily: '"Inter", sans-serif',
+    fontSize: '12px',
     fontWeight: 500,
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
+    lineHeight: '24px',
   },
   textField: {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: 'rgba(26, 27, 38, 0.6)',
-      borderRadius: '8px',
+      backgroundColor: colors.background.base,
+      borderRadius: '6px',
       '& fieldset': {
-        borderColor: 'rgba(71, 133, 255, 0.2)',
+        borderColor: colors.border.default,
       },
       '&:hover fieldset': {
-        borderColor: 'rgba(71, 133, 255, 0.4)',
+        borderColor: colors.border.default,
       },
       '&.Mui-focused fieldset': {
-        borderColor: '#4785FF',
-        borderWidth: '1px',
+        borderColor: colors.accent.blue,
+        borderWidth: '2px',
       },
     },
     '& .MuiOutlinedInput-input': {
-      color: '#c0caf5',
-      padding: '14px 16px',
+      color: colors.text.primary,
+      fontFamily: '"Inter", sans-serif',
+      fontSize: '14px',
+      padding: '12px 16px',
       '&::placeholder': {
-        color: 'rgba(192, 202, 245, 0.4)',
+        color: colors.text.muted,
       },
+    },
+    '& .MuiFormHelperText-root': {
+      color: colors.text.muted,
+      fontFamily: '"Inter", sans-serif',
+      fontSize: '12px',
+      marginTop: '4px',
     },
   },
   button: {
     marginTop: '24px',
-    padding: '14px 24px',
-    borderRadius: '8px',
-    background: 'linear-gradient(135deg, #4785FF 0%, #5a9cff 100%)',
-    boxShadow: '0 4px 16px rgba(71, 133, 255, 0.3)',
+    padding: '12px 24px',
+    borderRadius: '6px',
+    backgroundColor: colors.accent.blue,
+    color: '#FFFFFF',
     textTransform: 'none',
-    fontSize: '15px',
-    fontWeight: 600,
-    letterSpacing: '0.3px',
-    transition: 'all 0.2s ease',
+    fontFamily: '"Inter", sans-serif',
+    fontSize: '14px',
+    fontWeight: 500,
+    lineHeight: '24px',
     '&:hover': {
-      background: 'linear-gradient(135deg, #5a9cff 0%, #4785FF 100%)',
-      boxShadow: '0 6px 20px rgba(71, 133, 255, 0.4)',
-      transform: 'translateY(-1px)',
+      backgroundColor: '#2563EB', // accent.blue dark
     },
     '&:disabled': {
-      background: 'rgba(71, 133, 255, 0.3)',
-      color: 'rgba(255, 255, 255, 0.5)',
+      backgroundColor: colors.text.muted,
+      color: colors.text.secondary,
     },
   },
   footer: {
     marginTop: '24px',
     textAlign: 'center',
-    color: 'rgba(192, 202, 245, 0.4)',
+    color: colors.text.muted,
+    fontFamily: '"Inter", sans-serif',
     fontSize: '12px',
+    fontWeight: 400,
+    lineHeight: '24px',
   },
 } as const;
 
@@ -176,13 +170,10 @@ const LoginPage = () => {
     <Box sx={styles.root}>
       <Box sx={styles.form}>
         <Box sx={styles.logo}>
-          <Box sx={styles.logoIcon}>
-            <Typography sx={{ color: '#fff', fontSize: '24px', fontWeight: 700 }}>P</Typography>
-          </Box>
-          <Typography sx={styles.logoText}>Palad</Typography>
+          <Logo width={120} />
         </Box>
 
-        <Typography variant="displaySmall" sx={styles.title}>
+        <Typography sx={styles.title}>
           Sign in
         </Typography>
         <Typography sx={styles.subtitle}>Enter your credentials to access your workspace</Typography>

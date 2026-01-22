@@ -2,6 +2,8 @@ import { Box, Typography, Button, Paper, CircularProgress } from '@mui/material'
 import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 
+import { Logo } from 'shared/ui';
+
 // Simple icons using unicode/emoji
 const PlayArrowIcon = () => <span style={{ fontSize: '24px' }}>▶</span>;
 const TerminalIcon = () => <span style={{ fontSize: '64px' }}>⌨️</span>;
@@ -109,10 +111,9 @@ const HomePage: React.FC = () => {
   return (
     <Box sx={styles.container}>
       <Paper elevation={0} sx={styles.card}>
-        <TerminalIcon sx={styles.icon} />
-        <Typography variant="h3" component="h1" sx={styles.title}>
-          Palad
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
+          <Logo width={120} />
+        </Box>
         <Typography variant="body1" sx={styles.subtitle}>
           Interactive terminal sessions powered by Docker
         </Typography>

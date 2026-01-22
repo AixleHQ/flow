@@ -3,7 +3,7 @@
 class Company < ApplicationRecord
   extend Enumerize
 
-  enumerize :status, in: %i[active suspended archived], default: :active, predicates: true, scope: true
+  enumerize :state, in: %i[active suspended archived], default: :active, predicates: true, scope: true
 
   # Associations
   has_many :users, dependent: :destroy

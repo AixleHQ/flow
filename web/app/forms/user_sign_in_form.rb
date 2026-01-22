@@ -10,7 +10,7 @@ class UserSignInForm
   validate :check_authenticate, if: :email
 
   def user
-    @user ||= User.with_status(:active).find_by(email: email)
+    @user ||= User.with_state(:active).find_by(email: email)
   end
 
   def check_authenticate

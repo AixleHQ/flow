@@ -2,40 +2,26 @@ FactoryBot.define do
   factory :user do
     email
     name
-    status { "active" }
-
     password { generate :password }
     password_confirmation { password }
 
-    trait :admin do
-      after(:create) do |user|
-        user.add_role(:super_admin)
-      end
+    trait :super_admin do
+      role { "super_admin" }
+      company { nil }
     end
 
-    trait :draft do
-      status { "draft" }
+    trait :with_company do
+      association :company
     end
 
-    trait :with_resource_role do
-      transient do
-        resource { }
-        role { }
-      end
-
-      after(:create) do |user, evaluator|
-        user.add_role(evaluator.role, evaluator.resource)
-      end
+    trait :collaborator do
+      role { "collaborator" }
+      association :company
     end
 
-    trait :with_account do
-      transient do
-        account { }
-      end
-
-      after(:create) do |user, evaluator|
-        user.account_users.create(account: evaluator.account, status: :active)
-      end
+    trait :admin_role do
+      role { "admin" }
+      association :company
     end
   end
 end

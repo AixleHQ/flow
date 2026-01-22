@@ -1,42 +1,32 @@
 # frozen_string_literal: true
 
-module Api
-  module V1
-    class CurrentUserController < Api::V1::ApplicationController
-      # @tags User
-      # @summary Get current user info
-      #
-      # @response Current user data(200) [Hash{user: Hash}]
-      def show
-        render json: {
-          user: user_data,
-          company: company_data
-        }
-      end
+class Api::V1::CurrentUserController < Api::V1::ApplicationController
+  # @tags CurrentUser
+  # @summary Get the current user
+  #
+  # @response Success(200) [User]
+  # @response_example Success(200) [Hash] [{"id": "1", "name": "John Doe", "email": "john.doe@example.com", "new_user": true, "permissions": [{"id": 1, "resourceType": "Workspace", "resourceId": 1, "resourceName": "Workspace 1", "name": "write", "parents": [{"id": 1, "resourceType": "Account", "resourceId": 1, "resourceName": "Account 1"}]}]}]
 
-      private
+  def show
+    respond_with current_user, serializer: CurrentUserSerializer
+  end
 
-      def user_data
-        {
-          id: current_user.id,
-          email: current_user.email,
-          name: current_user.name,
-          onboarding_completed: current_user.onboarding_completed?,
-          selected_agents: current_user.selected_agents,
-          configured_agents: current_user.configured_agents,
-          pending_agents: current_user.pending_agents
-        }
-      end
+  # @tags CurrentUser
+  # @summary Update the current user
+  #
+  # @request_body
+  #   [ !Hash{ current_user: Hash{ password: String, password_confirmation: String, name: String } } ]
+  #
+  # @response Success(200) [User]
+  # @response_example Success(200) [Hash] [{"id": "1", "name": "John Doe", "email": "john.doe@example.com", "new_user": false, "permissions": [{"id": 1, "resourceType": "Workspace", "resourceId": 1, "resourceName": "Workspace 1", "name": "write", "parents": [{"id": 1, "resourceType": "Account", "resourceId": 1, "resourceName": "Account 1"}]}]}]
+  def update
+    current_user.update(update_current_user_params)
+    respond_with current_user, serializer: CurrentUserSerializer
+  end
 
-      def company_data
-        company = current_user.company
-        {
-          id: company.id,
-          name: company.name,
-          slug: company.slug,
-          branding: company.branding
-        }
-      end
-    end
+  private
+
+  def update_current_user_params
+    params.require(:current_user).permit(:password, :password_confirmation, :name)
   end
 end

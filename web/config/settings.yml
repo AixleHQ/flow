@@ -47,7 +47,8 @@ docs:
   password: <%= ENV['DOCS_PASSWORD'] || 'password' %>
 
 admin:
-  password: <%= ENV['ADMIN_PASSWORD'] || "Admin+Pass1" %>
+  password: <%= ENV['ADMIN_PASSWORD'] || "adminpass" %>
+  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@palad.ai" %>
 
 aws:
   access_key_id:     <%= ENV['AWS_ACCESS_KEY_ID']%>

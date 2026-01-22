@@ -22,10 +22,25 @@ Rails.application.routes.draw do
     end
   end
 
+  namespace :admin do
+    root to: "users#index"
+
+    resources :users do
+      member do
+        post :impersonate
+        post :stop_impersonate
+      end
+    end
+    resources :companies
+    resources :projects
+    resources :project_collaborators
+  end
+
   scope module: :web, defaults: { format: :html } do
     root "home#show"
     mount OasRails::Engine => "/docs"
     mount(LetterOpenerWeb::Engine, at: "/letter_opener") if Rails.env.development?
     get "*path", to: "home#show"
   end
+
 end
