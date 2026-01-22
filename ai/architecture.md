@@ -227,7 +227,7 @@ Since this is a brownfield project with an already established architecture, eva
 **Testing Framework:**
 - Minitest for the Rails backend (controllers only)
 - Mandatory use of factories for tests
-- Factories 
+- Factories
 - **Note:** Tests run in Docker. We write tests only for controllers, not for models.
 
 **Code Organization:**
@@ -966,6 +966,30 @@ app/                                    # Root directory
 - **Factory Rules:** In factories, nothing should be written directly in fields, except `password_confirmation` which duplicates `password`
 - **Data Generation:** All values are generated via sequences (email, name, password, etc.)
 - **Traits:** Use traits for variations (for example, `:super_admin`, `:with_company`)
+
+**Admin Panel:**
+- **Approach:** Use the Administrate gem for the admin panel
+- **No custom dashboard:** Standard resource controllers without a custom dashboard controller
+- **Rationale:** Administrate provides all the needed features out of the box
+
+**Super Admin Role Management:**
+- **Approach:** The super admin role is protected via strong params and cannot be changed through the UI
+- **Validation:** Only at the strong params level in the controller, not in the model
+- **Seeds:** The super admin is created only via seeds or a direct DB update
+- **Enumerize:** Supports symbols for role assignment (`:super_admin` works correctly)
+
+**Field Naming Decisions:**
+- **`state` vs `status`:** Use `state` for the User model (team preference)
+- **Enumerize scopes:** `enumerize :state, scope: true` creates `User.active`, not `User.with_state(:active)`
+- **Rationale:** Shorter and more readable syntax
+
+**Authorization Patterns:**
+- **AdminConstraint:** Not used, protection only via `authenticate_admin!` in the controller
+- **Rationale:** A check in the controller is sufficient, a constraint is redundant for the current requirements
+
+**Project Collaborators:**
+- **`add_collaborator` method:** Provided by the AASM gem or a custom implementation
+- **Rationale:** AASM is used for state machine functionality
 
 **Asset Organization:**
 - **Rails assets:** `app/assets/` (SCSS, images)

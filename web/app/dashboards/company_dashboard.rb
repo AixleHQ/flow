@@ -13,9 +13,9 @@ class CompanyDashboard < Administrate::BaseDashboard
     logo_url: Field::String,
     primary_color: Field::String,
     secondary_color: Field::String,
-    status: Field::Select.with_options(
+    state: Field::Select.with_options(
       include_blank: false,
-      collection: ->(field) { available_states_collection(field, :status) }
+      collection: ->(field) { available_states_collection(field, :state) }
     ),
     settings: Field::JSONB,
     users: Field::HasMany,
@@ -28,7 +28,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     id
     name
     slug
-    status
+    state
     users
     projects
     created_at
@@ -42,7 +42,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     logo_url
     primary_color
     secondary_color
-    status
+    state
     settings
     users
     projects
@@ -56,7 +56,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     logo_url
     primary_color
     secondary_color
-    status
+    state
     settings
   ].freeze
 

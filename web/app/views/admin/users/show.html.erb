@@ -28,7 +28,7 @@ as well as a link to its edit page.
         t("administrate.actions.edit_resource", name: page.resource_name),
         [:edit, namespace, page.resource],
         class: "button",
-      ) if show_action?(:edit, page.resource) %>
+      ) %>
     <% end %>
 
     <% if accessible_action?(page.resource, :destroy) %>
@@ -38,7 +38,7 @@ as well as a link to its edit page.
         class: "button button--danger",
         method: :delete,
         data: { confirm: t("administrate.actions.confirm") }
-      ) if show_action?(:destroy, page.resource) %>
+      )  %>
     <% end %>
 
     <% if !page.resource.super_admin? %>

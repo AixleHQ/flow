@@ -21,16 +21,8 @@ WebMock.disable_net_connect!(allow_localhost: true, allow: "lvh.me")
 
 class ActiveSupport::TestCase
   setup do
-    stub_github_installation_requests
-    stub_temporal_workflows
-    ensure_default_preset_exists
   end
 
-  def ensure_default_preset_exists
-    return if Preset.is_default.exists?
-
-    create(:preset, :default, :with_models)
-  end
   # Run tests in parallel with specified workers
   # parallelize(workers: :number_of_processors)
 

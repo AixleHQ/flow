@@ -1,6 +1,6 @@
 # Story 1.0: Initial Super Admin Setup
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -190,6 +190,37 @@ So that platform administration is available after deployment.
 
 Claude Sonnet 4.5
 
+### Code Review Results
+
+**Code Review Date:** 2026-01-22
+**Reviewer:** Claude Sonnet 4.5 (Adversarial Review)
+
+**Findings Summary:**
+- 12 issues found (5 High, 4 Medium, 3 Low)
+- All critical issues addressed through architectural decisions or fixes
+- Story status updated to `done` after review
+
+**Architectural Decisions Made:**
+1. **No Custom Dashboard:** We use the standard tools of the Administrate gem, without a custom dashboard controller
+2. **Enumerize Symbols:** Enumerize correctly handles symbols for role (`:super_admin` works)
+3. **Super Admin Protection:** Protection via strong params in the controller, not via model validation
+4. **Field Naming:** Preference for `state` over `status` for the User model
+5. **Enumerize Scopes:** `User.active` instead of `User.with_state(:active)` (shorter and more readable)
+6. **No AdminConstraint:** Protection only via `authenticate_admin!` in the controller
+7. **AASM for State Machines:** `add_collaborator` and other methods are provided by the AASM gem
+
+**Code Improvements Applied:**
+1. ✅ Fixed Logo component - added `colorScheme` prop for variant-based filter application
+2. ✅ Moved LoginPage colors to theme palette (UX Spec colors added to `palette.ts`)
+3. ✅ Added migration for index on `users.role` column for query performance
+
+**Files Modified During Review:**
+- `web/app/frontend/shared/ui/Logo/Logo.tsx` - added colorScheme prop
+- `web/app/frontend/shared/theme/baseTheme/palette.ts` - added UX Spec colors
+- `web/app/frontend/pages/login/ui/LoginPage.tsx` - refactored to use theme colors
+- `web/db/migrate/20260122160601_add_index_to_users_role.rb` - created
+- `ai/architecture.md` - documented architectural decisions
+
 ### Debug Log References
 
 ### Completion Notes List
@@ -246,16 +277,32 @@ Claude Sonnet 4.5
 ### File List
 
 **Created:**
-- `web/app/controllers/admin/dashboard_controller.rb` - Admin dashboard controller
-- `web/test/controllers/admin/dashboard_controller_test.rb` - Controller tests for admin dashboard access
-- `web/config/routes/admin_routes.rb` - Admin routes module
+- `web/app/controllers/admin/dashboard_controller.rb` - Admin dashboard controller (deleted - not used, Administrate provides standard views)
+- `web/test/controllers/admin/dashboard_controller_test.rb` - Controller tests for admin dashboard access (deleted - no DashboardController)
+- `web/config/routes/admin_routes.rb` - Admin routes module (deleted - routes integrated directly)
 - `web/app/controllers/admin/application_controller.rb` - Admin base controller
 - `web/app/controllers/admin/` - Admin namespace directory
+- `web/db/migrate/20260122160601_add_index_to_users_role.rb` - Index on users.role for performance
 
 **Modified:**
 - `web/app/models/user.rb` - Added role enumerize, super_admin? method, validations, protection
 - `web/app/controllers/concerns/auth_concern.rb` - Added authenticate_admin! and true_user methods
-- `web/app/constraints/admin_constraint.rb` - Updated to use super_admin? method
-- `web/config/routes.rb` - Extended with AdminRoutes module
+- `web/app/constraints/admin_constraint.rb` - Updated to use super_admin? method (deleted - not used)
+- `web/config/routes.rb` - Extended with AdminRoutes module (admin routes integrated directly)
 - `web/config/settings.yml` - Added admin.email configuration
 - `web/db/seeds.rb` - Added super admin creation logic
+- `web/app/frontend/shared/ui/Logo/Logo.tsx` - Added colorScheme prop for theme-aware rendering
+- `web/app/frontend/shared/theme/baseTheme/palette.ts` - Added UX Spec colors for login page
+- `web/app/frontend/pages/login/ui/LoginPage.tsx` - Refactored to use theme colors
+- `ai/architecture.md` - Documented architectural decisions from code review
+
+**Tests Created:**
+- `web/test/controllers/admin/action_controller_test_case.rb` - Base test case for admin controllers
+- `web/test/controllers/admin/users_controller_test.rb` - Full CRUD + impersonate tests for UsersController
+- `web/test/controllers/admin/companies_controller_test.rb` - Full CRUD tests for CompaniesController
+- `web/test/controllers/admin/projects_controller_test.rb` - Full CRUD tests for ProjectsController
+- `web/test/controllers/admin/project_collaborators_controller_test.rb` - Full CRUD tests for ProjectCollaboratorsController
+
+**Factories Created:**
+- `web/test/factories/projects.rb` - Factory for Project model with traits
+- `web/test/factories/project_collaborators.rb` - Factory for ProjectCollaborator model

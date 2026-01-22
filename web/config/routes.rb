@@ -12,9 +12,9 @@ Rails.application.routes.draw do
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
       resource :sessions, only: %i[create destroy]
-      resource :current_user, only: [:show], controller: 'current_user'
-      resource :onboarding, only: %i[show create], controller: 'onboarding'
-      resources :terminal_sessions, only: [:create, :show, :destroy] do
+      resource :current_user, only: [ :show ], controller: "current_user"
+      resource :onboarding, only: %i[show create], controller: "onboarding"
+      resources :terminal_sessions, only: [ :create, :show, :destroy ] do
         collection do
           get :agents
         end
@@ -42,5 +42,4 @@ Rails.application.routes.draw do
     mount(LetterOpenerWeb::Engine, at: "/letter_opener") if Rails.env.development?
     get "*path", to: "home#show"
   end
-
 end

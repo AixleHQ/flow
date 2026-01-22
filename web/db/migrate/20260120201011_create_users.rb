@@ -15,6 +15,6 @@ class CreateUsers < ActiveRecord::Migration[8.0]
     add_index :users, :email, unique: true
     add_index :users, :state
     add_index :users, :role
-    add_index :users, [:company_id, :email], unique: true, where: "company_id IS NOT NULL"
+    add_index :users, [ :company_id, :email ], unique: true, where: "company_id IS NOT NULL"
   end
 end

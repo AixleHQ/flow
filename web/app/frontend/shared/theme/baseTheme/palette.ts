@@ -9,6 +9,10 @@ export default {
     elevated: '#1A1A1A', // bg.tertiary - elevated surfaces
     dark: '#0A0A0A', // bg.deep - terminal, code areas
     gradient: 'linear-gradient(180deg, rgba(59, 130, 246, 0.05) 0%, rgba(13, 13, 13, 1) 100%)',
+    // UX Spec colors for login/public pages
+    base: '#09090B', // Page background (UX Spec)
+    surface: '#18181B', // Cards, panels (UX Spec)
+    elevatedAlt: '#27272A', // Hover, selected (UX Spec)
   },
 
   // Primary accent (blue)
@@ -55,6 +59,10 @@ export default {
     secondary: '#A0A0A0', // text.secondary
     disabled: '#666666', // text.muted
     primaryFade: 'rgba(255, 255, 255, 0.72)',
+    // UX Spec text colors
+    primaryAlt: '#D4D4D8', // Main text (UX Spec)
+    secondaryAlt: '#A1A1AA', // Secondary text (UX Spec)
+    muted: '#52525B', // Disabled, hints (UX Spec)
   },
 
   // Borders and dividers
@@ -64,6 +72,8 @@ export default {
     subtle: '#1F1F1F',
     strong: '#3A3A3A',
     focus: '#3B82F6', // accent.blue for focus states
+    // UX Spec border color
+    defaultAlt: '#3F3F46', // Borders, dividers (UX Spec)
   },
 
   // Action colors (for buttons, interactive elements)

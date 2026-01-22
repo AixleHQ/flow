@@ -10,7 +10,7 @@ class CreateProjectCollaborators < ActiveRecord::Migration[8.0]
     end
 
     # One user can only be a collaborator once per project
-    add_index :project_collaborators, [:project_id, :user_id], unique: true
+    add_index :project_collaborators, [ :project_id, :user_id ], unique: true
     add_index :project_collaborators, :role
   end
 end

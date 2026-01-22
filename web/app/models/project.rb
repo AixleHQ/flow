@@ -3,7 +3,7 @@
 class Project < ApplicationRecord
   extend Enumerize
 
-  enumerize :status, in: %i[active paused archived], default: :active, predicates: true, scope: true
+  enumerize :state, in: %i[active paused archived], default: :active, predicates: true, scope: true
 
   # Associations
   belongs_to :company

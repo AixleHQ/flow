@@ -10,14 +10,14 @@ class ProjectDashboard < Administrate::BaseDashboard
     name: Field::String,
     slug: Field::String,
     description: Field::Text,
-    status: Field::Select.with_options(
+    state: Field::Select.with_options(
       include_blank: false,
-      collection: ->(field) { available_states_collection(field, :status) }
+      collection: ->(field) { available_states_collection(field, :state) }
     ),
     company: Field::BelongsTo,
-    owner: Field::BelongsTo.with_options(class_name: "User"),
+    owner: Field::BelongsTo,
     project_collaborators: Field::HasMany,
-    collaborators: Field::HasMany.with_options(class_name: "User"),
+    collaborators: Field::HasMany,
     settings: Field::JSONB,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p")
@@ -27,7 +27,7 @@ class ProjectDashboard < Administrate::BaseDashboard
     id
     name
     slug
-    status
+    state
     company
     owner
     created_at
@@ -38,7 +38,7 @@ class ProjectDashboard < Administrate::BaseDashboard
     name
     slug
     description
-    status
+    state
     company
     owner
     collaborators
@@ -50,7 +50,7 @@ class ProjectDashboard < Administrate::BaseDashboard
   FORM_ATTRIBUTES = %i[
     name
     description
-    status
+    state
     company
     owner
   ].freeze

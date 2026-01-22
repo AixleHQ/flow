@@ -101,14 +101,6 @@ GEM
     administrate-field-shrine (0.0.5)
       administrate (> 0.5.0)
       rails (>= 4.2)
-    administrate_batch_actions (0.3.4)
-      administrate
-      rails (>= 5.2)
-    administrate_exportable (0.6.3)
-      actionview (>= 5.2.2.1)
-      administrate (>= 0.17.0)
-      rails (>= 4.2)
-      railties (>= 5.2.2.1)
     ast (2.4.3)
     audited (5.8.0)
       activerecord (>= 5.2, < 8.2)
@@ -704,8 +696,6 @@ DEPENDENCIES
   administrate
   administrate-field-jsonb
   administrate-field-shrine
-  administrate_batch_actions
-  administrate_exportable
   audited
   aws-sdk-s3 (~> 1.186)
   bcrypt (~> 3.1.7)

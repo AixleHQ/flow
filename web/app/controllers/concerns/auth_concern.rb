@@ -52,4 +52,3 @@ module AuthConcern
     session[IMPERSONATION_KEY].present?
   end
 end
-

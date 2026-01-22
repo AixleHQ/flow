@@ -3,7 +3,7 @@
 module Api
   module V1
     class TerminalSessionsController < Api::V1::ApplicationController
-      skip_before_action :authenticate_user!, only: [:agents]
+      skip_before_action :authenticate_user!, only: [ :agents ]
 
       # GET /api/v1/terminal_sessions/agents
       # List available agents

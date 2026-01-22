@@ -12,7 +12,7 @@ class CreateProjects < ActiveRecord::Migration[8.0]
     end
 
     add_index :projects, :state
-    add_index :projects, [:company_id, :slug], unique: true
-    add_index :projects, [:company_id, :name], unique: true
+    add_index :projects, [ :company_id, :slug ], unique: true
+    add_index :projects, [ :company_id, :name ], unique: true
   end
 end
