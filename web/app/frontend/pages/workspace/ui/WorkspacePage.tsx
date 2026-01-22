@@ -8,7 +8,7 @@ import type { AgentType, IAgentSession } from '../lib/types';
 const agentColors: Record<AgentType, string> = {
   codex: '#10a37f',
   cursor_cli: '#7c3aed',
-  open_code: '#3b82f6',
+  gemini_cli: '#3b82f6',
   claude_code: '#d97706',
 };
 
@@ -157,20 +157,20 @@ const WorkspacePage = () => {
   const [sessions, setSessions] = useState<Record<AgentType, IAgentSession | null>>({
     codex: null,
     cursor_cli: null,
-    open_code: null,
+    gemini_cli: null,
     claude_code: null,
   });
   const [iframeLoaded, setIframeLoaded] = useState<Record<AgentType, boolean>>({
     codex: false,
     cursor_cli: false,
-    open_code: false,
+    gemini_cli: false,
     claude_code: false,
   });
 
   const iframeRefs = useRef<Record<AgentType, HTMLIFrameElement | null>>({
     codex: null,
     cursor_cli: null,
-    open_code: null,
+    gemini_cli: null,
     claude_code: null,
   });
 

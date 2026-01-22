@@ -1,8 +1,8 @@
 # =============================================================================
-# Open Code Interactive Session Image
+# Gemini CLI Interactive Session Image
 #
 # Components:
-#   - Open Code CLI (https://opencode.ai)
+#   - Gemini CLI (@google/gemini-cli)
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
 # =============================================================================
@@ -11,27 +11,22 @@ FROM palad/agent-base:latest
 # -----------------------------------------------------------------------------
 # Create non-root user first
 # -----------------------------------------------------------------------------
-RUN useradd -m -d /home/opencode -s /bin/bash opencode \
-    && chown -R opencode:opencode /workspace /opt/watcher
+RUN useradd -m -d /home/gemini -s /bin/bash gemini \
+    && chown -R gemini:gemini /workspace /opt/watcher
 
 # -----------------------------------------------------------------------------
-# Open Code CLI Installation
-# Install via official script from https://opencode.ai
-# Install as opencode user so it goes to correct location
+# Gemini CLI Installation
+# Install via npm global package
 # -----------------------------------------------------------------------------
-USER opencode
-WORKDIR /home/opencode
-RUN curl -fsSL https://opencode.ai/install | bash
+USER root
+RUN npm install -g @google/gemini-cli
 
-# Add opencode to PATH via .bashrc
-RUN echo 'export PATH="$HOME/.opencode/bin:$PATH"' >> ~/.bashrc
+# Switch to gemini user for configuration
+USER gemini
+WORKDIR /home/gemini
 
 # Switch back to root for remaining setup
 USER root
-
-# Ensure opencode CLI is accessible and create symlink
-RUN chown -R opencode:opencode /home/opencode \
-    && ln -sf /home/opencode/.opencode/bin/opencode /usr/local/bin/opencode || true
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint

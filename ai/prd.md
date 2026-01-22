@@ -364,7 +364,7 @@ A fixed-bid project is in full swing. Need to understand the AI spend.
 | Innovation | Description |
 |------------|-------------|
 | **Global Workflows** | Sharing workflows across the team, versioning, reuse |
-| **Agent Orchestration** | A single platform for different agents (Claude Code, Codex, OpenCode, Cursor CLI) |
+| **Agent Orchestration** | A single platform for different agents (Claude Code, Codex, Gemini CLI, Cursor CLI) |
 | **Shared Prompts & Settings** | Centralized storage of prompts, settings, secrets |
 | **Billing & Analytics** | Transparency of costs across all agents and workflows |
 | **MITM Billing Approach** | An innovative approach to tracking without modifying the agents |
@@ -573,7 +573,7 @@ Palad is a B2B SaaS platform for orchestrating AI agents with a workflow system.
 **Validation Plan for MITM:**
 1. Week 1: Test MITM with Claude Code
 2. Week 2: Test MITM with Codex
-3. Week 3: Test MITM with OpenCode
+3. Week 3: Test MITM with Gemini CLI
 4. Week 4: Test MITM with Cursor CLI
 5. For each failure: develop fallback (log parsing, wrapper)
 
@@ -609,7 +609,7 @@ Palad is a B2B SaaS platform for orchestrating AI agents with a workflow system.
 
 ### Agent Sessions
 
-- **FR1:** User can start a new agent session with selected agent type (Claude Code, Codex, OpenCode, Cursor CLI)
+- **FR1:** User can start a new agent session with selected agent type (Claude Code, Codex, Gemini CLI, Cursor CLI)
 - **FR2:** User can choose between Interactive and Non-interactive mode when starting a session
 - **FR3:** User can interact with agent through web terminal in Interactive mode
 - **FR4:** User can view file tree of session workspace in real-time

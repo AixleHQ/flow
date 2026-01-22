@@ -90,7 +90,7 @@ export default {
   agents: {
     codex: '#10A37F',
     cursor_cli: '#7C3AED',
-    open_code: '#3B82F6',
+    gemini_cli: '#3B82F6',
     claude_code: '#D97706',
   },
 

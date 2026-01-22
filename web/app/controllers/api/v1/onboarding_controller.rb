@@ -64,7 +64,7 @@ module Api
         {
           "codex" => "OpenAI Codex",
           "cursor_cli" => "Cursor CLI",
-          "open_code" => "Open Code",
+          "gemini_cli" => "Gemini CLI",
           "claude_code" => "Claude Code"
         }[type] || type.humanize
       end
@@ -73,7 +73,7 @@ module Api
         {
           "codex" => "OpenAI's powerful code generation model",
           "cursor_cli" => "AI-powered code editor in your terminal",
-          "open_code" => "Open-source AI coding assistant",
+          "gemini_cli" => "Google's Gemini AI coding assistant",
           "claude_code" => "Anthropic's Claude for code generation"
         }[type] || ""
       end
@@ -82,7 +82,7 @@ module Api
         {
           "codex" => "🤖",
           "cursor_cli" => "▶️",
-          "open_code" => "💻",
+          "gemini_cli" => "💻",
           "claude_code" => "🧠"
         }[type] || "⚡"
       end

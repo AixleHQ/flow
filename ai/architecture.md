@@ -32,7 +32,7 @@ _This document builds collaboratively through step-by-step discovery. Sections a
 53 functional requirements were extracted from the PRD, organized into 9 categories:
 
 1. **Agent Sessions (FR1-FR9)** — 9 requirements
-   - Launching sessions with different agents (Claude Code, Codex, OpenCode, Cursor CLI)
+   - Launching sessions with different agents (Claude Code, Codex, Gemini CLI, Cursor CLI)
    - Two operating modes: Interactive and Non-interactive
    - Web terminal for interactive interaction
    - Real-time file tree and file viewer

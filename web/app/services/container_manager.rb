@@ -33,13 +33,13 @@ class ContainerManager
       home_dir: "/home/codex",
       display_name: "OpenAI Codex"
     },
-    "open_code" => {
-      image: "palad/open-code:latest",
-      api_key_env: "OPENAI_API_KEY", # Can use either OpenAI or Anthropic
-      api_key_setting: -> { Settings.openai&.api_key || Settings.anthropic&.api_key },
-      api_key_required: false, # Can work with local models
-      home_dir: "/home/opencode",
-      display_name: "Open Code"
+    "gemini_cli" => {
+      image: "palad/gemini-cli:latest",
+      api_key_env: "GOOGLE_API_KEY",
+      api_key_setting: -> { Settings.google&.api_key },
+      api_key_required: false, # Can configure interactively
+      home_dir: "/home/gemini",
+      display_name: "Gemini CLI"
     }
   }.freeze
 
@@ -68,7 +68,7 @@ class ContainerManager
     # Create and start a new session container
     #
     # @param session_id [String] Unique session identifier
-    # @param agent_type [String] Type of agent (claude_code, cursor_cli, codex, open_code)
+    # @param agent_type [String] Type of agent (claude_code, cursor_cli, codex, gemini_cli)
     # @param repo_url [String, nil] Git repository URL to clone
     # @param repo_branch [String, nil] Git branch to checkout
     # @return [Docker::Container] The created container
@@ -260,10 +260,9 @@ class ContainerManager
       api_key = agent_config[:api_key_setting].call
       env << "#{agent_config[:api_key_env]}=#{api_key}" if api_key.present?
 
-      # For Open Code, add both keys if available
-      if agent_type == "open_code"
-        env << "ANTHROPIC_API_KEY=#{Settings.anthropic&.api_key}" if Settings.anthropic&.api_key.present?
-        env << "OPENAI_API_KEY=#{Settings.openai&.api_key}" if Settings.openai&.api_key.present?
+      # For Gemini CLI, add Google API key if available
+      if agent_type == "gemini_cli"
+        env << "GOOGLE_API_KEY=#{Settings.google&.api_key}" if Settings.google&.api_key.present?
       end
 
       env << "REPO_URL=#{repo_url}" if repo_url.present?

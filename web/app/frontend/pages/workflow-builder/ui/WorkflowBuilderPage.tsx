@@ -34,7 +34,7 @@ const AGENT_OPTIONS = [
   { value: 'claude_code', label: 'Claude Code', color: '#D97706' },
   { value: 'cursor_cli', label: 'Cursor CLI', color: '#7C3AED' },
   { value: 'codex', label: 'OpenAI Codex', color: '#10A37F' },
-  { value: 'open_code', label: 'Open Code', color: '#3B82F6' },
+  { value: 'gemini_cli', label: 'Gemini CLI', color: '#3B82F6' },
 ];
 
 const styles = {

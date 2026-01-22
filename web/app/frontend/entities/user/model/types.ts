@@ -1,4 +1,4 @@
-export type AgentType = 'codex' | 'cursor_cli' | 'open_code' | 'claude_code';
+export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
 
 export interface User {
   id: number;

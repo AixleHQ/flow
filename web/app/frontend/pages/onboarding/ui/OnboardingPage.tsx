@@ -19,7 +19,7 @@ interface IAgentLoginStatus {
 const agentColors: Record<AgentType, string> = {
   codex: '#10a37f',
   cursor_cli: '#7c3aed',
-  open_code: '#3b82f6',
+  gemini_cli: '#3b82f6',
   claude_code: '#d97706',
 };
 
@@ -39,9 +39,9 @@ const agentLoginInfo: Record<AgentType, { name: string; description: string; ico
     description: 'Authenticate with your OpenAI account',
     icon: '🧠',
   },
-  open_code: {
-    name: 'Open Code',
-    description: 'Configure Open Code with your API keys',
+  gemini_cli: {
+    name: 'Gemini CLI',
+    description: 'Configure Gemini CLI with your Google API key',
     icon: '🔓',
   },
 };
@@ -369,7 +369,7 @@ const OnboardingPage = () => {
     claude_code: 'pending',
     cursor_cli: 'pending',
     codex: 'pending',
-    open_code: 'pending',
+    gemini_cli: 'pending',
   });
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);

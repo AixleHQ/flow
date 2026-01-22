@@ -202,23 +202,22 @@ services:
     stdin_open: true
     tty: true
 
-  # Open Code interactive session
-  open-code:
+  # Gemini CLI interactive session
+  gemini-cli:
     profiles: [agents]
     build:
-      context: ./docker/open-code
+      context: ./docker/gemini-cli
       dockerfile: Dockerfile
-    image: palad/open-code:latest
+    image: palad/gemini-cli:latest
     ports:
       - '7684:7681'   # ttyd web terminal
       - '4043:4040'   # file watcher WebSocket + HTTP
     environment:
       - TTYD_PORT=7681
       - WATCHER_PORT=4040
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
-      - opencode_workspace:/workspace
+      - gemini_workspace:/workspace
     stdin_open: true
     tty: true
 
@@ -253,4 +252,4 @@ volumes:
   claude_workspace:
   cursor_workspace:
   codex_workspace:
-  opencode_workspace:
+  gemini_workspace:

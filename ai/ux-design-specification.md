@@ -41,7 +41,7 @@ projectType: 'brownfield'
 
 ### Project Vision
 
-**Palad** — a cloud platform for orchestrating AI coding agents. This is not yet another AI coding tool, but an **orchestration layer** for existing agents (Claude Code, Codex, OpenCode, Cursor CLI) with centralized workflows, shared settings, and transparent billing.
+**Palad** is a cloud platform for orchestration of AI coding agents. It is not yet another AI coding tool, but an **orchestration layer** for existing agents (Claude Code, Codex, Gemini CLI, Cursor CLI) with centralized workflows, shared settings, and transparent billing.
 
 The name comes from the Palladium — a sacred object, the "anchor" of Troy's protection. The platform serves as an anchor for the chaos of local AI tools.
 

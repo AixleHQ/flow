@@ -20,7 +20,7 @@ This document provides the complete epic and story breakdown for app, decomposin
 
 ### Functional Requirements
 
-FR1: User can start a new agent session with selected agent type (Claude Code, Codex, OpenCode, Cursor CLI)
+FR1: User can start a new agent session with selected agent type (Claude Code, Codex, Gemini CLI, Cursor CLI)
 FR2: User can choose between Interactive and Non-interactive mode when starting a session
 FR3: User can interact with agent through web terminal in Interactive mode
 FR4: User can view file tree of session workspace in real-time
@@ -206,7 +206,7 @@ Users can sign in to the platform and manage user access to the company.
 New users can configure their AI agents and save personal settings for each agent.
 
 **FRs covered:** (Prepares infrastructure for Epic 4, based on UX Design requirements)
-- Select agents to use (Claude Code, Codex, OpenCode, Cursor CLI)
+- Select agents to use (Claude Code, Codex, Gemini CLI, Cursor CLI)
 - Authenticate/configure each selected agent
 - Save user's personal settings for each agent
 - Manage agent settings (edit, disable)
@@ -472,7 +472,7 @@ So that I only configure the agents I actually need.
 **Then** I see a list of available agents:
   - Claude Code
   - Codex
-  - OpenCode
+  - Gemini CLI
   - Cursor CLI
 **And** each agent has a checkbox and brief description
 **When** I select one or more agents
@@ -525,24 +525,24 @@ So that I can use it in future sessions.
 **And** I can test the connection to verify it works
 **And** I can skip this agent configuration and configure it later
 
-### Story 2.5: Configure OpenCode Agent
+### Story 2.5: Configure Gemini CLI Agent
 
 As a user,
-I want to authenticate and configure my OpenCode agent,
+I want to authenticate and configure my Gemini CLI agent,
 So that I can use it in future sessions.
 
 **Acceptance Criteria:**
 
-**Given** I have selected OpenCode in the agent selection step
-**When** I reach the OpenCode configuration step
-**Then** I see instructions for configuring OpenCode
-**And** I can authenticate with OpenCode in an embedded terminal
-**And** I can specify OpenCode settings:
+**Given** I have selected Gemini CLI in the agent selection step
+**When** I reach the Gemini CLI configuration step
+**Then** I see instructions for configuring Gemini CLI
+**And** I can authenticate with Gemini CLI in an embedded terminal
+**And** I can specify Gemini CLI settings:
   - API credentials (stored as secret)
   - Default model preferences
   - Workspace preferences
 **When** I complete the configuration
-**Then** my OpenCode settings are saved to my user profile
+**Then** my Gemini CLI settings are saved to my user profile
 **And** the settings are encrypted and associated with my account
 **And** I can test the connection to verify it works
 **And** I can skip this agent configuration and configure it later
@@ -736,7 +736,7 @@ So that I can work with an AI agent on my project.
 **Then** I can see a "Start Session" button
 **When** I click "Start Session"
 **Then** I see a configuration modal with:
-  - Agent type selector (Claude Code, Codex, OpenCode, Cursor CLI)
+  - Agent type selector (Claude Code, Codex, Gemini CLI, Cursor CLI)
   - Mode selector (Interactive / Non-interactive)
   - Agent must be configured in my profile (validation)
 **When** I select an agent type and mode, then click "Start"
@@ -835,7 +835,7 @@ So that billing is accurate and transparent.
 **Then** all API requests are intercepted by the MITM proxy
 **And** token usage (input/output tokens) is tracked for each request
 **And** token counts are stored in the database
-**And** tracking works for all 4 supported agents (Claude Code, Codex, OpenCode, Cursor CLI)
+**And** tracking works for all 4 supported agents (Claude Code, Codex, Gemini CLI, Cursor CLI)
 **And** token tracking is accurate (≥95% of actual usage per NFR-R3)
 **And** if MITM proxy fails, the session continues but tracking may be incomplete (graceful degradation)
 
@@ -1177,7 +1177,7 @@ So that I can run workflows with my chosen agent and provide initial artifacts.
 **Given** I am viewing a workflow
 **When** I click "Run Workflow"
 **Then** I see a configuration modal with:
-  - Agent type selector (Claude Code, Codex, OpenCode, Cursor CLI) - required
+  - Agent type selector (Claude Code, Codex, Gemini CLI, Cursor CLI) - required
   - Input artifacts selector (multi-select from all project artifacts) - optional
   - Execution mode selector (Interactive / Non-interactive) - required
 **When** I select agent type, input artifacts, and mode, then click "Start"

@@ -8,7 +8,7 @@
 
 ## 🎯 Product vision
 
-Palad is a platform for running cloud AI agents (Claude Code, Cursor CLI, Codex, OpenCode) with:
+Palad — a platform for running cloud AI agents (Claude Code, Cursor CLI, Codex, Gemini CLI) with:
 - **Workflow Engine** — step-by-step task execution (BMAD-style)
 - **Multi-tenancy** — companies, users, data isolation
 - **Billing & Analytics** — accurate accounting of tokens and cost
@@ -126,7 +126,7 @@ workflows (id, company_id, name, description, status, version)
 
 workflow_steps (
   id, workflow_id, order, name, description,
-  agent_type,           -- 'claude_code' | 'codex' | 'opencode' | 'cursor'
+  agent_type,           -- 'claude_code' | 'codex' | 'gemini_cli' | 'cursor'
   prompt_template,      -- TEXT with {{variables}}
   tools,                -- JSONB array of tool references
   input_schema,         -- JSONB
@@ -281,7 +281,7 @@ async def read_slack_channel(channel: str, days: int = 7) -> dict:
 | # | Question | Options | How to verify |
 |---|--------|----------|---------------|
 | 1 | Tool Sidecar architecture | A) Temporal Worker + Local Activity<br>B) HTTP Server + sync workflow call | Build both, measure latency |
-| 2 | MITM with different agents | Claude Code, Codex, OpenCode | Run each one through mitmproxy |
+| 2 | MITM with different agents | Claude Code, Codex, Gemini CLI | Run each one through mitmproxy |
 | 3 | Latency overhead from proxy | Acceptable / not | Benchmark with and without proxy |
 | 4 | Certificate trust | Add CA / env var / agent config | Test each agent |
 
@@ -321,7 +321,7 @@ async def read_slack_channel(channel: str, days: int = 7) -> dict:
 ### Phase 1: PoC (1-2 weeks)
 - [ ] Verify MITM with Claude Code
 - [ ] Verify MITM with Codex
-- [ ] Check MITM with OpenCode
+- [ ] Verify MITM with Gemini CLI
 - [ ] Basic DB schema for workflows
 - [ ] One simple tool via Temporal
 

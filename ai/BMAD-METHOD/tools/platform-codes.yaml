@@ -37,11 +37,11 @@ platforms:
     category: ide
     description: "AI coding assistant"
 
-  opencode:
-    name: "OpenCode"
+  gemini-cli:
+    name: "Gemini CLI"
     preferred: false
-    category: ide
-    description: "OpenCode terminal coding assistant"
+    category: cli
+    description: "Google's CLI for Gemini AI coding assistant"
 
   auggie:
     name: "Auggie"
