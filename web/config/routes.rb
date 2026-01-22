@@ -11,9 +11,12 @@ Rails.application.routes.draw do
   # API routes
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
+      get "auth/:provider", to: redirect("/api/v1/auth/%{provider}"), as: :auth, format: :html
+      get "auth/:provider/callback", to: "sessions#omniauth", as: :auth_callback, format: :html
+      get "auth/failure", to: "sessions#failure", as: :auth_failure, format: :html
+
       resource :sessions, only: %i[create destroy]
-      resource :current_user, only: [ :show ], controller: "current_user"
-      resource :onboarding, only: %i[show create], controller: "onboarding"
+      resource :current_user, only: %i[show update], controller: "current_user"
       resources :terminal_sessions, only: [ :create, :show, :destroy ] do
         collection do
           get :agents
@@ -40,6 +43,7 @@ Rails.application.routes.draw do
     root "home#show"
     mount OasRails::Engine => "/docs"
     mount(LetterOpenerWeb::Engine, at: "/letter_opener") if Rails.env.development?
+
     get "*path", to: "home#show"
   end
 end

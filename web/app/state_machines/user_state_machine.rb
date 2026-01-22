@@ -6,16 +6,25 @@ module UserStateMachine
     include StateEventConcern
 
     aasm :state do
-      state :draft, initial: true
-      state :active
+      state :active, initial: true
+      state :pending
+      state :suspended
       state :archived
 
       event :activate do
-        transitions from: :draft, to: :active
+        transitions from: %i[pending suspended archived], to: :active
       end
 
-      event :deactivate do
-        transitions from: :active, to: :archived
+      event :suspend do
+        transitions from: :active, to: :suspended
+      end
+
+      event :archive do
+        transitions from: %i[active suspended pending], to: :archived
+      end
+
+      event :mark_pending do
+        transitions from: :active, to: :pending
       end
     end
   end

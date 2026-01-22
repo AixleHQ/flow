@@ -764,6 +764,49 @@ app/                                    # Root directory
 - **Redux Toolkit:** Global state (`app/frontend/shared/api/`)
 - **Zustand:** Local state (inside features/components)
 
+**State Machine Pattern (AASM):**
+- **Purpose:** Managing the lifecycle and state transitions for business entities
+- **Implementation:** AASM gem for backend state machines
+- **Location:** `app/state_machines/`
+- **Active State Machines:**
+  - `CompanyStateMachine`: Managing company states
+    - States: `active` (initial), `suspended`, `archived`
+    - Events: `suspend`, `activate`, `archive`
+    - Auto-generated scopes: `.active`, `.suspended`, `.archived`
+  - `UserStateMachine`: Managing user states
+    - States: `active` (initial), `pending`, `suspended`, `archived`
+    - Events: `activate`, `suspend`, `archive`, `mark_pending`
+    - Auto-generated scopes: `.active`, `.pending`, `.suspended`, `.archived`
+  - `StateEventConcern`: Provides `available_events` and `available_states` helpers
+- **Note:** Roles and positions use `enumerize`, not state machines
+  - Roles: `employee`, `admin`, `super_admin` (enumerize)
+  - Positions: `qa`, `pm_po_ba`, `dev`, `designer`, `cto` (enumerize)
+
+**Automatic Case Conversion (Frontend ↔ Backend):**
+- **Purpose:** Automatic conversion between camelCase (frontend) and snake_case (backend)
+- **Implementation:** `camelcaseKeys` and `decamelizeKeys` in `baseApi.ts`
+- **Location:** `app/frontend/shared/api/baseApi.ts`
+- **How it works:**
+  - **Request (Frontend → Backend):**
+    ```typescript
+    data: isDecamelize ? decamelizeKeys(data) : data
+    // { currentUser: { passwordConfirmation: "..." } }
+    // → { current_user: { password_confirmation: "..." } }
+    ```
+  - **Response (Backend → Frontend):**
+    ```typescript
+    data: camelcaseKeys(result.data)
+    // { current_user: { password_confirmation: "..." } }
+    // → { currentUser: { passwordConfirmation: "..." } }
+    ```
+- **TypeScript Interfaces:** All interfaces are written in camelCase (following TypeScript best practices)
+  - Example: `IUpdateCurrentUserRequest`, `IUser`, `ICompany`
+- **Benefits:**
+  - No need to manually write transform functions
+  - TypeScript types in pure camelCase
+  - Automatic conversion at the HTTP client level
+  - Consistency with the `web_reference` project
+
 **Service Communication Patterns:**
 - **Rails → Temporal:** Via TemporalService
 - **Rails → Docker:** Via ContainerManager
@@ -1242,6 +1285,88 @@ All project requirements are architecturally supported, with clear mapping from 
 
 **🏗️ Solid Foundation**
 The established architectural patterns provide a production-ready foundation following current best practices.
+
+---
+
+## Implementation Updates (2026-01-23)
+
+### User Onboarding Flow
+
+**Decision:** Automatic onboarding completion via model callbacks with agent configuration tracking
+
+**Context:**
+Users must complete onboarding before accessing the platform. Onboarding includes:
+1. Selecting position (QA, PM/PO/BA, Dev, Designer)
+2. Selecting preferred agent language
+3. Configuring at least one AI agent (Claude Code, Cursor CLI, Codex, Gemini CLI)
+
+**Solution:**
+Implemented automatic `onboarding_completed_at` tracking via `before_validation` callback in User model:
+
+```ruby
+# app/models/user.rb
+has_secure_password validations: false
+
+# Constants
+AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
+POSITIONS = %w[qa pm_po_ba dev designer].freeze
+AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
+
+# Database fields
+# - configured_agents: text[] (PostgreSQL array)
+# - position: string
+# - preferred_agent_language: string
+# - onboarding_completed_at: datetime
+
+# Validations
+validate :at_least_one_agent_after_onboarding
+validate :configured_agents_valid
+
+# Callbacks
+before_validation :set_onboarding_completed_at, if: :onboarding_ready?
+
+private
+
+def onboarding_ready?
+  return false if super_admin? # Super admins don't need onboarding
+  return false if onboarding_completed? # Already completed
+
+  # Onboarding is ready when position, language, and at least one agent are configured
+  position.present? &&
+    preferred_agent_language.present? &&
+    has_configured_agents?
+end
+
+def has_configured_agents?
+  configured_agents.present? && configured_agents.any?
+end
+
+def set_onboarding_completed_at
+  self.onboarding_completed_at = Time.current
+end
+```
+
+**Rationale:**
+1. **Single Responsibility:** Controller only updates user attributes, model handles completion logic
+2. **DRY:** No need to send `onboarding_completed_at` from frontend or set it in multiple places
+3. **Consistency:** Onboarding is always marked complete when ALL requirements are met (position + language + agent)
+4. **Rails Convention:** Business logic lives in models, not controllers
+5. **Data Integrity:** PostgreSQL array ensures valid storage, validations ensure valid values
+
+**API Changes:**
+- `PATCH /api/v1/current_user` - accepts `position`, `preferred_agent_language`, and `configured_agents` (array)
+- Backend automatically sets `onboarding_completed_at` when all three fields are valid and present
+- Frontend doesn't send or manage `onboarding_completed_at`
+
+**Database Schema:**
+```sql
+ALTER TABLE users ADD COLUMN configured_agents text[] DEFAULT '{}';
+```
+
+**Testing:**
+- Controller tests verify position/language/agents update
+- Model tests verify automatic completion only when all fields present
+- Validation tests ensure at least one agent required after onboarding
 
 ---
 

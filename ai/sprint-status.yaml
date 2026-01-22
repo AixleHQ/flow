@@ -42,7 +42,7 @@ story_location: ai
 development_status:
   epic-1: in-progress
   1-0-initial-super-admin-setup: done
-  1-1-platform-admin-company-management: ready-for-dev
+  1-1-platform-admin-company-management: done
   1-2-google-oauth-sign-in-with-domain-based-company-assignment: backlog
   1-3-user-profile-and-company-assignment: backlog
   1-4-invite-users-to-company: backlog

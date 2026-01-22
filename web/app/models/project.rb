@@ -3,6 +3,9 @@
 class Project < ApplicationRecord
   extend Enumerize
 
+  # Constants
+  ARTIFACTS_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
+
   enumerize :state, in: %i[active paused archived], default: :active, predicates: true, scope: true
 
   # Associations
@@ -16,6 +19,7 @@ class Project < ApplicationRecord
   validates :slug, presence: true,
                    uniqueness: { scope: :company_id },
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
+  validates :preferred_artifacts_language, inclusion: { in: ARTIFACTS_LANGUAGES }, allow_nil: false
   validate :owner_belongs_to_company
 
   # Callbacks

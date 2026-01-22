@@ -1,25 +1,17 @@
-import { baseApi, QueryTag } from 'shared/api';
+// Onboarding API is deprecated - all logic moved to currentUserApi
+// This file is kept for backwards compatibility but should not be used
 
-import type { CompleteOnboardingRequest, CompleteOnboardingResponse, OnboardingResponse } from '../lib/types';
+import { useUpdateCurrentUserMutation } from 'entities/user/api/currentUserApi';
 
-export const onboardingApi = baseApi.injectEndpoints({
-  endpoints: (builder) => ({
-    getOnboarding: builder.query<OnboardingResponse, void>({
-      query: () => ({
-        url: '/api/v1/onboarding',
-        method: 'GET',
-      }),
-      providesTags: [QueryTag.Onboarding],
-    }),
-    completeOnboarding: builder.mutation<CompleteOnboardingResponse, CompleteOnboardingRequest>({
-      query: (data) => ({
-        url: '/api/v1/onboarding',
-        method: 'POST',
-        data,
-      }),
-      invalidatesTags: [QueryTag.CurrentUser, QueryTag.Onboarding],
-    }),
-  }),
-});
+/**
+ * @deprecated Use useUpdateCurrentUserMutation from currentUserApi instead
+ */
+export const useCompleteOnboardingMutation = useUpdateCurrentUserMutation;
 
-export const { useGetOnboardingQuery, useCompleteOnboardingMutation } = onboardingApi;
+/**
+ * @deprecated Onboarding data is now part of currentUser response
+ */
+export const useGetOnboardingQuery = () => {
+  console.warn('useGetOnboardingQuery is deprecated. Use useGetCurrentUserQuery instead.');
+  return { data: undefined, isLoading: false };
+};

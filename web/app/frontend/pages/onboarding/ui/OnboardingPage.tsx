@@ -2,11 +2,10 @@ import { Box, Button, Checkbox, CircularProgress, LinearProgress, Typography } f
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { AgentType } from 'entities/user';
-
-import { useCompleteOnboardingMutation, useGetOnboardingQuery } from '../api/onboardingApi';
+import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user/api/currentUserApi';
 
 type OnboardingStep = 'agents' | 'login' | 'complete';
 
@@ -26,25 +25,33 @@ const agentColors: Record<AgentType, string> = {
 const agentLoginInfo: Record<AgentType, { name: string; description: string; icon: string }> = {
   claude_code: {
     name: 'Claude Code',
-    description: 'Authenticate with your Anthropic account to use Claude Code',
+    description: "Anthropic's Claude for code generation and assistance",
     icon: '🤖',
   },
   cursor_cli: {
     name: 'Cursor CLI',
-    description: 'Sign in to your Cursor account',
+    description: 'AI-powered code editor in your terminal',
     icon: '⚡',
   },
   codex: {
     name: 'OpenAI Codex',
-    description: 'Authenticate with your OpenAI account',
+    description: "OpenAI's powerful code generation model",
     icon: '🧠',
   },
   gemini_cli: {
     name: 'Gemini CLI',
-    description: 'Configure Gemini CLI with your Google API key',
+    description: "Google's Gemini AI coding assistant",
     icon: '🔓',
   },
 };
+
+// Available agents list
+const AVAILABLE_AGENTS: Array<{ type: AgentType; name: string; description: string }> = [
+  { type: 'claude_code', name: 'Claude Code', description: "Anthropic's Claude for code generation" },
+  { type: 'cursor_cli', name: 'Cursor CLI', description: 'AI-powered code editor in your terminal' },
+  { type: 'codex', name: 'OpenAI Codex', description: "OpenAI's powerful code generation model" },
+  { type: 'gemini_cli', name: 'Gemini CLI', description: "Google's Gemini AI coding assistant" },
+];
 
 const styles = {
   root: {
@@ -359,8 +366,8 @@ const STEPS: { key: OnboardingStep; label: string }[] = [
 const OnboardingPage = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { data, isLoading } = useGetOnboardingQuery();
-  const [completeOnboarding, { isLoading: isSubmitting }] = useCompleteOnboardingMutation();
+  const { data: currentUser, isLoading } = useGetCurrentUserQuery();
+  const [updateCurrentUser, { isLoading: isSubmitting }] = useUpdateCurrentUserMutation();
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('agents');
   const [selectedAgents, setSelectedAgents] = useState<AgentType[]>([]);
@@ -371,6 +378,48 @@ const OnboardingPage = () => {
     codex: 'pending',
     gemini_cli: 'pending',
   });
+  // TODO: Add position and language selection UI
+  const position = 'dev';
+  const preferredLanguage = 'en';
+
+  // Onboarding guard: prevent leaving if onboarding is not completed
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!currentUser.onboardingCompletedAt) {
+        e.preventDefault();
+        e.returnValue = 'You need to complete onboarding before leaving this page.';
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (!currentUser.onboardingCompletedAt) {
+        e.preventDefault();
+        enqueueSnackbar('Please complete onboarding before leaving', { variant: 'warning' });
+        // Push state back to keep user on onboarding page
+        window.history.pushState(null, '', '/onboarding');
+      }
+    };
+
+    // Redirect if already completed onboarding
+    if (currentUser.onboardingCompletedAt) {
+      navigate({ to: '/projects' });
+      return;
+    }
+
+    // Add guards
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+
+    // Push initial state to enable popstate detection
+    window.history.pushState(null, '', '/onboarding');
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [currentUser, navigate, enqueueSnackbar]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
@@ -417,7 +466,16 @@ const OnboardingPage = () => {
 
   const handleComplete = async () => {
     try {
-      await completeOnboarding({ agents: selectedAgents }).unwrap();
+      // Only send agents that were authenticated
+      const authenticatedAgents = selectedAgents.filter((agent) => loginStatuses[agent] === 'authenticated');
+
+      await updateCurrentUser({
+        currentUser: {
+          position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer',
+          preferredAgentLanguage: preferredLanguage,
+          configuredAgents: authenticatedAgents,
+        },
+      }).unwrap();
       enqueueSnackbar('Setup complete! Welcome to Palad.', { variant: 'success' });
       navigate({ to: '/projects' });
     } catch {
@@ -435,8 +493,6 @@ const OnboardingPage = () => {
       </Box>
     );
   }
-
-  const agents = data?.agents || [];
 
   const renderStepIndicator = () => (
     <Box sx={styles.progressContainer}>
@@ -476,12 +532,12 @@ const OnboardingPage = () => {
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Choose Your AI Agents</Typography>
         <Typography sx={styles.subtitle}>
-          Select the AI coding agents you want to use. You'll authenticate with each service in the next step.
+          Select the AI coding agents you want to use. You&apos;ll authenticate with each service in the next step.
         </Typography>
       </Box>
 
       <Box sx={styles.grid}>
-        {agents.map((agent) => {
+        {AVAILABLE_AGENTS.map((agent) => {
           const isSelected = selectedAgents.includes(agent.type);
           return (
             <Box
@@ -520,7 +576,7 @@ const OnboardingPage = () => {
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Authenticate Your Agents</Typography>
         <Typography sx={styles.subtitle}>
-          Sign in to each agent's service. This creates a secure session for the agent to work on your behalf.
+          Sign in to each agent&apos;s service. This creates a secure session for the agent to work on your behalf.
         </Typography>
       </Box>
 
@@ -544,7 +600,10 @@ const OnboardingPage = () => {
                 onClick={() => handleStartLogin(agentType)}
               >
                 <Box sx={styles.agentLoginHeader}>
-                  <Box sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }} style={{ backgroundColor: agentColors[agentType] }} />
+                  <Box
+                    sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }}
+                    style={{ backgroundColor: agentColors[agentType] }}
+                  />
                   <Typography sx={styles.agentLoginName}>{info.name}</Typography>
                   {isAuthenticated && (
                     <Box sx={{ ...styles.badge, ...styles.badgeAuthenticated, position: 'static' }}>✓</Box>
@@ -590,9 +649,7 @@ const OnboardingPage = () => {
               {loginStatuses[activeLoginAgent] === 'authenticating' ? (
                 <Box sx={styles.terminalPlaceholder}>
                   <CircularProgress size={32} />
-                  <Typography sx={{ fontSize: '14px' }}>
-                    Starting authentication session...
-                  </Typography>
+                  <Typography sx={{ fontSize: '14px' }}>Starting authentication session...</Typography>
                   <Typography sx={{ fontSize: '12px', color: 'text.disabled', maxWidth: '300px', textAlign: 'center' }}>
                     {agentLoginInfo[activeLoginAgent].description}
                   </Typography>
@@ -611,18 +668,14 @@ const OnboardingPage = () => {
                 </Box>
               ) : (
                 <Box sx={styles.terminalPlaceholder}>
-                  <Typography sx={{ fontSize: '14px' }}>
-                    Click "Start Authentication" to begin
-                  </Typography>
+                  <Typography sx={{ fontSize: '14px' }}>Click &quot;Start Authentication&quot; to begin</Typography>
                 </Box>
               )}
             </>
           ) : (
             <Box sx={styles.terminalPlaceholder}>
               <Typography sx={{ fontSize: '48px' }}>🔐</Typography>
-              <Typography sx={{ fontSize: '16px' }}>
-                Select an agent to authenticate
-              </Typography>
+              <Typography sx={{ fontSize: '16px' }}>Select an agent to authenticate</Typography>
             </Box>
           )}
         </Box>
@@ -654,10 +707,8 @@ const OnboardingPage = () => {
   const renderCompleteStep = () => (
     <Box sx={styles.completeContainer}>
       <Typography sx={styles.completeIcon}>🎉</Typography>
-      <Typography sx={styles.completeTitle}>You're all set!</Typography>
-      <Typography sx={styles.completeSubtitle}>
-        Your AI agents are configured and ready to use.
-      </Typography>
+      <Typography sx={styles.completeTitle}>You&apos;re all set!</Typography>
+      <Typography sx={styles.completeSubtitle}>Your AI agents are configured and ready to use.</Typography>
 
       <Box sx={{ maxWidth: '400px', margin: '0 auto', marginBottom: '32px' }}>
         {selectedAgents.map((agentType) => {
@@ -665,9 +716,14 @@ const OnboardingPage = () => {
           const isAuthenticated = loginStatuses[agentType] === 'authenticated';
           return (
             <Box key={agentType} sx={styles.summaryCard}>
-              <Box sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }} style={{ backgroundColor: agentColors[agentType] }} />
+              <Box
+                sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }}
+                style={{ backgroundColor: agentColors[agentType] }}
+              />
               <Typography sx={styles.summaryText}>{info.name}</Typography>
-              <Typography sx={{ marginLeft: 'auto', fontSize: '12px', color: isAuthenticated ? 'success.main' : 'warning.main' }}>
+              <Typography
+                sx={{ marginLeft: 'auto', fontSize: '12px', color: isAuthenticated ? 'success.main' : 'warning.main' }}
+              >
                 {isAuthenticated ? '✓ Authenticated' : '⚠ Pending'}
               </Typography>
             </Box>
@@ -679,12 +735,7 @@ const OnboardingPage = () => {
         <Button sx={styles.backButton} onClick={handleBack}>
           Back
         </Button>
-        <Button
-          variant="contained"
-          sx={styles.continueButton}
-          onClick={handleComplete}
-          disabled={isSubmitting}
-        >
+        <Button variant="contained" sx={styles.continueButton} onClick={handleComplete} disabled={isSubmitting}>
           {isSubmitting ? 'Setting up...' : 'Get Started'}
         </Button>
       </Box>

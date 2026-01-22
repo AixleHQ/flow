@@ -5,6 +5,7 @@ FactoryBot.define do
     name
     description
     state { :active }
+    preferred_artifacts_language { "en" }
     association :company
     association :owner, factory: :user
 

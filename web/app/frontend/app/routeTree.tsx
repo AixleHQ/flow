@@ -1,6 +1,6 @@
 import { createRootRoute, createRoute, lazyRouteComponent } from '@tanstack/react-router';
 
-import { RootLayout } from './layouts/RootLayout';
+import { AuthLayout, RootLayout } from './layouts';
 
 // Use lazyRouteComponent for page-level routes
 const HomePage = lazyRouteComponent(() => import('../pages/home'));
@@ -25,72 +25,79 @@ export const loginRoute = createRoute({
   component: LoginPage,
 });
 
-// Onboarding route
-export const onboardingRoute = createRoute({
+// AuthLayout route - wraps all authenticated pages
+export const authLayoutRoute = createRoute({
+  id: 'authLayout',
   getParentRoute: () => rootRoute,
+  component: AuthLayout,
+});
+
+// Onboarding route (still under authLayout for authentication check)
+export const onboardingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
   path: '/onboarding',
   component: OnboardingPage,
 });
 
 // Homepage route - now shows projects dashboard
 export const indexRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/',
   component: ProjectsPage,
 });
 
 // Projects list route
 export const projectsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/projects',
   component: ProjectsPage,
 });
 
 // Single project route
 export const projectRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/projects/$projectId',
   component: ProjectPage,
 });
 
 // Workflow run route - nested under project
 export const workflowRunRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/projects/$projectId/workflow-runs/$runId',
   component: WorkflowRunPage,
 });
 
 // Workflow builder route
 export const workflowBuilderRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/workflow-builder/$workflowId',
   component: WorkflowBuilderPage,
 });
 
 // Legacy home page route
 export const homeRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/home',
   component: HomePage,
 });
 
 // Session route with dynamic sessionId parameter
 export const sessionRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/session/$sessionId',
   component: SessionPage,
 });
 
 // Workspace route (legacy - for direct terminal access)
 export const workspaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/workspace',
   component: WorkspacePage,
 });
 
 // Setup route (placeholder for agent setup)
 export const setupRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/setup',
   component: WorkspacePage,
 });
@@ -98,14 +105,16 @@ export const setupRoute = createRoute({
 // Create the route tree
 export const routeTree = rootRoute.addChildren([
   loginRoute,
-  onboardingRoute,
-  indexRoute,
-  projectsRoute,
-  projectRoute,
-  workflowRunRoute,
-  workflowBuilderRoute,
-  homeRoute,
-  sessionRoute,
-  workspaceRoute,
-  setupRoute,
+  authLayoutRoute.addChildren([
+    onboardingRoute,
+    indexRoute,
+    projectsRoute,
+    projectRoute,
+    workflowRunRoute,
+    workflowBuilderRoute,
+    homeRoute,
+    sessionRoute,
+    workspaceRoute,
+    setupRoute,
+  ]),
 ]);

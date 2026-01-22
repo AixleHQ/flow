@@ -1,6 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, Button, Stack, SxProps, TextField, Typography } from '@mui/material';
+import { useSearch } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
+import { useEffect, useRef } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 
 import { setErrorsToForm } from 'shared/api';
@@ -8,6 +10,8 @@ import { Logo } from 'shared/ui';
 
 import { useLoginMutation } from '../api/loginApi';
 import { LoginFormData, loginSchema } from '../lib/schema';
+
+import { GoogleLoginButton } from './GoogleLoginButton';
 
 const styles = {
   root: {
@@ -113,6 +117,28 @@ const styles = {
       color: 'text.secondaryAlt',
     },
   },
+  divider: {
+    display: 'flex',
+    alignItems: 'center',
+    marginTop: '24px',
+    marginBottom: '24px',
+    color: 'text.muted',
+    fontSize: '12px',
+    fontWeight: 400,
+    fontFamily: '"Inter", sans-serif',
+    '&::before, &::after': {
+      content: '""',
+      flex: 1,
+      borderBottom: '1px solid',
+      borderColor: 'border.defaultAlt',
+    },
+    '&::before': {
+      marginRight: '16px',
+    },
+    '&::after': {
+      marginLeft: '16px',
+    },
+  },
   footer: {
     marginTop: '24px',
     textAlign: 'center',
@@ -135,6 +161,23 @@ const LoginPage = () => {
 
   const [login, { isLoading }] = useLoginMutation();
   const { enqueueSnackbar } = useSnackbar();
+  const searchParams = useSearch({ from: '/login' }) as { error?: string };
+  const errorShownRef = useRef(false);
+
+  // Show error messages from OAuth redirect (only once)
+  useEffect(() => {
+    if (searchParams.error && !errorShownRef.current) {
+      const errorMessages: Record<string, string> = {
+        pending_approval: 'Your account is pending approval. Please contact your company administrator.',
+        oauth_failed: 'Failed to authenticate with Google. Please try again.',
+        oauth_error: 'An error occurred during authentication. Please try again.',
+      };
+
+      const message = errorMessages[searchParams.error] || 'Authentication failed. Please try again.';
+      enqueueSnackbar(message, { variant: 'error' });
+      errorShownRef.current = true;
+    }
+  }, [searchParams.error, enqueueSnackbar]);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -154,9 +197,10 @@ const LoginPage = () => {
           <Logo width={120} colorScheme="dark" />
         </Box>
 
-        <Typography sx={styles.title}>
-          Sign in
-        </Typography>
+        <GoogleLoginButton />
+
+        <Box sx={styles.divider}>OR</Box>
+
         <Typography sx={styles.subtitle}>Enter your credentials to access your workspace</Typography>
 
         <FormProvider {...methods}>

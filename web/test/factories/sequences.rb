@@ -7,6 +7,11 @@ FactoryBot.define do
     "Company #{n}"
   end
 
+  sequence :email_domain do |n|
+    domains = %w[com ai dev partners tech io co]
+    "company-#{n}.#{domains.sample}"
+  end
+
   sequence :password do |n|
     Faker::Internet.password(min_length: 8, max_length: 16, mix_case: true, special_characters: true)
   end
