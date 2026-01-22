@@ -8,6 +8,10 @@ const SessionPage = lazyRouteComponent(() => import('../pages/session'));
 const LoginPage = lazyRouteComponent(() => import('../pages/login'));
 const OnboardingPage = lazyRouteComponent(() => import('../pages/onboarding'));
 const WorkspacePage = lazyRouteComponent(() => import('../pages/workspace'));
+const ProjectsPage = lazyRouteComponent(() => import('../pages/projects'));
+const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
+const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
+const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -28,11 +32,39 @@ export const onboardingRoute = createRoute({
   component: OnboardingPage,
 });
 
-// Homepage route - now shows workspace
+// Homepage route - now shows projects dashboard
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: WorkspacePage,
+  component: ProjectsPage,
+});
+
+// Projects list route
+export const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects',
+  component: ProjectsPage,
+});
+
+// Single project route
+export const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId',
+  component: ProjectPage,
+});
+
+// Workflow run route - nested under project
+export const workflowRunRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/projects/$projectId/workflow-runs/$runId',
+  component: WorkflowRunPage,
+});
+
+// Workflow builder route
+export const workflowBuilderRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/workflow-builder/$workflowId',
+  component: WorkflowBuilderPage,
 });
 
 // Legacy home page route
@@ -49,7 +81,7 @@ export const sessionRoute = createRoute({
   component: SessionPage,
 });
 
-// Workspace route
+// Workspace route (legacy - for direct terminal access)
 export const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspace',
@@ -68,6 +100,10 @@ export const routeTree = rootRoute.addChildren([
   loginRoute,
   onboardingRoute,
   indexRoute,
+  projectsRoute,
+  projectRoute,
+  workflowRunRoute,
+  workflowBuilderRoute,
   homeRoute,
   sessionRoute,
   workspaceRoute,

@@ -54,9 +54,10 @@ interface IWatcherTreeNode {
 }
 
 interface IFileTreeProps {
-  watcherPort: number | null;
+  watcherPort?: number | null;
   onFileSelect?: (path: string) => void;
   selectedPath?: string | null;
+  hideHeader?: boolean;
 }
 
 interface ITreeNode {
@@ -154,7 +155,7 @@ const styles = {
   },
 } as const;
 
-export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeProps) => {
+export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader = false }: IFileTreeProps) => {
   const [treeData, setTreeData] = useState<IWatcherTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -301,9 +302,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeP
   if (!watcherPort) {
     return (
       <Box sx={styles.container}>
-        <Box sx={styles.header}>
-          <Typography sx={styles.title}>Explorer</Typography>
-        </Box>
+        {!hideHeader && (
+          <Box sx={styles.header}>
+            <Typography sx={styles.title}>Explorer</Typography>
+          </Box>
+        )}
         <Box sx={styles.empty}>No watcher port available</Box>
       </Box>
     );
@@ -312,9 +315,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeP
   if (loading) {
     return (
       <Box sx={styles.container}>
-        <Box sx={styles.header}>
-          <Typography sx={styles.title}>Explorer</Typography>
-        </Box>
+        {!hideHeader && (
+          <Box sx={styles.header}>
+            <Typography sx={styles.title}>Explorer</Typography>
+          </Box>
+        )}
         <Box sx={styles.loading}>
           <CircularProgress size={20} sx={{ color: '#4ec9b0' }} />
         </Box>
@@ -325,9 +330,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeP
   if (error) {
     return (
       <Box sx={styles.container}>
-        <Box sx={styles.header}>
-          <Typography sx={styles.title}>Explorer</Typography>
-        </Box>
+        {!hideHeader && (
+          <Box sx={styles.header}>
+            <Typography sx={styles.title}>Explorer</Typography>
+          </Box>
+        )}
         <Box sx={styles.error}>{error}</Box>
       </Box>
     );
@@ -336,9 +343,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeP
   if (treeData.length === 0) {
     return (
       <Box sx={styles.container}>
-        <Box sx={styles.header}>
-          <Typography sx={styles.title}>Explorer</Typography>
-        </Box>
+        {!hideHeader && (
+          <Box sx={styles.header}>
+            <Typography sx={styles.title}>Explorer</Typography>
+          </Box>
+        )}
         <Box sx={styles.empty}>No files in workspace</Box>
       </Box>
     );
@@ -346,9 +355,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath }: IFileTreeP
 
   return (
     <Box sx={styles.container}>
-      <Box sx={styles.header}>
-        <Typography sx={styles.title}>Explorer</Typography>
-      </Box>
+      {!hideHeader && (
+        <Box sx={styles.header}>
+          <Typography sx={styles.title}>Explorer</Typography>
+        </Box>
+      )}
       <Box sx={styles.treeContainer}>
         <TreeView
           data={flattenedData}

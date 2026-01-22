@@ -32,7 +32,7 @@ workflow_status:
 
   # Phase 2: Planning
   prd: "ai/prd.md"  # completed 2026-01-21
-  create-ux-design: conditional  # if_has_ui - determined after PRD
+  create-ux-design: "ai/ux-design-specification.md"  # completed 2026-01-21
 
   # Phase 3: Solutioning
   create-architecture: required
