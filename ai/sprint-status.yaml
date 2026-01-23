@@ -50,8 +50,8 @@ development_status:
   1-6-remove-users-from-company: backlog
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-onboarding-flow-entry: backlog
+  epic-2: in-progress
+  2-1-onboarding-flow-entry: done
   2-2-select-agents-for-configuration: backlog
   2-3-configure-claude-code-agent: backlog
   2-4-configure-codex-agent: backlog

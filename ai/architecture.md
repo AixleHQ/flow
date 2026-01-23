@@ -1292,13 +1292,18 @@ The established architectural patterns provide a production-ready foundation fol
 
 ### User Onboarding Flow
 
-**Decision:** Automatic onboarding completion via model callbacks with agent configuration tracking
+**Decision:** Mandatory 4-Step Onboarding with Strict Validation (updated in Story 2.1)
 
 **Context:**
-Users must complete onboarding before accessing the platform. Onboarding includes:
-1. Selecting position (QA, PM/PO/BA, Dev, Designer)
-2. Selecting preferred agent language
-3. Configuring at least one AI agent (Claude Code, Cursor CLI, Codex, Gemini CLI)
+Users must complete onboarding before accessing the platform. Onboarding **cannot be skipped** and includes:
+1. **Step 1 - Your Profile:** Selecting position (Dev, QA, PM/PO/BA, Designer, CTO) and preferred agent language
+2. **Step 2 - Select Agents:** Selecting at least one AI agent (Claude Code, Cursor CLI, Codex, Gemini CLI)
+3. **Step 3 - Authenticate:** Authenticating at least one selected agent
+4. **Step 4 - Complete:** Reviewing and confirming setup
+
+**No progress is saved** - users must complete all steps in one session.
+
+**Edit Mode:** Users who have completed onboarding can return to `/onboarding` to edit their profile, position, language, and agents.
 
 **Solution:**
 Implemented automatic `onboarding_completed_at` tracking via `before_validation` callback in User model:
@@ -1348,10 +1353,12 @@ end
 
 **Rationale:**
 1. **Single Responsibility:** Controller only updates user attributes, model handles completion logic
-2. **DRY:** No need to send `onboarding_completed_at` from frontend or set it in multiple places
+2. **Mandatory Onboarding:** No "Skip" button - ensures all users have proper configuration before platform access
 3. **Consistency:** Onboarding is always marked complete when ALL requirements are met (position + language + agent)
 4. **Rails Convention:** Business logic lives in models, not controllers
 5. **Data Integrity:** PostgreSQL array ensures valid storage, validations ensure valid values
+6. **4-Step Flow:** Clear progression through profile → agents → authentication → completion (updated in Story 2.1)
+7. **Edit Mode:** Allows users to update their profile and agents after initial completion
 
 **API Changes:**
 - `PATCH /api/v1/current_user` - accepts `position`, `preferred_agent_language`, and `configured_agents` (array)

@@ -1,13 +1,22 @@
-import { Box, Button, Checkbox, CircularProgress, LinearProgress, Typography } from '@mui/material';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Box, Button, Checkbox, CircularProgress, LinearProgress, MenuItem, Select, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 
 import type { AgentType } from 'entities/user';
 import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user/api/currentUserApi';
 
-type OnboardingStep = 'agents' | 'login' | 'complete';
+import { profileSchema, type ProfileFormData } from '../model/profileValidation';
+
+// Constants
+const MAX_CONTAINER_WIDTH = '900px';
+const LOGO_MAX_WIDTH = '120px';
+const LOGO_MAX_HEIGHT = '60px';
+
+type OnboardingStep = 'profile' | 'agents' | 'login' | 'complete';
 
 interface IAgentLoginStatus {
   agentType: AgentType;
@@ -53,6 +62,24 @@ const AVAILABLE_AGENTS: Array<{ type: AgentType; name: string; description: stri
   { type: 'gemini_cli', name: 'Gemini CLI', description: "Google's Gemini AI coding assistant" },
 ];
 
+const POSITION_OPTIONS = [
+  { value: 'dev', label: 'Developer' },
+  { value: 'qa', label: 'QA Engineer' },
+  { value: 'pm_po_ba', label: 'Product Manager / BA' },
+  { value: 'designer', label: 'Designer' },
+  { value: 'cto', label: 'CTO' },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: 'en', label: 'English' },
+  { value: 'ru', label: 'Russian' },
+  { value: 'es', label: 'Spanish' },
+  { value: 'de', label: 'German' },
+  { value: 'fr', label: 'French' },
+  { value: 'ja', label: 'Japanese' },
+  { value: 'zh', label: 'Chinese' },
+];
+
 const styles = {
   root: {
     display: 'flex',
@@ -63,8 +90,33 @@ const styles = {
     background: 'linear-gradient(180deg, #0D0D0D 0%, #1A1A1A 100%)',
   },
   container: {
-    maxWidth: '900px',
+    maxWidth: MAX_CONTAINER_WIDTH,
     width: '100%',
+  },
+  welcomeSection: {
+    textAlign: 'center',
+    marginBottom: '48px',
+  },
+  companyLogo: {
+    maxWidth: LOGO_MAX_WIDTH,
+    maxHeight: LOGO_MAX_HEIGHT,
+    marginBottom: '24px',
+  },
+  welcomeTitle: {
+    fontSize: '36px',
+    fontWeight: 700,
+    color: 'text.primary',
+    marginBottom: '12px',
+  },
+  welcomeSubtitle: {
+    fontSize: '18px',
+    color: 'text.secondary',
+    marginBottom: '8px',
+  },
+  welcomeNote: {
+    fontSize: '14px',
+    color: 'text.disabled',
+    fontStyle: 'italic',
   },
   progressContainer: {
     marginBottom: '48px',
@@ -135,6 +187,42 @@ const styles = {
     maxWidth: '500px',
     margin: '0 auto',
     lineHeight: 1.6,
+  },
+  profileForm: {
+    maxWidth: '500px',
+    margin: '0 auto',
+    marginBottom: '48px',
+  },
+  formField: {
+    marginBottom: '24px',
+  },
+  formLabel: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: 'text.primary',
+    marginBottom: '8px',
+    display: 'block',
+  },
+  requiredAsterisk: {
+    color: 'error.main',
+    marginLeft: '4px',
+  },
+  select: {
+    width: '100%',
+    backgroundColor: 'background.paper',
+    '& .MuiSelect-select': {
+      padding: '12px 16px',
+    },
+  },
+  validationMessage: {
+    fontSize: '12px',
+    color: 'warning.main',
+    marginTop: '24px',
+    padding: '12px',
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    borderRadius: '8px',
+    border: '1px solid',
+    borderColor: 'warning.main',
   },
   grid: {
     display: 'grid',
@@ -358,18 +446,66 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const STEPS: { key: OnboardingStep; label: string }[] = [
+  { key: 'profile', label: 'Your Profile' },
   { key: 'agents', label: 'Select Agents' },
   { key: 'login', label: 'Authenticate' },
   { key: 'complete', label: 'Complete' },
 ];
 
+/**
+ * OnboardingPage Component
+ *
+ * Mandatory 4-step onboarding flow for new users. Users cannot skip onboarding and must complete
+ * all steps before accessing the platform.
+ *
+ * **Flow:**
+ * 1. **Step 1 - Your Profile:** User selects position and preferred agent language (required fields)
+ * 2. **Step 2 - Select Agents:** User selects at least 1 AI agent to configure
+ * 3. **Step 3 - Authenticate:** User authenticates at least 1 selected agent
+ * 4. **Step 4 - Complete:** User reviews and confirms setup, triggering API call
+ *
+ * **Required Fields:**
+ * - Position: dev, qa, pm_po_ba, designer, cto
+ * - Preferred Agent Language: en, ru, es, de, fr, ja, zh
+ * - Configured Agents: At least 1 authenticated agent
+ *
+ * **Edit Mode:**
+ * Users who have completed onboarding can return to `/onboarding` to edit their profile and agents.
+ * Edit mode pre-fills existing values and changes button text from "Get Started" to "Save Changes".
+ *
+ * **Validation:**
+ * - Step 1: Both fields required (validated with Zod)
+ * - Step 2: At least 1 agent must be selected
+ * - Step 3: At least 1 agent must be authenticated
+ * - No progress persistence - must complete in one session
+ *
+ * @returns {JSX.Element} Onboarding page with 4-step flow
+ */
 const OnboardingPage = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const { data: currentUser, isLoading } = useGetCurrentUserQuery();
   const [updateCurrentUser, { isLoading: isSubmitting }] = useUpdateCurrentUserMutation();
 
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('agents');
+  // Form state with react-hook-form + Zod validation
+  const {
+    control,
+    watch,
+    setValue,
+    formState: { isValid },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    mode: 'onChange',
+    defaultValues: {
+      position: '' as ProfileFormData['position'],
+      preferredAgentLanguage: '' as ProfileFormData['preferredAgentLanguage'],
+    },
+  });
+
+  const position = watch('position');
+  const preferredLanguage = watch('preferredAgentLanguage');
+
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('profile');
   const [selectedAgents, setSelectedAgents] = useState<AgentType[]>([]);
   const [activeLoginAgent, setActiveLoginAgent] = useState<AgentType | null>(null);
   const [loginStatuses, setLoginStatuses] = useState<Record<AgentType, IAgentLoginStatus['status']>>({
@@ -378,48 +514,45 @@ const OnboardingPage = () => {
     codex: 'pending',
     gemini_cli: 'pending',
   });
-  // TODO: Add position and language selection UI
-  const position = 'dev';
-  const preferredLanguage = 'en';
+  const [isEditMode, setIsEditMode] = useState(false);
 
-  // Onboarding guard: prevent leaving if onboarding is not completed
+  // Track if onboarding guard has been initialized (prevent duplicate redirects in React Strict Mode)
+  const onboardingGuardInitialized = useRef(false);
+
+  // Initialize edit mode and pre-fill data
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || onboardingGuardInitialized.current) return;
 
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!currentUser.onboardingCompletedAt) {
-        e.preventDefault();
-        e.returnValue = 'You need to complete onboarding before leaving this page.';
-      }
-    };
+    onboardingGuardInitialized.current = true;
 
-    const handlePopState = (e: PopStateEvent) => {
-      if (!currentUser.onboardingCompletedAt) {
-        e.preventDefault();
-        enqueueSnackbar('Please complete onboarding before leaving', { variant: 'warning' });
-        // Push state back to keep user on onboarding page
-        window.history.pushState(null, '', '/onboarding');
-      }
-    };
-
-    // Redirect if already completed onboarding
+    // If onboarding already completed, enable edit mode and pre-fill
     if (currentUser.onboardingCompletedAt) {
-      navigate({ to: '/projects' });
-      return;
+      setIsEditMode(true);
+      if (currentUser.position) {
+        setValue('position', currentUser.position);
+      }
+      if (currentUser.preferredAgentLanguage) {
+        setValue(
+          'preferredAgentLanguage',
+          currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
+        );
+      }
+      setSelectedAgents(currentUser.configuredAgents || []);
+      // Mark all configured agents as authenticated in edit mode
+      if (currentUser.configuredAgents) {
+        const newStatuses: Record<AgentType, IAgentLoginStatus['status']> = {
+          claude_code: 'pending',
+          cursor_cli: 'pending',
+          codex: 'pending',
+          gemini_cli: 'pending',
+        };
+        currentUser.configuredAgents.forEach((agent: AgentType) => {
+          newStatuses[agent] = 'authenticated';
+        });
+        setLoginStatuses(newStatuses);
+      }
     }
-
-    // Add guards
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    window.addEventListener('popstate', handlePopState);
-
-    // Push initial state to enable popstate detection
-    window.history.pushState(null, '', '/onboarding');
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, [currentUser, navigate, enqueueSnackbar]);
+  }, [currentUser, setValue]);
 
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
@@ -471,7 +604,7 @@ const OnboardingPage = () => {
 
       await updateCurrentUser({
         currentUser: {
-          position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer',
+          position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer' | 'cto',
           preferredAgentLanguage: preferredLanguage,
           configuredAgents: authenticatedAgents,
         },
@@ -486,6 +619,11 @@ const OnboardingPage = () => {
   const allAgentsAuthenticated = selectedAgents.every((agent) => loginStatuses[agent] === 'authenticated');
   const authenticatedCount = selectedAgents.filter((agent) => loginStatuses[agent] === 'authenticated').length;
 
+  // Validation flags
+  const isProfileComplete = isValid; // Uses Zod validation
+  const isAgentsSelected = selectedAgents.length >= 1;
+  const isAgentsAuthenticated = authenticatedCount >= 1;
+
   if (isLoading) {
     return (
       <Box sx={styles.root}>
@@ -493,6 +631,26 @@ const OnboardingPage = () => {
       </Box>
     );
   }
+
+  const companyName = currentUser?.company?.name || 'Platform';
+  const companyLogo = currentUser?.company?.logoUrl;
+
+  const renderWelcomeSection = () => (
+    <Box sx={styles.welcomeSection}>
+      {companyLogo && <img src={companyLogo} alt={companyName} style={styles.companyLogo as React.CSSProperties} />}
+      <Typography sx={styles.welcomeTitle}>
+        {isEditMode ? `Manage Your Profile & Agents` : `Welcome to ${companyName}! 🎉`}
+      </Typography>
+      <Typography sx={styles.welcomeSubtitle}>
+        {isEditMode
+          ? 'Update your profile information and agent configurations'
+          : "Let's set up your profile and AI agents to get started"}
+      </Typography>
+      {!isEditMode && (
+        <Typography sx={styles.welcomeNote}>This setup is required to start using the platform</Typography>
+      )}
+    </Box>
+  );
 
   const renderStepIndicator = () => (
     <Box sx={styles.progressContainer}>
@@ -527,12 +685,98 @@ const OnboardingPage = () => {
     </Box>
   );
 
+  const renderProfileStep = () => (
+    <>
+      <Box sx={styles.header}>
+        <Typography sx={styles.title}>Tell Us About Yourself</Typography>
+        <Typography sx={styles.subtitle}>
+          Help us personalize your experience by sharing a few details about your role and preferences.
+        </Typography>
+      </Box>
+
+      <Box sx={styles.profileForm}>
+        {/* Position Field */}
+        <Box sx={styles.formField}>
+          <Typography component="label" sx={styles.formLabel}>
+            Position in Company
+            <span style={styles.requiredAsterisk as React.CSSProperties}>*</span>
+          </Typography>
+          <Controller
+            name="position"
+            control={control}
+            render={({ field, fieldState }) => (
+              <>
+                <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
+                  <MenuItem value="" disabled>
+                    Select your position
+                  </MenuItem>
+                  {POSITION_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {fieldState.error && (
+                  <Typography sx={{ fontSize: '12px', color: 'error.main', marginTop: '4px' }}>
+                    {fieldState.error.message}
+                  </Typography>
+                )}
+              </>
+            )}
+          />
+        </Box>
+
+        {/* Preferred Language Field */}
+        <Box sx={styles.formField}>
+          <Typography component="label" sx={styles.formLabel}>
+            Preferred Agent Language
+            <span style={styles.requiredAsterisk as React.CSSProperties}>*</span>
+          </Typography>
+          <Controller
+            name="preferredAgentLanguage"
+            control={control}
+            render={({ field, fieldState }) => (
+              <>
+                <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
+                  <MenuItem value="" disabled>
+                    Select your preferred language
+                  </MenuItem>
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {fieldState.error && (
+                  <Typography sx={{ fontSize: '12px', color: 'error.main', marginTop: '4px' }}>
+                    {fieldState.error.message}
+                  </Typography>
+                )}
+              </>
+            )}
+          />
+        </Box>
+
+        {!isProfileComplete && (
+          <Typography sx={styles.validationMessage}>⚠️ Please fill in all required fields to continue</Typography>
+        )}
+      </Box>
+
+      <Box sx={styles.footer}>
+        <Box />
+        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isProfileComplete}>
+          Continue
+        </Button>
+      </Box>
+    </>
+  );
+
   const renderAgentsStep = () => (
     <>
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Choose Your AI Agents</Typography>
         <Typography sx={styles.subtitle}>
-          Select the AI coding agents you want to use. You&apos;ll authenticate with each service in the next step.
+          Select at least one AI coding agent to configure. You&apos;ll authenticate with each service in the next step.
         </Typography>
       </Box>
 
@@ -557,14 +801,15 @@ const OnboardingPage = () => {
         })}
       </Box>
 
+      {!isAgentsSelected && (
+        <Typography sx={styles.validationMessage}>⚠️ Select at least one agent to continue</Typography>
+      )}
+
       <Box sx={styles.footer}>
-        <Box />
-        <Button
-          variant="contained"
-          sx={styles.continueButton}
-          onClick={handleNext}
-          disabled={selectedAgents.length === 0}
-        >
+        <Button sx={styles.backButton} onClick={handleBack}>
+          Back
+        </Button>
+        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isAgentsSelected}>
           Continue
         </Button>
       </Box>
@@ -576,7 +821,8 @@ const OnboardingPage = () => {
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Authenticate Your Agents</Typography>
         <Typography sx={styles.subtitle}>
-          Sign in to each agent&apos;s service. This creates a secure session for the agent to work on your behalf.
+          Sign in to at least one agent&apos;s service. This creates a secure session for the agent to work on your
+          behalf.
         </Typography>
       </Box>
 
@@ -681,25 +927,17 @@ const OnboardingPage = () => {
         </Box>
       </Box>
 
+      {!isAgentsAuthenticated && (
+        <Typography sx={styles.validationMessage}>⚠️ Authenticate at least one agent to continue</Typography>
+      )}
+
       <Box sx={styles.footer}>
         <Button sx={styles.backButton} onClick={handleBack}>
           Back
         </Button>
-        <Box sx={{ display: 'flex', gap: '12px' }}>
-          {!allAgentsAuthenticated && (
-            <Button sx={styles.backButton} onClick={handleNext}>
-              Skip for now
-            </Button>
-          )}
-          <Button
-            variant="contained"
-            sx={styles.continueButton}
-            onClick={handleNext}
-            disabled={authenticatedCount === 0}
-          >
-            {allAgentsAuthenticated ? 'Continue' : `Continue (${authenticatedCount}/${selectedAgents.length})`}
-          </Button>
-        </Box>
+        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isAgentsAuthenticated}>
+          {allAgentsAuthenticated ? 'Continue' : `Continue (${authenticatedCount}/${selectedAgents.length})`}
+        </Button>
       </Box>
     </>
   );
@@ -708,7 +946,7 @@ const OnboardingPage = () => {
     <Box sx={styles.completeContainer}>
       <Typography sx={styles.completeIcon}>🎉</Typography>
       <Typography sx={styles.completeTitle}>You&apos;re all set!</Typography>
-      <Typography sx={styles.completeSubtitle}>Your AI agents are configured and ready to use.</Typography>
+      <Typography sx={styles.completeSubtitle}>Your profile and AI agents are configured and ready to use.</Typography>
 
       <Box sx={{ maxWidth: '400px', margin: '0 auto', marginBottom: '32px' }}>
         {selectedAgents.map((agentType) => {
@@ -736,7 +974,7 @@ const OnboardingPage = () => {
           Back
         </Button>
         <Button variant="contained" sx={styles.continueButton} onClick={handleComplete} disabled={isSubmitting}>
-          {isSubmitting ? 'Setting up...' : 'Get Started'}
+          {isSubmitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Get Started'}
         </Button>
       </Box>
     </Box>
@@ -745,8 +983,10 @@ const OnboardingPage = () => {
   return (
     <Box sx={styles.root}>
       <Box sx={styles.container}>
+        {renderWelcomeSection()}
         {renderStepIndicator()}
 
+        {currentStep === 'profile' && renderProfileStep()}
         {currentStep === 'agents' && renderAgentsStep()}
         {currentStep === 'login' && renderLoginStep()}
         {currentStep === 'complete' && renderCompleteStep()}

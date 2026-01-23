@@ -54,6 +54,67 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert { @user.configured_agents == [ "claude_code", "cursor_cli" ] }
   end
 
+  test "#update does not set onboarding_completed_at if position missing" do
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+
+    patch :update, params: {
+      current_user: {
+        preferred_agent_language: "en",
+        configured_agents: [ "claude_code" ]
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_completed_at.nil? }
+  end
+
+  test "#update does not set onboarding_completed_at if language missing" do
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+
+    patch :update, params: {
+      current_user: {
+        position: "dev",
+        configured_agents: [ "claude_code" ]
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_completed_at.nil? }
+  end
+
+  test "#update does not set onboarding_completed_at if configured_agents empty" do
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+
+    patch :update, params: {
+      current_user: {
+        position: "dev",
+        preferred_agent_language: "en",
+        configured_agents: []
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_completed_at.nil? }
+  end
+
+  test "#update does not set onboarding_completed_at if configured_agents missing" do
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+
+    patch :update, params: {
+      current_user: {
+        position: "dev",
+        preferred_agent_language: "en"
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_completed_at.nil? }
+  end
+
   test "#update with password and password_confirmation" do
     new_password = "newpassword123"
 
