@@ -3,7 +3,7 @@
 module Api
   module V1
     class SessionsController < Api::V1::ApplicationController
-      skip_before_action :authenticate_user!, only: [ :create ]
+      skip_before_action :authenticate_user!, only: [ :create, :omniauth, :failure ]
 
       # @tags Authentication
       # @summary Create a new user session (login)
@@ -33,6 +33,32 @@ module Api
       def destroy
         sign_out
         head :no_content
+      end
+
+      # @tags Authentication
+      # @summary OAuth callback handler (Google)
+      # @no_auth
+      #
+      # @response Successful OAuth login(302) [Redirect to root]
+      # @response OAuth failed(302) [Redirect to login with error]
+      def omniauth
+        auth_service = GoogleOmniAuthService.new(request.env["omniauth.auth"])
+        user = auth_service.authenticate
+
+        if user.pending?
+          redirect_to "/login?error=pending_approval", allow_other_host: false
+          return
+        end
+
+        sign_in(user)
+        redirect_to "/", allow_other_host: false
+      rescue StandardError => e
+        redirect_to "/login?error=oauth_failed", allow_other_host: false
+      end
+
+      def failure
+        error_type = params[:message] || "oauth_failed"
+        redirect_to "/login?error=#{error_type}", allow_other_host: false
       end
 
       private

@@ -19,6 +19,10 @@ class UserDashboard < Administrate::BaseDashboard
       include_blank: false,
       collection: ->(field) { available_states_collection(field, :state) }
     ),
+    state_event: Field::Select.with_options(
+      include_blank: true,
+      collection: ->(field) { available_events_collection(field, :state) }
+    ),
     company: Field::BelongsTo,
     owned_projects: Field::HasMany,
     collaborated_projects: Field::HasMany,
@@ -56,7 +60,7 @@ class UserDashboard < Administrate::BaseDashboard
     password
     password_confirmation
     role
-    state
+    state_event
     company
   ].freeze
 

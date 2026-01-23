@@ -4,6 +4,10 @@ domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
 asset_host: <%= ENV['ASSET_HOST'] || "lvh.me:4000" %>
 protocol: "https"
 
+google_oauth:
+  client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
+  client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
+
 anthropic:
   api_key: <%= ENV['ANTHROPIC_API_KEY'] %>
 

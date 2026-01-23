@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_22_130418) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_22_211731) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -26,6 +26,10 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_22_130418) do
     t.string "logo_url"
     t.string "primary_color", default: "#4785FF"
     t.string "secondary_color", default: "#bb9af7"
+    t.string "email_domain", null: false
+    t.boolean "auto_accept_users", default: false, null: false
+    t.text "logo_data"
+    t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
@@ -51,6 +55,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_22_130418) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.bigint "owner_id", null: false
+    t.string "preferred_artifacts_language", default: "en"
     t.index ["company_id", "name"], name: "index_projects_on_company_id_and_name", unique: true
     t.index ["company_id", "slug"], name: "index_projects_on_company_id_and_slug", unique: true
     t.index ["company_id"], name: "index_projects_on_company_id"
@@ -67,9 +72,19 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_22_130418) do
     t.string "role", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "onboarding_completed_at"
+    t.string "position"
+    t.string "preferred_agent_language", default: "en"
+    t.text "configured_agents", default: [], array: true
+    t.string "provider"
+    t.string "uid"
+    t.string "google_token"
+    t.string "google_refresh_token"
+    t.string "avatar_url"
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"
     t.index ["state"], name: "index_users_on_state"
   end

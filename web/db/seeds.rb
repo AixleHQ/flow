@@ -17,14 +17,16 @@ end
 puts "Creating test company..."
 test_company = Company.find_or_create_by!(slug: "dualboot") do |company|
   company.name = "Dualboot Partners"
+  company.email_domain = "dualbootpartners.com"
   company.state = :active
+  company.auto_accept_users = true
   company.settings = {
     billing: { enabled: false },
     features: { workflows: true, sessions: true }
   }
 end
 
-puts "Test company created: #{test_company.name}"
+puts "Test company created: #{test_company.name} (#{test_company.email_domain})"
 
 # Stop here in production environment
 if Rails.env.production?
@@ -35,31 +37,43 @@ end
 puts "Creating test users..."
 test_password = Settings.admin.password
 
-# Company users
-artem = User.find_or_create_by!(email: "artem@dualboot.dev") do |user|
+# Company users with onboarding completed
+artem = User.find_or_create_by!(email: "artem@dualbootpartners.com") do |user|
   user.name = "Artem"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
   user.company = test_company
+  user.position = :dev
+  user.preferred_agent_language = "en"
+  user.configured_agents = %w[claude_code cursor_cli]
+  user.onboarding_completed_at = Time.current
 end
 puts "User created: #{artem.email}"
 
-andrey = User.find_or_create_by!(email: "andrey@dualboot.dev") do |user|
+andrey = User.find_or_create_by!(email: "andrey@dualbootpartners.com") do |user|
   user.name = "Andrey"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
   user.company = test_company
+  user.position = :dev
+  user.preferred_agent_language = "ru"
+  user.configured_agents = %w[codex gemini_cli]
+  user.onboarding_completed_at = Time.current
 end
 puts "User created: #{andrey.email}"
 
-alex = User.find_or_create_by!(email: "alex@dualboot.dev") do |user|
+alex = User.find_or_create_by!(email: "alex@dualbootpartners.com") do |user|
   user.name = "Alexander"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
   user.company = test_company
+  user.position = :qa
+  user.preferred_agent_language = "en"
+  user.configured_agents = %w[claude_code]
+  user.onboarding_completed_at = Time.current
 end
 puts "User created: #{alex.email}"
 

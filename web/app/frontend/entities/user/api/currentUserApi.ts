@@ -1,6 +1,17 @@
 import { baseApi, QueryTag } from 'shared/api';
 
-import type { CurrentUserResponse } from '../model/types';
+import type { AgentType, CurrentUserResponse, UserPosition } from '../model/types';
+
+interface IUpdateCurrentUserRequest {
+  currentUser: {
+    name?: string;
+    password?: string;
+    passwordConfirmation?: string;
+    position?: UserPosition;
+    preferredAgentLanguage?: string;
+    configuredAgents?: AgentType[];
+  };
+}
 
 export const currentUserApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -11,7 +22,15 @@ export const currentUserApi = baseApi.injectEndpoints({
       }),
       providesTags: [QueryTag.CurrentUser],
     }),
+    updateCurrentUser: builder.mutation<CurrentUserResponse, IUpdateCurrentUserRequest>({
+      query: (data) => ({
+        url: '/api/v1/current_user',
+        method: 'PATCH',
+        data,
+      }),
+      invalidatesTags: [QueryTag.CurrentUser],
+    }),
   }),
 });
 
-export const { useGetCurrentUserQuery } = currentUserApi;
+export const { useGetCurrentUserQuery, useUpdateCurrentUserMutation } = currentUserApi;

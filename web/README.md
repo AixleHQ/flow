@@ -31,6 +31,39 @@ docker-compose up
 
 4. Access the application at `http://localhost:4000`
 
+## Google OAuth Configuration
+
+To enable Google OAuth login, you need to configure Google Cloud Console:
+
+1. **Create Google Cloud Project:**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Create a new project or select an existing one
+
+2. **Enable Google+ API:**
+   - Navigate to "APIs & Services" → "Library"
+   - Search for "Google+ API" and enable it
+
+3. **Create OAuth 2.0 Credentials:**
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "OAuth 2.0 Client ID"
+   - Application type: "Web application"
+   - Add Authorized redirect URI: `http://localhost:4000/api/v1/auth/google/callback`
+   - For production, add: `https://yourdomain.com/api/v1/auth/google/callback`
+
+4. **Set Environment Variables:**
+   Create `.env` file in the `web/` directory:
+   ```bash
+   GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_CLIENT_SECRET=your-client-secret
+   ```
+
+5. **Restart the application:**
+   ```bash
+   docker-compose restart web
+   ```
+
+**Note:** Without Google OAuth configuration, the Google login button will redirect to `/api/v1/auth/failure`. Password-based login will still work.
+
 ## Development Commands
 
 ### Database Management
@@ -63,6 +96,75 @@ The project follows a modern architecture with:
 - Feature-Sliced Design (FSD) for frontend organization
 - Docker-based development environment
 - Comprehensive testing and linting setup
+
+### State Machines (AASM)
+
+The project uses AASM gem for managing entity lifecycles and state transitions:
+
+**Location:** `app/state_machines/`
+
+**Active State Machines:**
+
+1. **CompanyStateMachine** (`app/state_machines/company_state_machine.rb`)
+   - States: `active` (initial), `suspended`, `archived`
+   - Events: `suspend`, `activate`, `archive`
+   - Auto-generated scopes: `Company.active`, `Company.suspended`, `Company.archived`
+
+2. **UserStateMachine** (`app/state_machines/user_state_machine.rb`)
+   - States: `active` (initial), `pending`, `suspended`, `archived`
+   - Events: `activate`, `suspend`, `archive`, `mark_pending`
+   - Auto-generated scopes: `User.active`, `User.pending`, etc.
+
+**Usage Example:**
+```ruby
+# Change state via events
+company.suspend!  # active → suspended
+company.activate! # suspended → active
+
+# Query by state
+Company.active.where(email_domain: "acme.com")
+User.pending.where(company: company)
+```
+
+**Note:** Roles (`employee`, `admin`, `super_admin`) and positions use `enumerize`, not state machines.
+
+### Automatic Case Conversion (Frontend ↔ Backend)
+
+The project automatically converts between camelCase (TypeScript) and snake_case (Ruby) in API requests/responses.
+
+**Implementation:** `app/frontend/shared/api/baseApi.ts`
+
+**How it works:**
+
+```typescript
+// Frontend sends (camelCase)
+const request = {
+  currentUser: {
+    passwordConfirmation: "secret123",
+    preferredAgentLanguage: "en"
+  }
+};
+
+// Automatically converted to snake_case for Rails
+// { current_user: { password_confirmation: "secret123", preferred_agent_language: "en" } }
+
+// Rails responds (snake_case)
+// { current_user: { onboarding_completed_at: "2026-01-23", configured_agents: [...] } }
+
+// Automatically converted to camelCase for TypeScript
+const response = {
+  currentUser: {
+    onboardingCompletedAt: "2026-01-23",
+    configuredAgents: [...]
+  }
+};
+```
+
+**TypeScript Best Practices:**
+- All interfaces use camelCase (e.g., `IUpdateCurrentUserRequest`, `IUser`)
+- No need for manual transform functions
+- Automatic conversion happens at HTTP client level
+- Consistent with `web_reference` project architecture
 
 ## Contributing
 

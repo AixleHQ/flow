@@ -3,10 +3,19 @@
 class User < ApplicationRecord
   extend Enumerize
 
-  has_secure_password
+  # State machine
+  include UserStateMachine
 
-  enumerize :state, in: %i[active suspended archived], default: :active, predicates: true, scope: true
-  enumerize :role, in: %i[collaborator admin super_admin], default: :collaborator, predicates: true, scope: true
+  has_secure_password validations: false
+
+  # Constants
+  AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
+  POSITIONS = %w[qa pm_po_ba dev designer cto].freeze
+  AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
+
+  # Enumerize for roles and positions (not state machines)
+  enumerize :role, in: %i[employee admin super_admin], default: :employee, predicates: true, scope: true
+  enumerize :position, in: POSITIONS, predicates: true
 
   # Associations
   belongs_to :company, optional: true
@@ -19,9 +28,34 @@ class User < ApplicationRecord
                     uniqueness: { case_sensitive: false },
                     format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
+  validates :password, length: { minimum: 8 }, if: :password_digest_changed?, allow_blank: true
+  validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
+  validates :company_id, presence: true, unless: :super_admin?
   validate :super_admin_company_validation
 
-  # Custom validations
+  before_validation :set_onboarding_completed_at, if: :onboarding_completed?
+
+  # Scopes
+  scope :for_company, ->(company) { where(company: company) }
+
+  # Helper methods
+  def onboarding_completed?
+    return true if super_admin?
+
+    position.present? &&
+      preferred_agent_language.present? &&
+      configured_agents.present? &&
+      configured_agents.any?
+  end
+
+  # All projects user has access to (owned + collaborated)
+  def projects
+    Project.where(id: owned_projects.select(:id))
+           .or(Project.where(id: collaborated_projects.select(:id)))
+  end
+
+  private
+
   def super_admin_company_validation
     if super_admin?
       errors.add(:company_id, "must be nil for super_admin users") if company_id.present?
@@ -30,13 +64,7 @@ class User < ApplicationRecord
     end
   end
 
-
-  # Scopes
-  scope :for_company, ->(company) { where(company: company) }
-
-  # All projects user has access to (owned + collaborated)
-  def projects
-    Project.where(id: owned_projects.select(:id))
-           .or(Project.where(id: collaborated_projects.select(:id)))
+  def set_onboarding_completed_at
+    self.onboarding_completed_at = Time.current
   end
 end

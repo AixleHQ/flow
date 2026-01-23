@@ -1,30 +1,45 @@
 export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
+export type UserRole = 'employee' | 'company_admin' | 'super_admin';
+export type UserState = 'active' | 'pending' | 'suspended' | 'archived';
+export type UserPosition = 'qa' | 'pm_po_ba' | 'dev' | 'designer' | 'cto';
 
-export interface User {
+export interface IUser {
   id: number;
   email: string;
   name: string;
-  onboardingCompleted: boolean;
-  selectedAgents: AgentType[];
-  configuredAgents: AgentType[];
-  pendingAgents: AgentType[];
+  role: UserRole;
+  state: UserState;
+  position: UserPosition | null;
+  preferredAgentLanguage: string;
+  onboardingCompletedAt: string | null;
 }
 
-export interface CompanyBranding {
+export interface ICompanyBranding {
   name: string;
+  emailDomain: string;
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
 }
 
-export interface Company {
+export interface ICompany {
   id: number;
   name: string;
-  slug: string;
-  branding: CompanyBranding;
+  emailDomain: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  secondaryColor: string;
 }
 
 export interface CurrentUserResponse {
-  user: User;
-  company: Company;
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  state: UserState;
+  position: UserPosition | null;
+  preferredAgentLanguage: string;
+  configuredAgents: AgentType[];
+  onboardingCompletedAt: string | null;
+  company: ICompany | null;
 }

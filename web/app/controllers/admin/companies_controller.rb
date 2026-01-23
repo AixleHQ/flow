@@ -2,13 +2,46 @@
 
 module Admin
   class CompaniesController < Admin::ApplicationController
-    # Overwrite any of the RESTful controller actions to implement custom behavior
-    # For example, you may want to send an email after a foo is updated.
-    #
-    # def update
-    #   super
-    #   send_foo_updated_email(requested_resource)
-    # end
+    def create
+      # Extract initial admin credentials before building company
+      initial_admin_email = params.dig(:company, :initial_admin_email)
+      initial_admin_password = params.dig(:company, :initial_admin_password)
+
+      # Remove virtual attributes from params before creating company
+      company_params = resource_params.except(:initial_admin_email, :initial_admin_password)
+      company = Company.new(company_params)
+
+      if company.save
+        # Create initial admin user if credentials provided
+        if initial_admin_email.present? && initial_admin_password.present?
+          admin_user = User.new(
+            email: initial_admin_email,
+            password: initial_admin_password,
+            password_confirmation: initial_admin_password,
+            name: initial_admin_email.split("@").first.titleize, # Generate name from email
+            company_id: company.id,
+            role: "admin",
+            state: "active",
+            onboarding_completed_at: nil
+          )
+
+          unless admin_user.save
+            # If admin user creation fails, delete the company and show errors
+            company.destroy
+            flash[:error] = "Failed to create admin user: #{admin_user.errors.full_messages.join(', ')}"
+            render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+            return
+          end
+        end
+
+        redirect_to(
+          [ namespace, company ],
+          notice: translate_with_resource("create.success"),
+        )
+      else
+        render :new, locals: { page: Administrate::Page::Form.new(dashboard, company) }, status: :unprocessable_entity
+      end
+    end
 
     # Override this method to specify custom lookup behavior.
     # This will be used to set the resource for the `show`, `edit`, and `update`
