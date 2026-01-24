@@ -31,36 +31,32 @@ const agentColors: Record<AgentType, string> = {
   claude_code: '#d97706',
 };
 
-const agentLoginInfo: Record<AgentType, { name: string; description: string; icon: string }> = {
-  claude_code: {
-    name: 'Claude Code',
-    description: "Anthropic's Claude for code generation and assistance",
-    icon: '🤖',
-  },
-  cursor_cli: {
-    name: 'Cursor CLI',
-    description: 'AI-powered code editor in your terminal',
-    icon: '⚡',
-  },
-  codex: {
-    name: 'OpenAI Codex',
-    description: "OpenAI's powerful code generation model",
-    icon: '🧠',
-  },
-  gemini_cli: {
-    name: 'Gemini CLI',
-    description: "Google's Gemini AI coding assistant",
-    icon: '🔓',
-  },
-};
-
-// Available agents list
+// Available agents list with detailed descriptions (single source of truth)
 const AVAILABLE_AGENTS: Array<{ type: AgentType; name: string; description: string }> = [
-  { type: 'claude_code', name: 'Claude Code', description: "Anthropic's Claude for code generation" },
-  { type: 'cursor_cli', name: 'Cursor CLI', description: 'AI-powered code editor in your terminal' },
-  { type: 'codex', name: 'OpenAI Codex', description: "OpenAI's powerful code generation model" },
-  { type: 'gemini_cli', name: 'Gemini CLI', description: "Google's Gemini AI coding assistant" },
+  {
+    type: 'claude_code',
+    name: 'Claude Code',
+    description: "Anthropic's AI coding assistant with deep reasoning capabilities",
+  },
+  {
+    type: 'cursor_cli',
+    name: 'Cursor CLI',
+    description: 'AI-powered code editor with context-aware suggestions',
+  },
+  {
+    type: 'codex',
+    name: 'OpenAI Codex',
+    description: "OpenAI's code generation model optimized for multiple languages",
+  },
+  {
+    type: 'gemini_cli',
+    name: 'Gemini CLI',
+    description: "Google's multimodal AI for code and documentation tasks",
+  },
 ];
+
+// Helper to get agent info by type
+const getAgentInfo = (type: AgentType) => AVAILABLE_AGENTS.find((a) => a.type === type)!;
 
 const POSITION_OPTIONS = [
   { value: 'dev', label: 'Developer' },
@@ -557,10 +553,29 @@ const OnboardingPage = () => {
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
 
+  /**
+   * Toggles the selection state of an agent.
+   * Adds the agent to selectedAgents if not present, removes if already selected.
+   * Used in Step 2 (Select Agents) to allow users to choose which AI agents to configure.
+   * @param agentType - The type of agent to toggle (claude_code, cursor_cli, codex, gemini_cli)
+   */
   const toggleAgent = (agentType: AgentType) => {
     setSelectedAgents((prev) =>
       prev.includes(agentType) ? prev.filter((a) => a !== agentType) : [...prev, agentType],
     );
+  };
+
+  /**
+   * Handles keyboard interaction for agent selection.
+   * Allows selecting agents with Enter or Space keys for accessibility.
+   * @param event - Keyboard event
+   * @param agentType - The type of agent to toggle
+   */
+  const handleAgentKeyDown = (event: React.KeyboardEvent, agentType: AgentType) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleAgent(agentType);
+    }
   };
 
   const handleNext = () => {
@@ -588,7 +603,7 @@ const OnboardingPage = () => {
 
   const handleMarkAuthenticated = (agentType: AgentType) => {
     setLoginStatuses((prev) => ({ ...prev, [agentType]: 'authenticated' }));
-    enqueueSnackbar(`${agentLoginInfo[agentType].name} authenticated!`, { variant: 'success' });
+    enqueueSnackbar(`${getAgentInfo(agentType).name} authenticated!`, { variant: 'success' });
 
     // Move to next agent if available
     const currentIndex = selectedAgents.indexOf(agentType);
@@ -621,7 +636,15 @@ const OnboardingPage = () => {
 
   // Validation flags
   const isProfileComplete = isValid; // Uses Zod validation
+  /**
+   * Validates that at least one agent is selected.
+   * Required to proceed from Step 2 (Select Agents) to Step 3 (Authenticate).
+   */
   const isAgentsSelected = selectedAgents.length >= 1;
+  /**
+   * Validates that at least one agent has been authenticated.
+   * Required to proceed from Step 3 (Authenticate) to Step 4 (Complete).
+   */
   const isAgentsAuthenticated = authenticatedCount >= 1;
 
   if (isLoading) {
@@ -774,7 +797,7 @@ const OnboardingPage = () => {
   const renderAgentsStep = () => (
     <>
       <Box sx={styles.header}>
-        <Typography sx={styles.title}>Choose Your AI Agents</Typography>
+        <Typography sx={styles.title}>Select AI Agents to Configure</Typography>
         <Typography sx={styles.subtitle}>
           Select at least one AI coding agent to configure. You&apos;ll authenticate with each service in the next step.
         </Typography>
@@ -791,8 +814,13 @@ const OnboardingPage = () => {
                 ...(isSelected ? styles.cardSelected : {}),
               }}
               onClick={() => toggleAgent(agent.type)}
+              onKeyDown={(e) => handleAgentKeyDown(e, agent.type)}
+              tabIndex={0}
+              role="button"
+              aria-pressed={isSelected}
+              aria-label={`${agent.name}: ${agent.description}`}
             >
-              <Checkbox checked={isSelected} sx={styles.checkbox} color="primary" />
+              <Checkbox checked={isSelected} sx={styles.checkbox} color="primary" tabIndex={-1} />
               <Box sx={{ ...styles.colorBar, backgroundColor: agentColors[agent.type] }} />
               <Typography sx={styles.cardName}>{agent.name}</Typography>
               <Typography sx={styles.cardDescription}>{agent.description}</Typography>
@@ -830,7 +858,7 @@ const OnboardingPage = () => {
         {/* Agents List */}
         <Box sx={styles.agentsList}>
           {selectedAgents.map((agentType) => {
-            const info = agentLoginInfo[agentType];
+            const info = getAgentInfo(agentType);
             const status = loginStatuses[agentType];
             const isActive = activeLoginAgent === agentType;
             const isAuthenticated = status === 'authenticated';
@@ -877,7 +905,7 @@ const OnboardingPage = () => {
               <Box sx={styles.terminalHeader}>
                 <Typography sx={styles.terminalTitle}>
                   <span style={{ color: agentColors[activeLoginAgent] }}>●</span>
-                  {agentLoginInfo[activeLoginAgent].name} Authentication
+                  {getAgentInfo(activeLoginAgent).name} Authentication
                 </Typography>
                 {loginStatuses[activeLoginAgent] === 'authenticating' && (
                   <Button
@@ -897,7 +925,7 @@ const OnboardingPage = () => {
                   <CircularProgress size={32} />
                   <Typography sx={{ fontSize: '14px' }}>Starting authentication session...</Typography>
                   <Typography sx={{ fontSize: '12px', color: 'text.disabled', maxWidth: '300px', textAlign: 'center' }}>
-                    {agentLoginInfo[activeLoginAgent].description}
+                    {getAgentInfo(activeLoginAgent).description}
                   </Typography>
                   {/* In real implementation, this would be an iframe to ttyd */}
                   {/* <iframe src={sessionUrl} style={styles.terminalIframe} /> */}
@@ -909,7 +937,7 @@ const OnboardingPage = () => {
                     Successfully authenticated!
                   </Typography>
                   <Typography sx={{ fontSize: '12px', color: 'text.disabled' }}>
-                    {agentLoginInfo[activeLoginAgent].name} is ready to use
+                    {getAgentInfo(activeLoginAgent).name} is ready to use
                   </Typography>
                 </Box>
               ) : (
@@ -950,7 +978,7 @@ const OnboardingPage = () => {
 
       <Box sx={{ maxWidth: '400px', margin: '0 auto', marginBottom: '32px' }}>
         {selectedAgents.map((agentType) => {
-          const info = agentLoginInfo[agentType];
+          const info = getAgentInfo(agentType);
           const isAuthenticated = loginStatuses[agentType] === 'authenticated';
           return (
             <Box key={agentType} sx={styles.summaryCard}>

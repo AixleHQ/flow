@@ -1292,18 +1292,22 @@ The established architectural patterns provide a production-ready foundation fol
 
 ### User Onboarding Flow
 
-**Decision:** Mandatory 4-Step Onboarding with Strict Validation (updated in Story 2.1)
+**Decision:** Mandatory 4-Step Onboarding with Strict Validation (updated in Story 2.1, verified in Story 2.2)
 
 **Context:**
 Users must complete onboarding before accessing the platform. Onboarding **cannot be skipped** and includes:
 1. **Step 1 - Your Profile:** Selecting position (Dev, QA, PM/PO/BA, Designer, CTO) and preferred agent language
 2. **Step 2 - Select Agents:** Selecting at least one AI agent (Claude Code, Cursor CLI, Codex, Gemini CLI)
+   - Each agent displays name and detailed description
+   - Visual states: default, selected (highlighted border), hover
+   - Validation: at least 1 agent required to proceed
+   - State persists across step navigation (back/forward)
 3. **Step 3 - Authenticate:** Authenticating at least one selected agent
 4. **Step 4 - Complete:** Reviewing and confirming setup
 
 **No progress is saved** - users must complete all steps in one session.
 
-**Edit Mode:** Users who have completed onboarding can return to `/onboarding` to edit their profile, position, language, and agents.
+**Edit Mode:** Users who have completed onboarding can return to `/onboarding` to edit their profile, position, language, and agents. Configured agents are pre-selected in Step 2.
 
 **Solution:**
 Implemented automatic `onboarding_completed_at` tracking via `before_validation` callback in User model:

@@ -152,6 +152,34 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert_response :unauthorized
   end
 
+  test "#show returns configured_agents for edit mode" do
+    @user.update!(configured_agents: %w[claude_code cursor_cli])
+
+    get :show
+
+    assert_response :success
+    json = response.parsed_body
+    # Rails API returns snake_case, frontend converts to camelCase
+    assert { json["data"]["configured_agents"] == %w[claude_code cursor_cli] }
+  end
+
+  test "#update can modify configured_agents in edit mode" do
+    @user.update!(
+      configured_agents: %w[claude_code],
+      onboarding_completed_at: 1.day.ago
+    )
+
+    patch :update, params: {
+      current_user: {
+        configured_agents: %w[claude_code cursor_cli codex]
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.configured_agents == %w[claude_code cursor_cli codex] }
+  end
+
   private
 
   def current_user
