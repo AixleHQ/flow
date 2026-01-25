@@ -19,11 +19,6 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN useradd -m -d /home/claude -s /bin/bash claude \
     && chown -R claude:claude /workspace /opt/watcher
 
-# -----------------------------------------------------------------------------
-# Claude Code managed settings (forces console/API key auth, no login prompts)
-# -----------------------------------------------------------------------------
-COPY config/claude-code/managed-settings.json /etc/claude-code/managed-settings.json
-
 # Default .claude.json (theme + onboarding state)
 RUN mkdir -p /home/claude/.claude \
     && chown -R claude:claude /home/claude
@@ -31,7 +26,6 @@ RUN mkdir -p /home/claude/.claude \
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
-COPY prompts/ /prompts/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 

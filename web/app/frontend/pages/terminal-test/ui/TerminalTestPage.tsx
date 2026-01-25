@@ -1,13 +1,25 @@
-import { Box, Button, Card, CardContent, Chip, Grid, Paper, Typography, CircularProgress } from '@mui/material';
-import { useState, useRef } from 'react';
+import {
+  Box,
+  Button,
+  Paper,
+  Typography,
+  CircularProgress,
+  ToggleButton,
+  ToggleButtonGroup,
+  IconButton,
+  Chip,
+} from '@mui/material';
 import { enqueueSnackbar } from 'notistack';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from '@tanstack/react-router';
 
-import type { AgentType } from 'entities/terminal-session/model/types';
+import type { AgentType, ITerminalSession } from 'entities/terminal-session/model/types';
 import {
   useCreateTerminalSessionMutation,
   useCancelSessionMutation,
   useGetTerminalSessionQuery,
 } from 'shared/api/terminalSessionApi';
+import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
   { type: 'claude_code', label: 'Claude Code', color: '#D97706' },
@@ -16,239 +28,252 @@ const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
   { type: 'gemini_cli', label: 'Gemini CLI', color: '#2563EB' },
 ];
 
-interface AgentTerminalProps {
-  agentType: AgentType;
-  label: string;
-  color: string;
-}
+type SessionType = 'auth_setup' | 'agent_session';
 
-const AgentTerminal: React.FC<AgentTerminalProps> = ({ agentType, label, color }) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+const CloseIcon = () => <span style={{ fontSize: '16px' }}>✕</span>;
+
+export const TerminalTestPage: React.FC = () => {
+  const params = useParams({ strict: false });
+  const navigate = useNavigate();
+  const routeToken = (params as { routeToken?: string }).routeToken;
+
+  const [selectedAgent, setSelectedAgent] = useState<AgentType>('claude_code');
+  const [sessionType, setSessionType] = useState<SessionType>('agent_session');
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [session, setSession] = useState<ITerminalSession | null>(null);
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
   const [cancelSession, { isLoading: isCancelling }] = useCancelSessionMutation();
 
-  // Poll session status
-  const { data: sessionData } = useGetTerminalSessionQuery(sessionId!, {
-    skip: !sessionId,
-    pollingInterval: 2000,
-  });
+  // Fetch existing session by routeToken if provided
+  const { data: existingSession, isLoading: isLoadingExisting } = useGetTerminalSessionQuery(
+    routeToken as string,
+    { skip: !routeToken }
+  );
 
-  const session = sessionData?.data;
+  // When existing session is loaded, use it
+  useEffect(() => {
+    if (existingSession?.data) {
+      setSessionId(existingSession.data.id);
+      setSession(existingSession.data);
+      // Set agent type from session
+      if (existingSession.data.agentType) {
+        setSelectedAgent(existingSession.data.agentType);
+      }
+    }
+  }, [existingSession]);
 
-  // Build ttyd URL from websocket URL
-  // websocket_url: ws://localhost/s/26/tty/ws -> http://localhost/s/26/tty
-  const ttydUrl = session?.websocketUrl
-    ? session.websocketUrl.replace('ws://', 'http://').replace('/ws', '')
-    : null;
+  const selectedAgentInfo = AGENT_TYPES.find((a) => a.type === selectedAgent)!;
 
-  // Start session
+  const handleAgentChange = (_: React.MouseEvent<HTMLElement>, newAgent: AgentType | null) => {
+    if (newAgent) {
+      setSelectedAgent(newAgent);
+    }
+  };
+
+  const handleSessionTypeChange = (_: React.MouseEvent<HTMLElement>, newType: SessionType | null) => {
+    if (newType) {
+      setSessionType(newType);
+    }
+  };
+
   const handleStart = async () => {
     try {
       const result = await createSession({
         terminalSession: {
-          sessionType: 'auth_setup',
-          agentType,
+          sessionType: sessionType,
+          agentType: selectedAgent,
         },
       }).unwrap();
 
       setSessionId(result.data.id);
-      setIframeLoaded(false);
-      enqueueSnackbar(`${label} session started`, { variant: 'success' });
+      const modeLabel = sessionType === 'agent_session' ? '(with credentials)' : '(auth)';
+      enqueueSnackbar(`${selectedAgentInfo.label} session started ${modeLabel}`, { variant: 'success' });
     } catch (error) {
-      enqueueSnackbar(`Failed to start ${label}`, { variant: 'error' });
+      enqueueSnackbar(`Failed to start ${selectedAgentInfo.label}`, { variant: 'error' });
       console.error('Failed to create terminal session:', error);
     }
   };
 
-  // Stop session
   const handleStop = async () => {
     if (!sessionId) return;
 
     try {
       await cancelSession(sessionId).unwrap();
       setSessionId(null);
-      setIframeLoaded(false);
-      enqueueSnackbar(`${label} session stopped`, { variant: 'info' });
-    } catch (error) {
-      enqueueSnackbar(`Failed to stop ${label}`, { variant: 'error' });
+      setSession(null);
+      // Navigate back to terminal-test without routeToken
+      if (routeToken) {
+        navigate({ to: '/terminal-test' });
+      }
+      enqueueSnackbar('Session stopped', { variant: 'info' });
+    } catch {
+      enqueueSnackbar('Failed to stop session', { variant: 'error' });
     }
   };
 
-  const handleIframeLoad = () => {
-    setIframeLoaded(true);
-    iframeRef.current?.focus();
+  const handleSessionUpdate = (updatedSession: ITerminalSession) => {
+    setSession(updatedSession);
+
+    // Update URL with route_token when session becomes running
+    if (updatedSession.state === 'running' && updatedSession.routeToken && !routeToken) {
+      navigate({ to: '/terminal-test/$routeToken', params: { routeToken: updatedSession.routeToken } });
+    }
   };
 
   const getStatusChip = () => {
-    if (!session) return <Chip size="small" label="Idle" />;
+    if (!session) return null;
     if (session.errorMessage) return <Chip size="small" label="Error" color="error" />;
-    if (session.state !== 'running') return <Chip size="small" label={session.state} color="default" />;
-    if (!iframeLoaded) return <Chip size="small" label="Connecting..." color="warning" />;
-    return <Chip size="small" label="Connected" color="success" />;
+    if (session.state === 'running') return <Chip size="small" label="Running" color="success" />;
+    return <Chip size="small" label={session.state} color="default" />;
   };
 
-  const isRunning = session?.state === 'running';
+  // Loading existing session
+  if (routeToken && isLoadingExisting) {
+    return (
+      <Box sx={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading session...</Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Card
-      sx={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        borderTop: `3px solid ${color}`,
-      }}
-    >
-      <CardContent sx={{ py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle1" fontWeight={600}>
-            {label}
-          </Typography>
-          {getStatusChip()}
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {!sessionId ? (
-            <Button
-              size="small"
-              variant="contained"
-              onClick={handleStart}
-              disabled={isCreating}
-              startIcon={isCreating ? <CircularProgress size={14} /> : undefined}
-              sx={{ bgcolor: color }}
-            >
-              Start
-            </Button>
-          ) : (
-            <Button
-              size="small"
-              variant="outlined"
-              color="error"
-              onClick={handleStop}
-              disabled={isCancelling}
-              startIcon={isCancelling ? <CircularProgress size={14} /> : undefined}
-            >
-              Stop
-            </Button>
-          )}
-        </Box>
-      </CardContent>
+    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: '#f5f5f5' }}>
+      {/* Header */}
+      <Paper sx={{ p: 2, borderRadius: 0, flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h6">Terminal Test</Typography>
 
-      {/* Debug info */}
-      {session && (
-        <Box sx={{ px: 2, pb: 1 }}>
-          <Typography variant="caption" color="text.secondary" component="div">
-            Session ID: {session.id} | Container: {session.containerId || 'N/A'} | State: {session.state}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" component="div" sx={{ wordBreak: 'break-all' }}>
-            TTY URL: {ttydUrl || 'N/A'}
-          </Typography>
-          {session.errorMessage && (
-            <Typography variant="caption" color="error" component="div">
-              Error: {session.errorMessage}
-            </Typography>
-          )}
-        </Box>
-      )}
+            {/* Session type selector */}
+            <ToggleButtonGroup
+              value={sessionType}
+              exclusive
+              onChange={handleSessionTypeChange}
+              size="small"
+              disabled={!!sessionId}
+            >
+              <ToggleButton value="agent_session">With Credentials</ToggleButton>
+              <ToggleButton value="auth_setup">Auth Setup</ToggleButton>
+            </ToggleButtonGroup>
 
-      {/* Terminal iframe */}
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 250,
-          bgcolor: '#1e1e1e',
-          position: 'relative',
-        }}
-      >
-        {isRunning && ttydUrl ? (
-          <>
-            {!iframeLoaded && (
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  bgcolor: '#1e1e1e',
-                  zIndex: 1,
-                }}
+            {/* Agent selector */}
+            <ToggleButtonGroup
+              value={selectedAgent}
+              exclusive
+              onChange={handleAgentChange}
+              size="small"
+              disabled={!!sessionId}
+            >
+              {AGENT_TYPES.map(({ type, label, color }) => (
+                <ToggleButton
+                  key={type}
+                  value={type}
+                  sx={{
+                    '&.Mui-selected': {
+                      bgcolor: color,
+                      color: '#fff',
+                      '&:hover': {
+                        bgcolor: color,
+                      },
+                    },
+                  }}
+                >
+                  {label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+
+            {/* Start/Stop button */}
+            {!sessionId ? (
+              <Button
+                variant="contained"
+                onClick={handleStart}
+                disabled={isCreating}
+                startIcon={isCreating ? <CircularProgress size={16} color="inherit" /> : undefined}
+                sx={{ bgcolor: selectedAgentInfo.color }}
               >
-                <CircularProgress size={24} sx={{ color: '#4ec9b0' }} />
-                <Typography variant="caption" sx={{ mt: 1, color: '#d4d4d4' }}>
-                  Connecting to terminal...
-                </Typography>
-              </Box>
+                Start Session
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={handleStop}
+                disabled={isCancelling}
+                startIcon={isCancelling ? <CircularProgress size={16} color="inherit" /> : undefined}
+              >
+                Stop
+              </Button>
             )}
-            <iframe
-              ref={iframeRef}
-              src={ttydUrl}
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-                backgroundColor: '#000',
-              }}
-              title={`${label} Terminal`}
-              onLoad={handleIframeLoad}
-            />
-          </>
+          </Box>
+
+          {/* Session info */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {session && (
+              <>
+                {getStatusChip()}
+                <Typography variant="caption" color="text.secondary">
+                  Session #{session.id}
+                </Typography>
+                {session.containerId && (
+                  <Typography variant="caption" color="text.secondary" sx={{ fontFamily: 'monospace' }}>
+                    {session.containerId.slice(0, 12)}
+                  </Typography>
+                )}
+                <IconButton size="small" onClick={handleStop} disabled={isCancelling}>
+                  <CloseIcon />
+                </IconButton>
+              </>
+            )}
+          </Box>
+        </Box>
+
+        {/* Debug info */}
+        {session && (
+          <Box sx={{ mt: 1, pt: 1, borderTop: '1px solid #eee' }}>
+            <Typography variant="caption" color="text.secondary" component="div" sx={{ fontFamily: 'monospace' }}>
+              WebSocket: {session.websocketUrl || 'N/A'}
+            </Typography>
+            {session.errorMessage && (
+              <Typography variant="caption" color="error" component="div">
+                Error: {session.errorMessage}
+              </Typography>
+            )}
+          </Box>
+        )}
+      </Paper>
+
+      {/* Terminal Widget */}
+      <Box sx={{ flex: 1, overflow: 'hidden' }}>
+        {sessionId ? (
+          <TerminalSessionWidget
+            sessionId={sessionId}
+            showFileTree={true}
+            showFileViewer={true}
+            showTerminal={true}
+            onSessionUpdate={handleSessionUpdate}
+          />
         ) : (
           <Box
             sx={{
               height: '100%',
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#808080',
+              gap: 2,
+              color: '#666',
             }}
           >
-            <Typography variant="body2">
-              {session?.errorMessage
-                ? 'Session failed - check error above'
-                : session
-                  ? `Waiting for container (${session.state})...`
-                  : 'Click Start to launch terminal'}
+            <Typography variant="h6">Select an agent and click Start</Typography>
+            <Typography variant="body2" color="text.secondary">
+              The terminal session will appear here with file tree, file viewer, and terminal panels.
             </Typography>
           </Box>
         )}
       </Box>
-    </Card>
-  );
-};
-
-export const TerminalTestPage: React.FC = () => {
-  return (
-    <Box sx={{ p: 3, height: '100vh', bgcolor: '#f5f5f5' }}>
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h5" gutterBottom>
-          Terminal Test Page
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Test all 4 agent types simultaneously. Click &quot;Start&quot; to launch a terminal session for each agent.
-        </Typography>
-        <Box sx={{ mt: 2, p: 2, bgcolor: '#fff3cd', borderRadius: 1 }}>
-          <Typography variant="body2">
-            <strong>Architecture:</strong> Rails (Control Plane) → Traefik (Data Plane) → Container (ttyd)
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 1 }}>
-            <strong>TTY Route:</strong> <code>/s/&#123;session_id&#125;/tty</code> → Traefik ForwardAuth → Container:7681
-          </Typography>
-        </Box>
-      </Paper>
-
-      <Grid container spacing={2} sx={{ height: 'calc(100% - 180px)' }}>
-        {AGENT_TYPES.map(({ type, label, color }) => (
-          <Grid item xs={12} md={6} key={type} sx={{ height: '50%' }}>
-            <AgentTerminal agentType={type} label={label} color={color} />
-          </Grid>
-        ))}
-      </Grid>
     </Box>
   );
 };

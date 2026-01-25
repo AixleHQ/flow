@@ -5,6 +5,7 @@
  *   - WebSocket streaming of file system changes
  *   - HTTP API for file tree
  *   - Real-time directory structure updates
+ *   - Auth status detection for auth_setup sessions
  *
  * Ports:
  *   - HTTP/WS: 4040 (configurable via WATCHER_PORT)
@@ -16,7 +17,9 @@
  *
  * HTTP Endpoints:
  *   - GET /tree - Returns full directory tree as JSON
+ *   - GET /file?path=... - Returns file content
  *   - GET /health - Health check
+ *   - GET /auth - Check authentication status (for auth_setup sessions)
  */
 
 const http = require('http');
@@ -28,6 +31,18 @@ const chokidar = require('chokidar');
 // Configuration
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
 const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
+
+// Auth watcher configuration (from ContainerService)
+// Only used for auth_setup session type
+const SESSION_TYPE = process.env.SESSION_TYPE || null;
+const AUTH_WATCH_PATH = process.env.AUTH_WATCH_PATH || null;
+const AGENT_TYPE = process.env.AGENT_TYPE || 'unknown';
+// Comma-separated list of JSON keys to check for auth completion
+// e.g. "oauthAccount,primaryApiKey" - auth is complete if ANY of these exist
+const AUTH_REQUIRED_KEYS = (process.env.AUTH_REQUIRED_KEYS || '')
+  .split(',')
+  .map(k => k.trim())
+  .filter(Boolean);
 
 /**
  * Format file size to human readable string
@@ -299,9 +314,62 @@ function handleRequest(req, res) {
       res.end(JSON.stringify({ status: 'ok', watching: WATCH_DIR }));
       break;
 
+    case '/auth':
+      res.setHeader('Content-Type', 'application/json');
+      res.writeHead(200);
+
+      // Simple response: just authenticated true/false
+      let authenticated = false;
+
+      if (SESSION_TYPE === 'auth_setup' && AUTH_WATCH_PATH) {
+        try {
+          if (fs.existsSync(AUTH_WATCH_PATH)) {
+            const content = fs.readFileSync(AUTH_WATCH_PATH, 'utf-8');
+            authenticated = checkAuthComplete(content);
+          }
+        } catch (e) {
+          log.error(`Error checking auth status: ${e.message}`);
+        }
+      }
+
+      res.end(JSON.stringify({ authenticated }));
+      break;
+
     default:
       res.writeHead(404);
       res.end('Not Found');
+  }
+}
+
+/**
+ * Auth detection logic
+ * Returns true if any of AUTH_REQUIRED_KEYS exist in config
+ */
+function checkAuthComplete(configContent) {
+  if (AUTH_REQUIRED_KEYS.length === 0) {
+    log.warn('AUTH_REQUIRED_KEYS not set, cannot detect auth completion');
+    return false;
+  }
+
+  try {
+    const config = JSON.parse(configContent);
+
+    // Check if ANY of the required keys exist and have a truthy value
+    const foundKey = AUTH_REQUIRED_KEYS.find(key => {
+      // Support nested keys like "oauthAccount.accountUuid"
+      const value = key.split('.').reduce((obj, k) => obj?.[k], config);
+      return value !== undefined && value !== null && value !== '';
+    });
+
+    if (foundKey) {
+      log.info(`Auth key found: ${foundKey}`);
+      return true;
+    }
+
+    return false;
+  } catch (e) {
+    log.error(`Failed to parse config: ${e.message}`);
+    return false;
   }
 }
 
@@ -333,7 +401,7 @@ function startServer() {
     depth: MAX_DEPTH,
     awaitWriteFinish: {
       stabilityThreshold: 100,
-      pollInterval: 50,
+      pollInterval: 500,
     },
   });
 

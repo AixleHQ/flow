@@ -10,10 +10,24 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_22_211731) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "agent_credentials", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "agent_type", null: false
+    t.text "encrypted_config_data", null: false
+    t.jsonb "metadata", default: {}
+    t.datetime "last_used_at"
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
+    t.index ["user_id", "agent_type"], name: "index_agent_credentials_on_user_id_and_agent_type", unique: true
+    t.index ["user_id"], name: "index_agent_credentials_on_user_id"
+  end
 
   create_table "companies", force: :cascade do |t|
     t.string "name", null: false
@@ -63,6 +77,34 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_22_211731) do
     t.index ["state"], name: "index_projects_on_state"
   end
 
+  create_table "terminal_sessions", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "project_id"
+    t.string "session_type", null: false
+    t.string "agent_type"
+    t.string "state", null: false
+    t.string "temporal_workflow_id"
+    t.string "temporal_run_id"
+    t.string "container_id"
+    t.string "artifacts_path"
+    t.text "error_message"
+    t.jsonb "metadata", default: {}
+    t.datetime "started_at"
+    t.datetime "finished_at"
+    t.datetime "collected_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "route_token"
+    t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
+    t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
+    t.index ["session_type"], name: "index_terminal_sessions_on_session_type"
+    t.index ["state"], name: "index_terminal_sessions_on_state"
+    t.index ["temporal_workflow_id"], name: "index_terminal_sessions_on_temporal_workflow_id"
+    t.index ["user_id", "session_type"], name: "index_terminal_sessions_on_user_id_and_session_type"
+    t.index ["user_id", "state"], name: "index_terminal_sessions_on_user_id_and_state"
+    t.index ["user_id"], name: "index_terminal_sessions_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.bigint "company_id"
     t.citext "email", null: false
@@ -89,9 +131,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_22_211731) do
     t.index ["state"], name: "index_users_on_state"
   end
 
+  add_foreign_key "agent_credentials", "users"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "terminal_sessions", "projects"
+  add_foreign_key "terminal_sessions", "users"
   add_foreign_key "users", "companies"
 end

@@ -24,7 +24,10 @@ const CloseIcon = () => <span style={{ fontSize: '16px' }}>✕</span>;
 const RefreshIcon = () => <span style={{ fontSize: '14px' }}>↻</span>;
 
 interface IFileViewerProps {
-  watcherPort: number | null;
+  /** Watcher URL (e.g., http://localhost/t/{token}/fs) - preferred */
+  watcherUrl?: string | null;
+  /** @deprecated Use watcherUrl instead. Direct port for legacy support */
+  watcherPort?: number | null;
   filePath: string | null;
   onClose: () => void;
 }
@@ -455,21 +458,24 @@ const CodeViewer = ({ content, extension }: { content: string; extension: string
   );
 };
 
-export const FileViewer = ({ watcherPort, filePath, onClose }: IFileViewerProps) => {
+export const FileViewer = ({ watcherUrl, watcherPort, filePath, onClose }: IFileViewerProps) => {
   const [fileContent, setFileContent] = useState<IFileContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
+  // Compute base URL: prefer watcherUrl, fallback to port-based URL
+  const baseUrl = watcherUrl || (watcherPort ? `http://localhost:${watcherPort}` : null);
+
   const fetchFileContent = async () => {
-    if (!watcherPort || !filePath) return;
+    if (!baseUrl || !filePath) return;
 
     setLoading(true);
     setError(null);
     setErrorDetails(null);
 
     try {
-      const response = await fetch(`http://localhost:${watcherPort}/file?path=${encodeURIComponent(filePath)}`);
+      const response = await fetch(`${baseUrl}/file?path=${encodeURIComponent(filePath)}`, { credentials: 'include' });
       const data = await response.json();
 
       if (!response.ok) {

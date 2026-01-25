@@ -19,11 +19,7 @@ class ContainerService
   class ContainerError < StandardError; end
 
   # Docker network for Traefik routing
-  DOCKER_NETWORK = ENV.fetch("DOCKER_NETWORK", "app_default")
-
-  # Base URL for Traefik (configurable for dev/prod)
-  TRAEFIK_WS_BASE = ENV.fetch("TRAEFIK_WS_BASE", "ws://localhost")
-  TRAEFIK_HTTP_BASE = ENV.fetch("TRAEFIK_HTTP_BASE", "http://localhost")
+    DOCKER_NETWORK = ENV.fetch("DOCKER_NETWORK", "app_default")
 
   class << self
     # Start authentication container
@@ -31,17 +27,21 @@ class ContainerService
     #
     # @param user_id [Integer] User ID
     # @param agent_type [String] Agent type (claude_code, cursor_cli, etc.)
-    # @param websocket_token [String] Token for auth verification
     # @param session_id [Integer] Terminal session ID
-    def start_auth_container(user_id, agent_type, websocket_token: nil, session_id: nil)
+    # @param route_token [String] Route token for URL (from TerminalSession)
+    def start_auth_container(user_id, agent_type, session_id: nil, route_token: nil)
       validate_agent_type!(agent_type)
       raise ArgumentError, "session_id is required" unless session_id.present?
+      raise ArgumentError, "route_token is required" unless route_token.present?
 
       image = image_for_agent(agent_type)
-      container_name = "terminal-s#{session_id}-#{Time.now.to_i}"
+      container_name = "terminal-#{route_token}"
 
       Rails.logger.info("Starting auth container for #{agent_type}, user: #{user_id}, session: #{session_id}")
       Rails.logger.info("Image: #{image}, Name: #{container_name}")
+
+      # Get agent-specific paths from adapter
+      agent_service = AgentCredentialsService.for(agent_type)
 
       # Build environment variables
       env_vars = [
@@ -51,16 +51,16 @@ class ContainerService
         "SESSION_ID=#{session_id}",
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
-        "TTYD_CMD=#{command_for_agent(agent_type)}"
+        "TTYD_CMD=#{command_for_agent(agent_type)}",
+        # Agent-specific paths for watcher
+        "HOME_DIR=#{agent_service.home_dir}",
+        "AUTH_WATCH_PATH=#{agent_service.auth_watch_path}",
+        "AUTH_REQUIRED_KEYS=#{agent_service.adapter.auth_required_keys.join(',')}"
       ]
 
-      # Token for verifying auth callback requests
-      env_vars << "WEBSOCKET_TOKEN=#{websocket_token}" if websocket_token.present?
-      # Callback URL for watcher to notify Rails when auth is detected
-      env_vars << "AUTH_CALLBACK_URL=http://web:4000/api/v1/internal/auth_callback"
 
-      # Traefik labels for dynamic routing
-      traefik_labels = build_traefik_labels(session_id)
+      # Traefik labels for dynamic routing (use route_token for URL)
+      traefik_labels = build_traefik_labels(route_token)
 
       container = Docker::Container.create(
         "name" => container_name,
@@ -75,7 +75,7 @@ class ContainerService
           "NetworkMode" => DOCKER_NETWORK,
           # Temporary filesystem for home directory (credentials stored here)
           "Tmpfs" => {
-            "/home/claude" => "rw,size=100m,mode=0755"
+            agent_service.home_dir => "rw,size=100m,mode=0755"
           },
           "AutoRemove" => false
         },
@@ -95,9 +95,9 @@ class ContainerService
       # Wait for ttyd to be ready (internal health check)
       wait_for_container_health(container.id)
 
-      # URLs - always through Traefik so multiple terminals can coexist
-      websocket_url = "#{TRAEFIK_WS_BASE}/s/#{session_id}/tty/ws"
-      watcher_url = "#{TRAEFIK_WS_BASE}/s/#{session_id}/fs"
+      # URLs - use route_token (not session_id) to prevent enumeration
+      websocket_url = "#{Settings.traefik.ws_base}/t/#{route_token}/tty/ws"
+      watcher_url = "#{Settings.traefik.ws_base}/t/#{route_token}/fs"
 
       Rails.logger.info("Container ready. TTY: #{websocket_url} (port: 7681), Watcher: #{watcher_url}")
 
@@ -115,10 +115,100 @@ class ContainerService
       raise ContainerError, "Failed to start container: #{e.message}"
     end
 
-    # Start agent session container (for future Epic 4)
-    def start_agent_container(user_id, agent_type, project_id, credentials = nil)
-      # Will be implemented in Epic 4
-      raise NotImplementedError, "Agent session containers not yet implemented (Epic 4)"
+    # Start agent session container with pre-loaded credentials
+    # Returns: { container_id:, container_name:, websocket_url:, watcher_url: }
+    #
+    # @param user_id [Integer] User ID
+    # @param agent_type [String] Agent type (claude_code, cursor_cli, etc.)
+    # @param session_id [Integer] Terminal session ID
+    # @param route_token [String] Route token for URL
+    # @param credential [AgentCredential] Credential to load into container
+    def start_agent_container(user_id, agent_type, session_id:, route_token:, credential: nil)
+      validate_agent_type!(agent_type)
+      raise ArgumentError, "session_id is required" unless session_id.present?
+      raise ArgumentError, "route_token is required" unless route_token.present?
+
+      image = image_for_agent(agent_type)
+      container_name = "terminal-#{route_token}"
+
+      Rails.logger.info("Starting agent container for #{agent_type}, user: #{user_id}, session: #{session_id}")
+      Rails.logger.info("Image: #{image}, Name: #{container_name}, Has credentials: #{credential.present?}")
+
+      # Get agent-specific paths from adapter
+      agent_service = AgentCredentialsService.for(agent_type)
+
+      # Build environment variables
+      env_vars = [
+        "USER_ID=#{user_id}",
+        "AGENT_TYPE=#{agent_type}",
+        "SESSION_TYPE=agent_session",
+        "SESSION_ID=#{session_id}",
+        "TTYD_PORT=7681",
+        "WATCHER_PORT=4040",
+        "TTYD_CMD=#{command_for_agent(agent_type)}",
+        "HOME_DIR=#{agent_service.home_dir}"
+      ]
+
+      # Traefik labels for dynamic routing
+      traefik_labels = build_traefik_labels(route_token)
+
+      container = Docker::Container.create(
+        "name" => container_name,
+        "Image" => image,
+        "Env" => env_vars,
+        "ExposedPorts" => {
+          "7681/tcp" => {},  # ttyd
+          "4040/tcp" => {}   # watcher
+        },
+        "HostConfig" => {
+          "NetworkMode" => DOCKER_NETWORK,
+          # Temporary filesystem for home directory
+          "Tmpfs" => {
+            agent_service.home_dir => "rw,size=100m,mode=0755"
+          },
+          "AutoRemove" => false
+        },
+        "Labels" => {
+          "palad.session_type" => "agent_session",
+          "palad.agent_type" => agent_type,
+          "palad.user_id" => user_id.to_s,
+          "palad.session_id" => session_id.to_s,
+          "palad.ttyd_port" => "7681"
+        }.merge(traefik_labels)
+      )
+
+      # Start container
+      container.start
+      Rails.logger.info("Container started: #{container.id}")
+
+      # Wait for container to be ready
+      wait_for_container_health(container.id)
+
+      # Load credentials into container if provided
+      if credential.present?
+        Rails.logger.info("Loading credentials into container...")
+        credential.write_to_container(container.id[0..11])
+        Rails.logger.info("Credentials loaded successfully")
+      end
+
+      # URLs
+      websocket_url = "#{Settings.traefik.ws_base}/t/#{route_token}/tty/ws"
+      watcher_url = "#{Settings.traefik.ws_base}/t/#{route_token}/fs"
+
+      Rails.logger.info("Container ready. TTY: #{websocket_url}, Watcher: #{watcher_url}")
+
+      {
+        container_id: container.id[0..11],
+        container_name: container_name,
+        websocket_url: websocket_url,
+        watcher_url: watcher_url
+      }
+    rescue Docker::Error::DockerError => e
+      Rails.logger.error("Docker error starting agent container: #{e.message}")
+      raise ContainerError, "Failed to start container: #{e.message}"
+    rescue StandardError => e
+      Rails.logger.error("Error starting agent container: #{e.message}")
+      raise ContainerError, "Failed to start container: #{e.message}"
     end
 
     # Extract files from container
@@ -224,7 +314,7 @@ class ContainerService
     def command_for_agent(agent_type)
       {
         "claude_code" => "claude",
-        "cursor_cli" => "cursor",
+        "cursor_cli" => "agent",  # Cursor CLI binary is named 'agent'
         "codex" => "codex",
         "gemini_cli" => "gemini"
       }[agent_type]
@@ -232,25 +322,26 @@ class ContainerService
 
     # Build Traefik labels for dynamic routing
     # Routes:
-    #   /s/{session_id}/tty/* → container:7681 (ttyd)
-    #   /s/{session_id}/fs/*  → container:4040 (watcher)
-    def build_traefik_labels(session_id)
-      router_name = "terminal-#{session_id}"
+    #   /t/{route_token}/tty/* → container:7681 (ttyd)
+    #   /t/{route_token}/fs/*  → container:4040 (watcher)
+    # Using random route_token instead of session_id to prevent URL enumeration
+    def build_traefik_labels(route_token)
+      router_name = "terminal-#{route_token}"
       {
         # Enable Traefik for this container
         "traefik.enable" => "true",
 
-        # TTY router (ttyd terminal)
-        "traefik.http.routers.#{router_name}-tty.rule" => "PathPrefix(`/s/#{session_id}/tty`)",
+        # TTY router (ttyd terminal) - no CORS needed, loaded in iframe
+        "traefik.http.routers.#{router_name}-tty.rule" => "PathPrefix(`/t/#{route_token}/tty`)",
         "traefik.http.routers.#{router_name}-tty.middlewares" => "terminal-auth,#{router_name}-tty-strip",
-        "traefik.http.middlewares.#{router_name}-tty-strip.stripprefix.prefixes" => "/s/#{session_id}/tty",
+        "traefik.http.middlewares.#{router_name}-tty-strip.stripprefix.prefixes" => "/t/#{route_token}/tty",
         "traefik.http.routers.#{router_name}-tty.service" => "#{router_name}-tty",
         "traefik.http.services.#{router_name}-tty.loadbalancer.server.port" => "7681",
 
-        # File watcher router
-        "traefik.http.routers.#{router_name}-fs.rule" => "PathPrefix(`/s/#{session_id}/fs`)",
-        "traefik.http.routers.#{router_name}-fs.middlewares" => "terminal-auth,#{router_name}-fs-strip",
-        "traefik.http.middlewares.#{router_name}-fs-strip.stripprefix.prefixes" => "/s/#{session_id}/fs",
+        # File watcher router - needs CORS for cross-origin fetch from localhost:4000
+        "traefik.http.routers.#{router_name}-fs.rule" => "PathPrefix(`/t/#{route_token}/fs`)",
+        "traefik.http.routers.#{router_name}-fs.middlewares" => "terminal-cors,terminal-auth,#{router_name}-fs-strip",
+        "traefik.http.middlewares.#{router_name}-fs-strip.stripprefix.prefixes" => "/t/#{route_token}/fs",
         "traefik.http.routers.#{router_name}-fs.service" => "#{router_name}-fs",
         "traefik.http.services.#{router_name}-fs.loadbalancer.server.port" => "4040"
       }

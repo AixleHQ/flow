@@ -18,13 +18,13 @@ module TemporalExceptions
   # - Temporary service unavailability
   #
   # Example:
-  #   raise Temporal::Exceptions::RetryableError.new("Rate limit exceeded")
+  #   raise TemporalExceptions::RetryableError.new("Rate limit exceeded")
   class RetryableError < BaseError
     def initialize(message, type: nil)
       super(
         message,
         type: type || "RetryableError",
-        non_retryable: false,  # Will retry
+        non_retryable: false # Will retry
       )
     end
   end
@@ -37,13 +37,13 @@ module TemporalExceptions
   # - Business logic violations
   #
   # Example:
-  #   raise Temporal::Exceptions::NonRetryableError.new("Invalid workspace ID")
+  #   raise TemporalExceptions::NonRetryableError.new("Invalid workspace ID")
   class NonRetryableError < BaseError
     def initialize(message, type: nil)
       super(
         message,
         type: type || "NonRetryableError",
-        non_retryable: true,  # Won't retry
+        non_retryable: true # Won't retry
       )
     end
   end
@@ -61,14 +61,14 @@ module TemporalExceptions
   #   begin
   #     user = User.find(id)
   #   rescue ActiveRecord::RecordNotFound => e
-  #     raise Temporal::Exceptions.wrap(e, retryable: false)
+  #     raise TemporalExceptions.wrap(e, retryable: false)
   #   end
   def self.wrap(error, retryable: true, type: nil, details: nil)
     error_class = retryable ? RetryableError : NonRetryableError
 
     error_class.new(
       error.message,
-      type: error.class.name,
+      type: type || error.class.name
     )
   end
 end

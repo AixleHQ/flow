@@ -35,9 +35,10 @@ const AuthLayout = () => {
     const currentPath = window.location.pathname;
     const isOnboardingPath = ALLOWED_PATHS_FOR_INCOMPLETE_ONBOARDING.includes(currentPath);
 
-    if (!data.onboardingCompletedAt && !isOnboardingPath) {
-      navigate({ to: Routes.frontend.onboardingPath });
-    }
+    // TODO: Re-enable after testing
+    // if (!data.onboardingCompletedAt && !isOnboardingPath) {
+    //   navigate({ to: Routes.frontend.onboardingPath });
+    // }
   }, [data, isLoading, navigate]);
 
   // Show loading state while checking auth

@@ -8,9 +8,6 @@ google_oauth:
   client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
   client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
 
-anthropic:
-  api_key: <%= ENV['ANTHROPIC_API_KEY'] %>
-
 rails:
   secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] || "secret" %>
   port: <%= ENV['RAILS_PORT'] || 4000 %>
@@ -70,4 +67,13 @@ temporal:
   namespace: <%= ENV['TEMPORAL_NAMESPACE'] || 'default' %>
   task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'palad_ruby' %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
+
+encryption:
+  credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
+
+traefik:
+  ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
+  http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>
+  dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
+  cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
 

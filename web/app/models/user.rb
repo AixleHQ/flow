@@ -22,6 +22,8 @@ class User < ApplicationRecord
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
+  has_many :terminal_sessions, dependent: :destroy
+  has_many :agent_credentials, dependent: :destroy
 
   # Validations
   validates :email, presence: true,
@@ -52,6 +54,24 @@ class User < ApplicationRecord
   def projects
     Project.where(id: owned_projects.select(:id))
            .or(Project.where(id: collaborated_projects.select(:id)))
+  end
+
+  # Add agent to configured_agents array
+  def add_configured_agent(agent_type)
+    return false unless AVAILABLE_AGENTS.include?(agent_type)
+    return true if configured_agents&.include?(agent_type)
+
+    self.configured_agents ||= []
+    self.configured_agents << agent_type
+    save
+  end
+
+  # Remove agent from configured_agents array
+  def remove_configured_agent(agent_type)
+    return false if configured_agents.blank?
+
+    self.configured_agents = configured_agents.reject { |a| a == agent_type }
+    save
   end
 
   private

@@ -1,5 +1,5 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine browser-tools-server login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-claude-session help
+.PHONY: setup run shell-web shell-ai-engine browser-tools-server login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents help
 
 # Setup project in one command
 setup:
@@ -13,7 +13,7 @@ up:
 
 # Run workers
 workers:
-	docker-compose --profile worker up --no-deps worker-python worker-ruby --scale worker-python=3
+	docker-compose --profile worker up --no-deps worker-ruby
 
 # Open shell in web container
 shell-web:
@@ -75,9 +75,13 @@ restore-qa-db: dump-qa fetch-qa-dump restore-dump
 
 restore-prod-db: dump-prod fetch-prod-dump restore-dump
 
-# Build Claude Code session image
-build-claude-session:
-	docker build -t palad-claude-session:latest -f docker/claude-session/Dockerfile docker/claude-session/
+# Build agent images
+build-agents:
+	docker build -t palad/agent-base:latest docker/base
+	docker build -t palad/claude-code:latest docker/claude-code
+	docker build -t palad/cursor-cli:latest docker/cursor-cli
+	docker build -t palad/codex:latest docker/codex
+	docker build -t palad/gemini-cli:latest docker/gemini-cli
 
 # Help command
 help:
@@ -106,5 +110,9 @@ help:
 	@echo "  make restore-dump           - Restore database dump locally"
 	@echo "  make restore-qa-db          - Full cycle: dump QA DB, fetch it, and restore locally"
 	@echo "  make restore-prod-db        - Full cycle: dump Production DB, fetch it, and restore locally"
+	@echo ""
+	@echo ""
+	@echo "Agent Docker Images:"
+	@echo "  make build-agents           - Build all agent images (base + 4 agents)"
 	@echo ""
 	@echo "  make help                   - Show this help message"

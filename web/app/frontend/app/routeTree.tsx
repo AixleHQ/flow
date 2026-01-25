@@ -12,6 +12,7 @@ const ProjectsPage = lazyRouteComponent(() => import('../pages/projects'));
 const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
+const TerminalTestPage = lazyRouteComponent(() => import('../pages/terminal-test'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -102,6 +103,20 @@ export const setupRoute = createRoute({
   component: WorkspacePage,
 });
 
+// Terminal test route (for debugging WebSocket connections)
+export const terminalTestRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/terminal-test',
+  component: TerminalTestPage,
+});
+
+// Terminal test route with existing session (by route token)
+export const terminalTestSessionRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/terminal-test/$routeToken',
+  component: TerminalTestPage,
+});
+
 // Create the route tree
 export const routeTree = rootRoute.addChildren([
   loginRoute,
@@ -116,5 +131,7 @@ export const routeTree = rootRoute.addChildren([
     sessionRoute,
     workspaceRoute,
     setupRoute,
+    terminalTestRoute,
+    terminalTestSessionRoute,
   ]),
 ]);

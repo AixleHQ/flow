@@ -1,176 +1,18 @@
 workflows:
-  - name: sync_model_list
+  - name: agent_auth_workflow
     owner: palad_ruby
     activities:
-      - name: model_list_get
-        task_queue: palad_python
-      - name: model_list_save
+      - name: start_auth_terminal_activity
+        task_queue: palad_ruby
+      - name: collect_artifacts_activity
+        task_queue: palad_ruby
+      - name: stop_container_activity
         task_queue: palad_ruby
 
-  - name: asset_codebase_processing
-    owner: palad_python
-    activities:
-      - name: codebase_extract_and_prepare
-        task_queue: palad_ruby
-      - name: codebase_load_file_content
-        task_queue: palad_ruby
-      - name: codebase_analyze_file
-        task_queue: palad_python
-      - name: codebase_save_file_analysis
-        task_queue: palad_ruby
-      - name: codebase_index_file_in_vector_db
-        task_queue: palad_python
-      - name: codebase_initiate_report_section
-        task_queue: palad_ruby
-      - name: codebase_generate_report_section
-        task_queue: palad_python
-      - name: codebase_save_report_section
-        task_queue: palad_ruby
-      - name: codebase_fail_report_section
-        task_queue: palad_ruby
-      - name: shared_finalize_asset
-        task_queue: palad_ruby
-      - name: shared_fail_asset
-        task_queue: palad_ruby
-
-  - name: asset_document_processing
-    owner: palad_python
-    activities:
-      - name: document_load_file_content
-        task_queue: palad_ruby
-      - name: document_analyze_file
-        task_queue: palad_python
-      - name: document_save_analysis
-        task_queue: palad_ruby
-      - name: document_index_in_vector_db
-        task_queue: palad_python
-      - name: shared_finalize_asset
-        task_queue: palad_ruby
-      - name: shared_fail_asset
-        task_queue: palad_ruby
-
-  - name: asset_image_processing
-    owner: palad_python
-    activities:
-      - name: image_load_file_content
-        task_queue: palad_ruby
-      - name: image_analyze_file
-        task_queue: palad_python
-      - name: image_save_analysis
-        task_queue: palad_ruby
-      - name: image_index_in_vector_db
-        task_queue: palad_python
-      - name: shared_finalize_asset
-        task_queue: palad_ruby
-      - name: shared_fail_asset
-        task_queue: palad_ruby
-
-  - name: asset_image_collection_processing
-    owner: palad_python
-    activities:
-      - name: image_collection_extract_and_prepare
-        task_queue: palad_ruby
-      - name: image_collection_load_file_content
-        task_queue: palad_ruby
-      - name: image_analyze_file
-        task_queue: palad_python
-      - name: image_collection_save_analysis
-        task_queue: palad_ruby
-      - name: image_index_in_vector_db
-        task_queue: palad_python
-      - name: shared_finalize_asset
-        task_queue: palad_ruby
-      - name: shared_fail_asset
-        task_queue: palad_ruby
-
-  - name: refresh_file_tree_urls
+  - name: agent_session_workflow
     owner: palad_ruby
     activities:
-      - name: scheduled_refresh_file_tree_urls
+      - name: start_agent_session_activity
         task_queue: palad_ruby
-
-  - name: integration_repo_download
-    owner: palad_ruby
-    activities:
-      - name: integration_download_repo_archive
-        task_queue: palad_ruby
-
-  - name: specification_processing
-    owner: palad_python
-    activities:
-      - name: specification_create_specification_version
-        task_queue: palad_ruby
-      - name: specification_prepare_domain_context
-        task_queue: palad_ruby
-      - name: generate_domains
-        task_queue: palad_python
-      - name: specification_save_domains
-        task_queue: palad_ruby
-      - name: specification_prepare_feature_context
-        task_queue: palad_ruby
-      - name: generate_features
-        task_queue: palad_python
-      - name: specification_save_features
-        task_queue: palad_ruby
-      - name: specification_prepare_user_story_context
-        task_queue: palad_ruby
-      - name: generate_user_stories
-        task_queue: palad_python
-      - name: specification_save_user_stories
-        task_queue: palad_ruby
-      - name: specification_prepare_use_case_context
-        task_queue: palad_ruby
-      - name: generate_use_cases
-        task_queue: palad_python
-      - name: specification_save_use_cases
-        task_queue: palad_ruby
-      - name: specification_prepare_diagram_context
-        task_queue: palad_ruby
-      - name: generate_erd_diagram
-        task_queue: palad_python
-      - name: specification_save_erd_diagram
-        task_queue: palad_ruby
-      - name: generate_dataflow_diagram
-        task_queue: palad_python
-      - name: specification_save_dataflow_diagram
-        task_queue: palad_ruby
-      - name: specification_finalize_specification
-        task_queue: palad_ruby
-      - name: specification_fail_specification
-        task_queue: palad_ruby
-
-  - name: jira_export
-    owner: palad_ruby
-    activities:
-      - name: integration_jira_export
-        task_queue: palad_ruby
-
-  - name: jira_import
-    owner: palad_ruby
-    activities:
-      - name: integration_jira_import
-        task_queue: palad_ruby
-
-  - name: jira_sync_projects
-    owner: palad_ruby
-    activities:
-      - name: integration_jira_sync_projects
-        task_queue: palad_ruby
-
-  - name: jira_cleanup
-    owner: palad_ruby
-    activities:
-      - name: integration_jira_cleanup
-        task_queue: palad_ruby
-
-  - name: confluence_import
-    owner: palad_ruby
-    activities:
-      - name: integration_confluence_import
-        task_queue: palad_ruby
-
-  - name: confluence_sync_spaces
-    owner: palad_ruby
-    activities:
-      - name: integration_confluence_sync_spaces
+      - name: stop_container_activity
         task_queue: palad_ruby
