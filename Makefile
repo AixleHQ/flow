@@ -1,11 +1,10 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine browser-tools-server login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents help
+.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents help
 
 # Setup project in one command
 setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
-	docker-compose run --rm worker-python make deps workflows
 
 # Run all main services
 up:
@@ -22,10 +21,6 @@ shell-web:
 # Open shell in ai engine container
 shell-ai-engine:
 	docker-compose run --rm worker-python bash
-
-# Run browser tools server
-browser-tools-server:
-	docker-compose up browser-tools-server
 
 # Login to AWS account with AWS-Vault
 login_aws:

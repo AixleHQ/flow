@@ -46,7 +46,10 @@ module Workflows
       )
 
       # Step 4: Stop container and cleanup
-      stop_input = { container_id: container_id }
+      stop_input = {
+        container_id: container_id,
+        terminal_session_id: input.terminal_session_id
+      }
       execute_activity(
         WorkflowService.agent_auth_workflow.activities.stop_container_activity,
         stop_input

@@ -119,6 +119,16 @@ export const TerminalTestPage: React.FC = () => {
     if (updatedSession.state === 'running' && updatedSession.routeToken && !routeToken) {
       navigate({ to: '/terminal-test/$routeToken', params: { routeToken: updatedSession.routeToken } });
     }
+
+    // Reset to default state when session is completed/stopped
+    if (updatedSession.state === 'stopped' || updatedSession.state === 'collected') {
+      setSessionId(null);
+      setSession(null);
+      if (routeToken) {
+        navigate({ to: '/terminal-test' });
+      }
+      enqueueSnackbar('Session completed', { variant: 'info' });
+    }
   };
 
   const getStatusChip = () => {

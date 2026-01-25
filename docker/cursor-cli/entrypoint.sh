@@ -81,11 +81,19 @@ echo -e "${CYAN}🖥️  Starting web terminal on port ${TTYD_PORT}...${NC}"
 # Default command is agent (cursor CLI), can be overridden with TTYD_CMD env var
 TTYD_CMD="${TTYD_CMD:-agent}"
 
+# For auth commands (like 'agent login'), keep session alive briefly after completion
+# This gives time for credentials to be collected before container stops
+if [[ "$TTYD_CMD" == *"login"* ]]; then
+    TTYD_SHELL="$TTYD_CMD; echo -e '\\n\\033[0;32m✅ Authentication complete. Session will close shortly...\\033[0m\\n'; sleep 30"
+else
+    TTYD_SHELL="$TTYD_CMD"
+fi
+
 # Start ttyd with specified command
 if [ -n "$TTYD_CREDENTIAL" ]; then
-    ttyd -W -c "$TTYD_CREDENTIAL" -p "$TTYD_PORT" $TTYD_CMD &
+    ttyd -W -c "$TTYD_CREDENTIAL" -p "$TTYD_PORT" bash -c "$TTYD_SHELL" &
 else
-    ttyd -W -p "$TTYD_PORT" $TTYD_CMD &
+    ttyd -W -p "$TTYD_PORT" bash -c "$TTYD_SHELL" &
 fi
 TTYD_PID=$!
 

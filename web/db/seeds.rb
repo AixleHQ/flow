@@ -40,7 +40,7 @@ test_password = Settings.admin.password
 # Company users with onboarding completed
 artem = User.find_or_create_by!(email: "artem@dualbootpartners.com") do |user|
   user.name = "Artem"
-  user.password = test_password
+  user.password = w
   user.password_confirmation = test_password
   user.state = :active
   user.company = test_company

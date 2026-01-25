@@ -131,16 +131,17 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     return () => stopPolling();
   }, [session?.routeToken, session?.state, authDetected, stopPolling]);
 
-  // Auto-complete when collected (only once)
+  // Auto-complete when collected or stopped (only once)
   useEffect(() => {
-    if (session?.state === 'collected' && !authCompleteCalledRef.current) {
+    if ((session?.state === 'collected' || session?.state === 'stopped') && !authCompleteCalledRef.current) {
       authCompleteCalledRef.current = true;
       onAuthComplete?.();
     }
   }, [session?.state, onAuthComplete]);
 
   const isRunning = session?.state === 'running';
-  const canCancel = session?.state && !['collected', 'cancelled'].includes(session.state);
+  const isCompleted = session?.state === 'collected' || session?.state === 'stopped';
+  const canCancel = session?.state && !['collected', 'cancelled', 'stopped'].includes(session.state);
 
   // Not started - show start button
   if (!sessionId) {
@@ -154,6 +155,21 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
         >
           Start Authentication
         </Button>
+      </Box>
+    );
+  }
+
+  // Session completed - show success state
+  if (isCompleted) {
+    return (
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e', gap: 2 }}>
+        <Typography sx={{ fontSize: '48px' }}>✅</Typography>
+        <Typography variant="h6" sx={{ color: '#4caf50' }}>
+          Authentication Complete
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#888' }}>
+          Credentials have been saved securely.
+        </Typography>
       </Box>
     );
   }

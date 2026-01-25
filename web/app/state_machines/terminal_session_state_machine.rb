@@ -28,11 +28,13 @@ module TerminalSessionStateMachine
       end
 
       event :stop do
-        transitions from: :running, to: :stopped
+        # Allow from running or collected (after auth collection, container stops)
+        transitions from: %i[running collected], to: :stopped
       end
 
       event :collect do
-        transitions from: :stopped, to: :collected, after: :update_user_configured_agents
+        # Allow from running (auth flow) or stopped
+        transitions from: %i[running stopped], to: :collected, after: :update_user_configured_agents
       end
 
       event :fail do

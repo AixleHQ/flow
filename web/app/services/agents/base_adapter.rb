@@ -62,6 +62,14 @@ module Agents
       }
     end
 
+    # Paths to mount as tmpfs (for ephemeral credentials storage)
+    # By default, mounts entire home directory
+    # Override for agents that install binaries in home (e.g., Cursor CLI)
+    # @return [Array<String>]
+    def tmpfs_paths
+      [home_dir]
+    end
+
     protected
 
     def parse_json(content)

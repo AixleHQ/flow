@@ -73,10 +73,8 @@ class ContainerService
         "HostConfig" => {
           # Use Traefik on shared docker network (no host port bindings)
           "NetworkMode" => DOCKER_NETWORK,
-          # Temporary filesystem for home directory (credentials stored here)
-          "Tmpfs" => {
-            agent_service.home_dir => "rw,size=100m,mode=0755"
-          },
+          # Temporary filesystem for config directories (credentials stored here)
+          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths),
           "AutoRemove" => false
         },
         "Labels" => {
@@ -162,10 +160,8 @@ class ContainerService
         },
         "HostConfig" => {
           "NetworkMode" => DOCKER_NETWORK,
-          # Temporary filesystem for home directory
-          "Tmpfs" => {
-            agent_service.home_dir => "rw,size=100m,mode=0755"
-          },
+          # Temporary filesystem for config directories
+          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths),
           "AutoRemove" => false
         },
         "Labels" => {
@@ -312,26 +308,27 @@ class ContainerService
     end
 
     def command_for_agent(agent_type, session_type = "auth_setup")
-      base_commands = {
+      # Auth setup commands (interactive login)
+      auth_commands = {
         "claude_code" => "claude",
-        "cursor_cli" => "agent",  # Cursor CLI binary is named 'agent'
+        "cursor_cli" => "agent login",  # Cursor requires explicit login command
         "codex" => "codex",
         "gemini_cli" => "gemini"
       }
 
-      cmd = base_commands[agent_type]
+      # Agent session commands (pre-authenticated)
+      session_commands = {
+        "claude_code" => "claude --dangerously-skip-permissions",
+        "cursor_cli" => "agent",
+        "codex" => "codex --yolo",
+        "gemini_cli" => "gemini"
+      }
 
-      # Add flags for agent_session (pre-authenticated sessions)
       if session_type == "agent_session"
-        case agent_type
-        when "codex"
-          cmd = "#{cmd} --yolo"
-        when "claude_code"
-          cmd = "#{cmd} --dangerously-skip-permissions"
-        end
+        session_commands[agent_type]
+      else
+        auth_commands[agent_type]
       end
-
-      cmd
     end
 
     # Build Traefik labels for dynamic routing
@@ -392,6 +389,13 @@ class ContainerService
     rescue Docker::Error::NotFoundError
       Rails.logger.error("Container not found: #{container_id}")
       raise ContainerError, "Container not found: #{container_id}"
+    end
+
+    # Build tmpfs mounts hash from array of paths
+    def build_tmpfs_mounts(paths)
+      paths.each_with_object({}) do |path, hash|
+        hash[path] = "rw,size=50m,mode=0755"
+      end
     end
 
     # Extract file from TAR archive

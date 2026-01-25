@@ -29,10 +29,11 @@ RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 # Switch back to root for remaining setup
 USER root
 
-# Ensure cursor CLI is accessible and create symlink
-RUN mkdir -p /home/cursor/.cursor \
-    && chown -R cursor:cursor /home/cursor \
-    && ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent || true
+# Create symlink to /usr/local/bin so it survives tmpfs mount on config dirs
+# Note: We'll mount tmpfs only on config directories, not entire home
+RUN ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
+    && mkdir -p /home/cursor/.config/cursor /home/cursor/.cursor \
+    && chown -R cursor:cursor /home/cursor
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
