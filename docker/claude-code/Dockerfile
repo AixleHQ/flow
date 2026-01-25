@@ -9,6 +9,14 @@
 FROM palad/agent-base:latest
 
 # -----------------------------------------------------------------------------
+# MITM proxy (mitmdump) for request logging
+# -----------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip && \
+    python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==10.2.4 && \
+    apt-get purge -y python3-pip && apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/* /root/.cache
+
+# -----------------------------------------------------------------------------
 # Claude Code CLI
 # -----------------------------------------------------------------------------
 RUN npm install -g @anthropic-ai/claude-code
@@ -27,6 +35,7 @@ RUN mkdir -p /home/claude/.claude \
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
 COPY entrypoint.sh /app/
+COPY mitm_logger.py /app/
 RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /workspace
