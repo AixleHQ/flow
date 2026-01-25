@@ -26,12 +26,21 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   const [authDetected, setAuthDetected] = useState(false);
   const finishingRef = useRef(false);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const authCompleteCalledRef = useRef(false);
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
   const [finishAuth, { isLoading: isFinishing }] = useFinishAuthMutation();
   const [cancelSession, { isLoading: isCancelling }] = useCancelSessionMutation();
 
   const handleSessionUpdate = useCallback((s: ITerminalSession) => setSession(s), []);
+
+  // Stop polling helper - defined early so it can be used in handlers
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, []);
 
   const handleStart = async () => {
     try {
@@ -47,15 +56,19 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   const handleFinish = useCallback(async () => {
     if (!sessionId || finishingRef.current) return;
     finishingRef.current = true;
+    stopPolling(); // Stop polling immediately
     try {
       await finishAuth(sessionId).unwrap();
       enqueueSnackbar('Authentication saved!', { variant: 'success' });
-      onAuthComplete?.();
+      if (!authCompleteCalledRef.current) {
+        authCompleteCalledRef.current = true;
+        onAuthComplete?.();
+      }
     } catch {
       enqueueSnackbar('Failed to finish', { variant: 'error' });
       finishingRef.current = false;
     }
-  }, [sessionId, finishAuth, onAuthComplete]);
+  }, [sessionId, finishAuth, onAuthComplete, stopPolling]);
 
   const handleCancel = async () => {
     if (!sessionId) {
@@ -64,6 +77,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     }
     try {
       await cancelSession(sessionId).unwrap();
+      stopPolling(); // Stop polling on cancel too
       onCancel?.();
     } catch {
       enqueueSnackbar('Failed to cancel', { variant: 'error' });
@@ -72,39 +86,39 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
   // Poll /auth endpoint to detect authentication
   useEffect(() => {
-    console.log('[AgentAuthTerminal] Polling effect:', {
-      routeToken: session?.routeToken,
-      state: session?.state,
-      authDetected,
-    });
-
-    if (!session?.routeToken || session.state !== 'running' || authDetected) {
-      console.log('[AgentAuthTerminal] Skipping polling - conditions not met');
+    // Stop polling if auth detected or finishing
+    if (authDetected || finishingRef.current) {
+      stopPolling();
       return;
     }
 
-    console.log('[AgentAuthTerminal] Starting auth polling...');
+    // Only poll when session is running
+    if (!session?.routeToken || session.state !== 'running') {
+      stopPolling();
+      return;
+    }
 
     const checkAuth = async () => {
+      // Double-check we should still be polling
+      if (authDetected || finishingRef.current) {
+        stopPolling();
+        return;
+      }
+
       try {
-        // Use Traefik base URL (from Settings via gon) for /t/... routes
         const baseUrl = (window as unknown as { Settings?: { traefikHttpBase?: string } }).Settings?.traefikHttpBase || '';
         const url = `${baseUrl}/t/${session.routeToken}/fs/auth`;
-        console.log('[AgentAuthTerminal] Checking auth at:', url);
         const response = await fetch(url, { credentials: 'include' });
         if (response.ok) {
           const data: AuthStatusResponse = await response.json();
-          console.log('[AgentAuthTerminal] Auth response:', data);
-          if (data.authenticated && !authDetected) {
-            console.log('[AgentAuthTerminal] Auth detected via polling!');
+          if (data.authenticated) {
             setAuthDetected(true);
-            enqueueSnackbar('Authentication detected! Click "Finish" to save.', { variant: 'success' });
+            stopPolling();
+            enqueueSnackbar('Authentication detected! Click "Save" to finish.', { variant: 'success' });
           }
-        } else {
-          console.log('[AgentAuthTerminal] Auth check failed:', response.status);
         }
-      } catch (e) {
-        console.log('[AgentAuthTerminal] Auth check error:', e);
+      } catch {
+        // Ignore errors - container might not be ready yet
       }
     };
 
@@ -114,18 +128,15 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     // Poll every 2 seconds
     pollingRef.current = setInterval(checkAuth, 2000);
 
-    return () => {
-      if (pollingRef.current) {
-        console.log('[AgentAuthTerminal] Stopping auth polling');
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [session?.routeToken, session?.state, authDetected]);
+    return () => stopPolling();
+  }, [session?.routeToken, session?.state, authDetected, stopPolling]);
 
-  // Auto-complete when collected
+  // Auto-complete when collected (only once)
   useEffect(() => {
-    if (session?.state === 'collected') onAuthComplete?.();
+    if (session?.state === 'collected' && !authCompleteCalledRef.current) {
+      authCompleteCalledRef.current = true;
+      onAuthComplete?.();
+    }
   }, [session?.state, onAuthComplete]);
 
   const isRunning = session?.state === 'running';

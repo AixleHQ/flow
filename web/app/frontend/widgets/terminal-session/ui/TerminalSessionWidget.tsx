@@ -132,8 +132,6 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     return session.websocketUrl.replace('ws://', 'http://').replace('/tty/ws', '/fs').replace('/tty', '/fs');
   }, [session?.websocketUrl]);
 
-  console.log('session', session, 'ttydUrl', ttydUrl, 'watcherUrl', watcherUrl);
-
   const handleIframeLoad = useCallback(() => {
     setIframeLoaded(true);
     iframeRef.current?.focus();

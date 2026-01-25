@@ -51,7 +51,7 @@ class ContainerService
         "SESSION_ID=#{session_id}",
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
-        "TTYD_CMD=#{command_for_agent(agent_type)}",
+        "TTYD_CMD=#{command_for_agent(agent_type, 'auth_setup')}",
         # Agent-specific paths for watcher
         "HOME_DIR=#{agent_service.home_dir}",
         "AUTH_WATCH_PATH=#{agent_service.auth_watch_path}",
@@ -145,7 +145,7 @@ class ContainerService
         "SESSION_ID=#{session_id}",
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
-        "TTYD_CMD=#{command_for_agent(agent_type)}",
+        "TTYD_CMD=#{command_for_agent(agent_type, 'agent_session')}",
         "HOME_DIR=#{agent_service.home_dir}"
       ]
 
@@ -311,13 +311,27 @@ class ContainerService
       }[agent_type]
     end
 
-    def command_for_agent(agent_type)
-      {
+    def command_for_agent(agent_type, session_type = "auth_setup")
+      base_commands = {
         "claude_code" => "claude",
         "cursor_cli" => "agent",  # Cursor CLI binary is named 'agent'
         "codex" => "codex",
         "gemini_cli" => "gemini"
-      }[agent_type]
+      }
+
+      cmd = base_commands[agent_type]
+
+      # Add flags for agent_session (pre-authenticated sessions)
+      if session_type == "agent_session"
+        case agent_type
+        when "codex"
+          cmd = "#{cmd} --yolo"
+        when "claude_code"
+          cmd = "#{cmd} --dangerously-skip-permissions"
+        end
+      end
+
+      cmd
     end
 
     # Build Traefik labels for dynamic routing

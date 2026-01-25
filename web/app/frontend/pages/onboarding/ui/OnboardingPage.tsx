@@ -369,7 +369,7 @@ const styles = {
     border: '1px solid',
     borderColor: 'divider',
     overflow: 'hidden',
-    minHeight: '500px',
+    minHeight: '700px',
   },
   terminalHeader: {
     padding: '12px 16px',

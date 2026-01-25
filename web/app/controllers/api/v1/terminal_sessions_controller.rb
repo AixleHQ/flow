@@ -3,7 +3,6 @@
 module Api
   module V1
     class TerminalSessionsController < ApplicationController
-      before_action :authenticate_user!
       before_action :set_terminal_session, only: %i[show update destroy finish_auth cancel]
 
       # GET /api/v1/terminal_sessions

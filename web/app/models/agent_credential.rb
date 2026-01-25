@@ -16,6 +16,13 @@ class AgentCredential < ApplicationRecord
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :active, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
 
+  # Virtual attribute for admin display (shows keys without values)
+  def config_keys
+    config_data.keys.join(", ")
+  rescue StandardError
+    "Unable to decrypt"
+  end
+
   # Create credential from collected artifacts
   def self.from_artifacts(user_id, agent_type, artifacts_hash)
     credential = find_or_initialize_by(user_id: user_id, agent_type: agent_type)

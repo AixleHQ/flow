@@ -42,6 +42,7 @@ Rails.application.routes.draw do
     resources :companies
     resources :projects
     resources :project_collaborators
+    resources :agent_credentials
   end
 
   scope module: :web, defaults: { format: :html } do
