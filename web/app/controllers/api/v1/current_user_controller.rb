@@ -13,9 +13,10 @@ class Api::V1::CurrentUserController < Api::V1::ApplicationController
 
   # @tags CurrentUser
   # @summary Update the current user
+  # Note: configured_agents is read-only, derived from AgentCredentials
   #
   # @request_body
-  #   [ !Hash{ current_user: Hash{ password: String, password_confirmation: String, name: String, position: String, preferred_agent_language: String, configured_agents: Array<String> } } ]
+  #   [ !Hash{ current_user: Hash{ password: String, password_confirmation: String, name: String, position: String, preferred_agent_language: String } } ]
   #
   # @response Success(200) [User]
   # @response_example Success(200) [Hash] [{"id": "1", "name": "John Doe", "email": "john.doe@example.com", "position": "dev", "preferred_agent_language": "en", "configured_agents": ["claude_code", "cursor_cli"], "onboarding_completed_at": "2026-01-22T10:30:00Z", "company": {"subdomain": "acme", "logo_url": "https://...", "primary_color": "#FF5733", "secondary_color": "#bb9af7"}}]
@@ -27,6 +28,6 @@ class Api::V1::CurrentUserController < Api::V1::ApplicationController
   private
 
   def update_current_user_params
-    params.require(:current_user).permit(:password, :password_confirmation, :name, :position, :preferred_agent_language, configured_agents: [])
+    params.require(:current_user).permit(:password, :password_confirmation, :name, :position, :preferred_agent_language)
   end
 end

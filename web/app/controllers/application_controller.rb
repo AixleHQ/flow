@@ -12,6 +12,7 @@ class ApplicationController < ActionController::Base
       env: Rails.env,
       domain: Settings.domain,
       protocol: Settings.protocol,
+      traefik_http_base: Settings.traefik.http_base
     )
   end
 

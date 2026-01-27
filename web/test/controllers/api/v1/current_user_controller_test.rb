@@ -37,30 +37,31 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert { @user.preferred_agent_language == "en" }
   end
 
-  test "#update with configured_agents sets onboarding_completed_at" do
+  test "#update with agent_credentials sets onboarding_completed_at" do
     @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
+    # Create agent credential to simulate completed onboarding
+    create(:agent_credential, user: @user, agent_type: "claude_code")
 
     patch :update, params: {
       current_user: {
         position: "dev",
-        preferred_agent_language: "en",
-        configured_agents: [ "claude_code", "cursor_cli" ]
+        preferred_agent_language: "en"
       }
     }
 
     assert_response :success
     @user.reload
     assert { @user.onboarding_completed_at.present? }
-    assert { @user.configured_agents == [ "claude_code", "cursor_cli" ] }
+    assert { @user.configured_agents == [ "claude_code" ] }
   end
 
   test "#update does not set onboarding_completed_at if position missing" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
+    create(:agent_credential, user: @user, agent_type: "claude_code")
 
     patch :update, params: {
       current_user: {
-        preferred_agent_language: "en",
-        configured_agents: [ "claude_code" ]
+        preferred_agent_language: "en"
       }
     }
 
@@ -70,12 +71,12 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
   end
 
   test "#update does not set onboarding_completed_at if language missing" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
+    create(:agent_credential, user: @user, agent_type: "claude_code")
 
     patch :update, params: {
       current_user: {
-        position: "dev",
-        configured_agents: [ "claude_code" ]
+        position: "dev"
       }
     }
 
@@ -84,24 +85,9 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert { @user.onboarding_completed_at.nil? }
   end
 
-  test "#update does not set onboarding_completed_at if configured_agents empty" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
-
-    patch :update, params: {
-      current_user: {
-        position: "dev",
-        preferred_agent_language: "en",
-        configured_agents: []
-      }
-    }
-
-    assert_response :success
-    @user.reload
-    assert { @user.onboarding_completed_at.nil? }
-  end
-
-  test "#update does not set onboarding_completed_at if configured_agents missing" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil, configured_agents: [])
+  test "#update does not set onboarding_completed_at if no agent_credentials" do
+    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
+    # No agent credentials created
 
     patch :update, params: {
       current_user: {
@@ -152,32 +138,31 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert_response :unauthorized
   end
 
-  test "#show returns configured_agents for edit mode" do
-    @user.update!(configured_agents: %w[claude_code cursor_cli])
+  test "#show returns configured_agents from agent_credentials" do
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+    create(:agent_credential, user: @user, agent_type: "cursor_cli")
 
     get :show
 
     assert_response :success
     json = response.parsed_body
-    # Rails API returns snake_case, frontend converts to camelCase
-    assert { json["data"]["configured_agents"] == %w[claude_code cursor_cli] }
+    # configured_agents is derived from agent_credentials
+    assert { json["data"]["configured_agents"].sort == %w[claude_code cursor_cli] }
   end
 
-  test "#update can modify configured_agents in edit mode" do
-    @user.update!(
-      configured_agents: %w[claude_code],
-      onboarding_completed_at: 1.day.ago
-    )
+  test "#show returns agent_credentials list" do
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+    create(:agent_credential, user: @user, agent_type: "cursor_cli")
 
-    patch :update, params: {
-      current_user: {
-        configured_agents: %w[claude_code cursor_cli codex]
-      }
-    }
+    get :show
 
     assert_response :success
-    @user.reload
-    assert { @user.configured_agents == %w[claude_code cursor_cli codex] }
+    json = response.parsed_body
+    credentials = json["data"]["agent_credentials"]
+    assert { credentials.length == 2 }
+    assert { credentials.map { |c| c["agent_type"] }.sort == %w[claude_code cursor_cli] }
+    # Should not expose encrypted data
+    assert { credentials.all? { |c| c["encrypted_config_data"].nil? } }
   end
 
   private

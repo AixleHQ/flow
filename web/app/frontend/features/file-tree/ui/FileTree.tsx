@@ -54,6 +54,9 @@ interface IWatcherTreeNode {
 }
 
 interface IFileTreeProps {
+  /** Watcher URL (e.g., http://localhost/t/{token}/fs) - preferred */
+  watcherUrl?: string | null;
+  /** @deprecated Use watcherUrl instead. Direct port for legacy support */
   watcherPort?: number | null;
   onFileSelect?: (path: string) => void;
   selectedPath?: string | null;
@@ -155,20 +158,25 @@ const styles = {
   },
 } as const;
 
-export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader = false }: IFileTreeProps) => {
+export const FileTree = ({ watcherUrl, watcherPort, onFileSelect, selectedPath, hideHeader = false }: IFileTreeProps) => {
   const [treeData, setTreeData] = useState<IWatcherTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
+  // Compute base URL: prefer watcherUrl, fallback to port-based URL
+  const baseUrl = watcherUrl || (watcherPort ? `http://localhost:${watcherPort}` : null);
+  // WebSocket URL: convert http to ws
+  const wsUrl = baseUrl?.replace(/^http/, 'ws') || null;
+
   // Fetch initial tree
   const fetchTree = useCallback(async () => {
-    if (!watcherPort) return;
+    if (!baseUrl) return;
 
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`http://localhost:${watcherPort}/tree`);
+      const response = await fetch(`${baseUrl}/tree`, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch tree');
       const data = await response.json();
       // API returns { root, tree, timestamp } - extract tree array
@@ -187,11 +195,11 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader =
     } finally {
       setLoading(false);
     }
-  }, [watcherPort]);
+  }, [baseUrl]);
 
   // WebSocket for real-time updates
   useEffect(() => {
-    if (!watcherPort) return;
+    if (!wsUrl) return;
 
     fetchTree();
 
@@ -202,7 +210,7 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader =
     const connect = () => {
       if (!isMounted) return;
 
-      ws = new WebSocket(`ws://localhost:${watcherPort}`);
+      ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {
         if (isMounted) {
@@ -260,7 +268,7 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader =
         ws.close();
       }
     };
-  }, [watcherPort, fetchTree]);
+  }, [wsUrl, fetchTree]);
 
   // Convert to flattened format for react-accessible-treeview
   const flattenedData = useMemo(() => {
@@ -299,7 +307,7 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader =
     });
   }, []);
 
-  if (!watcherPort) {
+  if (!baseUrl) {
     return (
       <Box sx={styles.container}>
         {!hideHeader && (
@@ -307,7 +315,7 @@ export const FileTree = ({ watcherPort, onFileSelect, selectedPath, hideHeader =
             <Typography sx={styles.title}>Explorer</Typography>
           </Box>
         )}
-        <Box sx={styles.empty}>No watcher port available</Box>
+        <Box sx={styles.empty}>No watcher available</Box>
       </Box>
     );
   }

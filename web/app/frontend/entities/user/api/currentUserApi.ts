@@ -1,6 +1,6 @@
 import { baseApi, QueryTag } from 'shared/api';
 
-import type { AgentType, CurrentUserResponse, UserPosition } from '../model/types';
+import type { CurrentUserResponse, UserPosition } from '../model/types';
 
 interface IUpdateCurrentUserRequest {
   currentUser: {
@@ -9,7 +9,7 @@ interface IUpdateCurrentUserRequest {
     passwordConfirmation?: string;
     position?: UserPosition;
     preferredAgentLanguage?: string;
-    configuredAgents?: AgentType[];
+    // Note: configuredAgents is read-only, derived from AgentCredentials
   };
 }
 

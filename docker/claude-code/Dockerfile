@@ -17,25 +17,23 @@ RUN npm install -g @anthropic-ai/claude-code
 # Create non-root user
 # -----------------------------------------------------------------------------
 RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /opt/watcher
+    && chown -R claude:claude /workspace /opt/watcher /home/claude
 
-# -----------------------------------------------------------------------------
-# Claude Code managed settings (forces console/API key auth, no login prompts)
-# -----------------------------------------------------------------------------
-COPY config/claude-code/managed-settings.json /etc/claude-code/managed-settings.json
-
-# Default .claude.json (theme + onboarding state)
+# Default .claude.json directory
 RUN mkdir -p /home/claude/.claude \
     && chown -R claude:claude /home/claude
 
 # -----------------------------------------------------------------------------
 # Configuration & entrypoint
 # -----------------------------------------------------------------------------
-COPY prompts/ /prompts/
 COPY entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 
 WORKDIR /workspace
+ENV HOME=/home/claude
+
+# Run as non-root user (required for --dangerously-skip-permissions)
+USER claude
 
 # Use tini as init system for proper signal handling
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

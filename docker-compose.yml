@@ -61,8 +61,6 @@ services:
       - POSTGRES_PWD=postgres
       - POSTGRES_SEEDS=db
       - LOG_LEVEL=error
-    volumes:
-      - ./docker/temporal/dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/docker.yaml
     depends_on:
       - db
     attach: false
@@ -92,6 +90,11 @@ services:
       - redis
     environment:
       <<: *web-environment
+    labels:
+      - "traefik.enable=true"
+      # Rails app route (for ForwardAuth callbacks)
+      - "traefik.http.routers.web.rule=PathPrefix(`/api`)"
+      - "traefik.http.services.web.loadbalancer.server.port=4000"
     command: dev
 
   worker-ruby:
@@ -108,21 +111,6 @@ services:
       - db
     restart: on-failure:5
 
-  worker-python:
-    profiles: [worker]
-    build:
-      dockerfile: ./ai-engine/Dockerfile
-    volumes: *ai-engine-volumes
-    environment:
-      <<: *ai-engine-environment
-      TEMPORAL_DEBUG: 'true'
-    command: python app/temporal/worker.py
-    depends_on:
-      - temporal
-      - qdrant
-      - db
-    restart: on-failure:5
-
   db:
     image: postgres:15.3-alpine
     environment:
@@ -133,9 +121,38 @@ services:
     image: redis:7.2-alpine
     volumes:
       - redis_data:/data
-
     attach: false
 
+  traefik:
+    image: traefik:v3.3
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8090:8090"
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=app_default"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--log.level=DEBUG"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TRAEFIK_CORS_ORIGINS=${TRAEFIK_CORS_ORIGINS:-http://localhost:4000,http://localhost}
+    labels:
+      - "traefik.enable=true"
+      # ForwardAuth middleware for terminal sessions
+      - "traefik.http.middlewares.terminal-auth.forwardauth.address=http://web:4000/api/v1/internal/ws_auth"
+      - "traefik.http.middlewares.terminal-auth.forwardauth.authResponseHeadersRegex=^X-"
+      # CORS middleware for terminal APIs
+      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowOriginList=${TRAEFIK_CORS_ORIGINS:-http://localhost:4000,http://localhost}"
+      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowHeaders=Content-Type,Authorization,X-Requested-With,Cookie"
+      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowCredentials=true"
+    attach: false
 
   # Base image for all AI agents
   agent-base:
@@ -145,81 +162,33 @@ services:
       dockerfile: Dockerfile
     image: palad/agent-base:latest
 
-  # Claude Code interactive session with ttyd + file watcher
   claude-code:
     profiles: [agents]
     build:
       context: ./docker/claude-code
       dockerfile: Dockerfile
     image: palad/claude-code:latest
-    ports:
-      - '7681:7681'   # ttyd web terminal
-      - '4040:4040'   # file watcher WebSocket + HTTP
-    environment:
-      - TTYD_PORT=7681
-      - WATCHER_PORT=4040
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    volumes:
-      - claude_workspace:/workspace
-    stdin_open: true
-    tty: true
 
-  # Cursor CLI interactive session
   cursor-cli:
     profiles: [agents]
     build:
       context: ./docker/cursor-cli
       dockerfile: Dockerfile
     image: palad/cursor-cli:latest
-    ports:
-      - '7682:7681'   # ttyd web terminal
-      - '4041:4040'   # file watcher WebSocket + HTTP
-    environment:
-      - TTYD_PORT=7681
-      - WATCHER_PORT=4040
-      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
-    volumes:
-      - cursor_workspace:/workspace
-    stdin_open: true
-    tty: true
 
-  # OpenAI Codex CLI interactive session
   codex:
     profiles: [agents]
     build:
       context: ./docker/codex
       dockerfile: Dockerfile
     image: palad/codex:latest
-    ports:
-      - '7683:7681'   # ttyd web terminal
-      - '4042:4040'   # file watcher WebSocket + HTTP
-    environment:
-      - TTYD_PORT=7681
-      - WATCHER_PORT=4040
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-    volumes:
-      - codex_workspace:/workspace
-    stdin_open: true
-    tty: true
 
-  # Gemini CLI interactive session
   gemini-cli:
     profiles: [agents]
     build:
       context: ./docker/gemini-cli
       dockerfile: Dockerfile
     image: palad/gemini-cli:latest
-    ports:
-      - '7684:7681'   # ttyd web terminal
-      - '4043:4040'   # file watcher WebSocket + HTTP
-    environment:
-      - TTYD_PORT=7681
-      - WATCHER_PORT=4040
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-    volumes:
-      - gemini_workspace:/workspace
-    stdin_open: true
-    tty: true
 
   remote:
     profiles: [infra]

@@ -7,7 +7,6 @@ FactoryBot.define do
     onboarding_completed_at { nil }
     position { nil }
     preferred_agent_language { "en" }
-    configured_agents { [] }
 
     trait :super_admin do
       role { "super_admin" }
@@ -32,7 +31,18 @@ FactoryBot.define do
       onboarding_completed_at { Time.current }
       position { "dev" }
       preferred_agent_language { "en" }
-      configured_agents { %w[claude_code cursor_cli] }
+      # Note: configured_agents is now derived from AgentCredentials
+      # Use with_agent_credential trait to add credentials
+    end
+
+    trait :with_agent_credential do
+      transient do
+        agent_type { "claude_code" }
+      end
+
+      after(:create) do |user, evaluator|
+        create(:agent_credential, user: user, agent_type: evaluator.agent_type)
+      end
     end
 
     trait :pending do

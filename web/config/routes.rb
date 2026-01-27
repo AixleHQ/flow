@@ -17,10 +17,15 @@ Rails.application.routes.draw do
 
       resource :sessions, only: %i[create destroy]
       resource :current_user, only: %i[show update], controller: "current_user"
-      resources :terminal_sessions, only: [ :create, :show, :destroy ] do
-        collection do
-          get :agents
+      resources :terminal_sessions, only: %i[index show create update destroy] do
+        member do
+          post :finish_auth
+          post :cancel
         end
+      end
+
+      namespace :internal do
+        get "ws_auth", to: "ws_auth#show"
       end
     end
   end
@@ -37,6 +42,7 @@ Rails.application.routes.draw do
     resources :companies
     resources :projects
     resources :project_collaborators
+    resources :agent_credentials
   end
 
   scope module: :web, defaults: { format: :html } do

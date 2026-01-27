@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Box, Button, Checkbox, CircularProgress, LinearProgress, MenuItem, Select, Typography } from '@mui/material';
+import { Box, Button, Checkbox, LinearProgress, MenuItem, Select, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
@@ -8,6 +8,7 @@ import { Controller, useForm } from 'react-hook-form';
 
 import type { AgentType } from 'entities/user';
 import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user/api/currentUserApi';
+import { AgentAuthTerminal } from 'features/agent-auth/ui';
 
 import { profileSchema, type ProfileFormData } from '../model/profileValidation';
 
@@ -368,7 +369,7 @@ const styles = {
     border: '1px solid',
     borderColor: 'divider',
     overflow: 'hidden',
-    minHeight: '500px',
+    minHeight: '700px',
   },
   terminalHeader: {
     padding: '12px 16px',
@@ -533,16 +534,18 @@ const OnboardingPage = () => {
           currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
         );
       }
-      setSelectedAgents(currentUser.configuredAgents || []);
+      // configuredAgents is derived from agentCredentials
+      const configuredAgents = currentUser.configuredAgents || [];
+      setSelectedAgents(configuredAgents);
       // Mark all configured agents as authenticated in edit mode
-      if (currentUser.configuredAgents) {
+      if (configuredAgents.length > 0) {
         const newStatuses: Record<AgentType, IAgentLoginStatus['status']> = {
           claude_code: 'pending',
           cursor_cli: 'pending',
           codex: 'pending',
           gemini_cli: 'pending',
         };
-        currentUser.configuredAgents.forEach((agent: AgentType) => {
+        configuredAgents.forEach((agent: AgentType) => {
           newStatuses[agent] = 'authenticated';
         });
         setLoginStatuses(newStatuses);
@@ -595,33 +598,14 @@ const OnboardingPage = () => {
     }
   };
 
-  const handleStartLogin = (agentType: AgentType) => {
-    setActiveLoginAgent(agentType);
-    setLoginStatuses((prev) => ({ ...prev, [agentType]: 'authenticating' }));
-    // In real app, this would start a container session and get ttyd URL
-  };
-
-  const handleMarkAuthenticated = (agentType: AgentType) => {
-    setLoginStatuses((prev) => ({ ...prev, [agentType]: 'authenticated' }));
-    enqueueSnackbar(`${getAgentInfo(agentType).name} authenticated!`, { variant: 'success' });
-
-    // Move to next agent if available
-    const currentIndex = selectedAgents.indexOf(agentType);
-    if (currentIndex < selectedAgents.length - 1) {
-      setActiveLoginAgent(selectedAgents[currentIndex + 1]);
-    }
-  };
-
   const handleComplete = async () => {
     try {
-      // Only send agents that were authenticated
-      const authenticatedAgents = selectedAgents.filter((agent) => loginStatuses[agent] === 'authenticated');
-
+      // configuredAgents is now derived from AgentCredentials (created during auth)
+      // We only need to update profile settings
       await updateCurrentUser({
         currentUser: {
           position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer' | 'cto',
           preferredAgentLanguage: preferredLanguage,
-          configuredAgents: authenticatedAgents,
         },
       }).unwrap();
       enqueueSnackbar('Setup complete! Welcome to Palad.', { variant: 'success' });
@@ -871,7 +855,7 @@ const OnboardingPage = () => {
                   ...(isActive ? styles.agentLoginCardActive : {}),
                   ...(isAuthenticated ? styles.agentLoginCardAuthenticated : {}),
                 }}
-                onClick={() => handleStartLogin(agentType)}
+                onClick={() => setActiveLoginAgent(agentType)}
               >
                 <Box sx={styles.agentLoginHeader}>
                   <Box
@@ -901,51 +885,22 @@ const OnboardingPage = () => {
         {/* Terminal/Login Area */}
         <Box sx={styles.terminalContainer}>
           {activeLoginAgent ? (
-            <>
-              <Box sx={styles.terminalHeader}>
-                <Typography sx={styles.terminalTitle}>
-                  <span style={{ color: agentColors[activeLoginAgent] }}>●</span>
-                  {getAgentInfo(activeLoginAgent).name} Authentication
-                </Typography>
-                {loginStatuses[activeLoginAgent] === 'authenticating' && (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    color="success"
-                    onClick={() => handleMarkAuthenticated(activeLoginAgent)}
-                    sx={{ textTransform: 'none', fontSize: '12px' }}
-                  >
-                    Mark as Authenticated
-                  </Button>
-                )}
-              </Box>
+            <AgentAuthTerminal
+              agentType={activeLoginAgent}
+              onAuthComplete={() => {
+                setLoginStatuses((prev) => ({ ...prev, [activeLoginAgent]: 'authenticated' }));
+                enqueueSnackbar(`${getAgentInfo(activeLoginAgent).name} authenticated!`, { variant: 'success' });
 
-              {loginStatuses[activeLoginAgent] === 'authenticating' ? (
-                <Box sx={styles.terminalPlaceholder}>
-                  <CircularProgress size={32} />
-                  <Typography sx={{ fontSize: '14px' }}>Starting authentication session...</Typography>
-                  <Typography sx={{ fontSize: '12px', color: 'text.disabled', maxWidth: '300px', textAlign: 'center' }}>
-                    {getAgentInfo(activeLoginAgent).description}
-                  </Typography>
-                  {/* In real implementation, this would be an iframe to ttyd */}
-                  {/* <iframe src={sessionUrl} style={styles.terminalIframe} /> */}
-                </Box>
-              ) : loginStatuses[activeLoginAgent] === 'authenticated' ? (
-                <Box sx={styles.terminalPlaceholder}>
-                  <Typography sx={{ fontSize: '48px' }}>✓</Typography>
-                  <Typography sx={{ fontSize: '16px', fontWeight: 600, color: 'success.main' }}>
-                    Successfully authenticated!
-                  </Typography>
-                  <Typography sx={{ fontSize: '12px', color: 'text.disabled' }}>
-                    {getAgentInfo(activeLoginAgent).name} is ready to use
-                  </Typography>
-                </Box>
-              ) : (
-                <Box sx={styles.terminalPlaceholder}>
-                  <Typography sx={{ fontSize: '14px' }}>Click &quot;Start Authentication&quot; to begin</Typography>
-                </Box>
-              )}
-            </>
+                // Move to next agent if available
+                const currentIndex = selectedAgents.indexOf(activeLoginAgent);
+                if (currentIndex < selectedAgents.length - 1) {
+                  setActiveLoginAgent(selectedAgents[currentIndex + 1]);
+                }
+              }}
+              onCancel={() => {
+                setLoginStatuses((prev) => ({ ...prev, [activeLoginAgent]: 'error' }));
+              }}
+            />
           ) : (
             <Box sx={styles.terminalPlaceholder}>
               <Typography sx={{ fontSize: '48px' }}>🔐</Typography>

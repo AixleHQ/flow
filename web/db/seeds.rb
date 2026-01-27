@@ -46,7 +46,6 @@ artem = User.find_or_create_by!(email: "artem@dualbootpartners.com") do |user|
   user.company = test_company
   user.position = :dev
   user.preferred_agent_language = "en"
-  user.configured_agents = %w[claude_code cursor_cli]
   user.onboarding_completed_at = Time.current
 end
 puts "User created: #{artem.email}"
@@ -59,7 +58,6 @@ andrey = User.find_or_create_by!(email: "andrey@dualbootpartners.com") do |user|
   user.company = test_company
   user.position = :dev
   user.preferred_agent_language = "ru"
-  user.configured_agents = %w[codex gemini_cli]
   user.onboarding_completed_at = Time.current
 end
 puts "User created: #{andrey.email}"
@@ -72,10 +70,25 @@ alex = User.find_or_create_by!(email: "alex@dualbootpartners.com") do |user|
   user.company = test_company
   user.position = :qa
   user.preferred_agent_language = "en"
-  user.configured_agents = %w[claude_code]
   user.onboarding_completed_at = Time.current
 end
 puts "User created: #{alex.email}"
+
+# Create agent credentials for test users
+puts "Creating test agent credentials..."
+AgentCredential.find_or_create_by!(user: artem, agent_type: "claude_code") do |cred|
+  cred.config_data = { "test" => "data" }
+end
+AgentCredential.find_or_create_by!(user: artem, agent_type: "cursor_cli") do |cred|
+  cred.config_data = { "test" => "data" }
+end
+AgentCredential.find_or_create_by!(user: andrey, agent_type: "codex") do |cred|
+  cred.config_data = { "test" => "data" }
+end
+AgentCredential.find_or_create_by!(user: alex, agent_type: "claude_code") do |cred|
+  cred.config_data = { "test" => "data" }
+end
+puts "Agent credentials created"
 
 puts "Creating test projects..."
 

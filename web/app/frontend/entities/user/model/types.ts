@@ -31,6 +31,17 @@ export interface ICompany {
   secondaryColor: string;
 }
 
+// Agent credential info (without sensitive data)
+export interface IAgentCredential {
+  id: number;
+  agentType: AgentType;
+  configKeys: string[];
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CurrentUserResponse {
   id: number;
   email: string;
@@ -39,7 +50,10 @@ export interface CurrentUserResponse {
   state: UserState;
   position: UserPosition | null;
   preferredAgentLanguage: string;
+  // Derived from agentCredentials - list of agent types with saved credentials
   configuredAgents: AgentType[];
+  // Full credential info
+  agentCredentials: IAgentCredential[];
   onboardingCompletedAt: string | null;
   company: ICompany | null;
 }

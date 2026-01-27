@@ -38,10 +38,11 @@ class TemporalService
         Dir[Rails.root.join("app/temporal/workflows/**/*.rb")].each { |f| require f }
         Workflows::Base.descendants
       end
+
     end
 
     def schedule_definitions
-      @schedule_definitions ||= Hashie::Mash.new(YAML.load_file(Rails.root.join("app/temporal/schedules.yml"))).schedules
+      @schedule_definitions ||= Hashie::Mash.new(YAML.load_file(Rails.root.join("app/temporal/schedules.yml"))).schedules || []
     end
 
     def workflow_id(workflow, input)
@@ -85,6 +86,38 @@ class TemporalService
     rescue Temporalio::Error => e
       Rails.logger.info("[Temporal] ❌ Workflow #{id} execution failed: #{e.message}")
       raise
+    end
+
+    # Send signal to running workflow
+    def send_signal(workflow_id, signal_name, payload = nil)
+      return { ok: false, error: "Temporal is disabled" } unless enabled?
+
+      with_test_environment_handling do |cl|
+        handle = cl.workflow_handle(workflow_id)
+        handle.signal(signal_name.to_s, payload)
+      end
+
+      Rails.logger.info("[Temporal] ✅ Signal '#{signal_name}' sent to workflow #{workflow_id}")
+      { ok: true }
+    rescue Temporalio::Error => e
+      Rails.logger.error("[Temporal] ❌ Failed to send signal: #{e.message}")
+      { ok: false, error: e.message }
+    end
+
+    # Cancel running workflow
+    def cancel_workflow(workflow_id)
+      return { ok: false, error: "Temporal is disabled" } unless enabled?
+
+      with_test_environment_handling do |cl|
+        handle = cl.workflow_handle(workflow_id)
+        handle.cancel
+      end
+
+      Rails.logger.info("[Temporal] ✅ Workflow #{workflow_id} cancelled")
+      { ok: true }
+    rescue Temporalio::Error => e
+      Rails.logger.error("[Temporal] ❌ Failed to cancel workflow: #{e.message}")
+      { ok: false, error: e.message }
     end
 
     def create_schedule(schedule_def)

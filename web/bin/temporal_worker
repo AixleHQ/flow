@@ -5,6 +5,7 @@
 require_relative "../config/environment"
 
 logger = Logger.new($stdout)
+WorkflowService.workflows_data
 
 begin
   logger.info("Ruby worker - registered workflows: [#{TemporalService.workflows.map{|wf| wf.new.name }.join(', ')}]")

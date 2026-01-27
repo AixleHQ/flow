@@ -22,6 +22,8 @@ class User < ApplicationRecord
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
+  has_many :terminal_sessions, dependent: :destroy
+  has_many :agent_credentials, dependent: :destroy
 
   # Validations
   validates :email, presence: true,
@@ -44,8 +46,12 @@ class User < ApplicationRecord
 
     position.present? &&
       preferred_agent_language.present? &&
-      configured_agents.present? &&
-      configured_agents.any?
+      agent_credentials.exists?
+  end
+
+  # List of configured agent types (derived from credentials)
+  def configured_agents
+    agent_credentials.pluck(:agent_type)
   end
 
   # All projects user has access to (owned + collaborated)

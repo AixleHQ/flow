@@ -53,10 +53,10 @@ development_status:
   epic-2: in-progress
   2-1-onboarding-flow-entry: done
   2-2-select-agents-for-configuration: done
-  2-3-configure-claude-code-agent: backlog
-  2-4-configure-codex-agent: backlog
-  2-5-configure-gemini-cli-agent: backlog
-  2-6-configure-cursor-cli-agent: backlog
+  2-3-configure-claude-code-agent: done
+  2-4-configure-codex-agent: done
+  2-5-configure-gemini-cli-agent: done
+  2-6-configure-cursor-cli-agent: done
   2-7-save-agent-settings-and-complete-onboarding: backlog
   epic-2-retrospective: optional
 
