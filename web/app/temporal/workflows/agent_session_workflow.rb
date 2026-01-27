@@ -18,6 +18,12 @@ module Workflows
       @session_finished = true
     end
 
+    # Alias for cancel - same behavior as finish
+    workflow_signal
+    def session_cancelled
+      @session_finished = true
+    end
+
     def run(input)
       @session_finished = false
 
@@ -27,13 +33,15 @@ module Workflows
         input.to_h
       )
 
-      # Step 2: Wait for user to finish session (blocking)
-      # User sends signal via API or session times out
+      # Step 2: Wait for user to finish/cancel session (blocking)
       Temporalio::Workflow.wait_condition { @session_finished }
 
       # Step 3: Stop container and cleanup
       container_id = container_info[:container_id] || container_info["container_id"]
-      stop_input = { container_id: container_id }
+      stop_input = {
+        container_id: container_id,
+        terminal_session_id: input.terminal_session_id
+      }
       execute_activity(
         WorkflowService.agent_session_workflow.activities.stop_container_activity,
         stop_input

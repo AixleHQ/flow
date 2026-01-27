@@ -256,14 +256,9 @@ class ContainerManager
         "WATCHER_PORT=4040"
       ]
 
-      # Add API key
+      # Add API key (deprecated - use AgentSetting for agent-specific env vars)
       api_key = agent_config[:api_key_setting].call
       env << "#{agent_config[:api_key_env]}=#{api_key}" if api_key.present?
-
-      # For Gemini CLI, add Google API key if available
-      if agent_type == "gemini_cli"
-        env << "GOOGLE_API_KEY=#{Settings.google&.api_key}" if Settings.google&.api_key.present?
-      end
 
       env << "REPO_URL=#{repo_url}" if repo_url.present?
       env << "REPO_BRANCH=#{repo_branch}" if repo_branch.present?

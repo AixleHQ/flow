@@ -48,12 +48,12 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     }),
 
     // Finish authentication (user clicked "Finish" button)
-    finishAuth: builder.mutation<IFinishAuthResponse, number>({
-      query: (id) => ({
-        url: `/api/v1/terminal_sessions/${id}/finish_auth`,
+    finishAuth: builder.mutation<IFinishAuthResponse, { sessionId: number }>({
+      query: ({ sessionId }) => ({
+        url: `/api/v1/terminal_sessions/${sessionId}/finish_auth`,
         method: 'POST',
       }),
-      invalidatesTags: (result, error, id) => [{ type: QueryTag.TerminalSession, id }],
+      invalidatesTags: (result, error, { sessionId }) => [{ type: QueryTag.TerminalSession, id: sessionId }],
     }),
 
     // Cancel active session

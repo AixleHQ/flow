@@ -149,13 +149,16 @@ const request = {
 // { current_user: { password_confirmation: "secret123", preferred_agent_language: "en" } }
 
 // Rails responds (snake_case)
-// { current_user: { onboarding_completed_at: "2026-01-23", configured_agents: [...] } }
+// { current_user: { onboarding_completed_at: "2026-01-23", agent_credentials: [...], configured_agents: [...] } }
 
 // Automatically converted to camelCase for TypeScript
 const response = {
   currentUser: {
     onboardingCompletedAt: "2026-01-23",
-    configuredAgents: [...]
+    // agentCredentials - full credential info
+    agentCredentials: [{ agentType: "claude_code", configKeys: ["api_key"], ... }],
+    // configuredAgents - derived list of agent types (read-only)
+    configuredAgents: ["claude_code", "cursor_cli"]
   }
 };
 ```

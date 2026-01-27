@@ -1,4 +1,4 @@
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
 import { enqueueSnackbar } from 'notistack';
 import { useCallback, useEffect, useState, useRef } from 'react';
 
@@ -10,6 +10,13 @@ import {
 } from 'shared/api/terminalSessionApi';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
+// Agent-specific env fields that must be configured before starting container
+const AGENT_ENV_FIELDS: Record<string, { key: string; label: string; required: boolean; placeholder?: string }[]> = {
+  gemini_cli: [
+    { key: 'google_cloud_project', label: 'Google Cloud Project ID', required: true, placeholder: 'my-project-123' },
+  ],
+};
+
 interface AuthStatusResponse {
   authenticated: boolean;
 }
@@ -20,12 +27,19 @@ interface AgentAuthTerminalProps {
   onCancel?: () => void;
 }
 
+type AuthStep = 'env_fields' | 'terminal' | 'completed';
+
 export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType, onAuthComplete, onCancel }) => {
+  const envFields = AGENT_ENV_FIELDS[agentType] || [];
+  const requiresEnvFields = envFields.some((f) => f.required);
+
+  const [step, setStep] = useState<AuthStep>(requiresEnvFields ? 'env_fields' : 'terminal');
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [session, setSession] = useState<ITerminalSession | null>(null);
   const [authDetected, setAuthDetected] = useState(false);
+  const [metadata, setMetadata] = useState<Record<string, string>>({});
   const finishingRef = useRef(false);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const authCompleteCalledRef = useRef(false);
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
@@ -34,7 +48,6 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
   const handleSessionUpdate = useCallback((s: ITerminalSession) => setSession(s), []);
 
-  // Stop polling helper - defined early so it can be used in handlers
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -42,10 +55,29 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     }
   }, []);
 
-  const handleStart = async () => {
+  // Handle env fields submission and proceed to terminal
+  const handleEnvFieldsSubmit = () => {
+    // Validate required fields
+    const missingRequired = envFields
+      .filter((f) => f.required && !metadata[f.key])
+      .map((f) => f.label);
+    if (missingRequired.length > 0) {
+      enqueueSnackbar(`Please fill in: ${missingRequired.join(', ')}`, { variant: 'warning' });
+      return;
+    }
+    setStep('terminal');
+  };
+
+  // Handle starting terminal session
+  const handleStartTerminal = async () => {
     try {
       const result = await createSession({
-        terminalSession: { sessionType: 'auth_setup', agentType },
+        terminalSession: {
+          sessionType: 'auth_setup',
+          agentType,
+          // Pass env fields as metadata - will be used for container env vars
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+        },
       }).unwrap();
       setSessionId(result.data.id);
     } catch {
@@ -53,13 +85,15 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     }
   };
 
+  // Handle finishing authentication
   const handleFinish = useCallback(async () => {
     if (!sessionId || finishingRef.current) return;
     finishingRef.current = true;
-    stopPolling(); // Stop polling immediately
+    stopPolling();
     try {
-      await finishAuth(sessionId).unwrap();
+      await finishAuth({ sessionId }).unwrap();
       enqueueSnackbar('Authentication saved!', { variant: 'success' });
+      setStep('completed');
       if (!authCompleteCalledRef.current) {
         authCompleteCalledRef.current = true;
         onAuthComplete?.();
@@ -77,7 +111,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     }
     try {
       await cancelSession(sessionId).unwrap();
-      stopPolling(); // Stop polling on cancel too
+      stopPolling();
       onCancel?.();
     } catch {
       enqueueSnackbar('Failed to cancel', { variant: 'error' });
@@ -86,25 +120,20 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
   // Poll /auth endpoint to detect authentication
   useEffect(() => {
-    // Stop polling if auth detected or finishing
     if (authDetected || finishingRef.current) {
       stopPolling();
       return;
     }
-
-    // Only poll when session is running
     if (!session?.routeToken || session.state !== 'running') {
       stopPolling();
       return;
     }
 
     const checkAuth = async () => {
-      // Double-check we should still be polling
       if (authDetected || finishingRef.current) {
         stopPolling();
         return;
       }
-
       try {
         const baseUrl = (window as unknown as { Settings?: { traefikHttpBase?: string } }).Settings?.traefikHttpBase || '';
         const url = `${baseUrl}/t/${session.routeToken}/fs/auth`;
@@ -118,49 +147,74 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
           }
         }
       } catch {
-        // Ignore errors - container might not be ready yet
+        // Ignore - container might not be ready
       }
     };
 
-    // Check immediately
     checkAuth();
-
-    // Poll every 2 seconds
     pollingRef.current = setInterval(checkAuth, 2000);
-
     return () => stopPolling();
   }, [session?.routeToken, session?.state, authDetected, stopPolling]);
 
-  // Auto-complete when collected or stopped (only once)
+  // Auto-complete when session collected/stopped
   useEffect(() => {
     if ((session?.state === 'collected' || session?.state === 'stopped') && !authCompleteCalledRef.current) {
+      setStep('completed');
       authCompleteCalledRef.current = true;
       onAuthComplete?.();
     }
   }, [session?.state, onAuthComplete]);
 
   const isRunning = session?.state === 'running';
-  const isCompleted = session?.state === 'collected' || session?.state === 'stopped';
   const canCancel = session?.state && !['collected', 'cancelled', 'stopped'].includes(session.state);
 
-  // Not started - show start button
-  if (!sessionId) {
+  // Step 1: Env fields form (for agents that require pre-config like GOOGLE_CLOUD_PROJECT)
+  if (step === 'env_fields') {
     return (
-      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e' }}>
-        <Button
-          variant="contained"
-          onClick={handleStart}
-          disabled={isCreating}
-          startIcon={isCreating ? <CircularProgress size={16} /> : undefined}
-        >
-          Start Authentication
-        </Button>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e', gap: 2, p: 3 }}>
+        <Typography variant="h6" sx={{ color: '#fff' }}>
+          Configure {agentType.replace(/_/g, ' ')}
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#888', mb: 2 }}>
+          These settings are required before starting authentication.
+        </Typography>
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, width: '100%', maxWidth: 400 }}>
+          {envFields.map((field) => (
+            <TextField
+              key={field.key}
+              label={field.label}
+              placeholder={field.placeholder}
+              required={field.required}
+              value={metadata[field.key] || ''}
+              onChange={(e) => setMetadata((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiInputBase-root': { bgcolor: '#252525', color: '#fff' },
+                '& .MuiInputBase-input': { color: '#fff' },
+                '& .MuiInputLabel-root': { color: '#aaa' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#3d3d3d' },
+                '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#555' },
+              }}
+            />
+          ))}
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+          <Button variant="contained" onClick={handleEnvFieldsSubmit}>
+            Continue
+          </Button>
+          <Button variant="outlined" onClick={onCancel}>
+            Cancel
+          </Button>
+        </Box>
       </Box>
     );
   }
 
-  // Session completed - show success state
-  if (isCompleted) {
+  // Step 3: Completed
+  if (step === 'completed') {
     return (
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e', gap: 2 }}>
         <Typography sx={{ fontSize: '48px' }}>✅</Typography>
@@ -174,10 +228,26 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     );
   }
 
-  // Session started - show terminal with action buttons
+  // Step 2: Terminal (not started yet)
+  if (!sessionId) {
+    return (
+      <Box sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e' }}>
+        <Button
+          variant="contained"
+          onClick={handleStartTerminal}
+          disabled={isCreating}
+          startIcon={isCreating ? <CircularProgress size={16} /> : undefined}
+        >
+          Start Authentication
+        </Button>
+      </Box>
+    );
+  }
+
+  // Step 2: Terminal (session running)
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', bgcolor: '#1e1e1e' }}>
-      {/* Header with session info */}
+      {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 1, borderBottom: '1px solid #3d3d3d' }}>
         <Typography variant="body2" sx={{ color: '#888' }}>
           {agentType}

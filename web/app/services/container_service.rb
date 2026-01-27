@@ -58,6 +58,15 @@ class ContainerService
         "AUTH_REQUIRED_KEYS=#{agent_service.adapter.auth_required_keys.join(',')}"
       ]
 
+      # Add agent-specific environment variables from session metadata
+      # This is needed for agents like Gemini CLI that require GOOGLE_CLOUD_PROJECT at startup
+      session = TerminalSession.find(session_id)
+      if session.metadata.present?
+        agent_env_vars = agent_service.adapter.env_vars_from_metadata(session.metadata)
+        agent_env_vars.each do |key, value|
+          env_vars << "#{key}=#{value}" if value.present?
+        end
+      end
 
       # Traefik labels for dynamic routing (use route_token for URL)
       traefik_labels = build_traefik_labels(route_token)
@@ -144,8 +153,17 @@ class ContainerService
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
         "TTYD_CMD=#{command_for_agent(agent_type, 'agent_session')}",
-        "HOME_DIR=#{agent_service.home_dir}"
+        "HOME_DIR=#{agent_service.home_dir}",
       ]
+
+      # Add agent-specific environment variables from AgentCredential metadata
+      # This is used for settings like GOOGLE_CLOUD_PROJECT that are needed at container start
+      if credential.present? && credential.metadata.present?
+        agent_env_vars = agent_service.adapter.env_vars_from_metadata(credential.metadata)
+        agent_env_vars.each do |key, value|
+          env_vars << "#{key}=#{value}" if value.present?
+        end
+      end
 
       # Traefik labels for dynamic routing
       traefik_labels = build_traefik_labels(route_token)
@@ -318,7 +336,7 @@ class ContainerService
 
       # Agent session commands (pre-authenticated)
       session_commands = {
-        "claude_code" => "claude --dangerously-skip-permissions",
+        "claude_code" => "claude",
         "cursor_cli" => "agent",
         "codex" => "codex --yolo",
         "gemini_cli" => "gemini"

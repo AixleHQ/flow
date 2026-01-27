@@ -70,6 +70,42 @@ module Agents
       [home_dir]
     end
 
+    # =================================================================
+    # Environment Variables (from session/credential metadata)
+    # Used for agent-specific config like GOOGLE_CLOUD_PROJECT
+    # =================================================================
+
+    # Fields that must be configured before starting container
+    # Shown in UI before auth terminal starts
+    # @return [Array<Hash>] list of field definitions
+    # Example: [{ key: 'google_cloud_project', label: 'Google Project ID', required: true }]
+    def required_env_fields
+      []
+    end
+
+    # Extract environment variables from metadata (session or credential)
+    # @param metadata [Hash] metadata hash
+    # @return [Hash<String, String>] env var name => value
+    def env_vars_from_metadata(metadata)
+      {}
+    end
+
+    # Validate that required env fields are present in metadata
+    # @param metadata [Hash] metadata hash
+    # @return [Array<String>] list of error messages (empty if valid)
+    def validate_metadata(metadata)
+      missing = required_env_fields
+                .select { |f| f[:required] && metadata[f[:key]].blank? }
+                .map { |f| "#{f[:label]} is required" }
+      missing
+    end
+
+    # Check if agent requires env fields before starting
+    # @return [Boolean]
+    def requires_env_fields?
+      required_env_fields.any? { |f| f[:required] }
+    end
+
     protected
 
     def parse_json(content)

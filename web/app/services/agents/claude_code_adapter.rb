@@ -54,7 +54,30 @@ module Agents
       }
     end
 
+    # Override to write multiple config files
+    def config_files(credentials, workflow_config = {})
+      {
+        # Main config with credentials
+        config_path => generate_config(credentials, workflow_config).to_json,
+        # Settings to skip bypass permissions warning
+        "#{home_dir}/.claude/settings.json" => generate_settings.to_json
+      }
+    end
+
     private
+
+    def generate_settings
+      {
+        # Auto-accept the bypass permissions warning
+        "permissions" => {
+          "defaultMode" => "bypassPermissions",
+          "allow" => ["*"],
+          "deny" => [],
+          "ask" => []
+        },
+        "bypassPermissionsWarningAccepted" => true,
+      }
+    end
 
     def generate_projects_config(workflow_config)
       {

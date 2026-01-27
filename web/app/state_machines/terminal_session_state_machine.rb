@@ -34,7 +34,7 @@ module TerminalSessionStateMachine
 
       event :collect do
         # Allow from running (auth flow) or stopped
-        transitions from: %i[running stopped], to: :collected, after: :update_user_configured_agents
+        transitions from: %i[running stopped], to: :collected, after: :mark_collected_at
       end
 
       event :fail do
@@ -79,10 +79,7 @@ module TerminalSessionStateMachine
     end
   end
 
-  def update_user_configured_agents
-    return unless session_type == "auth_setup" && agent_type.present?
-
-    user.add_configured_agent(agent_type) unless user.configured_agents.include?(agent_type)
+  def mark_collected_at
     update!(collected_at: Time.current)
   end
 

@@ -67,23 +67,25 @@ module Api
       end
 
       # POST /api/v1/terminal_sessions/:id/cancel
-      # Cancel active session
+      # Cancel/stop active session (sends signal to gracefully shutdown and cleanup)
       def cancel
-        unless @session.may_cancel?
-          return render json: { error: "Session cannot be cancelled in current state: #{@session.state}" },
+        unless @session.may_stop? || @session.may_cancel?
+          return render json: { error: "Session cannot be stopped in current state: #{@session.state}" },
                         status: :bad_request
         end
 
-        @session.cancel!
-
-        # Cancel Temporal workflow if present
+        # Send cancel signal to Temporal workflow to trigger graceful cleanup
+        # This allows the workflow to run stop_container activity without collecting artifacts
         if @session.temporal_workflow_id.present?
-          TemporalService.cancel_workflow(@session.temporal_workflow_id)
+          TemporalService.send_signal(@session.temporal_workflow_id, :session_cancelled)
         end
+
+        # Update state
+        @session.stop! if @session.may_stop?
 
         render json: {
           data: TerminalSessionSerializer.new(@session).as_json,
-          message: "Session cancelled"
+          message: "Session stopping..."
         }
       end
 

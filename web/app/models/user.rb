@@ -46,32 +46,18 @@ class User < ApplicationRecord
 
     position.present? &&
       preferred_agent_language.present? &&
-      configured_agents.present? &&
-      configured_agents.any?
+      agent_credentials.exists?
+  end
+
+  # List of configured agent types (derived from credentials)
+  def configured_agents
+    agent_credentials.pluck(:agent_type)
   end
 
   # All projects user has access to (owned + collaborated)
   def projects
     Project.where(id: owned_projects.select(:id))
            .or(Project.where(id: collaborated_projects.select(:id)))
-  end
-
-  # Add agent to configured_agents array
-  def add_configured_agent(agent_type)
-    return false unless AVAILABLE_AGENTS.include?(agent_type)
-    return true if configured_agents&.include?(agent_type)
-
-    self.configured_agents ||= []
-    self.configured_agents << agent_type
-    save
-  end
-
-  # Remove agent from configured_agents array
-  def remove_configured_agent(agent_type)
-    return false if configured_agents.blank?
-
-    self.configured_agents = configured_agents.reject { |a| a == agent_type }
-    save
   end
 
   private

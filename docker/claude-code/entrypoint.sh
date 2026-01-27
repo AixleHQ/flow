@@ -26,8 +26,9 @@ TTYD_PORT="${TTYD_PORT:-7681}"
 WATCHER_PORT="${WATCHER_PORT:-4040}"
 WORKSPACE="${WORKSPACE:-/workspace}"
 
-# Set HOME for Claude Code
-export HOME="/home/claude"
+# HOME is set in Dockerfile
+# Ensure config directories exist (may be tmpfs mounted)
+mkdir -p "$HOME/.claude" 2>/dev/null || true
 
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
@@ -94,7 +95,7 @@ echo -e "${CYAN}🖥️  Starting web terminal on port ${TTYD_PORT}...${NC}"
 # Default command is claude, can be overridden with TTYD_CMD env var
 TTYD_CMD="${TTYD_CMD:-claude}"
 
-# Start ttyd with specified command
+# Start ttyd (already running as claude user via Dockerfile USER directive)
 # -W: Writable (allow input)
 # -p: Port
 if [ -n "$TTYD_CREDENTIAL" ]; then

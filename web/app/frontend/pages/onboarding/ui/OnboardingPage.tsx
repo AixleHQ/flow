@@ -534,16 +534,18 @@ const OnboardingPage = () => {
           currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
         );
       }
-      setSelectedAgents(currentUser.configuredAgents || []);
+      // configuredAgents is derived from agentCredentials
+      const configuredAgents = currentUser.configuredAgents || [];
+      setSelectedAgents(configuredAgents);
       // Mark all configured agents as authenticated in edit mode
-      if (currentUser.configuredAgents) {
+      if (configuredAgents.length > 0) {
         const newStatuses: Record<AgentType, IAgentLoginStatus['status']> = {
           claude_code: 'pending',
           cursor_cli: 'pending',
           codex: 'pending',
           gemini_cli: 'pending',
         };
-        currentUser.configuredAgents.forEach((agent: AgentType) => {
+        configuredAgents.forEach((agent: AgentType) => {
           newStatuses[agent] = 'authenticated';
         });
         setLoginStatuses(newStatuses);
@@ -598,14 +600,12 @@ const OnboardingPage = () => {
 
   const handleComplete = async () => {
     try {
-      // Only send agents that were authenticated
-      const authenticatedAgents = selectedAgents.filter((agent) => loginStatuses[agent] === 'authenticated');
-
+      // configuredAgents is now derived from AgentCredentials (created during auth)
+      // We only need to update profile settings
       await updateCurrentUser({
         currentUser: {
           position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer' | 'cto',
           preferredAgentLanguage: preferredLanguage,
-          configuredAgents: authenticatedAgents,
         },
       }).unwrap();
       enqueueSnackbar('Setup complete! Welcome to Palad.', { variant: 'success' });

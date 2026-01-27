@@ -6,6 +6,7 @@ import { Provider } from 'react-redux';
 
 import { ThemeProvider } from 'app/providers/ThemeProvider';
 import { routeTree } from 'app/routeTree';
+
 import { store } from 'shared/api/store';
 
 declare module '@tanstack/react-router' {
@@ -26,7 +27,7 @@ function App() {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }}>
+        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} autoHideDuration={3000}>
           <React.Suspense fallback={<LinearProgress />}>
             <RouterProvider router={router} defaultPreload="intent" defaultPreloadStaleTime={0} />
           </React.Suspense>

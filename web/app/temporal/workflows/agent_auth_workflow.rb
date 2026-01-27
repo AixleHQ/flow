@@ -19,8 +19,14 @@ module Workflows
       @auth_finished = true
     end
 
+    workflow_signal
+    def session_cancelled
+      @cancelled = true
+    end
+
     def run(input)
       @auth_finished = false
+      @cancelled = false
 
       # Step 1: Start container and get WebSocket URL
       container_info = execute_activity(
@@ -28,24 +34,25 @@ module Workflows
         input.to_h
       )
 
-      # Step 2: Wait for user to finish authentication (blocking)
-      # User sends signal via API: POST /terminal_sessions/:id/finish_auth
-      Temporalio::Workflow.wait_condition { @auth_finished }
-
-      # Step 3: Collect artifacts from container
-      # Note: container_info may use string keys depending on Temporal serialization
       container_id = container_info[:container_id] || container_info["container_id"]
-      collect_input = {
-        terminal_session_id: input.terminal_session_id,
-        container_id: container_id,
-        agent_type: input.agent_type
-      }
-      artifacts = execute_activity(
-        WorkflowService.agent_auth_workflow.activities.collect_artifacts_activity,
-        collect_input
-      )
 
-      # Step 4: Stop container and cleanup
+      # Step 2: Wait for user to finish authentication OR cancel
+      Temporalio::Workflow.wait_condition { @auth_finished || @cancelled }
+
+      # Step 3: Collect artifacts ONLY if auth finished (not cancelled)
+      if @auth_finished && !@cancelled
+        collect_input = {
+          terminal_session_id: input.terminal_session_id,
+          container_id: container_id,
+          agent_type: input.agent_type
+        }
+        artifacts = execute_activity(
+          WorkflowService.agent_auth_workflow.activities.collect_artifacts_activity,
+          collect_input
+        )
+      end
+
+      # Step 4: Stop container and cleanup (always)
       stop_input = {
         container_id: container_id,
         terminal_session_id: input.terminal_session_id
@@ -55,8 +62,12 @@ module Workflows
         stop_input
       )
 
-      # Return success
-      { status: :completed, artifacts: artifacts }
+      # Return status
+      if @cancelled
+        { status: :cancelled }
+      else
+        { status: :completed, artifacts: artifacts }
+      end
     end
   end
 end
