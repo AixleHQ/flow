@@ -58,7 +58,8 @@ module Agents
     def tmpfs_paths
       [
         "#{home_dir}/.config/cursor",  # auth.json location
-        "#{home_dir}/.cursor"          # cli-config.json location
+        "#{home_dir}/.cursor",         # cli-config.json location
+        "#{home_dir}/.mitmproxy"       # MITM proxy CA certificates
       ]
     end
 
@@ -66,27 +67,37 @@ module Agents
 
     def generate_cli_config(workflow_config)
       {
-        "permissions" => {
-          "allow" => ["*"],  # Allow all commands
-          "deny" => []
-        },
+        # Required fields per docs
         "version" => 1,
         "editor" => {
           "vimMode" => false
         },
+        "permissions" => {
+          # Allow common dev commands
+          "allow" => [
+            "Shell(ls)", "Shell(cat)", "Shell(head)", "Shell(tail)", "Shell(grep)", "Shell(find)",
+            "Shell(git)", "Shell(npm)", "Shell(yarn)", "Shell(pnpm)", "Shell(node)",
+            "Shell(python)", "Shell(pip)", "Shell(python3)", "Shell(pip3)",
+            "Shell(ruby)", "Shell(bundle)", "Shell(rails)", "Shell(rake)",
+            "Shell(make)", "Shell(cargo)", "Shell(go)",
+            "Shell(curl)", "Shell(wget)",
+            "Shell(mkdir)", "Shell(cp)", "Shell(mv)", "Shell(touch)",
+            "Shell(echo)", "Shell(pwd)", "Shell(cd)", "Shell(tree)",
+            "Read(**/*)",   # Allow reading all files
+            "Write(**/*)"   # Allow writing all files
+          ],
+          # Deny dangerous commands
+          "deny" => [
+            "Shell(rm)",    # Prevent destructive removal
+            "Shell(sudo)",  # No privilege escalation
+            "Read(.env*)",  # Protect env files from reading
+            "Write(.env*)"  # Protect env files from writing
+          ]
+        },
+        # Optional fields
         "hasChangedDefaultModel" => false,
-        "privacyCache" => {
-          "ghostMode" => true,
-          "privacyMode" => 2,
-          "updatedAt" => (Time.current.to_f * 1000).to_i
-        },
         "network" => {
-          "useHttp1ForAgent" => false
-        },
-        "approvalMode" => "auto-edit",  # Auto-approve edits
-        "sandbox" => {
-          "mode" => "disabled",         # Disable sandbox
-          "networkAccess" => "all"      # Allow all network
+          "useHttp1ForAgent" => false  # Better proxy compatibility
         },
         "attribution" => {
           "attributeCommitsToAgent" => true,

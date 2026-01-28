@@ -5,6 +5,7 @@
 #   - Node.js 22 (Debian slim for glibc compatibility)
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
+#   - MITM proxy for request/response logging
 #   - Common development tools
 # =============================================================================
 FROM node:22-slim
@@ -28,9 +29,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     # Build tools (for native npm modules)
     python3 \
+    python3-pip \
     make \
     g++ \
     && rm -rf /var/lib/apt/lists/*
+
+# -----------------------------------------------------------------------------
+# MITM proxy for request/response logging
+# -----------------------------------------------------------------------------
+RUN python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==10.2.4
 
 # Create fd symlink (fd-find installs as fdfind on Debian)
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
@@ -54,6 +61,13 @@ RUN npm install --production && npm cache clean --force
 COPY watcher/index.js ./
 
 # -----------------------------------------------------------------------------
+# MITM logger script
+# -----------------------------------------------------------------------------
+COPY logger/mitm_logger.py /opt/mitm/
+COPY logger/start-mitm.sh /opt/mitm/
+RUN chmod +x /opt/mitm/start-mitm.sh
+
+# -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
 RUN mkdir -p /workspace/repo /workspace/output
@@ -63,4 +77,5 @@ WORKDIR /workspace
 # Ports:
 #   7681 - ttyd web terminal
 #   4040 - file watcher WebSocket + HTTP API
+#   8888 - MITM proxy (internal)
 EXPOSE 7681 4040

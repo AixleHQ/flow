@@ -42,6 +42,11 @@ echo ""
 # -----------------------------------------------------------------------------
 mkdir -p "$WORKSPACE/repo" "$WORKSPACE/output"
 
+# -----------------------------------------------------------------------------
+# Start MITM proxy
+# -----------------------------------------------------------------------------
+source /opt/mitm/start-mitm.sh
+
 # Clone repo if URL provided
 if [ -n "$REPO_URL" ]; then
     echo -e "${GREEN}📦 Cloning repository...${NC}"
@@ -130,6 +135,7 @@ echo ""
 cleanup() {
     echo ""
     echo -e "${YELLOW}Shutting down services...${NC}"
+    kill $MITM_PID 2>/dev/null || true
     kill $WATCHER_PID 2>/dev/null || true
     kill $TTYD_PID 2>/dev/null || true
     exit 0

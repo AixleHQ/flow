@@ -30,13 +30,6 @@ WORKSPACE="${WORKSPACE:-/workspace}"
 # Ensure config directories exist (may be tmpfs mounted)
 mkdir -p "$HOME/.claude" 2>/dev/null || true
 
-# MITM proxy settings
-MITM_PROXY_PORT="${MITM_PROXY_PORT:-8888}"
-MITM_LOG_PATH="${MITM_LOG_PATH:-$WORKSPACE/output/mitmproxy.log}"
-MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-16000}"
-MITM_CA_CERT="${MITM_CA_CERT:-$HOME/.mitmproxy/mitmproxy-ca-cert.pem}"
-export MITM_LOG_PATH MITM_LOG_MAX_BODY
-
 echo ""
 echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
 echo -e "${BLUE}  Claude Code Interactive Session${NC}"
@@ -78,33 +71,9 @@ if [ -n "$STEP_NAME" ] && [ -f "/prompts/${STEP_NAME}.md" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Start MITM proxy (mitmdump) and set proxy env vars
+# Start MITM proxy
 # -----------------------------------------------------------------------------
-echo -e "${CYAN}🛡️  Starting MITM proxy on port ${MITM_PROXY_PORT}...${NC}"
-HTTP_PROXY="http://localhost:${MITM_PROXY_PORT}"
-HTTPS_PROXY="$HTTP_PROXY"
-NO_PROXY="localhost,127.0.0.1,::1"
-export HTTP_PROXY HTTPS_PROXY NO_PROXY
-
-mitmdump --listen-host 0.0.0.0 --listen-port "${MITM_PROXY_PORT}" \
-    --set block_global=false \
-    -q -s /app/mitm_logger.py &
-MITM_PID=$!
-
-# Wait briefly for CA to be generated so Node can trust it
-for _ in {1..20}; do
-    if [ -f "$MITM_CA_CERT" ]; then
-        export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
-        break
-    fi
-    sleep 0.1
-done
-
-if kill -0 $MITM_PID 2>/dev/null; then
-    echo -e "${GREEN}✅ MITM proxy started (PID: $MITM_PID) - logging to ${MITM_LOG_PATH}${NC}"
-else
-    echo -e "${YELLOW}⚠️  MITM proxy failed to start${NC}"
-fi
+source /opt/mitm/start-mitm.sh
 
 # -----------------------------------------------------------------------------
 # Start File Watcher Service
