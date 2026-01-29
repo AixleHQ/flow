@@ -8,6 +8,7 @@ export const MuiInputBase: Components<Theme>['MuiInputBase'] = {
       background: palette.background.gradient,
       border: `1px solid ${palette.border}`,
       color: palette.text.primaryFade,
+      fontSize: '14px',
       height: '40px',
       '&.Mui-disabled': {
         opacity: 0.5,

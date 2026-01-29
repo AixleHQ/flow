@@ -21,6 +21,7 @@ const frontend = {
   setupPath: '/setup',
   workspacePath: '/workspace',
   homePath: '/home',
+  profilePath: '/profile',
 } as const;
 
 // Combine both types of routes into a single export

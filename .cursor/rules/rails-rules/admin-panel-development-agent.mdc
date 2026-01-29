@@ -1,6 +1,6 @@
 ---
 description: This rule governs the architecture and organization of admin panel components. It should be applied whenever: (1) Creating new admin dashboards and controllers, (2) Refactoring existing admin components, (3) Planning feature implementation, (4) Discussing component architecture, or (5) Reviewing admin-related code structure.
-globs: 
+globs:
 alwaysApply: false
 ---
 # Admin Panel Development Guidelines
@@ -35,7 +35,7 @@ Contains admin-specific controllers:
 
 #### Main Resources (Full CRUD + Batch Operations)
 - **accounts** - Account management with batch delete and export
-- **account_users** - Account user management with batch delete and export  
+- **account_users** - Account user management with batch delete and export
 - **assets** - Asset management with batch delete and export
 - **integrations** - Integration management with batch delete and export
 - **roles** - Role management with batch delete and export
@@ -72,19 +72,12 @@ Contains admin-specific controllers:
 #### For New Full CRUD Resources:
 ```ruby
 resources :new_resource do
-  collection do
-    post :batch_delete
-    get :export
-  end
 end
 ```
 
 #### For New Read-Only Resources:
 ```ruby
 resources :new_resource, only: %i[index show] do
-  collection do
-    get :export
-  end
 end
 ```
 

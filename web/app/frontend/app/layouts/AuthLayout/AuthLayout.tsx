@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
+import { AppHeader } from 'widgets/AppHeader';
 
 const styles = {
   root: {
@@ -64,8 +65,13 @@ const AuthLayout = () => {
     return null;
   }
 
+  // Don't show header on onboarding page
+  const showHeader =
+    data.onboardingState === 'completed' && window.location.pathname !== Routes.frontend.onboardingPath;
+
   return (
     <Box sx={styles.root}>
+      {showHeader && <AppHeader />}
       <Box component="main" sx={styles.main}>
         <Outlet />
       </Box>

@@ -74,6 +74,62 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert_response :unauthorized
   end
 
+  # ====== Story 1.3: Profile Update Validation Tests ======
+
+  test "#update with empty name fails validation" do
+    patch :update, params: {
+      current_user: { name: "" }
+    }
+
+    assert_response :unprocessable_entity
+    @user.reload
+    # Name should not be changed
+    assert { @user.name.present? }
+  end
+
+  test "#update cannot change email (not permitted)" do
+    original_email = @user.email
+
+    patch :update, params: {
+      current_user: { email: "hacker@evil.com" }
+    }
+
+    # Request succeeds (unpermitted params are silently ignored)
+    assert_response :success
+    @user.reload
+    # Email should remain unchanged
+    assert { @user.email == original_email }
+  end
+
+  test "#update cannot change role (not permitted)" do
+    original_role = @user.role
+
+    patch :update, params: {
+      current_user: { role: "super_admin" }
+    }
+
+    # Request succeeds (unpermitted params are silently ignored)
+    assert_response :success
+    @user.reload
+    # Role should remain unchanged
+    assert { @user.role == original_role }
+  end
+
+  test "#update cannot change company_id (not permitted)" do
+    other_company = create(:company, name: "Other Company")
+    original_company_id = @user.company_id
+
+    patch :update, params: {
+      current_user: { company_id: other_company.id }
+    }
+
+    # Request succeeds (unpermitted params are silently ignored)
+    assert_response :success
+    @user.reload
+    # Company should remain unchanged
+    assert { @user.company_id == original_company_id }
+  end
+
   test "#show returns configured_agents from agent_credentials" do
     create(:agent_credential, user: @user, agent_type: "claude_code")
     create(:agent_credential, user: @user, agent_type: "cursor_cli")

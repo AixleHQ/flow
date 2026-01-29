@@ -4,6 +4,7 @@ export const MuiInputLabel: Components<Theme>['MuiInputLabel'] = {
   styleOverrides: {
     root: {
       color: '#fff',
+      fontSize: '12px',
       margin: '8px 0',
     },
   },

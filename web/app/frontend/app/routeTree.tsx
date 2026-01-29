@@ -14,6 +14,7 @@ const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
 const TerminalTestPage = lazyRouteComponent(() => import('../pages/terminal-test'));
+const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -119,6 +120,13 @@ export const terminalTestSessionRoute = createRoute({
   component: TerminalTestPage,
 });
 
+// Profile route
+export const profileRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/profile',
+  component: ProfilePage,
+});
+
 // Create the route tree
 export const routeTree = rootRoute.addChildren([
   loginRoute,
@@ -135,5 +143,6 @@ export const routeTree = rootRoute.addChildren([
     setupRoute,
     terminalTestRoute,
     terminalTestSessionRoute,
+    profileRoute,
   ]),
 ]);
