@@ -2,13 +2,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, Button, Checkbox, LinearProgress, MenuItem, Select, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
+import debounce from 'lodash/debounce';
 import { useSnackbar } from 'notistack';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
-import type { AgentType } from 'entities/user';
-import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user/api/currentUserApi';
-import { AgentAuthTerminal } from 'features/agent-auth/ui';
+import type { AgentType, OnboardingState } from 'entities/user';
+import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user';
+import { AgentAuthTerminal } from 'features/agent-auth';
 
 import { profileSchema, type ProfileFormData } from '../model/profileValidation';
 
@@ -16,12 +17,20 @@ import { profileSchema, type ProfileFormData } from '../model/profileValidation'
 const MAX_CONTAINER_WIDTH = '900px';
 const LOGO_MAX_WIDTH = '120px';
 const LOGO_MAX_HEIGHT = '60px';
+const AUTO_SAVE_DELAY = 300; // ms
 
-type OnboardingStep = 'profile' | 'agents' | 'login' | 'complete';
+// Polling constants for credential saving
+const CREDENTIAL_POLL_INTERVAL_MS = 500;
+const CREDENTIAL_POLL_MAX_ATTEMPTS = 20; // 20 * 500ms = 10 seconds max wait
+// Delay before enabling user change tracking after initial data load
+// This prevents false-positive auto-saves during component initialization
+const USER_CHANGE_TRACKING_DELAY_MS = 100;
+
+type OnboardingStepKey = 'profile' | 'agents' | 'login' | 'complete';
 
 interface IAgentLoginStatus {
   agentType: AgentType;
-  status: 'pending' | 'authenticating' | 'authenticated' | 'error';
+  status: 'pending' | 'authenticating' | 'authenticated' | 'saving' | 'error';
   sessionUrl?: string;
 }
 
@@ -371,29 +380,6 @@ const styles = {
     overflow: 'hidden',
     minHeight: '700px',
   },
-  terminalHeader: {
-    padding: '12px 16px',
-    backgroundColor: '#1A1A1A',
-    borderBottom: '1px solid',
-    borderColor: 'divider',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  terminalTitle: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: 'text.primary',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  terminalIframe: {
-    width: '100%',
-    height: '450px',
-    border: 'none',
-    backgroundColor: '#0D0D0D',
-  },
   terminalPlaceholder: {
     display: 'flex',
     flexDirection: 'column',
@@ -433,56 +419,67 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
   },
-  summaryIcon: {
-    fontSize: '24px',
-  },
   summaryText: {
     fontSize: '14px',
     color: 'text.primary',
   },
+  profileSummary: {
+    padding: '16px',
+    backgroundColor: 'background.paper',
+    borderRadius: '8px',
+    border: '1px solid',
+    borderColor: 'divider',
+    marginBottom: '24px',
+    textAlign: 'left',
+  },
+  profileSummaryRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    padding: '8px 0',
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    '&:last-child': {
+      borderBottom: 'none',
+    },
+  },
+  profileSummaryLabel: {
+    fontSize: '14px',
+    color: 'text.secondary',
+  },
+  profileSummaryValue: {
+    fontSize: '14px',
+    color: 'text.primary',
+    fontWeight: 500,
+  },
 } satisfies Record<string, SxProps<Theme>>;
 
-const STEPS: { key: OnboardingStep; label: string }[] = [
-  { key: 'profile', label: 'Your Profile' },
-  { key: 'agents', label: 'Select Agents' },
-  { key: 'login', label: 'Authenticate' },
-  { key: 'complete', label: 'Complete' },
+const STEPS: { key: OnboardingStepKey; label: string; state: OnboardingState }[] = [
+  { key: 'profile', label: 'Your Profile', state: 'step1' },
+  { key: 'agents', label: 'Select Agents', state: 'step2' },
+  { key: 'login', label: 'Authenticate', state: 'step3' },
+  { key: 'complete', label: 'Complete', state: 'step4' },
 ];
+
+// Convert OnboardingState to step key for UI
+const stateToStepKey = (state: OnboardingState): OnboardingStepKey => {
+  const step = STEPS.find((s) => s.state === state);
+  return step?.key || 'profile';
+};
 
 /**
  * OnboardingPage Component
  *
- * Mandatory 4-step onboarding flow for new users. Users cannot skip onboarding and must complete
- * all steps before accessing the platform.
+ * Mandatory 4-step onboarding flow for new users using state machine.
+ * State is managed via AASM state machine on backend.
  *
- * **Flow:**
- * 1. **Step 1 - Your Profile:** User selects position and preferred agent language (required fields)
- * 2. **Step 2 - Select Agents:** User selects at least 1 AI agent to configure
- * 3. **Step 3 - Authenticate:** User authenticates at least 1 selected agent
- * 4. **Step 4 - Complete:** User reviews and confirms setup, triggering API call
- *
- * **Required Fields:**
- * - Position: dev, qa, pm_po_ba, designer, cto
- * - Preferred Agent Language: en, ru, es, de, fr, ja, zh
- * - Configured Agents: At least 1 authenticated agent
- *
- * **Edit Mode:**
- * Users who have completed onboarding can return to `/onboarding` to edit their profile and agents.
- * Edit mode pre-fills existing values and changes button text from "Get Started" to "Save Changes".
- *
- * **Validation:**
- * - Step 1: Both fields required (validated with Zod)
- * - Step 2: At least 1 agent must be selected
- * - Step 3: At least 1 agent must be authenticated
- * - No progress persistence - must complete in one session
- *
- * @returns {JSX.Element} Onboarding page with 4-step flow
+ * **States:** step1, step2, step3, step4, completed
+ * **Events:** go_next, go_previous, complete
  */
 const OnboardingPage = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const { data: currentUser, isLoading } = useGetCurrentUserQuery();
-  const [updateCurrentUser, { isLoading: isSubmitting }] = useUpdateCurrentUserMutation();
+  const { data: currentUser, isLoading, refetch } = useGetCurrentUserQuery();
+  const [updateCurrentUser, { isLoading: isTransitioning }] = useUpdateCurrentUserMutation();
 
   // Form state with react-hook-form + Zod validation
   const {
@@ -502,7 +499,6 @@ const OnboardingPage = () => {
   const position = watch('position');
   const preferredLanguage = watch('preferredAgentLanguage');
 
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('profile');
   const [selectedAgents, setSelectedAgents] = useState<AgentType[]>([]);
   const [activeLoginAgent, setActiveLoginAgent] = useState<AgentType | null>(null);
   const [loginStatuses, setLoginStatuses] = useState<Record<AgentType, IAgentLoginStatus['status']>>({
@@ -511,56 +507,120 @@ const OnboardingPage = () => {
     codex: 'pending',
     gemini_cli: 'pending',
   });
-  const [isEditMode, setIsEditMode] = useState(false);
 
-  // Track if onboarding guard has been initialized (prevent duplicate redirects in React Strict Mode)
-  const onboardingGuardInitialized = useRef(false);
+  // Track if this is a user-initiated change (vs initial load)
+  const isUserChange = useRef(false);
+  // Track last synced user ID to avoid re-syncing same data
+  const lastSyncedUserId = useRef<number | null>(null);
+  // Track active credential poll interval for cleanup
+  const credentialPollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Initialize edit mode and pre-fill data
+  // Debounced auto-save function for profile data
+  const debouncedSave = useMemo(
+    () =>
+      debounce((data: Record<string, unknown>) => {
+        updateCurrentUser({ currentUser: data });
+      }, AUTO_SAVE_DELAY),
+    [updateCurrentUser],
+  );
+
+  // Cleanup debounce and polling on unmount
   useEffect(() => {
-    if (!currentUser || onboardingGuardInitialized.current) return;
+    return () => {
+      debouncedSave.cancel();
+      if (credentialPollIntervalRef.current) {
+        clearInterval(credentialPollIntervalRef.current);
+        credentialPollIntervalRef.current = null;
+      }
+    };
+  }, [debouncedSave]);
 
-    onboardingGuardInitialized.current = true;
+  // Initialize/sync from server state when currentUser loads or changes
+  useEffect(() => {
+    if (!currentUser) return;
 
-    // If onboarding already completed, enable edit mode and pre-fill
-    if (currentUser.onboardingCompletedAt) {
-      setIsEditMode(true);
-      if (currentUser.position) {
-        setValue('position', currentUser.position);
-      }
-      if (currentUser.preferredAgentLanguage) {
-        setValue(
-          'preferredAgentLanguage',
-          currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
-        );
-      }
-      // configuredAgents is derived from agentCredentials
-      const configuredAgents = currentUser.configuredAgents || [];
-      setSelectedAgents(configuredAgents);
-      // Mark all configured agents as authenticated in edit mode
-      if (configuredAgents.length > 0) {
-        const newStatuses: Record<AgentType, IAgentLoginStatus['status']> = {
-          claude_code: 'pending',
-          cursor_cli: 'pending',
-          codex: 'pending',
-          gemini_cli: 'pending',
-        };
-        configuredAgents.forEach((agent: AgentType) => {
-          newStatuses[agent] = 'authenticated';
-        });
-        setLoginStatuses(newStatuses);
-      }
+    // Only sync once per user load (avoid re-syncing on every render)
+    if (lastSyncedUserId.current === currentUser.id) return;
+    lastSyncedUserId.current = currentUser.id;
+
+    // Disable user change tracking during sync
+    isUserChange.current = false;
+
+    // Pre-fill position
+    if (currentUser.position) {
+      setValue('position', currentUser.position);
     }
+
+    // Pre-fill language
+    if (currentUser.preferredAgentLanguage) {
+      setValue(
+        'preferredAgentLanguage',
+        currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
+      );
+    }
+
+    // Pre-fill selected agents from server
+    if (currentUser.selectedAgents && currentUser.selectedAgents.length > 0) {
+      setSelectedAgents(currentUser.selectedAgents);
+    }
+
+    // Sync login statuses with configuredAgents (from AgentCredentials)
+    const configuredAgents = currentUser.configuredAgents || [];
+    const newStatuses: Record<AgentType, IAgentLoginStatus['status']> = {
+      claude_code: 'pending',
+      cursor_cli: 'pending',
+      codex: 'pending',
+      gemini_cli: 'pending',
+    };
+    configuredAgents.forEach((agent: AgentType) => {
+      newStatuses[agent] = 'authenticated';
+    });
+    setLoginStatuses(newStatuses);
+
+    // Enable user change tracking after initialization
+    setTimeout(() => {
+      isUserChange.current = true;
+    }, USER_CHANGE_TRACKING_DELAY_MS);
   }, [currentUser, setValue]);
 
+  // Auto-save position on change
+  useEffect(() => {
+    if (!isUserChange.current || !position) return;
+    debouncedSave({ position });
+  }, [position, debouncedSave]);
+
+  // Auto-save language on change
+  useEffect(() => {
+    if (!isUserChange.current || !preferredLanguage) return;
+    debouncedSave({ preferredAgentLanguage: preferredLanguage });
+  }, [preferredLanguage, debouncedSave]);
+
+  // Auto-save selected agents on change
+  useEffect(() => {
+    if (!isUserChange.current) return;
+    debouncedSave({ selectedAgents });
+  }, [selectedAgents, debouncedSave]);
+
+  // Sync loginStatuses when configuredAgents changes (after refetch)
+  const configuredAgentsForSync = currentUser?.configuredAgents;
+  useEffect(() => {
+    if (!configuredAgentsForSync) return;
+    setLoginStatuses((prev) => {
+      const updated = { ...prev };
+      configuredAgentsForSync.forEach((agent: AgentType) => {
+        updated[agent] = 'authenticated';
+      });
+      return updated;
+    });
+  }, [configuredAgentsForSync]);
+
+  // Get current step from backend state
+  const currentStep = currentUser ? stateToStepKey(currentUser.onboardingState) : 'profile';
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / STEPS.length) * 100;
 
   /**
-   * Toggles the selection state of an agent.
-   * Adds the agent to selectedAgents if not present, removes if already selected.
-   * Used in Step 2 (Select Agents) to allow users to choose which AI agents to configure.
-   * @param agentType - The type of agent to toggle (claude_code, cursor_cli, codex, gemini_cli)
+   * Toggles the selection state of an agent and auto-saves.
    */
   const toggleAgent = (agentType: AgentType) => {
     setSelectedAgents((prev) =>
@@ -570,9 +630,6 @@ const OnboardingPage = () => {
 
   /**
    * Handles keyboard interaction for agent selection.
-   * Allows selecting agents with Enter or Space keys for accessibility.
-   * @param event - Keyboard event
-   * @param agentType - The type of agent to toggle
    */
   const handleAgentKeyDown = (event: React.KeyboardEvent, agentType: AgentType) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -581,55 +638,69 @@ const OnboardingPage = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentStep === 'agents' && selectedAgents.length > 0) {
       setActiveLoginAgent(selectedAgents[0]);
     }
-    const stepIndex = STEPS.findIndex((s) => s.key === currentStep);
-    if (stepIndex < STEPS.length - 1) {
-      setCurrentStep(STEPS[stepIndex + 1].key);
+    try {
+      // Cancel any pending debounced saves and save current state with the transition
+      debouncedSave.cancel();
+      await updateCurrentUser({
+        currentUser: {
+          selectedAgents,
+          onboardingStateEvent: 'go_next',
+        },
+      }).unwrap();
+    } catch {
+      enqueueSnackbar('Failed to proceed to next step', { variant: 'error' });
     }
   };
 
-  const handleBack = () => {
-    const stepIndex = STEPS.findIndex((s) => s.key === currentStep);
-    if (stepIndex > 0) {
-      setCurrentStep(STEPS[stepIndex - 1].key);
+  const handleBack = async () => {
+    try {
+      await updateCurrentUser({ currentUser: { onboardingStateEvent: 'go_previous' } }).unwrap();
+    } catch {
+      enqueueSnackbar('Failed to go back', { variant: 'error' });
     }
   };
 
   const handleComplete = async () => {
     try {
-      // configuredAgents is now derived from AgentCredentials (created during auth)
-      // We only need to update profile settings
-      await updateCurrentUser({
-        currentUser: {
-          position: position as 'dev' | 'qa' | 'pm_po_ba' | 'designer' | 'cto',
-          preferredAgentLanguage: preferredLanguage,
-        },
-      }).unwrap();
-      enqueueSnackbar('Setup complete! Welcome to Palad.', { variant: 'success' });
+      await updateCurrentUser({ currentUser: { onboardingStateEvent: 'complete' } }).unwrap();
+      enqueueSnackbar('Welcome! Your agents are configured and ready to use.', { variant: 'success' });
       navigate({ to: '/projects' });
     } catch {
-      enqueueSnackbar('Failed to complete setup', { variant: 'error' });
+      enqueueSnackbar(
+        'Cannot complete onboarding - please ensure position, language and at least one agent are configured',
+        { variant: 'error' },
+      );
     }
   };
 
-  const allAgentsAuthenticated = selectedAgents.every((agent) => loginStatuses[agent] === 'authenticated');
-  const authenticatedCount = selectedAgents.filter((agent) => loginStatuses[agent] === 'authenticated').length;
+  // Get authenticated agents from configuredAgents (server state, source of truth)
+  const configuredAgents = currentUser?.configuredAgents || [];
+  const authenticatedCount = selectedAgents.filter((agent) => configuredAgents.includes(agent)).length;
+  const allAgentsAuthenticated = selectedAgents.every((agent) => configuredAgents.includes(agent));
 
   // Validation flags
-  const isProfileComplete = isValid; // Uses Zod validation
-  /**
-   * Validates that at least one agent is selected.
-   * Required to proceed from Step 2 (Select Agents) to Step 3 (Authenticate).
-   */
+  const isProfileComplete = isValid;
   const isAgentsSelected = selectedAgents.length >= 1;
-  /**
-   * Validates that at least one agent has been authenticated.
-   * Required to proceed from Step 3 (Authenticate) to Step 4 (Complete).
-   */
   const isAgentsAuthenticated = authenticatedCount >= 1;
+
+  // Can complete onboarding check
+  const canComplete = Boolean(position) && Boolean(preferredLanguage) && configuredAgents.length >= 1;
+
+  // Get position label for display
+  const getPositionLabel = (value: string) => {
+    const option = POSITION_OPTIONS.find((o) => o.value === value);
+    return option?.label || value;
+  };
+
+  // Get language label for display
+  const getLanguageLabel = (value: string) => {
+    const option = LANGUAGE_OPTIONS.find((o) => o.value === value);
+    return option?.label || value;
+  };
 
   if (isLoading) {
     return (
@@ -645,17 +716,9 @@ const OnboardingPage = () => {
   const renderWelcomeSection = () => (
     <Box sx={styles.welcomeSection}>
       {companyLogo && <img src={companyLogo} alt={companyName} style={styles.companyLogo as React.CSSProperties} />}
-      <Typography sx={styles.welcomeTitle}>
-        {isEditMode ? `Manage Your Profile & Agents` : `Welcome to ${companyName}! 🎉`}
-      </Typography>
-      <Typography sx={styles.welcomeSubtitle}>
-        {isEditMode
-          ? 'Update your profile information and agent configurations'
-          : "Let's set up your profile and AI agents to get started"}
-      </Typography>
-      {!isEditMode && (
-        <Typography sx={styles.welcomeNote}>This setup is required to start using the platform</Typography>
-      )}
+      <Typography sx={styles.welcomeTitle}>{`Welcome to ${companyName}! 🎉`}</Typography>
+      <Typography sx={styles.welcomeSubtitle}>Let&apos;s set up your profile and AI agents to get started</Typography>
+      <Typography sx={styles.welcomeNote}>This setup is required to start using the platform</Typography>
     </Box>
   );
 
@@ -771,8 +834,13 @@ const OnboardingPage = () => {
 
       <Box sx={styles.footer}>
         <Box />
-        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isProfileComplete}>
-          Continue
+        <Button
+          variant="contained"
+          sx={styles.continueButton}
+          onClick={handleNext}
+          disabled={!isProfileComplete || isTransitioning}
+        >
+          {isTransitioning ? 'Saving...' : 'Continue'}
         </Button>
       </Box>
     </>
@@ -818,11 +886,16 @@ const OnboardingPage = () => {
       )}
 
       <Box sx={styles.footer}>
-        <Button sx={styles.backButton} onClick={handleBack}>
+        <Button sx={styles.backButton} onClick={handleBack} disabled={isTransitioning}>
           Back
         </Button>
-        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isAgentsSelected}>
-          Continue
+        <Button
+          variant="contained"
+          sx={styles.continueButton}
+          onClick={handleNext}
+          disabled={!isAgentsSelected || isTransitioning}
+        >
+          {isTransitioning ? 'Saving...' : 'Continue'}
         </Button>
       </Box>
     </>
@@ -843,9 +916,9 @@ const OnboardingPage = () => {
         <Box sx={styles.agentsList}>
           {selectedAgents.map((agentType) => {
             const info = getAgentInfo(agentType);
+            const isAuthenticated = configuredAgents.includes(agentType);
             const status = loginStatuses[agentType];
             const isActive = activeLoginAgent === agentType;
-            const isAuthenticated = status === 'authenticated';
 
             return (
               <Box
@@ -868,10 +941,11 @@ const OnboardingPage = () => {
                   )}
                 </Box>
                 <Typography sx={styles.agentLoginStatus}>
-                  {status === 'pending' && 'Click to authenticate'}
-                  {status === 'authenticating' && 'Authenticating...'}
-                  {status === 'authenticated' && 'Authenticated'}
-                  {status === 'error' && 'Authentication failed'}
+                  {isAuthenticated && 'Authenticated'}
+                  {!isAuthenticated && status === 'pending' && 'Click to authenticate'}
+                  {!isAuthenticated && status === 'authenticating' && 'Authenticating...'}
+                  {!isAuthenticated && status === 'saving' && 'Saving credentials...'}
+                  {!isAuthenticated && status === 'error' && 'Authentication failed'}
                 </Typography>
               </Box>
             );
@@ -888,17 +962,51 @@ const OnboardingPage = () => {
             <AgentAuthTerminal
               agentType={activeLoginAgent}
               onAuthComplete={() => {
-                setLoginStatuses((prev) => ({ ...prev, [activeLoginAgent]: 'authenticated' }));
-                enqueueSnackbar(`${getAgentInfo(activeLoginAgent).name} authenticated!`, { variant: 'success' });
+                const justAuthenticatedAgent = activeLoginAgent;
+                // Clear active agent to show placeholder while polling
+                setActiveLoginAgent(null);
+                // Set status to 'saving' to show loading indicator
+                setLoginStatuses((prev) => ({ ...prev, [justAuthenticatedAgent]: 'saving' }));
+                enqueueSnackbar(`${getAgentInfo(justAuthenticatedAgent).name} - saving credentials...`, {
+                  variant: 'info',
+                });
 
-                // Move to next agent if available
-                const currentIndex = selectedAgents.indexOf(activeLoginAgent);
-                if (currentIndex < selectedAgents.length - 1) {
-                  setActiveLoginAgent(selectedAgents[currentIndex + 1]);
+                // Clear any existing poll interval before starting new one
+                if (credentialPollIntervalRef.current) {
+                  clearInterval(credentialPollIntervalRef.current);
                 }
+
+                // Poll until credential appears in configuredAgents (Temporal workflow completion)
+                let attempts = 0;
+                credentialPollIntervalRef.current = setInterval(async () => {
+                  attempts++;
+                  const result = await refetch();
+                  const agents = result.data?.configuredAgents || [];
+
+                  if (agents.includes(justAuthenticatedAgent)) {
+                    if (credentialPollIntervalRef.current) {
+                      clearInterval(credentialPollIntervalRef.current);
+                      credentialPollIntervalRef.current = null;
+                    }
+                    setLoginStatuses((prev) => ({ ...prev, [justAuthenticatedAgent]: 'authenticated' }));
+                    enqueueSnackbar(`${getAgentInfo(justAuthenticatedAgent).name} authenticated!`, {
+                      variant: 'success',
+                    });
+                  } else if (attempts >= CREDENTIAL_POLL_MAX_ATTEMPTS) {
+                    if (credentialPollIntervalRef.current) {
+                      clearInterval(credentialPollIntervalRef.current);
+                      credentialPollIntervalRef.current = null;
+                    }
+                    setLoginStatuses((prev) => ({ ...prev, [justAuthenticatedAgent]: 'error' }));
+                    enqueueSnackbar(`${getAgentInfo(justAuthenticatedAgent).name} - failed to save credentials`, {
+                      variant: 'error',
+                    });
+                  }
+                }, CREDENTIAL_POLL_INTERVAL_MS);
               }}
               onCancel={() => {
                 setLoginStatuses((prev) => ({ ...prev, [activeLoginAgent]: 'error' }));
+                setActiveLoginAgent(null);
               }}
             />
           ) : (
@@ -915,11 +1023,20 @@ const OnboardingPage = () => {
       )}
 
       <Box sx={styles.footer}>
-        <Button sx={styles.backButton} onClick={handleBack}>
+        <Button sx={styles.backButton} onClick={handleBack} disabled={isTransitioning}>
           Back
         </Button>
-        <Button variant="contained" sx={styles.continueButton} onClick={handleNext} disabled={!isAgentsAuthenticated}>
-          {allAgentsAuthenticated ? 'Continue' : `Continue (${authenticatedCount}/${selectedAgents.length})`}
+        <Button
+          variant="contained"
+          sx={styles.continueButton}
+          onClick={handleNext}
+          disabled={!isAgentsAuthenticated || isTransitioning}
+        >
+          {isTransitioning
+            ? 'Saving...'
+            : allAgentsAuthenticated
+              ? 'Continue'
+              : `Continue (${authenticatedCount}/${selectedAgents.length})`}
         </Button>
       </Box>
     </>
@@ -929,12 +1046,29 @@ const OnboardingPage = () => {
     <Box sx={styles.completeContainer}>
       <Typography sx={styles.completeIcon}>🎉</Typography>
       <Typography sx={styles.completeTitle}>You&apos;re all set!</Typography>
-      <Typography sx={styles.completeSubtitle}>Your profile and AI agents are configured and ready to use.</Typography>
+      <Typography sx={styles.completeSubtitle}>
+        Review your configuration and click &quot;Get Started&quot; to begin.
+      </Typography>
 
-      <Box sx={{ maxWidth: '400px', margin: '0 auto', marginBottom: '32px' }}>
+      {/* Profile Summary */}
+      <Box sx={{ maxWidth: '400px', margin: '0 auto', marginBottom: '24px' }}>
+        <Box sx={styles.profileSummary}>
+          <Box sx={styles.profileSummaryRow}>
+            <Typography sx={styles.profileSummaryLabel}>Position</Typography>
+            <Typography sx={styles.profileSummaryValue}>{position ? getPositionLabel(position) : '—'}</Typography>
+          </Box>
+          <Box sx={{ ...styles.profileSummaryRow, borderBottom: 'none' }}>
+            <Typography sx={styles.profileSummaryLabel}>Language</Typography>
+            <Typography sx={styles.profileSummaryValue}>
+              {preferredLanguage ? getLanguageLabel(preferredLanguage) : '—'}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Agent Summary */}
         {selectedAgents.map((agentType) => {
           const info = getAgentInfo(agentType);
-          const isAuthenticated = loginStatuses[agentType] === 'authenticated';
+          const isAuthenticated = configuredAgents.includes(agentType);
           return (
             <Box key={agentType} sx={styles.summaryCard}>
               <Box
@@ -945,19 +1079,31 @@ const OnboardingPage = () => {
               <Typography
                 sx={{ marginLeft: 'auto', fontSize: '12px', color: isAuthenticated ? 'success.main' : 'warning.main' }}
               >
-                {isAuthenticated ? '✓ Authenticated' : '⚠ Pending'}
+                {isAuthenticated ? '✓ Authenticated' : '⚠ Not authenticated'}
               </Typography>
             </Box>
           );
         })}
       </Box>
 
+      {/* Validation warning */}
+      {!canComplete && (
+        <Typography sx={{ ...styles.validationMessage, maxWidth: '400px', margin: '0 auto 24px' }}>
+          ⚠️ Please authenticate at least one agent to complete setup
+        </Typography>
+      )}
+
       <Box sx={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-        <Button sx={styles.backButton} onClick={handleBack}>
+        <Button sx={styles.backButton} onClick={handleBack} disabled={isTransitioning}>
           Back
         </Button>
-        <Button variant="contained" sx={styles.continueButton} onClick={handleComplete} disabled={isSubmitting}>
-          {isSubmitting ? 'Saving...' : isEditMode ? 'Save Changes' : 'Get Started'}
+        <Button
+          variant="contained"
+          sx={styles.continueButton}
+          onClick={handleComplete}
+          disabled={isTransitioning || !canComplete}
+        >
+          {isTransitioning ? 'Saving...' : 'Get Started'}
         </Button>
       </Box>
     </Box>

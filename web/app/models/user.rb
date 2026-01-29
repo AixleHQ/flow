@@ -34,19 +34,16 @@ class User < ApplicationRecord
   validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
   validates :company_id, presence: true, unless: :super_admin?
   validate :super_admin_company_validation
-
-  before_validation :set_onboarding_completed_at, if: :onboarding_completed?
+  validate :selected_agents_valid
 
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
 
-  # Helper methods
+  # Helper: check if onboarding is completed (based on state machine)
   def onboarding_completed?
     return true if super_admin?
 
-    position.present? &&
-      preferred_agent_language.present? &&
-      agent_credentials.exists?
+    onboarding_state == "completed"
   end
 
   # List of configured agent types (derived from credentials)
@@ -60,7 +57,28 @@ class User < ApplicationRecord
            .or(Project.where(id: collaborated_projects.select(:id)))
   end
 
+  # Guard for state machine: check if user can complete onboarding (all requirements met)
+  def can_complete_onboarding?
+    position.present? &&
+      preferred_agent_language.present? &&
+      agent_credentials.exists?
+  end
+
   private
+
+  # Callback for state machine: set timestamp when onboarding completes
+  def set_onboarding_completed_at
+    self.onboarding_completed_at = Time.current
+  end
+
+  def selected_agents_valid
+    return if selected_agents.blank?
+
+    invalid_agents = selected_agents - AVAILABLE_AGENTS
+    return if invalid_agents.empty?
+
+    errors.add(:selected_agents, "contains invalid agents: #{invalid_agents.join(', ')}")
+  end
 
   def super_admin_company_validation
     if super_admin?

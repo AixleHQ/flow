@@ -112,18 +112,11 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
             <Typography sx={styles.title}>{project.name}</Typography>
           </Box>
           {hasActiveTasks && (
-            <Chip
-              label={`${project.activeTasksCount} active`}
-              color="primary"
-              size="small"
-              sx={styles.chip}
-            />
+            <Chip label={`${project.activeTasksCount} active`} color="primary" size="small" sx={styles.chip} />
           )}
         </Box>
 
-        {project.description && (
-          <Typography sx={styles.description}>{project.description}</Typography>
-        )}
+        {project.description && <Typography sx={styles.description}>{project.description}</Typography>}
 
         <Box sx={styles.stats}>
           <Box sx={styles.stat}>
@@ -141,9 +134,7 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
         </Box>
 
         {project.lastActivityAt && (
-          <Typography sx={styles.lastActivity}>
-            Last activity {formatRelativeTime(project.lastActivityAt)}
-          </Typography>
+          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.lastActivityAt)}</Typography>
         )}
       </CardActionArea>
     </Card>

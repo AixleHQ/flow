@@ -1,15 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  Divider,
-  IconButton,
-  MenuItem,
-  Select,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Card, IconButton, MenuItem, Select, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
@@ -290,13 +279,8 @@ const LANGUAGES = [
   { value: 'java', label: 'Java', icon: '☕' },
 ];
 
-const mockFiles = [
-  { name: 'Gemfile', type: 'file', content: 'source "https://rubygems.org"\n\ngem "slack-ruby-client", "~> 2.0"' },
-  { name: 'Gemfile.lock', type: 'file', content: 'GEM\n  specs:\n    slack-ruby-client (2.0.0)' },
-  { name: 'script.rb', type: 'file', content: 'require "slack-ruby-client"\n\nSlack.configure do |config|\n  config.token = ENV["SLACK_TOKEN"]\nend\n\nclient = Slack::Web::Client.new\nclient.chat_postMessage(channel: "#general", text: "Hello from Palad!")' },
-];
-
-const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPanelProps) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const ToolConfigPanel = ({ agentType, onSave }: ToolConfigPanelProps) => {
   const { enqueueSnackbar } = useSnackbar();
   const [tool, setTool] = useState<ITool>({
     id: 'new-tool',
@@ -388,7 +372,8 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Configure Custom Tool</Typography>
         <Typography sx={styles.description}>
-          Configure secrets (environment variables), select language, set command, and test your tool in an interactive session.
+          Configure secrets (environment variables), select language, set command, and test your tool in an interactive
+          session.
         </Typography>
       </Box>
 
@@ -427,7 +412,7 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
                 fullWidth
                 size="small"
                 value={tool.language}
-                onChange={(e) => setTool({ ...tool, language: e.target.value as any })}
+                onChange={(e) => setTool({ ...tool, language: e.target.value as ITool['language'] })}
                 sx={styles.select}
               >
                 {LANGUAGES.map((lang) => (
@@ -444,7 +429,13 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
                 size="small"
                 value={tool.command}
                 onChange={(e) => setTool({ ...tool, command: e.target.value })}
-                placeholder={tool.language === 'ruby' ? 'ruby script.rb' : tool.language === 'node' ? 'node script.js' : 'python script.py'}
+                placeholder={
+                  tool.language === 'ruby'
+                    ? 'ruby script.rb'
+                    : tool.language === 'node'
+                      ? 'node script.js'
+                      : 'python script.py'
+                }
                 sx={styles.input}
               />
             </Box>
@@ -479,23 +470,14 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
                       onChange={(e) => handleUpdateSecret(index, { value: e.target.value })}
                       sx={{ ...styles.input, flex: 1 }}
                     />
-                    <IconButton
-                      size="small"
-                      onClick={() => handleRemoveSecret(index)}
-                      sx={{ color: 'error.main' }}
-                    >
+                    <IconButton size="small" onClick={() => handleRemoveSecret(index)} sx={{ color: 'error.main' }}>
                       ✕
                     </IconButton>
                   </Box>
                 </Box>
               ))}
             </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              sx={styles.addSecretButton}
-              onClick={handleAddSecret}
-            >
+            <Button variant="outlined" size="small" sx={styles.addSecretButton} onClick={handleAddSecret}>
               + Add Secret
             </Button>
           </Card>
@@ -532,26 +514,15 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
                 </Box>
               ))}
             </Box>
-            <Button
-              variant="outlined"
-              size="small"
-              sx={styles.addSecretButton}
-              onClick={handleAddFile}
-            >
+            <Button variant="outlined" size="small" sx={styles.addSecretButton} onClick={handleAddFile}>
               + Add File
             </Button>
 
             {selectedFileIndex !== null && tool.files[selectedFileIndex] && (
               <Box sx={styles.fileEditor}>
                 <Box sx={styles.fileEditorHeader}>
-                  <Typography sx={styles.fileEditorTitle}>
-                    {tool.files[selectedFileIndex].name}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={() => setSelectedFileIndex(null)}
-                    sx={{ color: 'text.secondary' }}
-                  >
+                  <Typography sx={styles.fileEditorTitle}>{tool.files[selectedFileIndex].name}</Typography>
+                  <IconButton size="small" onClick={() => setSelectedFileIndex(null)} sx={{ color: 'text.secondary' }}>
                     ✕
                   </IconButton>
                 </Box>
@@ -615,9 +586,7 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
                 {/* In real app, this would be an iframe to ttyd */}
                 <Box sx={styles.terminalPlaceholder}>
                   <Typography sx={styles.placeholderIcon}>💻</Typography>
-                  <Typography sx={styles.placeholderText}>
-                    Interactive terminal session
-                  </Typography>
+                  <Typography sx={styles.placeholderText}>Interactive terminal session</Typography>
                   <Typography sx={{ fontSize: '12px', color: 'text.disabled', textAlign: 'center' }}>
                     Files are available in the workspace. Run your command to test the tool.
                   </Typography>
@@ -628,10 +597,10 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
             <Box sx={styles.terminalPlaceholder}>
               <Typography sx={styles.placeholderIcon}>🧪</Typography>
               <Typography sx={styles.placeholderText}>
-                Click "Test Tool" to start an interactive session
+                Click &quot;Test Tool&quot; to start an interactive session
               </Typography>
               <Typography sx={{ fontSize: '12px', color: 'text.disabled', textAlign: 'center' }}>
-                You'll be able to edit files, run commands, and test your tool configuration
+                You&apos;ll be able to edit files, run commands, and test your tool configuration
               </Typography>
             </Box>
           )}
@@ -639,20 +608,10 @@ const ToolConfigPanel = ({ agentType: initialAgentType, onSave }: ToolConfigPane
       </Box>
 
       <Box sx={styles.actions}>
-        <Button
-          variant="outlined"
-          sx={styles.testButton}
-          onClick={handleTest}
-          disabled={!tool.name || !tool.command}
-        >
+        <Button variant="outlined" sx={styles.testButton} onClick={handleTest} disabled={!tool.name || !tool.command}>
           Test Tool
         </Button>
-        <Button
-          variant="contained"
-          sx={styles.saveButton}
-          onClick={handleSave}
-          disabled={!tool.name || !tool.command}
-        >
+        <Button variant="contained" sx={styles.saveButton} onClick={handleSave} disabled={!tool.name || !tool.command}>
           Save Tool
         </Button>
       </Box>

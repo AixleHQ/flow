@@ -11,7 +11,7 @@ class CreateAgentCredentials < ActiveRecord::Migration[8.0]
       t.timestamps
     end
 
-    add_index :agent_credentials, [:user_id, :agent_type], unique: true
+    add_index :agent_credentials, [ :user_id, :agent_type ], unique: true
     add_index :agent_credentials, :agent_type
   end
 end

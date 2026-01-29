@@ -18,7 +18,7 @@ require "net/http"
 class ContainerService
   class ContainerError < StandardError; end
 
-  # Docker network for Traefik routing
+    # Docker network for Traefik routing
     DOCKER_NETWORK = ENV.fetch("DOCKER_NETWORK", "app_default")
 
   class << self
@@ -153,7 +153,7 @@ class ContainerService
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
         "TTYD_CMD=#{command_for_agent(agent_type, 'agent_session')}",
-        "HOME_DIR=#{agent_service.home_dir}",
+        "HOME_DIR=#{agent_service.home_dir}"
       ]
 
       # Add agent-specific environment variables from AgentCredential metadata
@@ -236,7 +236,7 @@ class ContainerService
       paths.each do |path|
         begin
           # Create temp file
-          temp_file = Tempfile.new(["container-file", ".tar"])
+          temp_file = Tempfile.new([ "container-file", ".tar" ])
           temp_path = temp_file.path
           temp_file.close
 

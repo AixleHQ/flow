@@ -478,6 +478,23 @@ Since this is a brownfield project with an already established architecture, eva
 - **Implementation:** A base serializer automatically adds wrappers
 - **Rationale:** Consistency of API responses, uniformity
 
+**Frontend API Response Types:**
+```typescript
+// shared/api/types.ts
+export interface ApiResponse<T> {
+  data: T;  // Single resource response
+}
+
+export interface ApiCollectionResponse<T> {
+  items: T[];  // List response
+}
+```
+
+**RTK Query transformResponse:**
+- **Single resources:** `transformResponse: (response: ApiResponse<T>) => response.data`
+- **Lists:** `transformResponse: (response: ApiCollectionResponse<T>) => response.items`
+- **Rationale:** Extracting data from the wrapper for convenient use in components
+
 **Error Response Structure:**
 - **Validation errors:** Rails standard — `{errors: {field: ["message"]}}`
 - **Other errors:** `{error: "message"}` or `{errors: ["message"]}`
@@ -774,10 +791,19 @@ app/                                    # Root directory
     - Events: `suspend`, `activate`, `archive`
     - Auto-generated scopes: `.active`, `.suspended`, `.archived`
   - `UserStateMachine`: Managing user states
-    - States: `active` (initial), `pending`, `suspended`, `archived`
-    - Events: `activate`, `suspend`, `archive`, `mark_pending`
-    - Auto-generated scopes: `.active`, `.pending`, `.suspended`, `.archived`
-  - `StateEventConcern`: Provides `available_events` and `available_states` helpers
+    - Account state machine (column: `state`):
+      - States: `active` (initial), `pending`, `suspended`, `archived`
+      - Events: `activate`, `suspend`, `archive`, `mark_pending`
+    - Onboarding state machine (column: `onboarding_state`):
+      - States: `step1` (initial), `step2`, `step3`, `step4`, `completed`
+      - Events: `go_next`, `go_previous`, `complete`
+      - Guard: `complete` event guarded by `can_complete_onboarding?`
+      - Callback: `complete` event triggers `set_onboarding_completed_at`
+  - `StateEventConcern`: Provides `available_events`, `available_states` helpers AND auto-generates `{column}_event=` setters for triggering events via attribute assignment
+- **Frontend Integration:**
+  - API accepts `onboarding_state_event: 'go_next' | 'go_previous' | 'complete'`
+  - StateEventConcern converts attribute assignment to AASM event call
+  - Invalid events are silently ignored (guard fails = no state change)
 - **Note:** Roles and positions use `enumerize`, not state machines
   - Roles: `employee`, `admin`, `super_admin` (enumerize)
   - Positions: `qa`, `pm_po_ba`, `dev`, `designer`, `cto` (enumerize)
@@ -1009,6 +1035,17 @@ app/                                    # Root directory
 - **Factory Rules:** In factories, nothing should be written directly in fields, except `password_confirmation` which duplicates `password`
 - **Data Generation:** All values are generated via sequences (email, name, password, etc.)
 - **Traits:** Use traits for variations (for example, `:super_admin`, `:with_company`)
+
+**Code Quality Checks (MANDATORY):**
+- **Command:** `make check` (runs inside the Docker container)
+- **What it runs:**
+  1. `rails test` - all unit tests
+  2. `rubocop -a` - Ruby linting with autofix
+  3. `brakeman` - security scanning
+  4. `yarn lint:fix` - ESLint + Prettier with autofix
+- **When to run:** REQUIRED before completing any story/task
+- **Rule:** All checks must pass without errors before committing
+- **Note:** Some pre-existing warnings may be in files not touched by the current task
 
 **Admin Panel:**
 - **Approach:** Use the Administrate gem for the admin panel

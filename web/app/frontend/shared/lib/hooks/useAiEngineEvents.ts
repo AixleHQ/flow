@@ -29,6 +29,7 @@ export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
       log(event);
       onEvent?.(event);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onEvent],
   );
 
@@ -68,6 +69,7 @@ export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
         consumerRef.current.disconnect();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, specificationId, handleEvent]);
 
   return {};

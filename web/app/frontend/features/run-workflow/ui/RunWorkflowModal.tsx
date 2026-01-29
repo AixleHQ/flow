@@ -5,11 +5,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
   Switch,
   TextField,
   Typography,
@@ -37,7 +33,7 @@ interface RunWorkflowModalProps {
   open: boolean;
   workflow: IWorkflow | null;
   onClose: () => void;
-  onRun: (params: Record<string, any>) => void;
+  onRun: (params: Record<string, string | number | boolean>) => void;
 }
 
 const styles = {
@@ -123,10 +119,10 @@ const styles = {
 
 const RunWorkflowModal = ({ open, workflow, onClose, onRun }: RunWorkflowModalProps) => {
   const { enqueueSnackbar } = useSnackbar();
-  const [params, setParams] = useState<Record<string, any>>({});
+  const [params, setParams] = useState<Record<string, string | number | boolean>>({});
   const [autoStart, setAutoStart] = useState(true);
 
-  const handleParamChange = (name: string, value: any) => {
+  const handleParamChange = (name: string, value: string | number | boolean) => {
     setParams((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -204,7 +200,7 @@ const RunWorkflowModal = ({ open, workflow, onClose, onRun }: RunWorkflowModalPr
                         onChange={(e) => handleParamChange(param.name, e.target.checked)}
                       />
                     }
-                    label={params[param.name] ?? param.defaultValue ?? false ? 'Yes' : 'No'}
+                    label={(params[param.name] ?? param.defaultValue ?? false) ? 'Yes' : 'No'}
                     sx={styles.switchLabel}
                   />
                 ) : param.type === 'number' ? (

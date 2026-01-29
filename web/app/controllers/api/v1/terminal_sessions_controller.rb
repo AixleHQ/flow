@@ -69,8 +69,8 @@ module Api
       # POST /api/v1/terminal_sessions/:id/cancel
       # Cancel/stop active session (sends signal to gracefully shutdown and cleanup)
       def cancel
-        unless @session.may_stop? || @session.may_cancel?
-          return render json: { error: "Session cannot be stopped in current state: #{@session.state}" },
+        unless @session.may_cancel?
+          return render json: { error: "Session cannot be cancelled in current state: #{@session.state}" },
                         status: :bad_request
         end
 
@@ -80,12 +80,12 @@ module Api
           TemporalService.send_signal(@session.temporal_workflow_id, :session_cancelled)
         end
 
-        # Update state
-        @session.stop! if @session.may_stop?
+        # Update state to cancelled
+        @session.cancel!
 
         render json: {
           data: TerminalSessionSerializer.new(@session).as_json,
-          message: "Session stopping..."
+          message: "Session cancelled"
         }
       end
 
@@ -106,9 +106,9 @@ module Api
         # Find by ID (numeric) or route_token (hex string)
         @session = if params[:id].to_s.match?(/^\d+$/)
                      current_user.terminal_sessions.find_by(id: params[:id])
-                   else
+        else
                      current_user.terminal_sessions.find_by(route_token: params[:id])
-                   end
+        end
 
         render json: { error: "Terminal session not found" }, status: :not_found unless @session
       end

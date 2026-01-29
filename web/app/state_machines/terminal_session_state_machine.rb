@@ -52,13 +52,13 @@ module TerminalSessionStateMachine
     begin
       # Select workflow based on session type
       workflow = case session_type
-                 when "auth_setup"
+      when "auth_setup"
                    WorkflowService.workflows.agent_auth_workflow
-                 when "agent_session"
+      when "agent_session"
                    WorkflowService.workflows.agent_session_workflow
-                 else
+      else
                    raise "Unsupported session type: #{session_type}"
-                 end
+      end
 
       result = TemporalService.start_workflow(
         workflow,

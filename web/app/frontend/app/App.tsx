@@ -7,7 +7,7 @@ import { Provider } from 'react-redux';
 import { ThemeProvider } from 'app/providers/ThemeProvider';
 import { routeTree } from 'app/routeTree';
 
-import { store } from 'shared/api/store';
+import { store } from 'shared/api';
 
 declare module '@tanstack/react-router' {
   interface Register {

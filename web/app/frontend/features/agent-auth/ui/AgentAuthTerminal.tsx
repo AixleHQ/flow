@@ -2,12 +2,8 @@ import { Box, Button, CircularProgress, TextField, Typography } from '@mui/mater
 import { enqueueSnackbar } from 'notistack';
 import { useCallback, useEffect, useState, useRef } from 'react';
 
-import type { AgentType, ITerminalSession } from 'entities/terminal-session/model/types';
-import {
-  useCreateTerminalSessionMutation,
-  useFinishAuthMutation,
-  useCancelSessionMutation,
-} from 'shared/api/terminalSessionApi';
+import type { AgentType, ITerminalSession } from 'entities/terminal-session';
+import { useCreateTerminalSessionMutation, useFinishAuthMutation, useCancelSessionMutation } from 'shared/api';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 // Agent-specific env fields that must be configured before starting container
@@ -48,6 +44,22 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
   const handleSessionUpdate = useCallback((s: ITerminalSession) => setSession(s), []);
 
+  // Reset state when agentType changes
+  useEffect(() => {
+    setStep(requiresEnvFields ? 'env_fields' : 'terminal');
+    setSessionId(null);
+    setSession(null);
+    setAuthDetected(false);
+    setMetadata({});
+    finishingRef.current = false;
+    // Note: don't reset authCompleteCalledRef here as it could cause double calls
+    // when parent changes activeLoginAgent during onAuthComplete callback
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+  }, [agentType, requiresEnvFields]);
+
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -58,9 +70,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   // Handle env fields submission and proceed to terminal
   const handleEnvFieldsSubmit = () => {
     // Validate required fields
-    const missingRequired = envFields
-      .filter((f) => f.required && !metadata[f.key])
-      .map((f) => f.label);
+    const missingRequired = envFields.filter((f) => f.required && !metadata[f.key]).map((f) => f.label);
     if (missingRequired.length > 0) {
       enqueueSnackbar(`Please fill in: ${missingRequired.join(', ')}`, { variant: 'warning' });
       return;
@@ -135,7 +145,8 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
         return;
       }
       try {
-        const baseUrl = (window as unknown as { Settings?: { traefikHttpBase?: string } }).Settings?.traefikHttpBase || '';
+        const baseUrl =
+          (window as unknown as { Settings?: { traefikHttpBase?: string } }).Settings?.traefikHttpBase || '';
         const url = `${baseUrl}/t/${session.routeToken}/fs/auth`;
         const response = await fetch(url, { credentials: 'include' });
         if (response.ok) {
@@ -171,7 +182,18 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   // Step 1: Env fields form (for agents that require pre-config like GOOGLE_CLOUD_PROJECT)
   if (step === 'env_fields') {
     return (
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e', gap: 2, p: 3 }}>
+      <Box
+        sx={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: '#1e1e1e',
+          gap: 2,
+          p: 3,
+        }}
+      >
         <Typography variant="h6" sx={{ color: '#fff' }}>
           Configure {agentType.replace(/_/g, ' ')}
         </Typography>
@@ -216,7 +238,17 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   // Step 3: Completed
   if (step === 'completed') {
     return (
-      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', bgcolor: '#1e1e1e', gap: 2 }}>
+      <Box
+        sx={{
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: '#1e1e1e',
+          gap: 2,
+        }}
+      >
         <Typography sx={{ fontSize: '48px' }}>✅</Typography>
         <Typography variant="h6" sx={{ color: '#4caf50' }}>
           Authentication Complete
@@ -281,26 +313,27 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
       </Box>
 
       {/* Action buttons */}
-      <Box sx={{ display: 'flex', gap: 1, p: 1, borderTop: '1px solid #3d3d3d' }}>
+      <Box sx={{ display: 'flex', gap: 1, p: 1, borderTop: '1px solid #3d3d3d', alignItems: 'center' }}>
         {isRunning && (
-          <Button
-            variant="contained"
-            color="success"
-            size="small"
-            onClick={handleFinish}
-            disabled={isFinishing}
-          >
-            {isFinishing ? 'Saving...' : 'Save Authentication'}
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              color="success"
+              size="small"
+              onClick={handleFinish}
+              disabled={isFinishing || !authDetected}
+            >
+              {isFinishing ? 'Saving...' : 'Save Authentication'}
+            </Button>
+            {!authDetected && (
+              <Typography variant="caption" sx={{ color: '#888', ml: 1 }}>
+                Complete authentication in terminal first
+              </Typography>
+            )}
+          </>
         )}
         {canCancel && (
-          <Button
-            variant="outlined"
-            color="error"
-            size="small"
-            onClick={handleCancel}
-            disabled={isCancelling}
-          >
+          <Button variant="outlined" color="error" size="small" onClick={handleCancel} disabled={isCancelling}>
             Cancel
           </Button>
         )}

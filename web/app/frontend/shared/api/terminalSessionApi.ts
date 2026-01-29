@@ -5,7 +5,7 @@ import type {
   IFinishAuthResponse,
   IGetTerminalSessionResponse,
   IListTerminalSessionsResponse,
-} from 'entities/terminal-session/model/types';
+} from 'entities/terminal-session';
 
 import { baseApi } from './baseApi';
 import { QueryTag } from './QueryTag';
@@ -28,8 +28,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
         url: `/api/v1/terminal_sessions/${idOrToken}`,
         method: 'GET',
       }),
-      providesTags: (result) =>
-        result ? [{ type: QueryTag.TerminalSession, id: result.data.id }] : [],
+      providesTags: (result) => (result ? [{ type: QueryTag.TerminalSession, id: result.data.id }] : []),
     }),
 
     // List all terminal sessions for current user
@@ -41,9 +40,9 @@ export const terminalSessionApi = baseApi.injectEndpoints({
       providesTags: (result) =>
         result
           ? [
-            ...result.items.map(({ id }) => ({ type: QueryTag.TerminalSession, id })),
-            { type: QueryTag.TerminalSession, id: 'LIST' },
-          ]
+              ...result.items.map(({ id }) => ({ type: QueryTag.TerminalSession, id })),
+              { type: QueryTag.TerminalSession, id: 'LIST' },
+            ]
           : [{ type: QueryTag.TerminalSession, id: 'LIST' }],
     }),
 
@@ -53,7 +52,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
         url: `/api/v1/terminal_sessions/${sessionId}/finish_auth`,
         method: 'POST',
       }),
-      invalidatesTags: (result, error, { sessionId }) => [{ type: QueryTag.TerminalSession, id: sessionId }],
+      invalidatesTags: (_result, _error, { sessionId }) => [{ type: QueryTag.TerminalSession, id: sessionId }],
     }),
 
     // Cancel active session
@@ -62,7 +61,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
         url: `/api/v1/terminal_sessions/${id}/cancel`,
         method: 'POST',
       }),
-      invalidatesTags: (result, error, id) => [{ type: QueryTag.TerminalSession, id }],
+      invalidatesTags: (_result, _error, id) => [{ type: QueryTag.TerminalSession, id }],
     }),
 
     // Delete terminal session
@@ -71,7 +70,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
         url: `/api/v1/terminal_sessions/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, id) => [
+      invalidatesTags: (_result, _error, id) => [
         { type: QueryTag.TerminalSession, id },
         { type: QueryTag.TerminalSession, id: 'LIST' },
       ],

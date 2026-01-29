@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react';
+
 import type { TerminalHandle } from './Terminal';
 
 export function useTerminal() {

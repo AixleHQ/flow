@@ -4,7 +4,7 @@ FactoryBot.define do
     name
     password { generate :password }
     password_confirmation { password }
-    onboarding_completed_at { nil }
+    onboarding_state { "step1" }
     position { nil }
     preferred_agent_language { "en" }
 
@@ -28,6 +28,7 @@ FactoryBot.define do
     end
 
     trait :onboarding_completed do
+      onboarding_state { "completed" }
       onboarding_completed_at { Time.current }
       position { "dev" }
       preferred_agent_language { "en" }

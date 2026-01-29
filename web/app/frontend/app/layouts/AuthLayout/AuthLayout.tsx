@@ -1,11 +1,9 @@
 import { Box } from '@mui/material';
 import { Outlet, useNavigate } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
-
-const ALLOWED_PATHS_FOR_INCOMPLETE_ONBOARDING: string[] = [Routes.frontend.onboardingPath];
 
 const styles = {
   root: {
@@ -21,6 +19,7 @@ const styles = {
 const AuthLayout = () => {
   const { data, isLoading } = useGetCurrentUserQuery();
   const navigate = useNavigate();
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -31,14 +30,28 @@ const AuthLayout = () => {
       return;
     }
 
-    // If user hasn't completed onboarding, redirect to onboarding (unless already there)
-    const currentPath = window.location.pathname;
-    const isOnboardingPath = ALLOWED_PATHS_FOR_INCOMPLETE_ONBOARDING.includes(currentPath);
+    // Prevent duplicate navigations in React Strict Mode
+    if (hasNavigated.current) return;
 
-    // TODO: Re-enable after testing
-    // if (!data.onboardingCompletedAt && !isOnboardingPath) {
-    //   navigate({ to: Routes.frontend.onboardingPath });
-    // }
+    const currentPath = window.location.pathname;
+    const isOnboardingPath = currentPath === Routes.frontend.onboardingPath;
+    const isOnboardingCompleted = data.onboardingState === 'completed';
+
+    // AC4: Cannot leave onboarding until complete
+    // If user hasn't completed onboarding and is NOT on onboarding page, redirect to onboarding
+    if (!isOnboardingCompleted && !isOnboardingPath) {
+      hasNavigated.current = true;
+      navigate({ to: Routes.frontend.onboardingPath });
+      return;
+    }
+
+    // AC6: Cannot return to onboarding after completion
+    // If user HAS completed onboarding and IS on onboarding page, redirect to projects
+    if (isOnboardingCompleted && isOnboardingPath) {
+      hasNavigated.current = true;
+      navigate({ to: Routes.frontend.projectsPath });
+      return;
+    }
   }, [data, isLoading, navigate]);
 
   // Show loading state while checking auth

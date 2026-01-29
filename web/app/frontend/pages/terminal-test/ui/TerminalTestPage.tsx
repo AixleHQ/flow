@@ -9,16 +9,12 @@ import {
   IconButton,
   Chip,
 } from '@mui/material';
+import { useParams, useNavigate } from '@tanstack/react-router';
 import { enqueueSnackbar } from 'notistack';
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from '@tanstack/react-router';
 
-import type { AgentType, ITerminalSession } from 'entities/terminal-session/model/types';
-import {
-  useCreateTerminalSessionMutation,
-  useCancelSessionMutation,
-  useGetTerminalSessionQuery,
-} from 'shared/api/terminalSessionApi';
+import type { AgentType, ITerminalSession } from 'entities/terminal-session';
+import { useCreateTerminalSessionMutation, useCancelSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
@@ -46,10 +42,9 @@ export const TerminalTestPage: React.FC = () => {
   const [cancelSession, { isLoading: isCancelling }] = useCancelSessionMutation();
 
   // Fetch existing session by routeToken if provided
-  const { data: existingSession, isLoading: isLoadingExisting } = useGetTerminalSessionQuery(
-    routeToken as string,
-    { skip: !routeToken }
-  );
+  const { data: existingSession, isLoading: isLoadingExisting } = useGetTerminalSessionQuery(routeToken as string, {
+    skip: !routeToken,
+  });
 
   // When existing session is loaded, use it
   useEffect(() => {

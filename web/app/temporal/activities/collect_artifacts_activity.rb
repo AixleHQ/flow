@@ -33,11 +33,11 @@ module Activities
       session.collect!
 
       { credential_id: credential.id }
-    # rescue StandardError => e
-    #   Rails.logger.error("[CollectArtifactsActivity] Error: #{e.message}")
-    #   session&.update!(error_message: "Failed to collect artifacts: #{e.message}")
-    #   session&.fail! if session&.may_fail?
-    #   raise TemporalExceptions.wrap(e, retryable: false)
+      # rescue StandardError => e
+      #   Rails.logger.error("[CollectArtifactsActivity] Error: #{e.message}")
+      #   session&.update!(error_message: "Failed to collect artifacts: #{e.message}")
+      #   session&.fail! if session&.may_fail?
+      #   raise TemporalExceptions.wrap(e, retryable: false)
     end
   end
 end

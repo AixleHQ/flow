@@ -107,7 +107,7 @@ const ProjectsPage = () => {
   const { data, isLoading } = useProjectsQuery();
 
   // Use mock data if API returns empty or fails
-  const projects = data?.data?.length ? data.data : mockProjects;
+  const projects = data?.items?.length ? data.items : mockProjects;
 
   const handleProjectClick = (projectId: string) => {
     navigate({ to: '/projects/$projectId', params: { projectId } });
@@ -128,9 +128,7 @@ const ProjectsPage = () => {
       {/* Header */}
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Projects</Typography>
-        <Typography sx={styles.subtitle}>
-          Select a project to view workflows, artifacts, and tasks
-        </Typography>
+        <Typography sx={styles.subtitle}>Select a project to view workflows, artifacts, and tasks</Typography>
       </Box>
 
       {/* Projects Grid */}
@@ -139,12 +137,12 @@ const ProjectsPage = () => {
           <Box sx={styles.emptyIcon}>📁</Box>
           <Typography sx={styles.emptyTitle}>No projects yet</Typography>
           <Typography sx={styles.emptyDescription}>
-            You don't have access to any projects. Ask your team admin to invite you to a project.
+            You don&apos;t have access to any projects. Ask your team admin to invite you to a project.
           </Typography>
         </Box>
       ) : (
         <Grid container spacing={3} sx={styles.grid}>
-          {projects.map((project) => (
+          {projects.map((project: IProject) => (
             <Grid item xs={12} sm={6} lg={4} key={project.id}>
               <ProjectCard project={project} onClick={() => handleProjectClick(project.id)} />
             </Grid>

@@ -29,7 +29,9 @@ export const getArtifactType = (mimeType?: string, name?: string): ArtifactType 
 
   // Code
   if (
-    ['ts', 'tsx', 'js', 'jsx', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'css', 'scss', 'html'].includes(extension) ||
+    ['ts', 'tsx', 'js', 'jsx', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'css', 'scss', 'html'].includes(
+      extension,
+    ) ||
     type.includes('javascript') ||
     type.includes('typescript')
   ) {
@@ -37,11 +39,7 @@ export const getArtifactType = (mimeType?: string, name?: string): ArtifactType 
   }
 
   // Documents
-  if (
-    ['md', 'txt', 'pdf', 'doc', 'docx'].includes(extension) ||
-    type.includes('text/') ||
-    type.includes('pdf')
-  ) {
+  if (['md', 'txt', 'pdf', 'doc', 'docx'].includes(extension) || type.includes('text/') || type.includes('pdf')) {
     return 'document';
   }
 

@@ -44,7 +44,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#create with admin user redirects to root" do
     company = create(:company)
-    admin_user = create(:user, :admin, company: company, password: @password, onboarding_completed_at: Time.current)
+    admin_user = create(:user, :admin, company: company, password: @password, onboarding_state: "completed")
     auth_params = { user: { email: admin_user.email, password: @password } }
 
     post :create, params: auth_params
@@ -55,7 +55,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#create with user without onboarding redirects to root" do
     company = create(:company)
-    user = create(:user, :employee, company: company, password: @password, onboarding_completed_at: nil)
+    user = create(:user, :employee, company: company, password: @password, onboarding_state: "step1")
     auth_params = { user: { email: user.email, password: @password } }
 
     post :create, params: auth_params
@@ -145,7 +145,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#omniauth with existing active user redirects to root" do
     company = create(:company, email_domain: "example.com", auto_accept_users: true)
-    existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_completed_at: Time.current)
+    existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_state: "completed")
     auth_hash = build_auth_hash(email: "existing@example.com")
     @request.env["omniauth.auth"] = auth_hash
 
@@ -159,7 +159,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#omniauth with existing user without onboarding redirects to root" do
     company = create(:company, email_domain: "example.com", auto_accept_users: true)
-    existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_completed_at: nil)
+    existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_state: "step1")
     auth_hash = build_auth_hash(email: "existing@example.com")
     @request.env["omniauth.auth"] = auth_hash
 

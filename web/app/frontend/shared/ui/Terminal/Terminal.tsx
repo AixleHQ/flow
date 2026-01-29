@@ -1,7 +1,7 @@
-import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal as XTerm } from '@xterm/xterm';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import '@xterm/xterm/css/xterm.css';
 
 export interface TerminalHandle {
@@ -131,7 +131,7 @@ export const Terminal = forwardRef<TerminalHandle, TerminalProps>(
         }}
       />
     );
-  }
+  },
 );
 
 Terminal.displayName = 'Terminal';

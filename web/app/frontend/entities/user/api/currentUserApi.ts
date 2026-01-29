@@ -1,6 +1,6 @@
-import { baseApi, QueryTag } from 'shared/api';
+import { baseApi, QueryTag, type ApiResponse } from 'shared/api';
 
-import type { CurrentUserResponse, UserPosition } from '../model/types';
+import type { AgentType, CurrentUserResponse, OnboardingEvent, UserPosition } from '../model/types';
 
 interface IUpdateCurrentUserRequest {
   currentUser: {
@@ -9,6 +9,10 @@ interface IUpdateCurrentUserRequest {
     passwordConfirmation?: string;
     position?: UserPosition;
     preferredAgentLanguage?: string;
+    // Agents selected in Step 2 (before auth)
+    selectedAgents?: AgentType[];
+    // Trigger onboarding state transition: go_next, go_previous, complete
+    onboardingStateEvent?: OnboardingEvent;
     // Note: configuredAgents is read-only, derived from AgentCredentials
   };
 }
@@ -20,6 +24,7 @@ export const currentUserApi = baseApi.injectEndpoints({
         url: '/api/v1/current_user',
         method: 'GET',
       }),
+      transformResponse: (response: ApiResponse<CurrentUserResponse>) => response.data,
       providesTags: [QueryTag.CurrentUser],
     }),
     updateCurrentUser: builder.mutation<CurrentUserResponse, IUpdateCurrentUserRequest>({
@@ -28,6 +33,7 @@ export const currentUserApi = baseApi.injectEndpoints({
         method: 'PATCH',
         data,
       }),
+      transformResponse: (response: ApiResponse<CurrentUserResponse>) => response.data,
       invalidatesTags: [QueryTag.CurrentUser],
     }),
   }),

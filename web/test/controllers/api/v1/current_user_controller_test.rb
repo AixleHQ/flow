@@ -37,70 +37,6 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert { @user.preferred_agent_language == "en" }
   end
 
-  test "#update with agent_credentials sets onboarding_completed_at" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
-    # Create agent credential to simulate completed onboarding
-    create(:agent_credential, user: @user, agent_type: "claude_code")
-
-    patch :update, params: {
-      current_user: {
-        position: "dev",
-        preferred_agent_language: "en"
-      }
-    }
-
-    assert_response :success
-    @user.reload
-    assert { @user.onboarding_completed_at.present? }
-    assert { @user.configured_agents == [ "claude_code" ] }
-  end
-
-  test "#update does not set onboarding_completed_at if position missing" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
-    create(:agent_credential, user: @user, agent_type: "claude_code")
-
-    patch :update, params: {
-      current_user: {
-        preferred_agent_language: "en"
-      }
-    }
-
-    assert_response :success
-    @user.reload
-    assert { @user.onboarding_completed_at.nil? }
-  end
-
-  test "#update does not set onboarding_completed_at if language missing" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
-    create(:agent_credential, user: @user, agent_type: "claude_code")
-
-    patch :update, params: {
-      current_user: {
-        position: "dev"
-      }
-    }
-
-    assert_response :success
-    @user.reload
-    assert { @user.onboarding_completed_at.nil? }
-  end
-
-  test "#update does not set onboarding_completed_at if no agent_credentials" do
-    @user.update!(onboarding_completed_at: nil, position: nil, preferred_agent_language: nil)
-    # No agent credentials created
-
-    patch :update, params: {
-      current_user: {
-        position: "dev",
-        preferred_agent_language: "en"
-      }
-    }
-
-    assert_response :success
-    @user.reload
-    assert { @user.onboarding_completed_at.nil? }
-  end
-
   test "#update with password and password_confirmation" do
     new_password = "newpassword123"
 
@@ -163,6 +99,180 @@ class Api::V1::CurrentUserControllerTest < ActionController::TestCase
     assert { credentials.map { |c| c["agent_type"] }.sort == %w[claude_code cursor_cli] }
     # Should not expose encrypted data
     assert { credentials.all? { |c| c["encrypted_config_data"].nil? } }
+  end
+
+  # ====== Story 2.7: Onboarding State Machine Tests ======
+
+  test "#update with selected_agents saves array" do
+    patch :update, params: {
+      current_user: {
+        selected_agents: %w[claude_code cursor_cli]
+      }
+    }
+
+    assert_response :success
+    @user.reload
+    assert { @user.selected_agents == %w[claude_code cursor_cli] }
+  end
+
+  test "#show returns selected_agents and onboarding_state" do
+    @user.update!(selected_agents: %w[claude_code codex])
+
+    get :show
+
+    assert_response :success
+    json = response.parsed_body
+    assert { json["data"]["selected_agents"] == %w[claude_code codex] }
+    assert { json["data"]["onboarding_state"] == "step1" }
+  end
+
+  test "#update rejects invalid selected_agents values" do
+    patch :update, params: {
+      current_user: {
+        selected_agents: %w[claude_code invalid_agent]
+      }
+    }
+
+    assert_response :unprocessable_entity
+  end
+
+  # ====== Onboarding State Event Tests (via update) ======
+
+  test "#update with onboarding_state_event go_next transitions from step1 to step2" do
+    @user.update!(onboarding_state: "step1")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_next" } }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step2" }
+  end
+
+  test "#update with onboarding_state_event go_next transitions from step2 to step3" do
+    @user.update!(onboarding_state: "step2")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_next" } }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step3" }
+  end
+
+  test "#update with onboarding_state_event go_next transitions from step3 to step4" do
+    @user.update!(onboarding_state: "step3")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_next" } }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step4" }
+  end
+
+  test "#update with onboarding_state_event go_next ignores invalid transition from step4" do
+    @user.update!(onboarding_state: "step4")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_next" } }
+
+    # StateEventConcern silently ignores invalid transitions
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step4" }
+  end
+
+  test "#update with onboarding_state_event go_previous transitions from step2 to step1" do
+    @user.update!(onboarding_state: "step2")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_previous" } }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step1" }
+  end
+
+  test "#update with onboarding_state_event go_previous ignores invalid transition from step1" do
+    @user.update!(onboarding_state: "step1")
+
+    patch :update, params: { current_user: { onboarding_state_event: "go_previous" } }
+
+    # StateEventConcern silently ignores invalid transitions
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step1" }
+  end
+
+  test "#update with onboarding_state_event complete transitions from step4 to completed when requirements met" do
+    @user.update!(
+      onboarding_state: "step4",
+      position: "dev",
+      preferred_agent_language: "en"
+    )
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    patch :update, params: { current_user: { onboarding_state_event: "complete" } }
+
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "completed" }
+    assert { @user.onboarding_completed_at.present? }
+  end
+
+  test "#update with onboarding_state_event complete ignores when position missing" do
+    @user.update!(
+      onboarding_state: "step4",
+      position: nil,
+      preferred_agent_language: "en"
+    )
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    patch :update, params: { current_user: { onboarding_state_event: "complete" } }
+
+    # Guard fails, transition silently ignored
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step4" }
+  end
+
+  test "#update with onboarding_state_event complete ignores when language missing" do
+    @user.update!(
+      onboarding_state: "step4",
+      position: "dev",
+      preferred_agent_language: nil
+    )
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    patch :update, params: { current_user: { onboarding_state_event: "complete" } }
+
+    # Guard fails, transition silently ignored
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step4" }
+  end
+
+  test "#update with onboarding_state_event complete ignores when no agent_credentials" do
+    @user.update!(
+      onboarding_state: "step4",
+      position: "dev",
+      preferred_agent_language: "en"
+    )
+    # No agent credentials
+
+    patch :update, params: { current_user: { onboarding_state_event: "complete" } }
+
+    # Guard fails, transition silently ignored
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step4" }
+  end
+
+  test "#update with invalid onboarding_state_event is silently ignored" do
+    @user.update!(onboarding_state: "step1")
+
+    patch :update, params: { current_user: { onboarding_state_event: "invalid_event" } }
+
+    # Invalid events are silently ignored by StateEventConcern
+    assert_response :success
+    @user.reload
+    assert { @user.onboarding_state == "step1" }
   end
 
   private

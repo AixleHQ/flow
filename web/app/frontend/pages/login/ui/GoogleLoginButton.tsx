@@ -2,7 +2,7 @@ import { Button, SxProps } from '@mui/material';
 import { Link } from '@tanstack/react-router';
 import * as React from 'react';
 
-import { apiV1AuthPath } from 'shared/api/routes';
+import { apiV1AuthPath } from 'shared/api';
 
 const styles = {
   googleButton: {

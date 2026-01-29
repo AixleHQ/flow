@@ -1,16 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  Divider,
-  IconButton,
-  Switch,
-  Tab,
-  Tabs,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Divider, Switch, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
@@ -28,12 +16,13 @@ interface IIntegration {
   connectUrl?: string;
 }
 
-interface IBillingPeriod {
-  period: string;
-  cost: number;
-  tokens: number;
-  requests: number;
-}
+// IBillingPeriod will be used when integrating with real API
+// interface IBillingPeriod {
+//   period: string;
+//   cost: number;
+//   tokens: number;
+//   requests: number;
+// }
 
 const mockIntegrations: IIntegration[] = [
   {
@@ -60,12 +49,6 @@ const mockIntegrations: IIntegration[] = [
     connected: false,
     connectUrl: '/integrations/gitlab/connect',
   },
-];
-
-const mockBillingData: IBillingPeriod[] = [
-  { period: 'This Month', cost: 1247.50, tokens: 1250000, requests: 3420 },
-  { period: 'Last Month', cost: 1890.25, tokens: 1890000, requests: 5120 },
-  { period: 'This Year', cost: 15234.80, tokens: 15200000, requests: 45600 },
 ];
 
 const styles = {
@@ -237,18 +220,14 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
   };
 
   const handleConnectIntegration = (integrationId: string) => {
-    setIntegrations((prev) =>
-      prev.map((int) => (int.id === integrationId ? { ...int, connected: true } : int)),
-    );
+    setIntegrations((prev) => prev.map((int) => (int.id === integrationId ? { ...int, connected: true } : int)));
     enqueueSnackbar(`${integrations.find((i) => i.id === integrationId)?.name} connected!`, {
       variant: 'success',
     });
   };
 
   const handleDisconnectIntegration = (integrationId: string) => {
-    setIntegrations((prev) =>
-      prev.map((int) => (int.id === integrationId ? { ...int, connected: false } : int)),
-    );
+    setIntegrations((prev) => prev.map((int) => (int.id === integrationId ? { ...int, connected: false } : int)));
     enqueueSnackbar(`${integrations.find((i) => i.id === integrationId)?.name} disconnected`, {
       variant: 'info',
     });
@@ -336,10 +315,15 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
                 <>
                   {integration.id === 'linear' && (
                     <Box sx={{ marginTop: '12px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>
-                          Auto-sync tasks
-                        </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>Auto-sync tasks</Typography>
                         <Switch
                           size="small"
                           checked={autoSyncLinear}
@@ -350,10 +334,15 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
                   )}
                   {integration.id === 'github' && (
                     <Box sx={{ marginTop: '12px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>
-                          Auto-create PRs
-                        </Typography>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '8px',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>Auto-create PRs</Typography>
                         <Switch
                           size="small"
                           checked={autoCreatePRs}
@@ -390,7 +379,7 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
       <Box sx={styles.section}>
         <Typography sx={styles.sectionTitle}>Billing & Usage</Typography>
         <Typography sx={styles.sectionDescription}>
-          Track your project's token usage and costs across all workflows.
+          Track your project&apos;s token usage and costs across all workflows.
         </Typography>
 
         <CostAnalytics projectId={projectId} />

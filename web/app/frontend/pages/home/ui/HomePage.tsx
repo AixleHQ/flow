@@ -1,12 +1,11 @@
 import { Box, Typography, Button, Paper, CircularProgress } from '@mui/material';
-import { useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 
 import { Logo } from 'shared/ui';
 
 // Simple icons using unicode/emoji
 const PlayArrowIcon = () => <span style={{ fontSize: '24px' }}>▶</span>;
-const TerminalIcon = () => <span style={{ fontSize: '64px' }}>⌨️</span>;
 
 const styles = {
   container: {

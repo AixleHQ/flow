@@ -16,7 +16,7 @@ module Agents
     end
 
     def allowed_tools
-      ["Task","Bash","Glob","Grep","LS","Read","Edit","MultiEdit","Write","WebFetch","WebSearch"]
+      [ "Task", "Bash", "Glob", "Grep", "LS", "Read", "Edit", "MultiEdit", "Write", "WebFetch", "WebSearch" ]
     end
 
     # Keys that indicate auth is complete (any one = success)
@@ -88,7 +88,7 @@ module Agents
           "deny" => [],
           "ask" => []
         },
-        "bypassPermissionsWarningAccepted" => true,
+        "bypassPermissionsWarningAccepted" => true
       }
     end
 

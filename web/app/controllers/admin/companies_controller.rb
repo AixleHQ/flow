@@ -22,7 +22,7 @@ module Admin
             company_id: company.id,
             role: "admin",
             state: "active",
-            onboarding_completed_at: nil
+            onboarding_state: "step1"
           )
 
           unless admin_user.save

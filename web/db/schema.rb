@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_26_110000) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_29_111000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -114,7 +114,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_110000) do
     t.string "role", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.datetime "onboarding_completed_at"
     t.string "position"
     t.string "preferred_agent_language", default: "en"
     t.string "provider"
@@ -122,9 +121,13 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_26_110000) do
     t.string "google_token"
     t.string "google_refresh_token"
     t.string "avatar_url"
+    t.text "selected_agents", default: [], array: true
+    t.string "onboarding_state", default: "step1", null: false
+    t.datetime "onboarding_completed_at"
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"
     t.index ["state"], name: "index_users_on_state"

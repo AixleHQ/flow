@@ -239,7 +239,8 @@ const WorkflowStepper = ({ steps, currentStepId, onStepClick }: IWorkflowStepper
       {steps.map((step, index) => {
         const isLast = index === steps.length - 1;
         const isExpanded = expandedSteps.has(step.id);
-        const hasDetails = step.agent || step.duration || step.cost !== undefined || (step.artifacts && step.artifacts.length > 0);
+        const hasDetails =
+          step.agent || step.duration || step.cost !== undefined || (step.artifacts && step.artifacts.length > 0);
 
         return (
           <Box key={step.id} sx={styles.step}>
@@ -278,9 +279,7 @@ const WorkflowStepper = ({ steps, currentStepId, onStepClick }: IWorkflowStepper
                 </Box>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {step.cost !== undefined && (
-                    <Typography sx={{ ...styles.stepMeta, color: 'success.main' }}>
-                      ${step.cost.toFixed(2)}
-                    </Typography>
+                    <Typography sx={{ ...styles.stepMeta, color: 'success.main' }}>${step.cost.toFixed(2)}</Typography>
                   )}
                   {step.duration && <Typography sx={styles.stepMeta}>{step.duration}</Typography>}
                   {hasDetails && (

@@ -1,14 +1,12 @@
-import { baseApi } from 'shared/api';
-import type { ApiCollectionResponse } from 'shared/api';
-import { QueryTag, providesListTag } from 'shared/api';
-
 import type { IProject } from 'entities/project';
+import type { ApiCollectionResponse } from 'shared/api';
+import { baseApi, QueryTag, providesListTag } from 'shared/api';
 
 export const projectsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     projects: builder.query<ApiCollectionResponse<IProject>, void>({
-      query: () => '/projects',
-      providesTags: (result) => providesListTag(result?.data, QueryTag.Project),
+      query: () => ({ url: '/api/v1/projects', method: 'GET' }),
+      providesTags: (result) => providesListTag(result?.items, QueryTag.Project),
     }),
   }),
 });

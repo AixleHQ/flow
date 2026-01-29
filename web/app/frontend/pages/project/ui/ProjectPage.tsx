@@ -15,6 +15,7 @@ import {
   useProjectTasksQuery,
 } from '../api/projectApi';
 import type { ProjectTab, IWorkflow, IWorkflowRun, ITask } from '../lib/types';
+
 import SettingsTab from './SettingsTab';
 
 const styles = {
@@ -205,7 +206,13 @@ const mockWorkflows: IWorkflow[] = [
     parameters: [
       { name: 'product_name', type: 'string', description: 'Name of the product', required: true },
       { name: 'target_audience', type: 'string', description: 'Target audience description', required: false },
-      { name: 'include_mockups', type: 'boolean', description: 'Include mockup designs', defaultValue: false, required: false },
+      {
+        name: 'include_mockups',
+        type: 'boolean',
+        description: 'Include mockup designs',
+        defaultValue: false,
+        required: false,
+      },
     ],
   },
   {
@@ -252,9 +259,33 @@ const mockWorkflowRuns: IWorkflowRun[] = [
 ];
 
 const mockArtifacts: IArtifact[] = [
-  { id: '1', name: 'prd.md', type: 'document', workflowName: 'Create PRD', stepName: 'Generate PRD', userName: 'Artem', createdAt: new Date().toISOString() },
-  { id: '2', name: 'ux-design-specification.md', type: 'document', workflowName: 'Design UX', stepName: 'UX Spec', userName: 'Artem', createdAt: new Date().toISOString() },
-  { id: '3', name: 'mockups.html', type: 'code', workflowName: 'Design UX', stepName: 'Mockups', userName: 'Artem', createdAt: new Date().toISOString() },
+  {
+    id: '1',
+    name: 'prd.md',
+    type: 'document',
+    workflowName: 'Create PRD',
+    stepName: 'Generate PRD',
+    userName: 'Artem',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '2',
+    name: 'ux-design-specification.md',
+    type: 'document',
+    workflowName: 'Design UX',
+    stepName: 'UX Spec',
+    userName: 'Artem',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: '3',
+    name: 'mockups.html',
+    type: 'code',
+    workflowName: 'Design UX',
+    stepName: 'Mockups',
+    userName: 'Artem',
+    createdAt: new Date().toISOString(),
+  },
 ];
 
 const mockTasks: ITask[] = [
@@ -313,7 +344,7 @@ const ProjectPage = () => {
     setRunWorkflowModalOpen(true);
   };
 
-  const handleRunWorkflow = (params: Record<string, any>) => {
+  const handleRunWorkflow = (params: Record<string, string | number | boolean>) => {
     // In real app, this would trigger the workflow run
     console.log('Running workflow:', selectedWorkflow?.id, 'with params:', params);
     navigate({
@@ -351,7 +382,9 @@ const ProjectPage = () => {
                     </Typography>
                   </Box>
                   {run.totalCost !== undefined && (
-                    <Typography sx={{ color: 'success.main', fontFamily: '"JetBrains Mono", monospace', fontSize: '14px' }}>
+                    <Typography
+                      sx={{ color: 'success.main', fontFamily: '"JetBrains Mono", monospace', fontSize: '14px' }}
+                    >
                       ${run.totalCost.toFixed(2)}
                     </Typography>
                   )}
@@ -374,10 +407,7 @@ const ProjectPage = () => {
                   {workflow.lastRunStatus && (
                     <>
                       {' '}
-                      •{' '}
-                      <span style={{ color: getStatusColor(workflow.lastRunStatus) }}>
-                        {workflow.lastRunStatus}
-                      </span>
+                      • <span style={{ color: getStatusColor(workflow.lastRunStatus) }}>{workflow.lastRunStatus}</span>
                     </>
                   )}
                 </Typography>
@@ -454,9 +484,7 @@ const ProjectPage = () => {
                   .map((task) => (
                     <Box key={task.id} sx={styles.taskCard}>
                       <Typography sx={styles.taskTitle}>{task.title}</Typography>
-                      {task.assigneeName && (
-                        <Typography sx={styles.taskAssignee}>{task.assigneeName}</Typography>
-                      )}
+                      {task.assigneeName && <Typography sx={styles.taskAssignee}>{task.assigneeName}</Typography>}
                     </Box>
                   ))}
               </Box>

@@ -158,7 +158,13 @@ const styles = {
   },
 } as const;
 
-export const FileTree = ({ watcherUrl, watcherPort, onFileSelect, selectedPath, hideHeader = false }: IFileTreeProps) => {
+export const FileTree = ({
+  watcherUrl,
+  watcherPort,
+  onFileSelect,
+  selectedPath,
+  hideHeader = false,
+}: IFileTreeProps) => {
   const [treeData, setTreeData] = useState<IWatcherTreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

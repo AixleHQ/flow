@@ -17,6 +17,7 @@ const frontend = {
   rootPath: '/',
   loginPath: '/login',
   onboardingPath: '/onboarding',
+  projectsPath: '/projects',
   setupPath: '/setup',
   workspacePath: '/workspace',
   homePath: '/home',

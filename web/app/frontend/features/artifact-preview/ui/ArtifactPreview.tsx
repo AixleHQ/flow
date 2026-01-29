@@ -1,13 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  Chip,
-  IconButton,
-  Tab,
-  Tabs,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Chip, IconButton, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useState } from 'react';
 
@@ -237,9 +228,7 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
           );
         }
         // In a real app, you'd use a markdown renderer like react-markdown
-        return (
-          <Box sx={styles.markdownContent} dangerouslySetInnerHTML={{ __html: artifact.content || '' }} />
-        );
+        return <Box sx={styles.markdownContent} dangerouslySetInnerHTML={{ __html: artifact.content || '' }} />;
 
       case 'code':
       case 'json':
@@ -265,12 +254,7 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
               Binary file: {formatSize(artifact.size)}
             </Typography>
             {artifact.url && (
-              <Button
-                variant="outlined"
-                href={artifact.url}
-                download={artifact.name}
-                sx={styles.downloadButton}
-              >
+              <Button variant="outlined" href={artifact.url} download={artifact.name} sx={styles.downloadButton}>
                 Download File
               </Button>
             )}

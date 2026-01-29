@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  IconButton,
-  MenuItem,
-  Paper,
-  Select,
-  TextField,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Box, Button, IconButton, MenuItem, Select, TextField, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
@@ -388,7 +378,9 @@ const WorkflowBuilderPage = () => {
             <Box sx={styles.panel}>
               {/* Step Configuration */}
               <Box sx={styles.section}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}
+                >
                   <Typography sx={styles.sectionTitle}>Step Configuration</Typography>
                   <Tooltip title="Delete Step">
                     <IconButton

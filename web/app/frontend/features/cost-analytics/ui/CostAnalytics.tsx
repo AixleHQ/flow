@@ -1,12 +1,4 @@
-import {
-  Box,
-  Card,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Typography,
-} from '@mui/material';
+import { Box, Card, FormControl, InputLabel, MenuItem, Select, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useState } from 'react';
 
@@ -178,11 +170,12 @@ const generateMockData = (period: string): ICostDataPoint[] => {
 };
 
 const mockBreakdown: ICostBreakdown[] = [
-  { category: 'Claude API', cost: 847.30, percentage: 68 },
-  { category: 'OpenAI API', cost: 312.20, percentage: 25 },
-  { category: 'Storage (S3)', cost: 88.00, percentage: 7 },
+  { category: 'Claude API', cost: 847.3, percentage: 68 },
+  { category: 'OpenAI API', cost: 312.2, percentage: 25 },
+  { category: 'Storage (S3)', cost: 88.0, percentage: 7 },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CostAnalytics = ({ period: initialPeriod = '30d', projectId }: CostAnalyticsProps) => {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>(initialPeriod);
   const data = generateMockData(period);
@@ -198,7 +191,11 @@ const CostAnalytics = ({ period: initialPeriod = '30d', projectId }: CostAnalyti
         <Typography sx={styles.title}>Cost Analytics</Typography>
         <FormControl size="small" sx={styles.periodSelect}>
           <InputLabel>Period</InputLabel>
-          <Select value={period} label="Period" onChange={(e) => setPeriod(e.target.value as any)}>
+          <Select
+            value={period}
+            label="Period"
+            onChange={(e) => setPeriod(e.target.value as '7d' | '30d' | '90d' | '1y')}
+          >
             <MenuItem value="7d">Last 7 days</MenuItem>
             <MenuItem value="30d">Last 30 days</MenuItem>
             <MenuItem value="90d">Last 90 days</MenuItem>
@@ -266,7 +263,15 @@ const CostAnalytics = ({ period: initialPeriod = '30d', projectId }: CostAnalyti
             </Box>
           </Box>
         ))}
-        <Box sx={{ ...styles.breakdownItem, marginTop: '8px', paddingTop: '16px', borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box
+          sx={{
+            ...styles.breakdownItem,
+            marginTop: '8px',
+            paddingTop: '16px',
+            borderTop: '1px solid',
+            borderColor: 'divider',
+          }}
+        >
           <Typography sx={{ ...styles.breakdownCategory, fontWeight: 600 }}>Total</Typography>
           <Typography sx={{ ...styles.breakdownCost, fontWeight: 600 }}>
             ${mockBreakdown.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}

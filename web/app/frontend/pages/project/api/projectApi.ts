@@ -1,9 +1,7 @@
-import { baseApi } from 'shared/api';
-import type { ApiResponse, ApiCollectionResponse } from 'shared/api';
-import { QueryTag, providesListTag } from 'shared/api';
-
-import type { IProject } from 'entities/project';
 import type { IArtifact } from 'entities/artifact';
+import type { IProject } from 'entities/project';
+import type { ApiResponse, ApiCollectionResponse } from 'shared/api';
+import { baseApi, QueryTag, providesListTag } from 'shared/api';
 
 import type { IWorkflow, IWorkflowRun, ITask } from '../lib/types';
 

@@ -67,7 +67,7 @@ module Agents
     # Override for agents that install binaries in home (e.g., Cursor CLI)
     # @return [Array<String>]
     def tmpfs_paths
-      [home_dir]
+      [ home_dir ]
     end
 
     # UID for tmpfs mounts (must match container user)

@@ -38,7 +38,6 @@ class TemporalService
         Dir[Rails.root.join("app/temporal/workflows/**/*.rb")].each { |f| require f }
         Workflows::Base.descendants
       end
-
     end
 
     def schedule_definitions

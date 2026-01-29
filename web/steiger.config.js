@@ -4,7 +4,6 @@ import { defineConfig } from 'steiger';
 export default defineConfig([
   ...fsd.configs.recommended,
   {
-    // disable the `public-api` rule for files in the Shared layer
     files: ['./app/frontend/**'],
     rules: {
       'fsd/ambiguous-slice-names': 'error',
@@ -24,6 +23,26 @@ export default defineConfig([
       'fsd/shared-lib-grouping': 'error',
       'fsd/typo-in-layer-name': 'error',
       'fsd/no-processes': 'error',
+    },
+  },
+  // Architectural exceptions:
+  // - shared/api needs terminal-session types for API contracts
+  // - shared/lib/hooks needs terminal-session types for websocket handling
+  // - features/agent-auth uses widgets/terminal-session for terminal UI
+  // These are intentional cross-layer imports due to terminal session being a core infrastructure concept
+  {
+    files: [
+      './app/frontend/shared/api/terminalSessionApi.ts',
+      './app/frontend/shared/lib/hooks/useTerminalSessionChannel.ts',
+    ],
+    rules: {
+      'fsd/forbidden-imports': 'off',
+    },
+  },
+  {
+    files: ['./app/frontend/features/agent-auth/**'],
+    rules: {
+      'fsd/forbidden-imports': 'off',
     },
   },
 ]);

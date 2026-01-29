@@ -23,7 +23,7 @@ class CreateTerminalSessions < ActiveRecord::Migration[8.0]
     add_index :terminal_sessions, :session_type
     add_index :terminal_sessions, :state
     add_index :terminal_sessions, :temporal_workflow_id
-    add_index :terminal_sessions, [:user_id, :state]
-    add_index :terminal_sessions, [:user_id, :session_type]
+    add_index :terminal_sessions, [ :user_id, :state ]
+    add_index :terminal_sessions, [ :user_id, :session_type ]
   end
 end

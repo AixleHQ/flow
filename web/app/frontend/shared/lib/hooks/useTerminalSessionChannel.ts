@@ -1,7 +1,7 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
 import { createConsumer, Consumer, Subscription } from '@rails/actioncable';
+import { useEffect, useRef, useCallback, useState } from 'react';
 
-import type { ITerminalSession } from 'entities/terminal-session/model/types';
+import type { ITerminalSession } from 'entities/terminal-session';
 import { keysToCamelCase } from 'shared/lib/caseConverter';
 
 interface SessionUpdateMessage {
@@ -24,11 +24,7 @@ interface UseTerminalSessionChannelOptions {
  *   onUpdate: (session) => console.log('Session updated:', session)
  * });
  */
-export function useTerminalSessionChannel({
-  sessionId,
-  onUpdate,
-  onAuthComplete,
-}: UseTerminalSessionChannelOptions) {
+export function useTerminalSessionChannel({ sessionId, onUpdate, onAuthComplete }: UseTerminalSessionChannelOptions) {
   const consumerRef = useRef<Consumer | null>(null);
   const subscriptionRef = useRef<Subscription | null>(null);
   const onUpdateRef = useRef(onUpdate);
@@ -98,7 +94,7 @@ export function useTerminalSessionChannel({
             onAuthCompleteRef.current?.();
           }
         },
-      }
+      },
     );
 
     subscriptionRef.current = subscription;

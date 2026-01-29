@@ -31,7 +31,9 @@ FactoryBot.define do
 
     trait :running do
       state { "running" }
+      agent_type { "claude_code" }
       container_id { "container-#{SecureRandom.hex(8)}" }
+      route_token { SecureRandom.hex(16) }
       started_at { Time.current }
     end
 

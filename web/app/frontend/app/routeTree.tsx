@@ -4,7 +4,8 @@ import { AuthLayout, RootLayout } from './layouts';
 
 // Use lazyRouteComponent for page-level routes
 const HomePage = lazyRouteComponent(() => import('../pages/home'));
-const SessionPage = lazyRouteComponent(() => import('../pages/session'));
+// TODO: SessionPage was removed/renamed - needs investigation
+// const SessionPage = lazyRouteComponent(() => import('../pages/session'));
 const LoginPage = lazyRouteComponent(() => import('../pages/login'));
 const OnboardingPage = lazyRouteComponent(() => import('../pages/onboarding'));
 const WorkspacePage = lazyRouteComponent(() => import('../pages/workspace'));
@@ -83,10 +84,11 @@ export const homeRoute = createRoute({
 });
 
 // Session route with dynamic sessionId parameter
+// TODO: SessionPage was removed - using placeholder
 export const sessionRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: '/session/$sessionId',
-  component: SessionPage,
+  component: () => null,
 });
 
 // Workspace route (legacy - for direct terminal access)

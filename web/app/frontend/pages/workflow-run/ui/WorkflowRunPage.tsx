@@ -430,6 +430,7 @@ const mockWorkflowRun: IWorkflowRunDetail = {
 
 const WorkflowRunPage = () => {
   const navigate = useNavigate();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { projectId, runId } = useParams({ from: '/projects/$projectId/workflow-runs/$runId' });
   const [isLoading] = useState(false);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
@@ -440,7 +441,8 @@ const WorkflowRunPage = () => {
 
   const currentStep = workflowRun.steps.find((s) => s.status === 'running');
   const selectedStep = activeStepId ? workflowRun.steps.find((s) => s.id === activeStepId) : currentStep;
-  const sessionStatus = workflowRun.status === 'running' ? 'running' : workflowRun.status === 'completed' ? 'completed' : 'error';
+  const sessionStatus =
+    workflowRun.status === 'running' ? 'running' : workflowRun.status === 'completed' ? 'completed' : 'error';
 
   const formatDuration = (startedAt: string, completedAt?: string): string => {
     const start = new Date(startedAt);
@@ -542,7 +544,8 @@ const WorkflowRunPage = () => {
         <Box sx={styles.stepsHeader}>
           <Typography sx={styles.stepsTitle}>Workflow Steps</Typography>
           <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-            Step {workflowRun.steps.filter((s) => s.status === 'completed').length + (currentStep ? 1 : 0)}/{workflowRun.steps.length}
+            Step {workflowRun.steps.filter((s) => s.status === 'completed').length + (currentStep ? 1 : 0)}/
+            {workflowRun.steps.length}
           </Typography>
         </Box>
         <Box sx={styles.stepsList}>
@@ -568,9 +571,7 @@ const WorkflowRunPage = () => {
                       </Typography>
                     )}
                     {step.duration && <Typography component="span">{step.duration}</Typography>}
-                    {step.status === 'running' && step.user && (
-                      <Typography component="span">{step.user}</Typography>
-                    )}
+                    {step.status === 'running' && step.user && <Typography component="span">{step.user}</Typography>}
                   </Box>
                 </Box>
               </Box>
@@ -626,13 +627,9 @@ const WorkflowRunPage = () => {
               <Box sx={styles.panelContent}>
                 <Box sx={styles.placeholder}>
                   <Typography sx={styles.placeholderText}>
-                    {selectedStep
-                      ? `Terminal for "${selectedStep.name}"`
-                      : 'Select a step to view terminal'}
+                    {selectedStep ? `Terminal for "${selectedStep.name}"` : 'Select a step to view terminal'}
                   </Typography>
-                  <Typography sx={styles.placeholderSubtext}>
-                    Connect to session terminal via ttyd
-                  </Typography>
+                  <Typography sx={styles.placeholderSubtext}>Connect to session terminal via ttyd</Typography>
                 </Box>
               </Box>
             </Box>
@@ -659,12 +656,8 @@ const WorkflowRunPage = () => {
                   </Box>
                   <Box sx={styles.panelContent}>
                     <Box sx={styles.placeholder}>
-                      <Typography sx={styles.placeholderText}>
-                        Preview: {selectedStep.artifacts[0].name}
-                      </Typography>
-                      <Typography sx={styles.placeholderSubtext}>
-                        File content would render here
-                      </Typography>
+                      <Typography sx={styles.placeholderText}>Preview: {selectedStep.artifacts[0].name}</Typography>
+                      <Typography sx={styles.placeholderSubtext}>File content would render here</Typography>
                     </Box>
                   </Box>
                 </Box>

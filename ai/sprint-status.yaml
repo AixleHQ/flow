@@ -57,7 +57,7 @@ development_status:
   2-4-configure-codex-agent: done
   2-5-configure-gemini-cli-agent: done
   2-6-configure-cursor-cli-agent: done
-  2-7-save-agent-settings-and-complete-onboarding: backlog
+  2-7-save-agent-settings-and-complete-onboarding: review
   epic-2-retrospective: optional
 
   epic-3: backlog

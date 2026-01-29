@@ -40,7 +40,7 @@ module Api
         assert_response :success
 
         session_ids = json["items"].pluck("id")
-        assert_equal [new_session.id, old_session.id], session_ids
+        assert_equal [ new_session.id, old_session.id ], session_ids
       end
 
       # SHOW tests
@@ -52,9 +52,9 @@ module Api
 
         data = json["data"]
         assert_equal session.id, data["id"]
-        assert_equal "claude_code", data["agentType"]
+        assert_equal "claude_code", data["agent_type"]
         assert_equal "running", data["state"]
-        assert_not_nil data["websocketUrl"]
+        assert_not_nil data["websocket_url"]
       end
 
       test "#show returns 404 for other user's session" do
@@ -78,8 +78,8 @@ module Api
 
         assert_response :created
         data = json["data"]
-        assert_equal "claude_code", data["agentType"]
-        assert_equal "auth_setup", data["sessionType"]
+        assert_equal "claude_code", data["agent_type"]
+        assert_equal "auth_setup", data["session_type"]
         # After create, AASM start! is triggered
         assert_equal "started", data["state"]
       end

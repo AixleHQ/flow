@@ -5,3 +5,5 @@ export { QueryTag } from './QueryTag';
 export { providesListTag } from './providesListTag';
 export { MAX_PER_PAGE } from './constants';
 export { setErrorsToForm } from './formErrors';
+export * from './routes';
+export * from './terminalSessionApi';

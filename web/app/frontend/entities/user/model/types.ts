@@ -2,6 +2,8 @@ export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
 export type UserRole = 'employee' | 'company_admin' | 'super_admin';
 export type UserState = 'active' | 'pending' | 'suspended' | 'archived';
 export type UserPosition = 'qa' | 'pm_po_ba' | 'dev' | 'designer' | 'cto';
+export type OnboardingState = 'step1' | 'step2' | 'step3' | 'step4' | 'completed';
+export type OnboardingEvent = 'go_next' | 'go_previous' | 'complete';
 
 export interface IUser {
   id: number;
@@ -11,7 +13,7 @@ export interface IUser {
   state: UserState;
   position: UserPosition | null;
   preferredAgentLanguage: string;
-  onboardingCompletedAt: string | null;
+  onboardingState: OnboardingState;
 }
 
 export interface ICompanyBranding {
@@ -50,10 +52,15 @@ export interface CurrentUserResponse {
   state: UserState;
   position: UserPosition | null;
   preferredAgentLanguage: string;
+  // Agents selected in Step 2 (before auth)
+  selectedAgents: AgentType[];
   // Derived from agentCredentials - list of agent types with saved credentials
   configuredAgents: AgentType[];
   // Full credential info
   agentCredentials: IAgentCredential[];
+  // Onboarding state: step1, step2, step3, step4, completed
+  onboardingState: OnboardingState;
+  // Timestamp when onboarding was completed
   onboardingCompletedAt: string | null;
   company: ICompany | null;
 }

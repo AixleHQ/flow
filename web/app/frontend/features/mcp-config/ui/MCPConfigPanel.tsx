@@ -1,11 +1,4 @@
-import {
-  Box,
-  Button,
-  Card,
-  IconButton,
-  TextField,
-  Typography,
-} from '@mui/material';
+import { Box, Button, Card, IconButton, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
@@ -219,7 +212,8 @@ const MCPConfigPanel = ({ onSave }: MCPConfigPanelProps) => {
       <Box sx={styles.header}>
         <Typography sx={styles.title}>Configure MCP Server</Typography>
         <Typography sx={styles.description}>
-          Model Context Protocol (MCP) servers provide tools and resources to agents. Configure connection details and secrets.
+          Model Context Protocol (MCP) servers provide tools and resources to agents. Configure connection details and
+          secrets.
         </Typography>
       </Box>
 
@@ -257,7 +251,7 @@ const MCPConfigPanel = ({ onSave }: MCPConfigPanelProps) => {
                 key={transport.value}
                 variant={server.transport === transport.value ? 'contained' : 'outlined'}
                 size="small"
-                onClick={() => setServer({ ...server, transport: transport.value as any })}
+                onClick={() => setServer({ ...server, transport: transport.value as 'stdio' | 'http' | 'ws' })}
                 sx={{ textTransform: 'none' }}
               >
                 {transport.label}
@@ -295,23 +289,14 @@ const MCPConfigPanel = ({ onSave }: MCPConfigPanelProps) => {
                   onChange={(e) => handleUpdateArg(index, e.target.value)}
                   sx={{ ...styles.input, flex: 1 }}
                 />
-                <IconButton
-                  size="small"
-                  onClick={() => handleRemoveArg(index)}
-                  sx={{ color: 'error.main' }}
-                >
+                <IconButton size="small" onClick={() => handleRemoveArg(index)} sx={{ color: 'error.main' }}>
                   ✕
                 </IconButton>
               </Box>
             ))}
           </Box>
         )}
-        <Button
-          variant="outlined"
-          size="small"
-          sx={styles.addArgButton}
-          onClick={handleAddArg}
-        >
+        <Button variant="outlined" size="small" sx={styles.addArgButton} onClick={handleAddArg}>
           + Add Argument
         </Button>
       </Card>
@@ -345,23 +330,14 @@ const MCPConfigPanel = ({ onSave }: MCPConfigPanelProps) => {
                   onChange={(e) => handleUpdateSecret(index, { value: e.target.value })}
                   sx={{ ...styles.input, flex: 1 }}
                 />
-                <IconButton
-                  size="small"
-                  onClick={() => handleRemoveSecret(index)}
-                  sx={{ color: 'error.main' }}
-                >
+                <IconButton size="small" onClick={() => handleRemoveSecret(index)} sx={{ color: 'error.main' }}>
                   ✕
                 </IconButton>
               </Box>
             </Box>
           ))}
         </Box>
-        <Button
-          variant="outlined"
-          size="small"
-          sx={styles.addSecretButton}
-          onClick={handleAddSecret}
-        >
+        <Button variant="outlined" size="small" sx={styles.addSecretButton} onClick={handleAddSecret}>
           + Add Secret
         </Button>
       </Card>

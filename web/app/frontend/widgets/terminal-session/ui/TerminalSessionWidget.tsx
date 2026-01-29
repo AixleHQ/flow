@@ -2,7 +2,7 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 
-import type { ITerminalSession } from 'entities/terminal-session/model/types';
+import type { ITerminalSession } from 'entities/terminal-session';
 import { FileTree, FileViewer } from 'features/file-tree';
 import { useTerminalSessionChannel } from 'shared/lib/hooks';
 
@@ -142,7 +142,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
       setSelectedFile(path);
       onFileSelect?.(path);
     },
-    [onFileSelect]
+    [onFileSelect],
   );
 
   const handleCloseFileViewer = useCallback(() => {
@@ -205,12 +205,8 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     return (
       <Box sx={styles.loadingContainer}>
         <CircularProgress size={24} sx={{ color: '#4ec9b0' }} />
-        <Typography sx={styles.loadingText}>
-          Waiting for container ({session.state})...
-        </Typography>
-        {session.errorMessage && (
-          <Typography sx={styles.errorText}>{session.errorMessage}</Typography>
-        )}
+        <Typography sx={styles.loadingText}>Waiting for container ({session.state})...</Typography>
+        {session.errorMessage && <Typography sx={styles.errorText}>{session.errorMessage}</Typography>}
       </Box>
     );
   }
@@ -243,13 +239,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
           <Typography sx={styles.loadingText}>Connecting to terminal...</Typography>
         </Box>
       )}
-      <iframe
-        ref={iframeRef}
-        src={ttydUrl!}
-        style={styles.iframe}
-        title="Terminal"
-        onLoad={handleIframeLoad}
-      />
+      <iframe ref={iframeRef} src={ttydUrl!} style={styles.iframe} title="Terminal" onLoad={handleIframeLoad} />
     </Box>
   );
 
@@ -285,11 +275,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
         {canShowFileTree && (
           <>
             <Panel defaultSize={fileTreeWidth} minSize={10} style={styles.panel}>
-              <FileTree
-                watcherUrl={watcherUrl}
-                onFileSelect={handleFileSelect}
-                selectedPath={selectedFile}
-              />
+              <FileTree watcherUrl={watcherUrl} onFileSelect={handleFileSelect} selectedPath={selectedFile} />
             </Panel>
             <ResizeHandle />
           </>
@@ -299,11 +285,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
         {canShowFileViewer && (
           <>
             <Panel defaultSize={fileViewerWidth} minSize={15} style={styles.panel}>
-              <FileViewer
-                watcherUrl={watcherUrl}
-                filePath={selectedFile}
-                onClose={handleCloseFileViewer}
-              />
+              <FileViewer watcherUrl={watcherUrl} filePath={selectedFile} onClose={handleCloseFileViewer} />
             </Panel>
             <ResizeHandle />
           </>
@@ -311,7 +293,11 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
 
         {/* Terminal Panel */}
         {canShowTerminal && (
-          <Panel defaultSize={100 - fileTreeWidth - (canShowFileViewer ? fileViewerWidth : 0)} minSize={20} style={styles.panel}>
+          <Panel
+            defaultSize={100 - fileTreeWidth - (canShowFileViewer ? fileViewerWidth : 0)}
+            minSize={20}
+            style={styles.panel}
+          >
             {renderTerminal()}
           </Panel>
         )}

@@ -1,17 +1,17 @@
-import { Box, Typography, CircularProgress, IconButton, Tooltip } from '@mui/material';
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { vscodeDark } from '@uiw/codemirror-theme-vscode';
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { json } from '@codemirror/lang-json';
-import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
+import { html } from '@codemirror/lang-html';
+import { javascript } from '@codemirror/lang-javascript';
+import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
+import { python } from '@codemirror/lang-python';
 import { sql } from '@codemirror/lang-sql';
 import { xml } from '@codemirror/lang-xml';
 import { yaml } from '@codemirror/lang-yaml';
 import { EditorView } from '@codemirror/view';
+import { Box, Typography, CircularProgress, IconButton, Tooltip } from '@mui/material';
+import { vscodeDark } from '@uiw/codemirror-theme-vscode';
+import CodeMirror from '@uiw/react-codemirror';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -390,7 +390,11 @@ const PdfViewer = ({ content }: { content: string; mimeType: string }) => {
         </IconButton>
       </Box>
       <Box sx={styles.pdfScrollContainer}>
-        <Document file={pdfData} onLoadSuccess={onDocumentLoadSuccess} loading={<CircularProgress size={24} sx={{ color: '#4ec9b0' }} />}>
+        <Document
+          file={pdfData}
+          onLoadSuccess={onDocumentLoadSuccess}
+          loading={<CircularProgress size={24} sx={{ color: '#4ec9b0' }} />}
+        >
           <Page pageNumber={currentPage} renderTextLayer={true} renderAnnotationLayer={true} />
         </Document>
       </Box>
@@ -484,7 +488,9 @@ export const FileViewer = ({ watcherUrl, watcherPort, filePath, onClose }: IFile
         if (errorData.message) {
           setErrorDetails(errorData.message);
         } else if (errorData.size && errorData.maxSize) {
-          setErrorDetails(`File size: ${formatFileSize(errorData.size)}, Max allowed: ${formatFileSize(errorData.maxSize)}`);
+          setErrorDetails(
+            `File size: ${formatFileSize(errorData.size)}, Max allowed: ${formatFileSize(errorData.maxSize)}`,
+          );
         }
         return;
       }
@@ -499,6 +505,7 @@ export const FileViewer = ({ watcherUrl, watcherPort, filePath, onClose }: IFile
 
   useEffect(() => {
     fetchFileContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watcherPort, filePath]);
 
   if (!filePath) {
@@ -571,7 +578,13 @@ export const FileViewer = ({ watcherUrl, watcherPort, filePath, onClose }: IFile
   const renderContent = () => {
     switch (fileType) {
       case 'image':
-        return <ImageViewer content={fileContent.content} mimeType={fileContent.mimeType || 'image/png'} name={fileContent.name} />;
+        return (
+          <ImageViewer
+            content={fileContent.content}
+            mimeType={fileContent.mimeType || 'image/png'}
+            name={fileContent.name}
+          />
+        );
       case 'pdf':
         return <PdfViewer content={fileContent.content} mimeType={fileContent.mimeType || 'application/pdf'} />;
       case 'video':
