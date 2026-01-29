@@ -70,6 +70,12 @@ module Agents
       [home_dir]
     end
 
+    # UID for tmpfs mounts (must match container user)
+    # @return [Integer]
+    def tmpfs_uid
+      1001
+    end
+
     # =================================================================
     # Environment Variables (from session/credential metadata)
     # Used for agent-specific config like GOOGLE_CLOUD_PROJECT

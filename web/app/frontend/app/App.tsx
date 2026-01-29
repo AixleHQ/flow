@@ -27,7 +27,7 @@ function App() {
   return (
     <Provider store={store}>
       <ThemeProvider>
-        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} autoHideDuration={3000}>
+        <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} autoHideDuration={1500}>
           <React.Suspense fallback={<LinearProgress />}>
             <RouterProvider router={router} defaultPreload="intent" defaultPreloadStaleTime={0} />
           </React.Suspense>

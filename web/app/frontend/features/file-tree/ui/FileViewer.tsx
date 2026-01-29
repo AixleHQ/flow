@@ -189,7 +189,7 @@ const styles = {
   },
   editorContainer: {
     flex: 1,
-    overflow: 'hidden',
+    overflow: 'auto',
     '& .cm-editor': {
       height: '100%',
     },
@@ -446,7 +446,7 @@ const CodeViewer = ({ content, extension }: { content: string; extension: string
           autocompletion: false,
           rectangularSelection: false,
           crosshairCursor: false,
-          highlightSelectionMatches: true,
+          highlightSelectionMatches: false,
           closeBracketsKeymap: false,
           searchKeymap: true,
           foldKeymap: true,

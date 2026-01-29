@@ -42,23 +42,17 @@ module Agents
       {
         # OAuth credentials
         "#{home_dir}/.gemini/oauth_creds.json" => credentials.to_json,
-        # Settings to mark auth type and enable preview features
-        "#{home_dir}/.gemini/settings.json" => {
-          "security" => {
-            "auth" => {
-              "selectedType" => "oauth-personal"
-            }
-          },
-          "general" => {
-            "previewFeatures" => true
-          }
-        }.to_json
+        # Settings per https://geminicli.com/docs/get-started/configuration/
+        "#{home_dir}/.gemini/settings.json" => generate_settings.to_json
       }
     end
 
     # Directories to mount as tmpfs for credential storage
     def tmpfs_paths
-      ["#{home_dir}/.gemini"]
+      [
+        "#{home_dir}/.gemini",    # Gemini CLI config
+        "#{home_dir}/.mitmproxy"  # MITM proxy CA certificates
+      ]
     end
 
     # =================================================================
@@ -77,6 +71,54 @@ module Agents
       {
         "GOOGLE_CLOUD_PROJECT" => metadata["google_cloud_project"]
       }.compact
+    end
+
+    private
+
+    def generate_settings
+      {
+        # Authentication
+        "security" => {
+          "auth" => {
+            "selectedType" => "oauth-personal"
+          },
+          # Don't ask for folder trust in containers
+          "folderTrust" => {
+            "enabled" => false
+          }
+        },
+        # General settings
+        "general" => {
+          "previewFeatures" => true,       # Enable preview models (gemini-3-*)
+          "vimMode" => false,
+          "enableAutoUpdate" => false,     # Disable auto-update in containers
+          "enableAutoUpdateNotification" => false
+        },
+        # UI settings for headless/container environment
+        "ui" => {
+          "hideBanner" => true,
+          "hideTips" => true,
+          "hideWindowTitle" => true,
+          "dynamicWindowTitle" => false,
+          "showHomeDirectoryWarning" => false
+        },
+        # Privacy
+        "privacy" => {
+          "usageStatisticsEnabled" => true  # No telemetry in containers
+        },
+        # Tools - auto approve all operations (container is the sandbox)
+        "tools" => {
+          "autoAccept" => true,
+          "approvalMode" => "yolo",          # Auto-approve ALL tools
+          "sandbox" => false,                # Container is already sandboxed
+          "useRipgrep" => true
+        },
+        # Experimental features
+        "experimental" => {
+          "useOSC52Paste" => true,           # Better paste in web terminal
+          "enableAgents" => true             # Enable subagents
+        }
+      }
     end
   end
 end

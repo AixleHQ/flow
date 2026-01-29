@@ -15,6 +15,10 @@ module Agents
       "/home/claude"
     end
 
+    def allowed_tools
+      ["Task","Bash","Glob","Grep","LS","Read","Edit","MultiEdit","Write","WebFetch","WebSearch"]
+    end
+
     # Keys that indicate auth is complete (any one = success)
     def auth_required_keys
       %w[oauthAccount primaryApiKey]
@@ -64,14 +68,23 @@ module Agents
       }
     end
 
+    # Only mount config directories as tmpfs, not entire home
+    # This preserves ~/.local/bin/claude binary installed by official installer
+    def tmpfs_paths
+      [
+        "#{home_dir}/.claude",    # settings directory
+        "#{home_dir}/.mitmproxy"  # MITM proxy CA certificates
+      ]
+    end
+
     private
 
     def generate_settings
       {
         # Auto-accept the bypass permissions warning
         "permissions" => {
-          "defaultMode" => "bypassPermissions",
-          "allow" => ["*"],
+          "defaultMode" => "dontAsk",
+          "allow" => allowed_tools,
           "deny" => [],
           "ask" => []
         },
@@ -83,7 +96,7 @@ module Agents
       {
         "/workspace" => {
           # Tools and MCP from workflow config
-          "allowedTools" => workflow_config[:allowed_tools] || [],
+          "allowedTools" => allowed_tools,
           "mcpServers" => workflow_config[:mcp_servers] || {},
           "mcpContextUris" => workflow_config[:mcp_context_uris] || [],
           "enabledMcpjsonServers" => workflow_config[:enabled_mcp_servers] || [],

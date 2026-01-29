@@ -83,7 +83,7 @@ class ContainerService
           # Use Traefik on shared docker network (no host port bindings)
           "NetworkMode" => DOCKER_NETWORK,
           # Temporary filesystem for config directories (credentials stored here)
-          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths),
+          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths, agent_service.adapter.tmpfs_uid),
           "AutoRemove" => false
         },
         "Labels" => {
@@ -179,7 +179,7 @@ class ContainerService
         "HostConfig" => {
           "NetworkMode" => DOCKER_NETWORK,
           # Temporary filesystem for config directories
-          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths),
+          "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths, agent_service.adapter.tmpfs_uid),
           "AutoRemove" => false
         },
         "Labels" => {
@@ -339,7 +339,7 @@ class ContainerService
         "claude_code" => "claude",
         "cursor_cli" => "agent",
         "codex" => "codex --yolo",
-        "gemini_cli" => "gemini"
+        "gemini_cli" => "gemini --yolo"
       }
 
       if session_type == "agent_session"
@@ -410,9 +410,11 @@ class ContainerService
     end
 
     # Build tmpfs mounts hash from array of paths
-    def build_tmpfs_mounts(paths)
+    # @param paths [Array<String>] paths to mount as tmpfs
+    # @param uid [Integer] UID for tmpfs ownership (default: 1001)
+    def build_tmpfs_mounts(paths, uid = 1001)
       paths.each_with_object({}) do |path, hash|
-        hash[path] = "rw,size=50m,mode=0755"
+        hash[path] = "rw,size=50m,mode=0755,uid=#{uid},gid=#{uid}"
       end
     end
 

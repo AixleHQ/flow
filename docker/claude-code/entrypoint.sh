@@ -71,6 +71,11 @@ if [ -n "$STEP_NAME" ] && [ -f "/prompts/${STEP_NAME}.md" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+# Start MITM proxy
+# -----------------------------------------------------------------------------
+source /opt/mitm/start-mitm.sh
+
+# -----------------------------------------------------------------------------
 # Start File Watcher Service
 # -----------------------------------------------------------------------------
 echo -e "${CYAN}🔍 Starting file watcher on port ${WATCHER_PORT}...${NC}"
@@ -138,6 +143,7 @@ echo ""
 cleanup() {
     echo ""
     echo -e "${YELLOW}Shutting down services...${NC}"
+    kill $MITM_PID 2>/dev/null || true
     kill $WATCHER_PID 2>/dev/null || true
     kill $TTYD_PID 2>/dev/null || true
     exit 0

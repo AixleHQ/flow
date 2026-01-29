@@ -5,13 +5,9 @@
 #   - Claude Code CLI (official installer)
 #   - ttyd (web terminal)
 #   - File watcher service (WebSocket streaming)
+#   - MITM proxy (inherited from base)
 # =============================================================================
 FROM palad/agent-base:latest
-
-# -----------------------------------------------------------------------------
-# Claude Code CLI
-# -----------------------------------------------------------------------------
-RUN npm install -g @anthropic-ai/claude-code
 
 # -----------------------------------------------------------------------------
 # Create non-root user
@@ -19,7 +15,20 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN useradd -m -d /home/claude -s /bin/bash claude \
     && chown -R claude:claude /workspace /opt/watcher /home/claude
 
-# Default .claude.json directory
+# -----------------------------------------------------------------------------
+# Claude Code CLI (official installer)
+# -----------------------------------------------------------------------------
+USER claude
+WORKDIR /home/claude
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# Add claude to PATH
+ENV PATH="/home/claude/.local/bin:${PATH}"
+
+# Switch back to root for remaining setup
+USER root
+
+# Default .claude directory
 RUN mkdir -p /home/claude/.claude \
     && chown -R claude:claude /home/claude
 
