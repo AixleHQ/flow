@@ -13,7 +13,7 @@ module Api
         end
 
         def update?
-          current_user.admin? && same_company?
+          current_user.admin? && same_company? && not_changing_own_role?
         end
 
         def destroy?
@@ -35,6 +35,11 @@ module Api
         end
 
         def not_self?
+          record.id != current_user.id
+        end
+
+        def not_changing_own_role?
+          return true unless context.params[:user]&.key?(:role)
           record.id != current_user.id
         end
       end

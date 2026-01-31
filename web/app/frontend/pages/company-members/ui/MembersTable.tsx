@@ -180,6 +180,11 @@ const MembersTable: FC<MembersTableProps> = ({ users, page, perPage, totalCount,
   };
 
   const canDeleteUser = selectedUser && currentUser && selectedUser.id !== currentUser.id;
+  const canChangeRole = selectedUser && currentUser && selectedUser.id !== currentUser.id;
+
+  // Check if the selected user is the last admin in the company
+  const adminCount = users.filter((u) => u.role === 'admin').length;
+  const isLastAdmin = selectedUser?.role === 'admin' && adminCount <= 1;
 
   return (
     <Box>
@@ -257,9 +262,18 @@ const MembersTable: FC<MembersTableProps> = ({ users, page, perPage, totalCount,
             Activate
           </MenuItem>
         )}
-        {selectedUser?.role === 'employee' && <MenuItem onClick={() => handleRoleChange('admin')}>Make Admin</MenuItem>}
-        {selectedUser?.role === 'admin' && (
+        {canChangeRole && selectedUser?.role === 'employee' && (
+          <MenuItem onClick={() => handleRoleChange('admin')}>Make Admin</MenuItem>
+        )}
+        {canChangeRole && selectedUser?.role === 'admin' && !isLastAdmin && (
           <MenuItem onClick={() => handleRoleChange('employee')}>Make Employee</MenuItem>
+        )}
+        {canChangeRole && selectedUser?.role === 'admin' && isLastAdmin && (
+          <Tooltip title="Cannot demote the last admin">
+            <span>
+              <MenuItem disabled>Make Employee</MenuItem>
+            </span>
+          </Tooltip>
         )}
         {canDeleteUser && <Divider />}
         {canDeleteUser && (

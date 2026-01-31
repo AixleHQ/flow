@@ -45,9 +45,9 @@ development_status:
   1-1-platform-admin-company-management: done
   1-2-google-oauth-sign-in-with-domain-based-company-assignment: done
   1-3-user-profile-and-company-assignment: done
-  1-4-invite-users-to-company: review
-  1-5-assign-user-roles: backlog
-  1-6-remove-users-from-company: backlog
+  1-4-invite-users-to-company: done
+  1-5-assign-user-roles: done
+  1-6-remove-users-from-company: done
   epic-1-retrospective: optional
 
   epic-2: in-progress

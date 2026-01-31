@@ -41,6 +41,7 @@ class User < ApplicationRecord
   validate :super_admin_company_validation
   validate :selected_agents_valid
   validate :email_domain_matches_company, on: :create
+  validate :cannot_demote_last_admin, on: :update
 
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
@@ -120,6 +121,19 @@ class User < ApplicationRecord
       errors.add(:company_id, "must be nil for super_admin users") if company_id.present?
     else
       errors.add(:company_id, "must be present for non-super_admin users") if company_id.nil?
+    end
+  end
+
+  # Validation: cannot demote the last admin in a company
+  def cannot_demote_last_admin
+    return unless company.present?
+    return unless role_changed?
+    return unless role_was == "admin" && role != "admin"
+
+    admin_count = company.users.where(role: "admin").count
+    # If we're the last admin and trying to demote, block it
+    if admin_count <= 1
+      errors.add(:role, "Cannot demote the last admin")
     end
   end
 end
