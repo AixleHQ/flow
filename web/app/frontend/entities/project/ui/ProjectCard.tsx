@@ -102,8 +102,6 @@ const formatRelativeTime = (dateString?: string): string => {
 };
 
 const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
-  const hasActiveTasks = project.activeTasksCount > 0;
-
   return (
     <Card sx={styles.card} elevation={0}>
       <CardActionArea sx={styles.cardAction} onClick={onClick}>
@@ -111,8 +109,12 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
           <Box>
             <Typography sx={styles.title}>{project.name}</Typography>
           </Box>
-          {hasActiveTasks && (
-            <Chip label={`${project.activeTasksCount} active`} color="primary" size="small" sx={styles.chip} />
+          {project.state === 'active' && project.collaborators_count > 0 && (
+            <Chip
+              label={`${project.collaborators_count} collaborator${project.collaborators_count > 1 ? 's' : ''}`}
+              size="small"
+              sx={styles.chip}
+            />
           )}
         </Box>
 
@@ -120,21 +122,13 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
 
         <Box sx={styles.stats}>
           <Box sx={styles.stat}>
-            <Typography sx={styles.statValue}>{project.artifactsCount}</Typography>
-            <Typography sx={styles.statLabel}>Artifacts</Typography>
-          </Box>
-          <Box sx={styles.stat}>
-            <Typography sx={styles.statValue}>{project.tasksCount}</Typography>
-            <Typography sx={styles.statLabel}>Tasks</Typography>
-          </Box>
-          <Box sx={styles.stat}>
-            <Typography sx={styles.statValue}>{project.workflowsCount}</Typography>
-            <Typography sx={styles.statLabel}>Workflows</Typography>
+            <Typography sx={styles.statValue}>{project.collaborators_count}</Typography>
+            <Typography sx={styles.statLabel}>Collaborators</Typography>
           </Box>
         </Box>
 
-        {project.lastActivityAt && (
-          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.lastActivityAt)}</Typography>
+        {project.last_activity_at && (
+          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.last_activity_at)}</Typography>
         )}
       </CardActionArea>
     </Card>

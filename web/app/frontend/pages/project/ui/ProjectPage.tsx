@@ -183,17 +183,17 @@ const styles = {
 
 // Mock data
 const mockProject: IProject = {
-  id: '1',
+  id: 1,
   name: 'Palad Platform',
   description: 'AI coding agents orchestration platform',
-  companyId: '1',
-  artifactsCount: 42,
-  tasksCount: 15,
-  activeTasksCount: 3,
-  workflowsCount: 8,
-  lastActivityAt: new Date().toISOString(),
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  slug: 'palad-platform',
+  state: 'active',
+  company_id: 1,
+  owner_id: 1,
+  collaborators_count: 3,
+  last_activity_at: new Date().toISOString(),
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
 };
 
 const mockWorkflows: IWorkflow[] = [

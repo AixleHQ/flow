@@ -1,15 +1,15 @@
 export interface IProject {
-  id: string;
+  id: number;
   name: string;
-  description?: string;
-  companyId: string;
-  artifactsCount: number;
-  tasksCount: number;
-  activeTasksCount: number;
-  workflowsCount: number;
-  lastActivityAt?: string;
-  createdAt: string;
-  updatedAt: string;
+  description?: string | null;
+  slug: string;
+  state: 'active' | 'paused' | 'archived';
+  company_id: number;
+  owner_id: number;
+  collaborators_count: number;
+  last_activity_at?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface IProjectStats {

@@ -6,6 +6,7 @@ import type {
   UpdateCompanyUserRequest,
   CompanyUsersFilters,
 } from '../lib/types';
+import { Routes } from '../../../shared/routes';
 
 // Build query params from filters
 function buildQueryParams(filters?: CompanyUsersFilters): Record<string, string | number | undefined> {
@@ -31,7 +32,7 @@ export const companyUsersApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getCompanyUsers: builder.query<PaginatedResponse<CompanyUser>, CompanyUsersFilters | void>({
       query: (filters) => ({
-        url: '/api/v1/company/users',
+        url: Routes.backend.apiV1CompanyUsersPath(),
         method: 'GET',
         params: buildQueryParams(filters ?? {}),
       }),
@@ -39,7 +40,7 @@ export const companyUsersApi = baseApi.injectEndpoints({
     }),
     createCompanyUser: builder.mutation<CompanyUser, CreateCompanyUserRequest>({
       query: (data) => ({
-        url: '/api/v1/company/users',
+        url: Routes.backend.apiV1CompanyUsersPath(),
         method: 'POST',
         data: { user: data },
       }),
@@ -48,7 +49,7 @@ export const companyUsersApi = baseApi.injectEndpoints({
     }),
     updateCompanyUser: builder.mutation<CompanyUser, UpdateCompanyUserRequest>({
       query: ({ id, ...data }) => ({
-        url: `/api/v1/company/users/${id}`,
+        url: Routes.backend.apiV1CompanyUserPath(id),
         method: 'PATCH',
         data: { user: data },
       }),
@@ -57,7 +58,7 @@ export const companyUsersApi = baseApi.injectEndpoints({
     }),
     deleteCompanyUser: builder.mutation<void, number>({
       query: (id) => ({
-        url: `/api/v1/company/users/${id}`,
+        url: Routes.backend.apiV1CompanyUserPath(id),
         method: 'DELETE',
       }),
       invalidatesTags: [QueryTag.CompanyUsers],

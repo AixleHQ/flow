@@ -5,7 +5,7 @@ module Api
     module Company
       class UsersController < ApplicationController
         def index
-          users = current_company.users.ransack(params[:q]).result
+          users = current_company.users.ransack(q_params).result
           respond_with paginate(users)
         end
 

@@ -1,11 +1,14 @@
-import { Box, CircularProgress, Grid, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Grid, Snackbar, Alert, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
 
 import { ProjectCard, type IProject } from 'entities/project';
 import { Routes } from 'shared/routes';
 
 import { useProjectsQuery } from '../api/projectsApi';
+
+import CreateProjectDialog from './CreateProjectDialog';
 
 const styles = {
   root: {
@@ -14,8 +17,12 @@ const styles = {
     padding: '32px',
   },
   header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: '32px',
   },
+  headerText: {},
   title: {
     fontSize: '32px',
     fontWeight: 600,
@@ -60,58 +67,22 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-// Mock data for development - remove when API is ready
-const mockProjects: IProject[] = [
-  {
-    id: '1',
-    name: 'Palad Platform',
-    description: 'AI coding agents orchestration platform with workflow automation',
-    companyId: '1',
-    artifactsCount: 42,
-    tasksCount: 15,
-    activeTasksCount: 3,
-    workflowsCount: 8,
-    lastActivityAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    name: 'Mobile App',
-    description: 'React Native mobile application for iOS and Android',
-    companyId: '1',
-    artifactsCount: 18,
-    tasksCount: 7,
-    activeTasksCount: 0,
-    workflowsCount: 3,
-    lastActivityAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    name: 'Documentation Site',
-    description: 'Technical documentation and API reference',
-    companyId: '1',
-    artifactsCount: 5,
-    tasksCount: 2,
-    activeTasksCount: 1,
-    workflowsCount: 2,
-    lastActivityAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-    updatedAt: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 const ProjectsPage = () => {
   const navigate = useNavigate();
   const { data, isLoading } = useProjectsQuery();
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Use mock data if API returns empty or fails
-  const projects = data?.items?.length ? data.items : mockProjects;
+  const projects = data?.items ?? [];
 
-  const handleProjectClick = (projectId: string) => {
-    navigate({ to: Routes.frontend.companyProjectPath(projectId) });
+  const handleProjectClick = (projectId: number) => {
+    navigate({ to: Routes.frontend.companyProjectPath(String(projectId)) });
+  };
+
+  const handleCreateSuccess = (project: IProject) => {
+    setSuccessMessage(`Project "${project.name}" created successfully`);
+    // Navigate to the new project
+    navigate({ to: Routes.frontend.companyProjectPath(String(project.id)) });
   };
 
   if (isLoading) {
@@ -128,8 +99,13 @@ const ProjectsPage = () => {
     <Box sx={styles.root}>
       {/* Header */}
       <Box sx={styles.header}>
-        <Typography sx={styles.title}>Projects</Typography>
-        <Typography sx={styles.subtitle}>Select a project to view workflows, artifacts, and tasks</Typography>
+        <Box sx={styles.headerText}>
+          <Typography sx={styles.title}>Projects</Typography>
+          <Typography sx={styles.subtitle}>Select a project to view workflows, artifacts, and tasks</Typography>
+        </Box>
+        <Button variant="contained" onClick={() => setIsCreateDialogOpen(true)}>
+          Create Project
+        </Button>
       </Box>
 
       {/* Projects Grid */}
@@ -138,8 +114,11 @@ const ProjectsPage = () => {
           <Box sx={styles.emptyIcon}>📁</Box>
           <Typography sx={styles.emptyTitle}>No projects yet</Typography>
           <Typography sx={styles.emptyDescription}>
-            You don&apos;t have access to any projects. Ask your team admin to invite you to a project.
+            Create your first project to start organizing your work and collaborate with your team.
           </Typography>
+          <Button variant="contained" onClick={() => setIsCreateDialogOpen(true)}>
+            Create Your First Project
+          </Button>
         </Box>
       ) : (
         <Grid container spacing={3} sx={styles.grid}>
@@ -150,6 +129,25 @@ const ProjectsPage = () => {
           ))}
         </Grid>
       )}
+
+      {/* Create Project Dialog */}
+      <CreateProjectDialog
+        open={isCreateDialogOpen}
+        onClose={() => setIsCreateDialogOpen(false)}
+        onSuccess={handleCreateSuccess}
+      />
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={4000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="success" onClose={() => setSuccessMessage(null)}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

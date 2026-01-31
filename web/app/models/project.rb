@@ -27,7 +27,22 @@ class Project < ApplicationRecord
 
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
-  scope :for_user, ->(user) { where(owner: user).or(where(id: user.collaborated_projects.select(:id))) }
+  scope :for_user, ->(user) {
+    if user.admin?
+      where(company_id: user.company_id)
+    else
+      where(owner: user).or(where(id: user.collaborated_projects.select(:id)))
+    end
+  }
+
+  # Ransack
+  def self.ransackable_attributes(auth_object = nil)
+    %w[name description state created_at updated_at]
+  end
+
+  def self.ransackable_associations(auth_object = nil)
+    %w[company owner]
+  end
 
   # Add a user as collaborator
   def add_collaborator(user)

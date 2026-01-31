@@ -87,9 +87,14 @@ export function apiV1CurrentUserPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "current_user" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/terminal_sessions/agents(.:format) */
-export function agentsApiV1TerminalSessionsPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + "agents" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /api/v1/terminal_sessions/:id/finish_auth(.:format) */
+export function finishAuthApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish_auth" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/terminal_sessions/:id/cancel(.:format) */
+export function cancelApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "cancel" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/terminal_sessions(.:format) */
@@ -100,6 +105,26 @@ export function apiV1TerminalSessionsPath(options?: object): string {
 /** /api/v1/terminal_sessions/:id(.:format) */
 export function apiV1TerminalSessionPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/internal/ws_auth(.:format) */
+export function apiV1InternalWsAuthPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "internal" + "/" + "ws_auth" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/users(.:format) */
+export function apiV1CompanyUsersPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "users" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/users/:id(.:format) */
+export function apiV1CompanyUserPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/company/projects(.:format) */
+export function apiV1CompanyProjectsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /admin(.:format) */
@@ -195,6 +220,26 @@ export function editAdminProjectCollaboratorPath(id: ScalarType, options?: objec
 /** /admin/project_collaborators/:id(.:format) */
 export function adminProjectCollaboratorPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "project_collaborators" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/agent_credentials(.:format) */
+export function adminAgentCredentialsPath(options?: object): string {
+  return "/" + "admin" + "/" + "agent_credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/agent_credentials/new(.:format) */
+export function newAdminAgentCredentialPath(options?: object): string {
+  return "/" + "admin" + "/" + "agent_credentials" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/agent_credentials/:id/edit(.:format) */
+export function editAdminAgentCredentialPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/agent_credentials/:id(.:format) */
+export function adminAgentCredentialPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** / */

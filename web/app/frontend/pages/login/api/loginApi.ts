@@ -1,14 +1,13 @@
 import { baseApi, QueryTag } from 'shared/api';
+import { Routes } from 'shared/routes';
 
 import type { LoginFormData } from '../lib/schema';
-
-const API_V1_SESSIONS_PATH = '/api/v1/sessions';
 
 export const loginApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     login: builder.mutation<void, LoginFormData>({
       query: (data) => ({
-        url: API_V1_SESSIONS_PATH,
+        url: Routes.backend.apiV1SessionsPath(),
         method: 'POST',
         data: { user: data },
       }),
@@ -16,7 +15,7 @@ export const loginApi = baseApi.injectEndpoints({
     }),
     logout: builder.mutation<void, void>({
       query: () => ({
-        url: API_V1_SESSIONS_PATH,
+        url: Routes.backend.apiV1SessionsPath(),
         method: 'DELETE',
       }),
       invalidatesTags: [QueryTag.CurrentUser],

@@ -7,6 +7,8 @@ import type {
   IListTerminalSessionsResponse,
 } from 'entities/terminal-session';
 
+import { Routes } from '../routes';
+
 import { baseApi } from './baseApi';
 import { QueryTag } from './QueryTag';
 
@@ -15,7 +17,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // Create new terminal session (start authentication)
     createTerminalSession: builder.mutation<ICreateTerminalSessionResponse, ICreateTerminalSessionRequest>({
       query: (body) => ({
-        url: '/api/v1/terminal_sessions',
+        url: Routes.backend.apiV1TerminalSessionsPath(),
         method: 'POST',
         data: body,
       }),
@@ -25,7 +27,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // Get single terminal session by ID or route_token
     getTerminalSession: builder.query<IGetTerminalSessionResponse, number | string>({
       query: (idOrToken) => ({
-        url: `/api/v1/terminal_sessions/${idOrToken}`,
+        url: Routes.backend.apiV1TerminalSessionPath(idOrToken),
         method: 'GET',
       }),
       providesTags: (result) => (result ? [{ type: QueryTag.TerminalSession, id: result.data.id }] : []),
@@ -34,7 +36,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // List all terminal sessions for current user
     listTerminalSessions: builder.query<IListTerminalSessionsResponse, void>({
       query: () => ({
-        url: '/api/v1/terminal_sessions',
+        url: Routes.backend.apiV1TerminalSessionsPath(),
         method: 'GET',
       }),
       providesTags: (result) =>
@@ -49,7 +51,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // Finish authentication (user clicked "Finish" button)
     finishAuth: builder.mutation<IFinishAuthResponse, { sessionId: number }>({
       query: ({ sessionId }) => ({
-        url: `/api/v1/terminal_sessions/${sessionId}/finish_auth`,
+        url: Routes.backend.finishAuthApiV1TerminalSessionPath(sessionId),
         method: 'POST',
       }),
       invalidatesTags: (_result, _error, { sessionId }) => [{ type: QueryTag.TerminalSession, id: sessionId }],
@@ -58,7 +60,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // Cancel active session
     cancelSession: builder.mutation<ICancelSessionResponse, number>({
       query: (id) => ({
-        url: `/api/v1/terminal_sessions/${id}/cancel`,
+        url: Routes.backend.cancelApiV1TerminalSessionPath(id),
         method: 'POST',
       }),
       invalidatesTags: (_result, _error, id) => [{ type: QueryTag.TerminalSession, id }],
@@ -67,7 +69,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
     // Delete terminal session
     deleteTerminalSession: builder.mutation<void, number>({
       query: (id) => ({
-        url: `/api/v1/terminal_sessions/${id}`,
+        url: Routes.backend.apiV1TerminalSessionPath(id),
         method: 'DELETE',
       }),
       invalidatesTags: (_result, _error, id) => [
