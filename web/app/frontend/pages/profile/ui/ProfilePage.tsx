@@ -75,7 +75,7 @@ const getRoleBadgeColor = (role: UserRole): 'secondary' | 'primary' | 'default' 
   switch (role) {
     case 'super_admin':
       return 'secondary'; // purple
-    case 'company_admin':
+    case 'admin':
       return 'primary'; // blue
     case 'employee':
     default:
@@ -87,7 +87,7 @@ const getRoleDisplayName = (role: UserRole): string => {
   switch (role) {
     case 'super_admin':
       return 'Super Admin';
-    case 'company_admin':
+    case 'admin':
       return 'Admin';
     case 'employee':
     default:

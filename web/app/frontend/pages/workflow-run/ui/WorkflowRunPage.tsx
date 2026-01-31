@@ -1,9 +1,10 @@
 import { Box, Breadcrumbs, CircularProgress, IconButton, Link, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { FileTree } from 'features/file-tree';
+import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
 
 import type { IWorkflowRunDetail } from '../lib/types';
@@ -430,8 +431,7 @@ const mockWorkflowRun: IWorkflowRunDetail = {
 
 const WorkflowRunPage = () => {
   const navigate = useNavigate();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { projectId, runId } = useParams({ from: '/projects/$projectId/workflow-runs/$runId' });
+  // Params available for future use: useParams({ strict: false }) contains projectId, runId
   const [isLoading] = useState(false);
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const [showExplorer, setShowExplorer] = useState(true);
@@ -508,12 +508,12 @@ const WorkflowRunPage = () => {
       <Box sx={styles.header}>
         <Box sx={styles.headerLeft}>
           <Breadcrumbs sx={styles.breadcrumbs}>
-            <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: '/projects' })}>
+            <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}>
               Projects
             </Link>
             <Link
               sx={styles.breadcrumbLink}
-              onClick={() => navigate({ to: '/projects/$projectId', params: { projectId: workflowRun.projectId } })}
+              onClick={() => navigate({ to: Routes.frontend.companyProjectPath(workflowRun.projectId) })}
             >
               {workflowRun.projectName}
             </Link>

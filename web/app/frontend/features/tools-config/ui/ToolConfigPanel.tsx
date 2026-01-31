@@ -206,7 +206,7 @@ const styles = {
     marginBottom: '12px',
     textTransform: 'uppercase',
   },
-  fileItem: {
+  fileItemTree: {
     padding: '6px 8px',
     borderRadius: '4px',
     fontSize: '13px',
@@ -217,7 +217,7 @@ const styles = {
       backgroundColor: 'rgba(255, 255, 255, 0.05)',
     },
   },
-  fileItemActive: {
+  fileItemTreeActive: {
     backgroundColor: 'rgba(71, 133, 255, 0.2)',
     color: 'text.primary',
   },
@@ -280,7 +280,7 @@ const LANGUAGES = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const ToolConfigPanel = ({ agentType, onSave }: ToolConfigPanelProps) => {
+const ToolConfigPanel = ({ agentType: _agentType, onSave }: ToolConfigPanelProps) => {
   const { enqueueSnackbar } = useSnackbar();
   const [tool, setTool] = useState<ITool>({
     id: 'new-tool',

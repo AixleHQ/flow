@@ -251,7 +251,7 @@ const MCPConfigPanel = ({ onSave }: MCPConfigPanelProps) => {
                 key={transport.value}
                 variant={server.transport === transport.value ? 'contained' : 'outlined'}
                 size="small"
-                onClick={() => setServer({ ...server, transport: transport.value as 'stdio' | 'http' | 'ws' })}
+                onClick={() => setServer({ ...server, transport: transport.value as 'stdio' | 'sse' | 'websocket' })}
                 sx={{ textTransform: 'none' }}
               >
                 {transport.label}

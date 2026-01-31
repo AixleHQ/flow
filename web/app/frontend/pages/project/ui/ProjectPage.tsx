@@ -1,12 +1,11 @@
 import { Box, Breadcrumbs, Button, Chip, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
 import { RunWorkflowModal } from 'features/run-workflow';
-import { useParams } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 
 import {
@@ -315,7 +314,8 @@ const getStatusColor = (status: string): string => {
 
 const ProjectPage = () => {
   const navigate = useNavigate();
-  const { projectId } = useParams({ from: Routes.frontend.companyProjectPath('$projectId') });
+  const params = useParams({ strict: false });
+  const projectId = (params as { projectId?: string }).projectId || '';
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
   const [runWorkflowModalOpen, setRunWorkflowModalOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<IWorkflow | null>(null);
@@ -328,17 +328,17 @@ const ProjectPage = () => {
 
   // Use mock data if API returns empty
   const project = projectData?.data || mockProject;
-  const workflows = workflowsData?.data?.length ? workflowsData.data : mockWorkflows;
-  const runs = runsData?.data?.length ? runsData.data : mockWorkflowRuns;
-  const artifacts = artifactsData?.data?.length ? artifactsData.data : mockArtifacts;
-  const tasks = tasksData?.data?.length ? tasksData.data : mockTasks;
+  const workflows: IWorkflow[] = workflowsData?.items?.length ? workflowsData.items : mockWorkflows;
+  const runs: IWorkflowRun[] = runsData?.items?.length ? runsData.items : mockWorkflowRuns;
+  const artifacts: IArtifact[] = artifactsData?.items?.length ? artifactsData.items : mockArtifacts;
+  const tasks: ITask[] = tasksData?.items?.length ? tasksData.items : mockTasks;
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: ProjectTab) => {
     setActiveTab(newValue);
   };
 
   const handleWorkflowRunClick = (runId: string) => {
-    navigate({ to: '/projects/$projectId/workflow-runs/$runId', params: { projectId, runId } });
+    navigate({ to: Routes.frontend.workflowRunPath(projectId, runId) });
   };
 
   const handleWorkflowClick = (workflow: IWorkflow) => {
@@ -346,13 +346,10 @@ const ProjectPage = () => {
     setRunWorkflowModalOpen(true);
   };
 
-  const handleRunWorkflow = (params: Record<string, string | number | boolean>) => {
+  const handleRunWorkflow = (workflowParams: Record<string, string | number | boolean>) => {
     // In real app, this would trigger the workflow run
-    console.log('Running workflow:', selectedWorkflow?.id, 'with params:', params);
-    navigate({
-      to: '/projects/$projectId/workflow-runs/$runId',
-      params: { projectId, runId: 'new-run-id' },
-    });
+    console.log('Running workflow:', selectedWorkflow?.id, 'with params:', workflowParams);
+    navigate({ to: Routes.frontend.workflowRunPath(projectId, 'new-run-id') });
   };
 
   if (isLoadingProject) {
@@ -435,7 +432,10 @@ const ProjectPage = () => {
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <Typography sx={styles.sectionTitle}>All Workflows</Typography>
-        <Button variant="contained" onClick={() => navigate({ to: '/workflow-builder/new' })}>
+        <Button
+          variant="contained"
+          onClick={() => navigate({ to: Routes.frontend.workflowBuilderPath('new') as string })}
+        >
           Create Workflow
         </Button>
       </Box>
@@ -504,7 +504,7 @@ const ProjectPage = () => {
       {/* Header */}
       <Box sx={styles.header}>
         <Breadcrumbs sx={styles.breadcrumbs}>
-          <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: '/projects' })}>
+          <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}>
             Projects
           </Link>
           <Typography color="text.primary">{project.name}</Typography>

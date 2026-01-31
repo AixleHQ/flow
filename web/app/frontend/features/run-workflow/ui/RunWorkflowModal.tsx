@@ -196,7 +196,7 @@ const RunWorkflowModal = ({ open, workflow, onClose, onRun }: RunWorkflowModalPr
                   <FormControlLabel
                     control={
                       <Switch
-                        checked={params[param.name] ?? param.defaultValue ?? false}
+                        checked={Boolean(params[param.name] ?? param.defaultValue ?? false)}
                         onChange={(e) => handleParamChange(param.name, e.target.checked)}
                       />
                     }

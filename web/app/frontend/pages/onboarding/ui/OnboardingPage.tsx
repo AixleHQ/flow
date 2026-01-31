@@ -10,6 +10,7 @@ import { Controller, useForm } from 'react-hook-form';
 import type { AgentType, OnboardingState } from 'entities/user';
 import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user';
 import { AgentAuthTerminal } from 'features/agent-auth';
+import { Routes } from 'shared/routes';
 
 import { profileSchema, type ProfileFormData } from '../model/profileValidation';
 
@@ -668,7 +669,7 @@ const OnboardingPage = () => {
     try {
       await updateCurrentUser({ currentUser: { onboardingStateEvent: 'complete' } }).unwrap();
       enqueueSnackbar('Welcome! Your agents are configured and ready to use.', { variant: 'success' });
-      navigate({ to: '/projects' });
+      navigate({ to: Routes.frontend.companyProjectsPath });
     } catch {
       enqueueSnackbar(
         'Cannot complete onboarding - please ensure position, language and at least one agent are configured',

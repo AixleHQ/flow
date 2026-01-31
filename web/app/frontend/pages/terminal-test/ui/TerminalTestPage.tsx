@@ -9,12 +9,13 @@ import {
   IconButton,
   Chip,
 } from '@mui/material';
-import { useParams, useNavigate } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { enqueueSnackbar } from 'notistack';
 import { useState, useEffect } from 'react';
 
 import type { AgentType, ITerminalSession } from 'entities/terminal-session';
 import { useCreateTerminalSessionMutation, useCancelSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
+import { Routes } from 'shared/routes';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
@@ -99,7 +100,7 @@ export const TerminalTestPage: React.FC = () => {
       setSession(null);
       // Navigate back to terminal-test without routeToken
       if (routeToken) {
-        navigate({ to: '/terminal-test' });
+        navigate({ to: Routes.frontend.terminalTestPath });
       }
       enqueueSnackbar('Session stopped', { variant: 'info' });
     } catch {
@@ -112,7 +113,7 @@ export const TerminalTestPage: React.FC = () => {
 
     // Update URL with route_token when session becomes running
     if (updatedSession.state === 'running' && updatedSession.routeToken && !routeToken) {
-      navigate({ to: '/terminal-test/$routeToken', params: { routeToken: updatedSession.routeToken } });
+      navigate({ to: Routes.frontend.terminalTestSessionPath(updatedSession.routeToken) });
     }
 
     // Reset to default state when session is completed/stopped
@@ -120,7 +121,7 @@ export const TerminalTestPage: React.FC = () => {
       setSessionId(null);
       setSession(null);
       if (routeToken) {
-        navigate({ to: '/terminal-test' });
+        navigate({ to: Routes.frontend.terminalTestPath });
       }
       enqueueSnackbar('Session completed', { variant: 'info' });
     }

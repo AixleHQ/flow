@@ -176,7 +176,7 @@ const mockBreakdown: ICostBreakdown[] = [
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const CostAnalytics = ({ period: initialPeriod = '30d', projectId }: CostAnalyticsProps) => {
+const CostAnalytics = ({ period: initialPeriod = '30d', projectId: _projectId }: CostAnalyticsProps) => {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>(initialPeriod);
   const data = generateMockData(period);
 

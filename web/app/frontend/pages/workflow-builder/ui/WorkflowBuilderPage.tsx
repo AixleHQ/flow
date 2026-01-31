@@ -4,6 +4,8 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 
+import { Routes } from 'shared/routes';
+
 interface IWorkflowStep {
   id: string;
   name: string;
@@ -226,14 +228,8 @@ const WorkflowBuilderPage = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
-  let workflowId = 'new';
-  try {
-    const params = useParams({ from: '/workflow-builder/$workflowId', strict: false });
-    workflowId = params?.workflowId || 'new';
-  } catch {
-    // Fallback to 'new' if params not available
-    workflowId = 'new';
-  }
+  const params = useParams({ strict: false });
+  const workflowId = (params as { workflowId?: string }).workflowId || 'new';
 
   const [workflow, setWorkflow] = useState<IWorkflow>({
     id: workflowId || 'new',
@@ -360,7 +356,11 @@ const WorkflowBuilderPage = () => {
           </Box>
 
           <Box sx={styles.headerActions}>
-            <Button variant="outlined" sx={styles.actionButton} onClick={() => navigate({ to: '/projects' })}>
+            <Button
+              variant="outlined"
+              sx={styles.actionButton}
+              onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}
+            >
               Cancel
             </Button>
             <Button variant="outlined" sx={styles.actionButton} onClick={handleTest}>
