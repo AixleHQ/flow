@@ -9,7 +9,6 @@ class ProjectSerializer < ApplicationSerializer
   end
 
   def last_activity_at
-    # TODO: Implement when terminal_sessions or other activity tracking is added
-    nil
+    object.terminal_sessions.order(started_at: :desc).limit(1).pick(:started_at)
   end
 end

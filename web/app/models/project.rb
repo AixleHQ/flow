@@ -13,6 +13,7 @@ class Project < ApplicationRecord
   belongs_to :owner, class_name: "User", inverse_of: :owned_projects
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborators, through: :project_collaborators, source: :user
+  has_many :terminal_sessions, dependent: :nullify
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

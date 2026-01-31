@@ -1,7 +1,17 @@
-import { Box, Button, CircularProgress, Grid, Snackbar, Alert, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  CircularProgress,
+  Grid,
+  InputAdornment,
+  Snackbar,
+  Alert,
+  TextField,
+  Typography,
+} from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ProjectCard, type IProject } from 'entities/project';
 import { Routes } from 'shared/routes';
@@ -20,7 +30,7 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: '32px',
+    marginBottom: '24px',
   },
   headerText: {},
   title: {
@@ -32,6 +42,14 @@ const styles = {
   subtitle: {
     fontSize: '16px',
     color: 'text.secondary',
+  },
+  toolbar: {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '24px',
+  },
+  searchField: {
+    width: '300px',
   },
   grid: {
     marginTop: '24px',
@@ -72,8 +90,15 @@ const ProjectsPage = () => {
   const { data, isLoading } = useProjectsQuery();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const projects = data?.items ?? [];
+  const projects = useMemo(() => data?.items ?? [], [data?.items]);
+
+  const filteredProjects = useMemo(() => {
+    if (!searchQuery.trim()) return projects;
+    const query = searchQuery.toLowerCase();
+    return projects.filter((p) => p.name.toLowerCase().includes(query) || p.description?.toLowerCase().includes(query));
+  }, [projects, searchQuery]);
 
   const handleProjectClick = (projectId: number) => {
     navigate({ to: Routes.frontend.companyProjectPath(String(projectId)) });
@@ -108,6 +133,26 @@ const ProjectsPage = () => {
         </Button>
       </Box>
 
+      {/* Search */}
+      {projects.length > 0 && (
+        <Box sx={styles.toolbar}>
+          <TextField
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            size="small"
+            sx={styles.searchField}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <span style={{ opacity: 0.5 }}>🔍</span>
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+      )}
+
       {/* Projects Grid */}
       {projects.length === 0 ? (
         <Box sx={styles.empty}>
@@ -120,9 +165,15 @@ const ProjectsPage = () => {
             Create Your First Project
           </Button>
         </Box>
+      ) : filteredProjects.length === 0 ? (
+        <Box sx={styles.empty}>
+          <Box sx={styles.emptyIcon}>🔍</Box>
+          <Typography sx={styles.emptyTitle}>No projects found</Typography>
+          <Typography sx={styles.emptyDescription}>No projects match your search. Try a different query.</Typography>
+        </Box>
       ) : (
         <Grid container spacing={3} sx={styles.grid}>
-          {projects.map((project: IProject) => (
+          {filteredProjects.map((project: IProject) => (
             <Grid item xs={12} sm={6} lg={4} key={project.id}>
               <ProjectCard project={project} onClick={() => handleProjectClick(project.id)} />
             </Grid>

@@ -80,6 +80,22 @@ class Api::V1::Company::ProjectsControllerTest < ActionController::TestCase
     assert { json["items"].first["name"] == "Alpha Project" }
   end
 
+  test "#index includes last_activity_at from terminal sessions" do
+    sign_in @admin
+
+    project = create(:project, company: @company, owner: @admin, name: "Test Project")
+    session_time = 1.hour.ago
+    create(:terminal_session, project: project, user: @admin, started_at: session_time)
+
+    get :index
+
+    assert_response :success
+    json = response.parsed_body
+    project_data = json["items"].find { |p| p["id"] == project.id }
+    assert { project_data["last_activity_at"].present? }
+    assert { Time.zone.parse(project_data["last_activity_at"]).to_i == session_time.to_i }
+  end
+
   test "#index includes collaborators_count" do
     sign_in @admin
 
