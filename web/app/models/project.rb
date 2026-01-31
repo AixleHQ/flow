@@ -47,7 +47,7 @@ class Project < ApplicationRecord
 
   # Add a user as collaborator
   def add_collaborator(user)
-    project_collaborators.find_or_create_by!(user: user)
+    project_collaborators.create!(user: user)
   end
 
   # Remove a user from project
@@ -63,6 +63,13 @@ class Project < ApplicationRecord
   # Check if user is admin of project (owner only)
   def admin?(user)
     owner_id == user.id
+  end
+
+  # Returns all member users (owner first, then collaborators)
+  def member_users
+    collaborator_ids = project_collaborators.pluck(:user_id)
+    User.where(id: [ owner_id ] + collaborator_ids)
+        .order(Arel.sql("CASE WHEN id = #{owner_id} THEN 0 ELSE 1 END"))
   end
 
   private

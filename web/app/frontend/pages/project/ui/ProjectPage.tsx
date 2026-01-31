@@ -17,6 +17,7 @@ import {
 } from '../api/projectApi';
 import type { ProjectTab, IWorkflow, IWorkflowRun, ITask } from '../lib/types';
 
+import MembersTab from './MembersTab';
 import SettingsTab from './SettingsTab';
 
 const styles = {
@@ -549,6 +550,7 @@ const ProjectPage = () => {
             }
             sx={styles.tab}
           />
+          <Tab value="members" label="Members" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
@@ -559,6 +561,7 @@ const ProjectPage = () => {
         {activeTab === 'workflows' && renderWorkflowsTab()}
         {activeTab === 'artifacts' && renderArtifactsTab()}
         {activeTab === 'tasks' && renderTasksTab()}
+        {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
         {activeTab === 'settings' && renderSettingsTab()}
       </Box>
 

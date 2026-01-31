@@ -63,8 +63,8 @@ development_status:
   epic-3: in-progress
   3-1-create-new-project: done
   3-2-view-projects-list: done
-  3-3-switch-between-projects: backlog
-  3-4-add-collaborators-to-project: backlog
+  3-3-switch-between-projects: refused
+  3-4-add-collaborators-to-project: done
   3-5-remove-collaborators-from-project: backlog
   3-6-collaborator-access-to-project-resources: backlog
   epic-3-retrospective: optional

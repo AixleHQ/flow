@@ -30,7 +30,11 @@ Rails.application.routes.draw do
 
       namespace :company do
         resources :users, only: %i[index create update destroy]
-        resources :projects, only: %i[index create]
+        resources :projects, only: %i[index create] do
+          scope module: :projects do
+            resources :collaborators, only: %i[index create destroy]
+          end
+        end
       end
     end
   end
