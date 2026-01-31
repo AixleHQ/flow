@@ -1,20 +1,20 @@
 import { createRootRoute, createRoute, lazyRouteComponent } from '@tanstack/react-router';
 
+import { Routes } from 'shared/routes';
+
 import { AuthLayout, RootLayout } from './layouts';
 
 // Use lazyRouteComponent for page-level routes
-const HomePage = lazyRouteComponent(() => import('../pages/home'));
-// TODO: SessionPage was removed/renamed - needs investigation
-// const SessionPage = lazyRouteComponent(() => import('../pages/session'));
 const LoginPage = lazyRouteComponent(() => import('../pages/login'));
 const OnboardingPage = lazyRouteComponent(() => import('../pages/onboarding'));
-const WorkspacePage = lazyRouteComponent(() => import('../pages/workspace'));
 const ProjectsPage = lazyRouteComponent(() => import('../pages/projects'));
 const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
 const TerminalTestPage = lazyRouteComponent(() => import('../pages/terminal-test'));
 const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
+// Company pages
+const CompanyMembersPage = lazyRouteComponent(() => import('../pages/company-members'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -24,7 +24,7 @@ export const rootRoute = createRootRoute({
 // Login route
 export const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/login',
+  path: Routes.frontend.loginPath,
   component: LoginPage,
 });
 
@@ -38,111 +38,101 @@ export const authLayoutRoute = createRoute({
 // Onboarding route (still under authLayout for authentication check)
 export const onboardingRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/onboarding',
+  path: Routes.frontend.onboardingPath,
   component: OnboardingPage,
 });
 
-// Homepage route - now shows projects dashboard
+// Homepage route - redirects to company projects
 export const indexRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/',
+  path: Routes.frontend.rootPath,
   component: ProjectsPage,
 });
 
-// Projects list route
-export const projectsRoute = createRoute({
+// Company projects list route
+export const companyProjectsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/projects',
+  path: Routes.frontend.companyProjectsPath,
   component: ProjectsPage,
 });
 
-// Single project route
+// Single project route (under company)
 export const projectRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/projects/$projectId',
+  path: Routes.frontend.companyProjectPath('$projectId'),
   component: ProjectPage,
 });
 
 // Workflow run route - nested under project
 export const workflowRunRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/projects/$projectId/workflow-runs/$runId',
+  path: Routes.frontend.workflowRunPath('$projectId', '$runId'),
   component: WorkflowRunPage,
 });
 
 // Workflow builder route
 export const workflowBuilderRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/workflow-builder/$workflowId',
+  path: Routes.frontend.workflowBuilderPath('$workflowId'),
   component: WorkflowBuilderPage,
-});
-
-// Legacy home page route
-export const homeRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/home',
-  component: HomePage,
-});
-
-// Session route with dynamic sessionId parameter
-// TODO: SessionPage was removed - using placeholder
-export const sessionRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/session/$sessionId',
-  component: () => null,
-});
-
-// Workspace route (legacy - for direct terminal access)
-export const workspaceRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/workspace',
-  component: WorkspacePage,
-});
-
-// Setup route (placeholder for agent setup)
-export const setupRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: '/setup',
-  component: WorkspacePage,
 });
 
 // Terminal test route (for debugging WebSocket connections)
 export const terminalTestRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/terminal-test',
+  path: Routes.frontend.terminalTestPath,
   component: TerminalTestPage,
 });
 
 // Terminal test route with existing session (by route token)
 export const terminalTestSessionRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/terminal-test/$routeToken',
+  path: Routes.frontend.terminalTestSessionPath('$routeToken'),
   component: TerminalTestPage,
 });
 
 // Profile route
 export const profileRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: '/profile',
+  path: Routes.frontend.profilePath,
   component: ProfilePage,
 });
 
-// Create the route tree
+// Company members route
+export const companyMembersRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyMembersPath,
+  component: CompanyMembersPage,
+});
+
+// Company settings route (placeholder)
+export const companySettingsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companySettingsPath,
+  component: () => <div style={{ padding: 24, color: '#A1A1AA' }}>Company Settings - Coming Soon</div>,
+});
+
+// Company branding route (placeholder)
+export const companyBrandingRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyBrandingPath,
+  component: () => <div style={{ padding: 24, color: '#A1A1AA' }}>Company Branding - Coming Soon</div>,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   authLayoutRoute.addChildren([
     onboardingRoute,
     indexRoute,
-    projectsRoute,
+    companyProjectsRoute,
     projectRoute,
     workflowRunRoute,
     workflowBuilderRoute,
-    homeRoute,
-    sessionRoute,
-    workspaceRoute,
-    setupRoute,
     terminalTestRoute,
     terminalTestSessionRoute,
     profileRoute,
+    companyMembersRoute,
+    companySettingsRoute,
+    companyBrandingRoute,
   ]),
 ]);

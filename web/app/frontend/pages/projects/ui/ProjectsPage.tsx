@@ -3,6 +3,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
 
 import { ProjectCard, type IProject } from 'entities/project';
+import { Routes } from 'shared/routes';
 
 import { useProjectsQuery } from '../api/projectsApi';
 
@@ -110,7 +111,7 @@ const ProjectsPage = () => {
   const projects = data?.items?.length ? data.items : mockProjects;
 
   const handleProjectClick = (projectId: string) => {
-    navigate({ to: '/projects/$projectId', params: { projectId } });
+    navigate({ to: Routes.frontend.companyProjectPath(projectId) });
   };
 
   if (isLoading) {

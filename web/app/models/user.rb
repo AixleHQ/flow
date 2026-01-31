@@ -8,6 +8,9 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
+  # Virtual attribute for invitation flow
+  attr_accessor :inviter
+
   # Constants
   AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
   POSITIONS = %w[qa pm_po_ba dev designer cto].freeze
@@ -19,6 +22,8 @@ class User < ApplicationRecord
 
   # Associations
   belongs_to :company, optional: true
+  belongs_to :invited_by, class_name: "User", optional: true
+  has_many :invited_users, class_name: "User", foreign_key: :invited_by_id, dependent: :nullify, inverse_of: :invited_by
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
@@ -35,9 +40,20 @@ class User < ApplicationRecord
   validates :company_id, presence: true, unless: :super_admin?
   validate :super_admin_company_validation
   validate :selected_agents_valid
+  validate :email_domain_matches_company, on: :create
 
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
+  scope :invited, -> { where.not(invited_by_id: nil) }
+
+  # Ransack configuration
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[email name role state]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    []
+  end
 
   # Helper: check if onboarding is completed (based on state machine)
   def onboarding_completed?
@@ -64,11 +80,30 @@ class User < ApplicationRecord
       agent_credentials.exists?
   end
 
+  # Setter for invitation flow - sets invited_by and invited_at
+  def inviter=(user)
+    return unless user.present?
+
+    self.invited_by = user
+    self.invited_at = Time.current
+  end
+
   private
 
   # Callback for state machine: set timestamp when onboarding completes
   def set_onboarding_completed_at
     self.onboarding_completed_at = Time.current
+  end
+
+  # Validation: email domain must match company domain
+  def email_domain_matches_company
+    return if company.blank? || email.blank?
+    return if super_admin?
+
+    domain = email.split("@").last
+    return if domain == company.email_domain
+
+    errors.add(:email, "domain must match company domain (#{company.email_domain})")
   end
 
   def selected_agents_valid
@@ -86,9 +121,5 @@ class User < ApplicationRecord
     else
       errors.add(:company_id, "must be present for non-super_admin users") if company_id.nil?
     end
-  end
-
-  def set_onboarding_completed_at
-    self.onboarding_completed_at = Time.current
   end
 end

@@ -1,9 +1,11 @@
+import BusinessIcon from '@mui/icons-material/Business';
 import LogoutIcon from '@mui/icons-material/Logout';
 import PersonIcon from '@mui/icons-material/Person';
 import {
   AppBar,
   Avatar,
   Box,
+  Button,
   Divider,
   IconButton,
   ListItemIcon,
@@ -18,7 +20,6 @@ import { useState } from 'react';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
-import { Logo } from 'shared/ui';
 
 const styles = {
   appBar: {
@@ -34,10 +35,49 @@ const styles = {
     minHeight: '64px',
     padding: '0 24px',
   },
-  logoLink: {
+  logoSection: {
     display: 'flex',
     alignItems: 'center',
     textDecoration: 'none',
+  },
+  companyLogo: {
+    height: 32,
+    maxWidth: 120,
+    objectFit: 'contain' as const,
+  },
+  companyLogoPlaceholder: {
+    width: 32,
+    height: 32,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'action.hover',
+    borderRadius: 1,
+    color: 'text.secondary',
+  },
+  rightSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 2,
+  },
+  navSection: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
+  },
+  navButton: {
+    textTransform: 'none',
+    fontWeight: 500,
+    fontSize: '14px',
+    color: 'text.secondary',
+    px: 2,
+    '&:hover': {
+      backgroundColor: 'action.hover',
+    },
+  },
+  navButtonActive: {
+    color: 'primary.main',
+    backgroundColor: 'action.selected',
   },
   userSection: {
     display: 'flex',
@@ -84,7 +124,7 @@ const styles = {
     minWidth: '36px',
     color: 'text.secondary',
   },
-} satisfies Record<string, SxProps<Theme>>;
+} satisfies Record<string, SxProps<Theme> | React.CSSProperties>;
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/);
@@ -94,6 +134,19 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
+interface NavItem {
+  path: string;
+  label: string;
+  adminOnly?: boolean;
+}
+
+const navItems: NavItem[] = [
+  { path: Routes.frontend.companyProjectsPath, label: 'Projects' },
+  { path: Routes.frontend.companyMembersPath, label: 'Members', adminOnly: true },
+  { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
+  { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
+];
+
 export const AppHeader: React.FC = () => {
   const navigate = useNavigate();
   const routerState = useRouterState();
@@ -101,7 +154,10 @@ export const AppHeader: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
-  const isProfileActive = routerState.location.pathname === Routes.frontend.profilePath;
+  const currentPath = routerState.location.pathname;
+  const isProfileActive = currentPath === Routes.frontend.profilePath;
+  const isAdmin = currentUser?.role === 'admin';
+  const company = currentUser?.company;
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -118,7 +174,6 @@ export const AppHeader: React.FC = () => {
 
   const handleLogout = async () => {
     handleMenuClose();
-    // Clear session and redirect to login
     try {
       await fetch('/api/v1/sessions', { method: 'DELETE' });
     } catch {
@@ -131,27 +186,71 @@ export const AppHeader: React.FC = () => {
     return null;
   }
 
+  const renderCompanyLogo = () => {
+    if (company?.logoUrl) {
+      return <img src={company.logoUrl} alt={company.name} style={styles.companyLogo as React.CSSProperties} />;
+    }
+    return (
+      <Box sx={styles.companyLogoPlaceholder}>
+        <BusinessIcon fontSize="small" />
+      </Box>
+    );
+  };
+
+  const isNavItemActive = (path: string) => {
+    // For projects, check if we're on projects page or a specific project page
+    if (path === Routes.frontend.companyProjectsPath) {
+      return currentPath.startsWith('/company/projects');
+    }
+    return currentPath === path;
+  };
+
   return (
     <AppBar position="static" sx={styles.appBar}>
       <Toolbar sx={styles.toolbar}>
-        {/* Logo */}
-        <Link to={Routes.frontend.projectsPath} style={styles.logoLink as React.CSSProperties}>
-          <Logo width={100} />
+        {/* Company Logo */}
+        <Link to={Routes.frontend.companyProjectsPath} style={styles.logoSection as React.CSSProperties}>
+          {renderCompanyLogo()}
         </Link>
 
-        {/* User Section */}
-        <Box sx={styles.userSection}>
-          <Typography sx={styles.userName}>{currentUser.name}</Typography>
-          <IconButton
-            onClick={handleMenuOpen}
-            size="small"
-            aria-label="User menu"
-            aria-controls={open ? 'user-menu' : undefined}
-            aria-haspopup="true"
-            aria-expanded={open ? 'true' : undefined}
-          >
-            <Avatar sx={styles.avatar}>{getInitials(currentUser.name)}</Avatar>
-          </IconButton>
+        {/* Right Section: Navigation + User */}
+        <Box sx={styles.rightSection}>
+          {/* Navigation */}
+          <Box sx={styles.navSection}>
+            {navItems
+              .filter((item) => !item.adminOnly || isAdmin)
+              .map((item) => {
+                const isActive = isNavItemActive(item.path);
+                return (
+                  <Button
+                    key={item.path}
+                    component={Link}
+                    to={item.path}
+                    sx={{
+                      ...styles.navButton,
+                      ...(isActive ? styles.navButtonActive : {}),
+                    }}
+                  >
+                    {item.label}
+                  </Button>
+                );
+              })}
+          </Box>
+
+          {/* User Section */}
+          <Box sx={styles.userSection}>
+            <Typography sx={styles.userName}>{currentUser.name}</Typography>
+            <IconButton
+              onClick={handleMenuOpen}
+              size="small"
+              aria-label="User menu"
+              aria-controls={open ? 'user-menu' : undefined}
+              aria-haspopup="true"
+              aria-expanded={open ? 'true' : undefined}
+            >
+              <Avatar sx={styles.avatar}>{getInitials(currentUser.name)}</Avatar>
+            </IconButton>
+          </Box>
         </Box>
 
         {/* User Menu */}

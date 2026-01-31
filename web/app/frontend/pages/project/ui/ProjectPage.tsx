@@ -1,11 +1,13 @@
 import { Box, Breadcrumbs, Button, Chip, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
 import { RunWorkflowModal } from 'features/run-workflow';
+import { useParams } from 'shared/lib/hooks';
+import { Routes } from 'shared/routes';
 
 import {
   useProjectQuery,
@@ -313,7 +315,7 @@ const getStatusColor = (status: string): string => {
 
 const ProjectPage = () => {
   const navigate = useNavigate();
-  const { projectId } = useParams({ from: '/projects/$projectId' });
+  const { projectId } = useParams({ from: Routes.frontend.companyProjectPath('$projectId') });
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
   const [runWorkflowModalOpen, setRunWorkflowModalOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<IWorkflow | null>(null);

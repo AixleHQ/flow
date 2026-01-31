@@ -14,14 +14,30 @@ const backend = {
 
 // Frontend routes are defined manually here to match the SPA routing
 const frontend = {
+  // Static routes
   rootPath: '/',
   loginPath: '/login',
   onboardingPath: '/onboarding',
-  projectsPath: '/projects',
   setupPath: '/setup',
   workspacePath: '/workspace',
   homePath: '/home',
   profilePath: '/profile',
+
+  // Company routes
+  companyPath: '/company',
+  companyProjectsPath: '/company/projects',
+  companyProjectPath: (projectId: string) => `/company/projects/${projectId}`,
+  companyMembersPath: '/company/members',
+  companySettingsPath: '/company/settings',
+  companyBrandingPath: '/company/branding',
+
+  // Workflow routes
+  workflowRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/workflow-runs/${runId}`,
+  workflowBuilderPath: (workflowId: string) => `/workflow-builder/${workflowId}`,
+
+  // Terminal test routes
+  terminalTestPath: '/terminal-test',
+  terminalTestSessionPath: (routeToken: string) => `/terminal-test/${routeToken}`,
 } as const;
 
 // Combine both types of routes into a single export

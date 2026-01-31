@@ -164,11 +164,12 @@ const LoginPage = () => {
   const searchParams = useSearch({ from: '/login' }) as { error?: string };
   const errorShownRef = useRef(false);
 
-  // Show error messages from OAuth redirect (only once)
+  // Show error messages from OAuth redirect or auth layout redirect (only once)
   useEffect(() => {
     if (searchParams.error && !errorShownRef.current) {
       const errorMessages: Record<string, string> = {
         pending_approval: 'Your account is pending approval. Please contact your company administrator.',
+        deactivated: 'Your account has been deactivated. Please contact your company administrator.',
         oauth_failed: 'Failed to authenticate with Google. Please try again.',
         oauth_error: 'An error occurred during authentication. Please try again.',
       };

@@ -118,7 +118,6 @@ export const AppHeader: React.FC = () => {
 
   const handleLogout = async () => {
     handleMenuClose();
-    // Clear session and redirect to login
     try {
       await fetch('/api/v1/logout', { method: 'DELETE' });
     } catch {
@@ -135,7 +134,7 @@ export const AppHeader: React.FC = () => {
     <AppBar position="static" sx={styles.appBar}>
       <Toolbar sx={styles.toolbar}>
         {/* Logo */}
-        <Link to={Routes.frontend.projectsPath} style={styles.logoLink as React.CSSProperties}>
+        <Link to={Routes.frontend.companyProjectsPath} style={styles.logoLink as React.CSSProperties}>
           <Logo width={100} />
         </Link>
 

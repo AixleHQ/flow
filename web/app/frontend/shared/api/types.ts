@@ -21,6 +21,9 @@ export interface ApiCollectionResponse<T = unknown> {
   meta: Meta;
 }
 
+// Alias for paginated API responses
+export type PaginatedResponse<T> = ApiCollectionResponse<T>;
+
 export interface ApiError<T = unknown> {
   data?: {
     message: string;

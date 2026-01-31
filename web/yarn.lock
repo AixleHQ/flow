@@ -5380,6 +5380,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"date-fns@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "date-fns@npm:4.1.0"
+  checksum: 10c0/b79ff32830e6b7faa009590af6ae0fb8c3fd9ffad46d930548fbb5acf473773b4712ae887e156ba91a7b3dc30591ce0f517d69fd83bd9c38650fdc03b4e0bac8
+  languageName: node
+  linkType: hard
+
 "dayjs@npm:^1.11.18":
   version: 1.11.19
   resolution: "dayjs@npm:1.11.19"
@@ -10225,6 +10232,7 @@ __metadata:
     axios: "npm:^1.8.3"
     camelcase-keys: "npm:^9.1.3"
     classnames: "npm:^2.5.1"
+    date-fns: "npm:^4.1.0"
     decamelize-keys: "npm:^2.0.1"
     eslint: "npm:^9.39.2"
     eslint-config-prettier: "npm:^10.1.8"
@@ -10263,6 +10271,7 @@ __metadata:
     tailwindcss: "npm:^4.0.14"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.50.1"
+    use-debounce: "npm:^10.1.0"
     vite: "npm:^7.3.1"
     vite-plugin-ruby: "npm:^5.1.2"
     vite-tsconfig-paths: "npm:^6.0.3"
@@ -11697,6 +11706,15 @@ __metadata:
   dependencies:
     punycode: "npm:^2.1.0"
   checksum: 10c0/4ef57b45aa820d7ac6496e9208559986c665e49447cb072744c13b66925a362d96dd5a46c4530a6b8e203e5db5fe849369444440cb22ecfc26c679359e5dfa3c
+  languageName: node
+  linkType: hard
+
+"use-debounce@npm:^10.1.0":
+  version: 10.1.0
+  resolution: "use-debounce@npm:10.1.0"
+  peerDependencies:
+    react: "*"
+  checksum: 10c0/1d2c9ab71be283f7ea9f9c78f3574aeb6ff6fbcb18a9c5daf7f633521a8978f14d190016d39fd773227e40e9929e223677bb311343dadf33ee0763ef24bff510
   languageName: node
   linkType: hard
 

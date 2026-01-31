@@ -1,9 +1,9 @@
-import { Box } from '@mui/material';
-import { Outlet, useNavigate } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
+import { Box, Typography } from '@mui/material';
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
+import { Loader, Logo } from 'shared/ui';
 import { AppHeader } from 'widgets/AppHeader';
 
 const styles = {
@@ -15,59 +15,52 @@ const styles = {
   main: {
     flexGrow: 1,
   },
+  footer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+    py: 2,
+    opacity: 0.5,
+    transition: 'opacity 0.2s',
+    '&:hover': {
+      opacity: 0.8,
+    },
+  },
+  footerText: {
+    fontSize: 12,
+    color: 'text.secondary',
+  },
 } as const;
 
 const AuthLayout = () => {
-  const { data, isLoading } = useGetCurrentUserQuery();
+  const { data: user, isLoading } = useGetCurrentUserQuery();
   const navigate = useNavigate();
-  const hasNavigated = useRef(false);
+  const location = useLocation();
 
-  useEffect(() => {
-    if (isLoading) return;
-
-    // If not authenticated, redirect to login
-    if (!data) {
-      navigate({ to: Routes.frontend.loginPath });
-      return;
-    }
-
-    // Prevent duplicate navigations in React Strict Mode
-    if (hasNavigated.current) return;
-
-    const currentPath = window.location.pathname;
-    const isOnboardingPath = currentPath === Routes.frontend.onboardingPath;
-    const isOnboardingCompleted = data.onboardingState === 'completed';
-
-    // AC4: Cannot leave onboarding until complete
-    // If user hasn't completed onboarding and is NOT on onboarding page, redirect to onboarding
-    if (!isOnboardingCompleted && !isOnboardingPath) {
-      hasNavigated.current = true;
-      navigate({ to: Routes.frontend.onboardingPath });
-      return;
-    }
-
-    // AC6: Cannot return to onboarding after completion
-    // If user HAS completed onboarding and IS on onboarding page, redirect to projects
-    if (isOnboardingCompleted && isOnboardingPath) {
-      hasNavigated.current = true;
-      navigate({ to: Routes.frontend.projectsPath });
-      return;
-    }
-  }, [data, isLoading, navigate]);
-
-  // Show loading state while checking auth
   if (isLoading) {
-    return null;
+    return <Loader />;
   }
 
-  // Don't render if not authenticated (will redirect via useEffect)
-  if (!data) {
-    return null;
+  if (!user) {
+    return navigate({ to: Routes.frontend.loginPath });
   }
 
-  // Don't show header on onboarding page
+  const isOnboardingPath = location.pathname === Routes.frontend.onboardingPath;
+  const isOnboardingCompleted = user.onboardingState === 'completed';
+
+  if (!isOnboardingCompleted && !isOnboardingPath) {
+    return navigate({ to: Routes.frontend.onboardingPath });
+  }
+
+  if (isOnboardingCompleted && isOnboardingPath) {
+    return navigate({ to: Routes.frontend.companyProjectsPath });
+  }
+
   const showHeader =
-    data.onboardingState === 'completed' && window.location.pathname !== Routes.frontend.onboardingPath;
+    user.onboardingState === 'completed' && window.location.pathname !== Routes.frontend.onboardingPath;
+
+  const showFooter = showHeader;
 
   return (
     <Box sx={styles.root}>
@@ -75,6 +68,12 @@ const AuthLayout = () => {
       <Box component="main" sx={styles.main}>
         <Outlet />
       </Box>
+      {showFooter && (
+        <Box component="footer" sx={styles.footer}>
+          <Typography sx={styles.footerText}>Powered by</Typography>
+          <Logo width={60} />
+        </Box>
+      )}
     </Box>
   );
 };

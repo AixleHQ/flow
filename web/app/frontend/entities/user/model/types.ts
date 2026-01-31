@@ -1,5 +1,5 @@
 export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
-export type UserRole = 'employee' | 'company_admin' | 'super_admin';
+export type UserRole = 'employee' | 'admin' | 'super_admin';
 export type UserState = 'active' | 'pending' | 'suspended' | 'archived';
 export type UserPosition = 'qa' | 'pm_po_ba' | 'dev' | 'designer' | 'cto';
 export type OnboardingState = 'step1' | 'step2' | 'step3' | 'step4' | 'completed';

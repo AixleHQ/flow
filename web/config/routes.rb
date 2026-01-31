@@ -27,6 +27,10 @@ Rails.application.routes.draw do
       namespace :internal do
         get "ws_auth", to: "ws_auth#show"
       end
+
+      namespace :company do
+        resources :users, only: %i[index create update destroy]
+      end
     end
   end
 

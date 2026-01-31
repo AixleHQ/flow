@@ -9,6 +9,7 @@ import { MuiInputBase } from './MuiInputBase';
 import { MuiInputLabel } from './MuiInputLabel';
 import { MuiMenu } from './MuiMenu';
 import { MuiMenuItem } from './MuiMenuItem';
+import { MuiOutlinedInput } from './MuiOutlinedInput';
 import { MuiRadio } from './MuiRadio';
 import { MuiSelect } from './MuiSelect';
 import { MuiSlider } from './MuiSlider';
@@ -26,6 +27,7 @@ const components = {
   MuiIconButton,
   MuiMenuItem,
   MuiMenu,
+  MuiOutlinedInput,
   MuiTab,
   MuiTablePagination,
   MuiTabs,

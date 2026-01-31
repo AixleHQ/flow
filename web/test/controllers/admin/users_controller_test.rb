@@ -21,13 +21,18 @@ module Admin
     end
 
     test "should create user" do
-      company = create(:company)
+      company = create(:company, email_domain: "testcompany.com")
 
       assert_difference("User.count") do
         post :create, params: {
-          user: attributes_for(:user, :collaborator).merge(
-            company_id: company.id
-          )
+          user: {
+            email: "newuser@testcompany.com",
+            name: "New User",
+            password: "password123",
+            password_confirmation: "password123",
+            company_id: company.id,
+            role: "employee"
+          }
         }
       end
 
@@ -48,7 +53,7 @@ module Admin
       patch :update, params: {
         id: @user.id,
         user: {
-          email: generate(:email)
+          name: "Updated Name"
         }
       }
 

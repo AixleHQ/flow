@@ -1,0 +1,10 @@
+{
+  "ignored_warnings": [
+    {
+      "fingerprint": "20c0047ce6c72cd4ab9be2dcb167288b9682dcff1fb927003dd16ac89ce8bd20",
+      "note": "Role changes are protected by UsersPolicy#update? which requires admin role"
+    }
+  ],
+  "updated": "2026-01-31",
+  "brakeman_version": "7.0.0"
+}

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_29_111000) do
+ActiveRecord::Schema[8.0].define(version: 2026_01_30_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -124,9 +124,12 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_29_111000) do
     t.text "selected_agents", default: [], array: true
     t.string "onboarding_state", default: "step1", null: false
     t.datetime "onboarding_completed_at"
+    t.bigint "invited_by_id"
+    t.datetime "invited_at"
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"
@@ -141,4 +144,5 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_29_111000) do
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "users", "companies"
+  add_foreign_key "users", "users", column: "invited_by_id"
 end

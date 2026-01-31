@@ -1,12 +1,24 @@
 FactoryBot.define do
   factory :user do
-    email
     name
     password { generate :password }
     password_confirmation { password }
     onboarding_state { "step1" }
     position { nil }
     preferred_agent_language { "en" }
+
+    # Generate email based on company domain if company exists, otherwise use example.com
+    transient do
+      email_sequence { SecureRandom.hex(4) }
+    end
+
+    email do
+      if company.present?
+        "user-#{email_sequence}@#{company.email_domain}"
+      else
+        "user-#{email_sequence}@example.com"
+      end
+    end
 
     trait :super_admin do
       role { "super_admin" }

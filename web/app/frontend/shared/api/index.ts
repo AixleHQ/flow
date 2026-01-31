@@ -1,4 +1,4 @@
-export type { ApiResponse, ApiCollectionResponse, ApiError } from './types';
+export type { ApiResponse, ApiCollectionResponse, ApiError, PaginatedResponse } from './types';
 export { store, type AppDispatch } from './store';
 export { baseApi } from './baseApi';
 export { QueryTag } from './QueryTag';
