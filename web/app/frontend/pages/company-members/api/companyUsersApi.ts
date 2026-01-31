@@ -1,12 +1,12 @@
 import { baseApi, QueryTag, type ApiResponse, type PaginatedResponse } from 'shared/api';
 
+import { Routes } from '../../../shared/routes';
 import type {
   CompanyUser,
   CreateCompanyUserRequest,
   UpdateCompanyUserRequest,
   CompanyUsersFilters,
 } from '../lib/types';
-import { Routes } from '../../../shared/routes';
 
 // Build query params from filters
 function buildQueryParams(filters?: CompanyUsersFilters): Record<string, string | number | undefined> {
