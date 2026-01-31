@@ -9,6 +9,10 @@ module Api
           respond_with paginate(projects)
         end
 
+        def show
+          respond_with current_company.projects.find(params[:id])
+        end
+
         def create
           project = current_company.projects.create(project_params.merge(owner: current_user))
           respond_with project

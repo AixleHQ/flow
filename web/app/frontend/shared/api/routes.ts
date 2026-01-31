@@ -64,12 +64,12 @@ function $hasPresentOwnProperty(options: any, key: string): boolean {
 
 /** /api/v1/auth/:provider(.:format) */
 export function apiV1AuthPath(provider: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "auth" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "auth" + "/" + provider + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
 }
 
 /** /api/v1/auth/:provider/callback(.:format) */
 export function apiV1AuthCallbackPath(provider: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
 }
 
 /** /api/v1/auth/failure(.:format) */
@@ -89,12 +89,12 @@ export function apiV1CurrentUserPath(options?: object): string {
 
 /** /api/v1/terminal_sessions/:id/finish_auth(.:format) */
 export function finishAuthApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish_auth" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish_auth" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/terminal_sessions/:id/cancel(.:format) */
 export function cancelApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "cancel" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "cancel" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/terminal_sessions(.:format) */
@@ -104,7 +104,7 @@ export function apiV1TerminalSessionsPath(options?: object): string {
 
 /** /api/v1/terminal_sessions/:id(.:format) */
 export function apiV1TerminalSessionPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/internal/ws_auth(.:format) */
@@ -119,7 +119,17 @@ export function apiV1CompanyUsersPath(options?: object): string {
 
 /** /api/v1/company/users/:id(.:format) */
 export function apiV1CompanyUserPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/collaborators(.:format) */
+export function apiV1CompanyProjectCollaboratorsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "collaborators" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/collaborators/:id(.:format) */
+export function apiV1CompanyProjectCollaboratorPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "collaborators" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /api/v1/company/projects(.:format) */
@@ -127,14 +137,9 @@ export function apiV1CompanyProjectsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/company/projects/:project_id/collaborators(.:format) */
-export function apiV1CompanyProjectCollaboratorsPath(projectId: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "collaborators" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id", "format"]);
-}
-
-/** /api/v1/company/projects/:project_id/collaborators/:id(.:format) */
-export function apiV1CompanyProjectCollaboratorPath(projectId: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "collaborators" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id", "id", "format"]);
+/** /api/v1/company/projects/:id(.:format) */
+export function apiV1CompanyProjectPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin(.:format) */
@@ -144,12 +149,12 @@ export function adminRootPath(options?: object): string {
 
 /** /admin/users/:id/impersonate(.:format) */
 export function impersonateAdminUserPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "impersonate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "impersonate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/users/:id/stop_impersonate(.:format) */
 export function stopImpersonateAdminUserPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "stop_impersonate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "stop_impersonate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/users(.:format) */
@@ -164,12 +169,12 @@ export function newAdminUserPath(options?: object): string {
 
 /** /admin/users/:id/edit(.:format) */
 export function editAdminUserPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/users/:id(.:format) */
 export function adminUserPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/companies(.:format) */
@@ -184,12 +189,12 @@ export function newAdminCompanyPath(options?: object): string {
 
 /** /admin/companies/:id/edit(.:format) */
 export function editAdminCompanyPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "companies" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "companies" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/companies/:id(.:format) */
 export function adminCompanyPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "companies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/projects(.:format) */
@@ -204,12 +209,12 @@ export function newAdminProjectPath(options?: object): string {
 
 /** /admin/projects/:id/edit(.:format) */
 export function editAdminProjectPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "projects" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "projects" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/projects/:id(.:format) */
 export function adminProjectPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "projects" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "projects" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/project_collaborators(.:format) */
@@ -224,12 +229,12 @@ export function newAdminProjectCollaboratorPath(options?: object): string {
 
 /** /admin/project_collaborators/:id/edit(.:format) */
 export function editAdminProjectCollaboratorPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "project_collaborators" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "project_collaborators" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/project_collaborators/:id(.:format) */
 export function adminProjectCollaboratorPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "project_collaborators" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "project_collaborators" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/agent_credentials(.:format) */
@@ -244,12 +249,12 @@ export function newAdminAgentCredentialPath(options?: object): string {
 
 /** /admin/agent_credentials/:id/edit(.:format) */
 export function editAdminAgentCredentialPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/agent_credentials/:id(.:format) */
 export function adminAgentCredentialPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "admin" + "/" + "agent_credentials" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** / */
@@ -279,10 +284,10 @@ export function letterOpenerWebClearLettersPath(options?: object): string {
 
 /** /letter_opener/:id(/:style)(.:format) */
 export function letterOpenerWebLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + ($hasPresentOwnProperty(options, "style") ? "/" + (options as any).style : "") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "style", "format"]);
+  return "/" + "letter_opener" + "/" + id + ($hasPresentOwnProperty(options, "style") ? "/" + (options as any).style : "") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","style","format"]);
 }
 
 /** /letter_opener/:id/delete(.:format) */
 export function letterOpenerWebDeleteLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + "/" + "delete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id", "format"]);
+  return "/" + "letter_opener" + "/" + id + "/" + "delete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }

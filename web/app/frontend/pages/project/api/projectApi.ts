@@ -2,13 +2,14 @@ import type { IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
 import type { ApiResponse, ApiCollectionResponse } from 'shared/api';
 import { baseApi, QueryTag } from 'shared/api';
+import { Routes } from 'shared/routes';
 
 import type { IWorkflow, IWorkflowRun, ITask } from '../lib/types';
 
 export const projectApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     project: builder.query<ApiResponse<IProject>, string>({
-      query: (projectId) => ({ url: `/projects/${projectId}` }),
+      query: (projectId) => ({ url: Routes.backend.apiV1CompanyProjectPath(projectId) }),
       providesTags: (_result, _error, projectId) => [{ type: QueryTag.Project, id: projectId }],
     }),
 

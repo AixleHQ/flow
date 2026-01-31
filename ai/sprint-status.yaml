@@ -65,8 +65,8 @@ development_status:
   3-2-view-projects-list: done
   3-3-switch-between-projects: refused
   3-4-add-collaborators-to-project: done
-  3-5-remove-collaborators-from-project: backlog
-  3-6-collaborator-access-to-project-resources: backlog
+  3-5-remove-collaborators-from-project: review
+  3-6-collaborator-access-to-project-resources: review
   epic-3-retrospective: optional
 
   epic-4: backlog

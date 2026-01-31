@@ -124,4 +124,21 @@ class Api::V1::Company::Projects::CollaboratorsControllerTest < ActionController
 
     assert_response :forbidden
   end
+
+  test "#destroy prevents admin from removing themselves" do
+    sign_in @owner
+    # Make owner a collaborator first (edge case)
+    other_project = create(:project, company: @company, owner: @collaborator)
+    other_project.add_collaborator(@owner)
+
+    sign_in @collaborator
+
+    assert_no_difference "ProjectCollaborator.count" do
+      delete :destroy, params: { project_id: other_project.id, id: @collaborator.id }
+    end
+
+    assert_response :unprocessable_entity
+    json = response.parsed_body
+    assert { json["errors"]["base"].include?("Cannot remove yourself from the project") }
+  end
 end

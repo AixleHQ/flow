@@ -7,6 +7,7 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   IconButton,
   List,
@@ -20,6 +21,7 @@ import {
   Alert,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 
 import { useGetCurrentUserQuery } from 'entities/user';
@@ -86,8 +88,10 @@ const MembersTab = ({ projectId, ownerId: ownerIdProp }: MembersTabProps) => {
   const { data: companyUsersData } = useGetCompanyUsersForProjectQuery();
   const [addCollaborator] = useAddCollaboratorMutation();
   const [removeCollaborator] = useRemoveCollaboratorMutation();
+  const { enqueueSnackbar } = useSnackbar();
 
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [removeDialogUser, setRemoveDialogUser] = useState<ProjectMember | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | ''>('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -124,13 +128,24 @@ const MembersTab = ({ projectId, ownerId: ownerIdProp }: MembersTabProps) => {
     }
   };
 
-  const handleRemoveCollaborator = async (userId: number) => {
-    if (!confirm('Are you sure you want to remove this collaborator?')) return;
+  const handleRemoveCollaborator = async () => {
+    if (!removeDialogUser) return;
 
+    setIsSubmitting(true);
     try {
-      await removeCollaborator({ projectId, userId }).unwrap();
-    } catch {
-      alert('Failed to remove collaborator');
+      await removeCollaborator({ projectId, userId: removeDialogUser.id }).unwrap();
+      enqueueSnackbar('Collaborator removed successfully', { variant: 'success' });
+      setRemoveDialogUser(null);
+    } catch (err: unknown) {
+      const apiError = err as { data?: { errors?: Record<string, string[]> } };
+      if (apiError.data?.errors) {
+        const firstError = Object.values(apiError.data.errors)[0];
+        enqueueSnackbar(firstError?.[0] || 'Failed to remove collaborator', { variant: 'error' });
+      } else {
+        enqueueSnackbar('Failed to remove collaborator', { variant: 'error' });
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -181,11 +196,7 @@ const MembersTab = ({ projectId, ownerId: ownerIdProp }: MembersTabProps) => {
               />
               {isOwner && !isMemberOwner && (
                 <ListItemSecondaryAction>
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleRemoveCollaborator(member.id)}
-                    title="Remove collaborator"
-                  >
+                  <IconButton edge="end" onClick={() => setRemoveDialogUser(member)} title="Remove collaborator">
                     <span style={{ fontSize: '16px' }}>✕</span>
                   </IconButton>
                 </ListItemSecondaryAction>
@@ -230,6 +241,25 @@ const MembersTab = ({ projectId, ownerId: ownerIdProp }: MembersTabProps) => {
           </Button>
           <Button variant="contained" onClick={handleAddCollaborator} disabled={!selectedUserId || isSubmitting}>
             {isSubmitting ? <CircularProgress size={20} /> : 'Add'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Remove Collaborator Confirmation Dialog */}
+      <Dialog open={!!removeDialogUser} onClose={() => setRemoveDialogUser(null)}>
+        <DialogTitle>Remove Collaborator</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to remove <strong>{removeDialogUser?.name || removeDialogUser?.email}</strong> from
+            this project? They will lose access to all project resources.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRemoveDialogUser(null)} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" onClick={handleRemoveCollaborator} disabled={isSubmitting}>
+            {isSubmitting ? <CircularProgress size={20} /> : 'Remove'}
           </Button>
         </DialogActions>
       </Dialog>

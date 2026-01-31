@@ -22,6 +22,11 @@ module Api
           end
 
           def destroy
+            if params[:id].to_i == current_user.id
+              render json: { errors: { base: [ "Cannot remove yourself from the project" ] } }, status: :unprocessable_entity
+              return
+            end
+
             current_project.project_collaborators.find_by!(user_id: params[:id]).destroy
             head :no_content
           end

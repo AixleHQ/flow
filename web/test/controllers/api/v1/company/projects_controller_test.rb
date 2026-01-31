@@ -206,4 +206,47 @@ class Api::V1::Company::ProjectsControllerTest < ActionController::TestCase
     assert { json["data"]["name"] == "Minimal" }
     assert { json["data"]["description"].nil? }
   end
+
+  # ====== SHOW Tests ======
+
+  test "#show returns project for owner" do
+    sign_in @admin
+    project = create(:project, company: @company, owner: @admin, name: "My Project")
+
+    get :show, params: { id: project.id }
+
+    assert_response :success
+    json = response.parsed_body
+    assert { json["data"]["id"] == project.id }
+    assert { json["data"]["name"] == "My Project" }
+  end
+
+  test "#show returns project for collaborator" do
+    sign_in @employee
+    project = create(:project, company: @company, owner: @admin, name: "Collab Project")
+    project.add_collaborator(@employee)
+
+    get :show, params: { id: project.id }
+
+    assert_response :success
+    json = response.parsed_body
+    assert { json["data"]["id"] == project.id }
+  end
+
+  test "#show forbidden for non-collaborator" do
+    sign_in @employee
+    project = create(:project, company: @company, owner: @admin, name: "No Access")
+
+    get :show, params: { id: project.id }
+
+    assert_response :forbidden
+  end
+
+  test "#show requires authentication" do
+    project = create(:project, company: @company, owner: @admin)
+
+    get :show, params: { id: project.id }
+
+    assert_response :unauthorized
+  end
 end
