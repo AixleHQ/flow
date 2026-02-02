@@ -31,6 +31,7 @@ const frontend = {
   companySettingsPath: '/company/settings',
   companyConfigItemsPath: '/company/config-items',
   companyAgentsPath: '/company/agents',
+  companyToolsPath: '/company/tools',
   companyBrandingPath: '/company/branding',
 
   // Workflow routes

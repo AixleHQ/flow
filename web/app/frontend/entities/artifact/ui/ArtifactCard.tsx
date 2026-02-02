@@ -1,4 +1,4 @@
-import { Box, Card, CardActionArea, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Card, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 
 import { formatSize } from 'shared/lib';
@@ -124,37 +124,38 @@ const formatRelativeTime = (dateString: string): string => {
 const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => {
   const hasProvenance = artifact.workflowName || artifact.stepName || artifact.userName;
 
-  const handleDownload = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onDownload?.();
-  };
-
   return (
     <Card sx={styles.card} elevation={0}>
-      <CardActionArea sx={styles.cardAction} onClick={onClick}>
-        {/* Icon */}
-        <Box sx={styles.icon}>{getTypeIcon(artifact.name)}</Box>
+      <Box sx={styles.cardAction}>
+        {/* Clickable area */}
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0, cursor: 'pointer' }}
+          onClick={onClick}
+        >
+          {/* Icon */}
+          <Box sx={styles.icon}>{getTypeIcon(artifact.name)}</Box>
 
-        {/* Content */}
-        <Box sx={styles.content}>
-          <Typography sx={styles.name}>{artifact.name}</Typography>
-          {hasProvenance && (
-            <Typography sx={styles.provenance}>
-              {artifact.workflowName && (
-                <>
-                  <span>{artifact.workflowName}</span>
-                  {artifact.stepName && <span style={{ color: 'inherit' }}>→</span>}
-                </>
-              )}
-              {artifact.stepName && <span>{artifact.stepName}</span>}
-              {(artifact.workflowName || artifact.stepName) && artifact.userName && (
+          {/* Content */}
+          <Box sx={styles.content}>
+            <Typography sx={styles.name}>{artifact.name}</Typography>
+            {hasProvenance && (
+              <Typography sx={styles.provenance}>
+                {artifact.workflowName && (
+                  <>
+                    <span>{artifact.workflowName}</span>
+                    {artifact.stepName && <span style={{ color: 'inherit' }}>→</span>}
+                  </>
+                )}
+                {artifact.stepName && <span>{artifact.stepName}</span>}
+                {(artifact.workflowName || artifact.stepName) && artifact.userName && (
+                  <span style={{ margin: '0 4px' }}>•</span>
+                )}
+                {artifact.userName && <span>{artifact.userName}</span>}
                 <span style={{ margin: '0 4px' }}>•</span>
-              )}
-              {artifact.userName && <span>{artifact.userName}</span>}
-              <span style={{ margin: '0 4px' }}>•</span>
-              <span>{formatRelativeTime(artifact.createdAt)}</span>
-            </Typography>
-          )}
+                <span>{formatRelativeTime(artifact.createdAt)}</span>
+              </Typography>
+            )}
+          </Box>
         </Box>
 
         {/* Meta & Actions */}
@@ -162,13 +163,13 @@ const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => 
           {artifact.size && <Typography sx={styles.size}>{formatSize(artifact.size)}</Typography>}
           <Box sx={styles.actions}>
             <Tooltip title="Download">
-              <IconButton sx={styles.actionButton} size="small" onClick={handleDownload}>
+              <IconButton sx={styles.actionButton} size="small" onClick={onDownload}>
                 <span style={{ fontSize: '14px' }}>⬇</span>
               </IconButton>
             </Tooltip>
           </Box>
         </Box>
-      </CardActionArea>
+      </Box>
     </Card>
   );
 };

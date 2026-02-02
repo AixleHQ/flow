@@ -5,9 +5,10 @@ import { useState } from 'react';
 
 import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
+import { AgentsPanel } from 'features/agents-management';
+import { ConfigItemsPanel } from 'features/config-items-management';
 import { RunWorkflowModal } from 'features/run-workflow';
-import AgentsPage from 'pages/agents';
-import ConfigItemsPage from 'pages/config-items';
+import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
 
 import {
@@ -553,8 +554,9 @@ const ProjectPage = () => {
             sx={styles.tab}
           />
           <Tab value="members" label="Members" sx={styles.tab} />
-          <Tab value="config" label="Config" sx={styles.tab} />
+          <Tab value="config" label="Secrets & Variables" sx={styles.tab} />
           <Tab value="agents" label="Agents" sx={styles.tab} />
+          <Tab value="tools" label="Tools" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
@@ -566,8 +568,9 @@ const ProjectPage = () => {
         {activeTab === 'artifacts' && renderArtifactsTab()}
         {activeTab === 'tasks' && renderTasksTab()}
         {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
-        {activeTab === 'config' && <ConfigItemsPage projectId={Number(projectId)} />}
-        {activeTab === 'agents' && <AgentsPage projectId={Number(projectId)} />}
+        {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
+        {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}
+        {activeTab === 'tools' && <ToolsPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && renderSettingsTab()}
       </Box>
 

@@ -1,4 +1,3 @@
 export { default } from './ui/ConfigItemsPage';
-export { ConfigItemTypeBadge } from './ui/ConfigItemTypeBadge';
-export { ConfigItemScopeBadge } from './ui/ConfigItemScopeBadge';
-export type { ConfigItem, ConfigItemType, ScopeIndicator, ScopeType } from './lib/types';
+export { ConfigItemTypeBadge, ConfigItemScopeBadge } from 'features/config-items-management';
+export type { ConfigItem, ConfigItemType, ScopeIndicator, ScopeType } from 'features/config-items-management';

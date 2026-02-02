@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_02_150000) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -135,6 +135,35 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_150000) do
     t.index ["user_id"], name: "index_terminal_sessions_on_user_id"
   end
 
+  create_table "tool_files", force: :cascade do |t|
+    t.bigint "tool_id", null: false
+    t.string "path", null: false
+    t.text "content", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["tool_id", "path"], name: "index_tool_files_on_tool_id_and_path", unique: true
+    t.index ["tool_id"], name: "index_tool_files_on_tool_id"
+  end
+
+  create_table "tools", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "display_name", null: false
+    t.text "description"
+    t.string "scope_type"
+    t.bigint "scope_id"
+    t.string "docker_image"
+    t.text "command"
+    t.jsonb "required_config_items", default: []
+    t.jsonb "input_schema", default: {}
+    t.boolean "enabled", default: true
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "kind", default: "custom", null: false
+    t.index ["kind"], name: "index_tools_on_kind"
+    t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type"], name: "index_tools_on_scope_type"
+  end
+
   create_table "users", force: :cascade do |t|
     t.bigint "company_id"
     t.citext "email", null: false
@@ -173,6 +202,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_150000) do
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
+  add_foreign_key "tool_files", "tools"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
 end

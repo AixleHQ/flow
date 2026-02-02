@@ -6,6 +6,7 @@ export type ProjectTab =
   | 'members'
   | 'config'
   | 'agents'
+  | 'tools'
   | 'settings';
 
 export interface IWorkflowParameter {

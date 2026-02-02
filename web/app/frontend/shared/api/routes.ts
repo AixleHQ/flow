@@ -142,6 +142,16 @@ export function apiV1CompanyAgentPath(id: ScalarType, options?: object): string 
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "agents" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /api/v1/company/tools(.:format) */
+export function apiV1CompanyToolsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "tools" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/tools/:id(.:format) */
+export function apiV1CompanyToolPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "tools" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /api/v1/company/projects/:project_id/collaborators(.:format) */
 export function apiV1CompanyProjectCollaboratorsPath(project_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "collaborators" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
@@ -170,6 +180,16 @@ export function apiV1CompanyProjectAgentsPath(project_id: ScalarType, options?: 
 /** /api/v1/company/projects/:project_id/agents/:id(.:format) */
 export function apiV1CompanyProjectAgentPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "agents" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/tools(.:format) */
+export function apiV1CompanyProjectToolsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "tools" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/tools/:id(.:format) */
+export function apiV1CompanyProjectToolPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "tools" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /api/v1/company/projects(.:format) */

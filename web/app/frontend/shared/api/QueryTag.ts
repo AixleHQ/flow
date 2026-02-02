@@ -11,4 +11,5 @@ export enum QueryTag {
   CompanyUsers = 'CompanyUsers',
   ConfigItems = 'ConfigItems',
   Agents = 'Agents',
+  Tools = 'Tools',
 }

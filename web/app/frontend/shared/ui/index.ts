@@ -4,3 +4,4 @@ export * from './StatusBar';
 export * from './Terminal';
 export * from './WorkflowStepper';
 export * from './Loader';
+export * from './EmojiPicker';

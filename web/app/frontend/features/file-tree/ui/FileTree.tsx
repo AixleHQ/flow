@@ -38,7 +38,6 @@ const FileIconComponent = ({ name }: { name: string }) => {
 
   return (
     <span className="tree-node__icon tree-node__icon--file">
-      {/* @ts-expect-error - react-file-icon types are outdated */}
       <FileIcon extension={ext} {...iconStyles} />
     </span>
   );

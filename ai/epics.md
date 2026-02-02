@@ -291,17 +291,26 @@ Admins can create custom tools to extend agent capabilities.
 
 **User Outcome:** Extensible tools system executed via Docker.
 
-### Story 6.1: Create Custom Tool
+### Story 6.1: Create Tool with Types (Internal/Custom)
 
 As a company admin,
-I want to create custom tools with Docker image configuration,
-So that agents can use extended capabilities.
+I want to create and manage tools with type distinction,
+So that agents can use both platform-provided capabilities and custom extensions.
+
+**Tool Types:**
+| Type | Description | Scope |
+|------|-------------|-------|
+| `internal` | System-provided by Palad (create_workflow, manage_artifacts) | Global (no scope) |
+| `custom` | User-created with Docker execution | Company or Project |
 
 **Acceptance Criteria:**
-- Can create tool with: name, display_name, description, docker_image, docker_command
+- Tool model with `tool_type`: internal | custom
+- Can create custom tool with: name, display_name, description, docker_image, docker_command
 - Can define input_schema (JSON Schema)
-- Tool scoped to company or project
-- Can edit and delete tools
+- Custom tools scoped to company or project (polymorphic)
+- Internal tools are global and read-only
+- Can edit and delete custom tools only
+- UI shows merged list with type indicators
 
 ### Story 6.2: Specify Required Secrets for Tool
 
