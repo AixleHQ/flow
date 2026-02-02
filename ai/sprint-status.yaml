@@ -79,10 +79,10 @@ development_status:
   # PHASE 1: AGENT MANAGEMENT
   # ============================================
 
-  epic-5: backlog  # Agent Management (Phase 1)
+  epic-5: done  # Agent Management (Phase 1)
   5-1-agent-crud-with-scoping: done  # merged 5.1 + 5.4
   5-2-import-agents-from-bmad-files: refused
-  5-3-select-agent-for-session: backlog
+  5-3-select-agent-for-session: refused
   epic-5-retrospective: optional
 
   # ============================================
