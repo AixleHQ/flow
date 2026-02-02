@@ -16,3 +16,11 @@ workflows:
         task_queue: palad_ruby
       - name: stop_container_activity
         task_queue: palad_ruby
+
+  - name: tool_execution_workflow
+    owner: palad_ruby
+    activities:
+      - name: pull_docker_image_activity
+        task_queue: palad_ruby
+      - name: execute_tool_activity
+        task_queue: palad_ruby

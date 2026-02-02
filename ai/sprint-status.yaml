@@ -91,9 +91,9 @@ development_status:
 
   epic-6: in-progress  # Tools Framework (Phase 2)
   6-1-create-tool-with-types: done  # renamed: internal + custom tools
-  6-2-specify-required-secrets-for-tool: backlog
-  6-3-execute-tool-as-temporal-activity: backlog
-  6-4-tool-scoping-company-project: backlog
+  6-2-specify-required-secrets-for-tool: refused  # config items selection done in 6.1, resolution in 6.3
+  6-3-execute-tool-as-temporal-activity: done
+  6-4-tool-scoping-company-project: done  # implemented in 6.1
   epic-6-retrospective: optional
 
   # ============================================
