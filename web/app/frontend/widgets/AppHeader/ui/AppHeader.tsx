@@ -143,6 +143,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: Routes.frontend.companyProjectsPath, label: 'Projects' },
   { path: Routes.frontend.companyMembersPath, label: 'Members', adminOnly: true },
+  { path: Routes.frontend.companyConfigItemsPath, label: 'Config', adminOnly: true },
   { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
   { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
 ];

@@ -67,12 +67,12 @@ development_status:
   # PHASE 0: CONFIG ITEMS (SECRETS & VARIABLES)
   # ============================================
 
-  epic-4: in-progress  # Config Items (Phase 0)
+  epic-4: done  # Config Items (Phase 0)
   4-1-config-items-crud-with-type-toggle: done
   4-2-config-item-scoping-company-project-override: done
-  4-3-encrypt-secrets-at-rest: backlog
-  4-4-inject-config-items-into-containers: backlog
-  4-5-config-items-ui: backlog
+  4-3-encrypt-secrets-at-rest: done
+  4-4-inject-config-items-into-containers: refused  # moved to Epic 6 (Tools)
+  4-5-config-items-ui: done
   epic-4-retrospective: optional
 
   # ============================================

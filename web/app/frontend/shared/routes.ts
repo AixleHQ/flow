@@ -29,6 +29,7 @@ const frontend = {
   companyProjectPath: (projectId: string) => `/company/projects/${projectId}`,
   companyMembersPath: '/company/members',
   companySettingsPath: '/company/settings',
+  companyConfigItemsPath: '/company/config-items',
   companyBrandingPath: '/company/branding',
 
   // Workflow routes

@@ -9,4 +9,5 @@ export enum QueryTag {
   WorkflowRun = 'WorkflowRun',
   Task = 'Task',
   CompanyUsers = 'CompanyUsers',
+  ConfigItems = 'ConfigItems',
 }

@@ -1,4 +1,4 @@
-export type ProjectTab = 'overview' | 'workflows' | 'artifacts' | 'tasks' | 'members' | 'settings';
+export type ProjectTab = 'overview' | 'workflows' | 'artifacts' | 'tasks' | 'members' | 'config' | 'settings';
 
 export interface IWorkflowParameter {
   name: string;

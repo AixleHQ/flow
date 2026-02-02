@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
 import { RunWorkflowModal } from 'features/run-workflow';
+import ConfigItemsPage from 'pages/config-items';
 import { Routes } from 'shared/routes';
 
 import {
@@ -551,6 +552,7 @@ const ProjectPage = () => {
             sx={styles.tab}
           />
           <Tab value="members" label="Members" sx={styles.tab} />
+          <Tab value="config" label="Config" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
@@ -562,6 +564,7 @@ const ProjectPage = () => {
         {activeTab === 'artifacts' && renderArtifactsTab()}
         {activeTab === 'tasks' && renderTasksTab()}
         {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
+        {activeTab === 'config' && <ConfigItemsPage projectId={Number(projectId)} />}
         {activeTab === 'settings' && renderSettingsTab()}
       </Box>
 
