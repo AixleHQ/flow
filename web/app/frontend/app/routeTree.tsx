@@ -16,6 +16,7 @@ const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
 // Company pages
 const CompanyMembersPage = lazyRouteComponent(() => import('../pages/company-members'));
 const ConfigItemsPage = lazyRouteComponent(() => import('../pages/config-items'));
+const AgentsPage = lazyRouteComponent(() => import('../pages/agents'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -113,6 +114,13 @@ export const companyConfigItemsRoute = createRoute({
   component: ConfigItemsPage,
 });
 
+// Company agents route
+export const companyAgentsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyAgentsPath,
+  component: AgentsPage,
+});
+
 // Company settings route (placeholder)
 export const companySettingsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
@@ -141,6 +149,7 @@ export const routeTree = rootRoute.addChildren([
     profileRoute,
     companyMembersRoute,
     companyConfigItemsRoute,
+    companyAgentsRoute,
     companySettingsRoute,
     companyBrandingRoute,
   ]),

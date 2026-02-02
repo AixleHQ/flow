@@ -10,4 +10,5 @@ export enum QueryTag {
   Task = 'Task',
   CompanyUsers = 'CompanyUsers',
   ConfigItems = 'ConfigItems',
+  Agents = 'Agents',
 }

@@ -15,6 +15,7 @@ class Project < ApplicationRecord
   has_many :collaborators, through: :project_collaborators, source: :user
   has_many :terminal_sessions, dependent: :nullify
   has_many :config_items, as: :scope, dependent: :destroy
+  has_many :agents, as: :scope, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }
@@ -46,9 +47,9 @@ class Project < ApplicationRecord
     %w[company owner]
   end
 
-  # Add a user as collaborator
+  # Add a user as collaborator (idempotent)
   def add_collaborator(user)
-    project_collaborators.create!(user: user)
+    project_collaborators.find_or_create_by!(user: user)
   end
 
   # Remove a user from project
