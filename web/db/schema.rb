@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_01_30_100000) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_02_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -47,6 +47,20 @@ ActiveRecord::Schema[8.0].define(version: 2026_01_30_100000) do
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
+  end
+
+  create_table "config_items", force: :cascade do |t|
+    t.string "name", null: false
+    t.text "value"
+    t.text "encrypted_value"
+    t.text "description"
+    t.string "item_type", null: false
+    t.string "scope_type", null: false
+    t.bigint "scope_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scope_type", "scope_id", "name"], name: "index_config_items_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
   create_table "project_collaborators", force: :cascade do |t|

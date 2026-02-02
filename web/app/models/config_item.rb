@@ -25,9 +25,47 @@ class ConfigItem < ApplicationRecord
   # Value must be present on create
   validate :value_present_on_create, on: :create
 
+  # Handle encryption before validation (after all attributes are set)
+  before_validation :encrypt_value_if_secret
+
   # Scopes
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
+
+  # Get merged list of company + project items (for display)
+  # Returns array with scope_indicator method on each item
+  def self.merged_for_project(project)
+    company_items = for_company(project.company)
+    project_items = for_project(project)
+    project_names = project_items.pluck(:name)
+
+    result = []
+
+    # Add project items first (they take precedence)
+    project_items.each do |item|
+      overrides = company_items.exists?(name: item.name)
+      item.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
+      result << item
+    end
+
+    # Add company items that are NOT overridden
+    company_items.where.not(name: project_names).each do |item|
+      item.define_singleton_method(:scope_indicator) { "company" }
+      result << item
+    end
+
+    result
+  end
+
+  # Get effective config items for container injection (resolved overrides)
+  # Returns hash { name => decrypted_value }
+  def self.effective_for_project(project)
+    company_items = for_company(project.company).index_by(&:name)
+    project_items = for_project(project).index_by(&:name)
+
+    # Merge with project taking precedence
+    company_items.merge(project_items).transform_values(&:decrypted_value)
+  end
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
@@ -48,15 +86,13 @@ class ConfigItem < ApplicationRecord
     variable?
   end
 
-  # Set value (handles encryption for secrets)
+  # Store raw value temporarily - encryption happens in before_validation
+  attr_accessor :raw_value
+
+  # Intercept value assignment to handle secrets properly
   def value=(val)
-    if secret?
-      self.encrypted_value = encrypt(val) if val.present?
-      super(nil)
-    else
-      self.encrypted_value = nil
-      super(val)
-    end
+    @raw_value = val
+    super(val)
   end
 
   # Get decrypted value (for container injection only)
@@ -68,10 +104,23 @@ class ConfigItem < ApplicationRecord
 
   def value_present_on_create
     if secret?
-      errors.add(:value, "can't be blank") if encrypted_value.blank?
-    elsif value.blank?
+      errors.add(:value, "can't be blank") if encrypted_value.blank? && @raw_value.blank?
+    elsif value.blank? && @raw_value.blank?
       errors.add(:value, "can't be blank")
     end
+  end
+
+  def encrypt_value_if_secret
+    return unless @raw_value.present?
+
+    if secret?
+      self.encrypted_value = encrypt(@raw_value)
+      self[:value] = nil
+    else
+      self.encrypted_value = nil
+      self[:value] = @raw_value
+    end
+    @raw_value = nil # Clear temp value
   end
 
   def encrypt(plain_text)

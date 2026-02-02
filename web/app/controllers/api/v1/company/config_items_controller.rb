@@ -5,8 +5,8 @@ module Api
     module Company
       class ConfigItemsController < ApplicationController
         def index
-          items = current_company.config_items.ransack(q_params).result
-          respond_with paginate(items)
+          items = ConfigItem.for_company(current_company)
+          respond_with items, each_serializer: ConfigItemSerializer
         end
 
         def create

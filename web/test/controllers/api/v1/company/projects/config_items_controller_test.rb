@@ -25,33 +25,81 @@ class Api::V1::Company::Projects::ConfigItemsControllerTest < ActionController::
       description: "Project secret",
       item_type: :secret
     )
-    @secret.set_value("project_secret_123")
+    @secret.value = "project_secret_123"
     @secret.save!
+
+    # Company-level items for merge testing
+    @company_var = @company.config_items.create!(
+      name: "COMPANY_VAR",
+      value: "company_value",
+      item_type: :variable
+    )
+    @company_override = @company.config_items.create!(
+      name: "PROJECT_URL", # Same name as project item - will be overridden
+      value: "https://company.example.com",
+      item_type: :variable
+    )
   end
 
-  # ====== INDEX Tests ======
+  # ====== INDEX Tests (Merged List) ======
 
-  test "#index returns project config items for owner" do
+  test "#index returns merged list (company + project items)" do
     sign_in @owner
 
     get :index, params: { project_id: @project.id }
 
     assert_response :success
     json = response.parsed_body
-    assert { json["items"].length == 2 }
+    # Should have: PROJECT_URL (project), PROJECT_SECRET (project), COMPANY_VAR (company)
+    # COMPANY_VAR from company is NOT overridden
+    # PROJECT_URL from company IS overridden by project
+    assert { json["items"].length == 3 }
     names = json["items"].map { |i| i["name"] }
     assert { names.include?("PROJECT_URL") }
     assert { names.include?("PROJECT_SECRET") }
+    assert { names.include?("COMPANY_VAR") }
   end
 
-  test "#index returns project config items for collaborator" do
+  test "#index returns project item when name exists in both scopes" do
+    sign_in @owner
+
+    get :index, params: { project_id: @project.id }
+
+    json = response.parsed_body
+    project_url_item = json["items"].find { |i| i["name"] == "PROJECT_URL" }
+    # Should be project value, not company
+    assert { project_url_item["value"] == "https://project.example.com" }
+    assert { project_url_item["scope_type"] == "Project" }
+  end
+
+  test "#index returns scope_indicator for each item" do
+    sign_in @owner
+
+    get :index, params: { project_id: @project.id }
+
+    json = response.parsed_body
+
+    # PROJECT_URL overrides company item
+    project_url = json["items"].find { |i| i["name"] == "PROJECT_URL" }
+    assert { project_url["scope_indicator"] == "overrides_company" }
+
+    # PROJECT_SECRET is project-only
+    project_secret = json["items"].find { |i| i["name"] == "PROJECT_SECRET" }
+    assert { project_secret["scope_indicator"] == "project" }
+
+    # COMPANY_VAR is company-only (not overridden)
+    company_var = json["items"].find { |i| i["name"] == "COMPANY_VAR" }
+    assert { company_var["scope_indicator"] == "company" }
+  end
+
+  test "#index returns merged list for collaborator" do
     sign_in @collaborator
 
     get :index, params: { project_id: @project.id }
 
     assert_response :success
     json = response.parsed_body
-    assert { json["items"].length == 2 }
+    assert { json["items"].length == 3 }
   end
 
   test "#index forbidden for non-member" do

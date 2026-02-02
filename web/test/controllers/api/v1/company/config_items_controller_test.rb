@@ -22,7 +22,7 @@ class Api::V1::Company::ConfigItemsControllerTest < ActionController::TestCase
       description: "External API Key",
       item_type: :secret
     )
-    @secret.set_value("super_secret_123")
+    @secret.value = "super_secret_123"
     @secret.save!
   end
 
@@ -63,28 +63,6 @@ class Api::V1::Company::ConfigItemsControllerTest < ActionController::TestCase
     variable_item = json["items"].find { |i| i["name"] == "BASE_URL" }
     assert { variable_item["value"] == "https://api.example.com" }
     assert { variable_item["value_editable"] == true }
-  end
-
-  test "#index with item_type filter" do
-    sign_in @admin
-
-    get :index, params: { q: { item_type_eq: "secret" } }
-
-    assert_response :success
-    json = response.parsed_body
-    assert { json["items"].length == 1 }
-    assert { json["items"].first["name"] == "API_KEY" }
-  end
-
-  test "#index with name search" do
-    sign_in @admin
-
-    get :index, params: { q: { name_cont: "URL" } }
-
-    assert_response :success
-    json = response.parsed_body
-    assert { json["items"].length == 1 }
-    assert { json["items"].first["name"] == "BASE_URL" }
   end
 
   test "#index does not return other company items" do

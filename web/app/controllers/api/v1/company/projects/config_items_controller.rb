@@ -6,8 +6,8 @@ module Api
       module Projects
         class ConfigItemsController < ApplicationController
           def index
-            items = current_project.config_items.ransack(q_params).result
-            respond_with paginate(items)
+            items = ConfigItem.merged_for_project(current_project)
+            respond_with items, each_serializer: ConfigItemSerializer
           end
 
           def create

@@ -68,8 +68,8 @@ development_status:
   # ============================================
 
   epic-4: in-progress  # Config Items (Phase 0)
-  4-1-config-items-crud-with-type-toggle: review
-  4-2-config-item-scoping-company-project-override: backlog
+  4-1-config-items-crud-with-type-toggle: done
+  4-2-config-item-scoping-company-project-override: done
   4-3-encrypt-secrets-at-rest: backlog
   4-4-inject-config-items-into-containers: backlog
   4-5-config-items-ui: backlog
