@@ -45,6 +45,16 @@ classification:
 
 ---
 
+## Related Documents
+
+| Document | Description |
+|----------|-------------|
+| [Architecture Decision Document](./architecture.md) | System architecture, technology stack, data models |
+| [Workflow Architecture](./workflow-architecture.md) | Workflow engine design, execution flow, prerequisites |
+| [UX Design Specification](./ux-design-specification.md) | UI/UX patterns, wireframes |
+
+---
+
 ## Table of Contents
 
 1. [Executive Summary](#executive-summary)
@@ -335,6 +345,19 @@ A fixed-bid project is in full swing. Need to understand the AI spend.
 | **Audit Logging** | All actions logged for SOC 2 compliance |
 | **Encryption** | TLS in transit, encryption at rest for sensitive data |
 
+### Key Architecture Decisions
+
+> See [Workflow Architecture](./workflow-architecture.md) for full details.
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Tool calling mechanism | MCP servers | Standard protocol, works with all CLI agents |
+| Workflow steps | Sequential only | Simplicity for MVP, no parallel execution |
+| Branching in workflows | Not supported | UI shows step status (done/running/pending) instead |
+| Workspace structure | `/input/` (readonly) + `/output/` (collect) | Simple, predictable artifact flow |
+| Artifact versioning | Parent chain (v1 → v2 → v3) | Track changes across workflow runs |
+| MCP server lifecycle | Per-session | Server starts with session, stops when session ends |
+
 ### Integration Requirements
 
 | Integration | Purpose |
@@ -597,11 +620,36 @@ Palad is a B2B SaaS platform for orchestrating AI agents with a workflow system.
 
 **MVP Target:** ~8-12 weeks with 3 people
 
-| Phase | Duration | Deliverables |
-|-------|----------|--------------|
-| Foundation | Weeks 1-4 | MITM validation, workflow engine core, agent sessions |
-| Integration | Weeks 5-8 | Full workflow execution, artifacts, billing |
-| Polish | Weeks 9-12 | UI, testing, dogfooding, iteration |
+> **Note:** See [Workflow Architecture](./workflow-architecture.md) for detailed dependency graph and implementation phases.
+
+#### Implementation Phases (Updated)
+
+| Phase | Scope | Deliverable |
+|-------|-------|-------------|
+| **Phase 0** | Secrets Management | Encrypted secrets CRUD, injection into containers |
+| **Phase 1** | Agents | Agent model, CRUD, selection in sessions |
+| **Phase 2** | Tools | Tool definitions, Docker execution, Temporal activities |
+| **Phase 3** | MCP Servers | MCP config, tool exposure, connection to CLI agents |
+| **Phase 4** | Session Context | Per-CLI configuration, credentials injection, MCP wiring |
+| **Phase 5** | Workflows Core | Workflow/Step CRUD, WorkflowRun/StepRun |
+| **Phase 6** | Artifacts | Collection, versioning, S3, validation |
+| **Phase 7** | Advanced | Builder, non-interactive, GitHub integration |
+
+#### Dependency Graph
+
+```
+WORKFLOWS (Phase 5-6)
+    ↓ depends on
+SESSION CONTEXT (Phase 4)
+    ↓ depends on
+MCP SERVERS (Phase 3)
+    ↓ depends on
+TOOLS (Phase 2)
+    ↓ depends on
+AGENTS (Phase 1)
+    ↓ depends on
+SECRETS MANAGEMENT (Phase 0)
+```
 
 ---
 
@@ -658,34 +706,58 @@ Palad is a B2B SaaS platform for orchestrating AI agents with a workflow system.
 - **FR35:** Secrets are encrypted at rest
 - **FR36:** User cannot view secret values after creation (write-only)
 
+### Agent Management
+
+- **FR37:** Admin can create agent with name, title, persona, and communication style
+- **FR38:** Admin can edit and delete agents
+- **FR39:** Admin can import agents from BMAD files
+- **FR40:** User can select agent when starting a session
+- **FR41:** Agent persona is injected as system prompt for LLM
+- **FR42:** Agents can be scoped to company or project level
+
 ### Tools Framework
 
-- **FR37:** Admin can create custom tool with Docker image and configuration
-- **FR38:** Admin can specify required secrets for tool
-- **FR39:** Agent can invoke tools during session via MCP
-- **FR40:** System executes tool as Temporal Activity (sync)
-- **FR41:** Tool results are returned to agent
+- **FR43:** Admin can create custom tool with Docker image and configuration
+- **FR44:** Admin can specify required secrets for tool
+- **FR45:** Admin can define tool input schema (JSON Schema)
+- **FR46:** Tools can be scoped to company or project level (project overrides company)
+- **FR47:** System executes tool as Temporal Activity (sync)
+- **FR48:** Tool results are returned to agent
+
+### MCP Server Management
+
+- **FR49:** Admin can configure MCP servers at company/project level
+- **FR50:** Admin can select which tools are exposed via MCP server
+- **FR51:** MCP server starts alongside agent session
+- **FR52:** CLI agents connect to MCP server for tool access
+
+### Session Context
+
+- **FR53:** Admin can configure session context per CLI type (Claude Code, Cursor, Gemini, Codex)
+- **FR54:** System injects config files into container based on CLI type
+- **FR55:** System injects environment variables with resolved secrets
+- **FR56:** System connects configured MCP servers to session
 
 ### Billing & Analytics
 
-- **FR42:** User can view total cost for project
-- **FR43:** User can view cost breakdown by workflow
-- **FR44:** User can view cost breakdown by user
-- **FR45:** User can view session history with costs
-- **FR46:** Admin can view company-wide usage statistics
+- **FR57:** User can view total cost for project
+- **FR58:** User can view cost breakdown by workflow
+- **FR59:** User can view cost breakdown by user
+- **FR60:** User can view session history with costs
+- **FR61:** Admin can view company-wide usage statistics
 
 ### User Management
 
-- **FR47:** User can sign in via Google OAuth
-- **FR48:** Admin can invite users to company
-- **FR49:** Admin can assign user roles (Admin, Collaborator)
-- **FR50:** Admin can remove users from company
+- **FR62:** User can sign in via Google OAuth
+- **FR63:** Admin can invite users to company
+- **FR64:** Admin can assign user roles (Admin, Collaborator)
+- **FR65:** Admin can remove users from company
 
 ### Integrations
 
-- **FR51:** System can export tasks to Linear from workflow output
-- **FR52:** System can load code context from GitHub repository
-- **FR53:** System can create PR in GitHub from session output
+- **FR66:** System can export tasks to Linear from workflow output
+- **FR67:** System can load code context from GitHub repository
+- **FR68:** System can create PR in GitHub from session output
 
 ---
 

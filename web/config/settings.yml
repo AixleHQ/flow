@@ -70,6 +70,7 @@ temporal:
 
 encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
+  config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
 
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>

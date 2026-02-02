@@ -14,6 +14,7 @@ class Project < ApplicationRecord
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborators, through: :project_collaborators, source: :user
   has_many :terminal_sessions, dependent: :nullify
+  has_many :config_items, as: :scope, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

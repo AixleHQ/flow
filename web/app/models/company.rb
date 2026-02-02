@@ -10,6 +10,7 @@ class Company < ApplicationRecord
   # Associations
   has_many :users, dependent: :destroy
   has_many :projects, dependent: :destroy
+  has_many :config_items, as: :scope, dependent: :destroy
 
   # Virtual attributes for initial admin creation (used in admin form)
   attr_accessor :initial_admin_email, :initial_admin_password
