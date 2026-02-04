@@ -1,6 +1,6 @@
 # Story 7.4: MCP Server Management
 
-Status: review
+Status: done
 
 ## Story
 

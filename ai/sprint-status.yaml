@@ -7,16 +7,17 @@
 # EPIC ORGANIZATION:
 # ==================
 # Epics reorganized by Implementation Phases from workflow-architecture.md
-# Dependency: Secrets → Agents → Tools → MCP → Session Context → Sessions → Artifacts → Workflows
+# Dependency: Secrets → Agents → Tools → MCP → Container Framework → Session Context → Sessions → Artifacts → Workflows
 #
 # Phase 0: Secrets Management (Epic 4)
 # Phase 1: Agent Management (Epic 5)
 # Phase 2: Tools Framework (Epic 6)
 # Phase 3: MCP Servers (Epic 7)
-# Phase 4: Session Context (Epic 8)
-# Phase 4+: Agent Sessions (Epic 9)
-# Phase 5-6: Workflows + Artifacts (Epic 10, 11)
-# Phase 7: Billing & Integrations (Epic 12, 13)
+# Phase 4: Unified Container Execution (Epic 8) ← NEW
+# Phase 4+: Session Context (Epic 9)
+# Phase 4++: Agent Sessions (Epic 10)
+# Phase 5-6: Workflows + Artifacts (Epic 12, 11)
+# Phase 7: Billing & Integrations (Epic 13, 14)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -103,86 +104,98 @@ development_status:
   epic-7: done  # MCP Tools Integration (Phase 3)
   7-1-dynamic-mcp-tools-integration: done
   7-2-select-tools-for-session-ui: refused
-  7-3-tool-selection-for-workflow-steps: deferred  # moved to Epic 11
+  7-3-tool-selection-for-workflow-steps: deferred  # moved to Epic 12
   7-4-mcp-server-management: done
   7-5-select-mcp-servers-for-session: refused
   epic-7-retrospective: optional
 
   # ============================================
-  # PHASE 4: SESSION CONTEXT
+  # PHASE 4: UNIFIED CONTAINER EXECUTION
   # ============================================
 
-  epic-8: backlog  # Session Context (Phase 4)
-  8-1-configure-session-context-per-cli-type: backlog
-  8-2-inject-config-files-into-container: backlog
-  8-3-inject-environment-variables-with-secrets: backlog
-  8-4-connect-mcp-servers-to-session: backlog
+  epic-8: ready-for-dev  # Unified Container Execution Framework (Phase 4)
+  8-1-container-execution-foundation: ready-for-dev
+  8-2-tool-execution-strategy: ready-for-dev
+  8-3-agent-container-strategies: ready-for-dev
+  8-4-unified-container-workflow: ready-for-dev
+  8-5-cleanup-documentation: ready-for-dev
   epic-8-retrospective: optional
 
   # ============================================
-  # PHASE 4+: AGENT SESSIONS CORE
+  # PHASE 4+: SESSION CONTEXT
   # ============================================
 
-  epic-9: in-progress  # Agent Sessions Core (Phase 4+)
-  9-1-start-agent-session: ready-for-dev
-  9-2-web-terminal-interface: ready-for-dev
-  9-3-real-time-file-tree: backlog
-  9-4-file-viewer-and-browser: backlog
-  9-5-stop-active-session: backlog
-  9-6-mitm-proxy-token-tracking: backlog
-  9-7-session-cost-display: backlog
-  9-8-session-history-view: backlog
-  epic-9-retrospective: optional
+  epic-9-session-context: backlog  # Session Context (Phase 4+)
+  9-1-configure-session-context-per-cli-type: backlog
+  9-2-inject-config-files-into-container: backlog
+  9-3-inject-environment-variables-with-secrets: backlog
+  9-4-connect-mcp-servers-to-session: backlog
+  epic-9-session-context-retrospective: optional
+
+  # ============================================
+  # PHASE 4++: AGENT SESSIONS CORE
+  # ============================================
+
+  epic-10: in-progress  # Agent Sessions Core (Phase 4++)
+  10-1-start-agent-session: ready-for-dev
+  10-2-web-terminal-interface: ready-for-dev
+  10-3-real-time-file-tree: backlog
+  10-4-file-viewer-and-browser: backlog
+  10-5-stop-active-session: backlog
+  10-6-mitm-proxy-token-tracking: backlog
+  10-7-session-cost-display: backlog
+  10-8-session-history-view: backlog
+  epic-10-retrospective: optional
 
   # ============================================
   # PHASE 6: ARTIFACTS
   # ============================================
 
-  epic-10: backlog  # Artifacts (Phase 6)
-  10-1-upload-assets-to-project: backlog
-  10-2-view-artifacts-list: backlog
-  10-3-download-artifacts: backlog
-  10-4-delete-artifacts: backlog
-  10-5-s3-storage-integration: backlog
-  10-6-artifact-history-and-versioning: backlog
-  10-7-artifact-provenance-tracking: backlog
-  epic-10-retrospective: optional
+  epic-11: backlog  # Artifacts (Phase 6)
+  11-1-upload-assets-to-project: backlog
+  11-2-view-artifacts-list: backlog
+  11-3-download-artifacts: backlog
+  11-4-delete-artifacts: backlog
+  11-5-s3-storage-integration: backlog
+  11-6-artifact-history-and-versioning: backlog
+  11-7-artifact-provenance-tracking: backlog
+  epic-11-retrospective: optional
 
   # ============================================
   # PHASE 5-6: WORKFLOWS
   # ============================================
 
-  epic-11: backlog  # Workflows (Phase 5-6)
-  11-1-create-new-workflow: backlog
-  11-2-define-workflow-steps: backlog
-  11-3-edit-existing-workflow: backlog
-  11-4-delete-workflow: backlog
-  11-5-view-workflows-list: backlog
-  11-6-start-workflow-execution: backlog
-  11-7-interactive-mode-execution: backlog
-  11-8-non-interactive-mode-execution: backlog
-  11-9-artifact-passing-between-steps: backlog
-  epic-11-retrospective: optional
+  epic-12: backlog  # Workflows (Phase 5-6)
+  12-1-create-new-workflow: backlog
+  12-2-define-workflow-steps: backlog
+  12-3-edit-existing-workflow: backlog
+  12-4-delete-workflow: backlog
+  12-5-view-workflows-list: backlog
+  12-6-start-workflow-execution: backlog
+  12-7-interactive-mode-execution: backlog
+  12-8-non-interactive-mode-execution: backlog
+  12-9-artifact-passing-between-steps: backlog
+  epic-12-retrospective: optional
 
   # ============================================
   # PHASE 7: BILLING & ANALYTICS
   # ============================================
 
-  epic-12: backlog  # Billing & Analytics (Phase 7)
-  12-1-view-total-cost-for-project: backlog
-  12-2-cost-breakdown-by-workflow: backlog
-  12-3-cost-breakdown-by-user: backlog
-  12-4-session-history-with-costs: backlog
-  12-5-company-wide-statistics: backlog
-  epic-12-retrospective: optional
+  epic-13: backlog  # Billing & Analytics (Phase 7)
+  13-1-view-total-cost-for-project: backlog
+  13-2-cost-breakdown-by-workflow: backlog
+  13-3-cost-breakdown-by-user: backlog
+  13-4-session-history-with-costs: backlog
+  13-5-company-wide-statistics: backlog
+  epic-13-retrospective: optional
 
   # ============================================
   # PHASE 7: EXTERNAL INTEGRATIONS
   # ============================================
 
-  epic-13: backlog  # External Integrations (Phase 7)
-  13-1-configure-github-repositories: backlog
-  13-2-load-code-context-from-github: backlog
-  13-3-create-pr-in-github: backlog
-  13-4-export-tasks-to-linear: backlog
-  epic-13-retrospective: optional
+  epic-14: backlog  # External Integrations (Phase 7)
+  14-1-configure-github-repositories: backlog
+  14-2-load-code-context-from-github: backlog
+  14-3-create-pr-in-github: backlog
+  14-4-export-tasks-to-linear: backlog
+  epic-14-retrospective: optional
