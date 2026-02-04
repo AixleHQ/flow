@@ -1,6 +1,6 @@
 # Story 8.3: Agent Container Strategies Migration
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -51,9 +51,9 @@ Activity → ContainerExecutionService.execute(
 
 ### Task 1: Create AgentAuthStrategy (AC: 1, 3, 4)
 
-- [ ] Create `app/services/container_strategies/agent_auth_strategy.rb`
-- [ ] Inherit from `BaseStrategy`
-- [ ] Implement `resolve_image`:
+- [x] Create `app/services/container_strategies/agent_auth_strategy.rb`
+- [x] Inherit from `BaseStrategy`
+- [x] Implement `resolve_image`:
   ```ruby
   def resolve_image
     agent_type = input[:agent_type]
@@ -547,6 +547,34 @@ Session containers receive:
 
 ## Dev Agent Record
 
-**Agent Model:** (to be filled during implementation)
+**Agent Model:** Claude Sonnet 4
 
-**Completion Notes:** (to be filled during implementation)
+**Completion Notes:**
+- Created `AgentAuthStrategy` with full lifecycle implementation
+- Created `AgentSessionStrategy` inheriting from AgentAuthStrategy
+- AgentAuthStrategy handles:
+  - Image resolution for all 4 agent types
+  - Env vars with session info, agent paths, metadata
+  - Traefik labels for ttyd and watcher routing
+  - Tmpfs mounts for credential storage
+  - Auth file extraction in before_cleanup
+- AgentSessionStrategy adds:
+  - MCP configuration (MCP_SERVER_URL, MCP_SESSION_KEY)
+  - Credential loading in before_exec
+  - Session artifact collection (logs, outputs)
+  - Session commands (vs auth commands)
+- Updated StartAuthTerminalActivity and StartAgentSessionActivity
+- Added deprecation warnings to ContainerService methods
+- All 391 tests pass with 1056 assertions
+
+**All Tasks Completed:**
+- Task 1: AgentAuthStrategy ✅
+- Task 2: Auth Artifact Collection ✅
+- Task 3: AgentSessionStrategy ✅
+- Task 4: Session Artifact Collection ✅
+- Task 5: Update Agent Activities ✅
+- Task 6: Deprecate ContainerService Methods ✅
+- Task 7: Helper Methods ✅
+- Task 8: Tests (30 new tests) ✅
+
+**Implementation Date:** 2026-02-04

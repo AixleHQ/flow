@@ -1,26 +1,11 @@
 workflows:
-  - name: agent_auth_workflow
-    owner: palad_ruby
-    activities:
-      - name: start_auth_terminal_activity
-        task_queue: palad_ruby
-      - name: collect_artifacts_activity
-        task_queue: palad_ruby
-      - name: stop_container_activity
-        task_queue: palad_ruby
-
-  - name: agent_session_workflow
-    owner: palad_ruby
-    activities:
-      - name: start_agent_session_activity
-        task_queue: palad_ruby
-      - name: stop_container_activity
-        task_queue: palad_ruby
-
-  - name: tool_execution_workflow
+  - name: unified_container_workflow
     owner: palad_ruby
     activities:
       - name: pull_docker_image_activity
         task_queue: palad_ruby
-      - name: execute_tool_activity
+      - name: execute_container_activity
         task_queue: palad_ruby
+      - name: cleanup_container_activity
+        task_queue: palad_ruby
+

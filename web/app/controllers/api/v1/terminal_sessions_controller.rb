@@ -55,9 +55,9 @@ module Api
 
         @session.stop!
 
-        # Send signal to Temporal workflow (if enabled)
+        # Send signal to Temporal workflow to finish and cleanup
         if @session.temporal_workflow_id.present?
-          TemporalService.send_signal(@session.temporal_workflow_id, :authentication_finished)
+          TemporalService.send_signal(@session.temporal_workflow_id, :container_finished)
         end
 
         render json: {
@@ -77,7 +77,7 @@ module Api
         # Send cancel signal to Temporal workflow to trigger graceful cleanup
         # This allows the workflow to run stop_container activity without collecting artifacts
         if @session.temporal_workflow_id.present?
-          TemporalService.send_signal(@session.temporal_workflow_id, :session_cancelled)
+          TemporalService.send_signal(@session.temporal_workflow_id, :container_cancelled)
         end
 
         # Update state to cancelled

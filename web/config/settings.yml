@@ -78,3 +78,25 @@ traefik:
   dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
   cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
 
+# Container Execution Framework (Epic 8)
+# Timeouts and resource limits for container lifecycle execution
+container_execution:
+  timeouts:
+    pull_image: 600        # 10 minutes for large images
+    before_create: 30      # 30 seconds
+    create: 60             # 1 minute
+    before_start: 30       # 30 seconds
+    start: 60              # 1 minute
+    before_exec: 120       # 2 minutes
+    exec_default: 300      # 5 minutes (default for tools)
+    exec_max: 1800         # 30 minutes (absolute max for tools)
+    before_cleanup: 120    # 2 minutes
+    cleanup: 30            # 30 seconds
+
+  limits:
+    tool_execution:
+      memory_mb: 1024      # Max memory per tool container (1GB)
+      cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
+      pids_limit: 100      # Max processes
+      max_timeout: 1800    # Absolute max timeout (30 min)
+

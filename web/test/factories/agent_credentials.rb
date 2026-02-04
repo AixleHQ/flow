@@ -2,8 +2,8 @@
 
 FactoryBot.define do
   factory :agent_credential do
-    user
-    agent_type { %w[claude_code cursor_cli codex gemini_cli].sample }
+    user { nil }  # Default: no user (requires explicit user:)
+    agent_type { "claude_code" }
     encrypted_config_data do
       {
         "~/.#{agent_type.split('_').first}/config" => "api_key: test-token-#{SecureRandom.hex(8)}\ntheme: dark"
@@ -13,6 +13,17 @@ FactoryBot.define do
     last_used_at { nil }
     expires_at { nil }
 
+    # == Association Traits ==
+
+    trait :with_user do
+      association :user
+    end
+
+    # Note: For most tests, pass user: explicitly:
+    #   create(:agent_credential, user: user)
+
+    # == Agent Type Traits ==
+
     trait :claude_code do
       agent_type { "claude_code" }
     end
@@ -20,6 +31,16 @@ FactoryBot.define do
     trait :cursor_cli do
       agent_type { "cursor_cli" }
     end
+
+    trait :codex do
+      agent_type { "codex" }
+    end
+
+    trait :gemini_cli do
+      agent_type { "gemini_cli" }
+    end
+
+    # == State Traits ==
 
     trait :expired do
       expires_at { 1.day.ago }

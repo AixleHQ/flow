@@ -6,8 +6,8 @@ module Admin
   class ProjectCollaboratorsControllerTest < Admin::ActionControllerTestCase
     setup do
       @company = create(:company)
-      @owner = create(:user, :admin_role, company: @company)
-      @collaborator_user = create(:user, :collaborator, company: @company)
+      @owner = create(:user, :admin, company: @company)
+      @collaborator_user = create(:user, company: @company)
       @project = create(:project, company: @company, owner: @owner)
       @project_collaborator = create(:project_collaborator, project: @project, user: @collaborator_user)
       @super_admin = create(:user, :super_admin)
@@ -25,7 +25,7 @@ module Admin
     end
 
     test "should create project_collaborator" do
-      new_user = create(:user, :collaborator, company: @company)
+      new_user = create(:user, company: @company)
 
       assert_difference("ProjectCollaborator.count") do
         post :create, params: {
@@ -50,7 +50,7 @@ module Admin
     end
 
     test "should update project_collaborator" do
-      new_user = create(:user, :collaborator, company: @company)
+      new_user = create(:user, company: @company)
 
       patch :update, params: {
         id: @project_collaborator.id,

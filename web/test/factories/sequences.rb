@@ -8,8 +8,7 @@ FactoryBot.define do
   end
 
   sequence :email_domain do |n|
-    domains = %w[com ai dev partners tech io co]
-    "company-#{n}.#{domains.sample}"
+    "company-#{n}-#{SecureRandom.hex(4)}.partners"
   end
 
   sequence :password do |n|

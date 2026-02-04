@@ -61,17 +61,12 @@ Rails.application.config.after_initialize do
     private
 
     def execute_tool_via_temporal(tool, arguments, session)
-      workflow = WorkflowService.tool_execution_workflow
-
-      TemporalService.execute_workflow(
-        workflow,
-        {
-          tool_id: tool.id,
-          docker_image: tool.docker_image,
-          parameters: arguments || {},
-          project_id: session.project_id,
-          timeout: 300
-        }
+      # Use unified container workflow (blocking execution)
+      ContainerWorkflowService.execute_tool(
+        tool: tool,
+        parameters: arguments || {},
+        project: session.project,
+        timeout: 300
       )
     end
 

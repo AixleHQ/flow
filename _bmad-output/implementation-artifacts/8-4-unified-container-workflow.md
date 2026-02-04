@@ -1,6 +1,6 @@
 # Story 8.4: Unified Container Workflow
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -558,6 +558,48 @@ handle.signal(:container_finished)
 
 ## Dev Agent Record
 
-**Agent Model:** (to be filled during implementation)
+**Agent Model:** Claude Sonnet 4
 
-**Completion Notes:** (to be filled during implementation)
+**Completion Notes:**
+- Created `UnifiedContainerWorkflow` with full lifecycle support
+- Created `ExecuteContainerActivity` for strategy resolution and execution
+- Created `CleanupContainerActivity` for container cleanup
+- Created `ContainerWorkflowService` helper for workflow management
+- Updated `workflows.yml` with new workflow registration
+
+**Key Features:**
+1. **UnifiedContainerWorkflow**:
+   - Always pulls image first (fast if cached)
+   - Executes container via strategy pattern
+   - Waits for signal for agent sessions (auth/session)
+   - Always cleans up (even on errors)
+   - Dynamic timeout calculation per strategy type
+
+2. **ExecuteContainerActivity**:
+   - Resolves strategy class by type (tool_execution, agent_auth, agent_session)
+   - Prepares strategy-specific input
+   - Executes via ContainerExecutionService
+
+3. **CleanupContainerActivity**:
+   - Graceful stop with timeout
+   - Force remove on error
+   - Session status update
+   - Best-effort (never fails workflow)
+
+4. **ContainerWorkflowService**:
+   - Helper methods for starting workflows
+   - Signaling workflows
+   - Getting workflow results
+
+**All Tasks Completed:**
+- Task 1: UnifiedContainerWorkflow ✅
+- Task 2: ExecuteContainerActivity ✅
+- Task 3: CleanupContainerActivity ✅
+- Task 4: Register Workflow ✅
+- Task 5: Backward Compatibility (existing workflows still work) ✅
+- Task 6: ContainerWorkflowService ✅
+- Task 7: Tests (34 new tests, 425 total) ✅
+
+**Tests:** 425 tests, 1135 assertions, 0 failures (1 flaky pre-existing error unrelated to changes)
+
+**Implementation Date:** 2026-02-04

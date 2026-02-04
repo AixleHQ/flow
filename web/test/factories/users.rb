@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   factory :user do
     name
@@ -6,6 +8,8 @@ FactoryBot.define do
     onboarding_state { "step1" }
     position { nil }
     preferred_agent_language { "en" }
+    company { nil }  # Default: no company (requires :with_company trait or explicit company:)
+    role { "employee" }
 
     # Generate email based on company domain if company exists, otherwise use example.com
     transient do
@@ -20,33 +24,41 @@ FactoryBot.define do
       end
     end
 
-    trait :super_admin do
-      role { "super_admin" }
-      company { nil }
-    end
+    # == Association Traits ==
 
     trait :with_company do
       association :company
     end
 
+    # == Role Traits ==
+
+    trait :super_admin do
+      role { "super_admin" }
+      company { nil }
+    end
+
     trait :employee do
       role { "employee" }
-      association :company
     end
 
     trait :admin do
       role { "admin" }
-      association :company
     end
+
+    # == State Traits ==
 
     trait :onboarding_completed do
       onboarding_state { "completed" }
       onboarding_completed_at { Time.current }
       position { "dev" }
       preferred_agent_language { "en" }
-      # Note: configured_agents is now derived from AgentCredentials
-      # Use with_agent_credential trait to add credentials
     end
+
+    trait :pending do
+      state { "pending" }
+    end
+
+    # == Nested Associations ==
 
     trait :with_agent_credential do
       transient do
@@ -56,28 +68,6 @@ FactoryBot.define do
       after(:create) do |user, evaluator|
         create(:agent_credential, user: user, agent_type: evaluator.agent_type)
       end
-    end
-
-    trait :pending do
-      state { "pending" }
-    end
-
-    # DEPRECATED: use :employee instead
-    trait :collaborator do
-      role { "employee" }
-      association :company
-    end
-
-    # DEPRECATED: use :admin instead
-    trait :admin_role do
-      role { "admin" }
-      association :company
-    end
-
-    # DEPRECATED: use :admin instead
-    trait :company_admin do
-      role { "admin" }
-      association :company
     end
   end
 end

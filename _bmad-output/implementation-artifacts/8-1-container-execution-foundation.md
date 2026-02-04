@@ -1,6 +1,6 @@
 # Story 8.1: Container Execution Framework Foundation
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -52,15 +52,15 @@ So that all container-based workloads (agents, tools, future use cases) use cons
 
 ### Task 1: Create ContainerExecutionService (AC: 1, 5, 6)
 
-- [ ] Create `app/services/container_execution_service.rb`
-- [ ] Implement lifecycle phases:
+- [x] Create `app/services/container_execution_service.rb`
+- [x] Implement lifecycle phases:
   ```ruby
   def lifecycle_phases
     [:before_create, :create, :before_start, :start,
      :before_exec, :exec, :before_cleanup, :cleanup]
   end
   ```
-- [ ] Implement phase execution with timeout:
+- [x] Implement phase execution with timeout:
   ```ruby
   def execute_phase(phase)
     timeout = phase_timeout(phase)
@@ -73,18 +73,18 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     handle_error(phase, e)
   end
   ```
-- [ ] Implement shared context between phases: `@context = {}`
-- [ ] Add phase-specific error logging
-- [ ] Add emergency cleanup on timeout
+- [x] Implement shared context between phases: `@context = {}`
+- [x] Add phase-specific error logging
+- [x] Add emergency cleanup on timeout
 
-**Acceptance:** Service executes all phases in order with timeout protection
+**Acceptance:** Service executes all phases in order with timeout protection ✅
 
 ---
 
 ### Task 2: Create BaseStrategy (AC: 2)
 
-- [ ] Create `app/services/container_strategies/base_strategy.rb`
-- [ ] Implement default `before_create`:
+- [x] Create `app/services/container_strategies/base_strategy.rb`
+- [x] Implement default `before_create`:
   ```ruby
   def before_create(context)
     context[:image] = resolve_image
@@ -93,7 +93,7 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     context[:host_config] = build_host_config
   end
   ```
-- [ ] Implement `create`:
+- [x] Implement `create`:
   ```ruby
   def create(context)
     context[:container] = Docker::Container.create(
@@ -104,14 +104,14 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     )
   end
   ```
-- [ ] Implement `start` with health check:
+- [x] Implement `start` with health check:
   ```ruby
   def start(context)
     context[:container].start
     wait_for_container_health(context[:container])
   end
   ```
-- [ ] Implement default `cleanup`:
+- [x] Implement default `cleanup`:
   ```ruby
   def cleanup(context)
     container = context[:container]
@@ -119,16 +119,16 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     container&.remove
   end
   ```
-- [ ] Add template methods: `resolve_image`, `build_env_vars`, `build_labels`, `build_host_config`
-- [ ] Add `wait_for_container_health` helper
+- [x] Add template methods: `resolve_image`, `build_env_vars`, `build_labels`, `build_host_config`
+- [x] Add `wait_for_container_health` helper
 
-**Acceptance:** BaseStrategy provides working defaults for common phases
+**Acceptance:** BaseStrategy provides working defaults for common phases ✅
 
 ---
 
 ### Task 3: Configure Timeouts (AC: 3)
 
-- [ ] Add to `config/settings.yml`:
+- [x] Add to `config/settings.yml`:
   ```yaml
   container_execution:
     timeouts:
@@ -149,17 +149,17 @@ So that all container-based workloads (agents, tools, future use cases) use cons
         cpu_percent: 50
         max_timeout: 1800
   ```
-- [ ] Update ContainerExecutionService to read from Settings
-- [ ] Allow strategy to override timeouts via `timeout_for(phase)` method
+- [x] Update ContainerExecutionService to read from Settings
+- [x] Allow strategy to override timeouts via `timeout_for(phase)` method
 
-**Acceptance:** All timeouts configurable and enforced
+**Acceptance:** All timeouts configurable and enforced ✅
 
 ---
 
 ### Task 4: Create PullDockerImageActivity (AC: 4)
 
-- [ ] Create `app/temporal/activities/pull_docker_image_activity.rb`
-- [ ] Implement idempotent pull logic:
+- [x] Create `app/temporal/activities/pull_docker_image_activity.rb`
+- [x] Implement idempotent pull logic:
   ```ruby
   def run(input)
     image = input.image
@@ -182,17 +182,17 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     { status: :pulled, image: image, duration_seconds: duration }
   end
   ```
-- [ ] Add progress logging
-- [ ] Set activity timeout to 10 minutes
-- [ ] Handle Docker errors gracefully
+- [x] Add progress logging
+- [x] Set activity timeout to 10 minutes
+- [x] Handle Docker errors gracefully
 
-**Acceptance:** Activity pulls images with idempotent caching
+**Acceptance:** Activity pulls images with idempotent caching ✅
 
 ---
 
 ### Task 5: Add Resource Limits Helper (AC: 3)
 
-- [ ] Add to BaseStrategy:
+- [x] Add to BaseStrategy:
   ```ruby
   def build_host_config_with_limits
     {
@@ -206,30 +206,30 @@ So that all container-based workloads (agents, tools, future use cases) use cons
     }
   end
   ```
-- [ ] Document anti-mining protection
+- [x] Document anti-mining protection
 
-**Acceptance:** Resource limits prevent abuse
+**Acceptance:** Resource limits prevent abuse ✅
 
 ---
 
 ### Task 6: Write Tests (AC: 7)
 
-- [ ] Test `ContainerExecutionService`:
+- [x] Test `ContainerExecutionService`:
   - Phase execution order
   - Timeout enforcement
   - Error handling
   - Context sharing
-- [ ] Test `BaseStrategy`:
+- [x] Test `BaseStrategy`:
   - Default implementations
   - Template method pattern
   - Health checks
-- [ ] Test `PullDockerImageActivity`:
+- [x] Test `PullDockerImageActivity`:
   - Cached images (fast path)
   - Pull from registry (slow path)
   - Error handling
-- [ ] Integration test: full lifecycle execution
+- [x] Integration test: full lifecycle execution
 
-**Acceptance:** >90% code coverage, all edge cases tested
+**Acceptance:** >90% code coverage, all edge cases tested ✅ (46 tests, 111 assertions, 0 failures)
 
 ---
 

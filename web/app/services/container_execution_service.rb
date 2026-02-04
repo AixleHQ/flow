@@ -1,30 +1,28 @@
-# frozen_string_literal: true
+l# frozen_string_literal: true
 
 require "docker"
 require "timeout"
 
-# ContainerService
+# ContainerExecutionService
 # Unified orchestrator for container lifecycle execution using Strategy Pattern
 #
-# Executes 6 lifecycle phases with per-phase timeout protection:
+# Executes 8 lifecycle phases with per-phase timeout protection:
 #   1. before_create  - Validate input, resolve config
 #   2. create         - Docker container create
 #   3. before_start   - Configure labels, network, volumes
 #   4. start          - Start container + health check
 #   5. before_exec    - Inject files/credentials
 #   6. exec           - Main execution (command/wait/signal)
-#
-# Cleanup is done separately via strategy.cleanup() in CleanupContainerActivity
+#   7. before_cleanup - Collect artifacts
+#   8. cleanup        - Stop and remove container
 #
 # Usage:
 #   strategy = ContainerStrategies::ToolExecutionStrategy.new(tool: tool, parameters: params)
-#   result = ContainerService.execute(strategy: strategy, input: { ... })
+#   result = ContainerExecutionService.execute(strategy: strategy, input: { ... })
 #
-class ContainerService
+class ContainerExecutionService
   class ExecutionError < StandardError; end
   class ExecutionTimeout < ExecutionError; end
-  class ImageNotFoundError < ExecutionError; end
-  class ImagePullError < ExecutionError; end
   class PhaseError < ExecutionError
     attr_reader :phase, :original_error
 
@@ -35,7 +33,6 @@ class ContainerService
     end
   end
 
-  # Execution phases (cleanup is separate via strategy.cleanup)
   LIFECYCLE_PHASES = %i[
     before_create
     create
@@ -43,6 +40,8 @@ class ContainerService
     start
     before_exec
     exec
+    before_cleanup
+    cleanup
   ].freeze
 
   # Default timeouts in seconds (can be overridden in settings.yml)
@@ -52,13 +51,13 @@ class ContainerService
     before_start: 30,
     start: 60,
     before_exec: 120,
-    exec: 300
+    exec: 300,
+    before_cleanup: 120,
+    cleanup: 30
   }.freeze
 
   class << self
     # Main entry point for container execution
-    # Runs 6 phases: before_create, create, before_start, start, before_exec, exec
-    # Cleanup should be called separately via strategy.cleanup()
     #
     # @param strategy [ContainerStrategies::BaseStrategy] Strategy instance
     # @param input [Hash] Input parameters (passed to context)
@@ -79,23 +78,23 @@ class ContainerService
   #
   # @return [Hash] Result from context[:result] or empty hash
   def run
-    Rails.logger.info("[ContainerService] Starting: #{@strategy.class.name}")
+    Rails.logger.info("[ContainerExecution] Starting execution with strategy: #{@strategy.class.name}")
 
     LIFECYCLE_PHASES.each do |phase|
       execute_phase(phase)
       @completed_phases << phase
     end
 
-    Rails.logger.info("[ContainerService] Completed successfully")
+    Rails.logger.info("[ContainerExecution] Execution completed successfully")
     @context[:result] || {}
   rescue ExecutionTimeout, PhaseError => e
-    Rails.logger.error("[ContainerService] Failed: #{e.message}")
-    emergency_cleanup
+    Rails.logger.error("[ContainerExecution] Execution failed: #{e.message}")
+    emergency_cleanup unless @completed_phases.include?(:cleanup)
     raise
   rescue StandardError => e
-    Rails.logger.error("[ContainerService] Unexpected error: #{e.message}")
+    Rails.logger.error("[ContainerExecution] Unexpected error: #{e.message}")
     Rails.logger.error(e.backtrace&.first(10)&.join("\n"))
-    emergency_cleanup
+    emergency_cleanup unless @completed_phases.include?(:cleanup)
     raise PhaseError.new(@current_phase || :unknown, e)
   end
 
@@ -110,7 +109,7 @@ class ContainerService
     @current_phase = phase
     timeout = phase_timeout(phase)
 
-    Rails.logger.info("[ContainerService] Phase #{phase} starting (timeout: #{timeout}s)")
+    Rails.logger.info("[ContainerExecution] Phase #{phase} starting (timeout: #{timeout}s)")
     start_time = Time.current
 
     Timeout.timeout(timeout) do
@@ -118,7 +117,7 @@ class ContainerService
     end
 
     duration = ((Time.current - start_time) * 1000).to_i
-    Rails.logger.info("[ContainerService] Phase #{phase} completed in #{duration}ms")
+    Rails.logger.info("[ContainerExecution] Phase #{phase} completed in #{duration}ms")
   rescue Timeout::Error
     handle_timeout(phase, timeout)
   rescue StandardError => e
@@ -163,8 +162,11 @@ class ContainerService
   # @param phase [Symbol] Phase name
   # @param timeout [Integer] Timeout that was exceeded
   def handle_timeout(phase, timeout)
-    Rails.logger.error("[ContainerService] Phase #{phase} TIMED OUT after #{timeout}s")
-    emergency_cleanup
+    Rails.logger.error("[ContainerExecution] Phase #{phase} TIMED OUT after #{timeout}s")
+
+    # Try emergency cleanup for non-cleanup phases
+    emergency_cleanup if phase != :cleanup
+
     raise ExecutionTimeout, "Phase #{phase} exceeded timeout of #{timeout}s"
   end
 
@@ -173,7 +175,7 @@ class ContainerService
   # @param phase [Symbol] Phase name
   # @param error [StandardError] The error that occurred
   def handle_error(phase, error)
-    Rails.logger.error("[ContainerService] Phase #{phase} FAILED: #{error.message}")
+    Rails.logger.error("[ContainerExecution] Phase #{phase} FAILED: #{error.message}")
     Rails.logger.error(error.backtrace&.first(5)&.join("\n"))
 
     # Wrap and re-raise
@@ -185,7 +187,7 @@ class ContainerService
   def emergency_cleanup
     return unless @context[:container]
 
-    Rails.logger.warn("[ContainerService] Performing emergency cleanup")
+    Rails.logger.warn("[ContainerExecution] Performing emergency cleanup")
 
     begin
       container = @context[:container]
@@ -193,24 +195,24 @@ class ContainerService
       # Try to kill first (faster than stop)
       begin
         container.kill
-        Rails.logger.info("[ContainerService] Container killed")
+        Rails.logger.info("[ContainerExecution] Container killed")
       rescue Docker::Error::NotFoundError
         # Already gone
       rescue StandardError => e
-        Rails.logger.warn("[ContainerService] Kill failed: #{e.message}")
+        Rails.logger.warn("[ContainerExecution] Kill failed: #{e.message}")
       end
 
       # Force remove
       begin
         container.remove(force: true)
-        Rails.logger.info("[ContainerService] Container removed")
+        Rails.logger.info("[ContainerExecution] Container removed")
       rescue Docker::Error::NotFoundError
         # Already gone
       rescue StandardError => e
-        Rails.logger.warn("[ContainerService] Force remove failed: #{e.message}")
+        Rails.logger.warn("[ContainerExecution] Force remove failed: #{e.message}")
       end
     rescue StandardError => e
-      Rails.logger.error("[ContainerService] Emergency cleanup failed: #{e.message}")
+      Rails.logger.error("[ContainerExecution] Emergency cleanup failed: #{e.message}")
     end
   end
 end

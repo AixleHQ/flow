@@ -163,7 +163,7 @@ module Admin
 
     test "non-super-admin cannot access companies index" do
       sign_out
-      regular_user = create(:user, :employee)
+      regular_user = create(:user, :with_company)
       sign_in regular_user
 
       get :index
@@ -173,7 +173,7 @@ module Admin
 
     test "non-super-admin cannot create company" do
       sign_out
-      admin_user = create(:user, :admin)
+      admin_user = create(:user, :admin, :with_company)
       sign_in admin_user
 
       assert_no_difference "Company.count" do
@@ -187,7 +187,7 @@ module Admin
 
     test "non-super-admin cannot update company" do
       sign_out
-      admin_user = create(:user, :admin)
+      admin_user = create(:user, :admin, :with_company)
       sign_in admin_user
 
       original_name = @company.name
@@ -204,7 +204,7 @@ module Admin
 
     test "non-super-admin cannot destroy company" do
       sign_out
-      admin_user = create(:user, :admin)
+      admin_user = create(:user, :admin, :with_company)
       sign_in admin_user
 
       assert_no_difference "Company.count" do

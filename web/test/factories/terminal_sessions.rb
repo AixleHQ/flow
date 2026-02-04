@@ -2,8 +2,8 @@
 
 FactoryBot.define do
   factory :terminal_session do
-    user
-    project { nil }  # Default: no project for auth sessions
+    user { nil }     # Default: no user (requires explicit user:)
+    project { nil }  # Default: no project
     session_type { "auth_setup" }
     agent_type { "claude_code" }
     state { "not_started" }
@@ -17,21 +17,34 @@ FactoryBot.define do
     finished_at { nil }
     collected_at { nil }
 
+    # == Association Traits ==
+
+    trait :with_user do
+      association :user
+    end
+
+    trait :with_project do
+      association :project
+    end
+
+    # Note: For most tests, pass user: explicitly:
+    #   create(:terminal_session, user: user)
+
+    # == Session Type Traits ==
+
     trait :auth_setup do
       session_type { "auth_setup" }
-      agent_type { %w[claude_code cursor_cli codex gemini_cli].sample }
       project { nil }
     end
 
     trait :agent_session do
       session_type { "agent_session" }
-      project
-      agent_type { %w[claude_code cursor_cli codex gemini_cli].sample }
     end
+
+    # == State Traits ==
 
     trait :running do
       state { "running" }
-      agent_type { "claude_code" }
       container_id { "container-#{SecureRandom.hex(8)}" }
       route_token { SecureRandom.hex(16) }
       started_at { Time.current }

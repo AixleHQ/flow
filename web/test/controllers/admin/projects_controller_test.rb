@@ -6,7 +6,7 @@ module Admin
   class ProjectsControllerTest < Admin::ActionControllerTestCase
     setup do
       @company = create(:company)
-      @owner = create(:user, :admin_role, company: @company)
+      @owner = create(:user, :admin, company: @company)
       @project = create(:project, company: @company, owner: @owner)
       @super_admin = create(:user, :super_admin)
       sign_in @super_admin

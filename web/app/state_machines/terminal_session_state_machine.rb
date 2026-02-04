@@ -50,22 +50,18 @@ module TerminalSessionStateMachine
   # Callbacks
   def start_temporal_workflow
     begin
-      # Select workflow based on session type
-      workflow = case session_type
+      # Use unified container workflow via ContainerWorkflowService
+      result = case session_type
       when "auth_setup"
-                   WorkflowService.workflows.agent_auth_workflow
+                 ContainerWorkflowService.start_agent_auth(session: self)
       when "agent_session"
-                   WorkflowService.workflows.agent_session_workflow
+                 credential = user.agent_credentials.find_by(agent_type: agent_type)
+                 ContainerWorkflowService.start_agent_session(session: self, credential: credential)
       else
-                   raise "Unsupported session type: #{session_type}"
+                 raise "Unsupported session type: #{session_type}"
       end
 
-      result = TemporalService.start_workflow(
-        workflow,
-        terminal_session_id: id,
-        user_id: user_id,
-        agent_type: agent_type
-      )
+      raise result[:error] unless result[:ok]
 
       update!(
         temporal_workflow_id: result[:workflow_id],

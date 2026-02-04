@@ -1,57 +1,39 @@
 # frozen_string_literal: true
 
 # Pull Docker Image Activity
-# Downloads Docker image if not already cached
+# Pulls Docker image via strategy's pull_image method
 #
-# Input: { image: "python:3.11" }
-# Returns: { image: string, pulled: boolean }
+# Input:
+#   - strategy_type: tool_execution | agent_auth | agent_session
+#   - strategy_input: Hash with strategy-specific parameters
+#
+# Output: { status: :cached|:pulled, image: "...", duration_seconds: N }
 
 module Activities
-  class PullDockerImageActivity < Base
-    PULL_TIMEOUT = 5.minutes
-
+  class PullDockerImageActivity < ContainerActivityBase
     def run(input)
-      image = input.image
-      raise ArgumentError, "image is required" if image.blank?
+      strategy_type = input.strategy_type
+      strategy_input = input.strategy_input
 
-      log(:info, "Checking image: #{image}")
+      log(:info, "[Pull] Strategy: #{strategy_type}")
 
-      # Check if image exists locally
-      if image_exists?(image)
-        log(:info, "Image already cached: #{image}")
-        return { image: image, pulled: false }
-      end
+      strategy = build_strategy_from_input(strategy_type, strategy_input)
+      result = strategy.pull_image
 
-      # Pull image
-      log(:info, "Pulling image: #{image}")
-      pull_image(image)
-      log(:info, "Image pulled successfully: #{image}")
-
-      { image: image, pulled: true }
+      log(:info, "[Pull] Done: #{result[:status]} (#{result[:duration_seconds]}s)")
+      result
     rescue Docker::Error::NotFoundError => e
-      log(:error, "Image not found: #{image}")
+      log(:error, "[Pull] Image not found")
       raise TemporalExceptions.wrap(e, retryable: false)
-    rescue Docker::Error::TimeoutError => e
-      log(:error, "Timeout pulling image: #{image}")
+    rescue Docker::Error::DockerError => e
+      log(:error, "[Pull] Docker error: #{e.message}")
       raise TemporalExceptions.wrap(e, retryable: true)
+    rescue ArgumentError => e
+      log(:error, "[Pull] Invalid arguments: #{e.message}")
+      raise TemporalExceptions.wrap(e, retryable: false)
     rescue StandardError => e
-      log(:error, "Failed to pull image: #{e.message}")
+      log(:error, "[Pull] Error: #{e.message}")
       raise TemporalExceptions.wrap(e, retryable: true)
-    end
-
-    private
-
-    def image_exists?(image)
-      Docker::Image.get(image)
-      true
-    rescue Docker::Error::NotFoundError
-      false
-    end
-
-    def pull_image(image)
-      Timeout.timeout(PULL_TIMEOUT) do
-        Docker::Image.create("fromImage" => image)
-      end
     end
   end
 end

@@ -5,7 +5,7 @@ require "test_helper"
 module Admin
   class UsersControllerTest < Admin::ActionControllerTestCase
     setup do
-      @user = create(:user, :collaborator)
+      @user = create(:user, :with_company)
       @super_admin = create(:user, :super_admin)
       sign_in @super_admin
     end

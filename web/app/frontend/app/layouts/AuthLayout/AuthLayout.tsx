@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material';
-import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { Outlet, useLocation, useRouter } from '@tanstack/react-router';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
@@ -35,7 +35,7 @@ const styles = {
 
 const AuthLayout = () => {
   const { data: user, isLoading } = useGetCurrentUserQuery();
-  const navigate = useNavigate();
+  const router = useRouter();
   const location = useLocation();
 
   if (isLoading) {
@@ -43,23 +43,24 @@ const AuthLayout = () => {
   }
 
   if (!user) {
-    return navigate({ to: Routes.frontend.loginPath });
+    router.navigate({ to: Routes.frontend.loginPath });
+    return <Loader />;
   }
 
   const isOnboardingPath = location.pathname === Routes.frontend.onboardingPath;
   const isOnboardingCompleted = user.onboardingState === 'completed';
 
   if (!isOnboardingCompleted && !isOnboardingPath) {
-    return navigate({ to: Routes.frontend.onboardingPath });
+    router.navigate({ to: Routes.frontend.onboardingPath });
+    return <Loader />;
   }
 
   if (isOnboardingCompleted && isOnboardingPath) {
-    return navigate({ to: Routes.frontend.companyProjectsPath });
+    router.navigate({ to: Routes.frontend.companyProjectsPath });
+    return <Loader />;
   }
 
-  const showHeader =
-    user.onboardingState === 'completed' && window.location.pathname !== Routes.frontend.onboardingPath;
-
+  const showHeader = isOnboardingCompleted && !isOnboardingPath;
   const showFooter = showHeader;
 
   return (

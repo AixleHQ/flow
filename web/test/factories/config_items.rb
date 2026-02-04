@@ -6,7 +6,23 @@ FactoryBot.define do
     value { "test_value" }
     description { "Test config item" }
     item_type { :variable }
-    association :scope, factory: :company
+    scope { nil }  # Default: no scope (requires explicit scope:)
+
+    # == Association Traits ==
+
+    trait :with_company_scope do
+      association :scope, factory: :company
+    end
+
+    trait :with_project_scope do
+      association :scope, factory: :project
+    end
+
+    # Note: For most tests, pass scope: explicitly:
+    #   create(:config_item, scope: company)
+    #   create(:config_item, scope: project)
+
+    # == Type Traits ==
 
     trait :secret do
       item_type { :secret }
@@ -17,10 +33,6 @@ FactoryBot.define do
       item_type { :variable }
       value { "plain_text_value" }
       encrypted_value { nil }
-    end
-
-    trait :for_project do
-      association :scope, factory: :project
     end
   end
 end

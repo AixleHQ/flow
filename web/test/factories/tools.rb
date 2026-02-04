@@ -9,7 +9,29 @@ FactoryBot.define do
     required_config_items { [] }
     input_schema { {} }
     kind { :custom }
-    association :scope, factory: :company
+    scope { nil }  # Default: no scope (requires explicit scope:)
+
+    # == Association Traits ==
+
+    trait :with_company_scope do
+      association :scope, factory: :company
+    end
+
+    trait :with_project_scope do
+      association :scope, factory: :project
+    end
+
+    # Alias for backward compatibility
+    trait :project do
+      # Expects scope: to be passed explicitly
+      # This trait is just a semantic marker for project-scoped tools
+    end
+
+    # Note: For most tests, pass scope: explicitly:
+    #   create(:tool, scope: company)
+    #   create(:tool, scope: project)
+
+    # == Kind Traits ==
 
     trait :internal do
       kind { :internal }
@@ -17,13 +39,13 @@ FactoryBot.define do
       docker_image { nil }
     end
 
-    trait :project do
-      association :scope, factory: :project
-    end
+    # == State Traits ==
 
     trait :disabled do
       enabled { false }
     end
+
+    # == Nested Associations ==
 
     trait :with_files do
       after(:create) do |tool|

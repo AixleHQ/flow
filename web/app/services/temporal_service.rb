@@ -57,9 +57,14 @@ class TemporalService
     end
 
     def start_workflow(workflow, input, options = {})
-      id = workflow_id(workflow, input)
+      id = options[:id] || workflow_id(workflow, input)
+      execution_timeout = options[:execution_timeout]
+
       handle = with_test_environment_handling do |cl|
-        cl.start_workflow(workflow.name, input, id: id, task_queue: workflow.owner)
+        workflow_options = { id: id, task_queue: workflow.owner }
+        workflow_options[:execution_timeout] = execution_timeout if execution_timeout
+
+        cl.start_workflow(workflow.name, input, **workflow_options)
       end
 
       return { ok: false, error: "Temporal is disabled" } if handle.nil?
@@ -72,10 +77,14 @@ class TemporalService
     end
 
     def execute_workflow(workflow, input, options = {})
-      id = workflow_id(workflow, input)
+      id = options[:id] || workflow_id(workflow, input)
+      execution_timeout = options[:execution_timeout]
 
       result = with_test_environment_handling do |cl|
-        cl.execute_workflow(workflow.name, input, id: id, task_queue: workflow.owner)
+        workflow_options = { id: id, task_queue: workflow.owner }
+        workflow_options[:execution_timeout] = execution_timeout if execution_timeout
+
+        cl.execute_workflow(workflow.name, input, **workflow_options)
       end
 
       return nil if result.nil? && !enabled?

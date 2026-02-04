@@ -97,6 +97,38 @@ The project follows a modern architecture with:
 - Docker-based development environment
 - Comprehensive testing and linting setup
 
+### Container Execution Framework (Epic 8)
+
+Unified framework for running Docker containers with Strategy Pattern:
+
+**Location:** `app/services/container_strategies/`
+
+**Key Components:**
+- `ContainerExecutionService` - Unified orchestrator with 8 lifecycle phases
+- `BaseStrategy` - Abstract base class with timeout protection
+- `ToolExecutionStrategy` - Custom tool execution
+- `AgentAuthStrategy` - Agent authentication containers
+- `AgentSessionStrategy` - Pre-authenticated agent sessions
+
+**Usage:**
+```ruby
+# Execute a tool
+strategy = ContainerStrategies::ToolExecutionStrategy.new(
+  tool: tool,
+  parameters: { query: "hello" },
+  timeout: 300
+)
+result = ContainerExecutionService.execute(strategy: strategy)
+
+# Start agent session via workflow
+ContainerWorkflowService.start_agent_session(
+  session: terminal_session,
+  credential: agent_credential
+)
+```
+
+**Documentation:** See `ai/epic-8-unified-container-architecture.md`
+
 ### State Machines (AASM)
 
 The project uses AASM gem for managing entity lifecycles and state transitions:

@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, lazyRouteComponent } from '@tanstack/react-router';
+import { createRootRoute, createRoute, lazyRouteComponent, redirect } from '@tanstack/react-router';
 
 import { Routes } from 'shared/routes';
 
@@ -50,6 +50,9 @@ export const onboardingRoute = createRoute({
 export const indexRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.rootPath,
+  beforeLoad: () => {
+    throw redirect({ to: Routes.frontend.companyProjectsPath });
+  },
   component: ProjectsPage,
 });
 
