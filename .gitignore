@@ -39,6 +39,7 @@ web/public/assets
 web/config/master.key
 web/app/temporal/workflows.yml
 web_reference
+initializer_reference
 
 web/.yarn/*
 !web/.yarn/patches

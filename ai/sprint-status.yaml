@@ -89,7 +89,7 @@ development_status:
   # PHASE 2: TOOLS FRAMEWORK
   # ============================================
 
-  epic-6: in-progress  # Tools Framework (Phase 2)
+  epic-6: done  # Tools Framework (Phase 2)
   6-1-create-tool-with-types: done  # renamed: internal + custom tools
   6-2-specify-required-secrets-for-tool: refused  # config items selection done in 6.1, resolution in 6.3
   6-3-execute-tool-as-temporal-activity: done
@@ -97,13 +97,15 @@ development_status:
   epic-6-retrospective: optional
 
   # ============================================
-  # PHASE 3: MCP SERVERS
+  # PHASE 3: MCP TOOLS INTEGRATION
   # ============================================
 
-  epic-7: backlog  # MCP Servers (Phase 3)
-  7-1-configure-mcp-server: backlog
-  7-2-select-tools-for-mcp-server: backlog
-  7-3-mcp-server-lifecycle-per-session: backlog
+  epic-7: done  # MCP Tools Integration (Phase 3)
+  7-1-dynamic-mcp-tools-integration: done
+  7-2-select-tools-for-session-ui: refused
+  7-3-tool-selection-for-workflow-steps: deferred  # moved to Epic 11
+  7-4-mcp-server-management: done
+  7-5-select-mcp-servers-for-session: refused
   epic-7-retrospective: optional
 
   # ============================================

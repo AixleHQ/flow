@@ -10,7 +10,11 @@ const NUMERIC_DASH_KEY_PATTERN = /^\d+(-\d+)+$/;
 export const camelcaseKeys = (data: Record<string, unknown>) =>
   camelcaseKeysLib(data, {
     deep: true,
-    exclude: [NUMERIC_DASH_KEY_PATTERN],
+    exclude: [NUMERIC_DASH_KEY_PATTERN, 'headers'],
   });
 
-export const decamelizeKeys = (data: Record<string, unknown>) => decamelize(data, { deep: true });
+export const decamelizeKeys = (data: Record<string, unknown>) =>
+  decamelize(data, {
+    deep: true,
+    exclude: ['headers'],
+  });

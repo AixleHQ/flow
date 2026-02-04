@@ -10,10 +10,78 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_04_170001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "action_mcp_session_messages", force: :cascade do |t|
+    t.string "session_id", null: false
+    t.string "direction", default: "client", null: false, comment: "The message recipient"
+    t.string "message_type", null: false, comment: "The type of the message"
+    t.string "jsonrpc_id"
+    t.json "message_json"
+    t.boolean "is_ping", default: false, null: false, comment: "Whether the message is a ping"
+    t.boolean "request_acknowledged", default: false, null: false
+    t.boolean "request_cancelled", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["session_id"], name: "index_action_mcp_session_messages_on_session_id"
+  end
+
+  create_table "action_mcp_session_resources", force: :cascade do |t|
+    t.string "session_id", null: false
+    t.string "uri", null: false
+    t.string "name"
+    t.text "description"
+    t.string "mime_type", null: false
+    t.boolean "created_by_tool", default: false
+    t.datetime "last_accessed_at"
+    t.json "metadata"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["session_id"], name: "index_action_mcp_session_resources_on_session_id"
+  end
+
+  create_table "action_mcp_session_subscriptions", force: :cascade do |t|
+    t.string "session_id", null: false
+    t.string "uri", null: false
+    t.datetime "last_notification_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["session_id"], name: "index_action_mcp_session_subscriptions_on_session_id"
+  end
+
+  create_table "action_mcp_sessions", id: :string, force: :cascade do |t|
+    t.string "role", default: "server", null: false, comment: "The role of the session"
+    t.string "status", default: "pre_initialize", null: false
+    t.datetime "ended_at", comment: "The time the session ended"
+    t.string "protocol_version"
+    t.json "server_capabilities", comment: "The capabilities of the server"
+    t.json "client_capabilities", comment: "The capabilities of the client"
+    t.json "server_info", comment: "The information about the server"
+    t.json "client_info", comment: "The information about the client"
+    t.boolean "initialized", default: false, null: false
+    t.integer "messages_count", default: 0, null: false
+    t.integer "sse_event_counter", default: 0, null: false
+    t.json "tool_registry", default: []
+    t.json "prompt_registry", default: []
+    t.json "resource_registry", default: []
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.json "consents", default: {}, null: false
+  end
+
+  create_table "action_mcp_sse_events", force: :cascade do |t|
+    t.string "session_id", null: false
+    t.integer "event_id", null: false
+    t.text "data", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_action_mcp_sse_events_on_created_at"
+    t.index ["session_id", "event_id"], name: "index_action_mcp_sse_events_on_session_id_and_event_id", unique: true
+    t.index ["session_id"], name: "index_action_mcp_sse_events_on_session_id"
+  end
 
   create_table "agent_credentials", force: :cascade do |t|
     t.bigint "user_id", null: false
@@ -79,6 +147,23 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
+  create_table "mcp_servers", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "display_name", null: false
+    t.string "url"
+    t.string "transport", default: "sse"
+    t.jsonb "headers", default: {}
+    t.text "description"
+    t.string "kind", default: "custom", null: false
+    t.string "scope_type"
+    t.bigint "scope_id"
+    t.boolean "enabled", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
+    t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
+  end
+
   create_table "project_collaborators", force: :cascade do |t|
     t.bigint "project_id", null: false
     t.bigint "user_id", null: false
@@ -107,6 +192,16 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
     t.index ["state"], name: "index_projects_on_state"
   end
 
+  create_table "session_tools", force: :cascade do |t|
+    t.bigint "terminal_session_id", null: false
+    t.bigint "tool_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["terminal_session_id", "tool_id"], name: "index_session_tools_on_terminal_session_id_and_tool_id", unique: true
+    t.index ["terminal_session_id"], name: "index_session_tools_on_terminal_session_id"
+    t.index ["tool_id"], name: "index_session_tools_on_tool_id"
+  end
+
   create_table "terminal_sessions", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "project_id"
@@ -125,6 +220,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "route_token"
+    t.string "mcp_key"
+    t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true
     t.index ["session_type"], name: "index_terminal_sessions_on_session_type"
@@ -195,11 +292,17 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_02_160004) do
     t.index ["state"], name: "index_users_on_state"
   end
 
+  add_foreign_key "action_mcp_session_messages", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_messages_session_id", on_update: :cascade, on_delete: :cascade
+  add_foreign_key "action_mcp_session_resources", "action_mcp_sessions", column: "session_id", on_delete: :cascade
+  add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
+  add_foreign_key "action_mcp_sse_events", "action_mcp_sessions", column: "session_id"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "session_tools", "terminal_sessions"
+  add_foreign_key "session_tools", "tools"
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"

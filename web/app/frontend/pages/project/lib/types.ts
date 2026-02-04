@@ -7,6 +7,7 @@ export type ProjectTab =
   | 'config'
   | 'agents'
   | 'tools'
+  | 'mcp-servers'
   | 'settings';
 
 export interface IWorkflowParameter {

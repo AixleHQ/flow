@@ -69,7 +69,9 @@ gem "oas_rails"
 
 # gem "image_processing", "~> 1.2"
 
-gem "fast-mcp"
+# MCP (Model Context Protocol) server
+gem "actionmcp", "~> 0.80.0"
+gem "solid_mcp"
 
 group :development, :test do
   # Testing tools

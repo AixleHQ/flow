@@ -146,6 +146,7 @@ const navItems: NavItem[] = [
   { path: Routes.frontend.companyConfigItemsPath, label: 'Secrets & Variables', adminOnly: true },
   { path: Routes.frontend.companyAgentsPath, label: 'Agents', adminOnly: true },
   { path: Routes.frontend.companyToolsPath, label: 'Tools', adminOnly: true },
+  { path: Routes.frontend.companyMcpServersPath, label: 'MCP Servers', adminOnly: true },
   { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
   { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
 ];

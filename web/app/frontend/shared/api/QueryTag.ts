@@ -12,4 +12,5 @@ export enum QueryTag {
   ConfigItems = 'ConfigItems',
   Agents = 'Agents',
   Tools = 'Tools',
+  McpServers = 'McpServers',
 }

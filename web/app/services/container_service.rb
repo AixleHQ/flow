@@ -144,6 +144,10 @@ class ContainerService
       # Get agent-specific paths from adapter
       agent_service = AgentCredentialsService.for(agent_type)
 
+      # Get MCP key from session for tools access
+      terminal_session = TerminalSession.find_by(id: session_id)
+      mcp_key = terminal_session&.mcp_key
+
       # Build environment variables
       env_vars = [
         "USER_ID=#{user_id}",
@@ -153,7 +157,10 @@ class ContainerService
         "TTYD_PORT=7681",
         "WATCHER_PORT=4040",
         "TTYD_CMD=#{command_for_agent(agent_type, 'agent_session')}",
-        "HOME_DIR=#{agent_service.home_dir}"
+        "HOME_DIR=#{agent_service.home_dir}",
+        # MCP configuration for tools access
+        "MCP_SERVER_URL=#{mcp_server_url}",
+        "MCP_SESSION_KEY=#{mcp_key}"
       ]
 
       # Add agent-specific environment variables from AgentCredential metadata
@@ -416,6 +423,12 @@ class ContainerService
       paths.each_with_object({}) do |path, hash|
         hash[path] = "rw,size=50m,mode=0755,uid=#{uid},gid=#{uid}"
       end
+    end
+
+    # MCP server URL for tool access
+    # Uses internal Docker network URL for container-to-container communication
+    def mcp_server_url
+      ENV.fetch("MCP_SERVER_URL", "http://web:3000/action_mcp")
     end
 
     # Extract file from TAR archive

@@ -7,9 +7,12 @@ class TerminalSession < ApplicationRecord
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
+  has_many :session_tools, dependent: :destroy
+  has_many :tools, through: :session_tools
 
   # Callbacks
   before_create :generate_route_token
+  before_create :generate_mcp_key
   after_update :broadcast_update
 
   # Validations
@@ -24,6 +27,7 @@ class TerminalSession < ApplicationRecord
   }, allow_nil: true
   validates :state, presence: true
   validates :route_token, uniqueness: true, allow_nil: true
+  validates :mcp_key, uniqueness: true, allow_nil: true
 
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
@@ -32,10 +36,32 @@ class TerminalSession < ApplicationRecord
   scope :completed, -> { where(state: %w[collected]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
 
+  # Check if session is active (for MCP authentication)
+  def active?
+    state.in?(%w[not_started started running])
+  end
+
+  # Returns tools available for this session
+  # If tools are explicitly assigned, use those
+  # Otherwise, fall back to all enabled custom tools for the project
+  def available_tools
+    if tools.any?
+      tools.enabled
+    elsif project.present?
+      Tool.for_project(project).custom_tools.enabled
+    else
+      Tool.none
+    end
+  end
+
   private
 
   def generate_route_token
     self.route_token ||= SecureRandom.hex(16)
+  end
+
+  def generate_mcp_key
+    self.mcp_key ||= SecureRandom.urlsafe_base64(32)
   end
 
   # Broadcast updates to ActionCable subscribers

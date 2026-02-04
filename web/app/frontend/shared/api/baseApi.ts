@@ -38,11 +38,12 @@ const axiosBaseQuery =
       params?: AxiosRequestConfig['params'];
       headers?: AxiosRequestConfig['headers'];
       isDecamelize?: boolean;
+      isCamelizeResponse?: boolean;
     },
     unknown,
     unknown
   > =>
-  async ({ url, method, data, params, headers, isDecamelize = true }) => {
+  async ({ url, method, data, params, headers, isDecamelize = true, isCamelizeResponse = true }) => {
     try {
       const result = await axiosInstance({
         url: baseUrl + url,
@@ -52,7 +53,7 @@ const axiosBaseQuery =
         headers,
       });
       return {
-        data: camelcaseKeys(result.data),
+        data: isCamelizeResponse ? camelcaseKeys(result.data) : result.data,
       };
     } catch (axiosError) {
       const err = axiosError as AxiosError;

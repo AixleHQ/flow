@@ -7,6 +7,7 @@ import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
 import { AgentsPanel } from 'features/agents-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
+import { McpServersPanel } from 'features/mcp-servers-management';
 import { RunWorkflowModal } from 'features/run-workflow';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
@@ -557,6 +558,7 @@ const ProjectPage = () => {
           <Tab value="config" label="Secrets & Variables" sx={styles.tab} />
           <Tab value="agents" label="Agents" sx={styles.tab} />
           <Tab value="tools" label="Tools" sx={styles.tab} />
+          <Tab value="mcp-servers" label="MCP Servers" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
@@ -571,6 +573,7 @@ const ProjectPage = () => {
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
         {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}
         {activeTab === 'tools' && <ToolsPanel projectId={Number(projectId)} />}
+        {activeTab === 'mcp-servers' && <McpServersPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && renderSettingsTab()}
       </Box>
 
