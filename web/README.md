@@ -104,7 +104,7 @@ Unified framework for running Docker containers with Strategy Pattern:
 **Location:** `app/services/container_strategies/`
 
 **Key Components:**
-- `ContainerExecutionService` - Unified orchestrator with 8 lifecycle phases
+- `ContainerService` - Unified orchestrator with lifecycle phases
 - `BaseStrategy` - Abstract base class with timeout protection
 - `ToolExecutionStrategy` - Custom tool execution
 - `AgentAuthStrategy` - Agent authentication containers
@@ -118,7 +118,7 @@ strategy = ContainerStrategies::ToolExecutionStrategy.new(
   parameters: { query: "hello" },
   timeout: 300
 )
-result = ContainerExecutionService.execute(strategy: strategy)
+result = ContainerService.execute(strategy: strategy)
 
 # Start agent session via workflow
 ContainerWorkflowService.start_agent_session(
