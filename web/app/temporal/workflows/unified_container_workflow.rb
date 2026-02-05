@@ -25,6 +25,7 @@ module Workflows
     AGENT_PHASES_TIMEOUT = 300   # 5 minutes for phases
     IMAGE_PULL_TIMEOUT = 600     # 10 minutes
     CLEANUP_TIMEOUT = 120        # 2 minutes (includes artifact collection)
+    AGENT_SIGNAL_TIMEOUT = 82_800 # 23 hours — buffer before server-side execution timeout (24h)
 
     workflow_signal
     def container_finished
@@ -40,6 +41,7 @@ module Workflows
     def run(input)
       @finished = false
       @cancelled = false
+      @timed_out = false
 
       strategy_type = (input.strategy_type || input["strategy_type"]).to_sym
       strategy_input = input.strategy_input || input["strategy_input"]
@@ -71,8 +73,15 @@ module Workflows
       # Step 3: Wait for signal if long-running (agent sessions)
       if should_wait_for_signal?(strategy_type)
         Temporalio::Workflow.logger.info("[UnifiedWorkflow] Waiting for container_finished signal")
-        Temporalio::Workflow.wait_condition { @finished }
-        Temporalio::Workflow.logger.info("[UnifiedWorkflow] Signal received, cancelled: #{@cancelled}")
+
+        Temporalio::Workflow.timeout(AGENT_SIGNAL_TIMEOUT) do
+          Temporalio::Workflow.wait_condition { @finished }
+        rescue Timeout::Error
+          @timed_out = true
+          Temporalio::Workflow.logger.warn("[UnifiedWorkflow] Timed out waiting for signal, proceeding to cleanup")
+        end
+
+        Temporalio::Workflow.logger.info("[UnifiedWorkflow] Done waiting, cancelled: #{@cancelled}, timed_out: #{@timed_out}")
       end
 
       # Step 4: Cleanup (before_cleanup runs artifact collection via strategy)
@@ -140,8 +149,9 @@ module Workflows
         merged[:credential_id] = cleanup_result[:credential_id] || cleanup_result["credential_id"]
       end
 
-      # Add cancelled flag
+      # Add status flags
       merged[:cancelled] = @cancelled
+      merged[:timed_out] = @timed_out
 
       merged
     end
