@@ -32,13 +32,13 @@ module ContainerStrategies
       refute env_vars.any? { |v| v == "SESSION_TYPE=auth_setup" }
     end
 
-    test "builds env vars with MCP configuration" do
+    test "does not include MCP env vars (MCP configured via config files)" do
       strategy = build_strategy
 
       env_vars = strategy.build_env_vars
 
-      assert env_vars.any? { |v| v.start_with?("MCP_SERVER_URL=") }
-      assert env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
+      refute env_vars.any? { |v| v.start_with?("MCP_SERVER_URL=") }
+      refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
     test "uses session command instead of auth command" do
@@ -92,6 +92,11 @@ module ContainerStrategies
       # Expect credential.write_to_container to be called
       @credential.expects(:write_to_container).with("abc123def456")
 
+      # Stub Docker::Container.get for MCP injection (palad-tools always injected)
+      docker_container_mock = mock("docker_container")
+      docker_container_mock.stubs(:exec).returns([ [], [], 0 ])
+      Docker::Container.stubs(:get).returns(docker_container_mock)
+
       context = { container: container_mock }
       strategy.before_exec(context)
     end
@@ -108,6 +113,11 @@ module ContainerStrategies
 
       container_mock = mock("container")
       container_mock.stubs(:id).returns("abc123def456789")
+
+      # Stub Docker::Container.get for MCP injection (palad-tools always injected)
+      docker_container_mock = mock("docker_container")
+      docker_container_mock.stubs(:exec).returns([ [], [], 0 ])
+      Docker::Container.stubs(:get).returns(docker_container_mock)
 
       # write_to_container should NOT be called (no expects)
       context = { container: container_mock }

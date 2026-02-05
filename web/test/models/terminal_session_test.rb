@@ -20,8 +20,8 @@ class TerminalSessionTest < ActiveSupport::TestCase
     session = build(:terminal_session, user: @user, session_config: {
       "config_files" => { "CLAUDE.md" => "# Context" },
       "env_vars" => { "NODE_ENV" => "production" },
-      "mcp_server_ids" => [1, 2],
-      "tool_ids" => [3, 7],
+      "mcp_server_ids" => [ 1, 2 ],
+      "tool_ids" => [ 3, 7 ],
       "agent_id" => 42
     })
     assert session.valid?
@@ -64,9 +64,9 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "mcp_server_ids returns array" do
     session = build(:terminal_session, user: @user, session_config: {
-      "mcp_server_ids" => [1, 5, 12]
+      "mcp_server_ids" => [ 1, 5, 12 ]
     })
-    assert_equal [1, 5, 12], session.mcp_server_ids
+    assert_equal [ 1, 5, 12 ], session.mcp_server_ids
   end
 
   test "mcp_server_ids returns empty array when absent" do
@@ -76,9 +76,9 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "tool_ids returns array" do
     session = build(:terminal_session, user: @user, session_config: {
-      "tool_ids" => [3, 7, 14]
+      "tool_ids" => [ 3, 7, 14 ]
     })
-    assert_equal [3, 7, 14], session.tool_ids
+    assert_equal [ 3, 7, 14 ], session.tool_ids
   end
 
   test "tool_ids returns empty array when absent" do
@@ -105,7 +105,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
     tool2 = create(:tool, scope: @company)
 
     session = create(:terminal_session, user: @user, project: @project, session_config: {
-      "tool_ids" => [tool1.id, tool2.id]
+      "tool_ids" => [ tool1.id, tool2.id ]
     })
 
     assert_includes session.available_tools, tool1
@@ -129,7 +129,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
     tool = create(:tool, scope: @company)
 
     session = create(:terminal_session, user: @user, project: @project, session_config: {
-      "tool_ids" => [tool.id, 999_999]
+      "tool_ids" => [ tool.id, 999_999 ]
     })
 
     assert_equal 1, session.available_tools.count

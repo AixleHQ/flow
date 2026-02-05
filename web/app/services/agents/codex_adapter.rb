@@ -5,6 +5,10 @@ module Agents
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
+    def self.default_config_paths
+      [ "~/.codex/config.toml", "AGENTS.md" ]
+    end
+
     def config_path
       "#{home_dir}/.codex/auth.json"
     end
@@ -54,6 +58,26 @@ module Agents
         # Project trust config (skip trust dialog)
         "#{home_dir}/.codex/config.toml" => generate_config_toml(workflow_config)
       }
+    end
+
+    # MCP config: appended to ~/.codex/config.toml
+    def mcp_config(servers)
+      sections = servers.map do |s|
+        lines = []
+        lines << "[mcp_servers.\"#{s.name}\"]"
+        lines << "type = \"#{s.transport == 'sse' ? 'http' : 'stdio'}\""
+        lines << "url = \"#{s.url}\"" if s.url.present?
+        if s.headers.present? && s.headers.any?
+          header_pairs = s.headers.map { |k, v| "#{k} = \"#{v}\"" }.join(", ")
+          lines << "headers = { #{header_pairs} }"
+        end
+        lines.join("\n")
+      end
+      { "#{home_dir}/.codex/config.toml" => "# MCP Servers (auto-generated)\n#{sections.join("\n\n")}\n" }
+    end
+
+    def mcp_merge_strategy
+      :append_toml
     end
 
     private

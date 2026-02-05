@@ -9,6 +9,10 @@ module Agents
   #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal)
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
+    def self.default_config_paths
+      [ "~/.gemini/settings.json", "GEMINI.md" ]
+    end
+
     def config_path
       "#{home_dir}/.gemini/oauth_creds.json"
     end
@@ -45,6 +49,22 @@ module Agents
         # Settings per https://geminicli.com/docs/get-started/configuration/
         "#{home_dir}/.gemini/settings.json" => generate_settings.to_json
       }
+    end
+
+    # MCP config: merged into ~/.gemini/settings.json
+    def mcp_config(servers)
+      mcp_servers = {}
+      servers.each do |s|
+        entry = { "trust" => true }
+        entry["httpUrl"] = s.url if s.url.present?
+        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        mcp_servers[s.name] = entry
+      end
+      { "#{home_dir}/.gemini/settings.json" => { "mcpServers" => mcp_servers }.to_json }
+    end
+
+    def mcp_merge_strategy
+      :merge_json
     end
 
     # Directories to mount as tmpfs for credential storage

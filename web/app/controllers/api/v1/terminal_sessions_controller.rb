@@ -118,11 +118,18 @@ module Api
           :session_type,
           :agent_type,
           :project_id,
-          metadata: {}
+          metadata: {},
+          session_config: [
+            :agent_id,
+            { config_files: {}, env_vars: {}, mcp_server_ids: [], tool_ids: [] }
+          ]
         )
 
         if params.dig(:terminal_session, :session_config).present?
-          permitted[:session_config] = params[:terminal_session][:session_config].permit!.to_h
+          raw = params[:terminal_session][:session_config]
+          permitted[:session_config] = raw.to_unsafe_h.slice(
+            *TerminalSession::ALLOWED_SESSION_CONFIG_KEYS
+          )
         end
 
         permitted

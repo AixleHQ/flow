@@ -7,6 +7,10 @@ module Agents
   #   - ~/.cursor/cli-config.json (settings)
   # Auth: OAuth via Cursor (agent login)
   class CursorCliAdapter < BaseAdapter
+    def self.default_config_paths
+      [ "~/.cursor/cli-config.json", ".cursorrules" ]
+    end
+
     def config_path
       # Primary auth file
       "#{home_dir}/.config/cursor/auth.json"
@@ -51,6 +55,18 @@ module Agents
         # Workspace trust (skip trust dialog)
         "#{home_dir}/.cursor/projects#{workspace}/.workspace-trusted" => generate_workspace_trust(workspace).to_json
       }
+    end
+
+    # MCP config: /workspace/.cursor/mcp.json
+    def mcp_config(servers)
+      mcp_servers = {}
+      servers.each do |s|
+        entry = {}
+        entry["url"] = s.url if s.url.present?
+        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        mcp_servers[s.name] = entry
+      end
+      { "/workspace/.cursor/mcp.json" => { "mcpServers" => mcp_servers }.to_json }
     end
 
     # Only mount config directories as tmpfs, not entire home

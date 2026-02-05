@@ -1,6 +1,6 @@
 # Story 9.4: Connect MCP Servers to Session
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -25,40 +25,40 @@ so that the agent can access tools (internal and external) via the MCP protocol.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Add MCP config generation to SessionContextService (AC: #1, #3-5)
-  - [ ] `SessionContextService.generate_mcp_config(session)` → returns `{ path => content }` hash
-  - [ ] Per-CLI format generators:
-    - [ ] `generate_claude_mcp_config(servers)` → JSON for `.mcp.json`
-    - [ ] `generate_codex_mcp_config(servers)` → TOML for `config.toml` append
-    - [ ] `generate_gemini_mcp_config(servers)` → JSON for `settings.json` mcpServers
-    - [ ] `generate_cursor_mcp_config(servers)` → JSON for `.cursor/mcp.json`
-  - [ ] Each generator takes `MCPServer` instances and produces CLI-native format
+- [x] Task 1: Add MCP config generation to SessionContextService (AC: #1, #3-5)
+  - [x] `SessionContextService.generate_mcp_config(session)` → returns `{ path => content }` hash
+  - [x] Per-CLI format generators:
+    - [x] `build_claude_mcp(servers)` → JSON for `/workspace/.mcp.json`
+    - [x] `build_codex_mcp_toml(servers)` → TOML for `config.toml` append
+    - [x] `build_gemini_mcp_json(servers)` → JSON for `settings.json` mcpServers merge
+    - [x] `build_cursor_mcp(servers)` → JSON for `/workspace/.cursor/mcp.json`
+  - [x] Each generator takes resolved MCPServer data and produces CLI-native format
 
-- [ ] Task 2: Resolve MCP server list for session (AC: #1, #7, #8)
-  - [ ] `SessionContextService.resolve_mcp_servers(session)`
-  - [ ] Read `session.session_mcp_server_ids` (helper from Story 9.1)
-  - [ ] Load `MCPServer.where(id: ids, enabled: true)` — only enabled, skip missing
-  - [ ] Always include internal MCP servers via env vars (already handled)
-  - [ ] Log warnings for invalid/missing IDs
+- [x] Task 2: Resolve MCP server list for session (AC: #1, #7, #8)
+  - [x] `resolve_mcp_servers(session)` — private method
+  - [x] Read `session.mcp_server_ids` (renamed accessor from Story 9.1)
+  - [x] Load `MCPServer.where(id: ids, enabled: true)` — only enabled, skip missing
+  - [x] Internal MCP via env vars (already handled in build_env_vars)
+  - [x] Log warnings for invalid/missing IDs
 
-- [ ] Task 3: Resolve secrets in MCP headers (AC: #6)
-  - [ ] MCP server `headers` jsonb may contain `config_item:API_KEY` references
-  - [ ] Reuse `SessionContextService.resolve_config_item_reference` from Story 9.3
-  - [ ] Example: `{ "Authorization": "Bearer config_item:TAVILY_API_KEY" }` → resolved
+- [x] Task 3: Resolve secrets in MCP headers (AC: #6)
+  - [x] `resolve_embedded_references` handles embedded `config_item:NAME` patterns via gsub
+  - [x] Example: `"Bearer config_item:TAVILY_API_KEY"` → `"Bearer tvly-secret"`
 
-- [ ] Task 4: Integrate into AgentSessionStrategy.before_exec (AC: #2)
-  - [ ] After config files injection (Story 9.2): generate MCP config and inject
-  - [ ] Call `SessionContextService.generate_mcp_config(session)`
-  - [ ] Write generated config files to container (same write pattern as 9.2)
-  - [ ] Merge with existing config files if they already exist (don't overwrite)
+- [x] Task 4: Integrate into AgentSessionStrategy.before_exec (AC: #2)
+  - [x] Step 3 in before_exec: `SessionContextService.inject_mcp_config(container_id, session)`
+  - [x] Gemini: merges mcpServers into existing settings.json
+  - [x] Codex: appends MCP section to existing config.toml
+  - [x] Claude/Cursor: writes fresh MCP config files
 
-- [ ] Task 5: Write tests (AC: #1-8)
-  - [ ] Test MCP config generation for each CLI format
-  - [ ] Test server resolution (enabled only, skip missing)
-  - [ ] Test secret resolution in headers
-  - [ ] Test internal MCP always present via env vars
-  - [ ] Test merge with existing config files
-  - [ ] Test empty mcp_server_ids (skip gracefully)
+- [x] Task 5: Write tests (AC: #1-8)
+  - [x] Test MCP config generation for all 4 CLI formats
+  - [x] Test server resolution (enabled only, skip disabled/missing)
+  - [x] Test secret resolution in headers (embedded config_item refs)
+  - [x] Test internal MCP via env vars (covered by existing strategy tests)
+  - [x] Test merge with existing Gemini settings
+  - [x] Test append to existing Codex config.toml
+  - [x] Test empty mcp_server_ids (skip gracefully)
 
 ## Dev Notes
 
@@ -166,9 +166,25 @@ end
 ## Dev Agent Record
 
 ### Agent Model Used
+Claude claude-4.6-opus (Cursor Agent)
 
 ### Debug Log References
+- Secret resolution in headers: initial `start_with?("config_item:")` approach failed for embedded refs like `"Bearer config_item:KEY"`. Fixed with `resolve_embedded_references` using gsub pattern.
 
 ### Completion Notes List
+- Added `generate_mcp_config`, `inject_mcp_config` to SessionContextService
+- 4 per-CLI format builders: Claude JSON, Cursor JSON, Gemini JSON merge, Codex TOML append
+- `resolve_mcp_servers` filters by enabled + logs missing
+- `resolve_embedded_references` handles `config_item:NAME` anywhere in header values
+- Gemini: reads existing settings.json, deep merges mcpServers, writes back
+- Codex: reads existing config.toml, appends MCP sections
+- Integrated as step 3 in `AgentSessionStrategy.before_exec`
+- 12 tests for MCP config generation, injection, server resolution, secret resolution
 
 ### File List
+- `web/app/services/session_context_service.rb` (modified)
+- `web/app/services/container_strategies/agent_session_strategy.rb` (modified)
+- `web/test/services/session_context_service_test.rb` (modified)
+
+### Change Log
+- 2026-02-06: Story 9-4 implemented — per-CLI MCP config generation + injection with secret resolution and merge support

@@ -122,7 +122,7 @@ module Api
               session_config: {
                 config_files: { "CLAUDE.md" => "# Context" },
                 env_vars: { "NODE_ENV" => "production" },
-                mcp_server_ids: [1, 2],
+                mcp_server_ids: [ 1, 2 ],
                 tool_ids: [],
                 agent_id: 42
               }

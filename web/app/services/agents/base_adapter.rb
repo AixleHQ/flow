@@ -16,6 +16,12 @@ module Agents
       raise NotImplementedError, "#{self.class} must implement #home_dir"
     end
 
+    # Default config file paths for UI hints (path => description)
+    # @return [Array<String>]
+    def self.default_config_paths
+      []
+    end
+
     # Path to watch for auth completion (for watcher service)
     # @return [String]
     def auth_watch_path
@@ -74,6 +80,27 @@ module Agents
     # @return [Integer]
     def tmpfs_uid
       1001
+    end
+
+    # =================================================================
+    # MCP Server Configuration
+    # Each CLI has different MCP config format and file path
+    # =================================================================
+
+    # Generate MCP config files for this CLI.
+    # @param servers [Array<OpenStruct>] resolved servers with :name, :url, :transport, :headers
+    # @return [Hash<String, String>] { path => content }
+    def mcp_config(servers)
+      {}
+    end
+
+    # How to handle existing file at MCP config path.
+    # :fresh       — write new file (Claude, Cursor)
+    # :merge_json  — read existing JSON, merge mcpServers key, write back (Gemini)
+    # :append_toml — read existing TOML, append MCP section (Codex)
+    # @return [Symbol]
+    def mcp_merge_strategy
+      :fresh
     end
 
     # =================================================================

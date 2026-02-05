@@ -7,6 +7,10 @@ module Agents
   class ClaudeCodeAdapter < BaseAdapter
     CONFIG_VERSION = "2.1.14"
 
+    def self.default_config_paths
+      [ "~/.claude/settings.json", "CLAUDE.md" ]
+    end
+
     def config_path
       "#{home_dir}/.claude.json"
     end
@@ -66,6 +70,18 @@ module Agents
         # Settings to skip bypass permissions warning
         "#{home_dir}/.claude/settings.json" => generate_settings.to_json
       }
+    end
+
+    # MCP config: /workspace/.mcp.json
+    def mcp_config(servers)
+      mcp_servers = {}
+      servers.each do |s|
+        entry = { "type" => s.transport == "sse" ? "sse" : "stdio" }
+        entry["url"] = s.url if s.url.present?
+        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        mcp_servers[s.name] = entry
+      end
+      { "/workspace/.mcp.json" => { "mcpServers" => mcp_servers }.to_json }
     end
 
     # Only mount config directories as tmpfs, not entire home

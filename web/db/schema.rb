@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_06_100001) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_06_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -192,16 +192,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100001) do
     t.index ["state"], name: "index_projects_on_state"
   end
 
-  create_table "session_tools", force: :cascade do |t|
-    t.bigint "terminal_session_id", null: false
-    t.bigint "tool_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["terminal_session_id", "tool_id"], name: "index_session_tools_on_terminal_session_id_and_tool_id", unique: true
-    t.index ["terminal_session_id"], name: "index_session_tools_on_terminal_session_id"
-    t.index ["tool_id"], name: "index_session_tools_on_tool_id"
-  end
-
   create_table "terminal_sessions", force: :cascade do |t|
     t.bigint "user_id", null: false
     t.bigint "project_id"
@@ -302,8 +292,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100001) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
-  add_foreign_key "session_tools", "terminal_sessions"
-  add_foreign_key "session_tools", "tools"
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"

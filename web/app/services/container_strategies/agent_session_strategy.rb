@@ -38,12 +38,7 @@ module ContainerStrategies
       # Change TTYD_CMD to session command
       base_vars.map! { |v| v.sub(/^TTYD_CMD=.*$/, "TTYD_CMD=#{ttyd_command}") }
 
-      # Add MCP configuration
       session = TerminalSession.find(input[:session_id])
-      base_vars += [
-        "MCP_SERVER_URL=#{mcp_server_url}",
-        "MCP_SESSION_KEY=#{session.mcp_key}"
-      ]
 
       # Add agent-specific env vars from credential metadata (overrides session metadata)
       if input[:credential]&.metadata.present?
@@ -51,6 +46,10 @@ module ContainerStrategies
         agent_env_vars = agent_service.adapter.env_vars_from_metadata(input[:credential].metadata)
         agent_env_vars.each { |k, v| base_vars << "#{k}=#{v}" if v.present? }
       end
+
+      # Add session context env vars (Story 9.3)
+      context_vars = SessionContextService.resolve_env_vars(session)
+      context_vars.each { |k, v| base_vars << "#{k}=#{v}" }
 
       base_vars
     end
@@ -63,14 +62,21 @@ module ContainerStrategies
     # Load credentials into container
 
     def before_exec(context)
-      return unless input[:credential].present?
-
       container_id = context[:container].id[0..11]
-      Rails.logger.info("[AgentSession] Loading credentials into container #{container_id}")
+      session = TerminalSession.find(input[:session_id])
 
-      input[:credential].write_to_container(container_id)
+      # 1. Load credentials (existing)
+      if input[:credential].present?
+        Rails.logger.info("[AgentSession] Loading credentials into container #{container_id}")
+        input[:credential].write_to_container(container_id)
+        Rails.logger.info("[AgentSession] Credentials loaded successfully")
+      end
 
-      Rails.logger.info("[AgentSession] Credentials loaded successfully")
+      # 2. Inject config files (Story 9.2)
+      SessionContextService.inject_config_files(container_id, session)
+
+      # 3. Inject MCP config (Story 9.4) — after config files to enable merge
+      SessionContextService.inject_mcp_config(container_id, session)
     end
 
     # == Lifecycle: before_cleanup ==

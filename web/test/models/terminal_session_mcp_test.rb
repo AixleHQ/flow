@@ -46,7 +46,7 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
   test "available_tools returns tools from session_config tool_ids" do
     tool = create(:tool, scope: @company)
     session = create(:terminal_session, user: @user, project: @project, session_config: {
-      "tool_ids" => [tool.id]
+      "tool_ids" => [ tool.id ]
     })
 
     assert_includes session.available_tools, tool

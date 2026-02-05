@@ -17,6 +17,9 @@ module Workflows
       temporal_logger.stubs(:warn)
       temporal_logger.stubs(:error)
       Temporalio::Workflow.stubs(:logger).returns(temporal_logger)
+
+      # Stub Temporal workflow.timeout to just yield (not available outside workflow env)
+      Temporalio::Workflow.stubs(:timeout).yields
     end
 
     # == Tool Execution Tests ==
