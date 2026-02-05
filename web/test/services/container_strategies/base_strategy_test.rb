@@ -352,5 +352,322 @@ module ContainerStrategies
 
       assert_nil content
     end
+
+    # == pull_image Tests ==
+
+    test "pull_image returns cached when image exists" do
+      strategy = TestStrategy.new
+      Docker::Image.expects(:get).with("test-image:latest").returns(mock("image"))
+
+      result = strategy.pull_image
+
+      assert_equal :cached, result[:status]
+      assert_equal "test-image:latest", result[:image]
+      assert_equal 0, result[:duration_seconds]
+    end
+
+    test "pull_image pulls image when not cached" do
+      strategy = TestStrategy.new
+      Docker::Image.expects(:get).with("test-image:latest").raises(Docker::Error::NotFoundError, "not found")
+      Docker::Image.expects(:create).with(
+        "fromImage" => "test-image",
+        "tag" => "latest"
+      ).yields('{"status": "Pulling"}').returns(mock("image"))
+
+      result = strategy.pull_image
+
+      assert_equal :pulled, result[:status]
+      assert_equal "test-image:latest", result[:image]
+    end
+
+    test "pull_image raises error when image is blank" do
+      strategy = BaseStrategy.new
+      strategy.define_singleton_method(:resolve_image) { nil }
+
+      assert_raises(ArgumentError) do
+        strategy.pull_image
+      end
+    end
+
+    test "pull_image parses image without tag" do
+      strategy = BaseStrategy.new
+      strategy.define_singleton_method(:resolve_image) { "my-image" }
+      Docker::Image.expects(:get).with("my-image").raises(Docker::Error::NotFoundError, "not found")
+      Docker::Image.expects(:create).with(
+        "fromImage" => "my-image",
+        "tag" => "latest"
+      ).returns(mock("image"))
+
+      result = strategy.pull_image
+      assert_equal :pulled, result[:status]
+    end
+
+    # == cleanup with container_id Tests ==
+
+    test "cleanup gets container by id when container object is nil" do
+      strategy = TestStrategy.new
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.expects(:stop).with("t" => 5).once
+      container_mock.expects(:remove).once
+
+      Docker::Container.expects(:get).with("abc123").returns(container_mock)
+
+      context = { container: nil, container_id: "abc123" }
+
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
+    end
+
+    test "cleanup returns not_found when container_id lookup fails" do
+      strategy = TestStrategy.new
+      Docker::Container.expects(:get).with("missing").raises(Docker::Error::NotFoundError, "not found")
+
+      context = { container: nil, container_id: "missing" }
+
+      result = strategy.cleanup(context)
+      assert_equal :not_found, result[:status]
+    end
+
+    test "cleanup returns skipped when both container and container_id are nil" do
+      strategy = TestStrategy.new
+      context = { container: nil, container_id: nil }
+
+      result = strategy.cleanup(context)
+      assert_equal :skipped, result[:status]
+    end
+
+    # == cleanup error handling Tests ==
+
+    test "cleanup force removes on stop error" do
+      strategy = TestStrategy.new
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.expects(:stop).raises(StandardError, "timeout")
+      container_mock.expects(:remove).with(force: true).once
+
+      context = { container: container_mock }
+
+      result = strategy.cleanup(context)
+      assert_equal :force_removed, result[:status]
+    end
+
+    test "cleanup force removes on remove error" do
+      strategy = TestStrategy.new
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.expects(:stop).once
+      container_mock.expects(:remove).raises(StandardError, "error")
+      container_mock.expects(:remove).with(force: true).once
+
+      context = { container: container_mock }
+
+      result = strategy.cleanup(context)
+      assert_equal :force_removed, result[:status]
+    end
+
+    test "cleanup handles force remove failure" do
+      strategy = TestStrategy.new
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.expects(:stop).raises(StandardError, "error")
+      container_mock.expects(:remove).with(force: true).raises(StandardError, "force failed")
+
+      context = { container: container_mock }
+
+      result = strategy.cleanup(context)
+      assert_equal :failed, result[:status]
+      assert_equal "force failed", result[:error]
+    end
+
+    # == wait_for_services Tests ==
+
+    class TestStrategyWithPorts < BaseStrategy
+      def resolve_image
+        "test-image:latest"
+      end
+
+      def services_ports
+        [ 8080, 3000 ]
+      end
+    end
+
+    test "wait_for_services returns immediately when no ports" do
+      strategy = TestStrategy.new
+      container_mock = mock("container")
+
+      result = strategy.wait_for_services(container_mock)
+      assert_nil result # returns nil from empty block
+    end
+
+    test "wait_for_services checks ports" do
+      strategy = TestStrategyWithPorts.new
+      container_mock = mock("container")
+
+      # Simulate ports being open
+      container_mock.stubs(:exec).returns([ [ "open" ], [], 0 ])
+
+      result = strategy.wait_for_services(container_mock, timeout: 2)
+      assert_equal true, result
+    end
+
+    test "wait_for_services times out when ports not ready" do
+      strategy = TestStrategyWithPorts.new
+      container_mock = mock("container")
+      Rails.logger.stubs(:debug)
+
+      # Simulate ports not open
+      container_mock.stubs(:exec).returns([ [], [], 1 ])
+
+      result = strategy.wait_for_services(container_mock, timeout: 1)
+      assert_equal false, result
+    end
+
+    # == port_open? Tests ==
+
+    test "port_open? returns true when port is open" do
+      strategy = BaseStrategy.new
+      container_mock = mock("container")
+
+      # Port 8080 = 0x1F90
+      container_mock.expects(:exec).returns([ [ "open" ], [], 0 ])
+
+      assert strategy.port_open?(container_mock, 8080)
+    end
+
+    test "port_open? returns false on exec error" do
+      strategy = BaseStrategy.new
+      container_mock = mock("container")
+      Rails.logger.stubs(:debug)
+
+      container_mock.expects(:exec).raises(StandardError, "error")
+
+      refute strategy.port_open?(container_mock, 8080)
+    end
+
+    # == wait_for_container_health timeout Tests ==
+
+    test "wait_for_container_health raises on timeout" do
+      strategy = BaseStrategy.new
+      container_mock = mock("container")
+
+      container_mock.stubs(:refresh!)
+      container_mock.stubs(:json).returns({
+        "State" => { "Running" => false, "Status" => "created" }
+      })
+
+      error = assert_raises(RuntimeError) do
+        strategy.wait_for_container_health(container_mock, timeout: 0.1)
+      end
+
+      assert_match(/failed to start within/, error.message)
+    end
+
+    test "wait_for_container_health raises on dead state" do
+      strategy = BaseStrategy.new
+      container_mock = mock("container")
+
+      container_mock.stubs(:refresh!)
+      container_mock.stubs(:json).returns({
+        "State" => { "Running" => false, "Status" => "dead", "ExitCode" => 137 }
+      })
+
+      error = assert_raises(RuntimeError) do
+        strategy.wait_for_container_health(container_mock, timeout: 1)
+      end
+
+      assert_match(/exited with code 137/, error.message)
+    end
+
+    # == cleanup_image error handling Tests ==
+
+    test "cleanup_image handles image not found" do
+      strategy = TestStrategy.new
+      strategy.define_singleton_method(:remove_image_after_cleanup?) { true }
+
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.stubs(:stop)
+      container_mock.stubs(:remove)
+
+      Docker::Image.expects(:get).with("missing:latest").raises(Docker::Error::NotFoundError, "not found")
+
+      context = { container: container_mock, image: "missing:latest" }
+
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
+    end
+
+    test "cleanup_image handles generic error" do
+      strategy = TestStrategy.new
+      strategy.define_singleton_method(:remove_image_after_cleanup?) { true }
+
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
+      container_mock.stubs(:stop)
+      container_mock.stubs(:remove)
+
+      image_mock = mock("image")
+      image_mock.expects(:remove).raises(StandardError, "unknown error")
+      Docker::Image.expects(:get).with("error:latest").returns(image_mock)
+
+      context = { container: container_mock, image: "error:latest" }
+
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
+    end
+
+    # == container_limits Tests ==
+
+    test "container_limits returns defaults when Settings not defined" do
+      strategy = BaseStrategy.new
+
+      limits = strategy.container_limits
+
+      assert_equal 1024 * 1024 * 1024, limits[:memory_bytes]
+      assert_equal 50_000, limits[:cpu_quota]
+      assert_equal 100, limits[:pids_limit]
+    end
+
+    # == read_file_from_container error handling ==
+
+    test "read_file_from_container handles generic error" do
+      strategy = BaseStrategy.new
+      container_mock = mock("container")
+
+      container_mock.expects(:exec).raises(StandardError, "connection error")
+
+      content = strategy.send(:read_file_from_container, container_mock, "/test/file")
+
+      assert_nil content
+    end
+
+    # == log_pull_progress Tests ==
+
+    test "log_pull_progress handles non-string chunk" do
+      strategy = BaseStrategy.new
+      Rails.logger.stubs(:debug)
+
+      # Should not raise
+      strategy.send(:log_pull_progress, nil)
+      strategy.send(:log_pull_progress, 123)
+      assert true
+    end
+
+    test "log_pull_progress handles invalid JSON" do
+      strategy = BaseStrategy.new
+      Rails.logger.stubs(:debug)
+
+      # Should not raise
+      strategy.send(:log_pull_progress, "not json")
+      assert true
+    end
+
+    test "log_pull_progress logs status with progress" do
+      strategy = BaseStrategy.new
+      Rails.logger.expects(:debug).once
+
+      strategy.send(:log_pull_progress, '{"status": "Downloading", "progress": "50%"}')
+    end
   end
 end

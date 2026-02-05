@@ -279,5 +279,82 @@ module ContainerStrategies
       assert_equal "/workspace", context[:working_dir]
       assert context[:host_config]["Memory"] > 0
     end
+
+    # == before_cleanup Tests ==
+
+    test "before_cleanup collects output files when tool has output_paths" do
+      @tool.define_singleton_method(:output_paths) { [ "/output/result.json" ] }
+
+      container_mock = mock("container")
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      strategy.stubs(:read_file_from_container).with(container_mock, "/output/result.json").returns('{"result": "ok"}')
+
+      context = { container: container_mock }
+      strategy.before_cleanup(context)
+
+      assert context[:result][:output_files].key?("/output/result.json")
+      assert_equal '{"result": "ok"}', context[:result][:output_files]["/output/result.json"]
+    end
+
+    test "before_cleanup skips when tool has no output_paths" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+
+      container_mock = mock("container")
+      context = { container: container_mock }
+      strategy.before_cleanup(context)
+
+      # Should complete without errors
+      assert true
+    end
+
+    test "before_cleanup handles file read errors gracefully" do
+      @tool.define_singleton_method(:output_paths) { [ "/missing/file" ] }
+
+      container_mock = mock("container")
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      strategy.stubs(:read_file_from_container).raises(StandardError.new("File not found"))
+
+      context = { container: container_mock }
+      # Should not raise
+      strategy.before_cleanup(context)
+
+      assert context[:result][:output_files].empty?
+    end
+
+    # == Config Item Resolution Tests ==
+
+    test "skips missing config items" do
+      @tool.update!(required_config_items: [ "MISSING_KEY" ])
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+
+      env_vars = strategy.build_env_vars
+
+      assert_empty env_vars
+    end
+
+    test "resolves config from company when project is nil" do
+      strategy = ToolExecutionStrategy.new(tool: @tool, project: nil)
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "API_KEY=secret123"
+    end
+
+    # == Timeout Handling with Kill Error ==
+
+    test "handles container kill errors during timeout" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+
+      container_mock = mock("container")
+      container_mock.stubs(:kill).raises(StandardError.new("Already dead"))
+
+      context = { container: container_mock }
+      start_time = Time.current
+
+      # Should not raise
+      strategy.send(:handle_execution_timeout, context, start_time, 5)
+
+      assert_equal 124, context[:result][:exit_code]
+    end
   end
 end

@@ -141,6 +141,185 @@ module ContainerStrategies
       assert_equal "agent_session", strategy.send(:session_type)
     end
 
+    test "services_ports returns ttyd and file watcher ports" do
+      strategy = build_strategy
+
+      ports = strategy.send(:services_ports)
+
+      assert_includes ports, 7681 # ttyd
+      assert_includes ports, 4040 # file watcher
+    end
+
+    test "ttyd_command returns session command for claude_code" do
+      strategy = build_strategy(agent_type: "claude_code")
+
+      cmd = strategy.send(:ttyd_command)
+
+      assert_equal "claude", cmd
+    end
+
+    test "list_files_in_container returns path directly for non-glob" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      files = strategy.send(:list_files_in_container, container_mock, "/path/to/file.log")
+
+      assert_equal [ "/path/to/file.log" ], files
+    end
+
+    test "list_files_in_container executes find for glob pattern" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      # Mock find command execution
+      container_mock.expects(:exec).with(
+        [ "/bin/sh", "-c", "find /tmp -name '*.log' 2>/dev/null || true" ],
+        stdout: true,
+        stderr: true
+      ).returns([ [ "/tmp/app.log\n/tmp/error.log\n" ], [], 0 ])
+
+      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+
+      assert_equal [ "/tmp/app.log", "/tmp/error.log" ], files
+    end
+
+    test "list_files_in_container returns empty array on error" do
+      strategy = build_strategy
+      container_mock = mock("container")
+      container_mock.expects(:exec).raises(Docker::Error::DockerError.new("Exec failed"))
+
+      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+
+      assert_equal [], files
+    end
+
+    test "list_files_in_container returns empty array on non-zero exit" do
+      strategy = build_strategy
+      container_mock = mock("container")
+      container_mock.expects(:exec).returns([ [], [], 1 ])
+
+      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+
+      assert_equal [], files
+    end
+
+    # == before_cleanup with artifacts Tests ==
+
+    test "before_cleanup collects session logs when adapter supports session_log_paths" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      # Mock adapter with session_log_paths
+      mock_adapter = mock("adapter")
+      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
+      mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(false)
+      mock_adapter.stubs(:session_log_paths).returns([ "/tmp/session.log" ])
+
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).returns(mock_service)
+
+      # Mock file reading
+      strategy.stubs(:read_file_from_container).with(container_mock, "/tmp/session.log").returns("log content")
+
+      context = { container: container_mock }
+      strategy.before_cleanup(context)
+
+      assert context[:result][:artifacts]["logs/session.log"].present?
+      assert_equal "log content", context[:result][:artifacts]["logs/session.log"]
+    end
+
+    test "before_cleanup handles log collection errors gracefully" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      mock_adapter = mock("adapter")
+      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
+      mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(false)
+      mock_adapter.stubs(:session_log_paths).returns([ "/tmp/error.log" ])
+
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).returns(mock_service)
+
+      # Simulate error when reading file
+      strategy.stubs(:read_file_from_container).raises(StandardError.new("Read error"))
+
+      context = { container: container_mock }
+      # Should not raise
+      strategy.before_cleanup(context)
+
+      assert context[:result][:artifacts_count] == 0
+    end
+
+    test "before_cleanup collects output artifacts when adapter supports output_artifact_paths" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      mock_adapter = mock("adapter")
+      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
+      mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(true)
+      mock_adapter.stubs(:output_artifact_paths).returns([ "/output/*.json" ])
+
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).returns(mock_service)
+
+      # Mock list_files_in_container
+      strategy.stubs(:list_files_in_container).with(container_mock, "/output/*.json").returns([ "/output/data.json" ])
+      strategy.stubs(:read_file_from_container).with(container_mock, "/output/data.json").returns('{"result": "ok"}')
+
+      context = { container: container_mock }
+      strategy.before_cleanup(context)
+
+      assert context[:result][:artifacts]["/output/data.json"].present?
+      assert_equal '{"result": "ok"}', context[:result][:artifacts]["/output/data.json"]
+    end
+
+    test "before_cleanup handles file listing errors gracefully" do
+      strategy = build_strategy
+      container_mock = mock("container")
+
+      mock_adapter = mock("adapter")
+      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
+      mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(true)
+      mock_adapter.stubs(:output_artifact_paths).returns([ "/error/*.json" ])
+
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).returns(mock_service)
+
+      # list_files_in_container raises error
+      strategy.stubs(:list_files_in_container).raises(StandardError.new("List error"))
+
+      context = { container: container_mock }
+      # Should not raise
+      strategy.before_cleanup(context)
+
+      assert context[:result].present?
+    end
+
+    # == Credential metadata env vars ==
+
+    test "builds env vars with credential metadata for gemini" do
+      @session.update!(agent_type: "gemini_cli")
+      @credential.update!(agent_type: "gemini_cli", metadata: { "google_cloud_project" => "my-project" })
+      strategy = build_strategy(agent_type: "gemini_cli")
+
+      env_vars = strategy.build_env_vars
+
+      assert env_vars.any? { |v| v == "GOOGLE_CLOUD_PROJECT=my-project" }
+    end
+
+    test "builds env vars skips blank credential metadata values" do
+      @credential.update!(metadata: { "empty_key" => "" })
+      strategy = build_strategy
+
+      env_vars = strategy.build_env_vars
+
+      refute env_vars.any? { |v| v.start_with?("empty_key=") }
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code", credential: nil)

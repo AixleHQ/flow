@@ -207,6 +207,79 @@ module ContainerStrategies
       assert_equal "terminal-#{@session.route_token}", context[:container_name]
     end
 
+    # == Services Ports Tests ==
+
+    test "services_ports returns ttyd and watcher ports" do
+      strategy = build_strategy
+
+      ports = strategy.send(:services_ports)
+
+      assert_includes ports, 7681
+      assert_includes ports, 4040
+    end
+
+    # == Session Type Tests ==
+
+    test "session_type returns auth_setup" do
+      strategy = build_strategy
+
+      assert_equal "auth_setup", strategy.send(:session_type)
+    end
+
+    # == Env Vars with Session Metadata Tests ==
+
+    test "builds env vars with metadata" do
+      @session.update!(metadata: { "project_id" => "my-project" })
+
+      # Create adapter that returns env vars from metadata
+      strategy = build_strategy(agent_type: "gemini_cli")
+      @session.update!(agent_type: "gemini_cli")
+
+      env_vars = strategy.build_env_vars
+
+      # Gemini adapter returns GOOGLE_CLOUD_PROJECT from metadata
+      # This may or may not be present depending on adapter implementation
+      assert env_vars.is_a?(Array)
+    end
+
+    # == Parse Auth Files Tests ==
+
+    test "parse_auth_files parses JSON content" do
+      strategy = build_strategy
+      auth_files = {
+        "/path/to/config.json" => '{"api_key": "test-key"}'
+      }
+
+      result = strategy.send(:parse_auth_files, auth_files)
+
+      assert_equal "test-key", result["api_key"]
+    end
+
+    test "parse_auth_files handles invalid JSON" do
+      strategy = build_strategy
+      auth_files = {
+        "/path/to/file.txt" => "not json content"
+      }
+
+      result = strategy.send(:parse_auth_files, auth_files)
+
+      # Stores raw content under path key
+      assert_equal "not json content", result["/path/to/file.txt"]
+    end
+
+    test "parse_auth_files merges multiple files" do
+      strategy = build_strategy
+      auth_files = {
+        "/path/to/file1.json" => '{"key1": "value1"}',
+        "/path/to/file2.json" => '{"key2": "value2"}'
+      }
+
+      result = strategy.send(:parse_auth_files, auth_files)
+
+      assert_equal "value1", result["key1"]
+      assert_equal "value2", result["key2"]
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code")

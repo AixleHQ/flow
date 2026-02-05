@@ -4,6 +4,8 @@ require "simplecov"
 
 SimpleCov.start("rails") do
   add_filter "app/dashboards/audited/audit_dashboard.rb"
+  enable_coverage :branch
+  primary_coverage :line
 end
 
 require_relative "../config/environment"
