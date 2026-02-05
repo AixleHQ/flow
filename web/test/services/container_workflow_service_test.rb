@@ -12,6 +12,11 @@ class ContainerWorkflowServiceTest < ActiveSupport::TestCase
     ContainerWorkflowService.instance_variable_set(:@workflow, nil)
   end
 
+  teardown do
+    # Clean up memoized state and mocks
+    ContainerWorkflowService.instance_variable_set(:@workflow, nil)
+  end
+
   def create_test_objects
     @company = create(:company)
     @user = create(:user, company: @company)

@@ -125,7 +125,7 @@ module ContainerStrategies
 
     # Ports to check for service readiness
     def services_ports
-      [7681, 4040] # ttyd and file watcher
+      [ 7681, 4040 ] # ttyd and file watcher
     end
 
     def session_type

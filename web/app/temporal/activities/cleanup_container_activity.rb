@@ -45,10 +45,10 @@ module Activities
       # Step 2: cleanup (stop + remove container)
       cleanup_result = if strategy
                          strategy.cleanup(context)
-                       else
+      else
                          # Fallback: direct cleanup without strategy
                          cleanup_without_strategy(container_id)
-                       end
+      end
       result[:status] = cleanup_result[:status]
 
       # Step 3: Update session state

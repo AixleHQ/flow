@@ -150,12 +150,14 @@ module ContainerStrategies
       strategy = TestStrategy.new
       container_mock = mock("container")
 
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.expects(:stop).with("t" => 5).once
       container_mock.expects(:remove).once
 
       context = { container: container_mock }
 
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
     end
 
     test "cleanup handles missing container gracefully" do
@@ -171,26 +173,27 @@ module ContainerStrategies
       strategy = TestStrategy.new
       container_mock = mock("container")
 
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.expects(:stop).raises(Docker::Error::NotFoundError, "not found")
-      container_mock.expects(:remove).once
 
       context = { container: container_mock }
 
-      # Should not raise
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :not_found, result[:status]
     end
 
     test "cleanup handles NotFoundError on remove" do
       strategy = TestStrategy.new
       container_mock = mock("container")
 
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.expects(:stop).once
       container_mock.expects(:remove).raises(Docker::Error::NotFoundError, "not found")
 
       context = { container: container_mock }
 
-      # Should not raise
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :not_found, result[:status]
     end
 
     test "cleanup removes image when remove_image_after_cleanup? is true" do
@@ -198,6 +201,7 @@ module ContainerStrategies
       strategy.define_singleton_method(:remove_image_after_cleanup?) { true }
 
       container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.expects(:stop).once
       container_mock.expects(:remove).once
 
@@ -207,13 +211,15 @@ module ContainerStrategies
 
       context = { container: container_mock, image: "test-image:latest" }
 
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
     end
 
     test "cleanup does not remove image by default" do
       strategy = TestStrategy.new
 
       container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.expects(:stop).once
       container_mock.expects(:remove).once
 
@@ -222,7 +228,8 @@ module ContainerStrategies
 
       context = { container: container_mock, image: "test-image:latest" }
 
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
     end
 
     test "cleanup handles image in use by another container" do
@@ -230,6 +237,7 @@ module ContainerStrategies
       strategy.define_singleton_method(:remove_image_after_cleanup?) { true }
 
       container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123456789")
       container_mock.stubs(:stop)
       container_mock.stubs(:remove)
 
@@ -239,8 +247,8 @@ module ContainerStrategies
 
       context = { container: container_mock, image: "busy-image:latest" }
 
-      # Should not raise
-      strategy.cleanup(context)
+      result = strategy.cleanup(context)
+      assert_equal :cleaned_up, result[:status]
     end
 
     # == Template Methods Tests ==

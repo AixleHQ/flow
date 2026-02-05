@@ -22,7 +22,7 @@ module Activities
     test "cleans up container successfully via strategy" do
       container_mock = mock("container")
       container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([[], [], 1]) # No auth files found
+      container_mock.stubs(:exec).returns([ [], [], 1 ]) # No auth files found
       container_mock.expects(:stop).with("t" => 5)
       container_mock.expects(:remove)
 
@@ -55,7 +55,7 @@ module Activities
     test "force removes on stop error" do
       container_mock = mock("container")
       container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([[], [], 1])
+      container_mock.stubs(:exec).returns([ [], [], 1 ])
       container_mock.expects(:stop).raises(Docker::Error::DockerError.new("stop failed"))
       container_mock.expects(:remove).with(force: true)
 
@@ -76,7 +76,7 @@ module Activities
     test "updates session status after cleanup" do
       container_mock = mock("container")
       container_mock.stubs(:id).returns(@session.container_id + "000000")
-      container_mock.stubs(:exec).returns([[], [], 1])
+      container_mock.stubs(:exec).returns([ [], [], 1 ])
       container_mock.expects(:stop).with("t" => 5)
       container_mock.expects(:remove)
 
@@ -158,7 +158,7 @@ module Activities
     test "handles string keys in input" do
       container_mock = mock("container")
       container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([[], [], 1])
+      container_mock.stubs(:exec).returns([ [], [], 1 ])
       container_mock.expects(:stop).with("t" => 5)
       container_mock.expects(:remove)
 

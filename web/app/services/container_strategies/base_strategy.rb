@@ -316,7 +316,7 @@ module ContainerStrategies
     # Check if port is open inside container
     def port_open?(container, port)
       # Use netstat/ss to check if port is listening
-      result = container.exec(["sh", "-c", "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -q ':#{port.to_s(16).upcase.rjust(4, '0')} ' && echo 'open'"])
+      result = container.exec([ "sh", "-c", "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -q ':#{port.to_s(16).upcase.rjust(4, '0')} ' && echo 'open'" ])
       result[0].join.include?("open")
     rescue StandardError => e
       Rails.logger.debug("[#{self.class.name}] Port check error: #{e.message}")
@@ -469,9 +469,9 @@ module ContainerStrategies
     def parse_image_reference(image)
       if image.include?(":")
         parts = image.rpartition(":")
-        [parts[0], parts[2]]
+        [ parts[0], parts[2] ]
       else
-        [image, "latest"]
+        [ image, "latest" ]
       end
     end
 

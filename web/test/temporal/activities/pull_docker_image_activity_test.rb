@@ -80,7 +80,7 @@ module Activities
       )
 
       image = @tool.docker_image
-      image_name, tag = image.include?(":") ? image.rpartition(":").values_at(0, 2) : [image, "latest"]
+      image_name, tag = image.include?(":") ? image.rpartition(":").values_at(0, 2) : [ image, "latest" ]
 
       # Image not found locally
       Docker::Image.expects(:get).with(image).raises(Docker::Error::NotFoundError)

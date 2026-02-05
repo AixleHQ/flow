@@ -4,8 +4,6 @@ import { useSnackbar } from 'notistack';
 import { useState } from 'react';
 
 import { CostAnalytics } from 'features/cost-analytics';
-import { MCPConfigPanel } from 'features/mcp-config';
-import { ToolConfigPanel } from 'features/tools-config';
 
 interface IIntegration {
   id: string;
@@ -383,30 +381,6 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
         </Typography>
 
         <CostAnalytics projectId={projectId} />
-      </Box>
-
-      <Divider sx={styles.divider} />
-
-      {/* Agent Tools Configuration */}
-      <Box sx={styles.section}>
-        <Typography sx={styles.sectionTitle}>Agent Tools</Typography>
-        <Typography sx={styles.sectionDescription}>
-          Configure which tools each agent can use during workflow execution.
-        </Typography>
-
-        <ToolConfigPanel agentType="claude_code" />
-      </Box>
-
-      <Divider sx={styles.divider} />
-
-      {/* MCP Servers Configuration */}
-      <Box sx={styles.section}>
-        <Typography sx={styles.sectionTitle}>MCP Servers</Typography>
-        <Typography sx={styles.sectionDescription}>
-          Configure Model Context Protocol servers to provide tools and resources to agents.
-        </Typography>
-
-        <MCPConfigPanel />
       </Box>
     </Box>
   );

@@ -15,9 +15,8 @@ export const configItemsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyConfigItemsPath(),
         method: 'GET',
       }),
-      transformResponse: (response: ConfigItem[] | ConfigItemsResponse) => {
-        // Handle both array and object with items
-        return Array.isArray(response) ? response : response.items;
+      transformResponse: (response: ConfigItemsResponse) => {
+        return response.items;
       },
       providesTags: [QueryTag.ConfigItems],
     }),
@@ -25,11 +24,11 @@ export const configItemsApi = baseApi.injectEndpoints({
     // Project-level config items (merged list)
     getProjectConfigItems: builder.query<ConfigItem[], number>({
       query: (projectId) => ({
-        url: Routes.backend.apiV1CompanyProjectPath(projectId),
+        url: Routes.backend.apiV1CompanyProjectConfigItemsPath(projectId),
         method: 'GET',
       }),
-      transformResponse: (response: ConfigItem[] | ConfigItemsResponse) => {
-        return Array.isArray(response) ? response : response.items;
+      transformResponse: (response: ConfigItemsResponse) => {
+        return response.items;
       },
       providesTags: [QueryTag.ConfigItems],
     }),
@@ -46,7 +45,7 @@ export const configItemsApi = baseApi.injectEndpoints({
 
     createProjectConfigItem: builder.mutation<ConfigItem, { projectId: number } & CreateConfigItemRequest>({
       query: ({ projectId, ...data }) => ({
-        url: Routes.backend.apiV1CompanyProjectPath(projectId),
+        url: Routes.backend.apiV1CompanyProjectConfigItemsPath(projectId),
         method: 'POST',
         data: { configItem: data },
       }),
