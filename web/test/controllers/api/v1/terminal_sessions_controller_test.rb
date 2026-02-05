@@ -109,6 +109,45 @@ module Api
         assert_response :unprocessable_entity
       end
 
+      # CREATE with session_config tests
+      test "#create creates session with session_config" do
+        project = create(:project, owner: @user, company: @company)
+
+        assert_difference -> { TerminalSession.count }, 1 do
+          post :create, params: {
+            terminal_session: {
+              session_type: "agent_session",
+              agent_type: "claude_code",
+              project_id: project.id,
+              session_config: {
+                config_files: { "CLAUDE.md" => "# Context" },
+                env_vars: { "NODE_ENV" => "production" },
+                mcp_server_ids: [1, 2],
+                tool_ids: [],
+                agent_id: 42
+              }
+            }
+          }
+        end
+
+        assert_response :created
+        data = json["data"]
+        assert_not_nil data["session_config"]
+        assert_equal "# Context", data["session_config"]["config_files"]["CLAUDE.md"]
+        assert_equal "production", data["session_config"]["env_vars"]["NODE_ENV"]
+      end
+
+      test "#show includes session_config in response" do
+        session = create(:terminal_session, :with_session_config, user: @user)
+
+        get :show, params: { id: session.id }
+        assert_response :success
+
+        data = json["data"]
+        assert data.key?("session_config")
+        assert_equal 42, data["session_config"]["agent_id"]
+      end
+
       # UPDATE tests
       test "#update can modify session metadata" do
         session = create(:terminal_session, user: @user, metadata: { theme: "light" })

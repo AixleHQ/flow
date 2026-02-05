@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_02_04_170001) do
+ActiveRecord::Schema[8.0].define(version: 2026_02_06_100001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -221,6 +221,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_04_170001) do
     t.datetime "updated_at", null: false
     t.string "route_token"
     t.string "mcp_key"
+    t.jsonb "session_config", default: {}, null: false
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
     t.index ["project_id"], name: "index_terminal_sessions_on_project_id"
     t.index ["route_token"], name: "index_terminal_sessions_on_route_token", unique: true

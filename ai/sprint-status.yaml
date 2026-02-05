@@ -125,11 +125,11 @@ development_status:
   # PHASE 4+: SESSION CONTEXT
   # ============================================
 
-  epic-9-session-context: backlog  # Session Context (Phase 4+)
-  9-1-configure-session-context-per-cli-type: backlog
-  9-2-inject-config-files-into-container: backlog
-  9-3-inject-environment-variables-with-secrets: backlog
-  9-4-connect-mcp-servers-to-session: backlog
+  epic-9-session-context: in-progress  # Session Context (Phase 4+)
+  9-1-configure-session-context-per-cli-type: review
+  9-2-inject-config-files-into-container: ready-for-dev
+  9-3-inject-environment-variables-with-secrets: ready-for-dev
+  9-4-connect-mcp-servers-to-session: ready-for-dev
   9-5-skills-crud-with-scoping: backlog  # Skill model, migration, API controller, serializer, policy, company/project polymorphic scope (like agents/tools pattern)
   9-6-inject-agent-skills-into-container: backlog  # Per-CLI format transform (SKILL.md/extensions/toml), write to container filesystem at session start
   9-7-mcp-descriptions-in-session-context: backlog  # Generate MCP server+tool descriptions, inject into CLI context files (CLAUDE.md/AGENTS.md/GEMINI.md/.cursorrules)

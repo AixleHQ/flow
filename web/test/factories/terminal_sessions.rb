@@ -13,6 +13,7 @@ FactoryBot.define do
     artifacts_path { nil }
     error_message { nil }
     metadata { {} }
+    session_config { {} }
     started_at { nil }
     finished_at { nil }
     collected_at { nil }
@@ -39,6 +40,18 @@ FactoryBot.define do
 
     trait :agent_session do
       session_type { "agent_session" }
+    end
+
+    trait :with_session_config do
+      session_config do
+        {
+          "config_files" => { "CLAUDE.md" => "# Context" },
+          "env_vars" => { "NODE_ENV" => "production" },
+          "mcp_server_ids" => [1, 2],
+          "tool_ids" => [],
+          "agent_id" => 42
+        }
+      end
     end
 
     # == State Traits ==

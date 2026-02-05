@@ -15,6 +15,7 @@ module Api
                  :artifacts_path,
                  :error_message,
                  :metadata,
+                 :session_config,
                  :started_at,
                  :finished_at,
                  :collected_at,

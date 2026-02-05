@@ -7,8 +7,6 @@ class TerminalSession < ApplicationRecord
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
-  has_many :session_tools, dependent: :destroy
-  has_many :tools, through: :session_tools
 
   # Callbacks
   before_create :generate_route_token
@@ -28,6 +26,7 @@ class TerminalSession < ApplicationRecord
   validates :state, presence: true
   validates :route_token, uniqueness: true, allow_nil: true
   validates :mcp_key, uniqueness: true, allow_nil: true
+  validate :validate_session_config
 
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
@@ -36,17 +35,41 @@ class TerminalSession < ApplicationRecord
   scope :completed, -> { where(state: %w[collected]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
 
+  # == session_config accessors ==
+
+  ALLOWED_SESSION_CONFIG_KEYS = %w[config_files env_vars mcp_server_ids tool_ids agent_id].freeze
+
+  def config_files
+    session_config["config_files"] || {}
+  end
+
+  def env_vars
+    session_config["env_vars"] || {}
+  end
+
+  def mcp_server_ids
+    session_config["mcp_server_ids"] || []
+  end
+
+  def tool_ids
+    session_config["tool_ids"] || []
+  end
+
+  def configured_agent_id
+    session_config["agent_id"]
+  end
+
   # Check if session is active (for MCP authentication)
   def active?
     state.in?(%w[not_started started running])
   end
 
   # Returns tools available for this session
-  # If tools are explicitly assigned, use those
+  # If tool_ids specified in session_config, use those
   # Otherwise, fall back to all enabled custom tools for the project
   def available_tools
-    if tools.any?
-      tools.enabled
+    if tool_ids.any?
+      Tool.where(id: tool_ids).enabled
     elsif project.present?
       Tool.for_project(project).custom_tools.enabled
     else
@@ -62,6 +85,20 @@ class TerminalSession < ApplicationRecord
 
   def generate_mcp_key
     self.mcp_key ||= SecureRandom.urlsafe_base64(32)
+  end
+
+  def validate_session_config
+    return if session_config.blank?
+
+    unless session_config.is_a?(Hash)
+      errors.add(:session_config, "must be a Hash")
+      return
+    end
+
+    unknown_keys = session_config.keys - ALLOWED_SESSION_CONFIG_KEYS
+    if unknown_keys.any?
+      errors.add(:session_config, "contains unknown keys: #{unknown_keys.join(', ')}")
+    end
   end
 
   # Broadcast updates to ActionCable subscribers

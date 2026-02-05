@@ -114,12 +114,18 @@ module Api
       end
 
       def session_params
-        params.require(:terminal_session).permit(
+        permitted = params.require(:terminal_session).permit(
           :session_type,
           :agent_type,
           :project_id,
           metadata: {}
         )
+
+        if params.dig(:terminal_session, :session_config).present?
+          permitted[:session_config] = params[:terminal_session][:session_config].permit!.to_h
+        end
+
+        permitted
       end
 
       def update_params

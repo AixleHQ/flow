@@ -43,22 +43,23 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
     end
   end
 
-  test "available_tools returns assigned tools when present" do
+  test "available_tools returns tools from session_config tool_ids" do
     tool = create(:tool, scope: @company)
-    session = create(:terminal_session, user: @user, project: @project)
-    session.tools << tool
+    session = create(:terminal_session, user: @user, project: @project, session_config: {
+      "tool_ids" => [tool.id]
+    })
 
     assert_includes session.available_tools, tool
   end
 
-  test "available_tools returns project tools when no tools assigned" do
+  test "available_tools returns project tools when no tool_ids" do
     tool = create(:tool, scope: @project)
     session = create(:terminal_session, user: @user, project: @project)
 
     assert_includes session.available_tools, tool
   end
 
-  test "available_tools returns empty when no project and no tools" do
+  test "available_tools returns empty when no project and no tool_ids" do
     session = build(:terminal_session, user: @user, project: nil)
 
     assert_empty session.available_tools
