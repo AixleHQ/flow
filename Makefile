@@ -1,10 +1,22 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents help
+.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-apply kube-rm help
 
 # Setup project in one command
 setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
+
+# Apply Kubernetes manifests
+kube-setup:
+	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
+
+# Apply Kubernetes manifests only
+kube-apply:
+	kubectl apply -f /workspaces/palad-app/kube
+
+# Remove Kubernetes manifests
+kube-rm:
+	kubectl delete -f /workspaces/palad-app/kube
 
 # Run all main services
 up:
@@ -82,6 +94,9 @@ build-agents:
 help:
 	@echo "Available commands:"
 	@echo "  make setup                  - Setup project in one command"
+	@echo "  make kube-setup             - Apply Kubernetes manifests"
+	@echo "  make kube-apply             - Apply Kubernetes manifests only"
+	@echo "  make kube-rm                - Delete Kubernetes manifests"
 	@echo "  make up                     - Run all main services"
 	@echo "  make workers                - Run workers (3 Python + 1 Ruby)"
 	@echo "  make shell-web              - Open shell in web container"
