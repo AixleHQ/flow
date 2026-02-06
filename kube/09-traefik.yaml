@@ -92,17 +92,3 @@ spec:
     - name: dashboard
       port: 8090
       targetPort: 8090
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: traefik-dashboard
-  namespace: palad
-spec:
-  type: LoadBalancer
-  selector:
-    app: traefik
-  ports:
-    - name: dashboard-https
-      port: 443
-      targetPort: 8090

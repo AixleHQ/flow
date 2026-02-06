@@ -5,10 +5,11 @@ metadata:
   namespace: palad
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
-    - match: PathPrefix(`/api`)
+    - match: PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
           port: 4000
+  tls: {}
