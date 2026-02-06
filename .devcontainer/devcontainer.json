@@ -1,22 +1,16 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-docker-compose
+// For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "Existing Docker Compose (Extend)",
+	"name": "Palad Devcontainer",
 
-	// Update the 'dockerComposeFile' list if you have more compose files or use different names.
-	// The .devcontainer/docker-compose.yml file contains any overrides you need/want to make.
-	"dockerComposeFile": [
-		"../docker-compose.yml",
-		"docker-compose.yml"
-	],
-
-	// The 'service' property is the name of the service for the container that VS Code should
-	// use. Update this value and .devcontainer/docker-compose.yml to the real service name.
-	"service": "web",
+	"build": {
+		"dockerfile": "../web/Dockerfile",
+		"context": ".."
+	},
 
 	// The optional 'workspaceFolder' property is the path VS Code should open by default when
-	// connected. This is typically a file mount in .devcontainer/docker-compose.yml
+	// connected.
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
 
 	// Mount host kube config for Orbstack K8s access
 	"mounts": [
@@ -27,14 +21,20 @@
 		"KUBECONFIG": "/root/.kube/config"
 	},
 
+	// Ensure Orbstack hostnames resolve inside the container
+	"runArgs": [
+		"--add-host=k8s.orb.local:host-gateway",
+		"--add-host=docker.orb.local:host-gateway",
+		"--add-host=orbstack:host-gateway"
+	],
+
 	// Install kubectl/helm/minikube on Alpine-based image
 	"postCreateCommand": "bash .devcontainer/install-k8s-tools.sh",
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
 
-	// Uncomment the next line if you want start specific services in your Docker Compose config.
-	"runServices": ["web"]
+	// "runServices": []
 
 	// Uncomment the next line if you want to keep your containers running after VS Code shuts down.
 	// "shutdownAction": "none",
