@@ -16,10 +16,19 @@
 
 	// The optional 'workspaceFolder' property is the path VS Code should open by default when
 	// connected. This is typically a file mount in .devcontainer/docker-compose.yml
-	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}"
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
+	// Mount host kube config for Orbstack K8s access
+	"mounts": [
+		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached"
+	],
+
+	"containerEnv": {
+		"KUBECONFIG": "/root/.kube/config"
+	},
+
+	// Install kubectl/helm/minikube on Alpine-based image
+	"postCreateCommand": "bash .devcontainer/install-k8s-tools.sh"
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],

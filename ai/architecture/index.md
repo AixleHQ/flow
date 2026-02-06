@@ -72,6 +72,7 @@
       - [7. Frontend Components](./implementation-updates-2026-01-23.md#7-frontend-components)
       - [8. Adding New Agent Types](./implementation-updates-2026-01-23.md#8-adding-new-agent-types)
   - [Container Execution Framework (Epic 8)](./container-execution-framework-epic-8.md)
+  - [Container Runtime: Pluggable Docker + Kubernetes Pods (Epic 14)](./container-runtime-k8s-pods.md)
   - [Workflow System](./workflow-system.md)
     - [Key Concepts](./workflow-system.md#key-concepts)
     - [Workspace Structure](./workflow-system.md#workspace-structure)

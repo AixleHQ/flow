@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: palad-runtime
+  namespace: palad
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: palad-runtime
+  namespace: palad
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "services"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  - apiGroups: ["traefik.io"]
+    resources: ["ingressroutes", "middlewares"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: palad-runtime
+  namespace: palad
+subjects:
+  - kind: ServiceAccount
+    name: palad-runtime
+    namespace: palad
+roleRef:
+  kind: Role
+  name: palad-runtime
+  apiGroup: rbac.authorization.k8s.io

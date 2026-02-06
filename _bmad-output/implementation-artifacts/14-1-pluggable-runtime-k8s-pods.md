@@ -35,7 +35,18 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ## Tasks
 
-### Task 1: Define Runtime Interface (AC: 1)
+### Task 1: Run Application in Cluster (PoC)
+
+- [ ] Create `palad` namespace
+- [ ] Deploy Postgres, Redis, Temporal, Temporal UI
+- [ ] Deploy Rails app (`web`) with Service
+- [ ] Deploy `worker-ruby` with ServiceAccount
+- [ ] Deploy Traefik (CRDs + RBAC + ForwardAuth)
+- [ ] Configure `terminal-auth` middleware to call in-cluster Rails
+- [ ] Set `Settings.traefik.ws_base` to Traefik external URL
+- [ ] Set `Settings.container_runtime = k8s`
+
+### Task 2: Define Runtime Interface (AC: 1)
 
 - [ ] Create `app/services/container_runtime/base_runtime.rb`:
   - `pull_image(image)`
@@ -47,14 +58,14 @@ So that execution can run locally via Docker or via Kubernetes without changing 
   - `remove_container(id)`
   - `wait_for_ready(id, ports)`
 
-### Task 2: Implement DockerRuntime (AC: 2)
+### Task 3: Implement DockerRuntime (AC: 2)
 
 - [ ] Create `app/services/container_runtime/docker_runtime.rb`:
   - Wrap current Docker API operations
   - Preserve timeouts and error handling
   - Return the same results as current `BaseStrategy` helpers
 
-### Task 3: Implement KubernetesRuntime (AC: 3, 4, 5)
+### Task 4: Implement KubernetesRuntime (AC: 3, 4, 5)
 
 - [ ] Create `app/services/container_runtime/kubernetes_runtime.rb`:
   - Create Pod with same env vars and commands
@@ -64,24 +75,24 @@ So that execution can run locally via Docker or via Kubernetes without changing 
   - Exec into Pod for file reads and artifact collection
   - Delete Pod + Service + IngressRoute on cleanup
 
-### Task 4: Wire Runtime Selection (AC: 6)
+### Task 5: Wire Runtime Selection (AC: 6)
 
 - [ ] Add config: `Settings.container_runtime` (docker | k8s)
 - [ ] Update `ContainerService` and `BaseStrategy` to use runtime adapter
 
-### Task 5: Update Strategies (AC: 2, 3, 4, 5)
+### Task 6: Update Strategies (AC: 2, 3, 4, 5)
 
 - [ ] Replace direct Docker calls with runtime API
 - [ ] Keep strategy outputs unchanged
 - [ ] Ensure routing URLs remain the same
 
-### Task 6: Orbstack Kubernetes Setup (AC: 3, 4)
+### Task 7: Orbstack Kubernetes Setup (AC: 3, 4)
 
 - [ ] Add minimal manifests for Traefik + RBAC
 - [ ] Add example namespace + service account
 - [ ] Document local setup steps
 
-### Task 7: Verification (AC: 3)
+### Task 8: Verification (AC: 3)
 
 - [ ] Auth flow: terminal + watcher, credentials extraction
 - [ ] Session flow: credential injection + artifact collection

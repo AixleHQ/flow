@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-ruby
+  namespace: palad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker-ruby
+  template:
+    metadata:
+      labels:
+        app: worker-ruby
+    spec:
+      serviceAccountName: palad-runtime
+      containers:
+        - name: worker-ruby
+          image: web:latest
+          command: ["bin/temporal_worker"]
+          env:
+            - name: RAILS_ENV
+              value: development
+            - name: RAILS_LOG_TO_STDOUT
+              value: "true"
+            - name: DB_HOST
+              value: db
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USERNAME
+              value: postgres
+            - name: DB_PASSWORD
+              value: postgres
+            - name: DB_NAME
+              value: palad_development
+            - name: REDIS_URL
+              value: redis://redis:6379/1
+            - name: TEMPORAL_ENABLED
+              value: "true"
+            - name: TEMPORAL_DEBUG
+              value: "true"
+            - name: TEMPORAL_HOST
+              value: temporal
+            - name: TEMPORAL_PORT
+              value: "7233"
+            - name: TEMPORAL_NAMESPACE
+              value: default
+            - name: TEMPORAL_TASK_QUEUE
+              value: palad_ruby
+          volumeMounts:
+            - name: workflows
+              mountPath: /app/app/temporal/workflows.yml
+              subPath: workflows.yml
+      volumes:
+        - name: workflows
+          configMap:
+            name: palad-workflows
