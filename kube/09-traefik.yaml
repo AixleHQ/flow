@@ -64,12 +64,15 @@ spec:
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
+            - "--entrypoints.temporal.address=:8080"
             - "--log.level=DEBUG"
           ports:
             - name: web
               containerPort: 80
             - name: websecure
               containerPort: 443
+            - name: temporal
+              containerPort: 8080
             - name: dashboard
               containerPort: 8090
 ---
@@ -89,6 +92,9 @@ spec:
     - name: websecure
       port: 443
       targetPort: 443
+    - name: temporal
+      port: 8080
+      targetPort: 8080
     - name: dashboard
       port: 8090
       targetPort: 8090

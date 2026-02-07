@@ -13,51 +13,14 @@ spec:
       labels:
         app: web
     spec:
+      serviceAccountName: palad-runtime
       containers:
         - name: web
           image: web
           imagePullPolicy: IfNotPresent
-          env:
-            - name: RAILS_ENV
-              value: development
-            - name: RAILS_PORT
-              value: "4000"
-            - name: RAILS_LOG_TO_STDOUT
-              value: "true"
-            - name: RAILS_SECRET_KEY_BASE
-              value: secret
-            - name: DB_HOST
-              value: db
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USERNAME
-              value: postgres
-            - name: DB_PASSWORD
-              value: postgres
-            - name: DB_NAME
-              value: palad_development
-            - name: REDIS_URL
-              value: redis://redis:6379/1
-            - name: TEMPORAL_ENABLED
-              value: "true"
-            - name: TEMPORAL_HOST
-              value: temporal
-            - name: TEMPORAL_PORT
-              value: "7233"
-            - name: TEMPORAL_NAMESPACE
-              value: default
-            - name: TEMPORAL_TASK_QUEUE
-              value: palad_ruby
-            - name: TEMPORAL_UI_URL
-              value: http://temporal-ui:8080
-            - name: TRAEFIK_WS_BASE
-              value: ws://localhost
-            - name: TRAEFIK_HTTP_BASE
-              value: http://localhost
-            - name: TRAEFIK_DASHBOARD_URL
-              value: http://localhost:8090
-            - name: TRAEFIK_CORS_ORIGINS
-              value: http://localhost:4000,http://localhost
+          envFrom:
+            - configMapRef:
+                name: palad-app-config
           ports:
             - containerPort: 4000
           volumeMounts:

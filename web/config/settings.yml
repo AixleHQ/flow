@@ -80,6 +80,19 @@ traefik:
 
 container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
 
+kubernetes:
+  namespace: <%= ENV['K8S_NAMESPACE'] || 'palad' %>
+  service_host: <%= ENV['KUBERNETES_SERVICE_HOST'] || 'kubernetes.default.svc' %>
+  service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
+  traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>
+  traefik_auth_middleware: <%= ENV['TRAEFIK_AUTH_MIDDLEWARE'] || 'terminal-auth' %>
+  traefik_cors_middleware: <%= ENV['TRAEFIK_CORS_MIDDLEWARE'] || 'terminal-cors' %>
+  service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
+  workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
+  kubeconfig_path: <%= ENV['KUBECONFIG'] || File.join(ENV.fetch('HOME', '/root'), '.kube', 'config') %>
+  service_account_token_path: <%= ENV['K8S_SA_TOKEN_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/token' %>
+  service_account_ca_path: <%= ENV['K8S_SA_CA_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' %>
+
 # Container Execution Framework (Epic 8)
 # Timeouts and resource limits for container lifecycle execution
 container_execution:
