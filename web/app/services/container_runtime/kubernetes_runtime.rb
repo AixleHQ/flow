@@ -93,10 +93,9 @@ module ContainerRuntime
       stdout_lines.join
     end
 
-    def stop_container(id, timeout = nil, _options = {})
+    def stop_container(id, _timeout = nil, _options = {})
       handle = resolve_handle(id)
-      delete_options = timeout ? { gracePeriodSeconds: timeout } : {}
-      core_client.delete_pod(handle.pod_name, handle.namespace, delete_options)
+      core_client.delete_pod(handle.pod_name, handle.namespace)
     rescue StandardError => e
       Rails.logger.warn("[KubernetesRuntime] Stop pod failed: #{e.message}")
     end
@@ -170,6 +169,7 @@ module ContainerRuntime
       container = {
         name: handle.container_name,
         image: spec[:image],
+        imagePullPolicy: image_pull_policy,
         env: env_vars,
         command: spec[:cmd],
         workingDir: spec[:working_dir],
@@ -232,8 +232,8 @@ module ContainerRuntime
       tty_strip = build_strip_middleware(handle, "tty", "/t/#{handle.route_token}/tty")
       fs_strip = build_strip_middleware(handle, "fs", "/t/#{handle.route_token}/fs")
 
-      traefik_client.create_middleware(tty_strip)
-      traefik_client.create_middleware(fs_strip)
+      traefik_client.create_entity("Middleware", "middlewares", tty_strip)
+      traefik_client.create_entity("Middleware", "middlewares", fs_strip)
     rescue StandardError => e
       Rails.logger.warn("[KubernetesRuntime] Middleware create failed: #{e.message}")
     end
@@ -255,21 +255,21 @@ module ContainerRuntime
         }
       )
 
-      traefik_client.create_ingressroute(ingress)
+      traefik_client.create_entity("IngressRoute", "ingressroutes", ingress)
       Rails.logger.info("[KubernetesRuntime] IngressRoute created: #{handle.ingress_name}")
     rescue StandardError => e
       Rails.logger.warn("[KubernetesRuntime] IngressRoute create failed: #{e.message}")
     end
 
     def delete_ingressroute(handle)
-      traefik_client.delete_ingressroute(handle.ingress_name, handle.namespace)
+      traefik_client.delete_entity("ingressroutes", handle.ingress_name, handle.namespace)
     rescue StandardError
       nil
     end
 
     def delete_middlewares(handle)
       handle.middleware_names.each do |name|
-        traefik_client.delete_middleware(name, handle.namespace)
+        traefik_client.delete_entity("middlewares", name, handle.namespace)
       rescue StandardError
         nil
       end
@@ -289,15 +289,16 @@ module ContainerRuntime
 
     def wait_for_pod_ready(handle)
       start_time = Time.current
+      timeout = ready_timeout
 
       loop do
         pod = core_client.get_pod(handle.pod_name, handle.namespace)
         return true if pod_ready?(pod)
 
         elapsed = Time.current - start_time
-        raise "Pod failed to start within #{READY_TIMEOUT}s" if elapsed > READY_TIMEOUT
+        raise "Pod failed to start within #{timeout}s" if elapsed > timeout
 
-        sleep READY_INTERVAL
+        sleep ready_interval
       end
     end
 
@@ -437,6 +438,10 @@ module ContainerRuntime
       kube_setting(:workspace_dir, DEFAULT_WORKSPACE_DIR)
     end
 
+    def image_pull_policy
+      kube_setting(:image_pull_policy, "IfNotPresent")
+    end
+
     def service_account_token_path
       kube_setting(:service_account_token_path, "/var/run/secrets/kubernetes.io/serviceaccount/token")
     end
@@ -459,12 +464,26 @@ module ContainerRuntime
     end
 
     def traefik_client
-      @traefik_client ||= Kubeclient::Client.new(
-        kube_endpoint,
-        "traefik.io/v1alpha1",
+      return @traefik_client if defined?(@traefik_client)
+
+      client = Kubeclient::Client.new(
+        traefik_api_endpoint,
+        "v1alpha1",
         ssl_options: kube_ssl_options,
         auth_options: kube_auth_options
       )
+
+      begin
+        client.discover unless client.discovered
+      rescue StandardError => e
+        Rails.logger.warn("[KubernetesRuntime] Traefik discovery failed: #{e.message}")
+      end
+
+      @traefik_client = client
+    end
+
+    def traefik_api_endpoint
+      "#{kube_endpoint}/apis/traefik.io"
     end
 
     def kube_endpoint
@@ -510,6 +529,14 @@ module ContainerRuntime
       File.exist?(service_account_token_path)
     end
 
+    def ready_timeout
+      kube_setting(:ready_timeout, READY_TIMEOUT).to_i
+    end
+
+    def ready_interval
+      kube_setting(:ready_interval, READY_INTERVAL).to_f
+    end
+
     def verify_resources(handle, ports)
       ensure_service(handle, ports)
       ensure_middlewares(handle)
@@ -528,7 +555,7 @@ module ContainerRuntime
       return if handle.route_token.blank?
 
       handle.middleware_names.each do |name|
-        traefik_client.get_middleware(name, handle.namespace)
+        traefik_client.get_entity("middlewares", name, handle.namespace)
       end
     rescue StandardError => e
       raise "Middleware not ready: #{e.message}"
@@ -537,7 +564,7 @@ module ContainerRuntime
     def ensure_ingressroute(handle)
       return if handle.route_token.blank?
 
-      traefik_client.get_ingressroute(handle.ingress_name, handle.namespace)
+      traefik_client.get_entity("ingressroutes", handle.ingress_name, handle.namespace)
     rescue StandardError => e
       raise "IngressRoute not ready: #{handle.ingress_name} (#{e.message})"
     end

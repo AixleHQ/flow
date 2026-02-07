@@ -89,9 +89,12 @@ kubernetes:
   traefik_cors_middleware: <%= ENV['TRAEFIK_CORS_MIDDLEWARE'] || 'terminal-cors' %>
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
+  image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
   kubeconfig_path: <%= ENV['KUBECONFIG'] || File.join(ENV.fetch('HOME', '/root'), '.kube', 'config') %>
   service_account_token_path: <%= ENV['K8S_SA_TOKEN_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/token' %>
   service_account_ca_path: <%= ENV['K8S_SA_CA_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' %>
+  ready_timeout: <%= ENV['K8S_READY_TIMEOUT'] || 60 %>
+  ready_interval: <%= ENV['K8S_READY_INTERVAL'] || 1 %>
 
 # Container Execution Framework (Epic 8)
 # Timeouts and resource limits for container lifecycle execution

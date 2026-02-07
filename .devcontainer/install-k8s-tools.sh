@@ -13,6 +13,9 @@ esac
 
 OS=linux
 
+# docker cli
+apk add --no-cache docker-cli docker-compose
+
 # kubectl
 KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
 curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${OS}/${ARCH}/kubectl"
@@ -35,3 +38,5 @@ curl -L -o /usr/local/bin/minikube "https://storage.googleapis.com/minikube/rele
 chmod +x /usr/local/bin/minikube
 
 echo "Installed kubectl $(kubectl version --client --short), helm $(helm version --short), minikube $(minikube version --short)"
+echo "Installed docker $(docker --version)"
+echo "Installed docker-compose $(docker-compose --version)"

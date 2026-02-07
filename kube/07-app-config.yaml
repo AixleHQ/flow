@@ -26,3 +26,4 @@ data:
   TRAEFIK_DASHBOARD_URL: http://localhost:8090
   TRAEFIK_CORS_ORIGINS: http://localhost:4000,http://localhost
   CONTAINER_RUNTIME: k8s
+  K8S_IMAGE_PULL_POLICY: IfNotPresent

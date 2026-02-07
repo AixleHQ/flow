@@ -14,7 +14,8 @@
 
 	// Mount host kube config for Orbstack K8s access
 	"mounts": [
-		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached"
+		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached",
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
 	],
 
 	"containerEnv": {
