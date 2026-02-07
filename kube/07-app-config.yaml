@@ -8,6 +8,7 @@ data:
   RAILS_PORT: "4000"
   RAILS_LOG_TO_STDOUT: "true"
   RAILS_SECRET_KEY_BASE: secret
+  ACTION_CABLE_URL: wss://traefik.palad.k8s.orb.local/cable
   DB_HOST: db
   DB_PORT: "5432"
   DB_USERNAME: postgres
@@ -20,10 +21,10 @@ data:
   TEMPORAL_PORT: "7233"
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
-  TEMPORAL_UI_URL: http://temporal-ui:8080
-  TRAEFIK_WS_BASE: ws://localhost
-  TRAEFIK_HTTP_BASE: http://localhost
-  TRAEFIK_DASHBOARD_URL: http://localhost:8090
-  TRAEFIK_CORS_ORIGINS: http://localhost:4000,http://localhost
+  TEMPORAL_UI_URL: https://traefik.palad.k8s.orb.local:8080/
+  TRAEFIK_WS_BASE: wss://traefik.palad.k8s.orb.local
+  TRAEFIK_HTTP_BASE: https://traefik.palad.k8s.orb.local
+  TRAEFIK_DASHBOARD_URL: https://traefik.palad.k8s.orb.local:8090
+  TRAEFIK_CORS_ORIGINS: https://traefik.palad.k8s.orb.local
   CONTAINER_RUNTIME: k8s
   K8S_IMAGE_PULL_POLICY: IfNotPresent

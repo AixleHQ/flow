@@ -40,6 +40,10 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #wait_for_ready"
     end
 
+    def resolve_container(container_id)
+      raise NotImplementedError, "#{self.class.name} must implement #resolve_container"
+    end
+
     def container_identifier(_container)
       raise NotImplementedError, "#{self.class.name} must implement #container_identifier"
     end

@@ -65,12 +65,9 @@ module Activities
     def cleanup_without_strategy(container_id)
       return { status: :skipped } if container_id.blank?
 
-      container = Docker::Container.get(container_id)
-      container.stop("t" => 5)
-      container.remove
+      runtime.stop_container(container_id, 5)
+      runtime.remove_container(container_id)
       { status: :cleaned_up, container_id: container_id }
-    rescue Docker::Error::NotFoundError
-      { status: :not_found, container_id: container_id }
     rescue StandardError => e
       log(:warn, "[Cleanup] Fallback cleanup failed: #{e.message}")
       { status: :failed, container_id: container_id, error: e.message }

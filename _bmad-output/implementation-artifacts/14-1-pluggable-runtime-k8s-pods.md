@@ -65,7 +65,7 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 4: Implement KubernetesRuntime (AC: 3, 4, 5)
 
-- [ ] Create `app/services/container_runtime/kubernetes_runtime.rb`:
+- [x] Create `app/services/container_runtime/kubernetes_runtime.rb`:
 - [x] Add KubernetesRuntime template (stubs only)
   - Create Pod with same env vars and commands
   - Attach `emptyDir` volumes for credentials + artifacts
@@ -81,22 +81,15 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 6: Update Strategies (AC: 2, 3, 4, 5)
 
-- [ ] Replace direct Docker calls with runtime API
-- [ ] Keep strategy outputs unchanged
-- [ ] Ensure routing URLs remain the same
+- [x] Replace direct Docker calls with runtime API
+- [x] Keep strategy outputs unchanged
+- [x] Ensure routing URLs remain the same
 
 ### Task 7: Orbstack Kubernetes Setup (AC: 3, 4)
 
-- [ ] Add minimal manifests for Traefik + RBAC
-- [ ] Add example namespace + service account
+- [x] Add minimal manifests for Traefik + RBAC
+- [x] Add example namespace + service account
 - [ ] Document local setup steps
-
-### Task 8: Verification (AC: 3)
-
-- [ ] Auth flow: terminal + watcher, credentials extraction
-- [ ] Session flow: credential injection + artifact collection
-- [ ] Tool execution: command execution + output files
-- [ ] MCP server execution: stdio/exec output
 
 ## Notes / Assumptions
 

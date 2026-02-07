@@ -98,6 +98,14 @@ module ContainerRuntime
       true
     end
 
+    def resolve_container(container_id)
+      return container_id if container_id.is_a?(Docker::Container)
+
+      Docker::Container.get(container_id)
+    rescue Docker::Error::NotFoundError, Docker::Error::ClientError
+      nil
+    end
+
     def container_identifier(container)
       return nil if container.blank?
       return container if container.is_a?(String)

@@ -3,6 +3,8 @@
 require "kubeclient"
 require "ostruct"
 require "securerandom"
+require "uri"
+require "websocket-client-simple"
 
 module ContainerRuntime
   # KubernetesRuntime
@@ -45,37 +47,7 @@ module ContainerRuntime
 
     def exec(id, cmd, opts = {})
       handle = resolve_handle(id)
-
-      result = nil
-      stdout = +""
-      stderr = +""
-      exit_code = 0
-
-      begin
-        result = core_client.exec(
-          handle.pod_name,
-          cmd,
-          namespace: handle.namespace,
-          container: handle.container_name,
-          stdin: false,
-          tty: false
-        ) do |stream, chunk|
-          case stream
-          when :stdout
-            stdout << chunk
-          when :stderr
-            stderr << chunk
-          when :status
-            exit_code = chunk.is_a?(Hash) && chunk["status"] == "Success" ? 0 : 1
-          end
-        end
-      rescue StandardError
-        result = nil
-      end
-
-      if result.is_a?(Array) && result.length == 3
-        return result
-      end
+      stdout, stderr, exit_code = exec_via_websocket(handle, cmd, opts)
 
       stdout_lines = stdout.empty? ? [] : stdout.split("\n").map { |line| "#{line}\n" }
       stderr_lines = stderr.empty? ? [] : stderr.split("\n").map { |line| "#{line}\n" }
@@ -96,8 +68,6 @@ module ContainerRuntime
     def stop_container(id, _timeout = nil, _options = {})
       handle = resolve_handle(id)
       core_client.delete_pod(handle.pod_name, handle.namespace)
-    rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] Stop pod failed: #{e.message}")
     end
 
     def remove_container(id, _options = {})
@@ -123,6 +93,10 @@ module ContainerRuntime
       return true if ports.blank?
 
       ports.all? { |port| port_open?(handle, port) }
+    end
+
+    def resolve_container(container_id)
+      resolve_handle(container_id)
     end
 
     def container_identifier(container)
@@ -248,8 +222,6 @@ module ContainerRuntime
 
       traefik_client.create_entity("Middleware", "middlewares", tty_strip)
       traefik_client.create_entity("Middleware", "middlewares", fs_strip)
-    rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] Middleware create failed: #{e.message}")
     end
 
     def create_ingressroute(handle)
@@ -262,6 +234,7 @@ module ContainerRuntime
         },
         spec: {
           entryPoints: [ traefik_entrypoint ],
+          tls: {},
           routes: [
             build_route(handle, "tty", 7681, [ traefik_auth_middleware, "#{handle.pod_name}-tty-strip" ]),
             build_route(handle, "fs", 4040, [ traefik_cors_middleware, traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ])
@@ -271,34 +244,24 @@ module ContainerRuntime
 
       traefik_client.create_entity("IngressRoute", "ingressroutes", ingress)
       Rails.logger.info("[KubernetesRuntime] IngressRoute created: #{handle.ingress_name}")
-    rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] IngressRoute create failed: #{e.message}")
     end
 
     def delete_ingressroute(handle)
       traefik_client.delete_entity("ingressroutes", handle.ingress_name, handle.namespace)
-    rescue StandardError
-      nil
     end
 
     def delete_middlewares(handle)
       handle.middleware_names.each do |name|
         traefik_client.delete_entity("middlewares", name, handle.namespace)
-      rescue StandardError
-        nil
       end
     end
 
     def delete_service(handle)
       core_client.delete_service(handle.service_name, handle.namespace)
-    rescue StandardError
-      nil
     end
 
     def delete_pod(handle)
       core_client.delete_pod(handle.pod_name, handle.namespace)
-    rescue StandardError
-      nil
     end
 
     def wait_for_pod_ready(handle)
@@ -331,8 +294,113 @@ module ContainerRuntime
       cmd = [ "sh", "-c", "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -q ':#{hex_port} ' && echo 'open'" ]
       stdout_lines, _stderr_lines, exit_code = exec(handle, cmd)
       exit_code.to_i.zero? && stdout_lines.join.include?("open")
-    rescue StandardError
-      false
+    end
+
+    def exec_via_websocket(handle, cmd, opts)
+      params = build_exec_params(handle, cmd, opts)
+      url = build_exec_url(handle, params)
+      headers = websocket_headers
+      timeout = opts[:timeout].to_i
+      timeout = 30 if timeout <= 0
+
+      stdout = +""
+      stderr = +""
+      exit_code = 0
+      done = false
+      error = nil
+      mutex = Mutex.new
+      cv = ConditionVariable.new
+
+      ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
+
+      ws.on(:message) do |msg|
+        next if msg.data.to_s.empty?
+
+        data = msg.data.bytes
+        channel = data.shift
+        payload = data.pack("C*").force_encoding("utf-8")
+
+        case channel
+        when 1
+          stdout << payload
+        when 2
+          stderr << payload
+        end
+      end
+
+      ws.on(:error) do |msg|
+        mutex.synchronize do
+          error = msg
+          exit_code = 1
+          done = true
+          cv.broadcast
+        end
+      end
+
+      ws.on(:close) do |_msg|
+        mutex.synchronize do
+          done = true
+          cv.broadcast
+        end
+      end
+
+      mutex.synchronize do
+        cv.wait(mutex, timeout) unless done
+        unless done
+          exit_code = 1
+          error = "exec timeout after #{timeout}s"
+        end
+      end
+
+      ws.close
+
+      raise error if error.is_a?(StandardError)
+
+      [ stdout, stderr, exit_code ]
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] Exec failed: #{e.message}")
+      [ "", "", 1 ]
+    end
+
+    def build_exec_params(handle, cmd, _opts)
+      params = {
+        stdin: false,
+        stdout: true,
+        stderr: true,
+        tty: false
+      }
+      params[:container] = handle.container_name if handle.container_name.present?
+
+      command = build_exec_command(cmd, params[:tty])
+      params[:command] = command
+
+      params
+    end
+
+    def build_exec_command(cmd, tty)
+      if cmd.is_a?(String)
+        [ "/bin/sh", "-c", cmd ]
+      elsif cmd.is_a?(Array) && cmd.size == 1
+        [ "/bin/sh", "-c", cmd.first.to_s ]
+      elsif tty == false
+        joined = Array(cmd).map { |word| "\"#{word}\"" }.join(" ")
+        [ "/bin/sh", "-c", joined ]
+      else
+        Array(cmd)
+      end
+    end
+
+    def build_exec_url(handle, params)
+      ns = core_client.send(:build_namespace_prefix, handle.namespace)
+      url = URI.parse(core_client.send(:rest_client)["#{ns}pods/#{handle.pod_name}/exec"].url)
+      commands = params.delete(:command).map { |value| "command=#{URI.encode_www_form_component(value)}" }
+      query = params.map { |key, value| "#{key}=#{value}" }
+      url.query = (query + commands).join("&")
+      url
+    end
+
+    def websocket_headers
+      core_client.instance_variable_get(:@headers) || {}
     end
 
     def build_env_vars(env_vars)
@@ -350,10 +418,6 @@ module ContainerRuntime
       paths = []
       tmpfs = spec.dig(:host_config, "Tmpfs") || {}
       paths.concat(tmpfs.keys)
-      paths << workspace_dir
-
-      home_dir = env_vars.find { |env| env[:name] == "HOME_DIR" }
-      paths << home_dir[:value] if home_dir&.dig(:value).present?
 
       paths.compact.uniq
     end
@@ -489,8 +553,6 @@ module ContainerRuntime
 
       begin
         client.discover unless client.discovered
-      rescue StandardError => e
-        Rails.logger.warn("[KubernetesRuntime] Traefik discovery failed: #{e.message}")
       end
 
       @traefik_client = client

@@ -137,6 +137,7 @@ gem "docker-api", "~> 2.3"
 
 # Kubernetes API client for container runtime
 gem "kubeclient", "~> 4.13"
+gem "websocket-client-simple", "~> 0.3"
 
 # Temporal (Ruby worker/client)
 # Note: temporal-ruby is early; validate in dev.

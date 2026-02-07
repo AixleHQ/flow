@@ -123,14 +123,21 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   const ttydUrl = useMemo(() => {
     if (!session?.websocketUrl) return null;
     // websocket_url: ws://localhost/t/{token}/tty/ws -> http://localhost/t/{token}/tty
-    return session.websocketUrl.replace('ws://', 'http://').replace('/ws', '');
+    return session.websocketUrl
+      .replace('wss://', 'https://')
+      .replace('ws://', 'http://')
+      .replace('/ws', '');
   }, [session?.websocketUrl]);
 
   const watcherUrl = useMemo(() => {
     if (!session?.websocketUrl) return null;
     // websocket_url: ws://localhost/t/{token}/tty/ws -> http://localhost/t/{token}/fs
-    return session.websocketUrl.replace('ws://', 'http://').replace('/tty/ws', '/fs').replace('/tty', '/fs');
-  }, [session?.websocketUrl]);
+    return session.websocketUrl
+      .replace('wss://', 'https://')
+      .replace('ws://', 'http://')
+      .replace('/tty/ws', '/fs')
+      .replace('/tty', '/fs');
+  }, [session?.watcherUrl, session?.websocketUrl]);
 
   const handleIframeLoad = useCallback(() => {
     setIframeLoaded(true);

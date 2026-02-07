@@ -185,6 +185,10 @@ module ContainerStrategies
       Settings.traefik.ws_base
     end
 
+    def traefik_http_base
+      Settings.traefik.http_base
+    end
+
     def mcp_server_url
       ENV.fetch("MCP_SERVER_URL", "http://web:3000/action_mcp")
     end
