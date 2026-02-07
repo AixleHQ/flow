@@ -78,6 +78,8 @@ traefik:
   dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
   cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
 
+container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
+
 # Container Execution Framework (Epic 8)
 # Timeouts and resource limits for container lifecycle execution
 container_execution:

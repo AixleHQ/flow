@@ -37,18 +37,16 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 1: Run Application in Cluster (PoC)
 
-- [ ] Create `palad` namespace
-- [ ] Deploy Postgres, Redis, Temporal, Temporal UI
-- [ ] Deploy Rails app (`web`) with Service
-- [ ] Deploy `worker-ruby` with ServiceAccount
-- [ ] Deploy Traefik (CRDs + RBAC + ForwardAuth)
-- [ ] Configure `terminal-auth` middleware to call in-cluster Rails
-- [ ] Set `Settings.traefik.ws_base` to Traefik external URL
-- [ ] Set `Settings.container_runtime = k8s`
+- [x] Create `palad` namespace
+- [x] Deploy Postgres, Redis, Temporal, Temporal UI
+- [x] Deploy Rails app (`web`) with Service
+- [x] Deploy `worker-ruby` with ServiceAccount
+- [x] Deploy Traefik (CRDs + RBAC + ForwardAuth)
+- [x] Configure `terminal-auth` middleware to call in-cluster Rails
 
 ### Task 2: Define Runtime Interface (AC: 1)
 
-- [ ] Create `app/services/container_runtime/base_runtime.rb`:
+- [x] Create `app/services/container_runtime/base_runtime.rb`:
   - `pull_image(image)`
   - `create_container(spec)`
   - `start_container(id)`
@@ -60,7 +58,7 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 3: Implement DockerRuntime (AC: 2)
 
-- [ ] Create `app/services/container_runtime/docker_runtime.rb`:
+- [x] Create `app/services/container_runtime/docker_runtime.rb`:
   - Wrap current Docker API operations
   - Preserve timeouts and error handling
   - Return the same results as current `BaseStrategy` helpers
@@ -68,6 +66,7 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 ### Task 4: Implement KubernetesRuntime (AC: 3, 4, 5)
 
 - [ ] Create `app/services/container_runtime/kubernetes_runtime.rb`:
+- [x] Add KubernetesRuntime template (stubs only)
   - Create Pod with same env vars and commands
   - Attach `emptyDir` volumes for credentials + artifacts
   - Create Service for ttyd/watcher ports
@@ -77,8 +76,8 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 5: Wire Runtime Selection (AC: 6)
 
-- [ ] Add config: `Settings.container_runtime` (docker | k8s)
-- [ ] Update `ContainerService` and `BaseStrategy` to use runtime adapter
+- [x] Add config: `Settings.container_runtime` (docker | k8s)
+- [x] Update `ContainerService` and `BaseStrategy` to use runtime adapter
 
 ### Task 6: Update Strategies (AC: 2, 3, 4, 5)
 
