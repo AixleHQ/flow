@@ -39,5 +39,9 @@ module ContainerRuntime
     def wait_for_ready(_id, _ports = [])
       raise NotImplementedError, "#{self.class.name} must implement #wait_for_ready"
     end
+
+    def container_identifier(_container)
+      raise NotImplementedError, "#{self.class.name} must implement #container_identifier"
+    end
   end
 end

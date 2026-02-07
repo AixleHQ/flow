@@ -125,6 +125,20 @@ module ContainerRuntime
       ports.all? { |port| port_open?(handle, port) }
     end
 
+    def container_identifier(container)
+      return nil if container.blank?
+      return container if container.is_a?(String)
+
+      return container.pod_name if container.respond_to?(:pod_name)
+
+      if container.respond_to?(:id)
+        id = container.id
+        return id[0..11] if id.is_a?(String) && id.present?
+      end
+
+      container.to_s
+    end
+
     private
 
     def resolve_handle(id)

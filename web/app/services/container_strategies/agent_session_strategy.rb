@@ -62,21 +62,23 @@ module ContainerStrategies
     # Load credentials into container
 
     def before_exec(context)
-      container_id = context[:container].id[0..11]
+      container_ref = context[:container] || context[:container_id]
+      container_id = runtime.container_identifier(container_ref)
+      raise "Container not ready for before_exec" if container_id.blank?
       session = TerminalSession.find(input[:session_id])
 
       # 1. Load credentials (existing)
       if input[:credential].present?
         Rails.logger.info("[AgentSession] Loading credentials into container #{container_id}")
-        input[:credential].write_to_container(container_id)
+        input[:credential].write_to_container(container_ref)
         Rails.logger.info("[AgentSession] Credentials loaded successfully")
       end
 
       # 2. Inject config files (Story 9.2)
-      SessionContextService.inject_config_files(container_id, session)
+      SessionContextService.inject_config_files(container_ref, session)
 
       # 3. Inject MCP config (Story 9.4) — after config files to enable merge
-      SessionContextService.inject_mcp_config(container_id, session)
+      SessionContextService.inject_mcp_config(container_ref, session)
     end
 
     # == Lifecycle: before_cleanup ==
@@ -159,7 +161,8 @@ module ContainerStrategies
       dir = File.dirname(path_pattern)
       name = File.basename(path_pattern)
 
-      result = container.exec(
+      result = runtime.exec(
+        container,
         [ "/bin/sh", "-c", "find #{dir} -name '#{name}' 2>/dev/null || true" ],
         stdout: true,
         stderr: true

@@ -130,22 +130,22 @@ class SessionContextService
     # == Container File Operations ==
 
     def write_file(container_id, path, content, uid = 1001)
-      container = Docker::Container.get(container_id)
       dir = File.dirname(path)
-
-      container.exec([ "mkdir", "-p", dir ])
-
       encoded = Base64.strict_encode64(content)
-      container.exec([ "sh", "-c", "echo '#{encoded}' | base64 -d > #{path}" ])
-      container.exec([ "chown", "#{uid}:#{uid}", path ])
+      cmd = [
+        "sh",
+        "-c",
+        "mkdir -p #{dir} && echo '#{encoded}' | base64 -d > #{path} && chown #{uid}:#{uid} #{path}"
+      ]
+
+      runtime.exec(container_id, cmd)
     end
 
     def read_file(container_id, path)
-      container = Docker::Container.get(container_id)
-      result = container.exec([ "cat", path ])
+      result = runtime.exec(container_id, [ "cat", path ])
       exit_code = result[2]
 
-      return nil unless exit_code.zero?
+      return nil unless exit_code.to_i.zero?
 
       result[0].join
     rescue StandardError
@@ -215,6 +215,10 @@ class SessionContextService
     rescue JSON::ParserError => e
       Rails.logger.warn("[SessionContext] Failed to parse existing file #{path}: #{e.message}, writing fresh")
       write_file(container_id, path, content, uid)
+    end
+
+    def runtime
+      @runtime ||= ContainerRuntime.build
     end
   end
 end

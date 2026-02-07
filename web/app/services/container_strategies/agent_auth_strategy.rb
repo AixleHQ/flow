@@ -124,12 +124,15 @@ module ContainerStrategies
 
     def exec(context)
       route_token = input[:route_token]
+      container_ref = context[:container] || context[:container_id]
+      container_id = runtime.container_identifier(container_ref)
+      raise "Container not ready for exec" if container_id.blank?
 
       websocket_url = "#{traefik_ws_base}/t/#{route_token}/tty/ws"
       watcher_url = "#{traefik_ws_base}/t/#{route_token}/fs"
 
       context[:result] = {
-        container_id: context[:container].id[0..11],
+        container_id: container_id,
         container_name: "terminal-#{route_token}",
         websocket_url: websocket_url,
         watcher_url: watcher_url
