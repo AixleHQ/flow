@@ -21,6 +21,8 @@ WEB_HOST_PATH ?= $(shell pwd)/web
 kube-apply-dev:
 	kubectl patch deployment web -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
 	kubectl rollout restart deployment/web -n palad
+	kubectl patch deployment worker-ruby -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
+	kubectl rollout restart deployment/worker-ruby -n palad
 
 # Remove Kubernetes manifests
 kube-rm:

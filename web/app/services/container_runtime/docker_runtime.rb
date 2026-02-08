@@ -63,6 +63,21 @@ module ContainerRuntime
       container.archive(path)
     end
 
+    def copy_to(id, path, content)
+      return false if path.blank?
+
+      container = resolve_container(id)
+      tar_io = build_tar_stream(path, content.to_s)
+      _stdout_lines, _stderr_lines, exit_code = container.exec(
+        [ "/bin/sh", "-c", "tar -xf - -C /" ],
+        stdin: tar_io
+      )
+
+      exit_code.to_i.zero?
+    ensure
+      tar_io&.close!
+    end
+
     def stop_container(id, timeout = nil, _options = {})
       container = resolve_container(id)
       options = timeout ? { "t" => timeout } : {}

@@ -3,6 +3,8 @@
 require "kubeclient"
 require "ostruct"
 require "securerandom"
+require "shellwords"
+require "tempfile"
 require "uri"
 require "websocket-client-simple"
 
@@ -56,13 +58,42 @@ module ContainerRuntime
     end
 
     def copy_from(id, path)
+      return "" if path.blank?
+
       handle = resolve_handle(id)
-      tar_cmd = [ "/bin/sh", "-c", "tar -cf - -C / #{path}" ]
-      stdout_lines, _stderr_lines, exit_code = exec(handle, tar_cmd)
+      normalized = normalize_tar_path(path)
+      return "" if normalized.blank?
+
+      output = Tempfile.new("palad-copy-from")
+      output.binmode
+      cmd = [ "/bin/sh", "-c", "tar -cf - -C / #{Shellwords.escape(normalized)}" ]
+      _stdout, _stderr, exit_code = exec_via_websocket(handle, cmd, stdout_io: output, binary: true)
 
       return "" unless exit_code.to_i.zero?
 
-      stdout_lines.join
+      output.rewind
+      output.read
+    ensure
+      output&.close!
+    end
+
+    def copy_to(id, path, content)
+      return false if path.blank?
+
+      handle = resolve_handle(id)
+      tar_io = build_tar_stream(path, content.to_s)
+      cmd = [ "/bin/sh", "-c", "tar -xf - -C /" ]
+      _stdout, _stderr, exit_code = exec_via_websocket(
+        handle,
+        cmd,
+        stdin_io: tar_io,
+        binary: true,
+        close_on_stdin_eof: true
+      )
+
+      exit_code.to_i.zero?
+    ensure
+      tar_io&.close!
     end
 
     def stop_container(id, _timeout = nil, _options = {})
@@ -303,6 +334,12 @@ module ContainerRuntime
       timeout = opts[:timeout].to_i
       timeout = 30 if timeout <= 0
 
+      stdout_io = opts[:stdout_io]
+      stderr_io = opts[:stderr_io]
+      stdin_io = opts[:stdin_io]
+      binary = opts[:binary]
+      close_on_stdin_eof = opts[:close_on_stdin_eof]
+
       stdout = +""
       stderr = +""
       exit_code = 0
@@ -313,18 +350,54 @@ module ContainerRuntime
 
       ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
 
+      ws.on(:open) do
+        next unless stdin_io
+
+        Thread.new do
+          begin
+            stdin_io.rewind if stdin_io.respond_to?(:rewind)
+            while (chunk = stdin_io.read(16_384))
+              ws.send([ 0 ].pack("C") + chunk)
+            end
+            ws.close if close_on_stdin_eof
+          rescue StandardError => e
+            mutex.synchronize do
+              error = e
+              exit_code = 1
+              done = true
+              cv.broadcast
+            end
+          end
+        end
+      end
+
       ws.on(:message) do |msg|
         next if msg.data.to_s.empty?
 
         data = msg.data.bytes
         channel = data.shift
-        payload = data.pack("C*").force_encoding("utf-8")
+        payload = data.pack("C*")
+        payload.force_encoding("utf-8") unless binary
 
         case channel
         when 1
-          stdout << payload
+          if stdout_io
+            stdout_io.write(payload)
+          else
+            stdout << payload
+          end
         when 2
-          stderr << payload
+          if stderr_io
+            stderr_io.write(payload)
+          else
+            stderr << payload
+          end
+        when 3
+          if stderr_io
+            stderr_io.write(payload)
+          else
+            stderr << payload
+          end
         end
       end
 
@@ -362,13 +435,14 @@ module ContainerRuntime
       [ "", "", 1 ]
     end
 
-    def build_exec_params(handle, cmd, _opts)
+    def build_exec_params(handle, cmd, opts)
       params = {
         stdin: false,
         stdout: true,
         stderr: true,
         tty: false
       }
+      params[:stdin] = true if opts[:stdin_io] || opts[:stdin]
       params[:container] = handle.container_name if handle.container_name.present?
 
       command = build_exec_command(cmd, params[:tty])

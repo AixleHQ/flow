@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require "rubygems/package"
+require "shellwords"
+require "stringio"
+
 # SessionContextService
 # Injects session configuration into agent containers.
 # Reads from TerminalSession#session_config:
@@ -130,26 +134,45 @@ class SessionContextService
     # == Container File Operations ==
 
     def write_file(container_id, path, content, uid = 1001)
-      dir = File.dirname(path)
-      encoded = Base64.strict_encode64(content)
-      cmd = [
-        "sh",
-        "-c",
-        "mkdir -p #{dir} && echo '#{encoded}' | base64 -d > #{path} && chown #{uid}:#{uid} #{path}"
-      ]
+      return if path.blank?
 
+      ok = runtime.copy_to(container_id, path, content)
+      return unless ok
+
+      owner = uid.to_i
+      safe_path = Shellwords.escape(path.to_s)
+      cmd = [ "sh", "-c", "chown #{owner}:#{owner} #{safe_path}" ]
       runtime.exec(container_id, cmd)
     end
 
     def read_file(container_id, path)
-      result = runtime.exec(container_id, [ "cat", path ])
-      exit_code = result[2]
+      return nil if path.blank?
 
-      return nil unless exit_code.to_i.zero?
+      tar_data = runtime.copy_from(container_id, path)
+      return nil if tar_data.blank?
 
-      result[0].join
+      extract_file_from_tar(tar_data, path)
     rescue StandardError
       nil
+    end
+
+    def extract_file_from_tar(tar_data, path)
+      normalized = path.to_s.sub(%r{\A/}, "")
+      return nil if normalized.blank?
+
+      reader = Gem::Package::TarReader.new(StringIO.new(tar_data))
+      contents = nil
+
+      reader.each do |entry|
+        entry_name = entry.full_name.sub(%r{\A\./}, "")
+        if entry_name == normalized
+          contents = entry.read
+          break
+        end
+      end
+      contents
+    ensure
+      reader&.close
     end
 
     # == MCP Server Resolution ==
