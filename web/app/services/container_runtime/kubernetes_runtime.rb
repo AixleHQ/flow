@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kubeclient"
+require "json"
 require "ostruct"
 require "securerandom"
 require "shellwords"
@@ -349,6 +350,7 @@ module ContainerRuntime
       cv = ConditionVariable.new
 
       ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
+      exit_code_parser = method(:exit_code_from_status_payload)
 
       ws.on(:open) do
         next unless stdin_io
@@ -393,15 +395,16 @@ module ContainerRuntime
             stderr << payload
           end
         when 3
-          if stderr_io
-            stderr_io.write(payload)
-          else
-            stderr << payload
+          mutex.synchronize do
+            exit_code = exit_code_parser.call(payload)
+            done = true
+            cv.broadcast
           end
         end
       end
 
       ws.on(:error) do |msg|
+        Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
         mutex.synchronize do
           error = msg
           exit_code = 1
@@ -416,7 +419,6 @@ module ContainerRuntime
           cv.broadcast
         end
       end
-
       mutex.synchronize do
         cv.wait(mutex, timeout) unless done
         unless done
@@ -425,9 +427,13 @@ module ContainerRuntime
         end
       end
 
-      ws.close
+      ws.close if websocket_open?(ws)
 
-      raise error if error.is_a?(StandardError)
+      if error.is_a?(StandardError)
+        raise error
+      elsif error
+        Rails.logger.warn("[KubernetesRuntime] Exec error: #{error}")
+      end
 
       [ stdout, stderr, exit_code ]
     rescue StandardError => e
@@ -449,6 +455,30 @@ module ContainerRuntime
       params[:command] = command
 
       params
+    end
+
+    def exit_code_from_status_payload(payload)
+      status = JSON.parse(payload)
+      return 0 if status.is_a?(Hash) && status["status"] == "Success"
+
+      causes = status.is_a?(Hash) ? status.dig("details", "causes") : nil
+      exit_cause = Array(causes).find { |cause| cause["reason"] == "ExitCode" }
+      code = exit_cause && exit_cause["message"].to_s
+      return code.to_i if code.match?(/\A-?\d+\z/)
+
+      1
+    rescue JSON::ParserError
+      1
+    end
+
+    def websocket_open?(ws)
+      return false if ws.nil?
+      return ws.open? if ws.respond_to?(:open?)
+      return ws.state.to_s == "open" if ws.respond_to?(:state)
+
+      true
+    rescue StandardError
+      true
     end
 
     def build_exec_command(cmd, tty)
@@ -474,7 +504,9 @@ module ContainerRuntime
     end
 
     def websocket_headers
-      core_client.instance_variable_get(:@headers) || {}
+      headers = core_client.instance_variable_get(:@headers) || {}
+      # Request v4 exec channel protocol to receive status/exit code frames.
+      headers.merge("Sec-WebSocket-Protocol" => "v4.channel.k8s.io")
     end
 
     def build_env_vars(env_vars)
