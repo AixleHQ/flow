@@ -6,19 +6,22 @@ setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
 
-# Apply Kubernetes manifests
+# Full Kubernetes setup: CRDs, manifests, wait for pods, migrate and seed
 kube-setup:
+	@make build-web
+	@make build-agents
 	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-
-# Apply Kubernetes manifests only
-kube-apply:
 	kubectl apply -f ./kube
+	kubectl wait --for=condition=ready pod -l app=db -n palad --timeout=120s
+	kubectl wait --for=condition=ready pod -l app=web -n palad --timeout=120s
+	kubectl exec -n palad deployment/web -- make db-prepare
+	@make kube-mount-dev
 
 # Default to current directory's web folder if not provided
 WEB_HOST_PATH ?= $(shell pwd)/web
 
 # Apply Kubernetes manifests with a dev hostPath for the web container
-kube-apply-dev:
+kube-mount-dev:
 	kubectl patch deployment web -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
 	kubectl rollout restart deployment/web -n palad
 	kubectl patch deployment worker-ruby -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
@@ -91,6 +94,9 @@ restore-dump:
 restore-qa-db: dump-qa fetch-qa-dump restore-dump
 
 restore-prod-db: dump-prod fetch-prod-dump restore-dump
+
+build-web:
+	docker build -f web/Dockerfile -t web .
 
 # Build agent images
 build-agents:

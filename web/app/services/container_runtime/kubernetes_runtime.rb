@@ -125,6 +125,10 @@ module ContainerRuntime
       return true if ports.blank?
 
       ports.all? { |port| port_open?(handle, port) }
+
+      wait_for_traefik_route(handle) if handle.route_token.present?
+
+      true
     end
 
     def resolve_container(container_id)
@@ -749,6 +753,34 @@ module ContainerRuntime
       traefik_client.get_entity("ingressroutes", handle.ingress_name, handle.namespace)
     rescue StandardError => e
       raise "IngressRoute not ready: #{handle.ingress_name} (#{e.message})"
+    end
+
+    def wait_for_traefik_route(handle)
+      traefik_url = "https://traefik.#{handle.namespace}.svc.cluster.local/t/#{handle.route_token}/tty/"
+      start_time = Time.current
+      timeout = ready_timeout
+
+      loop do
+        response = Net::HTTP.start(
+          URI(traefik_url).host, 443,
+          use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE,
+          open_timeout: 2, read_timeout: 2
+        ) { |http| http.head(URI(traefik_url).request_uri) }
+
+        if response.code.to_i != 404
+          Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{response.code})")
+          return true
+        end
+      rescue StandardError => e
+        Rails.logger.debug("[KubernetesRuntime] Traefik route not ready: #{e.class} #{e.message}")
+      ensure
+        elapsed = Time.current - start_time
+        if elapsed > timeout
+          Rails.logger.warn("[KubernetesRuntime] Traefik route timeout after #{elapsed.round(1)}s for #{handle.route_token}")
+          return true # Don't block — let the frontend retry
+        end
+        sleep ready_interval
+      end
     end
 
     def kube_setting(key, default)

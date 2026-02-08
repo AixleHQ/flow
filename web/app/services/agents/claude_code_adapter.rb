@@ -19,7 +19,7 @@ module Agents
       "/home/claude"
     end
 
-    def session_log_paths 
+    def session_log_paths
       [
         "/workspace/output/mitmproxy.log",  # MITM proxy logs (if enabled)
       ]

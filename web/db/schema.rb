@@ -237,6 +237,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100002) do
     t.string "name", null: false
     t.string "display_name", null: false
     t.text "description"
+    t.string "kind", default: "custom", null: false
     t.string "scope_type"
     t.bigint "scope_id"
     t.string "docker_image"
@@ -246,10 +247,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100002) do
     t.boolean "enabled", default: true
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "kind", default: "custom", null: false
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
-    t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
   create_table "users", force: :cascade do |t|
@@ -261,6 +260,7 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100002) do
     t.string "role", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "onboarding_completed_at"
     t.string "position"
     t.string "preferred_agent_language", default: "en"
     t.string "provider"
@@ -270,7 +270,6 @@ ActiveRecord::Schema[8.0].define(version: 2026_02_06_100002) do
     t.string "avatar_url"
     t.text "selected_agents", default: [], array: true
     t.string "onboarding_state", default: "step1", null: false
-    t.datetime "onboarding_completed_at"
     t.bigint "invited_by_id"
     t.datetime "invited_at"
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"

@@ -8,7 +8,7 @@ data:
   RAILS_PORT: "4000"
   RAILS_LOG_TO_STDOUT: "true"
   RAILS_SECRET_KEY_BASE: secret
-  ACTION_CABLE_URL: wss://traefik.palad.k8s.orb.local/cable
+  ACTION_CABLE_URL: /cable
   DB_HOST: db
   DB_PORT: "5432"
   DB_USERNAME: postgres
