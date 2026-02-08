@@ -1,5 +1,5 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-apply kube-rm help
+.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-apply kube-apply-dev kube-rm help
 
 # Setup project in one command
 setup:
@@ -12,11 +12,19 @@ kube-setup:
 
 # Apply Kubernetes manifests only
 kube-apply:
-	kubectl apply -f /workspaces/palad-app/kube
+	kubectl apply -f ./kube
+
+# Default to current directory's web folder if not provided
+WEB_HOST_PATH ?= $(shell pwd)/web
+
+# Apply Kubernetes manifests with a dev hostPath for the web container
+kube-apply-dev:
+	kubectl patch deployment web -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
+	kubectl rollout restart deployment/web -n palad
 
 # Remove Kubernetes manifests
 kube-rm:
-	kubectl delete -f /workspaces/palad-app/kube
+	kubectl delete -f ./kube
 
 # Run all main services
 up:
@@ -96,6 +104,7 @@ help:
 	@echo "  make setup                  - Setup project in one command"
 	@echo "  make kube-setup             - Apply Kubernetes manifests"
 	@echo "  make kube-apply             - Apply Kubernetes manifests only"
+	@echo "  make kube-apply-dev          - Apply manifests with WEB_HOST_PATH for web"
 	@echo "  make kube-rm                - Delete Kubernetes manifests"
 	@echo "  make up                     - Run all main services"
 	@echo "  make workers                - Run workers (3 Python + 1 Ruby)"
