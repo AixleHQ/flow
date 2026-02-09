@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "docker"
 require "timeout"
 
 # ContainerService
@@ -8,7 +7,7 @@ require "timeout"
 #
 # Executes 6 lifecycle phases with per-phase timeout protection:
 #   1. before_create  - Validate input, resolve config
-#   2. create         - Docker container create
+#   2. create         - Container create
 #   3. before_start   - Configure labels, network, volumes
 #   4. start          - Start container + health check
 #   5. before_exec    - Inject files/credentials
@@ -180,37 +179,38 @@ class ContainerService
     raise PhaseError.new(phase, error)
   end
 
-  # Emergency cleanup - kill and remove container forcefully
+  # Emergency cleanup - stop and remove container forcefully
   # Called when execution fails to ensure no orphaned containers
   def emergency_cleanup
-    return unless @context[:container]
+    container = @context[:container]
+    container_id = @context[:container_id]
+
+    return if container.nil? && container_id.nil?
 
     Rails.logger.warn("[ContainerService] Performing emergency cleanup")
 
     begin
-      container = @context[:container]
+      target = container || container_id
 
-      # Try to kill first (faster than stop)
       begin
-        container.kill
-        Rails.logger.info("[ContainerService] Container killed")
-      rescue Docker::Error::NotFoundError
-        # Already gone
+        runtime.stop_container(target, 5)
       rescue StandardError => e
-        Rails.logger.warn("[ContainerService] Kill failed: #{e.message}")
+        Rails.logger.warn("[ContainerService] Stop failed: #{e.message}")
       end
 
-      # Force remove
       begin
-        container.remove(force: true)
+        runtime.remove_container(target, force: true)
         Rails.logger.info("[ContainerService] Container removed")
-      rescue Docker::Error::NotFoundError
-        # Already gone
       rescue StandardError => e
-        Rails.logger.warn("[ContainerService] Force remove failed: #{e.message}")
+        Rails.logger.warn("[ContainerService] Remove failed: #{e.message}")
       end
     rescue StandardError => e
       Rails.logger.error("[ContainerService] Emergency cleanup failed: #{e.message}")
     end
   end
+
+  def runtime
+    @runtime ||= ContainerRuntime.build
+  end
+
 end

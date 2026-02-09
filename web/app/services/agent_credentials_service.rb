@@ -100,38 +100,35 @@ class AgentCredentialsService
   private
 
   def read_container_file(container_id, path)
-    container = Docker::Container.get(container_id)
-    # Read file content using exec
-    # exec returns [stdout_array, stderr_array, exit_code]
-    result = container.exec([ "cat", path ])
+    result = runtime.exec(container_id, [ "cat", path ])
     stdout = result[0]
     exit_code = result[2]
 
-    return nil unless exit_code.zero?
+    return nil unless exit_code.to_i.zero?
 
     stdout.join
-  rescue Docker::Error::NotFoundError
-    Rails.logger.warn("Container not found: #{container_id}")
-    nil
   rescue StandardError => e
     Rails.logger.error("Failed to read #{path} from container #{container_id}: #{e.message}")
     nil
   end
 
   def write_container_file(container_id, path, content)
-    container = Docker::Container.get(container_id)
     dir = File.dirname(path)
-
-    # Create directory
-    container.exec([ "mkdir", "-p", dir ])
-
-    # Write file using base64 to handle special characters
     encoded = Base64.strict_encode64(content)
-    container.exec([ "sh", "-c", "echo '#{encoded}' | base64 -d > #{path}" ])
+    cmd = [
+      "sh",
+      "-c",
+      "mkdir -p #{dir} && echo '#{encoded}' | base64 -d > #{path}"
+    ]
 
+    runtime.exec(container_id, cmd)
     Rails.logger.info("Wrote #{path} to container #{container_id}")
   rescue StandardError => e
     Rails.logger.error("Failed to write #{path} to container #{container_id}: #{e.message}")
     raise
+  end
+
+  def runtime
+    @runtime ||= ContainerRuntime.build
   end
 end

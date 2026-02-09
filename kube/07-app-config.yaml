@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: palad-app-config
+  namespace: palad
+data:
+  RAILS_ENV: development
+  RAILS_PORT: "4000"
+  RAILS_LOG_TO_STDOUT: "true"
+  RAILS_SECRET_KEY_BASE: secret
+  ACTION_CABLE_URL: /cable
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_USERNAME: postgres
+  DB_PASSWORD: postgres
+  DB_NAME: palad_development
+  REDIS_URL: redis://redis:6379/1
+  TEMPORAL_ENABLED: "true"
+  TEMPORAL_DEBUG: "true"
+  TEMPORAL_HOST: temporal
+  TEMPORAL_PORT: "7233"
+  TEMPORAL_NAMESPACE: default
+  TEMPORAL_TASK_QUEUE: palad_ruby
+  TEMPORAL_UI_URL: https://traefik.palad.k8s.orb.local:8080/
+  TRAEFIK_WS_BASE: wss://traefik.palad.k8s.orb.local
+  TRAEFIK_HTTP_BASE: https://traefik.palad.k8s.orb.local
+  TRAEFIK_DASHBOARD_URL: https://traefik.palad.k8s.orb.local:8090
+  TRAEFIK_CORS_ORIGINS: https://traefik.palad.k8s.orb.local
+  CONTAINER_RUNTIME: k8s
+  K8S_IMAGE_PULL_POLICY: IfNotPresent

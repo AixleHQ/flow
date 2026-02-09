@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-require "docker"
-
 module ContainerStrategies
   # BaseStrategy
   # Abstract base class for container execution strategies
   #
   # Provides default implementations for common lifecycle phases:
   #   - before_create: Build container configuration
-  #   - create: Create Docker container
+  #   - create: Create container
   #   - start: Start container and health check
   #   - cleanup: Stop and remove container
   #
@@ -34,8 +32,6 @@ module ContainerStrategies
   #
   class BaseStrategy
     DOCKER_NETWORK = ENV.fetch("DOCKER_NETWORK", "app_default")
-    HEALTH_CHECK_TIMEOUT = 30
-    HEALTH_CHECK_INTERVAL = 1
 
     attr_reader :input
 
@@ -51,22 +47,7 @@ module ContainerStrategies
       image = resolve_image
       raise ArgumentError, "image is required" if image.blank?
 
-      Rails.logger.info("[#{strategy_name}] Checking image: #{image}")
-
-      if image_exists?(image)
-        Rails.logger.info("[#{strategy_name}] Image cached: #{image}")
-        return { status: :cached, image: image, duration_seconds: 0 }
-      end
-
-      Rails.logger.info("[#{strategy_name}] Pulling image: #{image}")
-      start_time = Time.current
-
-      pull_from_registry(image)
-
-      duration = (Time.current - start_time).to_i
-      Rails.logger.info("[#{strategy_name}] Image pulled: #{image} (#{duration}s)")
-
-      { status: :pulled, image: image, duration_seconds: duration }
+      runtime.pull_image(image)
     end
 
     # == Lifecycle Phase: before_create ==
@@ -93,35 +74,35 @@ module ContainerStrategies
     end
 
     # == Lifecycle Phase: create ==
-    # Create Docker container
+    # Create container
     #
     # @param context [Hash] Shared context (expects :image, :env_vars, etc.)
     def create(context)
-      config = {
-        "Image" => context[:image],
-        "Env" => context[:env_vars] || [],
-        "Labels" => context[:labels] || {},
-        "HostConfig" => context[:host_config] || {}
+      spec = {
+        image: context[:image],
+        env_vars: context[:env_vars] || [],
+        labels: context[:labels] || {},
+        host_config: context[:host_config] || {},
+        cmd: context[:cmd],
+        working_dir: context[:working_dir],
+        exposed_ports: context[:exposed_ports],
+        container_name: context[:container_name]
       }
 
-      # Optional fields
-      config["Cmd"] = context[:cmd] if context[:cmd]
-      config["WorkingDir"] = context[:working_dir] if context[:working_dir]
-      config["ExposedPorts"] = context[:exposed_ports] if context[:exposed_ports]
-      config["name"] = context[:container_name] if context[:container_name]
-
-      context[:container] = Docker::Container.create(config)
+      context[:container] = runtime.create_container(spec)
+      context[:container_id] ||= runtime_container_id(context[:container])
     end
 
     # == Lifecycle Phase: start ==
-    # Start container and wait for health
+    # Start container and wait for readiness
     #
     # @param context [Hash] Shared context (expects :container)
     def start(context)
-      container = context[:container]
-      container.start
+      target = context[:container] || context[:container_id]
+      context[:container] = runtime.start_container(target)
+      context[:container_id] ||= runtime_container_id(context[:container] || target)
 
-      wait_for_container_health(container)
+      runtime.wait_for_ready(context[:container] || context[:container_id], services_ports)
     end
 
     # == Lifecycle Phase: cleanup ==
@@ -139,25 +120,25 @@ module ContainerStrategies
     # @param context [Hash] Shared context (expects :container or :container_id)
     # @return [Hash] { status: :cleaned_up | :not_found | :force_removed | :failed }
     def cleanup(context)
-      container = context[:container]
-      container_id = context[:container_id]
-
-      # Get container if only ID provided
-      if container.nil? && container_id.present?
-        container = Docker::Container.get(container_id)
-      end
-
+      container = context[:container] || context[:container_id]
       return { status: :skipped } unless container
 
-      # Stop and remove
-      result = cleanup_container(container)
+      container_id = runtime_container_id(container)
 
-      # Optionally remove image
-      cleanup_image(context[:image]) if remove_image_after_cleanup?
+      begin
+        runtime.stop_container(container, 5)
+      rescue StandardError => e
+        Rails.logger.warn("[#{strategy_name}] Stop failed: #{e.message}")
+      end
 
-      result
-    rescue Docker::Error::NotFoundError
-      { status: :not_found, container_id: container_id }
+      begin
+        runtime.remove_container(container)
+        runtime.remove_image(context[:image]) if remove_image_after_cleanup?
+        { status: :cleaned_up, container_id: container_id }
+      rescue StandardError => e
+        Rails.logger.warn("[#{strategy_name}] Remove failed: #{e.message}")
+        { status: :failed, container_id: container_id, error: e.message }
+      end
     end
 
     # Whether to remove Docker image after cleanup
@@ -243,84 +224,10 @@ module ContainerStrategies
       nil
     end
 
-    # Wait for container to be running and healthy
-    #
-    # @param container [Docker::Container] Container instance
-    # @param timeout [Integer] Max wait time in seconds
-    def wait_for_container_health(container, timeout: HEALTH_CHECK_TIMEOUT)
-      start_time = Time.current
-
-      loop do
-        # Refresh container state
-        container.refresh!
-        state = container.json["State"]
-
-        if state["Running"]
-          Rails.logger.info("[#{self.class.name}] Container is running")
-          # Wait for services to start (ttyd needs a moment)
-          wait_for_services(container)
-          return true
-        end
-
-        if state["Status"] == "exited" || state["Status"] == "dead"
-          exit_code = state["ExitCode"]
-          raise "Container exited with code #{exit_code}"
-        end
-
-        elapsed = Time.current - start_time
-        if elapsed > timeout
-          raise "Container failed to start within #{timeout}s"
-        end
-
-        sleep HEALTH_CHECK_INTERVAL
-      end
-    end
-
-    # Wait for services to be ready inside container
-    # Override in subclasses for custom health checks
-    #
-    # @param container [Docker::Container] Container instance
-    # @param timeout [Integer] Max wait time in seconds
-    def wait_for_services(container, timeout: 10)
-      ports_to_check = services_ports
-      return if ports_to_check.empty?
-
-      start_time = Time.current
-
-      loop do
-        all_ready = ports_to_check.all? do |port|
-          port_open?(container, port)
-        end
-
-        if all_ready
-          Rails.logger.info("[#{self.class.name}] All services ready")
-          return true
-        end
-
-        elapsed = Time.current - start_time
-        if elapsed > timeout
-          Rails.logger.warn("[#{self.class.name}] Services timeout after #{timeout}s")
-          return false
-        end
-
-        sleep 0.5
-      end
-    end
-
     # Ports to check for service readiness
     # Override in subclasses
     def services_ports
       []
-    end
-
-    # Check if port is open inside container
-    def port_open?(container, port)
-      # Use netstat/ss to check if port is listening
-      result = container.exec([ "sh", "-c", "cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | grep -q ':#{port.to_s(16).upcase.rjust(4, '0')} ' && echo 'open'" ])
-      result[0].join.include?("open")
-    rescue StandardError => e
-      Rails.logger.debug("[#{self.class.name}] Port check error: #{e.message}")
-      false
     end
 
     # Get resource limits from settings or defaults
@@ -362,20 +269,18 @@ module ContainerStrategies
 
     # Read file from container using exec cat (faster than copy/tar)
     #
-    # @param container [Docker::Container] Container instance
+    # @param container [Object] Runtime container handle
     # @param path [String] File path in container
     # @return [String, nil] File contents or nil
     def read_file_from_container(container, path)
       # exec returns [stdout_array, stderr_array, exit_code]
-      result = container.exec([ "cat", path ])
+      result = runtime.exec(container, [ "cat", path ])
       stdout = result[0]
       exit_code = result[2]
 
       return nil unless exit_code.zero?
 
       stdout.join
-    rescue Docker::Error::NotFoundError
-      nil
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
       nil
@@ -383,108 +288,14 @@ module ContainerStrategies
 
     private
 
-    # Stop and remove container
-    #
-    # @param container [Docker::Container, nil] Container instance
-    def cleanup_container(container)
-      return { status: :skipped } unless container
-
-      container_id = container.id[0..11]
-
-      # Stop container
-      begin
-        container.stop("t" => 5)
-      rescue Docker::Error::NotFoundError
-        return { status: :not_found, container_id: container_id }
-      rescue StandardError => e
-        Rails.logger.warn("[#{strategy_name}] Stop failed: #{e.message}, force removing")
-        return force_remove_container(container, container_id)
-      end
-
-      # Remove container
-      begin
-        container.remove
-        Rails.logger.info("[#{strategy_name}] Cleaned up: #{container_id}")
-        { status: :cleaned_up, container_id: container_id }
-      rescue Docker::Error::NotFoundError
-        { status: :not_found, container_id: container_id }
-      rescue StandardError => e
-        Rails.logger.warn("[#{strategy_name}] Remove failed: #{e.message}, force removing")
-        force_remove_container(container, container_id)
-      end
+    def runtime
+      @runtime ||= ContainerRuntime.build
     end
 
-    def force_remove_container(container, container_id)
-      container.remove(force: true)
-      Rails.logger.info("[#{strategy_name}] Force removed: #{container_id}")
-      { status: :force_removed, container_id: container_id }
-    rescue Docker::Error::NotFoundError
-      { status: :not_found, container_id: container_id }
-    rescue StandardError => e
-      Rails.logger.error("[#{strategy_name}] Force remove failed: #{e.message}")
-      { status: :failed, container_id: container_id, error: e.message }
-    end
+    def runtime_container_id(container)
+      return container.id if container.respond_to?(:id)
 
-    # Remove Docker image
-    #
-    # @param image [String, nil] Image name
-    def cleanup_image(image)
-      return unless image
-
-      begin
-        docker_image = Docker::Image.get(image)
-        docker_image.remove(force: true)
-        Rails.logger.info("[#{self.class.name}] Removed image: #{image}")
-      rescue Docker::Error::NotFoundError
-        # Already gone
-      rescue Docker::Error::ConflictError => e
-        # Image in use by another container
-        Rails.logger.warn("[#{self.class.name}] Cannot remove image #{image}: #{e.message}")
-      rescue StandardError => e
-        Rails.logger.warn("[#{self.class.name}] Remove image failed: #{e.message}")
-      end
-    end
-
-    # Check if image exists locally
-    def image_exists?(image)
-      Docker::Image.get(image)
-      true
-    rescue Docker::Error::NotFoundError
-      false
-    end
-
-    # Pull image from registry
-    def pull_from_registry(image)
-      image_name, tag = parse_image_reference(image)
-
-      Docker::Image.create(
-        "fromImage" => image_name,
-        "tag" => tag
-      ) do |chunk|
-        log_pull_progress(chunk)
-      end
-    end
-
-    # Parse image reference into name and tag
-    def parse_image_reference(image)
-      if image.include?(":")
-        parts = image.rpartition(":")
-        [ parts[0], parts[2] ]
-      else
-        [ image, "latest" ]
-      end
-    end
-
-    # Log pull progress from Docker API
-    def log_pull_progress(chunk)
-      return unless chunk.is_a?(String)
-
-      data = JSON.parse(chunk) rescue nil
-      return unless data
-
-      if data["status"] && data["progress"]
-        Rails.logger.debug("[#{strategy_name}] #{data['status']}: #{data['progress']}")
-      end
+      container.to_s
     end
 
     # Strategy name for logging

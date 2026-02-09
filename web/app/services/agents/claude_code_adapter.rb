@@ -19,6 +19,12 @@ module Agents
       "/home/claude"
     end
 
+    def session_log_paths
+      [
+        "/workspace/output/mitmproxy.log",  # MITM proxy logs (if enabled)
+      ]
+    end
+
     def allowed_tools
       [ "Task", "Bash", "Glob", "Grep", "LS", "Read", "Edit", "MultiEdit", "Write", "WebFetch", "WebSearch" ]
     end

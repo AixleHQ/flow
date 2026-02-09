@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runtime-notes
+  namespace: palad
+data:
+  README: |
+    This file exists to keep all kube resources under version control.
+    It is safe to delete if not needed.

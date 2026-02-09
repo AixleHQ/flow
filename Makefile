@@ -1,10 +1,35 @@
 # AI Engine Docker Management
-.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents help
+.PHONY: setup run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-apply kube-apply-dev kube-rm help
 
 # Setup project in one command
 setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
+
+# Full Kubernetes setup: CRDs, manifests, wait for pods, migrate and seed
+kube-setup:
+	@make build-web
+	@make build-agents
+	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
+	kubectl apply -f ./kube
+	kubectl wait --for=condition=ready pod -l app=db -n palad --timeout=120s
+	kubectl wait --for=condition=ready pod -l app=web -n palad --timeout=120s
+	kubectl exec -n palad deployment/web -- make db-prepare
+	@make kube-mount-dev
+
+# Default to current directory's web folder if not provided
+WEB_HOST_PATH ?= $(shell pwd)/web
+
+# Apply Kubernetes manifests with a dev hostPath for the web container
+kube-mount-dev:
+	kubectl patch deployment web -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
+	kubectl rollout restart deployment/web -n palad
+	kubectl patch deployment worker-ruby -n palad --type='json' -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"web-source","hostPath":{"path":"$(WEB_HOST_PATH)","type":"Directory"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"web-source","mountPath":"/app"}}]'
+	kubectl rollout restart deployment/worker-ruby -n palad
+
+# Remove Kubernetes manifests
+kube-rm:
+	kubectl delete -f ./kube
 
 # Run all main services
 up:
@@ -70,6 +95,9 @@ restore-qa-db: dump-qa fetch-qa-dump restore-dump
 
 restore-prod-db: dump-prod fetch-prod-dump restore-dump
 
+build-web:
+	docker build -f web/Dockerfile -t web .
+
 # Build agent images
 build-agents:
 	docker build -t palad/agent-base:latest docker/base
@@ -82,6 +110,10 @@ build-agents:
 help:
 	@echo "Available commands:"
 	@echo "  make setup                  - Setup project in one command"
+	@echo "  make kube-setup             - Apply Kubernetes manifests"
+	@echo "  make kube-apply             - Apply Kubernetes manifests only"
+	@echo "  make kube-apply-dev          - Apply manifests with WEB_HOST_PATH for web"
+	@echo "  make kube-rm                - Delete Kubernetes manifests"
 	@echo "  make up                     - Run all main services"
 	@echo "  make workers                - Run workers (3 Python + 1 Ruby)"
 	@echo "  make shell-web              - Open shell in web container"

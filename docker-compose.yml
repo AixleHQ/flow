@@ -128,7 +128,7 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "8090:8090"
+      - "8090:8080"
     command:
       - "--api.dashboard=true"
       - "--api.insecure=true"

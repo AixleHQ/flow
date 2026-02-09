@@ -1,0 +1,51 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+	"name": "Palad Devcontainer",
+
+	"build": {
+		"dockerfile": "../web/Dockerfile",
+		"context": ".."
+	},
+
+	// The optional 'workspaceFolder' property is the path VS Code should open by default when
+	// connected.
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+
+	// Mount host kube config for Orbstack K8s access
+	"mounts": [
+		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached",
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+	],
+
+	"containerEnv": {
+		"KUBECONFIG": "/root/.kube/config"
+	},
+
+	// Ensure Orbstack hostnames resolve inside the container
+	"runArgs": [
+		"--add-host=k8s.orb.local:host-gateway",
+		"--add-host=docker.orb.local:host-gateway",
+		"--add-host=orbstack:host-gateway"
+	],
+
+	// Install kubectl/helm/minikube on Alpine-based image
+	"postCreateCommand": "bash .devcontainer/install-k8s-tools.sh",
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// "runServices": []
+
+	// Uncomment the next line if you want to keep your containers running after VS Code shuts down.
+	// "shutdownAction": "none",
+
+	// Uncomment the next line to run commands after the container is created.
+	// "postCreateCommand": "cat /etc/os-release",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+
+	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "devcontainer"
+}

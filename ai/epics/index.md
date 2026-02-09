@@ -78,4 +78,6 @@
     - [Story 13.2: Load Code Context from GitHub](./epic-13-external-integrations-phase-7.md#story-132-load-code-context-from-github)
     - [Story 13.3: Create PR in GitHub](./epic-13-external-integrations-phase-7.md#story-133-create-pr-in-github)
     - [Story 13.4: Export Tasks to Linear](./epic-13-external-integrations-phase-7.md#story-134-export-tasks-to-linear)
+  - [Epic 14: Container Runtime (Phase 0)](./epic-14-container-runtime-phase-0.md)
+    - [Story 14.1: Pluggable Runtime with Kubernetes Pods](./epic-14-container-runtime-phase-0.md#story-141-pluggable-runtime-with-kubernetes-pods)
   - [FR Coverage Map (Updated)](./fr-coverage-map-updated.md)

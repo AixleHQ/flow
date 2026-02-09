@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: palad-workflows
+  namespace: palad
+data:
+  workflows.yml: |
+    workflows:
+      - name: unified_container_workflow
+        owner: palad_ruby
+        activities:
+          - name: pull_docker_image_activity
+            task_queue: palad_ruby
+          - name: execute_container_activity
+            task_queue: palad_ruby
+          - name: cleanup_container_activity
+            task_queue: palad_ruby

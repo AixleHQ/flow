@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: palad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      serviceAccountName: palad-runtime
+      containers:
+        - name: web
+          image: web
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: palad-app-config
+          ports:
+            - containerPort: 4000
+          volumeMounts:
+            - name: workflows
+              mountPath: /app/app/temporal/workflows.yml
+              subPath: workflows.yml
+      volumes:
+        - name: workflows
+          configMap:
+            name: palad-workflows
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: palad
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000

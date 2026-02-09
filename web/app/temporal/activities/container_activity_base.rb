@@ -58,9 +58,7 @@ module Activities
     def find_container(container_id)
       return nil if container_id.blank?
 
-      Docker::Container.get(container_id)
-    rescue Docker::Error::NotFoundError
-      nil
+      runtime.resolve_container(container_id)
     end
 
     # Update session after successful container start
@@ -116,6 +114,10 @@ module Activities
       else
         input.symbolize_keys
       end
+    end
+
+    def runtime
+      @runtime ||= ContainerRuntime.build
     end
   end
 end
