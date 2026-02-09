@@ -82,6 +82,9 @@ module ContainerStrategies
 
       # 4. Inject skills (Story 9.6) — after MCP config
       SessionContextService.inject_skills(container_ref, session)
+
+      # 5. Inject context file (Story 9.7) — after skills (appends to same file for Gemini)
+      SessionContextService.inject_context_file(container_ref, session)
     end
 
     # == Lifecycle: before_cleanup ==

@@ -78,13 +78,18 @@ module Agents
       }
     end
 
-    # Skill files: /workspace/.claude/skills/<name>.md
+    # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)
+    def context_file_path
+      "#{home_dir}/.claude/CLAUDE.md"
+    end
+
+    # Skill files: ~/.claude/skills/<name>.md (user-scoped, not in workspace)
     def skill_files(skills)
       files = {}
       skills.each do |skill|
         next if skill.content.blank?
 
-        files["/workspace/.claude/skills/#{skill.name}.md"] = skill.content
+        files["#{home_dir}/.claude/skills/#{skill.name}.md"] = skill.content
       end
       files
     end

@@ -51,7 +51,12 @@ module Agents
       }
     end
 
-    # Skill files: appended as sections to /workspace/GEMINI.md
+    # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)
+    def context_file_path
+      "#{home_dir}/.gemini/GEMINI.md"
+    end
+
+    # Skill files: appended as sections to ~/.gemini/GEMINI.md (user-scoped, not in workspace)
     def skill_files(skills)
       sections = skills.filter_map do |skill|
         next if skill.content.blank?
@@ -60,7 +65,7 @@ module Agents
       end
       return {} if sections.empty?
 
-      { "/workspace/GEMINI.md" => "\n\n" + sections.join("\n\n---\n\n") + "\n" }
+      { "#{home_dir}/.gemini/GEMINI.md" => "\n\n" + sections.join("\n\n---\n\n") + "\n" }
     end
 
     def skill_merge_strategy

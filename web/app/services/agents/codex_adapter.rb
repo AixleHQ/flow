@@ -60,7 +60,12 @@ module Agents
       }
     end
 
-    # Skill files: /workspace/.codex/skills/<name>/SKILL.md with YAML front matter
+    # Context file: ~/.codex/AGENTS.md (auto-read by Codex at startup)
+    def context_file_path
+      "#{home_dir}/.codex/AGENTS.md"
+    end
+
+    # Skill files: ~/.codex/skills/<name>/SKILL.md with YAML front matter (user-scoped)
     def skill_files(skills)
       files = {}
       skills.each do |skill|
@@ -68,7 +73,7 @@ module Agents
 
         description = (skill.description || skill.title || skill.name).to_s
         front_matter = "---\nname: #{skill.name}\ndescription: #{description.to_json}\n---\n\n"
-        files["/workspace/.codex/skills/#{skill.name}/SKILL.md"] = front_matter + skill.content
+        files["#{home_dir}/.codex/skills/#{skill.name}/SKILL.md"] = front_matter + skill.content
       end
       files
     end

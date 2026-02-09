@@ -57,13 +57,18 @@ module Agents
       }
     end
 
-    # Skill files: /workspace/.cursor/skills/<name>.md
+    # Context file: ~/.cursor/rules/.cursorrules (auto-read by Cursor at startup)
+    def context_file_path
+      "#{home_dir}/.cursor/rules/.cursorrules"
+    end
+
+    # Skill files: ~/.cursor/rules/<name>.md (user-scoped, not in workspace)
     def skill_files(skills)
       files = {}
       skills.each do |skill|
         next if skill.content.blank?
 
-        files["/workspace/.cursor/skills/#{skill.name}.md"] = skill.content
+        files["#{home_dir}/.cursor/rules/#{skill.name}.md"] = skill.content
       end
       files
     end

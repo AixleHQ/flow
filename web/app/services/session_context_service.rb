@@ -10,6 +10,8 @@ require "stringio"
 #   - Config files (Story 9.2)
 #   - Environment variables with secret resolution (Story 9.3)
 #   - MCP server configurations per CLI format (Story 9.4)
+#   - Skill files per CLI format (Story 9.6)
+#   - Context file with MCP/tool descriptions and agent persona (Story 9.7)
 class SessionContextService
   class << self
     # == Story 9.2: Config File Injection ==
@@ -78,6 +80,29 @@ class SessionContextService
 
         Rails.logger.info("[SessionContext] Injected skill: #{path} (#{content.bytesize} bytes)")
       end
+    end
+
+    # == Story 9.7: Context File Injection ==
+
+    # Generate and inject CLI-specific context file with agent persona,
+    # MCP server descriptions, and tool descriptions.
+    # Appends to existing content (from config_files or skills injection).
+    def inject_context_file(container_id, session)
+      content = build_context_content(session)
+      return if content.blank?
+
+      adapter = adapter_for(session)
+      path = adapter.context_file_path
+      return if path.blank?
+
+      expanded = expand_path(path, adapter.home_dir)
+      existing = read_file(container_id, expanded) || ""
+
+      separator = existing.present? ? "\n\n---\n\n" : ""
+      final_content = existing + separator + content
+
+      write_file(container_id, expanded, final_content, adapter.tmpfs_uid)
+      Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes added)")
     end
 
     # == Story 9.4: MCP Config Injection ==
@@ -156,6 +181,92 @@ class SessionContextService
         end
         resolved
       end
+    end
+
+    # == Context Content Builders (Story 9.7) ==
+
+    def build_context_content(session)
+      sections = []
+
+      persona = build_agent_persona(session)
+      sections << persona if persona.present?
+
+      mcp = build_mcp_descriptions(session)
+      sections << mcp if mcp.present?
+
+      tools = build_tool_descriptions(session)
+      sections << tools if tools.present?
+
+      sections.join("\n\n")
+    end
+
+    def build_agent_persona(session)
+      agent_id = session.configured_agent_id
+      return "" if agent_id.blank?
+
+      agent = Agent.find_by(id: agent_id)
+      return "" unless agent
+
+      agent.to_system_prompt
+    end
+
+    def build_mcp_descriptions(session)
+      servers = resolve_mcp_servers_for_descriptions(session)
+      return "" if servers.empty?
+
+      lines = [ "## Available MCP Servers\n" ]
+      servers.each do |server|
+        lines << "### #{server[:name]}"
+        lines << server[:display_name] if server[:display_name].present?
+        lines << server[:description] if server[:description].present?
+        lines << ""
+      end
+      lines.join("\n")
+    end
+
+    def build_tool_descriptions(session)
+      tools = session.available_tools.to_a
+      return "" if tools.empty?
+
+      lines = [ "## Available Tools\n" ]
+      tools.each do |tool|
+        lines << "### #{tool.name}"
+        desc = [ tool.display_name, tool.description ].compact.join(" — ")
+        lines << desc if desc.present?
+        if tool.input_schema.present? && tool.input_schema["properties"].present?
+          params = tool.input_schema["properties"].map { |k, v| "#{k} (#{v['type']})" }.join(", ")
+          lines << "Parameters: #{params}" if params.present?
+        end
+        lines << ""
+      end
+      lines.join("\n")
+    end
+
+    # Resolve MCP server descriptions: palad-tools (always) + external MCPServer records
+    def resolve_mcp_servers_for_descriptions(session)
+      result = []
+
+      # Always include palad-tools
+      result << {
+        name: "palad-tools",
+        display_name: nil,
+        description: "Internal tools server. Provides project-specific tools configured for this session.\n" \
+                     "Call tools via MCP — use `tools/list` to see available tools."
+      }
+
+      # Resolve external MCP servers from session config
+      ids = session.mcp_server_ids
+      if ids.present?
+        MCPServer.where(id: ids, enabled: true).find_each do |server|
+          result << {
+            name: server.name,
+            display_name: server.display_name,
+            description: server.description
+          }
+        end
+      end
+
+      result
     end
 
     # == Skill Resolution ==

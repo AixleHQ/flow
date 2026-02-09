@@ -83,6 +83,17 @@ module Agents
     end
 
     # =================================================================
+    # Context File (CLI-specific instruction file auto-read at startup)
+    # =================================================================
+
+    # Path to CLI-specific context file (auto-read by CLI at startup).
+    # Written to home dir (not workspace) to keep /workspace clean.
+    # @return [String, nil] nil if CLI doesn't support context files
+    def context_file_path
+      nil
+    end
+
+    # =================================================================
     # Skill File Generation
     # Each CLI has different skill format and file path
     # =================================================================

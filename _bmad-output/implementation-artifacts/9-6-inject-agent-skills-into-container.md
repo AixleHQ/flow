@@ -299,6 +299,11 @@ Claude claude-4.6-opus
 - Gemini append strategy: reads existing GEMINI.md, appends skills sections
 - Integrated as Step 4 in `AgentSessionStrategy.before_exec` (after MCP config)
 - Skills with blank content skipped; missing skill IDs logged as warnings
+- **Updated:** All skill files write to home dirs (not /workspace) to keep workspace clean:
+  - Claude: `~/.claude/skills/<name>.md`
+  - Codex: `~/.codex/skills/<name>/SKILL.md`
+  - Gemini: `~/.gemini/GEMINI.md`
+  - Cursor: `~/.cursor/rules/<name>.md`
 
 ### File List
 

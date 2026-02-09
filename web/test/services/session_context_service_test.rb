@@ -367,8 +367,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/deploy-guide.md", skill.content).returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/deploy-guide.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/deploy-guide.md", skill.content).returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/deploy-guide.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -383,12 +383,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
-        path == "/workspace/.codex/skills/test-runner/SKILL.md" &&
+        path == "/home/codex/.codex/skills/test-runner/SKILL.md" &&
         content.include?("---\nname: test-runner\n") &&
         content.include?('"Runs tests"') &&
         content.include?("# Test Runner")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.codex/skills/test-runner/SKILL.md" ])
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/skills/test-runner/SKILL.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -402,15 +402,15 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
     # read existing GEMINI.md — returns nil (file doesn't exist)
-    runtime_mock.expects(:copy_from).with("ctr1", "/workspace/GEMINI.md").returns(nil)
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(nil)
     # write appended content
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
-        path == "/workspace/GEMINI.md" &&
+        path == "/home/gemini/.gemini/GEMINI.md" &&
         content.include?("## Skill: Coding Style") &&
         content.include?("Use 2 spaces")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/GEMINI.md" ])
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -424,16 +424,16 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
     existing_content = "# Project Context\nExisting content"
-    tar_stream = build_tar_stream("/workspace/GEMINI.md", existing_content)
-    runtime_mock.expects(:copy_from).with("ctr1", "/workspace/GEMINI.md").returns(tar_stream)
+    tar_stream = build_tar_stream("/home/gemini/.gemini/GEMINI.md", existing_content)
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(tar_stream)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
-        path == "/workspace/GEMINI.md" &&
+        path == "/home/gemini/.gemini/GEMINI.md" &&
         content.start_with?("# Project Context\nExisting content") &&
         content.include?("## Skill: Coding Style")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/GEMINI.md" ])
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -446,8 +446,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.cursor/skills/review-guide.md", skill.content).returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.cursor/skills/review-guide.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/home/cursor/.cursor/rules/review-guide.md", skill.content).returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/rules/review-guide.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -461,10 +461,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/skill-a.md", "Content A").returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/skill-a.md" ])
-    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/skill-b.md", "Content B").returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/skill-b.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/skill-a.md", "Content A").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/skill-a.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/skill-b.md", "Content B").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/skill-b.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -485,8 +485,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/existing.md", "Content").returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/existing.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/existing.md", "Content").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/existing.md" ])
 
     Rails.logger.expects(:warn).with { |msg| msg.include?("Skill 999999 not found") }
 
@@ -519,8 +519,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 2, result.size
-    assert_equal "# Deploy", result["/workspace/.claude/skills/deploy.md"]
-    assert_equal "# Test", result["/workspace/.claude/skills/test.md"]
+    assert_equal "# Deploy", result["/home/claude/.claude/skills/deploy.md"]
+    assert_equal "# Test", result["/home/claude/.claude/skills/test.md"]
   end
 
   test "Codex adapter skill_files includes YAML front matter" do
@@ -530,7 +530,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 1, result.size
-    content = result["/workspace/.codex/skills/lint/SKILL.md"]
+    content = result["/home/codex/.codex/skills/lint/SKILL.md"]
     assert content.start_with?("---\n")
     assert_includes content, "name: lint"
     assert_includes content, '"Lint description"'
@@ -547,7 +547,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 1, result.size
-    content = result["/workspace/GEMINI.md"]
+    content = result["/home/gemini/.gemini/GEMINI.md"]
     assert_includes content, "## Skill: Skill A"
     assert_includes content, "Content A"
     assert_includes content, "## Skill: Skill B"
@@ -567,7 +567,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 1, result.size
-    assert_equal "# Review", result["/workspace/.cursor/skills/review.md"]
+    assert_equal "# Review", result["/home/cursor/.cursor/rules/review.md"]
   end
 
   test "Base adapter skill_files returns empty hash" do
@@ -591,7 +591,324 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 1, result.size
-    assert result.key?("/workspace/.claude/skills/has-content.md")
+    assert result.key?("/home/claude/.claude/skills/has-content.md")
+  end
+
+  # ====================================================================
+  # Story 9.7: Adapter context_file_path
+  # ====================================================================
+
+  test "Claude adapter context_file_path returns home dir CLAUDE.md" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    assert_equal "/home/claude/.claude/CLAUDE.md", adapter.context_file_path
+  end
+
+  test "Codex adapter context_file_path returns home dir AGENTS.md" do
+    adapter = Agents::CodexAdapter.new
+    assert_equal "/home/codex/.codex/AGENTS.md", adapter.context_file_path
+  end
+
+  test "Gemini adapter context_file_path returns home dir GEMINI.md" do
+    adapter = Agents::GeminiCliAdapter.new
+    assert_equal "/home/gemini/.gemini/GEMINI.md", adapter.context_file_path
+  end
+
+  test "Cursor adapter context_file_path returns home dir .cursorrules" do
+    adapter = Agents::CursorCliAdapter.new
+    assert_equal "/home/cursor/.cursor/rules/.cursorrules", adapter.context_file_path
+  end
+
+  test "Base adapter context_file_path returns nil" do
+    adapter = Agents::BaseAdapter.new
+    assert_nil adapter.context_file_path
+  end
+
+  # ====================================================================
+  # Story 9.7: build_context_content (private builders via send)
+  # ====================================================================
+
+  test "build_agent_persona returns agent system prompt" do
+    agent = Agent.create!(
+      name: "coder", title: "Expert Coder", persona: "You are an expert coder.",
+      scope_type: "Company", scope_id: @company.id
+    )
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "agent_id" => agent.id })
+
+    result = SessionContextService.send(:build_agent_persona, session)
+
+    assert_includes result, "# Expert Coder"
+    assert_includes result, "You are an expert coder."
+  end
+
+  test "build_agent_persona returns empty string when agent_id is blank" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    result = SessionContextService.send(:build_agent_persona, session)
+
+    assert_equal "", result
+  end
+
+  test "build_agent_persona returns empty string when agent not found" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "agent_id" => 999_999 })
+
+    result = SessionContextService.send(:build_agent_persona, session)
+
+    assert_equal "", result
+  end
+
+  test "build_mcp_descriptions always includes palad-tools" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    result = SessionContextService.send(:build_mcp_descriptions, session)
+
+    assert_includes result, "## Available MCP Servers"
+    assert_includes result, "### palad-tools"
+    assert_includes result, "Internal tools server"
+  end
+
+  test "build_mcp_descriptions includes external MCP servers" do
+    server = create(:mcp_server, :custom, name: "tavily", display_name: "Tavily Search",
+                    description: "Web search API", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "mcp_server_ids" => [ server.id ] })
+
+    result = SessionContextService.send(:build_mcp_descriptions, session)
+
+    assert_includes result, "### palad-tools"
+    assert_includes result, "### tavily"
+    assert_includes result, "Tavily Search"
+    assert_includes result, "Web search API"
+  end
+
+  test "build_mcp_descriptions skips disabled MCP servers" do
+    enabled = create(:mcp_server, :custom, name: "enabled-srv", display_name: "Enabled",
+                     url: "https://a.com/mcp", scope: @company, enabled: true)
+    disabled = create(:mcp_server, :custom, name: "disabled-srv", display_name: "Disabled",
+                      url: "https://b.com/mcp", scope: @company, enabled: false)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "mcp_server_ids" => [ enabled.id, disabled.id ] })
+
+    result = SessionContextService.send(:build_mcp_descriptions, session)
+
+    assert_includes result, "### enabled-srv"
+    assert_not_includes result, "### disabled-srv"
+  end
+
+  test "build_tool_descriptions formats tool info with input schema" do
+    tool = create(:tool, name: "web_search", display_name: "Web Search",
+                  description: "Search the web", scope: @company,
+                  input_schema: { "properties" => { "query" => { "type" => "string" }, "max_results" => { "type" => "integer" } } })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "tool_ids" => [ tool.id ] })
+
+    result = SessionContextService.send(:build_tool_descriptions, session)
+
+    assert_includes result, "## Available Tools"
+    assert_includes result, "### web_search"
+    assert_includes result, "Web Search"
+    assert_includes result, "Search the web"
+    assert_includes result, "Parameters: query (string), max_results (integer)"
+  end
+
+  test "build_tool_descriptions returns empty string when no tools" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    result = SessionContextService.send(:build_tool_descriptions, session)
+
+    assert_equal "", result
+  end
+
+  test "build_context_content combines persona, MCP, and tools" do
+    agent = Agent.create!(
+      name: "dev", title: "Developer", persona: "You are a developer.",
+      scope_type: "Company", scope_id: @company.id
+    )
+    server = create(:mcp_server, :custom, name: "context7", display_name: "Context7",
+                    description: "Docs search", url: "https://ctx7.com/mcp", scope: @company)
+    tool = create(:tool, name: "gh_pr", display_name: "GitHub PR",
+                  description: "Create PRs", scope: @company, input_schema: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {
+                       "agent_id" => agent.id,
+                       "mcp_server_ids" => [ server.id ],
+                       "tool_ids" => [ tool.id ]
+                     })
+
+    result = SessionContextService.send(:build_context_content, session)
+
+    assert_includes result, "# Developer"
+    assert_includes result, "## Available MCP Servers"
+    assert_includes result, "### context7"
+    assert_includes result, "## Available Tools"
+    assert_includes result, "### gh_pr"
+  end
+
+  test "build_context_content returns empty when nothing to add" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    # Only palad-tools is always present, so MCP descriptions are never fully empty
+    result = SessionContextService.send(:build_context_content, session)
+
+    assert_includes result, "## Available MCP Servers"
+    assert_includes result, "### palad-tools"
+  end
+
+  # ====================================================================
+  # Story 9.7: inject_context_file (container interaction)
+  # ====================================================================
+
+  test "inject_context_file writes Claude context file to container" do
+    server = create(:mcp_server, :custom, name: "tavily", display_name: "Tavily",
+                    description: "Search API", url: "https://tavily.com/mcp", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "mcp_server_ids" => [ server.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    # read existing CLAUDE.md — returns nil (no existing content)
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
+    # write context file (no separator since no existing content)
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/claude/.claude/CLAUDE.md" &&
+        content.include?("## Available MCP Servers") &&
+        content.include?("### palad-tools") &&
+        content.include?("### tavily") &&
+        !content.start_with?("\n\n---")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file appends to existing content with separator" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    existing_content = "# Existing Config\nSome previous content"
+    tar_stream = build_tar_stream("/home/claude/.claude/CLAUDE.md", existing_content)
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(tar_stream)
+
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/claude/.claude/CLAUDE.md" &&
+        content.start_with?("# Existing Config\nSome previous content") &&
+        content.include?("\n\n---\n\n") &&
+        content.include?("## Available MCP Servers")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file writes Gemini context to GEMINI.md" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(nil)
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/gemini/.gemini/GEMINI.md" &&
+        content.include?("## Available MCP Servers") &&
+        content.include?("### palad-tools")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file writes Codex context to AGENTS.md" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/codex/.codex/AGENTS.md").returns(nil)
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/codex/.codex/AGENTS.md" &&
+        content.include?("## Available MCP Servers")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/AGENTS.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file writes Cursor context to .cursorrules" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/cursor/.cursor/rules/.cursorrules").returns(nil)
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/cursor/.cursor/rules/.cursorrules" &&
+        content.include?("## Available MCP Servers")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/rules/.cursorrules" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file includes agent persona when configured" do
+    agent = Agent.create!(
+      name: "reviewer", title: "Code Reviewer", persona: "You review code carefully.",
+      scope_type: "Company", scope_id: @company.id
+    )
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "agent_id" => agent.id })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
+    runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
+      content.include?("# Code Reviewer") &&
+        content.include?("You review code carefully.") &&
+        content.include?("## Available MCP Servers")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  test "inject_context_file includes tool descriptions when tools configured" do
+    tool = create(:tool, name: "deploy_tool", display_name: "Deploy",
+                  description: "Deploy to production", scope: @company,
+                  input_schema: { "properties" => { "env" => { "type" => "string" } } })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "tool_ids" => [ tool.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
+    runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
+      content.include?("## Available Tools") &&
+        content.include?("### deploy_tool") &&
+        content.include?("Deploy — Deploy to production") &&
+        content.include?("Parameters: env (string)")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    SessionContextService.inject_context_file("ctr1", session)
   end
 
   # ====================================================================
