@@ -13,4 +13,5 @@ export enum QueryTag {
   Agents = 'Agents',
   Tools = 'Tools',
   McpServers = 'McpServers',
+  Skills = 'Skills',
 }

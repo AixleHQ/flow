@@ -1,6 +1,6 @@
 # Story 9.5: Skills CRUD with Scoping
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,47 +22,47 @@ so that agent sessions can be enhanced with reusable, domain-specific instructio
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Migration (AC: #2)
-  - [ ] Create `skills` table: `name`, `title`, `content`, `description`, `kind` (default: "custom"), `scope_type` (nullable), `scope_id` (nullable), timestamps
-  - [ ] Unique index on `[scope_type, scope_id, name]`
-  - [ ] Index on `[scope_type, scope_id]`
-  - [ ] Index on `kind`
+- [x] Task 1: Migration (AC: #2)
+  - [x] Create `skills` table: `name`, `title`, `content`, `description`, `kind` (default: "custom"), `scope_type` (nullable), `scope_id` (nullable), timestamps
+  - [x] Unique index on `[scope_type, scope_id, name]`
+  - [x] Index on `[scope_type, scope_id]`
+  - [x] Index on `kind`
 
-- [ ] Task 2: Skill model (AC: #1, #5, #8)
-  - [ ] `belongs_to :scope, polymorphic: true, optional: true`
-  - [ ] `kind` enum or string: `internal`, `custom` (default: custom)
-  - [ ] Name normalization via `name=` setter (downcase, replace non-alphanumeric with `_`, allow `-`)
-  - [ ] Validations: name format, uniqueness within scope; custom requires scope_type/scope_id/title/content; internal has nil scope
-  - [ ] Scopes: `for_company`, `for_project`, `internal_skills`, `custom_skills`
-  - [ ] `merged_for_project(project)` class method with `scope_indicator` (includes internal)
-  - [ ] `ransackable_attributes` and `ransackable_associations`
+- [x] Task 2: Skill model (AC: #1, #5, #8)
+  - [x] `belongs_to :scope, polymorphic: true, optional: true`
+  - [x] `kind` enum or string: `internal`, `custom` (default: custom)
+  - [x] Name normalization via `name=` setter (downcase, replace non-alphanumeric with `_`, allow `-`)
+  - [x] Validations: name format, uniqueness within scope; custom requires scope_type/scope_id/title/content; internal has nil scope
+  - [x] Scopes: `for_company`, `for_project`, `internal_skills`, `custom_skills`
+  - [x] `merged_for_project(project)` class method with `scope_indicator` (includes internal)
+  - [x] `ransackable_attributes` and `ransackable_associations`
 
-- [ ] Task 3: Add `has_many :skills` to Company and Project (AC: #9)
-  - [ ] `has_many :skills, as: :scope, dependent: :destroy` in both models
+- [x] Task 3: Add `has_many :skills` to Company and Project (AC: #9)
+  - [x] `has_many :skills, as: :scope, dependent: :destroy` in both models
 
-- [ ] Task 4: Company-level controller (AC: #3)
-  - [ ] `Api::V1::Company::SkillsController` — index, create, update, destroy
-  - [ ] Strong params: `name`, `title`, `content`, `description`
-  - [ ] Routes in `config/routes.rb`
+- [x] Task 4: Company-level controller (AC: #3)
+  - [x] `Api::V1::Company::SkillsController` — index, create, update, destroy
+  - [x] Strong params: `name`, `title`, `content`, `description`
+  - [x] Routes in `config/routes.rb`
 
-- [ ] Task 5: Project-level controller (AC: #4)
-  - [ ] `Api::V1::Company::Projects::SkillsController` — index, create, update, destroy
-  - [ ] Index uses `Skill.merged_for_project`
-  - [ ] Routes nested under `projects/:project_id`
+- [x] Task 5: Project-level controller (AC: #4)
+  - [x] `Api::V1::Company::Projects::SkillsController` — index, create, update, destroy
+  - [x] Index uses `Skill.merged_for_project`
+  - [x] Routes nested under `projects/:project_id`
 
-- [ ] Task 6: Serializer (AC: #7)
-  - [ ] `Api::V1::SkillSerializer` with `scope_indicator`
-  - [ ] Attributes: `id`, `name`, `title`, `content`, `description`, `scope_type`, `scope_id`, `scope_indicator`, `created_at`, `updated_at`
+- [x] Task 6: Serializer (AC: #7)
+  - [x] `Api::V1::SkillSerializer` with `scope_indicator`
+  - [x] Attributes: `id`, `name`, `title`, `content`, `description`, `scope_type`, `scope_id`, `scope_indicator`, `created_at`, `updated_at`
 
-- [ ] Task 7: Policies (AC: #6)
-  - [ ] `Api::V1::Company::SkillsPolicy` — admin only
-  - [ ] `Api::V1::Company::Projects::SkillsPolicy` — project_accessible?
+- [x] Task 7: Policies (AC: #6)
+  - [x] `Api::V1::Company::SkillsPolicy` — admin only
+  - [x] `Api::V1::Company::Projects::SkillsPolicy` — project_accessible?
 
-- [ ] Task 8: Factory and tests (AC: #1-9)
-  - [ ] Factory with `:internal`, `:with_company_scope`, `:with_project_scope` traits
-  - [ ] Model tests: validations, scopes, merged_for_project (with internal), name normalization, kind-conditional validations
-  - [ ] Controller tests (company-level): CRUD, authorization, name uniqueness
-  - [ ] Controller tests (project-level): merged list with internal + scope_indicator, authorization
+- [x] Task 8: Factory and tests (AC: #1-9)
+  - [x] Factory with `:internal`, `:with_company_scope`, `:with_project_scope` traits
+  - [x] Model tests: validations, scopes, merged_for_project (with internal), name normalization, kind-conditional validations
+  - [x] Controller tests (company-level): CRUD, authorization, name uniqueness
+  - [x] Controller tests (project-level): merged list with internal + scope_indicator, authorization
 
 ## Dev Notes
 
@@ -197,7 +197,6 @@ For now (this story), we just store `content` as text. Story 9-6 will transform 
 - `web/app/models/company.rb` — add `has_many :skills`
 - `web/app/models/project.rb` — add `has_many :skills`
 - `web/config/routes.rb` — add skill routes
-- `web/db/schema.rb` — auto-updated
 
 ### Key Code References
 
@@ -239,10 +238,45 @@ Stories 9-1 through 9-4 established:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude claude-4.6-opus (Cursor Agent)
 
 ### Debug Log References
 
+- Migration ran successfully in test env, created skills table with 3 indexes
+- Model tests: 37/37 passed (validations, scopes, merged_for_project, name normalization, associations)
+- Company controller tests: 21/21 passed (CRUD, auth, validation, response format)
+- Project controller tests: 10/10 passed (merged list, scope_indicators, overrides, auth)
+- Full regression suite: 786/786 passed, 0 failures, 0 errors
+- Rubocop: 11 files inspected, 0 offenses
+
 ### Completion Notes List
 
+- All 8 tasks implemented following exact patterns from Agent, Tool, MCPServer models
+- Skill model supports internal (no scope) and custom (Company/Project scope) kinds
+- merged_for_project returns sorted array with internal + company + project skills, project overrides company by name
+- Serializer includes scope_indicator (internal/company/project/overrides_company) and internal boolean
+- Company-level CRUD restricted to admin role, project-level to project_accessible? (owner/collaborator)
+- Name normalization: downcase + replace non-alphanumeric (except hyphens/underscores) with underscore
+- Used enumerize for kind enum (consistent with Tool, MCPServer patterns)
+- 68 new tests total (37 model + 21 company controller + 10 project controller)
+
 ### File List
+
+**New files:**
+- web/db/migrate/20260209100001_create_skills.rb
+- web/app/models/skill.rb
+- web/app/controllers/api/v1/company/skills_controller.rb
+- web/app/controllers/api/v1/company/projects/skills_controller.rb
+- web/app/serializers/api/v1/skill_serializer.rb
+- web/app/policies/api/v1/company/skills_policy.rb
+- web/app/policies/api/v1/company/projects/skills_policy.rb
+- web/test/factories/skills.rb
+- web/test/models/skill_test.rb
+- web/test/controllers/api/v1/company/skills_controller_test.rb
+- web/test/controllers/api/v1/company/projects/skills_controller_test.rb
+
+**Modified files:**
+- web/app/models/company.rb — added `has_many :skills, as: :scope, dependent: :destroy`
+- web/app/models/project.rb — added `has_many :skills, as: :scope, dependent: :destroy`
+- web/config/routes.rb — added skill routes at company and project levels
+- ai/sprint-status.yaml — status updated to in-progress → review

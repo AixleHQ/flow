@@ -34,6 +34,7 @@ Rails.application.routes.draw do
         resources :agents, only: %i[index create update destroy]
         resources :tools, only: %i[index create update destroy]
         resources :mcp_servers, only: %i[index create update destroy]
+        resources :skills, only: %i[index create update destroy]
         resources :projects, only: %i[index show create] do
           scope module: :projects do
             resources :collaborators, only: %i[index create destroy]
@@ -41,6 +42,7 @@ Rails.application.routes.draw do
             resources :agents, only: %i[index create update destroy]
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
+            resources :skills, only: %i[index create update destroy]
           end
         end
       end
