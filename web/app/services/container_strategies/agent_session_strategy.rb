@@ -79,6 +79,9 @@ module ContainerStrategies
 
       # 3. Inject MCP config (Story 9.4) — after config files to enable merge
       SessionContextService.inject_mcp_config(container_ref, session)
+
+      # 4. Inject skills (Story 9.6) — after MCP config
+      SessionContextService.inject_skills(container_ref, session)
     end
 
     # == Lifecycle: before_cleanup ==

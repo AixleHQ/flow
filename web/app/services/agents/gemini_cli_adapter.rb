@@ -51,6 +51,22 @@ module Agents
       }
     end
 
+    # Skill files: appended as sections to /workspace/GEMINI.md
+    def skill_files(skills)
+      sections = skills.filter_map do |skill|
+        next if skill.content.blank?
+
+        "## Skill: #{skill.title || skill.name}\n\n#{skill.content}"
+      end
+      return {} if sections.empty?
+
+      { "/workspace/GEMINI.md" => "\n\n" + sections.join("\n\n---\n\n") + "\n" }
+    end
+
+    def skill_merge_strategy
+      :append
+    end
+
     # MCP config: merged into ~/.gemini/settings.json
     def mcp_config(servers)
       mcp_servers = {}

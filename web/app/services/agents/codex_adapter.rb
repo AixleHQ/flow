@@ -60,6 +60,19 @@ module Agents
       }
     end
 
+    # Skill files: /workspace/.codex/skills/<name>/SKILL.md with YAML front matter
+    def skill_files(skills)
+      files = {}
+      skills.each do |skill|
+        next if skill.content.blank?
+
+        description = (skill.description || skill.title || skill.name).to_s
+        front_matter = "---\nname: #{skill.name}\ndescription: #{description.to_json}\n---\n\n"
+        files["/workspace/.codex/skills/#{skill.name}/SKILL.md"] = front_matter + skill.content
+      end
+      files
+    end
+
     # MCP config: appended to ~/.codex/config.toml
     def mcp_config(servers)
       sections = servers.map do |s|

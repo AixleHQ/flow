@@ -86,6 +86,25 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal [], session.tool_ids
   end
 
+  test "skill_ids returns array" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "skill_ids" => [ 10, 20, 30 ]
+    })
+    assert_equal [ 10, 20, 30 ], session.skill_ids
+  end
+
+  test "skill_ids returns empty array when absent" do
+    session = build(:terminal_session, user: @user, session_config: {})
+    assert_equal [], session.skill_ids
+  end
+
+  test "valid with skill_ids in session_config" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "skill_ids" => [ 1, 2 ]
+    })
+    assert session.valid?
+  end
+
   test "configured_agent_id returns agent_id" do
     session = build(:terminal_session, user: @user, session_config: {
       "agent_id" => 42
@@ -147,6 +166,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal({}, session.env_vars)
     assert_equal([], session.mcp_server_ids)
     assert_equal([], session.tool_ids)
+    assert_equal([], session.skill_ids)
     assert_nil session.configured_agent_id
   end
 end

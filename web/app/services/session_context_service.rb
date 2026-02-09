@@ -53,6 +53,33 @@ class SessionContextService
       resolved
     end
 
+    # == Story 9.6: Skill Injection ==
+
+    # Inject skill files into container based on session_config["skill_ids"].
+    # Each CLI has different skill format and path (adapter.skill_files).
+    # Handles append strategy for Gemini (skills appended to GEMINI.md).
+    def inject_skills(container_id, session)
+      skills = resolve_skills(session)
+      return if skills.empty?
+
+      adapter = adapter_for(session)
+      files = adapter.skill_files(skills)
+      return if files.blank?
+
+      files.each do |path, content|
+        expanded = expand_path(path, adapter.home_dir)
+
+        if adapter.skill_merge_strategy == :append
+          existing = read_file(container_id, expanded) || ""
+          write_file(container_id, expanded, existing + content, adapter.tmpfs_uid)
+        else
+          write_file(container_id, expanded, content, adapter.tmpfs_uid)
+        end
+
+        Rails.logger.info("[SessionContext] Injected skill: #{path} (#{content.bytesize} bytes)")
+      end
+    end
+
     # == Story 9.4: MCP Config Injection ==
 
     # Generate and inject MCP server config files into container.
@@ -129,6 +156,20 @@ class SessionContextService
         end
         resolved
       end
+    end
+
+    # == Skill Resolution ==
+
+    def resolve_skills(session)
+      ids = session.skill_ids
+      return [] if ids.blank?
+
+      skills = Skill.where(id: ids).to_a
+      found_ids = skills.map(&:id)
+      missing = ids - found_ids
+
+      missing.each { |id| Rails.logger.warn("[SessionContext] Skill #{id} not found, skipping") }
+      skills
     end
 
     # == Container File Operations ==

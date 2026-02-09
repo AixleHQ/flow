@@ -83,6 +83,26 @@ module Agents
     end
 
     # =================================================================
+    # Skill File Generation
+    # Each CLI has different skill format and file path
+    # =================================================================
+
+    # Generate skill files for this CLI.
+    # @param skills [Array<Skill>] resolved Skill records
+    # @return [Hash<String, String>] { path => content }
+    def skill_files(skills)
+      {}
+    end
+
+    # How to handle writing skill files.
+    # :fresh   — write new files (Claude, Codex, Cursor)
+    # :append  — append to existing file (Gemini)
+    # @return [Symbol]
+    def skill_merge_strategy
+      :fresh
+    end
+
+    # =================================================================
     # MCP Server Configuration
     # Each CLI has different MCP config format and file path
     # =================================================================

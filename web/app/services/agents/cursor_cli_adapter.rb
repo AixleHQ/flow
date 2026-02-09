@@ -57,6 +57,17 @@ module Agents
       }
     end
 
+    # Skill files: /workspace/.cursor/skills/<name>.md
+    def skill_files(skills)
+      files = {}
+      skills.each do |skill|
+        next if skill.content.blank?
+
+        files["/workspace/.cursor/skills/#{skill.name}.md"] = skill.content
+      end
+      files
+    end
+
     # MCP config: /workspace/.cursor/mcp.json
     def mcp_config(servers)
       mcp_servers = {}

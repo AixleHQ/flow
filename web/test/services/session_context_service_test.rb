@@ -11,6 +11,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Rails.logger.stubs(:info)
     Rails.logger.stubs(:warn)
     Rails.logger.stubs(:debug)
+
+    # Reset cached runtime between tests
+    SessionContextService.instance_variable_set(:@runtime, nil)
   end
 
   # ====================================================================
@@ -353,6 +356,245 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
+  # Story 9.6: inject_skills
+  # ====================================================================
+
+  test "inject_skills writes Claude skill files to container" do
+    skill = create(:skill, name: "deploy-guide", content: "# Deploy Guide\nSteps here", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/deploy-guide.md", skill.content).returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/deploy-guide.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills writes Codex skill files with YAML front matter" do
+    skill = create(:skill, name: "test-runner", content: "# Test Runner\nRun tests", description: "Runs tests", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/workspace/.codex/skills/test-runner/SKILL.md" &&
+        content.include?("---\nname: test-runner\n") &&
+        content.include?('"Runs tests"') &&
+        content.include?("# Test Runner")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.codex/skills/test-runner/SKILL.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills appends Gemini skill sections to GEMINI.md" do
+    skill = create(:skill, name: "coding-style", title: "Coding Style", content: "Use 2 spaces", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    # read existing GEMINI.md — returns nil (file doesn't exist)
+    runtime_mock.expects(:copy_from).with("ctr1", "/workspace/GEMINI.md").returns(nil)
+    # write appended content
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/workspace/GEMINI.md" &&
+        content.include?("## Skill: Coding Style") &&
+        content.include?("Use 2 spaces")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/GEMINI.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills appends to existing GEMINI.md content" do
+    skill = create(:skill, name: "coding-style", title: "Coding Style", content: "Use 2 spaces", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    existing_content = "# Project Context\nExisting content"
+    tar_stream = build_tar_stream("/workspace/GEMINI.md", existing_content)
+    runtime_mock.expects(:copy_from).with("ctr1", "/workspace/GEMINI.md").returns(tar_stream)
+
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/workspace/GEMINI.md" &&
+        content.start_with?("# Project Context\nExisting content") &&
+        content.include?("## Skill: Coding Style")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/GEMINI.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills writes Cursor skill files to container" do
+    skill = create(:skill, name: "review-guide", content: "# Review Guide\nCheck these things", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.cursor/skills/review-guide.md", skill.content).returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.cursor/skills/review-guide.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills writes multiple skill files" do
+    skill1 = create(:skill, name: "skill-a", content: "Content A", scope: @company)
+    skill2 = create(:skill, name: "skill-b", content: "Content B", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "skill_ids" => [ skill1.id, skill2.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/skill-a.md", "Content A").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/skill-a.md" ])
+    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/skill-b.md", "Content B").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/skill-b.md" ])
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills skips when skill_ids is empty" do
+    session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
+
+    # Should not write anything — returns early
+    result = SessionContextService.inject_skills("ctr1", session)
+    assert_nil result
+  end
+
+  test "inject_skills skips missing skill IDs with warning" do
+    skill = create(:skill, name: "existing", content: "Content", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "skill_ids" => [ skill.id, 999_999 ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:copy_to).with("ctr1", "/workspace/.claude/skills/existing.md", "Content").returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.claude/skills/existing.md" ])
+
+    Rails.logger.expects(:warn).with { |msg| msg.include?("Skill 999999 not found") }
+
+    SessionContextService.inject_skills("ctr1", session)
+  end
+
+  test "inject_skills skips skills with blank content" do
+    skill = build(:skill, name: "empty-skill", content: "", scope: @company)
+    skill.save(validate: false) # bypass content presence validation
+
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "skill_ids" => [ skill.id ] })
+
+    # skill_files returns empty hash for blank content → no writes
+    result = SessionContextService.inject_skills("ctr1", session)
+    assert_nil result
+  end
+
+  # ====================================================================
+  # Story 9.6: Adapter skill_files
+  # ====================================================================
+
+  test "Claude adapter skill_files returns correct paths and content" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    skills = [
+      OpenStruct.new(name: "deploy", content: "# Deploy", title: "Deploy", description: "Deploy guide"),
+      OpenStruct.new(name: "test", content: "# Test", title: "Test", description: "Test guide")
+    ]
+
+    result = adapter.skill_files(skills)
+
+    assert_equal 2, result.size
+    assert_equal "# Deploy", result["/workspace/.claude/skills/deploy.md"]
+    assert_equal "# Test", result["/workspace/.claude/skills/test.md"]
+  end
+
+  test "Codex adapter skill_files includes YAML front matter" do
+    adapter = Agents::CodexAdapter.new
+    skills = [ OpenStruct.new(name: "lint", content: "# Lint rules", title: "Linter", description: "Lint description") ]
+
+    result = adapter.skill_files(skills)
+
+    assert_equal 1, result.size
+    content = result["/workspace/.codex/skills/lint/SKILL.md"]
+    assert content.start_with?("---\n")
+    assert_includes content, "name: lint"
+    assert_includes content, '"Lint description"'
+    assert_includes content, "# Lint rules"
+  end
+
+  test "Gemini adapter skill_files concatenates into single GEMINI.md" do
+    adapter = Agents::GeminiCliAdapter.new
+    skills = [
+      OpenStruct.new(name: "a", content: "Content A", title: "Skill A", description: nil),
+      OpenStruct.new(name: "b", content: "Content B", title: "Skill B", description: nil)
+    ]
+
+    result = adapter.skill_files(skills)
+
+    assert_equal 1, result.size
+    content = result["/workspace/GEMINI.md"]
+    assert_includes content, "## Skill: Skill A"
+    assert_includes content, "Content A"
+    assert_includes content, "## Skill: Skill B"
+    assert_includes content, "Content B"
+    assert_includes content, "---" # separator between skills
+  end
+
+  test "Gemini adapter skill_merge_strategy is append" do
+    adapter = Agents::GeminiCliAdapter.new
+    assert_equal :append, adapter.skill_merge_strategy
+  end
+
+  test "Cursor adapter skill_files returns correct paths" do
+    adapter = Agents::CursorCliAdapter.new
+    skills = [ OpenStruct.new(name: "review", content: "# Review", title: "Review", description: nil) ]
+
+    result = adapter.skill_files(skills)
+
+    assert_equal 1, result.size
+    assert_equal "# Review", result["/workspace/.cursor/skills/review.md"]
+  end
+
+  test "Base adapter skill_files returns empty hash" do
+    adapter = Agents::BaseAdapter.new
+    assert_equal({}, adapter.skill_files([]))
+  end
+
+  test "Base adapter skill_merge_strategy is fresh" do
+    adapter = Agents::BaseAdapter.new
+    assert_equal :fresh, adapter.skill_merge_strategy
+  end
+
+  test "adapter skill_files skips skills with blank content" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    skills = [
+      OpenStruct.new(name: "has-content", content: "# Content", title: "T", description: nil),
+      OpenStruct.new(name: "no-content", content: "", title: "T", description: nil),
+      OpenStruct.new(name: "nil-content", content: nil, title: "T", description: nil)
+    ]
+
+    result = adapter.skill_files(skills)
+
+    assert_equal 1, result.size
+    assert result.key?("/workspace/.claude/skills/has-content.md")
+  end
+
+  # ====================================================================
   # Adapter: default_config_paths
   # ====================================================================
 
@@ -382,5 +624,17 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Base adapter returns empty default_config_paths" do
     assert_equal [], Agents::BaseAdapter.default_config_paths
+  end
+
+  private
+
+  # Build a tar stream containing a single file (mirrors ContainerRuntime.copy_from output)
+  def build_tar_stream(path, content)
+    io = StringIO.new
+    writer = Gem::Package::TarWriter.new(io)
+    normalized = path.to_s.sub(%r{\A/}, "")
+    writer.add_file(normalized, 0o644) { |f| f.write(content) }
+    writer.close
+    io.string
   end
 end

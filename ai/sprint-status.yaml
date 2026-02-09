@@ -132,7 +132,7 @@ development_status:
   9-4-connect-mcp-servers-to-session: done
   9-5-skills-crud-with-scoping: done  # Skill model, migration, API controller, serializer, policy, company/project polymorphic scope (like agents/tools pattern)
   9-5-1-skills-ui: done  # Skills management UI: company page, project tab, CRUD dialogs, RTK Query API, routing (follows agents/tools UI pattern)
-  9-6-inject-agent-skills-into-container: backlog  # Per-CLI format transform (SKILL.md/extensions/toml), write to container filesystem at session start
+  9-6-inject-agent-skills-into-container: done  # Per-CLI format transform (SKILL.md/extensions/toml), write to container filesystem at session start
   9-7-mcp-descriptions-in-session-context: backlog  # Generate MCP server+tool descriptions, inject into CLI context files (CLAUDE.md/AGENTS.md/GEMINI.md/.cursorrules)
   9-8-full-session-context-assembly-and-interactive-agents: backlog  # SessionContextAssembler: credentials + configs + env + MCP + skills + MCP descriptions + agent persona + interactive agent mode
   epic-9-session-context-retrospective: optional
