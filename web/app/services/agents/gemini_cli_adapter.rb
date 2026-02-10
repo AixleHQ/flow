@@ -51,6 +51,15 @@ module Agents
       }
     end
 
+    # Session command: gemini --yolo (interactive), gemini -p "prompt" (non-interactive)
+    def session_command(mode:, prompt: nil)
+      if mode == "non_interactive" && prompt.present?
+        "gemini -p #{Shellwords.escape(prompt)}"
+      else
+        "gemini --yolo"
+      end
+    end
+
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)
     def context_file_path
       "#{home_dir}/.gemini/GEMINI.md"

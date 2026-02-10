@@ -73,7 +73,6 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
   test "delegates config_path to adapter" do
     service = AgentCredentialsService.new("claude_code")
 
-    # ClaudeCodeAdapter returns specific config path
     assert service.config_path.is_a?(String)
     assert service.config_path.include?(".claude")
   end
@@ -88,17 +87,16 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "extract_from_container returns credentials from container" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
 
-    # Mock file content
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
     config_content = JSON.generate({
       "primaryApiKey" => "sk-ant-123",
       "lastAccountId" => "user_123"
     })
-    container_mock.expects(:exec).with([ "cat", service.config_path ])
+    runtime_mock.expects(:exec).with("container123", [ "cat", service.config_path ])
       .returns([ [ config_content ], [], 0 ])
-
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
 
     credentials = service.extract_from_container("container123")
 
@@ -108,10 +106,11 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "extract_from_container returns empty hash when file not found" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
-    container_mock.expects(:exec).returns([ [], [ "No such file" ], 1 ])
 
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:exec).returns([ [], [ "No such file" ], 1 ])
 
     credentials = service.extract_from_container("container123")
 
@@ -121,7 +120,10 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
   test "extract_from_container returns empty hash when container not found" do
     service = AgentCredentialsService.new("claude_code")
 
-    Docker::Container.expects(:get).with("missing123").raises(Docker::Error::NotFoundError)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:exec).raises(StandardError.new("container not found"))
 
     credentials = service.extract_from_container("missing123")
 
@@ -132,25 +134,26 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "auth_complete_in_container? returns true when credentials present" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
+
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
 
     config_content = JSON.generate({
       "primaryApiKey" => "sk-ant-123",
       "lastAccountId" => "user_123"
     })
-    container_mock.expects(:exec).returns([ [ config_content ], [], 0 ])
-
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock.expects(:exec).returns([ [ config_content ], [], 0 ])
 
     assert service.auth_complete_in_container?("container123")
   end
 
   test "auth_complete_in_container? returns false when file not found" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
-    container_mock.expects(:exec).returns([ [], [], 1 ])
 
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:exec).returns([ [], [], 1 ])
 
     refute service.auth_complete_in_container?("container123")
   end
@@ -159,28 +162,29 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "write_to_container writes config files" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
 
-    # Expect mkdir and write operations for each config file (stubs allows any)
-    container_mock.stubs(:exec)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
 
-    Docker::Container.stubs(:get).with("container123").returns(container_mock)
+    # Expect exec calls for each config file (mkdir + write)
+    runtime_mock.stubs(:exec)
 
     credentials = { api_key: "test-key", account_id: "user-123" }
 
     # Should not raise
     service.write_to_container("container123", credentials)
-    assert true # Code path covered
+    assert true
   end
 
-  test "write_to_container raises on docker error" do
+  test "write_to_container raises on runtime error" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
-    container_mock.expects(:exec).raises(Docker::Error::DockerError.new("Write failed"))
 
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
 
-    assert_raises(Docker::Error::DockerError) do
+    runtime_mock.expects(:exec).raises(StandardError.new("Write failed"))
+
+    assert_raises(StandardError) do
       service.write_to_container("container123", { api_key: "test" })
     end
   end
@@ -189,15 +193,15 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "save_credentials_from_container creates agent credential" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
+
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
 
     config_content = JSON.generate({
       "primaryApiKey" => "sk-ant-123",
       "lastAccountId" => "user_123"
     })
-    container_mock.expects(:exec).returns([ [ config_content ], [], 0 ])
-
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock.expects(:exec).returns([ [ config_content ], [], 0 ])
 
     credential = service.save_credentials_from_container(@user, "container123")
 
@@ -208,10 +212,11 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "save_credentials_from_container raises when no credentials" do
     service = AgentCredentialsService.new("claude_code")
-    container_mock = mock("container")
-    container_mock.expects(:exec).returns([ [], [], 1 ])
 
-    Docker::Container.expects(:get).with("container123").returns(container_mock)
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
+    runtime_mock.expects(:exec).returns([ [], [], 1 ])
 
     assert_raises(RuntimeError, "No credentials found in container") do
       service.save_credentials_from_container(@user, "container123")
@@ -223,19 +228,17 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
   test "load_credentials_to_container writes existing credentials" do
     service = AgentCredentialsService.new("claude_code")
 
-    # Create credential for user
+    runtime_mock = mock("runtime")
+    service.instance_variable_set(:@runtime, runtime_mock)
+
     credential = create(:agent_credential,
       user: @user,
       agent_type: "claude_code",
       config_data: { api_key: "existing-key", account_id: "user-123" }
     )
 
-    container_mock = mock("container")
-    container_mock.expects(:exec).at_least_once
+    runtime_mock.stubs(:exec)
 
-    Docker::Container.expects(:get).with("container123").returns(container_mock).at_least_once
-
-    # Should not raise and should touch credential
     service.load_credentials_to_container(@user, "container123")
 
     credential.reload

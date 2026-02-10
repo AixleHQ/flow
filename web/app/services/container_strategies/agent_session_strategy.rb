@@ -65,26 +65,11 @@ module ContainerStrategies
       container_ref = context[:container] || context[:container_id]
       container_id = runtime.container_identifier(container_ref)
       raise "Container not ready for before_exec" if container_id.blank?
+
       session = TerminalSession.find(input[:session_id])
-
-      # 1. Load credentials (existing)
-      if input[:credential].present?
-        Rails.logger.info("[AgentSession] Loading credentials into container #{container_id}")
-        input[:credential].write_to_container(container_ref)
-        Rails.logger.info("[AgentSession] Credentials loaded successfully")
-      end
-
-      # 2. Inject config files (Story 9.2)
-      SessionContextService.inject_config_files(container_ref, session)
-
-      # 3. Inject MCP config (Story 9.4) — after config files to enable merge
-      SessionContextService.inject_mcp_config(container_ref, session)
-
-      # 4. Inject skills (Story 9.6) — after MCP config
-      SessionContextService.inject_skills(container_ref, session)
-
-      # 5. Inject context file (Story 9.7) — after skills (appends to same file for Gemini)
-      SessionContextService.inject_context_file(container_ref, session)
+      SessionContextService.assemble_session_context(
+        container_ref, session, credential: input[:credential]
+      )
     end
 
     # == Lifecycle: before_cleanup ==
@@ -147,7 +132,9 @@ module ContainerStrategies
     end
 
     def ttyd_command
-      SESSION_COMMANDS.fetch(input[:agent_type])
+      session = TerminalSession.find(input[:session_id])
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      adapter.session_command(mode: session.mode, prompt: session.initial_prompt)
     end
 
     private

@@ -1,5 +1,14 @@
 {
-  "ignored_warnings": [],
-  "updated": "2026-01-31",
+  "ignored_warnings": [
+    {
+      "fingerprint": "2c5f9d954a91f75b1605adcbedba2c51eb6d969a412b8beb04d93665b3328b45",
+      "warning_type": "SSL Verification Bypass",
+      "check_name": "SSLVerify",
+      "message": "SSL certificate verification was bypassed",
+      "file": "app/services/container_runtime/kubernetes_runtime.rb",
+      "note": "In-cluster health check to Traefik service uses self-signed certificate. This is an internal pod-to-service call within the Kubernetes cluster, not an external request."
+    }
+  ],
+  "updated": "2026-02-10",
   "brakeman_version": "7.0.0"
 }

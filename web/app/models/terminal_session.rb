@@ -27,6 +27,7 @@ class TerminalSession < ApplicationRecord
   validates :route_token, uniqueness: true, allow_nil: true
   validates :mcp_key, uniqueness: true, allow_nil: true
   validate :validate_session_config
+  validate :validate_non_interactive_prompt
 
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
@@ -37,7 +38,7 @@ class TerminalSession < ApplicationRecord
 
   # == session_config accessors ==
 
-  ALLOWED_SESSION_CONFIG_KEYS = %w[config_files env_vars mcp_server_ids tool_ids agent_id skill_ids].freeze
+  ALLOWED_SESSION_CONFIG_KEYS = %w[config_files env_vars mcp_server_ids tool_ids agent_id skill_ids mode initial_prompt].freeze
 
   def config_files
     session_config["config_files"] || {}
@@ -61,6 +62,14 @@ class TerminalSession < ApplicationRecord
 
   def configured_agent_id
     session_config["agent_id"]
+  end
+
+  def mode
+    session_config["mode"] || "interactive"
+  end
+
+  def initial_prompt
+    session_config["initial_prompt"]
   end
 
   # Check if session is active (for MCP authentication)
@@ -102,6 +111,15 @@ class TerminalSession < ApplicationRecord
     unknown_keys = session_config.keys - ALLOWED_SESSION_CONFIG_KEYS
     if unknown_keys.any?
       errors.add(:session_config, "contains unknown keys: #{unknown_keys.join(', ')}")
+    end
+  end
+
+  def validate_non_interactive_prompt
+    return unless session_config.is_a?(Hash)
+    return unless session_config["mode"] == "non_interactive"
+
+    if session_config["initial_prompt"].blank?
+      errors.add(:session_config, "initial_prompt is required for non_interactive mode")
     end
   end
 

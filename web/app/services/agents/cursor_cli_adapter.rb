@@ -57,6 +57,15 @@ module Agents
       }
     end
 
+    # Session command: agent (interactive), agent -m "prompt" (non-interactive)
+    def session_command(mode:, prompt: nil)
+      if mode == "non_interactive" && prompt.present?
+        "agent -m #{Shellwords.escape(prompt)}"
+      else
+        "agent"
+      end
+    end
+
     # Context file: ~/.cursor/rules/.cursorrules (auto-read by Cursor at startup)
     def context_file_path
       "#{home_dir}/.cursor/rules/.cursorrules"

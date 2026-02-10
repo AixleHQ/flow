@@ -14,6 +14,37 @@ require "stringio"
 #   - Context file with MCP/tool descriptions and agent persona (Story 9.7)
 class SessionContextService
   class << self
+    # == Story 9.8: Unified Session Context Assembly ==
+
+    # Orchestrate all session context injection steps in correct order.
+    # Single entry point for AgentSessionStrategy#before_exec.
+    #
+    # @param container_id [String] Container identifier
+    # @param session [TerminalSession] Session record
+    # @param credential [AgentCredential, nil] Optional credential to inject
+    def assemble_session_context(container_id, session, credential: nil)
+      # Step 1: Credentials (optional)
+      if credential.present?
+        measure_step("credentials") do
+          credential.write_to_container(container_id)
+        end
+      end
+
+      # Step 2: Config files
+      measure_step("config_files") { inject_config_files(container_id, session) }
+
+      # Step 3: MCP config
+      measure_step("mcp_config") { inject_mcp_config(container_id, session) }
+
+      # Step 4: Skills
+      measure_step("skills") { inject_skills(container_id, session) }
+
+      # Step 5: Context file (after skills — append to same file for Gemini)
+      measure_step("context_file") { inject_context_file(container_id, session) }
+
+      Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
+    end
+
     # == Story 9.2: Config File Injection ==
 
     # Inject config files from session_config into container.
@@ -136,6 +167,15 @@ class SessionContextService
     end
 
     private
+
+    # == Timing ==
+
+    def measure_step(name)
+      start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      yield
+      elapsed = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(1)
+      Rails.logger.info("[SessionContext] Step '#{name}' completed in #{elapsed}ms")
+    end
 
     # == Shared Helpers ==
 

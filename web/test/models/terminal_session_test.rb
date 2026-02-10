@@ -155,6 +155,66 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_includes session.available_tools, tool
   end
 
+  # == mode and initial_prompt accessors ==
+
+  test "mode returns interactive by default" do
+    session = build(:terminal_session, user: @user, session_config: {})
+    assert_equal "interactive", session.mode
+  end
+
+  test "mode returns configured value" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "non_interactive",
+      "initial_prompt" => "Do something"
+    })
+    assert_equal "non_interactive", session.mode
+  end
+
+  test "initial_prompt returns nil by default" do
+    session = build(:terminal_session, user: @user, session_config: {})
+    assert_nil session.initial_prompt
+  end
+
+  test "initial_prompt returns configured value" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "non_interactive",
+      "initial_prompt" => "Refactor the auth module"
+    })
+    assert_equal "Refactor the auth module", session.initial_prompt
+  end
+
+  test "valid with mode and initial_prompt in session_config" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "non_interactive",
+      "initial_prompt" => "Run tests"
+    })
+    assert session.valid?
+  end
+
+  test "valid with interactive mode and no initial_prompt" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "interactive"
+    })
+    assert session.valid?
+  end
+
+  test "invalid when non_interactive mode without initial_prompt" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "non_interactive"
+    })
+    assert_not session.valid?
+    assert_includes session.errors[:session_config].join, "initial_prompt is required"
+  end
+
+  test "invalid when non_interactive mode with blank initial_prompt" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "mode" => "non_interactive",
+      "initial_prompt" => ""
+    })
+    assert_not session.valid?
+    assert_includes session.errors[:session_config].join, "initial_prompt is required"
+  end
+
   # == backwards compatibility ==
 
   test "auth_setup sessions work with empty session_config" do

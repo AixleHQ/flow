@@ -1,0 +1,55 @@
+# /etc/inputrc — readline config for agent containers (ttyd web terminal)
+
+# Completion
+set completion-ignore-case On
+set show-all-if-ambiguous On
+set visible-stats On
+set mark-symlinked-directories On
+
+# Unicode / meta
+set convert-meta Off
+set input-meta On
+set output-meta On
+
+# Tilde expansion
+set expand-tilde On
+
+# Editing mode
+set editing-mode emacs
+set bind-tty-special-chars Off
+
+# Up/Down search history using typed prefix
+"\e[A": history-search-backward
+"\e[B": history-search-forward
+
+# Ctrl+Left/Right — word navigation
+"\e[1;5C": forward-word
+"\e[1;5D": backward-word
+
+# Option+Left/Right (macOS double-escape)
+"\e\e[C": forward-word
+"\e\e[D": backward-word
+
+# Option+Left/Right (xterm modifyOtherKeys / ttyd)
+"\e[1;3C": forward-word
+"\e[1;3D": backward-word
+
+# Cmd+Left/Right — beginning/end of line (ttyd sends 1;9 for super/cmd)
+"\e[1;9C": end-of-line
+"\e[1;9D": beginning-of-line
+
+# Ctrl+W — delete word backward
+"\C-w": backward-kill-word
+
+# Home / End
+"\e[1~": beginning-of-line
+"\e[4~": end-of-line
+"\e[H": beginning-of-line
+"\e[F": end-of-line
+
+# Page Up / Page Down — history
+"\e[5~": beginning-of-history
+"\e[6~": end-of-history
+
+# Delete key
+"\e[3~": delete-char

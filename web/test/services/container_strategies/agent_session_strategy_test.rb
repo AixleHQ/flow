@@ -83,26 +83,23 @@ module ContainerStrategies
 
     # == before_exec Tests ==
 
-    test "before_exec loads credentials into container" do
+    test "before_exec loads credentials into container via assembler" do
       strategy = build_strategy
 
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123def456789")
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
 
-      # Expect credential.write_to_container to be called
-      @credential.expects(:write_to_container).with("abc123def456")
+      # Expect assemble_session_context to be called with credential
+      SessionContextService.expects(:assemble_session_context).with(
+        "container_ref", @session, credential: @credential
+      )
 
-      # Stub Docker::Container.get for MCP injection (palad-tools always injected)
-      docker_container_mock = mock("docker_container")
-      docker_container_mock.stubs(:exec).returns([ [], [], 0 ])
-      Docker::Container.stubs(:get).returns(docker_container_mock)
-
-      context = { container: container_mock }
+      context = { container: "container_ref" }
       strategy.before_exec(context)
     end
 
-    test "before_exec skips when no credential" do
-      # Create strategy without credential
+    test "before_exec skips credential when nil" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
         agent_type: "claude_code",
@@ -111,20 +108,17 @@ module ContainerStrategies
         credential: nil
       )
 
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123def456789")
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
 
-      # Stub Docker::Container.get for MCP injection (palad-tools always injected)
-      docker_container_mock = mock("docker_container")
-      docker_container_mock.stubs(:exec).returns([ [], [], 0 ])
-      Docker::Container.stubs(:get).returns(docker_container_mock)
+      # Expect assemble_session_context to be called with credential: nil
+      SessionContextService.expects(:assemble_session_context).with(
+        "container_ref", @session, credential: nil
+      )
 
-      # write_to_container should NOT be called (no expects)
-      context = { container: container_mock }
+      context = { container: "container_ref" }
       strategy.before_exec(context)
-
-      # Test passes if no error - credential was nil so no write attempted
-      assert true
     end
 
     # == before_cleanup Tests ==
@@ -168,6 +162,60 @@ module ContainerStrategies
       assert_equal "claude", cmd
     end
 
+    test "ttyd_command returns non-interactive command when mode is non_interactive" do
+      @session.update!(session_config: {
+        "mode" => "non_interactive",
+        "initial_prompt" => "Fix the tests"
+      })
+      strategy = build_strategy(agent_type: "claude_code")
+
+      cmd = strategy.send(:ttyd_command)
+
+      assert_equal "claude -p Fix\\ the\\ tests", cmd
+    end
+
+    test "ttyd_command uses adapter session_command for codex non-interactive" do
+      @session.update!(agent_type: "codex", session_config: {
+        "mode" => "non_interactive",
+        "initial_prompt" => "Run all tests"
+      })
+      @credential.update!(agent_type: "codex")
+      strategy = build_strategy(agent_type: "codex")
+
+      cmd = strategy.send(:ttyd_command)
+
+      assert_equal "codex -q Run\\ all\\ tests", cmd
+    end
+
+    # == before_exec delegates to assembler ==
+
+    test "before_exec delegates to SessionContextService.assemble_session_context" do
+      strategy = build_strategy
+
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
+
+      SessionContextService.expects(:assemble_session_context).with(
+        "container_ref", @session, credential: @credential
+      )
+
+      context = { container: "container_ref" }
+      strategy.before_exec(context)
+    end
+
+    test "before_exec raises when container not ready" do
+      strategy = build_strategy
+
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:container_identifier).returns(nil)
+
+      assert_raises(RuntimeError, /Container not ready/) do
+        strategy.before_exec(container: "bad_ref")
+      end
+    end
+
     test "list_files_in_container returns path directly for non-glob" do
       strategy = build_strategy
       container_mock = mock("container")
@@ -179,36 +227,41 @@ module ContainerStrategies
 
     test "list_files_in_container executes find for glob pattern" do
       strategy = build_strategy
-      container_mock = mock("container")
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
 
-      # Mock find command execution
-      container_mock.expects(:exec).with(
+      runtime_mock.expects(:exec).with(
+        "container_ref",
         [ "/bin/sh", "-c", "find /tmp -name '*.log' 2>/dev/null || true" ],
         stdout: true,
         stderr: true
       ).returns([ [ "/tmp/app.log\n/tmp/error.log\n" ], [], 0 ])
 
-      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
 
       assert_equal [ "/tmp/app.log", "/tmp/error.log" ], files
     end
 
     test "list_files_in_container returns empty array on error" do
       strategy = build_strategy
-      container_mock = mock("container")
-      container_mock.expects(:exec).raises(Docker::Error::DockerError.new("Exec failed"))
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
 
-      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+      runtime_mock.expects(:exec).raises(StandardError.new("Exec failed"))
+
+      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
 
       assert_equal [], files
     end
 
     test "list_files_in_container returns empty array on non-zero exit" do
       strategy = build_strategy
-      container_mock = mock("container")
-      container_mock.expects(:exec).returns([ [], [], 1 ])
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
 
-      files = strategy.send(:list_files_in_container, container_mock, "/tmp/*.log")
+      runtime_mock.expects(:exec).returns([ [], [], 1 ])
+
+      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
 
       assert_equal [], files
     end

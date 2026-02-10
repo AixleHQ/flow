@@ -28,18 +28,16 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       }
     })
 
-    container_mock = mock("container")
-    Docker::Container.expects(:get).with("abc123").returns(container_mock).twice
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # For settings.json: mkdir + write + chown
-    container_mock.expects(:exec).with([ "mkdir", "-p", "/home/claude/.claude" ])
-    container_mock.expects(:exec).with { |args| args[0] == "sh" && args[2].include?("base64 -d > /home/claude/.claude/settings.json") }
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "/home/claude/.claude/settings.json" ])
+    # For settings.json: copy_to + chown
+    runtime_mock.expects(:copy_to).with("abc123", "/home/claude/.claude/settings.json", '{"permissions":{}}').returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/settings.json" ])
 
-    # For CLAUDE.md: mkdir + write + chown
-    container_mock.expects(:exec).with([ "mkdir", "-p", "." ])
-    container_mock.expects(:exec).with { |args| args[0] == "sh" && args[2].include?("base64 -d > CLAUDE.md") }
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "CLAUDE.md" ])
+    # For CLAUDE.md: copy_to + chown
+    runtime_mock.expects(:copy_to).with("abc123", "CLAUDE.md", "# Context").returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 CLAUDE.md" ])
 
     SessionContextService.inject_config_files("abc123", session)
   end
@@ -47,7 +45,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_config_files skips when config_files is empty" do
     session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
 
-    Docker::Container.expects(:get).never
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    runtime_mock.expects(:copy_to).never
 
     SessionContextService.inject_config_files("abc123", session)
   end
@@ -57,7 +57,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       "config_files" => nil
     })
 
-    Docker::Container.expects(:get).never
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    runtime_mock.expects(:copy_to).never
 
     SessionContextService.inject_config_files("abc123", session)
   end
@@ -268,12 +270,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: { "mcp_server_ids" => [ server.id ] })
 
-    container_mock = mock("container")
-    Docker::Container.expects(:get).with("abc123").returns(container_mock).at_least_once
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    container_mock.expects(:exec).with([ "mkdir", "-p", "/workspace" ]).once
-    container_mock.expects(:exec).with { |args| args[0] == "sh" && args[2].include?("/workspace/.mcp.json") }.once
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "/workspace/.mcp.json" ]).once
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "abc123" && path == "/workspace/.mcp.json" &&
+        JSON.parse(content)["mcpServers"]["tavily"].present?
+    end.returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -284,26 +288,24 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli",
                      session_config: { "mcp_server_ids" => [ server.id ] })
 
-    container_mock = mock("container")
-    Docker::Container.expects(:get).with("abc123").returns(container_mock).at_least_once
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # Read existing settings returns existing config
+    # Read existing settings (merge_json strategy reads first)
     existing_settings = { "security" => { "auth" => { "selectedType" => "oauth-personal" } } }
-    container_mock.expects(:exec).with([ "cat", "/home/gemini/.gemini/settings.json" ])
-                  .returns([ [ existing_settings.to_json ], [], 0 ])
+    tar_stream = build_tar_stream("/home/gemini/.gemini/settings.json", existing_settings.to_json)
+    runtime_mock.expects(:copy_from).with("abc123", "/home/gemini/.gemini/settings.json").returns(tar_stream)
 
     # Write merged settings
-    container_mock.expects(:exec).with([ "mkdir", "-p", "/home/gemini/.gemini" ])
-    container_mock.expects(:exec).with { |args|
-      next false unless args[0] == "sh"
-      decoded = Base64.decode64(args[2].match(/echo '(.+)'/)[1]) rescue nil
-      next false unless decoded
-      parsed = JSON.parse(decoded) rescue nil
-      next false unless parsed
-      # Verify merge: original key preserved + mcpServers added
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      next false unless ctr == "abc123" && path == "/home/gemini/.gemini/settings.json"
+
+      parsed = JSON.parse(content)
       parsed["security"].present? && parsed["mcpServers"]["tavily"].present?
-    }.returns([ [], [], 0 ])
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "/home/gemini/.gemini/settings.json" ])
+    rescue JSON::ParserError
+      false
+    end.returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/settings.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -314,23 +316,20 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex",
                      session_config: { "mcp_server_ids" => [ server.id ] })
 
-    container_mock = mock("container")
-    Docker::Container.expects(:get).with("abc123").returns(container_mock).at_least_once
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # Read existing config.toml
-    container_mock.expects(:exec).with([ "cat", "/home/codex/.codex/config.toml" ])
-                  .returns([ [ "approval_policy = \"never\"\n" ], [], 0 ])
+    # Read existing config.toml (append_toml strategy reads first)
+    existing_toml = "approval_policy = \"never\"\n"
+    tar_stream = build_tar_stream("/home/codex/.codex/config.toml", existing_toml)
+    runtime_mock.expects(:copy_from).with("abc123", "/home/codex/.codex/config.toml").returns(tar_stream)
 
     # Write appended config
-    container_mock.expects(:exec).with([ "mkdir", "-p", "/home/codex/.codex" ])
-    container_mock.expects(:exec).with { |args|
-      next false unless args[0] == "sh"
-      decoded = Base64.decode64(args[2].match(/echo '(.+)'/)[1]) rescue nil
-      next false unless decoded
-      # Verify original content preserved + MCP appended
-      decoded.include?("approval_policy") && decoded.include?('[mcp_servers."tavily"]')
-    }.returns([ [], [], 0 ])
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "/home/codex/.codex/config.toml" ])
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "abc123" && path == "/home/codex/.codex/config.toml" &&
+        content.include?("approval_policy") && content.include?('[mcp_servers."tavily"]')
+    end.returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/config.toml" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -339,18 +338,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: {})
 
-    container_mock = mock("container")
-    Docker::Container.expects(:get).with("abc123").returns(container_mock).at_least_once
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    container_mock.expects(:exec).with([ "mkdir", "-p", "/workspace" ])
-    container_mock.expects(:exec).with { |args|
-      next false unless args[0] == "sh"
-      decoded = Base64.decode64(args[2].match(/echo '(.+)'/)[1]) rescue nil
-      next false unless decoded
-      parsed = JSON.parse(decoded) rescue nil
-      parsed&.dig("mcpServers", "palad-tools").present?
-    }.returns([ [], [], 0 ])
-    container_mock.expects(:exec).with([ "chown", "1001:1001", "/workspace/.mcp.json" ])
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "abc123" && path == "/workspace/.mcp.json" &&
+        JSON.parse(content).dig("mcpServers", "palad-tools").present?
+    end.returns(true)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -909,6 +904,166 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
+  end
+
+  # ====================================================================
+  # Story 9.8: Adapter session_command
+  # ====================================================================
+
+  test "Claude adapter session_command returns claude for interactive mode" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    assert_equal "claude", adapter.session_command(mode: "interactive")
+  end
+
+  test "Claude adapter session_command returns claude -p for non_interactive mode" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    result = adapter.session_command(mode: "non_interactive", prompt: "Fix the bug")
+    assert_equal "claude -p Fix\\ the\\ bug", result
+  end
+
+  test "Claude adapter session_command returns claude when non_interactive but no prompt" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    assert_equal "claude", adapter.session_command(mode: "non_interactive", prompt: nil)
+  end
+
+  test "Codex adapter session_command returns codex --yolo for interactive mode" do
+    adapter = Agents::CodexAdapter.new
+    assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
+  end
+
+  test "Codex adapter session_command returns codex -q for non_interactive mode" do
+    adapter = Agents::CodexAdapter.new
+    result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+    assert_equal "codex -q Run\\ tests", result
+  end
+
+  test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
+    adapter = Agents::GeminiCliAdapter.new
+    assert_equal "gemini --yolo", adapter.session_command(mode: "interactive")
+  end
+
+  test "Gemini adapter session_command returns gemini -p for non_interactive mode" do
+    adapter = Agents::GeminiCliAdapter.new
+    result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
+    assert_equal "gemini -p Deploy\\ staging", result
+  end
+
+  test "Cursor adapter session_command returns agent for interactive mode" do
+    adapter = Agents::CursorCliAdapter.new
+    assert_equal "agent", adapter.session_command(mode: "interactive")
+  end
+
+  test "Cursor adapter session_command returns agent -m for non_interactive mode" do
+    adapter = Agents::CursorCliAdapter.new
+    result = adapter.session_command(mode: "non_interactive", prompt: "Refactor auth")
+    assert_equal "agent -m Refactor\\ auth", result
+  end
+
+  test "Base adapter session_command raises NotImplementedError" do
+    adapter = Agents::BaseAdapter.new
+    assert_raises(NotImplementedError) do
+      adapter.session_command(mode: "interactive")
+    end
+  end
+
+  test "session_command escapes shell special characters in prompt" do
+    adapter = Agents::ClaudeCodeAdapter.new
+    result = adapter.session_command(mode: "non_interactive", prompt: 'Fix the "bug" && deploy')
+    assert_includes result, "claude -p"
+    # Ensure special chars are escaped
+    assert_not_includes result, '"bug"'
+    assert_not_includes result, "&&"
+  end
+
+  # ====================================================================
+  # Story 9.8: assemble_session_context
+  # ====================================================================
+
+  test "assemble_session_context orchestrates all steps in order" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    credential_mock = mock("credential")
+
+    call_order = sequence("assembly_order")
+
+    # Step 1: Credentials
+    credential_mock.expects(:write_to_container).with("ctr1").in_sequence(call_order)
+
+    # Step 2: Config files — no config_files in session_config, skipped internally
+
+    # Step 3: MCP config — always includes palad-tools
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/workspace/.mcp.json"
+    end.returns(true).in_sequence(call_order)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ]).in_sequence(call_order)
+
+    # Step 4: Skills — no skill_ids, skipped internally
+
+    # Step 5: Context file — always generates content (palad-tools)
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil).in_sequence(call_order)
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
+    end.returns(true).in_sequence(call_order)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ]).in_sequence(call_order)
+
+    SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
+  end
+
+  test "assemble_session_context skips credentials when nil" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    # No credential.write_to_container expected
+
+    # MCP config (palad-tools)
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/workspace/.mcp.json"
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
+
+    # Context file
+    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+  end
+
+  test "assemble_session_context logs timing for each step" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: {})
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    # Allow all runtime calls
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:copy_from).returns(nil)
+    runtime_mock.stubs(:exec)
+
+    # Unstub info to capture calls
+    Rails.logger.unstub(:info)
+
+    logged_messages = []
+    Rails.logger.stubs(:info).with { |msg| logged_messages << msg; true }
+
+    SessionContextService.assemble_session_context("ctr1", session)
+
+    step_logs = logged_messages.select { |m| m.include?("[SessionContext] Step") }
+    assert step_logs.any? { |m| m.include?("'config_files'") }
+    assert step_logs.any? { |m| m.include?("'mcp_config'") }
+    assert step_logs.any? { |m| m.include?("'skills'") }
+    assert step_logs.any? { |m| m.include?("'context_file'") }
+    assert logged_messages.any? { |m| m.include?("Assembly complete") }
   end
 
   # ====================================================================

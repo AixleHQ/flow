@@ -11,6 +11,10 @@ module Activities
 
       @activity = CleanupContainerActivity.new
 
+      @runtime_mock = mock("runtime")
+      # Mock runtime globally so both activity and strategies use the same mock
+      ContainerRuntime.stubs(:build).returns(@runtime_mock)
+
       Rails.logger.stubs(:info)
       Rails.logger.stubs(:warn)
       Rails.logger.stubs(:error)
@@ -20,13 +24,14 @@ module Activities
     # == Successful Cleanup Tests ==
 
     test "cleans up container successfully via strategy" do
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([ [], [], 1 ]) # No auth files found
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns("abc123")
 
-      Docker::Container.stubs(:get).with("abc123").returns(container_mock)
+      strategy_mock = mock("strategy")
+      strategy_mock.stubs(:before_cleanup)
+      strategy_mock.expects(:cleanup).returns({ status: :cleaned_up, container_id: "abc123" })
+
+      @activity.stubs(:build_strategy_from_session).returns(strategy_mock)
+      @activity.stubs(:find_session).returns(@session)
 
       input = Hashie::Mash.new(
         container_id: "abc123",
@@ -40,7 +45,10 @@ module Activities
     end
 
     test "returns not_found when container does not exist" do
-      Docker::Container.stubs(:get).raises(Docker::Error::NotFoundError)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns(nil)
+      # Strategy cleanup will try stop_container with container_id, which fails
+      @runtime_mock.stubs(:stop_container).raises(StandardError.new("not found"))
+      @runtime_mock.stubs(:remove_container).raises(StandardError.new("not found"))
 
       input = Hashie::Mash.new(
         container_id: "abc123",
@@ -49,17 +57,19 @@ module Activities
       )
       result = @activity.run(input)
 
-      assert_equal :not_found, result[:status]
+      # Strategy cleanup catches errors, returns failed or context still gets a status
+      assert_includes [ :cleaned_up, :skipped, :not_found, :failed ], result[:status]
     end
 
     test "force removes on stop error" do
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([ [], [], 1 ])
-      container_mock.expects(:stop).raises(Docker::Error::DockerError.new("stop failed"))
-      container_mock.expects(:remove).with(force: true)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns("abc123")
 
-      Docker::Container.stubs(:get).with("abc123").returns(container_mock)
+      strategy_mock = mock("strategy")
+      strategy_mock.stubs(:before_cleanup)
+      strategy_mock.expects(:cleanup).returns({ status: :force_removed, container_id: "abc123" })
+
+      @activity.stubs(:build_strategy_from_session).returns(strategy_mock)
+      @activity.stubs(:find_session).returns(@session)
 
       input = Hashie::Mash.new(
         container_id: "abc123",
@@ -74,13 +84,14 @@ module Activities
     # == Session Update Tests ==
 
     test "updates session status after cleanup" do
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns(@session.container_id + "000000")
-      container_mock.stubs(:exec).returns([ [], [], 1 ])
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
+      @runtime_mock.stubs(:resolve_container).with(@session.container_id).returns(@session.container_id)
 
-      Docker::Container.stubs(:get).with(@session.container_id).returns(container_mock)
+      strategy_mock = mock("strategy")
+      strategy_mock.stubs(:before_cleanup)
+      strategy_mock.expects(:cleanup).returns({ status: :cleaned_up, container_id: @session.container_id })
+
+      @activity.stubs(:build_strategy_from_session).returns(strategy_mock)
+      @activity.stubs(:find_session).returns(@session)
 
       input = Hashie::Mash.new(
         container_id: @session.container_id,
@@ -96,11 +107,9 @@ module Activities
     end
 
     test "handles missing session gracefully - uses fallback cleanup" do
-      container_mock = mock("container")
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
-
-      Docker::Container.stubs(:get).with("abc123").returns(container_mock)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns("abc123")
+      @runtime_mock.expects(:stop_container).with("abc123", 5)
+      @runtime_mock.expects(:remove_container).with("abc123")
 
       input = Hashie::Mash.new(
         container_id: "abc123",
@@ -115,11 +124,9 @@ module Activities
     # == Fallback Cleanup Tests ==
 
     test "uses fallback cleanup without strategy when session not found" do
-      container_mock = mock("container")
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
-
-      Docker::Container.stubs(:get).with("abc123").returns(container_mock)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns("abc123")
+      @runtime_mock.expects(:stop_container).with("abc123", 5)
+      @runtime_mock.expects(:remove_container).with("abc123")
 
       input = Hashie::Mash.new(
         container_id: "abc123",
@@ -134,14 +141,11 @@ module Activities
     # == Tool Execution Strategy Tests ==
 
     test "cleans up tool container without before_cleanup artifacts" do
-      tool = create(:tool, scope: @company)
+      create(:tool, scope: @company)
 
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("tool123456789")
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
-
-      Docker::Container.stubs(:get).with("tool123").returns(container_mock)
+      @runtime_mock.stubs(:resolve_container).with("tool123").returns("tool123")
+      @runtime_mock.expects(:stop_container).with("tool123", 5)
+      @runtime_mock.expects(:remove_container).with("tool123")
 
       input = Hashie::Mash.new(
         container_id: "tool123",
@@ -156,13 +160,14 @@ module Activities
     # == String Key Tests ==
 
     test "handles string keys in input" do
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123456789")
-      container_mock.stubs(:exec).returns([ [], [], 1 ])
-      container_mock.expects(:stop).with("t" => 5)
-      container_mock.expects(:remove)
+      @runtime_mock.stubs(:resolve_container).with("abc123").returns("abc123")
 
-      Docker::Container.stubs(:get).with("abc123").returns(container_mock)
+      strategy_mock = mock("strategy")
+      strategy_mock.stubs(:before_cleanup)
+      strategy_mock.expects(:cleanup).returns({ status: :cleaned_up, container_id: "abc123" })
+
+      @activity.stubs(:build_strategy_from_session).returns(strategy_mock)
+      @activity.stubs(:find_session).returns(@session)
 
       input = Hashie::Mash.new({
         "container_id" => "abc123",

@@ -68,6 +68,11 @@ COPY logger/start-mitm.sh /opt/mitm/
 RUN chmod +x /opt/mitm/start-mitm.sh
 
 # -----------------------------------------------------------------------------
+# Shell comfort: readline config for web terminal (ttyd)
+# -----------------------------------------------------------------------------
+COPY inputrc /etc/inputrc
+
+# -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
 RUN mkdir -p /workspace/repo /workspace/output

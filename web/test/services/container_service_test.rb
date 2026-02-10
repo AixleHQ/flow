@@ -3,24 +3,9 @@
 require "test_helper"
 
 class ContainerServiceTest < ActiveSupport::TestCase
-  # Simple mock container object
-  class MockContainer
-    def id
-      "abc123def456"
-    end
-
-    def kill
-      true
-    end
-
-    def remove(_options = {})
-      true
-    end
-  end
-
   # Mock strategy for testing
   class MockStrategy
-    attr_accessor :phases_called, :should_timeout, :should_error, :error_phase, :container_mock
+    attr_accessor :phases_called, :should_timeout, :should_error, :error_phase
     attr_reader :input
 
     def initialize(input = {})
@@ -29,7 +14,6 @@ class ContainerServiceTest < ActiveSupport::TestCase
       @should_timeout = false
       @should_error = false
       @error_phase = nil
-      @container_mock = MockContainer.new
     end
 
     def before_create(context)
@@ -43,7 +27,8 @@ class ContainerServiceTest < ActiveSupport::TestCase
 
     def create(context)
       @phases_called << :create
-      context[:container] = @container_mock
+      context[:container] = "mock-container-123"
+      context[:container_id] = "mock-container-123"
       maybe_timeout_or_error(:create)
     end
 
@@ -86,7 +71,7 @@ class ContainerServiceTest < ActiveSupport::TestCase
 
     def maybe_timeout_or_error(phase)
       if @should_timeout && @error_phase == phase
-        sleep(10) # Will trigger timeout
+        sleep(10)
       end
 
       if @should_error && @error_phase == phase
@@ -115,10 +100,12 @@ class ContainerServiceTest < ActiveSupport::TestCase
   end
 
   setup do
-    # Stub Rails.logger to avoid nil errors
     Rails.logger.stubs(:info)
     Rails.logger.stubs(:warn)
     Rails.logger.stubs(:error)
+
+    @runtime_mock = mock("runtime")
+    ContainerRuntime.stubs(:build).returns(@runtime_mock)
   end
 
   # == Phase Execution Order Tests ==
@@ -128,7 +115,6 @@ class ContainerServiceTest < ActiveSupport::TestCase
 
     result = ContainerService.execute(strategy: strategy, input: {})
 
-    # 6 phases - cleanup is done separately
     expected_order = [
       :before_create,
       :create,
@@ -148,7 +134,6 @@ class ContainerServiceTest < ActiveSupport::TestCase
 
     result = ContainerService.execute(strategy: strategy, input: {})
 
-    # Only before_create and exec are implemented
     assert_equal [ :before_create, :exec ], strategy.phases_called
     assert_equal :done, result[:status]
   end
@@ -192,6 +177,10 @@ class ContainerServiceTest < ActiveSupport::TestCase
     strategy.should_error = true
     strategy.error_phase = :exec
 
+    # Emergency cleanup via runtime
+    @runtime_mock.stubs(:stop_container)
+    @runtime_mock.stubs(:remove_container)
+
     error = assert_raises(ContainerService::PhaseError) do
       ContainerService.execute(strategy: strategy, input: {})
     end
@@ -201,37 +190,26 @@ class ContainerServiceTest < ActiveSupport::TestCase
   end
 
   test "performs emergency cleanup on error" do
-    cleanup_called = false
-
     strategy = MockStrategy.new
     strategy.should_error = true
     strategy.error_phase = :exec
 
-    # Track cleanup via a custom container
-    cleanup_container = Object.new
-    cleanup_container.define_singleton_method(:kill) { }
-    cleanup_container.define_singleton_method(:remove) { |_opts = {}| cleanup_called = true }
-    strategy.container_mock = cleanup_container
+    @runtime_mock.expects(:stop_container).with("mock-container-123", 5)
+    @runtime_mock.expects(:remove_container).with("mock-container-123", force: true)
 
     assert_raises(ContainerService::PhaseError) do
       ContainerService.execute(strategy: strategy, input: {})
     end
-
-    assert cleanup_called, "Emergency cleanup should have been called"
   end
 
-  test "emergency cleanup handles NotFoundError gracefully" do
+  test "emergency cleanup handles errors gracefully" do
     strategy = MockStrategy.new
     strategy.should_error = true
     strategy.error_phase = :exec
 
-    # Create container that raises NotFoundError on cleanup
-    error_container = Object.new
-    error_container.define_singleton_method(:kill) { raise Docker::Error::NotFoundError, "not found" }
-    error_container.define_singleton_method(:remove) { |_opts = {}| raise Docker::Error::NotFoundError, "not found" }
-    strategy.container_mock = error_container
+    @runtime_mock.stubs(:stop_container).raises(StandardError.new("stop failed"))
+    @runtime_mock.stubs(:remove_container).raises(StandardError.new("remove failed"))
 
-    # Should not raise despite Docker::Error::NotFoundError in cleanup
     assert_raises(ContainerService::PhaseError) do
       ContainerService.execute(strategy: strategy, input: {})
     end
@@ -242,15 +220,16 @@ class ContainerServiceTest < ActiveSupport::TestCase
   test "raises ExecutionTimeout when phase exceeds timeout" do
     strategy = MockStrategy.new
 
-    # Override phase with sleep
     strategy.define_singleton_method(:exec) do |_context|
-      sleep(5) # Longer than our test timeout
+      sleep(5)
     end
 
-    # Override timeout to be very short
     strategy.define_singleton_method(:timeout_for) do |phase|
       phase == :exec ? 0.1 : nil
     end
+
+    @runtime_mock.stubs(:stop_container)
+    @runtime_mock.stubs(:remove_container)
 
     error = assert_raises(ContainerService::ExecutionTimeout) do
       ContainerService.execute(strategy: strategy, input: {})
@@ -264,7 +243,6 @@ class ContainerServiceTest < ActiveSupport::TestCase
   test "uses default timeouts when not configured" do
     service = ContainerService.new(MockStrategy.new, {})
 
-    # Access private method via send
     assert_equal 30, service.send(:phase_timeout, :before_create)
     assert_equal 60, service.send(:phase_timeout, :create)
     assert_equal 300, service.send(:phase_timeout, :exec)
@@ -279,7 +257,7 @@ class ContainerServiceTest < ActiveSupport::TestCase
     service = ContainerService.new(strategy, {})
 
     assert_equal 999, service.send(:phase_timeout, :exec)
-    assert_equal 30, service.send(:phase_timeout, :before_create) # Still default
+    assert_equal 30, service.send(:phase_timeout, :before_create)
   end
 
   # == Result Tests ==

@@ -21,7 +21,7 @@ module Agents
 
     def session_log_paths
       [
-        "/workspace/output/mitmproxy.log",  # MITM proxy logs (if enabled)
+        "/workspace/output/mitmproxy.log"  # MITM proxy logs (if enabled)
       ]
     end
 
@@ -76,6 +76,15 @@ module Agents
         # Settings to skip bypass permissions warning
         "#{home_dir}/.claude/settings.json" => generate_settings.to_json
       }
+    end
+
+    # Session command: claude (interactive), claude -p "prompt" (non-interactive)
+    def session_command(mode:, prompt: nil)
+      if mode == "non_interactive" && prompt.present?
+        "claude -p #{Shellwords.escape(prompt)}"
+      else
+        "claude"
+      end
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)

@@ -83,6 +83,18 @@ module Agents
     end
 
     # =================================================================
+    # Session Command (mode-aware CLI command for ttyd)
+    # =================================================================
+
+    # Generate CLI command for the session based on mode.
+    # @param mode [String] "interactive" or "non_interactive"
+    # @param prompt [String, nil] initial prompt for non_interactive mode
+    # @return [String] CLI command string
+    def session_command(mode:, prompt: nil)
+      raise NotImplementedError, "#{self.class} must implement #session_command"
+    end
+
+    # =================================================================
     # Context File (CLI-specific instruction file auto-read at startup)
     # =================================================================
 

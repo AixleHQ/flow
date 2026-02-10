@@ -60,6 +60,15 @@ module Agents
       }
     end
 
+    # Session command: codex --yolo (interactive), codex -q "prompt" (non-interactive)
+    def session_command(mode:, prompt: nil)
+      if mode == "non_interactive" && prompt.present?
+        "codex -q #{Shellwords.escape(prompt)}"
+      else
+        "codex --yolo"
+      end
+    end
+
     # Context file: ~/.codex/AGENTS.md (auto-read by Codex at startup)
     def context_file_path
       "#{home_dir}/.codex/AGENTS.md"
