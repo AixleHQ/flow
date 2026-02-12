@@ -190,7 +190,7 @@ module ContainerStrategies
     end
 
     def mcp_server_url
-      ENV.fetch("MCP_SERVER_URL", "http://web:3000/action_mcp")
+      ENV.fetch("MCP_SERVER_URL", "http://web:4002/action_mcp")
     end
 
     private

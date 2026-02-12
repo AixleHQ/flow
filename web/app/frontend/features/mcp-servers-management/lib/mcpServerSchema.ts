@@ -7,7 +7,7 @@ export const mcpServerSchema = z.object({
     .regex(/^[a-z][a-z0-9_-]*$/, 'Must start with letter, use lowercase letters, numbers, dashes, underscores'),
   displayName: z.string().min(1, 'Display name is required'),
   url: z.string().url('Must be a valid URL'),
-  transport: z.enum(['sse', 'stdio']).default('sse'),
+  transport: z.enum(['http', 'sse']).default('http'),
   headers: z.record(z.string()).default({}),
   description: z.string().optional(),
   enabled: z.boolean().default(true),

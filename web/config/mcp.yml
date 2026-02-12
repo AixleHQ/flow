@@ -4,7 +4,9 @@
 
 shared:
   # Authentication configuration - array of methods to try in order
-  authentication: ["none"]  # No authentication required by default
+  authentication: ["session_key"]  # Authenticate via X-Session-Key header
+  # Explicitly set gateway class (Zeitwerk lazy-loads, so defined? check fails at boot)
+  gateway_class: "ApplicationGateway"
 
   # Session store configuration
   # Global session store type used by both client and server (default: volatile in dev/test, active_record in production)

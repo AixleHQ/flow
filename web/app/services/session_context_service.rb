@@ -23,10 +23,17 @@ class SessionContextService
     # @param session [TerminalSession] Session record
     # @param credential [AgentCredential, nil] Optional credential to inject
     def assemble_session_context(container_id, session, credential: nil)
+      # Resolve MCP server names early — needed for pre-approving servers
+      # in the credential config (e.g. Claude Code's enabledMcpjsonServers)
+      mcp_server_names = build_all_servers(session).map(&:name)
+      Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
+
       # Step 1: Credentials (optional)
       if credential.present?
         measure_step("credentials") do
-          credential.write_to_container(container_id)
+          workflow_config = { enabled_mcp_servers: mcp_server_names }
+          Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
+          credential.write_to_container(container_id, workflow_config)
         end
       end
 
@@ -116,8 +123,11 @@ class SessionContextService
     # == Story 9.7: Context File Injection ==
 
     # Generate and inject CLI-specific context file with agent persona,
-    # MCP server descriptions, and tool descriptions.
-    # Appends to existing content (from config_files or skills injection).
+    # MCP server descriptions, tool descriptions, and optionally skills.
+    #
+    # When adapter#includes_skills_in_context? is true, the content is a complete
+    # standalone file (e.g. AGENTS.md) — written fresh.
+    # Otherwise appends to existing content (for adapters where skills are separate files).
     def inject_context_file(container_id, session)
       content = build_context_content(session)
       return if content.blank?
@@ -127,13 +137,11 @@ class SessionContextService
       return if path.blank?
 
       expanded = expand_path(path, adapter.home_dir)
-      existing = read_file(container_id, expanded) || ""
 
-      separator = existing.present? ? "\n\n---\n\n" : ""
-      final_content = existing + separator + content
+      # Write fresh — context file is always generated as a complete document
+      write_file(container_id, expanded, content, adapter.tmpfs_uid)
 
-      write_file(container_id, expanded, final_content, adapter.tmpfs_uid)
-      Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes added)")
+      Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes)")
     end
 
     # == Story 9.4: MCP Config Injection ==
@@ -226,35 +234,78 @@ class SessionContextService
     # == Context Content Builders (Story 9.7) ==
 
     def build_context_content(session)
+      adapter = adapter_for(session)
       sections = []
 
+      sections << "# Agent Instructions"
+
+      # Section 1: Role / Persona
       persona = build_agent_persona(session)
       sections << persona if persona.present?
 
+      # Section 2: Session context
+      sections << build_session_context(session)
+
+      # Section 3: Available MCP servers
       mcp = build_mcp_descriptions(session)
       sections << mcp if mcp.present?
 
+      # Section 4: Available tools
       tools = build_tool_descriptions(session)
       sections << tools if tools.present?
+
+      # Section 5: Skills (when adapter embeds them into context file)
+      if adapter.includes_skills_in_context?
+        skills_section = build_skills_section(session)
+        sections << skills_section if skills_section.present?
+      end
+
+      # Section 6: General instructions
+      sections << build_general_instructions(session)
+
+      # Section 7: Workflow instructions (placeholder for future use)
+      # When workflow steps are implemented, they will be injected here:
+      # sections << build_workflow_instructions(session)
 
       sections.join("\n\n")
     end
 
     def build_agent_persona(session)
       agent_id = session.configured_agent_id
-      return "" if agent_id.blank?
+      return nil if agent_id.blank?
 
       agent = Agent.find_by(id: agent_id)
-      return "" unless agent
+      return nil unless agent
 
-      agent.to_system_prompt
+      lines = [ "## Your Role" ]
+      lines << agent.to_system_prompt
+      lines.join("\n\n")
+    end
+
+    def build_session_context(session)
+      lines = [ "## Session Context" ]
+      lines << ""
+      lines << "You are running in a standalone #{session.mode} agent session on the Palad platform."
+      lines << ""
+      lines << "- **Session ID:** #{session.id}"
+      lines << "- **Agent Runtime:** #{session.agent_type}"
+      lines << "- **Mode:** #{session.mode}"
+      lines << "- **Project:** #{session.project.name}" if session.project.present?
+
+      lang = session.user&.preferred_agent_language
+      if lang.present?
+        lines << "- **Preferred language:** #{lang} — communicate with the user in this language"
+      end
+
+      lines.join("\n")
     end
 
     def build_mcp_descriptions(session)
       servers = resolve_mcp_servers_for_descriptions(session)
-      return "" if servers.empty?
+      return nil if servers.empty?
 
-      lines = [ "## Available MCP Servers\n" ]
+      lines = [ "## Available MCP Servers" ]
+      lines << ""
       servers.each do |server|
         lines << "### #{server[:name]}"
         lines << server[:display_name] if server[:display_name].present?
@@ -266,9 +317,12 @@ class SessionContextService
 
     def build_tool_descriptions(session)
       tools = session.available_tools.to_a
-      return "" if tools.empty?
+      return nil if tools.empty?
 
-      lines = [ "## Available Tools\n" ]
+      lines = [ "## Available Tools" ]
+      lines << ""
+      lines << "These tools are provided via the **palad-tools** MCP server. Call them through MCP."
+      lines << ""
       tools.each do |tool|
         lines << "### #{tool.name}"
         desc = [ tool.display_name, tool.description ].compact.join(" — ")
@@ -279,6 +333,32 @@ class SessionContextService
         end
         lines << ""
       end
+      lines.join("\n")
+    end
+
+    def build_skills_section(session)
+      skills = resolve_skills(session)
+      return nil if skills.empty?
+
+      lines = [ "## Skills" ]
+      lines << ""
+      skills.each do |skill|
+        next if skill.content.blank?
+
+        lines << "### #{skill.title.presence || skill.name}"
+        lines << ""
+        lines << skill.content
+        lines << ""
+      end
+      lines.join("\n")
+    end
+
+    def build_general_instructions(session)
+      lines = [ "## General Instructions" ]
+      lines << ""
+      lines << "Act to achieve the maximum result for the user."
+      lines << "Use all available MCP servers and tools. Call `tools/list` on MCP servers to discover available capabilities."
+      lines << "Write clean, production-quality code. Follow project conventions when present."
       lines.join("\n")
     end
 
@@ -352,12 +432,15 @@ class SessionContextService
       normalized = path.to_s.sub(%r{\A/}, "")
       return nil if normalized.blank?
 
+      # Docker copy_from returns tar with basename only, not full path
+      basename = File.basename(normalized)
+
       reader = Gem::Package::TarReader.new(StringIO.new(tar_data))
       contents = nil
 
       reader.each do |entry|
         entry_name = entry.full_name.sub(%r{\A\./}, "")
-        if entry_name == normalized
+        if entry_name == normalized || entry_name == basename
           contents = entry.read
           break
         end
@@ -381,8 +464,8 @@ class SessionContextService
     def build_internal_mcp(session)
       OpenStruct.new(
         name: "palad-tools",
-        url: ENV.fetch("MCP_SERVER_URL", "http://web:3000/action_mcp"),
-        transport: "sse",
+        url: ENV.fetch("MCP_SERVER_URL", "http://web:4002/action_mcp"),
+        transport: "streamable-http",
         headers: { "X-Session-Key" => session.mcp_key }
       )
     end

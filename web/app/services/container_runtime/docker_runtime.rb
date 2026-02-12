@@ -67,15 +67,16 @@ module ContainerRuntime
       return false if path.blank?
 
       container = resolve_container(id)
-      tar_io = build_tar_stream(path, content.to_s)
-      _stdout_lines, _stderr_lines, exit_code = container.exec(
-        [ "/bin/sh", "-c", "tar -xf - -C /" ],
-        stdin: tar_io
+      dir = File.dirname(path)
+      safe_dir = Shellwords.escape(dir)
+      safe_path = Shellwords.escape(path)
+      encoded = Base64.strict_encode64(content.to_s)
+
+      _stdout, _stderr, exit_code = container.exec(
+        [ "/bin/sh", "-c", "mkdir -p #{safe_dir} && echo '#{encoded}' | base64 -d > #{safe_path}" ]
       )
 
       exit_code.to_i.zero?
-    ensure
-      tar_io&.close!
     end
 
     def stop_container(id, timeout = nil, _options = {})
@@ -134,12 +135,6 @@ module ContainerRuntime
     end
 
     private
-
-    def resolve_container(id)
-      return id if id.is_a?(Docker::Container)
-
-      Docker::Container.get(id)
-    end
 
     def wait_for_container_health(container, timeout: HEALTH_CHECK_TIMEOUT)
       start_time = Time.current

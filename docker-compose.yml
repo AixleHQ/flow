@@ -85,6 +85,7 @@ services:
     ports:
       - '4000:4000'
       - '4001:4001'
+      - '4002:4002'  # MCP server (separate Puma via Procfile.dev)
     depends_on:
       - db
       - redis

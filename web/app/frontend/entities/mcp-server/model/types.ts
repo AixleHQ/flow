@@ -3,7 +3,7 @@ export interface McpServer {
   name: string;
   displayName: string;
   url: string;
-  transport: 'sse' | 'stdio';
+  transport: 'http' | 'sse';
   headers: Record<string, string>;
   description: string | null;
   kind: 'internal' | 'custom';
@@ -20,7 +20,7 @@ export interface CreateMcpServerDto {
   name: string;
   displayName: string;
   url: string;
-  transport?: 'sse' | 'stdio';
+  transport?: 'http' | 'sse';
   headers?: Record<string, string>;
   description?: string;
   enabled?: boolean;
@@ -30,7 +30,7 @@ export interface UpdateMcpServerDto {
   name?: string;
   displayName?: string;
   url?: string;
-  transport?: 'sse' | 'stdio';
+  transport?: 'http' | 'sse';
   headers?: Record<string, string>;
   description?: string;
   enabled?: boolean;

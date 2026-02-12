@@ -20,6 +20,7 @@ const AgentsPage = lazyRouteComponent(() => import('../pages/agents'));
 const ToolsPage = lazyRouteComponent(() => import('../pages/tools'));
 const McpServersPage = lazyRouteComponent(() => import('../pages/mcp-servers'));
 const SkillsPage = lazyRouteComponent(() => import('../pages/skills'));
+const CompanySessionsPage = lazyRouteComponent(() => import('../pages/company-sessions'));
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -162,6 +163,19 @@ export const companyBrandingRoute = createRoute({
   component: () => <div style={{ padding: 24, color: '#A1A1AA' }}>Company Branding - Coming Soon</div>,
 });
 
+// Company sessions routes
+export const companySessionsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companySessionsPath,
+  component: CompanySessionsPage,
+});
+
+export const companySessionRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companySessionPath('$sessionId'),
+  component: CompanySessionsPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   authLayoutRoute.addChildren([
@@ -182,5 +196,7 @@ export const routeTree = rootRoute.addChildren([
     companySkillsRoute,
     companySettingsRoute,
     companyBrandingRoute,
+    companySessionsRoute,
+    companySessionRoute,
   ]),
 ]);

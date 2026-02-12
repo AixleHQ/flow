@@ -12,6 +12,17 @@ export type TerminalSessionType = 'auth_setup' | 'agent_session' | 'tool_setup' 
 
 export type AgentType = 'claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli';
 
+export type SessionMode = 'interactive' | 'non_interactive';
+
+export interface ISessionConfig {
+  agentId?: number;
+  toolIds?: number[];
+  skillIds?: number[];
+  mcpServerIds?: number[];
+  mode?: SessionMode;
+  initialPrompt?: string;
+}
+
 export interface ITerminalSession {
   id: number;
   sessionType: TerminalSessionType;
@@ -25,6 +36,7 @@ export interface ITerminalSession {
   artifactsPath: string | null;
   errorMessage: string | null;
   metadata: Record<string, unknown>;
+  sessionConfig: ISessionConfig | null;
   startedAt: string | null;
   finishedAt: string | null;
   collectedAt: string | null;
@@ -38,6 +50,7 @@ export interface ICreateTerminalSessionRequest {
     agentType: AgentType;
     projectId?: number;
     metadata?: Record<string, unknown>;
+    sessionConfig?: ISessionConfig;
   };
 }
 

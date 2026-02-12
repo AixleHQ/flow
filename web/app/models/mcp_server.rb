@@ -11,7 +11,7 @@ class MCPServer < ApplicationRecord
   extend Enumerize
 
   enumerize :kind, in: %i[internal custom], default: :custom, predicates: true
-  enumerize :transport, in: %i[sse stdio], default: :sse
+  enumerize :transport, in: %i[http sse], default: :http
 
   # Polymorphic scope (Company or Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true

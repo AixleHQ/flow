@@ -110,6 +110,13 @@ module Agents
     # Each CLI has different skill format and file path
     # =================================================================
 
+    # Whether skills are embedded directly into the context file (AGENTS.md).
+    # When true, skill_files returns empty and skills are merged into context.
+    # @return [Boolean]
+    def includes_skills_in_context?
+      false
+    end
+
     # Generate skill files for this CLI.
     # @param skills [Array<Skill>] resolved Skill records
     # @return [Hash<String, String>] { path => content }

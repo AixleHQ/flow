@@ -12,6 +12,7 @@ import { RunWorkflowModal } from 'features/run-workflow';
 import { SkillsPanel } from 'features/skills-management';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
+import { SessionLaunchWidget } from 'widgets/session-launch';
 
 import {
   useProjectQuery,
@@ -555,6 +556,7 @@ const ProjectPage = () => {
             }
             sx={styles.tab}
           />
+          <Tab value="sessions" label="Sessions" sx={styles.tab} />
           <Tab value="members" label="Members" sx={styles.tab} />
           <Tab value="config" label="Secrets & Variables" sx={styles.tab} />
           <Tab value="agents" label="Agents" sx={styles.tab} />
@@ -571,6 +573,7 @@ const ProjectPage = () => {
         {activeTab === 'workflows' && renderWorkflowsTab()}
         {activeTab === 'artifacts' && renderArtifactsTab()}
         {activeTab === 'tasks' && renderTasksTab()}
+        {activeTab === 'sessions' && <SessionLaunchWidget projectId={Number(projectId)} />}
         {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
         {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}

@@ -92,7 +92,7 @@ module Agents
       sections = servers.map do |s|
         lines = []
         lines << "[mcp_servers.\"#{s.name}\"]"
-        lines << "type = \"#{s.transport == 'sse' ? 'http' : 'stdio'}\""
+        lines << "type = \"#{mcp_transport_type(s.transport)}\""
         lines << "url = \"#{s.url}\"" if s.url.present?
         if s.headers.present? && s.headers.any?
           header_pairs = s.headers.map { |k, v| "#{k} = \"#{v}\"" }.join(", ")
@@ -108,6 +108,15 @@ module Agents
     end
 
     private
+
+    # Map internal transport name to Codex MCP type
+    def mcp_transport_type(transport)
+      case transport.to_s
+      when "streamable-http", "http" then "http"
+      when "sse"                     then "sse"
+      else "stdio"
+      end
+    end
 
     def generate_config_toml(workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"

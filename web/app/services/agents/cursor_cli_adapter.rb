@@ -58,40 +58,56 @@ module Agents
     end
 
     # Session command: agent (interactive), agent -m "prompt" (non-interactive)
+    # --force: auto-approve all tools unless explicitly denied (yolo mode)
+    # --approve-mcps: auto-approve MCP server connections (headless only, backup for mcp-approvals.json)
     def session_command(mode:, prompt: nil)
+      base = "agent --force"
       if mode == "non_interactive" && prompt.present?
-        "agent -m #{Shellwords.escape(prompt)}"
+        "#{base} -p #{Shellwords.escape(prompt)}"
       else
-        "agent"
+        base
       end
     end
 
-    # Context file: ~/.cursor/rules/.cursorrules (auto-read by Cursor at startup)
+    # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)
     def context_file_path
-      "#{home_dir}/.cursor/rules/.cursorrules"
+      "/workspace/AGENTS.md"
     end
 
-    # Skill files: ~/.cursor/rules/<name>.md (user-scoped, not in workspace)
+    # Skills as standard Cursor Agent Skills: ~/.cursor/skills/<name>/SKILL.md
+    # Cursor auto-discovers and applies them based on description relevance.
+    # Adds YAML frontmatter (name, description) if not already present.
+    # See: https://cursor.com/docs/context/skills
     def skill_files(skills)
       files = {}
       skills.each do |skill|
         next if skill.content.blank?
 
-        files["#{home_dir}/.cursor/rules/#{skill.name}.md"] = skill.content
+        slug = skill.name.parameterize
+        content = ensure_skill_frontmatter(skill)
+        files["#{home_dir}/.cursor/skills/#{slug}/SKILL.md"] = content
       end
       files
     end
 
-    # MCP config: /workspace/.cursor/mcp.json
+    # MCP config: /workspace/.cursor/mcp.json + pre-approved mcp-approvals.json
     def mcp_config(servers)
+      workspace = "/workspace"
       mcp_servers = {}
+      approvals = []
+
       servers.each do |s|
         entry = {}
         entry["url"] = s.url if s.url.present?
         entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         mcp_servers[s.name] = entry
+        approvals << "#{s.name}-#{mcp_approval_hash(entry, workspace)}"
       end
-      { "/workspace/.cursor/mcp.json" => { "mcpServers" => mcp_servers }.to_json }
+
+      {
+        "#{workspace}/.cursor/mcp.json" => { "mcpServers" => mcp_servers }.to_json,
+        "#{home_dir}/.cursor/projects#{workspace}/mcp-approvals.json" => approvals.to_json
+      }
     end
 
     # Only mount config directories as tmpfs, not entire home
@@ -105,6 +121,22 @@ module Agents
     end
 
     private
+
+    # Ensure SKILL.md has YAML frontmatter with name and description.
+    # Skips if content already starts with ---.
+    def ensure_skill_frontmatter(skill)
+      content = skill.content.strip
+      return content if content.start_with?("---")
+
+      frontmatter = [
+        "---",
+        "name: #{skill.name.parameterize}",
+        "description: #{(skill.description.presence || skill.title.presence || skill.name).to_s.gsub('"', '\\"')}",
+        "---"
+      ].join("\n")
+
+      "#{frontmatter}\n\n#{content}"
+    end
 
     def generate_cli_config(workflow_config)
       {
@@ -124,8 +156,10 @@ module Agents
             "Shell(curl)", "Shell(wget)",
             "Shell(mkdir)", "Shell(cp)", "Shell(mv)", "Shell(touch)",
             "Shell(echo)", "Shell(pwd)", "Shell(cd)", "Shell(tree)",
-            "Read(**/*)",   # Allow reading all files
-            "Write(**/*)"   # Allow writing all files
+            "Read(**/*)",    # Allow reading all files
+            "Write(**/*)",  # Allow writing all files
+            "Mcp(*:*)",    # Allow all MCP server tools without confirmation
+            "WebFetch(**)"  # Allow fetching any URL (** matches domains and paths)
           ],
           # Deny dangerous commands
           "deny" => [
@@ -152,6 +186,13 @@ module Agents
         "trustedAt" => Time.current.iso8601(3),
         "workspacePath" => workspace
       }
+    end
+
+    # Generate MCP approval hash matching Cursor CLI algorithm:
+    # sha256(JSON.stringify({path: workspace, server: serverConfig})).substring(0, 16)
+    def mcp_approval_hash(server_entry, workspace)
+      payload = { "path" => workspace, "server" => server_entry }
+      Digest::SHA256.hexdigest(payload.to_json)[0, 16]
     end
   end
 end

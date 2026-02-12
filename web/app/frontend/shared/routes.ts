@@ -35,6 +35,8 @@ const frontend = {
   companyMcpServersPath: '/company/mcp-servers',
   companySkillsPath: '/company/skills',
   companyBrandingPath: '/company/branding',
+  companySessionsPath: '/company/sessions',
+  companySessionPath: (sessionId: string) => `/company/sessions/${sessionId}`,
 
   // Workflow routes
   workflowRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/workflow-runs/${runId}`,

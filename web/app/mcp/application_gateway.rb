@@ -20,9 +20,9 @@ class TerminalSessionIdentifier < ActionMCP::GatewayIdentifier
 
   def extract_session_key
     # Try multiple header formats
-    request.env["HTTP_X_SESSION_KEY"] ||
-      request.env["HTTP_AUTHORIZATION"]&.delete_prefix("Bearer ") ||
-      request.params[:session_key]
+    @request.env["HTTP_X_SESSION_KEY"] ||
+      @request.env["HTTP_AUTHORIZATION"]&.delete_prefix("Bearer ") ||
+      @request.params[:session_key]
   end
 end
 

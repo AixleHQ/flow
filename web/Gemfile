@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.0.2"
+gem "rails", "~> 8.1.0"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.1"
 gem "responders"
@@ -70,7 +70,7 @@ gem "oas_rails"
 # gem "image_processing", "~> 1.2"
 
 # MCP (Model Context Protocol) server
-gem "actionmcp", "~> 0.80.0"
+gem "actionmcp", "~> 0.100"
 gem "solid_mcp"
 
 group :development, :test do

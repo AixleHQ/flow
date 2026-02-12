@@ -9,6 +9,8 @@ import { useTerminalSessionChannel } from 'shared/lib/hooks';
 export interface TerminalSessionWidgetProps {
   /** Terminal session ID to display */
   sessionId: number | null;
+  /** Pre-resolved session object — when provided, skips internal ActionCable subscription */
+  session?: ITerminalSession | null;
   /** Show file tree panel */
   showFileTree?: boolean;
   /** Show file content viewer panel */
@@ -19,7 +21,7 @@ export interface TerminalSessionWidgetProps {
   fileTreeWidth?: number;
   /** Initial file viewer width in percent (default: 40) */
   fileViewerWidth?: number;
-  /** Callback when session updates */
+  /** Callback when session updates (only used when no session prop) */
   onSessionUpdate?: (session: ITerminalSession) => void;
   /** Callback when authentication is complete (detected by watcher) */
   onAuthComplete?: () => void;
@@ -99,6 +101,7 @@ const ResizeHandle = () => (
 
 export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   sessionId,
+  session: externalSession,
   showFileTree = true,
   showFileViewer = true,
   showTerminal = true,
@@ -112,12 +115,20 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
-  // Subscribe to session updates via ActionCable
-  const { session, connecting, error } = useTerminalSessionChannel({
-    sessionId,
+  // Subscribe to session updates via ActionCable only when no external session is provided
+  const useInternalChannel = externalSession === undefined;
+  const {
+    session: channelSession,
+    connecting,
+    error,
+  } = useTerminalSessionChannel({
+    sessionId: useInternalChannel ? sessionId : null,
     onUpdate: onSessionUpdate,
     onAuthComplete,
   });
+
+  // Use external session if provided, otherwise fall back to channel data
+  const session = externalSession !== undefined ? externalSession : channelSession;
 
   // Derive URLs from session
   const ttydUrl = useMemo(() => {

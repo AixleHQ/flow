@@ -65,7 +65,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
       name: '',
       displayName: '',
       url: '',
-      transport: 'sse',
+      transport: 'http',
       headers: {},
       description: '',
       enabled: true,
@@ -94,7 +94,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
         name: '',
         displayName: '',
         url: '',
-        transport: 'sse',
+        transport: 'http',
         headers: {},
         description: '',
         enabled: true,
@@ -218,8 +218,8 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
               <FormControl fullWidth error={!!errors.transport}>
                 <InputLabel>Transport</InputLabel>
                 <Select {...field} label="Transport">
+                  <MenuItem value="http">HTTP</MenuItem>
                   <MenuItem value="sse">SSE (Server-Sent Events)</MenuItem>
-                  <MenuItem value="stdio">STDIO</MenuItem>
                 </Select>
                 {errors.transport && <FormHelperText>{errors.transport.message}</FormHelperText>}
               </FormControl>

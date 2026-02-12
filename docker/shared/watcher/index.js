@@ -151,6 +151,8 @@ function buildTree(dir, depth = 0) {
         if (entry.name.startsWith('.')) return false;
         if (entry.name === 'node_modules') return false;
         if (entry.name === '__pycache__') return false;
+        // Hide platform-injected agent context files from file tree
+        if (['AGENTS.md', 'CLAUDE.md', 'CLAUDE.local.md', 'GEMINI.md'].includes(entry.name)) return false;
         return true;
       })
       .sort((a, b) => {

@@ -9,6 +9,11 @@
 Rails.application.config.after_initialize do
   next unless defined?(ActionMCP)
 
+  # Allow terminal_session as an identity key in the gateway
+  ActionMCP.configure do |config|
+    config.allowed_identity_keys = %w[user api_key jwt bearer token account session terminal_session]
+  end
+
   # Extend Current to hold terminal_session
   ActionMCP::Current.class_eval do
     attribute :terminal_session

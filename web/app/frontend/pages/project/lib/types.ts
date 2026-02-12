@@ -3,6 +3,7 @@ export type ProjectTab =
   | 'workflows'
   | 'artifacts'
   | 'tasks'
+  | 'sessions'
   | 'members'
   | 'config'
   | 'agents'

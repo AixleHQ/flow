@@ -25,8 +25,12 @@ module Agents
       ]
     end
 
-    def allowed_tools
-      [ "Task", "Bash", "Glob", "Grep", "LS", "Read", "Edit", "MultiEdit", "Write", "WebFetch", "WebSearch" ]
+    # Built-in Claude Code tools (always allowed)
+    BUILTIN_TOOLS = %w[Task Bash Glob Grep LS Read Edit MultiEdit Write WebFetch WebSearch].freeze
+
+    def allowed_tools(mcp_server_names = [])
+      mcp_permissions = mcp_server_names.map { |name| "mcp__#{name}" }
+      BUILTIN_TOOLS + mcp_permissions
     end
 
     # Keys that indicate auth is complete (any one = success)
@@ -70,11 +74,12 @@ module Agents
 
     # Override to write multiple config files
     def config_files(credentials, workflow_config = {})
+      mcp_names = workflow_config[:enabled_mcp_servers] || []
       {
         # Main config with credentials
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings to skip bypass permissions warning
-        "#{home_dir}/.claude/settings.json" => generate_settings.to_json
+        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names).to_json
       }
     end
 
@@ -104,10 +109,12 @@ module Agents
     end
 
     # MCP config: /workspace/.mcp.json
+    # Claude Code supports: "http" (streamable-http), "sse" (deprecated), "stdio"
+    # See: https://code.claude.com/docs/en/mcp
     def mcp_config(servers)
       mcp_servers = {}
       servers.each do |s|
-        entry = { "type" => s.transport == "sse" ? "sse" : "stdio" }
+        entry = { "type" => mcp_transport_type(s.transport) }
         entry["url"] = s.url if s.url.present?
         entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         mcp_servers[s.name] = entry
@@ -126,12 +133,21 @@ module Agents
 
     private
 
-    def generate_settings
+    # Map internal transport name to Claude Code MCP type
+    def mcp_transport_type(transport)
+      case transport.to_s
+      when "streamable-http", "http" then "http"
+      when "sse"                     then "sse"
+      else "stdio"
+      end
+    end
+
+    def generate_settings(mcp_server_names = [])
       {
         # Auto-accept the bypass permissions warning
         "permissions" => {
           "defaultMode" => "dontAsk",
-          "allow" => allowed_tools,
+          "allow" => allowed_tools(mcp_server_names),
           "deny" => [],
           "ask" => []
         },
@@ -140,10 +156,11 @@ module Agents
     end
 
     def generate_projects_config(workflow_config)
+      mcp_names = workflow_config[:enabled_mcp_servers] || []
       {
         "/workspace" => {
           # Tools and MCP from workflow config
-          "allowedTools" => allowed_tools,
+          "allowedTools" => allowed_tools(mcp_names),
           "mcpServers" => workflow_config[:mcp_servers] || {},
           "mcpContextUris" => workflow_config[:mcp_context_uris] || [],
           "enabledMcpjsonServers" => workflow_config[:enabled_mcp_servers] || [],
