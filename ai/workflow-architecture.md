@@ -1,6 +1,7 @@
-# Workflow Architecture Design
+# Workflow & Asset Architecture Design
 
-**Date:** 2026-01-30
+**Date:** 2026-02-13 (v3)
+**Previous versions:** v2 2026-02-13, v1 2026-01-30
 **Status:** Approved
 **Author:** Artem Petrov + AI Analysis
 
@@ -18,794 +19,977 @@
 
 ## Overview
 
-Workflow system architecture for Palad, based on an analysis of the BMAD Method.
+Architecture of the workflow and asset system for Palad. This document defines how workflows, steps, sub-steps, assets, and their execution are modeled and connected.
+
+Key design principle: **Palad is a persistent BMAD runtime** — BMAD today works through fresh LLM chats with markdown files; Palad turns this into a persistent system with tracking, assets, versioning, and automation.
 
 ---
 
 ## 1. Core Concepts
 
-### 1.1 Separation of entities
+### 1.1 Entity Hierarchy
 
-| Concept | Description |
-|-----------|----------|
-| **Agent** | LLM configuration (persona, system prompt). Not tied to a workflow |
-| **Workflow** | Process definition: steps, inputs, outputs |
-| **WorkflowStep** | A single workflow step with instructions |
-| **WorkflowRun** | A specific workflow execution |
-| **StepRun** | Execution of a single step |
-| **Artifact** | File/document with versioning |
+```
+Workflow                          — Process definition (e.g., "Product Planning")
+  └── Step                        — One agent session, one deliverable (e.g., "Create Architecture")
+        └── SubStep               — Unit of work within a step (e.g., "Core Decisions")
 
-### 1.2 Key decisions
+WorkflowRun                       — Specific execution of a workflow
+  └── StepRun                     — Execution of one step (= one terminal session)
+        └── SubStepRun            — Tracked execution of one sub-step
 
-- **Agents are separate from Workflows** — an agent is just an LLM configuration, not a workflow entry point
-- **Standalone sessions** — a user can work with an agent without a workflow
-- **Workflow sessions** — each step = a separate terminal session
-- **Simple workspace** — only `input/` (readonly) and `output/` (collect)
+WorkflowRunAsset                  — Intermediate file shared between steps
+Asset                             — Project-level file with versioning, folders, tags, public sharing
+```
+
+### 1.2 Granularity Rationale
+
+| Palad | = BMAD equivalent | Why |
+|-------|-------------------|-----|
+| **Workflow** | Entire phase or business process | Full process: planning, code report, story implementation |
+| **Step** | One BMAD workflow (Create Architecture, Create PRD) | 1 terminal session, 1 agent, 1 major deliverable |
+| **SubStep** | One BMAD step file (step-04-decisions.md) | Trackable unit of work within a session |
+
+A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) becomes a **single Step** in Palad with 6-8 SubSteps. No need to spin up separate containers for each section of one document.
+
+### 1.3 Key Decisions
+
+- **Assets, not Artifacts** — "Asset" is broader: covers uploads, agent outputs, repos, templates, reports
+- **Two-tier asset model** — WorkflowRunAsset (intermediate) → Asset (project-level, explicit export)
+- **SubSteps as goals** — Checklist of work units, not interactive menu items
+- **Mixed execution mode** — Non-interactive steps auto-proceed, interactive steps wait for user
+- **Menus through instructions** — No separate menu model; step/sub-step instructions describe interactive behavior
+- **Agents separate from Workflows** — Agent is LLM configuration, not a workflow entry point
+- **Standalone sessions** — User can work with an agent without a workflow
+- **Tri-modal → separate workflows** — PRD Create vs Validate/Edit = different workflows, not modes
 
 ---
 
-## 2. Workspace Structure
+## 2. Data Model
 
-### 2.1 Directories in the container
-
-```
-/workspace/
-├── input/              # READONLY — input artifacts
-│   ├── prd.md          # Automatically from input_requirements
-│   ├── architecture.md # Added by the user manually
-│   └── repo/           # GitHub clone (if needed)
-│
-└── output/             # COLLECT — everything the agent created
-    ├── story-1-1.md    # New artifact
-    └── architecture.md # Modified copy from input
-```
-
-### 2.2 Preparing input artifacts
-
-**Two sources:**
-
-| Source | How it gets in | Example |
-|----------|--------------|--------|
-| **Auto** | From `step.input_requirements` | PRD, epics — required for the step |
-| **Manual** | The user adds it in the UI before starting | "I want to add architecture.md as context" |
-
-**UI at step start:**
-```
-┌─────────────────────────────────────────┐
-│ Start Step: Create User Story           │
-├─────────────────────────────────────────┤
-│ Required inputs (auto):                  │
-│   ✓ prd.md                              │
-│   ✓ epics.md                            │
-│                                          │
-│ Add more context (optional):            │
-│   [ ] architecture.md                    │
-│   [ ] previous-story.md                  │
-│   [+ Add artifact...]                    │
-│                                          │
-│ [Start Step]                             │
-└─────────────────────────────────────────┘
-```
-
-### 2.3 Rules for the agent
-
-In the step instructions we specify:
-
-```
-- Read from: /workspace/input/
-- Save all results to: /workspace/output/
-- If you need to modify an existing document, copy it from input to output first
-```
-
-### 2.4 Collecting artifacts
-
-On step completion:
-1. Collect all files from `/workspace/output/`
-2. Upload to S3
-3. Create `Artifact` records in the DB
-4. If a file with the same name already exists → new version (parent_id)
-5. Artifacts are available for subsequent steps (via the same auto/manual mechanism)
-
----
-
-## 3. Data Model
-
-### 3.1 Core Entities
+### 2.1 Workflow
 
 ```ruby
-# Workflow definition
 class Workflow < ApplicationRecord
   belongs_to :project
-  has_many :steps, class_name: 'WorkflowStep', dependent: :destroy
+  has_many :steps, dependent: :destroy
   has_many :runs, class_name: 'WorkflowRun'
 
   # name: string
   # description: text
   # config: jsonb (additional settings)
-end
 
-# Workflow step (definition)
-class WorkflowStep < ApplicationRecord
+  def can_run_non_interactive?
+    steps.all?(&:allow_non_interactive)
+  end
+end
+```
+
+### 2.2 Step
+
+One step = one terminal session = one agent = one significant deliverable.
+
+```ruby
+class Step < ApplicationRecord
   belongs_to :workflow
+  belongs_to :agent, optional: true  # recommended agent for this step
+  has_many :sub_steps, dependent: :destroy
 
   # position: integer
-  # name: string
-  # instructions: text (instructions for the agent)
-  # input_requirements: jsonb — automatically pulled-in artifacts
-  #   [{ artifact_type: "prd", required: true },
-  #    { artifact_type: "epics", required: true },
-  #    { from_previous_step: true }]  # Artifacts from the previous step
-  # expected_outputs: jsonb
-  #   [{ name_pattern: "*.md", type: "story", required: true, validation: {...} }]
+  # name: string ("Create Architecture")
+  # description: text (what the step does)
+  # instructions: text (detailed instructions for the agent — entire session)
+  #
   # allow_non_interactive: boolean (default: false)
+  # skip_policy: enum (never, if_outputs_exist, manual)
+  #   never           — always execute
+  #   if_outputs_exist — skip if all required output assets already exist
+  #   manual          — ask user before step start
+  #
+  # input_asset_specs: jsonb
+  #   [{ name: "prd", asset_type: "document", required: true },
+  #    { name: "repo", asset_type: "repository", required: false }]
+  #   NOTE: actual resolution = user-selected Assets + all WorkflowRunAssets from previous steps
+  #
+  # output_asset_specs: jsonb
+  #   [{ name: "architecture", asset_type: "document", required: true, name_pattern: "*.md" }]
+  #   Used for validation on step completion and for skip_policy: if_outputs_exist
+  #
+  # agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex)
+  # tool_ids: jsonb (which tools/MCP servers are available in this step)
+  #
+  # on_failure: enum (retry, skip, fail)
+  # max_retries: integer (default: 0)
 end
+```
 
-# Step execution — stores which artifacts were selected
-class StepRun < ApplicationRecord
-  # ...
-  # input_artifact_ids: jsonb — which artifacts were fed as input (auto + manual)
+### 2.3 SubStep
+
+Unit of work within a step. Configured in UI. Belongs to Step, not Workflow.
+
+```ruby
+class SubStep < ApplicationRecord
+  belongs_to :step
+
+  # position: integer
+  # name: string ("Core Architectural Decisions")
+  # description: text (what needs to be accomplished)
+  # instructions: text (optional — additional context for this sub-step)
+  # required: boolean (default: true)
 end
+```
 
-# Workflow execution
+SubSteps are NOT interactive menu items. They are a trackable checklist of work units:
+- In **interactive** mode: agent works through sub-steps, user sees progress, can guide
+- In **non-interactive** mode: agent processes all sub-steps autonomously
+
+If different behavior is needed between modes, it's described in the step's `instructions`:
+
+```markdown
+## Instructions
+
+### Interactive mode
+After completing each sub-step, present options:
+- [C] Continue to next sub-step
+- [R] Revise current section
+- [D] Deep dive — explore this topic further
+- [S] Skip to next sub-step
+
+### Non-interactive mode
+Complete all sub-steps sequentially using default assumptions.
+```
+
+### 2.4 WorkflowRun
+
+```ruby
 class WorkflowRun < ApplicationRecord
   belongs_to :workflow
   belongs_to :project
   belongs_to :user
   has_many :step_runs, dependent: :destroy
-  has_many :artifacts, through: :step_runs
+  has_many :workflow_run_assets, dependent: :destroy
 
   # status: enum (pending, running, paused, completed, failed, cancelled)
-  # mode: enum (interactive, non_interactive)
-  # input_artifact_ids: jsonb (artifacts selected at start)
+  # mode: enum (interactive, non_interactive, mixed)
+  #   interactive      — all steps wait for user input/approval
+  #   non_interactive  — all steps auto-proceed (only if workflow.can_run_non_interactive?)
+  #   mixed            — steps with allow_non_interactive auto-proceed, others wait
+  #
+  # input_asset_ids: jsonb (project Assets selected by user at workflow start)
+  # shared_context: jsonb (accumulated from step notes, injected into CLI context files)
   # started_at: datetime
   # completed_at: datetime
-end
-
-# Step execution
-class StepRun < ApplicationRecord
-  belongs_to :workflow_run
-  belongs_to :workflow_step
-  belongs_to :terminal_session, optional: true
-  has_many :artifacts
-
-  # status: enum (pending, running, waiting_input, completed, failed, skipped)
-  # started_at: datetime
-  # completed_at: datetime
-  # output: text (logs, terminal output)
-  # error_message: text
-end
-
-# Artifact (file/document)
-class Artifact < ApplicationRecord
-  belongs_to :project
-  belongs_to :step_run, optional: true  # nil = uploaded manually
-  belongs_to :parent, class_name: 'Artifact', optional: true
-  has_many :versions, class_name: 'Artifact', foreign_key: :parent_id
-
-  # name: string
-  # artifact_type: string (prd, story, architecture, diagram, code, etc.)
-  # content_type: string (text/markdown, application/json, image/png, etc.)
-  # s3_key: string
-  # file_size: integer
-  # version: integer (auto-increment within parent chain)
-  # provenance: jsonb
-  #   { type: 'manual_upload', user_id: X }
-  #   { type: 'workflow', workflow_run_id: X, step_run_id: Y, step_name: "..." }
-  #   { type: 'github_clone', repo_url: "...", branch: "...", commit: "..." }
 end
 ```
 
-### 3.2 Relationship to existing models
+**Mode logic:**
 
 ```ruby
-# Already exists
+if workflow_run.mode == 'interactive'
+  # Always wait for user action (Approve / Retry / Stop)
+elsif workflow_run.mode == 'non_interactive'
+  # Only possible if workflow.can_run_non_interactive?
+  # Auto-proceed to next step
+elsif workflow_run.mode == 'mixed'
+  if step.allow_non_interactive
+    # Auto-proceed
+  else
+    # Wait for user action
+  end
+end
+```
+
+### 2.5 StepRun
+
+```ruby
+class StepRun < ApplicationRecord
+  belongs_to :workflow_run
+  belongs_to :step
+  belongs_to :terminal_session, optional: true
+  has_many :sub_step_runs, dependent: :destroy
+  has_many :produced_workflow_run_assets, class_name: 'WorkflowRunAsset',
+           foreign_key: :produced_by_step_run_id
+
+  # status: enum (pending, running, waiting_input, completed, failed, skipped)
+  # step_note: text (written by agent via write_step_note tool)
+  # skip_reason: string (why skipped, if status=skipped)
+  # started_at: datetime
+  # completed_at: datetime
+  # error_message: text
+end
+```
+
+### 2.6 SubStepRun
+
+Created automatically when StepRun starts. Agent updates status via `mark_sub_step` tool.
+
+```ruby
+class SubStepRun < ApplicationRecord
+  belongs_to :step_run
+  belongs_to :sub_step
+
+  # status: enum (pending, in_progress, completed, skipped)
+  # note: text (agent writes what was done, decisions made)
+  # data: jsonb (structured data — decisions, metrics, key findings)
+  # started_at: datetime
+  # completed_at: datetime
+end
+```
+
+**Lifecycle:**
+
+```ruby
+# When StepRun is created — system auto-creates all SubStepRuns:
+step.sub_steps.ordered.each do |sub_step|
+  step_run.sub_step_runs.create!(
+    sub_step: sub_step,
+    status: :pending
+  )
+end
+
+# Agent marks progress via tool:
+# mark_sub_step(1, "completed", "Selected PostgreSQL 16", { db: "postgres", version: "16" })
+```
+
+**SubStepRun.data examples:**
+
+```ruby
+# SubStep: "Data Architecture Decisions"
+{ decisions: [
+    { category: "database", choice: "PostgreSQL 16", rationale: "..." },
+    { category: "cache", choice: "Redis", rationale: "..." }
+] }
+
+# SubStep: "Security Analysis"
+{ findings: { critical: 3, medium: 12, low: 28 },
+  top_issues: ["SQL injection in /api/users", "Missing CSRF tokens"] }
+
+# SubStep: "User Requirements"
+{ fr_count: 12, categories: ["auth", "projects", "billing"] }
+```
+
+Data from previous SubStepRuns appears in workflow context for subsequent steps.
+
+### 2.7 WorkflowRunAsset
+
+Intermediate files shared between steps within a single workflow run.
+
+```ruby
+class WorkflowRunAsset < ApplicationRecord
+  belongs_to :workflow_run
+  belongs_to :produced_by_step_run, class_name: 'StepRun', optional: true
+
+  # name: string (filename)
+  # s3_key: string
+  # content_type: string (mime type)
+  # file_size: integer
+end
+```
+
+**Lifecycle:**
+1. Step completes → all files from `/workspace/output/` uploaded to S3 → WorkflowRunAsset records created
+2. Next step starts → ALL WorkflowRunAssets from previous steps + user-selected project Assets mounted to `/workspace/input/`
+3. After workflow completes → user sees all WorkflowRunAssets and can export selected ones to project-level Assets
+4. `export_asset` tool can also promote during workflow execution
+
+### 2.8 Asset (Project-level)
+
+```ruby
+class Asset < ApplicationRecord
+  belongs_to :project
+  belongs_to :source_workflow_run_asset, class_name: 'WorkflowRunAsset', optional: true
+  belongs_to :parent, class_name: 'Asset', optional: true  # versioning
+  has_many :versions, class_name: 'Asset', foreign_key: :parent_id
+
+  # name: string
+  # asset_type: enum (document, diagram, code, repository, data, image, html, other)
+  # content_type: string (mime type)
+  # s3_key: string
+  # file_size: integer
+  # version: integer (auto-increment within parent chain)
+  #
+  # folder: string (optional, one-level nesting — "architecture", "stories", "reports")
+  # tags: string[] (postgres array — ["prd", "v2", "approved", "client-facing"])
+  #
+  # public: boolean (default: false)
+  # public_token: string (unique, generated when public=true)
+  #   → URL: https://app.example.com/shared/{public_token}
+  #
+  # provenance: jsonb
+  #   { source: "upload", user_id: X }
+  #   { source: "workflow", workflow_run_id: X, step_run_id: Y, step_name: "..." }
+  #   { source: "github", repo_url: "...", branch: "...", commit: "..." }
+end
+```
+
+**Versioning:** When export creates an Asset with a name that already exists in the project → new version (parent_id chain). User controls via naming: `report.html` → new version; `report-2026-02.html` → new asset.
+
+### 2.9 Relationships with Existing Models
+
+```ruby
 class Project < ApplicationRecord
   has_many :workflows
-  has_many :artifacts
+  has_many :assets
   has_many :terminal_sessions
 end
 
 class TerminalSession < ApplicationRecord
   belongs_to :project
-  has_one :step_run  # Link to step execution
+  has_one :step_run
 end
 ```
+
+---
+
+## 3. Workspace Structure
+
+### 3.1 Container Directories
+
+```
+/workspace/
+├── input/                  # READONLY — all available files for this step
+│   ├── _index.md           # Auto-generated: describes all input files
+│   ├── prd.md              # Project Asset (selected at workflow start)
+│   ├── template.md         # Project Asset (selected at workflow start)
+│   ├── repo/               # GitHub clone (if repository asset)
+│   ├── code_report.md      # WorkflowRunAsset from previous step
+│   └── analysis.md         # WorkflowRunAsset from previous step
+│
+└── output/                 # COLLECT — everything agent produces
+    ├── architecture.md     # Will become WorkflowRunAsset
+    └── diagrams/           # Will become WorkflowRunAssets
+```
+
+### 3.2 Dynamic _index.md
+
+Auto-generated at each step start:
+
+```markdown
+# Workspace Input Index
+
+## Project Assets (selected at workflow start)
+- **prd.md** — Product Requirements Document (document, 2.3KB)
+- **company-template.md** — Code Report Template (document, 1.1KB)
+- **repo/** — Repository: github.com/acme/backend (repository, branch: main)
+
+## Workflow Run Assets (from previous steps)
+- **code_report.md** — from Step 1 "Generate Code Report" (document, 15.2KB)
+- **security_findings.json** — from Step 1 "Generate Code Report" (data, 3.4KB)
+
+## Instructions
+- Read from: /workspace/input/
+- Save all results to: /workspace/output/
+- If you need to modify an existing document, copy it from input to output first
+```
+
+### 3.3 Output Collection
+
+When step completes:
+1. Collect all files from `/workspace/output/`
+2. Upload each to S3
+3. Create `WorkflowRunAsset` records (belonging to WorkflowRun, linked to StepRun)
+4. Available to all subsequent steps automatically
 
 ---
 
 ## 4. Execution Flow
 
-### 4.1 Starting a Workflow
+### 4.1 Start Workflow
 
 ```
 User clicks "Run Workflow"
     │
-    ├─→ Select mode (interactive / non-interactive)
+    ├─→ Select mode:
+    │     • Interactive (all steps require user interaction)
+    │     • Non-interactive (only if workflow.can_run_non_interactive?)
+    │     • Mixed (non-interactive steps auto-proceed, others wait)
+    │
+    ├─→ Select project Assets as inputs
+    │     • Show all project Assets
+    │     • Check input_asset_specs from steps — highlight recommended
+    │     • User picks what to include
     │
     ▼
-Create WorkflowRun (status: pending)
+Create WorkflowRun (status: pending, input_asset_ids: [...])
     │
     ▼
-Start first step (see 4.2)
+Start first step
 ```
 
-### 4.2 Starting a step
+### 4.2 Start Step
 
 ```
 Start Step
     │
     ▼
-Resolve auto inputs (from step.input_requirements):
-    - artifact_type: "prd" → find latest prd in project
-    - artifact_type: "epics" → find latest epics
-    - from_previous_step: true → outputs of previous StepRun
+Check skip_policy:
+    ├─→ if_outputs_exist: check output_asset_specs → skip or execute
+    ├─→ manual: show UI "Skip? [Skip / Execute]"
+    ├─→ never: always execute
     │
     ▼
-Show UI: "Add more context?" (optional manual artifacts)
-    │
-    ▼
-Create StepRun with input_artifact_ids (auto + manual)
+Create StepRun (status: pending)
+Auto-create SubStepRuns from Step.sub_steps (all status: pending)
     │
     ▼
 Prepare workspace:
-    - Mount all input artifacts to /workspace/input/
+    - Mount user-selected project Assets to /workspace/input/
+    - Mount ALL WorkflowRunAssets from previous steps to /workspace/input/
+    - Generate /workspace/input/_index.md
     │
     ▼
-Start terminal session (TerminalSession)
+Inject workflow context into CLI context file (AGENTS.md / CLAUDE.md / .cursorrules)
+    │
+    ▼
+Start terminal session (TerminalSession, session_type: workflow_step)
     │
     ▼
 StepRun status → running
 ```
 
-### 4.2 Completing a step
+### 4.3 Complete Step
 
 ```
 Agent completes work / User stops session
     │
     ▼
-Collect artifacts from /workspace/output/
+Collect files from /workspace/output/
+Create WorkflowRunAsset records
     │
     ▼
-Validate against expected_outputs
-    │
-    ├─→ Valid: StepRun status → completed
-    │          Create Artifact records
-    │          Proceed to next step
-    │
-    └─→ Invalid (interactive): Show errors, allow retry
-    └─→ Invalid (non-interactive): Based on step config
-                                   (retry / skip / fail)
+Validate against output_asset_specs (if defined):
+    ├─→ Valid: StepRun status → completed, proceed to next step
+    ├─→ Invalid + retry: new StepRun, retry (up to max_retries)
+    ├─→ Invalid + skip: StepRun → skipped, proceed
+    └─→ Invalid + fail: StepRun → failed, WorkflowRun → failed
 ```
 
-### 4.3 Interactive vs Non-Interactive
-
-| Mode | Behavior |
-|-------|-----------|
-| **Interactive** | Waits for user input, shows the terminal, approval after each step |
-| **Non-Interactive** | Automatically transitions between steps (if step.allow_non_interactive) |
+### 4.4 Complete Workflow
 
 ```
-if workflow_run.mode == 'non_interactive' && step.allow_non_interactive
-  # Auto-proceed to next step
-else
-  # Wait for user action (Approve / Retry / Stop)
-end
+All steps completed/skipped
+    │
+    ▼
+WorkflowRun status → completed
+    │
+    ▼
+Show post-workflow UI:
+    ┌─────────────────────────────────────────────────────────┐
+    │ Workflow Run Complete: Product Planning                    │
+    ├─────────────────────────────────────────────────────────┤
+    │ Workflow Run Assets:                                      │
+    │   📄 product-brief.md (Step 2)    [Export to Project]     │
+    │   📄 PRD.md (Step 3)              [Export to Project]     │
+    │   📄 architecture.md (Step 5)     [Export to Project]     │
+    │   📄 epics.md (Step 6)            [Export to Project]     │
+    │   📄 readiness-report.md (Step 7) ✅ Exported (public)    │
+    │                                                           │
+    │ [Export Selected] [Export All] [Close]                    │
+    └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 5. Validation
+## 5. Workflow Context Injection
 
-### 5.1 Expected Outputs Schema
+### 5.1 Approach
 
-```yaml
-expected_outputs:
-  - name_pattern: "{epic_num}-{story_num}-*.md"
-    type: story
-    required: true
-    validation:
-      format: markdown
-      required_sections:
-        - "## Acceptance Criteria"
-        - "## Tasks"
-      min_length: 500
+Workflow context is injected directly into CLI context files (AGENTS.md, CLAUDE.md, .cursorrules, GEMINI.md) as a CRITICAL section. No separate tools for reading context — agent sees it on session start.
 
-  - name_pattern: "*.excalidraw"
-    type: diagram
-    required: false
+### 5.2 Context Template
+
+```markdown
+# ===== CRITICAL: WORKFLOW CONTEXT =====
+
+## Workflow: Product Planning (Greenfield)
+
+## Current Step: Create Architecture (Step 5 of 7)
+Agent: Architect
+Description: Make critical architectural decisions through collaborative discovery
+
+### Sub-Steps:
+1. ✅ Context Analysis
+   → "Loaded PRD, identified 12 FRs and 8 NFRs"
+2. ✅ Starter Template
+   → "Selected Rails + React monorepo"
+   → data: {framework: "Rails 7.2", frontend: "React 18"}
+3. 🔄 Core Decisions — in progress
+4. ⬜ Implementation Patterns
+5. ⬜ Project Structure
+6. ⬜ Validation
+
+### Previous Steps:
+- Step 1: Brainstorming ⏭️ Skipped
+- Step 2: Product Brief ✅ "Defined B2B SaaS for dev teams"
+- Step 3: Create PRD ✅
+  - "Functional Requirements": data: {fr_count: 12, categories: ["auth", "projects"]}
+  - "Non-Functional Requirements": data: {nfr_count: 8}
+  - Note: "12 FRs, 8 NFRs, 3 risk areas identified"
+- Step 4: UX Design ⏭️ Skipped
+
+### Available Input Files:
+See /workspace/input/_index.md for full list.
+
+### Workflow Tools:
+- list_sub_steps — list current sub-steps with statuses
+- mark_sub_step(id, status, note, data) — update sub-step progress
+- write_step_note(note) — save a note for future steps
+- export_asset(file, tags, folder, public) — promote output to project asset
+
+### Workspace Rules:
+- Read from: /workspace/input/
+- Save all results to: /workspace/output/
+- If you need to modify an existing document, copy from input to output first
+
+# ===== END WORKFLOW CONTEXT =====
 ```
 
-### 5.2 Validation Process
-
-1. **Existence** — the file exists in output
-2. **Naming** — matches the pattern
-3. **Structure** — contains required sections (for markdown)
-4. **Size** — minimum length
-
-### 5.3 On Validation Failure
-
-```yaml
-# Per-step config
-on_validation_fail: retry | skip | fail
-max_retries: 3
-```
-
----
-
-## 6. GitHub Integration
-
-### 6.1 Repository as Input
-
-```yaml
-# In the step's input_requirements
-input_requirements:
-  - type: github_repo
-    required: true
-    config:
-      repo_url: "{{project.github_repo}}"
-      branch: "main"
-      sparse_paths: ["src/", "docs/"]  # Optional
-      depth: 1  # Shallow clone
-```
-
-### 6.2 Clone Process
+### 5.3 Context Assembler
 
 ```ruby
-class WorkspacePreparator
-  def prepare_github_input(config, project)
-    repo_path = "/workspace/input/repo"
+class WorkflowContextAssembler
+  def assemble(step_run)
+    workflow_run = step_run.workflow_run
+    workflow = workflow_run.workflow
+    step = step_run.step
 
-    Git.clone(
-      config['repo_url'],
-      repo_path,
-      depth: config['depth'] || 1,
-      branch: config['branch'] || 'main',
-      credentials: project.github_credentials
-    )
+    previous_step_runs = workflow_run.step_runs
+      .where.not(id: step_run.id)
+      .where(status: [:completed, :skipped])
+      .includes(step: :sub_steps, sub_step_runs: :sub_step)
+      .order(:created_at)
 
-    repo_path
+    context = []
+    context << "# ===== CRITICAL: WORKFLOW CONTEXT ====="
+    context << ""
+    context << "## Workflow: #{workflow.name}"
+    context << "#{workflow.description}" if workflow.description.present?
+    context << ""
+    context << "## Current Step: #{step.name} (Step #{step.position} of #{workflow.steps.count})"
+    context << "Agent: #{step.agent&.title || 'Not specified'}"
+    context << "Description: #{step.description}"
+    context << ""
+
+    # Sub-steps
+    if step_run.sub_step_runs.any?
+      context << "### Sub-Steps:"
+      step_run.sub_step_runs.includes(:sub_step).order('sub_steps.position').each do |ssr|
+        icon = case ssr.status
+               when 'completed' then '✅'
+               when 'in_progress' then '🔄'
+               when 'skipped' then '⏭️'
+               else '⬜'
+               end
+        line = "#{ssr.sub_step.position}. #{icon} #{ssr.sub_step.name}"
+        line += " — #{ssr.status}" if ssr.in_progress?
+        context << line
+        context << "   → #{ssr.note.truncate(200)}" if ssr.note.present?
+        if ssr.data.present?
+          context << "   → data: #{ssr.data.to_json.truncate(300)}"
+        end
+      end
+      context << ""
+    end
+
+    # Previous steps
+    if previous_step_runs.any?
+      context << "### Previous Steps:"
+      previous_step_runs.each do |prev|
+        status_icon = prev.completed? ? '✅' : '⏭️ Skipped'
+        context << "- Step #{prev.step.position}: #{prev.step.name} #{status_icon}"
+        # Include sub-step data from previous steps
+        prev.sub_step_runs.where(status: :completed).each do |ssr|
+          if ssr.data.present? || ssr.note.present?
+            parts = ["  - \"#{ssr.sub_step.name}\""]
+            parts << "data: #{ssr.data.to_json.truncate(200)}" if ssr.data.present?
+            context << parts.join(': ')
+          end
+        end
+        context << "  - Note: \"#{prev.step_note}\"" if prev.step_note.present?
+      end
+      context << ""
+    end
+
+    context << tool_descriptions
+    context << workspace_rules
+    context << "# ===== END WORKFLOW CONTEXT ====="
+
+    context.join("\n")
   end
 end
 ```
 
 ---
 
-## 7. Artifact Versioning
+## 6. Internal Tools (Workflow-specific)
 
-### 7.1 Version Chain
+Four internal tools, automatically available when `session_type = workflow_step`.
 
-```
-Artifact (v1, parent: nil)
-    │
-    └─→ Artifact (v2, parent: v1)
-            │
-            └─→ Artifact (v3, parent: v1)  # parent always points to root
-```
+### 6.1 list_sub_steps
 
-### 7.2 Version Creation
-
-When collecting artifacts, if a file with the same name already exists in the project:
-
-```ruby
-def create_or_version_artifact(file, step_run)
-  existing = project.artifacts.find_by(name: file.name, parent_id: nil)
-
-  if existing
-    # Create a new version
-    Artifact.create!(
-      parent: existing,
-      version: existing.versions.count + 1,
-      # ... remaining fields
-    )
-  else
-    # New artifact
-    Artifact.create!(
-      version: 1,
-      # ...
-    )
-  end
-end
-```
-
----
-
-## 8. Builder (Level 2 - Assisted)
-
-### 8.1 Approach
-
-The agent helps create a workflow via chat, using a tool:
-
-```ruby
-# Tool definition
+```json
 {
-  name: "create_workflow",
-  description: "Create a new workflow with steps",
-  parameters: {
-    name: { type: "string", required: true },
-    description: { type: "string" },
-    steps: {
-      type: "array",
-      items: {
-        name: { type: "string" },
-        instructions: { type: "string" },
-        input_requirements: { type: "array" },
-        expected_outputs: { type: "array" },
-        allow_non_interactive: { type: "boolean" }
-      }
-    }
+  "name": "list_sub_steps",
+  "description": "List current step's sub-steps with their statuses",
+  "parameters": {}
+}
+```
+
+Returns:
+```json
+[
+  { "id": 1, "name": "Context Analysis", "status": "completed", "note": "...", "data": {...} },
+  { "id": 2, "name": "Starter Template", "status": "completed", "note": "...", "data": {...} },
+  { "id": 3, "name": "Core Decisions", "status": "in_progress", "note": null, "data": null },
+  { "id": 4, "name": "Implementation Patterns", "status": "pending", "note": null, "data": null }
+]
+```
+
+### 6.2 mark_sub_step
+
+```json
+{
+  "name": "mark_sub_step",
+  "description": "Update sub-step status with optional note and structured data. SubStepRuns are pre-created when step starts — this tool updates existing records.",
+  "parameters": {
+    "id": { "type": "integer", "required": true },
+    "status": { "type": "string", "enum": ["in_progress", "completed", "skipped"], "required": true },
+    "note": { "type": "string", "required": false, "description": "What was done, decisions made" },
+    "data": { "type": "object", "required": false, "description": "Structured data — decisions, metrics, findings" }
   }
 }
 ```
 
-### 8.2 Flow
+### 6.3 write_step_note
+
+```json
+{
+  "name": "write_step_note",
+  "description": "Save a note for this step. Visible to agents in subsequent steps via workflow context.",
+  "parameters": {
+    "note": { "type": "string", "required": true }
+  }
+}
+```
+
+Writes to `StepRun.step_note`. Appends if called multiple times.
+
+### 6.4 export_asset
+
+```json
+{
+  "name": "export_asset",
+  "description": "Promote a file from /workspace/output/ to a project-level Asset. Optionally make it public with a shareable link.",
+  "parameters": {
+    "file": { "type": "string", "required": true, "description": "Filename in /workspace/output/" },
+    "tags": { "type": "array", "items": { "type": "string" }, "required": false },
+    "folder": { "type": "string", "required": false },
+    "public": { "type": "boolean", "required": false, "default": false }
+  }
+}
+```
+
+Logic:
+1. Find file in `/workspace/output/{file}`
+2. Upload to S3 (or find existing WorkflowRunAsset)
+3. Check if Asset with same name exists → new version or new Asset
+4. If `public: true` → generate `public_token`, return shareable URL
+
+---
+
+## 7. Asset Versioning
+
+### 7.1 Version Chain
 
 ```
-User: "I want a workflow for code review"
+Asset (v1, parent: nil)  ← root
+    └─→ Asset (v2, parent: v1)
+            └─→ Asset (v3, parent: v1)  # parent always points to root
+```
 
-Agent: "Creating workflow:
-- Step 1: Clone repository
-- Step 2: Security analysis
-- Step 3: Generate report
+### 7.2 Version Creation on Export
 
-Save?"
+```ruby
+def export_to_project_asset(workflow_run_asset, options = {})
+  project = workflow_run_asset.workflow_run.project
+  existing_root = project.assets.find_by(name: workflow_run_asset.name, parent_id: nil)
 
-User: "Yes"
+  attrs = {
+    project: project,
+    name: workflow_run_asset.name,
+    s3_key: workflow_run_asset.s3_key,
+    content_type: workflow_run_asset.content_type,
+    file_size: workflow_run_asset.file_size,
+    source_workflow_run_asset: workflow_run_asset,
+    folder: options[:folder],
+    tags: options[:tags] || [],
+    public: options[:public] || false,
+    public_token: options[:public] ? SecureRandom.urlsafe_base64(16) : nil,
+    provenance: build_provenance(workflow_run_asset)
+  }
 
-Agent: *calls create_workflow tool*
+  if existing_root
+    attrs[:parent] = existing_root
+    attrs[:version] = existing_root.versions.count + 2
+  else
+    attrs[:version] = 1
+  end
+
+  Asset.create!(attrs)
+end
 ```
 
 ---
 
-## 9. Migration Path
+## 8. Asset Public Sharing
 
-### 9.1 From BMAD Files
+### 8.1 Shareable Endpoint
 
 ```ruby
-class BmadImporter
-  def import_workflow(path)
-    yaml = YAML.load_file("#{path}/workflow.yaml")
+class SharedAssetsController < ApplicationController
+  skip_before_action :authenticate_user!
 
-    workflow = Workflow.create!(
-      name: yaml['name'],
-      description: yaml['description'],
-      config: yaml.except('name', 'description')
+  def show
+    asset = Asset.find_by!(public_token: params[:token], public: true)
+    # For HTML: render inline; for other types: redirect to S3 pre-signed URL
+  end
+end
+```
+
+URL: `https://app.example.com/shared/{public_token}`
+
+### 8.2 Management
+
+- Toggle `public` on/off from Asset detail view
+- `public_token` generated once and preserved (stable URL)
+- Revoking: set `public: false` (token preserved for re-enabling)
+
+---
+
+## 9. Validation
+
+### 9.1 Output Asset Specs
+
+```yaml
+output_asset_specs:
+  - name: "architecture"
+    asset_type: document
+    name_pattern: "*.md"
+    required: true
+    validation:
+      format: markdown
+      required_sections:
+        - "## Core Decisions"
+        - "## Implementation Patterns"
+      min_length: 500
+```
+
+### 9.2 Validation Process
+
+1. **Existence** — file exists in output
+2. **Naming** — matches name_pattern
+3. **Structure** — contains required sections (markdown)
+4. **Size** — minimum length
+
+### 9.3 On Validation Failure
+
+Per-step via `on_failure` + `max_retries`:
+- `retry` — new StepRun, try again
+- `skip` — mark skipped, proceed
+- `fail` — stop workflow
+
+---
+
+## 10. BMAD Mapping
+
+### 10.1 How BMAD Workflows Map to Palad
+
+| BMAD | Palad | Notes |
+|------|-------|-------|
+| Phase/business process | **Workflow** | "Product Planning", "Code Report" |
+| One BMAD workflow (Create Architecture) | **Step** | 1 session, 1 agent, 1 deliverable |
+| BMAD step file (step-04-decisions.md) | **SubStep** | Trackable work unit |
+| Tri-modal (Create/Validate/Edit) | Separate Workflows | Not modes within one workflow |
+| A/P/C menu | Step instructions | Agent presents choices in interactive mode |
+| Agent persona (PM, Architect, Dev) | `agent_id` on Step | Optional, recommended agent |
+| Config + planning docs | Assets + workflow context | Persistent, versioned |
+| sprint-status.yaml | WorkflowRun + StepRun | Automatic tracking with UI |
+
+### 10.2 Greenfield Project Example
+
+```
+Workflow: "Product Planning (Greenfield)"
+Mode: mixed
+
+Step 1: "Brainstorming & Research"
+  Agent: Analyst | interactive | skip_policy: manual
+  SubSteps: Session Setup, Technique Selection, Execution, Organization
+  Output: brainstorming-report.md
+
+Step 2: "Create Product Brief"
+  Agent: Analyst | interactive | skip_policy: manual
+  SubSteps: Vision, Users, Metrics, Scope, Review
+  Output: product-brief.md
+
+Step 3: "Create PRD"
+  Agent: PM | interactive
+  SubSteps: Discovery, Vision, Users, FRs, NFRs, Risks, Metrics, Scope, Review
+  Output: PRD.md
+
+Step 4: "Create UX Design"
+  Agent: UX Designer | interactive | skip_policy: manual
+  SubSteps: Research, Personas, Flows, Wireframes, Specs, Review
+  Output: ux-spec.md
+
+Step 5: "Create Architecture"
+  Agent: Architect | interactive
+  SubSteps:
+    1. Context Analysis
+    2. Starter Template Selection
+    3. Core Decisions (Data, Auth, API, Frontend, Infra)
+    4. Implementation Patterns
+    5. Project Structure
+    6. Validation
+  Output: architecture.md
+
+Step 6: "Create Epics & Stories"
+  Agent: PM | interactive
+  SubSteps: Validate Prerequisites, Design Epics, Create Stories, Validation
+  Output: epics.md + story files
+
+Step 7: "Readiness Check"
+  Agent: Architect | allow_non_interactive: true
+  SubSteps: Document Discovery, PRD Analysis, Epic Coverage, UX Alignment, Assessment
+  Output: readiness-report.md
+```
+
+### 10.3 Code Report Example
+
+```
+Workflow: "Code Report"
+Mode: mixed
+
+Step 1: "Generate Code Report"
+  Agent: code-analyst | allow_non_interactive: true
+  SubSteps:
+    1. Security Analysis
+    2. Code Quality Metrics
+    3. Dependency Audit
+    4. Architecture Review
+    5. Test Coverage
+    6. Performance Hotspots
+    7. Documentation Completeness
+    8. Recommendations
+  Output: code_report.md
+
+Step 2: "Create Client Report"
+  Agent: report-designer | interactive
+  SubSteps:
+    1. Review sections with user
+    2. Generate styled HTML
+    3. Export as public asset
+  Output: report.html (exported as public Asset)
+```
+
+### 10.4 What Palad Adds Over BMAD
+
+| BMAD limitation | Palad solution |
+|-----------------|----------------|
+| Fresh chat = lost context | Assets persist, shared_context carries decisions |
+| Manual agent switching | `agent_id` on Step — system provisions correct agent |
+| sprint-status.yaml tracking | WorkflowRun + StepRun + SubStepRun — full history with UI |
+| Everything interactive | Mixed mode — TestArch-like steps auto-proceed |
+| Files overwritten | Asset versioning — full history |
+| No sharing | Public assets with shareable links |
+| No cost tracking | MITM proxy — cost per step |
+| No structured progress | SubStepRun.data — structured findings, decisions |
+
+---
+
+## 11. GitHub Integration
+
+### 11.1 Repository as Asset
+
+Repositories are a special `asset_type`. Cloned and mounted as directories.
+
+```ruby
+# Asset with asset_type: "repository"
+# provenance: { source: "github", repo_url: "...", branch: "main", commit: "abc123" }
+# Mounted to: /workspace/input/repo/
+```
+
+### 11.2 Clone Process
+
+```ruby
+class WorkspacePreparator
+  def prepare_repository_asset(asset, workspace_path)
+    repo_path = "#{workspace_path}/input/repo"
+    Git.clone(
+      asset.provenance['repo_url'], repo_path,
+      depth: asset.provenance['depth'] || 1,
+      branch: asset.provenance['branch'] || 'main',
+      credentials: resolve_github_credentials(asset.project)
     )
-
-    # Import steps if they exist
-    import_steps(workflow, path)
-
-    workflow
-  end
-
-  def import_steps(workflow, path)
-    Dir.glob("#{path}/steps/*.md").sort.each_with_index do |step_file, idx|
-      content = File.read(step_file)
-      name = File.basename(step_file, '.md')
-
-      workflow.steps.create!(
-        position: idx + 1,
-        name: name,
-        instructions: content
-      )
-    end
   end
 end
 ```
 
 ---
 
-## 10. Prerequisites Detail
-
-### 10.1 Agents
-
-```ruby
-class Agent < ApplicationRecord
-  belongs_to :company
-  belongs_to :project, optional: true  # nil = company-wide
-
-  # name: string
-  # title: string (e.g., "Business Analyst")
-  # icon: string (emoji)
-  # persona: text (system prompt / persona description)
-  # communication_style: text
-  # principles: text
-  # source: enum (bmad_import, custom)
-end
-```
-
-**Functionality:**
-- CRUD via UI
-- Import from BMAD files
-- Agent selection at session start
-- Agent's persona → system prompt for the LLM
-
----
-
-### 10.2 Tools
-
-```ruby
-class Tool < ApplicationRecord
-  belongs_to :company
-
-  # name: string (unique identifier)
-  # display_name: string
-  # description: text
-  # input_schema: jsonb (JSON Schema for parameters)
-  # docker_image: string
-  # docker_command: string (template with {{param}} placeholders)
-  # required_secrets: jsonb (array of secret names)
-  # timeout_seconds: integer
-end
-```
-
-**Functionality:**
-- CRUD via UI
-- Docker image pull/build
-- Execution as a Temporal Activity
-- Secrets injection
-
----
-
-### 10.3 MCP Servers
-
-```ruby
-class McpServer < ApplicationRecord
-  belongs_to :company
-  belongs_to :project, optional: true
-  has_many :mcp_server_tools
-  has_many :tools, through: :mcp_server_tools
-
-  # name: string
-  # description: text
-  # transport: enum (stdio, http, websocket)
-  # config: jsonb (transport-specific config)
-  # enabled: boolean
-end
-
-class McpServerTool < ApplicationRecord
-  belongs_to :mcp_server
-  belongs_to :tool
-
-  # exposed_name: string (can rename tool for MCP)
-end
-```
-
-**Functionality:**
-- Configure which tools are exposed via MCP
-- MCP server runs alongside agent container
-- CLI agents connect to MCP server
-
----
-
-### 10.4 Session Context (CLI-specific)
-
-Each CLI agent requires its own configuration:
-
-| CLI | Config Location | Required | Context Files |
-|-----|-----------------|----------|---------------|
-| **Claude Code** | `~/.claude/` | `ANTHROPIC_API_KEY` | `settings.json`, `claude.md` |
-| **Cursor CLI** | `~/.cursor/` | Auth tokens | `settings.json`, `.cursorrules` |
-| **Gemini CLI** | `~/.config/gemini/` | `GOOGLE_API_KEY` | config files |
-| **Codex** | `~/.codex/` | `OPENAI_API_KEY` | config files |
-
-```ruby
-class SessionContextConfig < ApplicationRecord
-  belongs_to :company
-
-  # agent_type: enum (claude_code, cursor_cli, gemini_cli, codex)
-  # config_files: jsonb
-  #   {
-  #     "~/.claude/settings.json": "{ ... }",
-  #     "~/.claude/claude.md": "content..."
-  #   }
-  # env_vars: jsonb
-  #   { "ANTHROPIC_API_KEY": "secret:anthropic_key" }  # reference to Secret
-  # mcp_servers: array of McpServer IDs to connect
-end
-```
-
-**At session start:**
-1. Load `SessionContextConfig` for selected `agent_type`
-2. Resolve secrets → actual values
-3. Write config files to container
-4. Set environment variables
-5. Connect MCP servers
-
-```ruby
-class SessionPreparator
-  def prepare(terminal_session)
-    config = SessionContextConfig.find_by(
-      company: terminal_session.user.company,
-      agent_type: terminal_session.agent_type
-    )
-
-    # Write config files
-    config.config_files.each do |path, content|
-      write_to_container(terminal_session, path, content)
-    end
-
-    # Set env vars (with secret resolution)
-    config.env_vars.each do |name, value|
-      resolved = resolve_secret_reference(value)
-      set_env_var(terminal_session, name, resolved)
-    end
-
-    # Connect MCP servers
-    config.mcp_servers.each do |mcp_server|
-      connect_mcp(terminal_session, mcp_server)
-    end
-  end
-end
-```
-
----
-
-## 11. Open Questions — Decisions
+## 12. Open Questions — Decisions
 
 | # | Question | Decision |
 |---|----------|----------|
-| 1 | Tool calling | ✅ MCP servers |
-| 2 | MCP integration | ✅ Yes, the primary mechanism |
-| 3 | Parallel steps | ❌ Not for now — sequential only |
-| 4 | Branching | ❌ Not needed. The UI should show step status (done/running/pending + who started it) |
-| 5 | Templates | ✅ Yes, needed. Like in BMAD (template.md for output documents) |
-| 6 | MCP server lifecycle | ✅ Per-session — the MCP server is brought up together with the session |
-| 7 | Custom tools via MCP | ✅ Yes, the user creates tools (project/company scope), code in any language in Docker + secrets |
-| 8 | Prompt injection | 🔬 Research needed — each CLI has its own mechanism |
+| 1 | Naming | ✅ Asset (not Artifact) |
+| 2 | Entity naming | ✅ Workflow → Step → SubStep (clean, no prefixes) |
+| 3 | Granularity | ✅ BMAD workflow = Palad Step; BMAD step-file = Palad SubStep |
+| 4 | Tool calling | ✅ MCP servers |
+| 5 | Parallel steps | ❌ Sequential only |
+| 6 | Branching | ❌ Not needed |
+| 7 | Execution modes | ✅ Interactive / Non-interactive / Mixed |
+| 8 | Intermediate files | ✅ Two-tier: WorkflowRunAsset → explicit export to Asset |
+| 9 | Sub-steps | ✅ Separate model, configurable in UI, pre-created on StepRun start |
+| 10 | Agent context | ✅ Injected into CLI context files, no read tools |
+| 11 | Skip policy | ✅ never / if_outputs_exist / manual (no condition) |
+| 12 | Workflow scope | ✅ Project-level only |
+| 13 | Asset versioning | ✅ Same name → new version; different name → new asset |
+| 14 | Asset organization | ✅ One-level folders + tags |
+| 15 | Public sharing | ✅ public flag + public_token → shareable URL |
+| 16 | Menus | ✅ Through step/sub-step instructions, not separate model |
+| 17 | Tri-modal | ✅ Separate workflows (Create PRD vs Validate/Edit PRD) |
+| 18 | SubStepRun creation | ✅ Auto-created when StepRun starts, agent updates via tool |
+| 19 | SubStepRun data | ✅ jsonb for structured data (decisions, metrics, findings) |
 
 ---
 
-### 11.1 Prompt Injection Research (TODO)
+## 13. Implementation Priority
 
-| CLI | Config File | What to research |
-|-----|-------------|------------------|
-| **Claude Code** | `claude.md` | Main instructions + per-step instructions? Or everything in claude.md? |
-| **Cursor CLI** | `.cursorrules`, `rules/*.mdc` | Rules format, how they are connected |
-| **Gemini CLI** | ? | How to inject system prompts |
-| **Codex** | ? | How to inject system prompts |
+### Prerequisites (already implemented)
 
-**Action:** Do research on each CLI — which files, formats, how to inject custom prompts.
+| # | Component | Status |
+|---|-----------|--------|
+| P0 | Secrets Management | ✅ Done (Epic 4) |
+| P1 | Agents | ✅ Done (Epic 5) |
+| P2 | Tools | ✅ Done (Epic 6) |
+| P3 | MCP Servers | ✅ Done (Epic 7) |
+| P4 | Container Execution | ✅ Done (Epic 8) |
+| P4+ | Session Context | ✅ Done (Epic 9) |
+| P4++ | Agent Sessions Core | 🔄 In Progress (Epic 10) |
 
----
+### Workflow & Asset Implementation Phases
 
-### 11.2 WorkflowRun UI — Step Status Display
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Workflow Run: Create PRD                                         │
-│ Started by: Artem • 2026-01-30 14:30                            │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ● Step 1: Discovery          ✅ Completed                      │
-│    └─ by Artem • 15 min • 3 artifacts                           │
-│                                                                  │
-│  ● Step 2: Vision             ✅ Completed                      │
-│    └─ by Artem • 10 min • 1 artifact                            │
-│                                                                  │
-│  ● Step 3: Users              🔄 Running                        │
-│    └─ by Artem • started 5 min ago                              │
-│    └─ [Open Terminal]                                            │
-│                                                                  │
-│  ○ Step 4: Metrics            ⏳ Pending                        │
-│                                                                  │
-│  ○ Step 5: Scope              ⏳ Pending                        │
-│                                                                  │
-│  ○ Step 6: Complete           ⏳ Pending                        │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+| Phase | Scope | Key Deliverables |
+|-------|-------|------------------|
+| **A** | Asset Foundation | Asset model, S3, upload, versioning, folders/tags |
+| **B** | Asset UI + Public | List, detail, upload, public toggle, shareable links |
+| **C** | Workflow Definition | Workflow, Step, SubStep models + CRUD UI |
+| **D** | Workflow Execution | WorkflowRun, StepRun, SubStepRun, WorkflowRunAsset, Temporal |
+| **E** | Internal Tools | 4 tools: list_sub_steps, mark_sub_step, write_step_note, export_asset |
+| **F** | Context + _index.md | WorkflowContextAssembler, _index.md, CLI context injection |
+| **G** | Execution Modes | Interactive/non-interactive/mixed, skip policies |
+| **H** | Post-workflow UI | WorkflowRun detail, asset export selection, public links |
 
 ---
 
-### 11.3 Tools Scope
-
-```ruby
-class Tool < ApplicationRecord
-  belongs_to :company
-  belongs_to :project, optional: true  # nil = company-wide
-
-  # When receiving tools for a session:
-  # 1. Project tools
-  # 2. Company tools (if there is no conflict by name)
-  # Merge: project tools override company tools with same name
-end
-```
-
-```ruby
-def tools_for_session(session)
-  company_tools = session.user.company.tools.where(project: nil)
-  project_tools = session.project.tools
-
-  # Project tools take precedence
-  (company_tools + project_tools).uniq(&:name)
-end
-```
-
----
-
-## 11. Implementation Priority
-
-### Prerequisites (before Workflows)
-
-Workflows depend on the base agent infrastructure:
-
-| # | Component | Description | Why needed |
-|---|-----------|-------------|------------|
-| **P1** | **Agents** | Agent CRUD, persona, system prompts | Workflow steps are executed by agents |
-| **P2** | **Tools** | Tool definitions, Docker images | Agents use tools |
-| **P3** | **MCP Servers** | MCP configuration, tool distribution | Standard way of delivering tools |
-| **P4** | **Session Context** | Context for different CLIs (Cursor, Gemini, Claude Code, Codex) | Each CLI requires its own configuration |
-
-### Dependency Graph
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         WORKFLOWS                                │
-│  (WorkflowRun, StepRun, Artifact collection)                    │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ depends on
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      SESSION CONTEXT                             │
-│  - Claude Code: ~/.claude/, ANTHROPIC_API_KEY                   │
-│  - Cursor CLI: ~/.cursor/, auth tokens                          │
-│  - Gemini CLI: ~/.config/gemini/, GOOGLE_API_KEY                │
-│  - Codex: ~/.codex/, OPENAI_API_KEY                             │
-│  - Custom prompts injection                                      │
-│  - MCP server connections                                        │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ depends on
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                         MCP SERVERS                              │
-│  - MCP server definitions (company/project level)               │
-│  - Tool exposure via MCP protocol                               │
-│  - Connection management                                         │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ depends on
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                           TOOLS                                  │
-│  - Tool definitions (name, description, schema)                 │
-│  - Docker images for execution                                  │
-│  - Required secrets mapping                                      │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ depends on
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                          AGENTS                                  │
-│  - Agent definitions (persona, system prompt)                   │
-│  - Company/project scoped                                        │
-│  - Agent selection for sessions                                  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ depends on
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SECRETS MANAGEMENT                            │
-│  - API keys (Anthropic, OpenAI, Google)                         │
-│  - Integration credentials (GitHub, Linear)                     │
-│  - Encrypted storage                                             │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Implementation Phases (Updated)
-
-| Phase | Scope | Deliverable |
-|-------|-------|-------------|
-| **Phase 0** | Secrets Management | Encrypted secrets CRUD, injection into containers |
-| **Phase 1** | Agents | Agent model, CRUD, selection in sessions |
-| **Phase 2** | Tools | Tool definitions, Docker execution, Temporal activities |
-| **Phase 3** | MCP Servers | MCP config, tool exposure, connection to CLI agents |
-| **Phase 4** | Session Context | Per-CLI configuration, credentials injection, MCP wiring |
-| **Phase 5** | Workflows Core | Workflow/Step CRUD, WorkflowRun/StepRun |
-| **Phase 6** | Artifacts | Collection, versioning, S3, validation |
-| **Phase 7** | Advanced | Builder, non-interactive, GitHub integration |
-
----
-
-_Document generated from brainstorm session 2026-01-30_
+_Document v3 generated from design session 2026-02-13_
+_Key changes from v2: Objective→SubStep, correct granularity (BMAD workflow=Step), SubStepRun auto-creation + data, BMAD mapping section_
