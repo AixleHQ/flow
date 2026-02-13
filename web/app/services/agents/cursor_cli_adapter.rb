@@ -120,6 +120,10 @@ module Agents
       ]
     end
 
+    def ingest_usage(_payload, _terminal_session)
+      raise NotImplementedError, "#{self.class} does not implement usage ingestion yet"
+    end
+
     private
 
     # Ensure SKILL.md has YAML frontmatter with name and description.

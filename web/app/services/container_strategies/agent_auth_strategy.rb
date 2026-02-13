@@ -72,26 +72,28 @@ module ContainerStrategies
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
-      env_vars = [
-        "USER_ID=#{input[:user_id]}",
-        "AGENT_TYPE=#{input[:agent_type]}",
-        "SESSION_TYPE=#{session_type}",
-        "SESSION_ID=#{input[:session_id]}",
-        "TTYD_PORT=7681",
-        "WATCHER_PORT=4040",
-        "TTYD_CMD=#{ttyd_command}",
-        "HOME_DIR=#{agent_service.home_dir}",
-        "AUTH_WATCH_PATH=#{agent_service.auth_watch_path}",
-        "AUTH_REQUIRED_KEYS=#{agent_service.adapter.auth_required_keys.join(',')}"
-      ]
+      env_vars = {
+        "USER_ID" => input[:user_id].to_s,
+        "AGENT_TYPE" => input[:agent_type],
+        "SESSION_TYPE" => session_type,
+        "SESSION_ID" => input[:session_id].to_s,
+        "TTYD_PORT" => "7681",
+        "WATCHER_PORT" => "4040",
+        "TTYD_CMD" => ttyd_command,
+        "HOME_DIR" => agent_service.home_dir,
+        "AUTH_WATCH_PATH" => agent_service.auth_watch_path,
+        "AUTH_REQUIRED_KEYS" => agent_service.adapter.auth_required_keys.join(",")
+      }
+
+      # Add adapter defaults (e.g., telemetry/OTEL settings)
+      env_vars.merge!(agent_service.adapter.default_env_vars(session))
 
       # Add agent-specific env vars from session metadata
       if session.metadata.present?
-        agent_env_vars = agent_service.adapter.env_vars_from_metadata(session.metadata)
-        agent_env_vars.each { |k, v| env_vars << "#{k}=#{v}" if v.present? }
+        env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata))
       end
 
-      env_vars
+      env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
 
     def build_labels

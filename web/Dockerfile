@@ -12,7 +12,7 @@ COPY web/Gemfile web/Gemfile.lock ./
 RUN gem install bundler -v 2.6.5
 RUN bundle install
 
-COPY web/package.json web/yarn.lock web/.yarnrc.yml  .
+COPY web/package.json web/yarn.lock web/.yarnrc.yml  ./
 COPY web/.yarn .yarn
 
 RUN yarn set version 4.12.0

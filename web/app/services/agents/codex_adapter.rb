@@ -111,6 +111,10 @@ module Agents
       :append_toml
     end
 
+    def ingest_usage(_payload, _terminal_session)
+      raise NotImplementedError, "#{self.class} does not implement usage ingestion yet"
+    end
+
     private
 
     def generate_config_toml(workflow_config)

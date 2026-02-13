@@ -9,6 +9,7 @@ setup:
 # Full Kubernetes setup: CRDs, manifests, wait for pods, migrate and seed
 kube-setup:
 	@make build-web
+	@make build-otlp-ingest
 	@make build-agents
 	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
 	kubectl apply -f ./kube
@@ -16,6 +17,9 @@ kube-setup:
 	kubectl wait --for=condition=ready pod -l app=web -n palad --timeout=120s
 	kubectl exec -n palad deployment/web -- make db-prepare
 	@make kube-mount-dev
+
+kube-apply:
+	kubectl apply -f ./kube
 
 # Default to current directory's web folder if not provided
 WEB_HOST_PATH ?= $(shell pwd)/web
@@ -98,6 +102,9 @@ restore-prod-db: dump-prod fetch-prod-dump restore-dump
 build-web:
 	docker build -f web/Dockerfile -t web .
 
+build-otlp-ingest:
+	docker build -f docker/otlp-ingest/Dockerfile -t otlp-ingest docker/otlp-ingest
+
 # Build agent images
 build-agents:
 	docker build -t palad/agent-base:latest docker/base
@@ -141,5 +148,6 @@ help:
 	@echo ""
 	@echo "Agent Docker Images:"
 	@echo "  make build-agents           - Build all agent images (base + 4 agents)"
+	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"
 	@echo ""
 	@echo "  make help                   - Show this help message"

@@ -158,6 +158,13 @@ module Agents
     # Used for agent-specific config like GOOGLE_CLOUD_PROJECT
     # =================================================================
 
+    # Default environment variables for the container runtime.
+    # @param session [TerminalSession, nil]
+    # @return [Hash<String, String>]
+    def default_env_vars(_session = nil)
+      {}
+    end
+
     # Fields that must be configured before starting container
     # Shown in UI before auth terminal starts
     # @return [Array<Hash>] list of field definitions
@@ -187,6 +194,14 @@ module Agents
     # @return [Boolean]
     def requires_env_fields?
       required_env_fields.any? { |f| f[:required] }
+    end
+
+    # Parse and persist usage statistics for a terminal session.
+    # @param payload [Hash] parsed OTLP JSON payload
+    # @param terminal_session [TerminalSession]
+    # @return [Symbol] :ok when persisted, :accepted when no usage found
+    def ingest_usage(_payload, _terminal_session)
+      raise NotImplementedError, "#{self.class} must implement #ingest_usage"
     end
 
     protected

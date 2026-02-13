@@ -7,6 +7,7 @@ class TerminalSession < ApplicationRecord
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
+  has_one :usage_statistic, dependent: :destroy
 
   # Callbacks
   before_create :generate_route_token

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_12_152725) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -275,7 +275,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_12_152725) do
     t.datetime "updated_at", null: false
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
-    t.index ["scope_type"], name: "index_tools_on_scope_type"
+  end
+
+  create_table "usage_statistics", force: :cascade do |t|
+    t.bigint "cost_cents", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.bigint "terminal_session_id", null: false
+    t.bigint "tokens", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["terminal_session_id"], name: "index_usage_statistics_on_terminal_session_id", unique: true
   end
 
   create_table "users", force: :cascade do |t|
@@ -321,6 +329,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_12_152725) do
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"
+  add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
 end
