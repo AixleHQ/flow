@@ -83,13 +83,12 @@ module Agents
       }
     end
 
-    # Session command: claude (interactive), claude -p "prompt" (non-interactive)
+    # Session command: always interactive mode for TUI with streaming output.
+    # For non-interactive sessions, prompt is passed as positional argument
+    # via AGENT_PROMPT env var → /tmp/.agent_prompt → run_agent.sh
+    # (claude -p is print/pipe mode — no TUI, no streaming, silent until done)
     def session_command(mode:, prompt: nil)
-      if mode == "non_interactive" && prompt.present?
-        "claude -p #{Shellwords.escape(prompt)}"
-      else
-        "claude"
-      end
+      "claude"
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)

@@ -201,8 +201,22 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     toml_path = "/home/codex/.codex/config.toml"
     assert result.key?(toml_path)
     assert_includes result[toml_path], '[mcp_servers."tavily"]'
-    assert_includes result[toml_path], 'type = "http"'
     assert_includes result[toml_path], 'url = "https://tavily.com/mcp"'
+    refute_includes result[toml_path], 'type = "'
+  end
+
+  test "generate_mcp_config Codex uses http_headers not headers" do
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @company,
+                    headers: { "Authorization" => "Bearer secret123" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex",
+                     session_config: { "mcp_server_ids" => [ server.id ] })
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    toml_path = "/home/codex/.codex/config.toml"
+    assert_includes result[toml_path], 'http_headers = { "Authorization" = "Bearer secret123" }'
+    refute_includes result[toml_path], "\nheaders = "
   end
 
   test "generate_mcp_config resolves secrets in headers" do
@@ -242,7 +256,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     config = JSON.parse(result["/workspace/.mcp.json"])
     assert config["mcpServers"].key?("palad-tools")
-    assert_equal "sse", config["mcpServers"]["palad-tools"]["type"]
+    assert_equal "http", config["mcpServers"]["palad-tools"]["type"]
     assert_equal session.mcp_key, config["mcpServers"]["palad-tools"]["headers"]["X-Session-Key"]
   end
 

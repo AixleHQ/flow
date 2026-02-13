@@ -36,12 +36,9 @@ RUN ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
     && chown -R cursor:cursor /home/cursor
 
 # -----------------------------------------------------------------------------
-# Configuration & entrypoint
+# Configuration
 # -----------------------------------------------------------------------------
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
 WORKDIR /workspace
-
-# Use tini as init system for proper signal handling
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+ENV HOME=/home/cursor \
+    AGENT_NAME="Cursor CLI" \
+    PATH="/home/cursor/.local/bin:${PATH}"

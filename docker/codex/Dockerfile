@@ -20,12 +20,8 @@ RUN useradd -m -d /home/codex -s /bin/bash codex \
     && chown -R codex:codex /workspace /opt/watcher
 
 # -----------------------------------------------------------------------------
-# Configuration & entrypoint
+# Configuration
 # -----------------------------------------------------------------------------
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
 WORKDIR /workspace
-
-# Use tini as init system for proper signal handling
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+ENV HOME=/home/codex \
+    AGENT_NAME="Codex"

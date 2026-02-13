@@ -359,6 +359,31 @@ class SessionContextService
       lines << "Act to achieve the maximum result for the user."
       lines << "Use all available MCP servers and tools. Call `tools/list` on MCP servers to discover available capabilities."
       lines << "Write clean, production-quality code. Follow project conventions when present."
+
+      if session.mode == "non_interactive"
+        lines << ""
+        lines << "## CRITICAL: Non-Interactive Mode"
+        lines << ""
+        lines << "This session runs **non-interactively** — there is NO human to respond."
+        lines << "The user's prompt is the ONLY input you will receive. No follow-up is possible."
+        lines << ""
+        lines << "**Strict rules:**"
+        lines << "- NEVER ask questions, request clarifications, or wait for input"
+        lines << "- NEVER present options and ask the user to choose"
+        lines << "- NEVER stop mid-task saying you need more information"
+        lines << "- Make reasonable assumptions when details are missing and document them"
+        lines << "- If a task is ambiguous, choose the most sensible interpretation and proceed"
+        lines << ""
+        lines << "**How to operate:**"
+        lines << "1. Analyze the prompt and all available context (MCP tools, project files, skills)"
+        lines << "2. Break the task into concrete steps"
+        lines << "3. Execute each step fully — write files, create artifacts, run commands"
+        lines << "4. Save all results to `/workspace/output/` so they persist after the session"
+        lines << "5. At the end, write a summary of what was done and any assumptions made"
+        lines << ""
+        lines << "Your output MUST be actionable artifacts (documents, code, configs), not a conversation."
+      end
+
       lines.join("\n")
     end
 
@@ -420,11 +445,16 @@ class SessionContextService
     def read_file(container_id, path)
       return nil if path.blank?
 
-      tar_data = runtime.copy_from(container_id, path)
-      return nil if tar_data.blank?
+      safe_path = Shellwords.escape(path.to_s)
+      result = runtime.exec(container_id, [ "sh", "-c", "cat #{safe_path}" ])
+      stdout = result[0]
+      exit_code = result[2]
 
-      extract_file_from_tar(tar_data, path)
-    rescue StandardError
+      return nil unless exit_code.to_i.zero?
+
+      stdout.join
+    rescue StandardError => e
+      Rails.logger.debug("[SessionContext] read_file(#{path}) failed: #{e.message}")
       nil
     end
 

@@ -120,8 +120,8 @@ module Api
           :project_id,
           metadata: {},
           session_config: [
-            :agent_id,
-            { config_files: {}, env_vars: {}, mcp_server_ids: [], tool_ids: [] }
+            :agent_id, :mode, :initial_prompt,
+            { config_files: {}, env_vars: {}, mcp_server_ids: [], tool_ids: [], skill_ids: [] }
           ]
         )
 

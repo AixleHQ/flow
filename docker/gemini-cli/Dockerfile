@@ -29,12 +29,8 @@ WORKDIR /home/gemini
 USER root
 
 # -----------------------------------------------------------------------------
-# Configuration & entrypoint
+# Configuration
 # -----------------------------------------------------------------------------
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
 WORKDIR /workspace
-
-# Use tini as init system for proper signal handling
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
+ENV HOME=/home/gemini \
+    AGENT_NAME="Gemini CLI"

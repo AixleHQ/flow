@@ -8,7 +8,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import type { AgentType, OnboardingState } from 'entities/user';
-import { useGetCurrentUserQuery, useUpdateCurrentUserMutation } from 'entities/user';
+import {
+  AGENT_COLORS,
+  AVAILABLE_AGENTS,
+  getAgentInfo,
+  useGetCurrentUserQuery,
+  useUpdateCurrentUserMutation,
+} from 'entities/user';
 import { AgentAuthTerminal } from 'features/agent-auth';
 import { Routes } from 'shared/routes';
 
@@ -34,40 +40,6 @@ interface IAgentLoginStatus {
   status: 'pending' | 'authenticating' | 'authenticated' | 'saving' | 'error';
   sessionUrl?: string;
 }
-
-const agentColors: Record<AgentType, string> = {
-  codex: '#10a37f',
-  cursor_cli: '#7c3aed',
-  gemini_cli: '#3b82f6',
-  claude_code: '#d97706',
-};
-
-// Available agents list with detailed descriptions (single source of truth)
-const AVAILABLE_AGENTS: Array<{ type: AgentType; name: string; description: string }> = [
-  {
-    type: 'claude_code',
-    name: 'Claude Code',
-    description: "Anthropic's AI coding assistant with deep reasoning capabilities",
-  },
-  {
-    type: 'cursor_cli',
-    name: 'Cursor CLI',
-    description: 'AI-powered code editor with context-aware suggestions',
-  },
-  {
-    type: 'codex',
-    name: 'OpenAI Codex',
-    description: "OpenAI's code generation model optimized for multiple languages",
-  },
-  {
-    type: 'gemini_cli',
-    name: 'Gemini CLI',
-    description: "Google's multimodal AI for code and documentation tasks",
-  },
-];
-
-// Helper to get agent info by type
-const getAgentInfo = (type: AgentType) => AVAILABLE_AGENTS.find((a) => a.type === type)!;
 
 const POSITION_OPTIONS = [
   { value: 'dev', label: 'Developer' },
@@ -874,7 +846,7 @@ const OnboardingPage = () => {
               aria-label={`${agent.name}: ${agent.description}`}
             >
               <Checkbox checked={isSelected} sx={styles.checkbox} color="primary" tabIndex={-1} />
-              <Box sx={{ ...styles.colorBar, backgroundColor: agentColors[agent.type] }} />
+              <Box sx={{ ...styles.colorBar, backgroundColor: AGENT_COLORS[agent.type] }} />
               <Typography sx={styles.cardName}>{agent.name}</Typography>
               <Typography sx={styles.cardDescription}>{agent.description}</Typography>
             </Box>
@@ -934,7 +906,7 @@ const OnboardingPage = () => {
                 <Box sx={styles.agentLoginHeader}>
                   <Box
                     sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }}
-                    style={{ backgroundColor: agentColors[agentType] }}
+                    style={{ backgroundColor: AGENT_COLORS[agentType] }}
                   />
                   <Typography sx={styles.agentLoginName}>{info.name}</Typography>
                   {isAuthenticated && (
@@ -1074,7 +1046,7 @@ const OnboardingPage = () => {
             <Box key={agentType} sx={styles.summaryCard}>
               <Box
                 sx={{ ...styles.colorBar, height: '24px', marginBottom: 0 }}
-                style={{ backgroundColor: agentColors[agentType] }}
+                style={{ backgroundColor: AGENT_COLORS[agentType] }}
               />
               <Typography sx={styles.summaryText}>{info.name}</Typography>
               <Typography

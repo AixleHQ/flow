@@ -57,13 +57,13 @@ module Agents
       }
     end
 
-    # Session command: agent (interactive), agent -m "prompt" (non-interactive)
+    # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
-    # --approve-mcps: auto-approve MCP server connections (headless only, backup for mcp-approvals.json)
+    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
       base = "agent --force"
       if mode == "non_interactive" && prompt.present?
-        "#{base} -p #{Shellwords.escape(prompt)}"
+        "#{base} -p"
       else
         base
       end

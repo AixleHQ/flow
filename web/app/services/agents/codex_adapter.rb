@@ -60,18 +60,19 @@ module Agents
       }
     end
 
-    # Session command: codex --yolo (interactive), codex -q "prompt" (non-interactive)
+    # Session command: codex --yolo (interactive), codex -q (non-interactive)
+    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
       if mode == "non_interactive" && prompt.present?
-        "codex -q #{Shellwords.escape(prompt)}"
+        "codex -q"
       else
         "codex --yolo"
       end
     end
 
-    # Context file: ~/.codex/AGENTS.md (auto-read by Codex at startup)
+    # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)
     def context_file_path
-      "#{home_dir}/.codex/AGENTS.md"
+      "/workspace/AGENTS.md"
     end
 
     # Skill files: ~/.codex/skills/<name>/SKILL.md with YAML front matter (user-scoped)
@@ -88,15 +89,18 @@ module Agents
     end
 
     # MCP config: appended to ~/.codex/config.toml
+    # Codex format per https://developers.openai.com/codex/mcp/
+    # - STDIO: command, args, env
+    # - Streamable HTTP: url, http_headers, bearer_token_env_var
+    # Type inferred by Codex from presence of url vs command — no "type" field
     def mcp_config(servers)
       sections = servers.map do |s|
         lines = []
         lines << "[mcp_servers.\"#{s.name}\"]"
-        lines << "type = \"#{mcp_transport_type(s.transport)}\""
         lines << "url = \"#{s.url}\"" if s.url.present?
         if s.headers.present? && s.headers.any?
-          header_pairs = s.headers.map { |k, v| "#{k} = \"#{v}\"" }.join(", ")
-          lines << "headers = { #{header_pairs} }"
+          header_pairs = s.headers.map { |k, v| "\"#{k}\" = \"#{v}\"" }.join(", ")
+          lines << "http_headers = { #{header_pairs} }"
         end
         lines.join("\n")
       end
@@ -108,15 +112,6 @@ module Agents
     end
 
     private
-
-    # Map internal transport name to Codex MCP type
-    def mcp_transport_type(transport)
-      case transport.to_s
-      when "streamable-http", "http" then "http"
-      when "sse"                     then "sse"
-      else "stdio"
-      end
-    end
 
     def generate_config_toml(workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"

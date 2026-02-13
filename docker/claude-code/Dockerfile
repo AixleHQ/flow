@@ -33,16 +33,11 @@ RUN mkdir -p /home/claude/.claude \
     && chown -R claude:claude /home/claude
 
 # -----------------------------------------------------------------------------
-# Configuration & entrypoint
+# Configuration
 # -----------------------------------------------------------------------------
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
-
 WORKDIR /workspace
-ENV HOME=/home/claude
+ENV HOME=/home/claude \
+    AGENT_NAME="Claude Code"
 
 # Run as non-root user (required for --dangerously-skip-permissions)
 USER claude
-
-# Use tini as init system for proper signal handling
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

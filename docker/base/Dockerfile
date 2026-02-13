@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Terminal & shell
     bash \
     bash-completion \
+    tmux \
     # Development tools
     git \
     ripgrep \
@@ -73,6 +74,28 @@ RUN chmod +x /opt/mitm/start-mitm.sh
 COPY inputrc /etc/inputrc
 
 # -----------------------------------------------------------------------------
+# tmux config: session persistence for web terminal
+# Keeps command alive across browser reconnects, provides scrollback history
+# -----------------------------------------------------------------------------
+RUN printf '%s\n' \
+    'set -g history-limit 50000' \
+    'set -g remain-on-exit on' \
+    'set -g mouse on' \
+    'set -g status off' \
+    > /etc/tmux.conf
+
+# -----------------------------------------------------------------------------
+# UTF-8 locale (required for tmux + Russian/CJK text)
+# -----------------------------------------------------------------------------
+ENV LANG=C.UTF-8
+
+# -----------------------------------------------------------------------------
+# Shared entrypoint (agents customize via ENV vars)
+# -----------------------------------------------------------------------------
+COPY entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
+
+# -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
 RUN mkdir -p /workspace/repo /workspace/output
@@ -84,3 +107,5 @@ WORKDIR /workspace
 #   4040 - file watcher WebSocket + HTTP API
 #   8888 - MITM proxy (internal)
 EXPOSE 7681 4040
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

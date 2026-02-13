@@ -35,10 +35,17 @@ module ContainerStrategies
       # Change SESSION_TYPE
       base_vars.map! { |v| v.sub("SESSION_TYPE=auth_setup", "SESSION_TYPE=agent_session") }
 
-      # Change TTYD_CMD to session command
+      # Change TTYD_CMD to session command (base command with flag, no prompt value)
       base_vars.map! { |v| v.sub(/^TTYD_CMD=.*$/, "TTYD_CMD=#{ttyd_command}") }
 
       session = TerminalSession.find(input[:session_id])
+
+      # Pass prompt as separate env var for non-interactive sessions.
+      # Entrypoint writes it to /tmp/.agent_prompt and references via $(cat ...).
+      # This avoids all shell escaping issues with Shellwords.escape + newlines.
+      if session.mode == "non_interactive" && session.initial_prompt.present?
+        base_vars << "AGENT_PROMPT=#{session.initial_prompt}"
+      end
 
       # Add agent-specific env vars from credential metadata (overrides session metadata)
       if input[:credential]&.metadata.present?

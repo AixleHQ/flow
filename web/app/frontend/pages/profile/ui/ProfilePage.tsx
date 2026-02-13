@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import { useGetCurrentUserQuery, useUpdateCurrentUserMutation, type UserRole } from 'entities/user';
+import { AgentCredentialsSection } from 'features/agent-credentials';
 
 import { profileSchema, type IProfileFormData } from '../lib/profileSchema';
 
@@ -220,6 +221,8 @@ const ProfilePage: React.FC = () => {
             </form>
           </CardContent>
         </Card>
+
+        <AgentCredentialsSection />
       </Box>
     </Box>
   );

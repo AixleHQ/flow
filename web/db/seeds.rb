@@ -442,146 +442,6 @@ project_skills.each do |skill_data|
 end
 
 # ===========================================================================
-# Tools
-# ===========================================================================
-puts "Creating tools..."
-
-# Internal tools (system-provided, no scope)
-internal_tools = [
-  {
-    name: "web_search",
-    display_name: "Web Search",
-    description: "Search the web for real-time information using Tavily API",
-    docker_image: nil,
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "query" => { "type" => "string", "description" => "Search query" },
-        "max_results" => { "type" => "integer", "description" => "Maximum number of results", "default" => 5 }
-      },
-      "required" => [ "query" ]
-    }
-  },
-  {
-    name: "github_create_pr",
-    display_name: "Create GitHub PR",
-    description: "Create a pull request in the configured GitHub repository",
-    docker_image: nil,
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "title" => { "type" => "string", "description" => "PR title" },
-        "body" => { "type" => "string", "description" => "PR description" },
-        "base" => { "type" => "string", "description" => "Base branch", "default" => "main" },
-        "head" => { "type" => "string", "description" => "Head branch" }
-      },
-      "required" => [ "title", "head" ]
-    }
-  },
-  {
-    name: "github_list_issues",
-    display_name: "List GitHub Issues",
-    description: "List open issues from the configured GitHub repository",
-    docker_image: nil,
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "state" => { "type" => "string", "enum" => [ "open", "closed", "all" ], "default" => "open" },
-        "labels" => { "type" => "string", "description" => "Comma-separated label names" },
-        "limit" => { "type" => "integer", "default" => 20 }
-      }
-    }
-  }
-]
-
-internal_tools.each do |tool_data|
-  tool = Tool.find_or_create_by!(name: tool_data[:name], kind: :internal) do |t|
-    t.display_name = tool_data[:display_name]
-    t.description = tool_data[:description]
-    t.docker_image = tool_data[:docker_image]
-    t.input_schema = tool_data[:input_schema]
-    t.enabled = true
-  end
-  puts "  Tool created: #{tool.display_name} (internal)"
-end
-
-# Company-scoped tools
-company_tools = [
-  {
-    name: "run_tests",
-    display_name: "Run Test Suite",
-    description: "Execute the test suite in a Docker container and report results",
-    docker_image: "ruby:3.3-slim",
-    command: "bundle exec rails test",
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "test_path" => { "type" => "string", "description" => "Specific test file or directory", "default" => "" },
-        "seed" => { "type" => "integer", "description" => "Random seed for test order" }
-      }
-    }
-  },
-  {
-    name: "lint_check",
-    display_name: "Lint Check",
-    description: "Run RuboCop linter and report style violations",
-    docker_image: "ruby:3.3-slim",
-    command: "bundle exec rubocop --format json",
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "path" => { "type" => "string", "description" => "File or directory to lint", "default" => "." },
-        "autocorrect" => { "type" => "boolean", "description" => "Auto-correct offenses", "default" => false }
-      }
-    }
-  }
-]
-
-company_tools.each do |tool_data|
-  tool = test_company.tools.find_or_create_by!(name: tool_data[:name]) do |t|
-    t.display_name = tool_data[:display_name]
-    t.description = tool_data[:description]
-    t.docker_image = tool_data[:docker_image]
-    t.command = tool_data[:command]
-    t.input_schema = tool_data[:input_schema]
-    t.kind = :custom
-    t.enabled = true
-  end
-  puts "  Tool created: #{tool.display_name} (company)"
-end
-
-# Project-scoped tools
-project_tools = [
-  {
-    name: "deploy_staging",
-    display_name: "Deploy to Staging",
-    description: "Build and deploy the application to staging environment via Docker",
-    docker_image: "docker:24-dind",
-    command: "docker build -t palad-staging . && docker push registry.example.com/palad:staging",
-    input_schema: {
-      "type" => "object",
-      "properties" => {
-        "tag" => { "type" => "string", "description" => "Docker image tag", "default" => "staging" },
-        "skip_tests" => { "type" => "boolean", "description" => "Skip test suite before deploy", "default" => false }
-      }
-    }
-  }
-]
-
-project_tools.each do |tool_data|
-  tool = palad_project.tools.find_or_create_by!(name: tool_data[:name]) do |t|
-    t.display_name = tool_data[:display_name]
-    t.description = tool_data[:description]
-    t.docker_image = tool_data[:docker_image]
-    t.command = tool_data[:command]
-    t.input_schema = tool_data[:input_schema]
-    t.kind = :custom
-    t.enabled = true
-  end
-  puts "  Tool created: #{tool.display_name} (project: #{palad_project.name})"
-end
-
-# ===========================================================================
 # MCP Servers
 # ===========================================================================
 puts "Creating MCP servers..."
@@ -589,20 +449,12 @@ puts "Creating MCP servers..."
 # Company-scoped MCP servers
 company_mcp_servers = [
   {
-    name: "tavily",
-    display_name: "Tavily Search",
-    description: "Real-time web search API. Provides up-to-date search results, news, and factual information from the web.",
-    url: "https://mcp.tavily.com/mcp",
-    transport: :sse,
-    headers: { "Authorization" => "Bearer config_item:TAVILY_API_KEY" }
-  },
-  {
     name: "context7",
     display_name: "Context7 Documentation",
     description: "Library documentation search. Retrieves up-to-date API docs, code examples, and best practices for programming libraries and frameworks.",
     url: "https://mcp.context7.com/mcp",
     transport: :sse,
-    headers: {}
+    headers: { CONTEXT7_API_KEY: "REDACTED_CONTEXT7_API_KEY" }
   }
 ]
 
@@ -619,51 +471,86 @@ company_mcp_servers.each do |server_data|
   puts "  MCP Server created: #{server.display_name} (company)"
 end
 
-# Project-scoped MCP servers
-project_mcp_servers = [
-  {
-    name: "sentry",
-    display_name: "Sentry Error Tracking",
-    description: "Access Sentry error reports and issue data. Query recent errors, stack traces, and error frequency for debugging.",
-    url: "https://mcp.sentry.dev/sse",
-    transport: :sse,
-    headers: { "Authorization" => "Bearer config_item:SENTRY_AUTH_TOKEN" }
-  }
-]
-
-project_mcp_servers.each do |server_data|
-  server = palad_project.mcp_servers.find_or_create_by!(name: server_data[:name]) do |s|
-    s.display_name = server_data[:display_name]
-    s.description = server_data[:description]
-    s.url = server_data[:url]
-    s.transport = server_data[:transport]
-    s.headers = server_data[:headers]
-    s.kind = :custom
-    s.enabled = true
-  end
-  puts "  MCP Server created: #{server.display_name} (project: #{palad_project.name})"
-end
-
-# ===========================================================================
-# Config Items (secrets for MCP headers)
-# ===========================================================================
 puts "Creating config items for MCP server authentication..."
 
-config_items = [
-  { name: "TAVILY_API_KEY", value: "tvly-dev-test-key-placeholder", description: "Tavily API key for web search", item_type: :variable, scope: test_company },
-  { name: "SENTRY_AUTH_TOKEN", value: "sntrys_dev-test-token-placeholder", description: "Sentry auth token for error tracking", item_type: :variable, scope: palad_project },
-  { name: "ANTHROPIC_API_KEY", value: "sk-ant-dev-test-key-placeholder", description: "Anthropic API key for Claude", item_type: :secret, scope: test_company },
-  { name: "OPENAI_API_KEY", value: "sk-dev-test-key-placeholder", description: "OpenAI API key for Codex", item_type: :secret, scope: test_company }
-]
+tool = test_company.tools.find_or_create_by!(name: "slack_history", scope: test_company) do |t|
+  t.display_name = "Slack History"
+  t.description = "Fetch messages from a Slack channel for a given time range"
+  t.docker_image = "ruby:3.3-slim"
+  t.command = "ruby /workspace/main.rb"
+  t.required_config_items = %w[SLACK_TOKEN SLACK_CHANNEL SLACK_RANGE]
+  t.input_schema = {
+    type: "object",
+    properties: {
+      SLACK_RANGE: { type: "string", description: "Time range (e.g. 24h, 7d, 1w)", default: "24h" }
+    }
+  }
+end
 
-config_items.each do |item_data|
-  item = ConfigItem.find_or_create_by!(name: item_data[:name], scope: item_data[:scope]) do |ci|
-    ci.value = item_data[:value]
-    ci.description = item_data[:description]
-    ci.item_type = item_data[:item_type]
-  end
-  scope_name = item.scope.is_a?(Company) ? "company" : "project: #{item.scope.name}"
-  puts "  ConfigItem created: #{item.name} (#{scope_name})"
+# --- Tool File ---
+tool.tool_files.find_or_create_by!(path: "/workspace/main.rb") do |f|
+  f.content = <<~'RUBY'
+    #!/usr/bin/env ruby
+    require "net/http"
+    require "uri"
+    require "json"
+
+    def env!(k)
+      v = ENV[k].to_s.strip
+      abort("missing #{k}") if v.empty?
+      v
+    end
+
+    def secs(s)
+      n, u = s.to_s.strip.match(/\A(\d+)([smhdw])\z/)&.captures
+      abort("bad SLACK_RANGE (use 24h/7d/1d)") unless n
+      n = n.to_i
+      { "s"=>1, "m"=>60, "h"=>3600, "d"=>86400, "w"=>604800 }[u] * n
+    end
+
+    def slack_get(path, token, params = {})
+      uri = URI("https://slack.com/api/#{path}")
+      uri.query = URI.encode_www_form(params)
+      req = Net::HTTP::Get.new(uri)
+      req["Authorization"] = "Bearer #{token}"
+      data = JSON.parse(Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |h| h.request(req) }.body)
+      abort("slack error: #{data["error"]}") unless data["ok"]
+      data
+    end
+
+    def resolve_channel(name, token)
+      return name if name.match?(/\A[CGD][A-Z0-9]+\z/)
+      name = name.delete_prefix("#")
+      cursor = nil
+      loop do
+        data = slack_get("conversations.list", token, { "limit"=>"200", "types"=>"public_channel,private_channel", "cursor"=>cursor.to_s })
+        ch = data["channels"].find { |c| c["name"] == name }
+        return ch["id"] if ch
+        cursor = data.dig("response_metadata", "next_cursor").to_s.strip
+        abort("channel '#{name}' not found") if cursor.empty?
+      end
+    end
+
+    token   = env!("SLACK_TOKEN")
+    channel = resolve_channel(env!("SLACK_CHANNEL"), token)
+    range   = ENV.fetch("SLACK_RANGE", "24h")
+
+    now = Time.now.to_i
+    oldest = (now - secs(range)).to_s
+    latest = now.to_s
+
+    cursor = nil
+    loop do
+      q = { "channel"=>channel, "oldest"=>oldest, "latest"=>latest, "limit"=>"200" }
+      q["cursor"] = cursor unless cursor.to_s.empty?
+      data = slack_get("conversations.history", token, q)
+
+      (data["messages"] || []).each { |m| STDOUT.puts(JSON.generate(m)) }
+
+      cursor = data.dig("response_metadata", "next_cursor").to_s.strip
+      break if cursor.empty?
+    end
+  RUBY
 end
 
 puts "Seed data created successfully!"

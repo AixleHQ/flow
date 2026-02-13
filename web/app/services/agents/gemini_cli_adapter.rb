@@ -51,10 +51,11 @@ module Agents
       }
     end
 
-    # Session command: gemini --yolo (interactive), gemini -p "prompt" (non-interactive)
+    # Session command: gemini --yolo (interactive), gemini -p (non-interactive)
+    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
       if mode == "non_interactive" && prompt.present?
-        "gemini -p #{Shellwords.escape(prompt)}"
+        "gemini -p"
       else
         "gemini --yolo"
       end
@@ -159,7 +160,7 @@ module Agents
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
           "autoAccept" => true,
-          "approvalMode" => "yolo",          # Auto-approve ALL tools
+          "approvalMode" => "auto_edit",          # Auto-approve ALL tools
           "sandbox" => false,                # Container is already sandboxed
           "useRipgrep" => true
         },
