@@ -69,6 +69,20 @@ class UsageStatisticsService
       end
     end
 
+    resource_logs = payload["resourceLogs"] || []
+    resource_logs.each do |resource_log|
+      resource_attrs = resource_log.dig("resource", "attributes") || []
+      scope_logs = resource_log["scopeLogs"] || []
+
+      scope_logs.each do |scope_log|
+        log_records = scope_log["logRecords"] || []
+        log_records.each do |log_record|
+          token = extract_terminal_session_token(log_record["attributes"] || [], resource_attrs)
+          tokens.add(token) if token.present?
+        end
+      end
+    end
+
     tokens.to_a
   end
 
