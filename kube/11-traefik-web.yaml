@@ -12,4 +12,5 @@ spec:
       services:
         - name: web
           port: 4000
-  tls: {}
+  tls:
+    certResolver: letsencrypt
