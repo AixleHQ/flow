@@ -155,14 +155,17 @@ module ContainerRuntime
       return id if id.is_a?(OpenStruct)
       return id if id.respond_to?(:pod_name)
 
+      pod_name = sanitize_name(id.to_s)
+      route_token = extract_route_token(id.to_s)
+
       OpenStruct.new(
-        pod_name: id.to_s,
+        pod_name: pod_name,
         namespace: runtime_namespace,
         container_name: DEFAULT_CONTAINER_NAME,
-        service_name: id.to_s,
-        ingress_name: "#{id}-ingress",
-        middleware_names: [],
-        route_token: nil,
+        service_name: pod_name,
+        ingress_name: "#{pod_name}-ingress",
+        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip" ],
+        route_token: route_token,
         service_ports: []
       )
     end
