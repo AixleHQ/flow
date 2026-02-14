@@ -44,12 +44,13 @@ metadata:
   namespace: palad
 spec:
   entryPoints:
-    - temporal
+    - websecure
   routes:
-    - match: PathPrefix(`/`)
+    - match: HostRegexp(`temporal.*`)
       kind: Rule
       services:
         - name: temporal-ui
           port: 8080
 
-  tls: {}
+  tls:
+    certResolver: letsencrypt

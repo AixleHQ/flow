@@ -60,20 +60,19 @@ spec:
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
             - "--providers.kubernetesingress=true"
-            - "--entrypoints.traefik.address=:8090"
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
-            - "--entrypoints.temporal.address=:8080"
+            - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+            - "--certificatesresolvers.letsencrypt.acme.storage=/tmp/acme.json"
+            - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
             - "--log.level=DEBUG"
           ports:
             - name: web
               containerPort: 80
             - name: websecure
               containerPort: 443
-            - name: temporal
-              containerPort: 8080
-            - name: dashboard
+            - name: traefik
               containerPort: 8090
 ---
 apiVersion: v1
@@ -92,9 +91,35 @@ spec:
     - name: websecure
       port: 443
       targetPort: 443
-    - name: temporal
-      port: 8080
-      targetPort: 8080
-    - name: dashboard
-      port: 8090
-      targetPort: 8090
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: palad
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostRegexp(`traefik.*`)
+      kind: Rule
+      middlewares:
+        - name: traefik-dashboard-redirect
+      services:
+        - name: api@internal
+          kind: TraefikService
+
+  tls: 
+    certResolver: letsencrypt
+
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: traefik-dashboard-redirect
+  namespace: palad
+spec:
+  redirectRegex:
+    regex: "^(https?://[^/]+)/?$"
+    replacement: "${1}/dashboard/"
