@@ -6,6 +6,12 @@ module Agents
   # Docs: https://docs.anthropic.com/claude-code
   class ClaudeCodeAdapter < BaseAdapter
     CONFIG_VERSION = "2.1.14"
+    METRIC_TOKENS_NAME = "claude_code.token.usage"
+    METRIC_COST_NAME = "claude_code.cost.usage"
+    LEGACY_METRIC_NAMES = {
+      "terminal.session.tokens" => METRIC_TOKENS_NAME,
+      "terminal.session.cost" => METRIC_COST_NAME,
+    }.freeze
 
     def self.default_config_paths
       [ "~/.claude/settings.json", "CLAUDE.md" ]
@@ -130,7 +136,127 @@ module Agents
       ]
     end
 
+    # Default environment variables for Claude Code runtime.
+    def default_env_vars(session)
+      route_token = session.route_token
+      resource_attributes = "terminal_session_token=#{route_token}"
+
+      {
+        "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
+        "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
+        "OTEL_METRICS_EXPORTER" => "otlp",
+        "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
+        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
+      }.compact
+    end
+
+    # Parse OTLP payload and persist usage statistics for a terminal session.
+    def ingest_usage(payload, terminal_session)
+      totals = extract_usage_from_otlp(payload, terminal_session.route_token)
+      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+
+      UsageStatistic.transaction do
+        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
+        usage.tokens += totals[:tokens]
+        usage.cost_cents += totals[:cost_cents]
+        usage.save!
+      end
+
+      :ok
+    end
+
     private
+
+    def extract_usage_from_otlp(payload, terminal_session_token)
+      usage = { tokens: 0, cost_cents: 0 }
+      return usage if terminal_session_token.blank?
+
+      resource_metrics = payload["resourceMetrics"] || []
+      resource_metrics.each do |resource_metric|
+        resource_attrs = resource_metric.dig("resource", "attributes") || []
+        scope_metrics = resource_metric["scopeMetrics"] || []
+
+        scope_metrics.each do |scope_metric|
+          metrics = scope_metric["metrics"] || []
+          metrics.each do |metric|
+            metric_name = normalize_metric_name(metric["name"].to_s)
+            next if metric_name.blank?
+
+            data_points = extract_data_points(metric)
+            data_points.each do |data_point|
+              token_value = extract_terminal_session_token(data_point["attributes"] || [], resource_attrs)
+              next if token_value != terminal_session_token
+
+              value = number_from_data_point(data_point)
+              next if value.nil?
+
+              if metric_name == METRIC_TOKENS_NAME
+                usage[:tokens] += value.to_i
+              elsif metric_name == METRIC_COST_NAME
+                usage[:cost_cents] += dollars_to_cents(value)
+              end
+            end
+          end
+        end
+      end
+
+      usage
+    end
+
+    def normalize_metric_name(name)
+      return name if name == METRIC_TOKENS_NAME || name == METRIC_COST_NAME
+
+      LEGACY_METRIC_NAMES[name]
+    end
+
+    def extract_data_points(metric)
+      sum = metric["sum"]
+      return sum["dataPoints"] if sum.is_a?(Hash) && sum["dataPoints"].is_a?(Array)
+
+      gauge = metric["gauge"]
+      return gauge["dataPoints"] if gauge.is_a?(Hash) && gauge["dataPoints"].is_a?(Array)
+
+      []
+    end
+
+    def extract_terminal_session_token(attrs, resource_attrs)
+      value = attribute_value(attrs, "terminal_session_token")
+      value ||= attribute_value(resource_attrs, "terminal_session_token")
+
+      normalize_terminal_session_token(value)
+    end
+
+    def attribute_value(attrs, key)
+      attrs.each do |kv|
+        next unless kv["key"] == key
+
+        value = kv["value"] || {}
+        return value["stringValue"].to_s if value.key?("stringValue")
+        return value["intValue"].to_s if value.key?("intValue")
+      end
+
+      nil
+    end
+
+    def normalize_terminal_session_token(raw)
+      token = raw.to_s.strip
+      return nil if token.blank?
+
+      token
+    end
+
+    def number_from_data_point(data_point)
+      if data_point.key?("asInt")
+        data_point["asInt"].to_f
+      elsif data_point.key?("asDouble")
+        data_point["asDouble"].to_f
+      end
+    end
+
+    def dollars_to_cents(value)
+      (value.to_f * 100).round
+    end
 
     # Map internal transport name to Claude Code MCP type
     def mcp_transport_type(transport)

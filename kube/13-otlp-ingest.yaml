@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otlp-ingest
+  namespace: palad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otlp-ingest
+  template:
+    metadata:
+      labels:
+        app: otlp-ingest
+    spec:
+      serviceAccountName: palad-runtime
+      containers:
+        - name: otlp-ingest
+          image: otlp-ingest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: palad-app-config
+          env:
+            - name: OTLP_INGEST_PORT
+              value: "4318"
+            - name: OTLP_INGEST_WEB_BASE_URL
+              value: "http://web:4000"
+          ports:
+            - name: http
+              containerPort: 4318
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otlp-ingest
+  namespace: palad
+spec:
+  selector:
+    app: otlp-ingest
+  ports:
+    - name: http
+      port: 4318
+      targetPort: 4318

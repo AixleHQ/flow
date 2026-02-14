@@ -60,6 +60,11 @@ aws:
 mcp:
   name: palad-mcp-server
 
+otel:
+  endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>
+  metrics_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/metrics' %>
+  logs_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/logs' %>
+
 temporal:
   enabled: <%= ENV['TEMPORAL_ENABLED'] %>
   host: <%= ENV['TEMPORAL_HOST'] || 'temporal' %>

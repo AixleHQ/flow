@@ -5,6 +5,8 @@ module Agents
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
+    METRIC_EVENT_NAME = "codex.sse_event"
+    METRIC_EVENT_KIND_COMPLETED = "response.completed"
     def self.default_config_paths
       [ "~/.codex/config.toml", "AGENTS.md" ]
     end
@@ -111,6 +113,31 @@ module Agents
       :append_toml
     end
 
+    # Default environment variables for Codex CLI runtime.
+    def default_env_vars(session)
+      route_token = session.route_token
+      resource_attributes = "terminal_session_token=#{route_token}"
+
+      {
+        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
+      }.compact
+    end
+
+    # Parse OTLP payload and persist usage statistics for a terminal session.
+    def ingest_usage(payload, terminal_session)
+      totals = extract_usage_from_otlp_logs(payload, terminal_session.route_token)
+      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+
+      UsageStatistic.transaction do
+        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
+        usage.tokens += totals[:tokens]
+        usage.cost_cents += totals[:cost_cents]
+        usage.save!
+      end
+
+      :ok
+    end
+
     private
 
     def generate_config_toml(workflow_config)
@@ -125,9 +152,90 @@ module Agents
         [projects."#{workspace}"]
         trust_level = "trusted"
 
+        [otel]
+        environment = "prod"
+        log_user_prompt = false
+        exporter = { otlp-http = { endpoint = "#{Settings.otel.logs_endpoint}", protocol = "json" } }
+        metrics_exporter = { otlp-http = { endpoint = "#{Settings.otel.metrics_endpoint}", protocol = "json" } }
+
         [notice]
         hide_full_access_warning = true
       TOML
+    end
+
+    def extract_usage_from_otlp_logs(payload, terminal_session_token)
+      usage = { tokens: 0, cost_cents: 0 }
+      return usage if terminal_session_token.blank?
+
+      resource_logs = payload["resourceLogs"] || []
+      resource_logs.each do |resource_log|
+        resource_attrs = resource_log.dig("resource", "attributes") || []
+        scope_logs = resource_log["scopeLogs"] || []
+
+        scope_logs.each do |scope_log|
+          log_records = scope_log["logRecords"] || []
+          log_records.each do |log_record|
+            attrs = log_record["attributes"] || []
+            token_value = extract_terminal_session_token(attrs, resource_attrs)
+            next if token_value != terminal_session_token
+
+            event_name = attribute_string(attrs, "event.name")
+            event_kind = attribute_string(attrs, "event.kind")
+            next unless event_name == METRIC_EVENT_NAME && event_kind == METRIC_EVENT_KIND_COMPLETED
+
+            total_tokens = attribute_number(attrs, "tool_token_count")
+            if total_tokens.nil?
+              input_tokens = attribute_number(attrs, "input_token_count")
+              output_tokens = attribute_number(attrs, "output_token_count")
+              total_tokens = input_tokens.to_i + output_tokens.to_i
+            end
+
+            usage[:tokens] += total_tokens.to_i if total_tokens
+          end
+        end
+      end
+
+      usage
+    end
+
+    def extract_terminal_session_token(attrs, resource_attrs)
+      value = attribute_string(attrs, "terminal_session_token")
+      value ||= attribute_string(resource_attrs, "terminal_session_token")
+
+      normalize_terminal_session_token(value)
+    end
+
+    def attribute_string(attrs, key)
+      attrs.each do |kv|
+        next unless kv["key"] == key
+
+        value = kv["value"] || {}
+        return value["stringValue"].to_s if value.key?("stringValue")
+        return value["intValue"].to_s if value.key?("intValue")
+        return value["doubleValue"].to_s if value.key?("doubleValue")
+      end
+
+      nil
+    end
+
+    def attribute_number(attrs, key)
+      attrs.each do |kv|
+        next unless kv["key"] == key
+
+        value = kv["value"] || {}
+        return value["intValue"].to_f if value.key?("intValue")
+        return value["doubleValue"].to_f if value.key?("doubleValue")
+        return value["stringValue"].to_f if value.key?("stringValue")
+      end
+
+      nil
+    end
+
+    def normalize_terminal_session_token(raw)
+      token = raw.to_s.strip
+      return nil if token.blank?
+
+      token
     end
   end
 end

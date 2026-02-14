@@ -29,6 +29,7 @@ Rails.application.routes.draw do
 
       namespace :internal do
         get "ws_auth", to: "ws_auth#show"
+        post "usage_statistics", to: "usage_statistics#create"
       end
 
       namespace :company do

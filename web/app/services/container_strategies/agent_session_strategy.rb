@@ -51,12 +51,12 @@ module ContainerStrategies
       if input[:credential]&.metadata.present?
         agent_service = AgentCredentialsService.for(input[:agent_type])
         agent_env_vars = agent_service.adapter.env_vars_from_metadata(input[:credential].metadata)
-        agent_env_vars.each { |k, v| base_vars << "#{k}=#{v}" if v.present? }
+        agent_env_vars.each { |k, v| upsert_env_var(base_vars, k, v) }
       end
 
       # Add session context env vars (Story 9.3)
       context_vars = SessionContextService.resolve_env_vars(session)
-      context_vars.each { |k, v| base_vars << "#{k}=#{v}" }
+      context_vars.each { |k, v| upsert_env_var(base_vars, k, v) }
 
       base_vars
     end
@@ -177,6 +177,13 @@ module ContainerStrategies
     rescue StandardError => e
       Rails.logger.warn("[AgentSession] Failed to list files: #{e.message}")
       []
+    end
+
+    def upsert_env_var(env_vars, key, value)
+      return if value.blank?
+
+      env_vars.reject! { |entry| entry.start_with?("#{key}=") }
+      env_vars << "#{key}=#{value}"
     end
   end
 end
