@@ -155,8 +155,8 @@ module Agents
         [otel]
         environment = "prod"
         log_user_prompt = false
-        exporter = { otlp-http = { endpoint = "http://otlp-ingest:4318/v1/logs", protocol = "json" } }
-        metrics_exporter = { otlp-http = { endpoint = "http://otlp-ingest:4318/v1/metrics", protocol = "json" } }
+        exporter = { otlp-http = { endpoint = "#{Settings.otel.logs_endpoint}", protocol = "json" } }
+        metrics_exporter = { otlp-http = { endpoint = "#{Settings.otel.metrics_endpoint}", protocol = "json" } }
 
         [notice]
         hide_full_access_warning = true

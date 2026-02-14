@@ -143,7 +143,7 @@ module Agents
 
       {
         "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
-        "OTEL_EXPORTER_OTLP_ENDPOINT" => "http://otlp-ingest:4318",
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
         "OTEL_METRICS_EXPORTER" => "otlp",
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
