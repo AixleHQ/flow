@@ -9,6 +9,9 @@ module Agents
   #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal)
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
+    METRIC_TOKENS_NAME = "gemini_cli.token.usage"
+    LOG_EVENT_NAME = "gemini_cli.api_response"
+
     def self.default_config_paths
       [ "~/.gemini/settings.json", "GEMINI.md" ]
     end
@@ -124,8 +127,29 @@ module Agents
       }.compact
     end
 
-    def ingest_usage(_payload, _terminal_session)
-      raise NotImplementedError, "#{self.class} does not implement usage ingestion yet"
+    # Default environment variables for Gemini CLI runtime.
+    def default_env_vars(session)
+      route_token = session.route_token
+      resource_attributes = "terminal_session_token=#{route_token}"
+
+      {
+        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
+      }.compact
+    end
+
+    # Parse OTLP payload and persist usage statistics for a terminal session.
+    def ingest_usage(payload, terminal_session)
+      totals = extract_usage_from_otlp(payload, terminal_session.route_token)
+      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+
+      UsageStatistic.transaction do
+        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
+        usage.tokens += totals[:tokens]
+        usage.cost_cents += totals[:cost_cents]
+        usage.save!
+      end
+
+      :ok
     end
 
     private
@@ -159,7 +183,15 @@ module Agents
         },
         # Privacy
         "privacy" => {
-          "usageStatisticsEnabled" => true  # No telemetry in containers
+          "usageStatisticsEnabled" => true  # Allow telemetry in containers
+        },
+        # Telemetry (OpenTelemetry)
+        "telemetry" => {
+          "enabled" => true,
+          "target" => "local",
+          "otlpEndpoint" => Settings.otel.metrics_endpoint,
+          "otlpProtocol" => "http",
+          "logPrompts" => false
         },
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
@@ -174,6 +206,144 @@ module Agents
           "enableAgents" => true             # Enable subagents
         }
       }
+    end
+
+    def extract_usage_from_otlp(payload, terminal_session_token)
+      usage = { tokens: 0, cost_cents: 0 }
+      return usage if terminal_session_token.blank?
+
+      usage[:tokens] += extract_usage_from_otlp_metrics(payload, terminal_session_token)
+      if usage[:tokens].zero?
+        usage[:tokens] += extract_usage_from_otlp_logs(payload, terminal_session_token)
+      end
+
+      usage
+    end
+
+    def extract_usage_from_otlp_metrics(payload, terminal_session_token)
+      total = 0
+
+      resource_metrics = payload["resourceMetrics"] || []
+      resource_metrics.each do |resource_metric|
+        resource_attrs = resource_metric.dig("resource", "attributes") || []
+        scope_metrics = resource_metric["scopeMetrics"] || []
+
+        scope_metrics.each do |scope_metric|
+          metrics = scope_metric["metrics"] || []
+          metrics.each do |metric|
+            next unless metric["name"].to_s == METRIC_TOKENS_NAME
+
+            data_points = extract_data_points(metric)
+            data_points.each do |data_point|
+              token_value = extract_terminal_session_token(data_point["attributes"] || [], resource_attrs)
+              next if token_value != terminal_session_token
+
+              value = number_from_data_point(data_point)
+              next if value.nil?
+
+              total += value.to_i
+            end
+          end
+        end
+      end
+
+      total
+    end
+
+    def extract_usage_from_otlp_logs(payload, terminal_session_token)
+      total = 0
+
+      resource_logs = payload["resourceLogs"] || []
+      resource_logs.each do |resource_log|
+        resource_attrs = resource_log.dig("resource", "attributes") || []
+        scope_logs = resource_log["scopeLogs"] || []
+
+        scope_logs.each do |scope_log|
+          log_records = scope_log["logRecords"] || []
+          log_records.each do |log_record|
+            attrs = log_record["attributes"] || []
+            token_value = extract_terminal_session_token(attrs, resource_attrs)
+            next if token_value != terminal_session_token
+
+            event_name = attribute_string(attrs, "event.name")
+            next unless event_name == LOG_EVENT_NAME
+
+            total += sum_token_attributes(attrs)
+          end
+        end
+      end
+
+      total
+    end
+
+    def sum_token_attributes(attrs)
+      keys = %w[
+        input_token_count
+        output_token_count
+        cached_content_token_count
+        thoughts_token_count
+        tool_token_count
+      ]
+
+      keys.sum { |key| attribute_number(attrs, key).to_i }
+    end
+
+    def extract_data_points(metric)
+      sum = metric["sum"]
+      return sum["dataPoints"] if sum.is_a?(Hash) && sum["dataPoints"].is_a?(Array)
+
+      gauge = metric["gauge"]
+      return gauge["dataPoints"] if gauge.is_a?(Hash) && gauge["dataPoints"].is_a?(Array)
+
+      []
+    end
+
+    def extract_terminal_session_token(attrs, resource_attrs)
+      value = attribute_string(attrs, "terminal_session_token")
+      value ||= attribute_string(resource_attrs, "terminal_session_token")
+
+      normalize_terminal_session_token(value)
+    end
+
+    def attribute_string(attrs, key)
+      attrs.each do |kv|
+        next unless kv["key"] == key
+
+        value = kv["value"] || {}
+        return value["stringValue"].to_s if value.key?("stringValue")
+        return value["intValue"].to_s if value.key?("intValue")
+        return value["doubleValue"].to_s if value.key?("doubleValue")
+      end
+
+      nil
+    end
+
+    def attribute_number(attrs, key)
+      attrs.each do |kv|
+        next unless kv["key"] == key
+
+        value = kv["value"] || {}
+        return value["intValue"].to_f if value.key?("intValue")
+        return value["doubleValue"].to_f if value.key?("doubleValue")
+        return value["stringValue"].to_f if value.key?("stringValue")
+      end
+
+      nil
+    end
+
+    def normalize_terminal_session_token(raw)
+      token = raw.to_s.strip
+      return nil if token.blank?
+
+      token
+    end
+
+    def number_from_data_point(data_point)
+      if data_point.key?("asInt")
+        data_point["asInt"].to_f
+      elsif data_point.key?("asDouble")
+        data_point["asDouble"].to_f
+      end
     end
   end
 end

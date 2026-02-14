@@ -40,7 +40,9 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/metrics", srv.handleMetrics)
+	mux.HandleFunc("/v1/metrics/", srv.handleMetrics)
 	mux.HandleFunc("/v1/logs", srv.handleLogs)
+	mux.HandleFunc("/v1/logs/", srv.handleLogs)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
