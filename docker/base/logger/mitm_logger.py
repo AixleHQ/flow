@@ -1,33 +1,78 @@
 """
-Simple mitmproxy addon that logs outbound requests (host, URL, body) to a file.
+Mitmproxy addon that logs outbound requests AND responses to a file.
+Binary bodies (e.g. protobuf) are base64-encoded for safe JSON storage.
+
+Supports domain filtering via MITM_TRACKED_DOMAINS env var (comma-separated).
+When set, only requests to listed domains are logged.
+When empty, all traffic is logged.
 """
+import base64
 import datetime
 import json
 import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional, Set
 
 from mitmproxy import http  # type: ignore
 
-LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/workspace/output/mitmproxy.log"))
-MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "16000"))
+LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/var/log/mitm/http.log"))
+MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "32000"))
+
+# Domain filter: only log traffic to these domains (empty = log all)
+_raw_domains = os.environ.get("MITM_TRACKED_DOMAINS", "").strip()
+TRACKED_DOMAINS: Set[str] = set(d.strip() for d in _raw_domains.split(",") if d.strip())
+
+
+def _should_log(host: str) -> bool:
+    """Check if traffic to this host should be logged (suffix match)."""
+    if not TRACKED_DOMAINS:
+        return True
+    return any(host == d or host.endswith("." + d) for d in TRACKED_DOMAINS)
+
+
+def _is_text_content(content_type: str) -> bool:
+    """Check if content type is text-based (JSON, text, etc.)."""
+    text_types = ("json", "text", "xml", "html", "javascript", "yaml", "csv")
+    return any(t in content_type.lower() for t in text_types)
+
+
+def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
+    """Encode body for JSON storage. Returns dict with body + metadata."""
+    if not raw:
+        return {"body": "", "body_encoding": "text", "body_truncated": False}
+
+    if _is_text_content(content_type):
+        try:
+            text = raw.decode("utf-8", errors="replace")
+        except Exception:
+            text = "<decode-error>"
+        truncated = False
+        if len(text) > MAX_BODY:
+            text = text[:MAX_BODY] + f"...[truncated {len(text) - MAX_BODY} chars]"
+            truncated = True
+        return {"body": text, "body_encoding": "text", "body_truncated": truncated}
+
+    # Binary content — base64 encode
+    truncated = False
+    data = raw
+    if len(data) > MAX_BODY:
+        data = data[:MAX_BODY]
+        truncated = True
+    return {
+        "body": base64.b64encode(data).decode("ascii"),
+        "body_encoding": "base64",
+        "body_truncated": truncated,
+    }
 
 
 def _serialize_request(flow: http.HTTPFlow) -> Dict[str, Any]:
     req = flow.request
-
-    try:
-        body = req.get_text(strict=False)
-    except Exception:
-        body = "<unavailable>"
-
-    body_truncated = False
-    if isinstance(body, str) and len(body) > MAX_BODY:
-        body = body[:MAX_BODY] + f"...[truncated {len(body) - MAX_BODY} chars]"
-        body_truncated = True
+    ct = req.headers.get("content-type", "")
+    body_info = _encode_body(req.raw_content, ct)
 
     return {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "direction": "request",
         "scheme": req.scheme,
         "method": req.method,
         "host": req.host,
@@ -36,13 +81,56 @@ def _serialize_request(flow: http.HTTPFlow) -> Dict[str, Any]:
         "url": req.url,
         "headers": dict(req.headers),
         "content_length": len(req.raw_content or b""),
-        "body": body,
-        "body_truncated": body_truncated,
+        **body_info,
     }
 
 
-def request(flow: http.HTTPFlow) -> None:
+def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
+    resp = flow.response
+    if resp is None:
+        return None
+
+    req = flow.request
+    ct = resp.headers.get("content-type", "")
+    body_info = _encode_body(resp.raw_content, ct)
+
+    return {
+        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "direction": "response",
+        "status_code": resp.status_code,
+        "host": req.host,
+        "path": req.path,
+        "url": req.url,
+        "headers": dict(resp.headers),
+        "content_length": len(resp.raw_content or b""),
+        **body_info,
+    }
+
+
+def _write_entry(entry: Dict[str, Any]) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    entry = _serialize_request(flow)
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=True) + "\n")
+
+
+def request(flow: http.HTTPFlow) -> None:
+    if not _should_log(flow.request.host):
+        return
+    _write_entry(_serialize_request(flow))
+
+
+def responseheaders(flow: http.HTTPFlow) -> None:
+    """Enable streaming for all responses.
+
+    Without this, mitmproxy buffers entire response before forwarding,
+    which breaks HTTP/2 server-streaming (e.g. AgentService/Run).
+    """
+    flow.response.stream = True
+
+
+def response(flow: http.HTTPFlow) -> None:
+    if not _should_log(flow.request.host):
+        return
+    entry = _serialize_response(flow)
+    if entry:
+        _write_entry(entry)

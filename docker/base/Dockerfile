@@ -65,6 +65,7 @@ COPY watcher/index.js ./
 # MITM logger script
 # -----------------------------------------------------------------------------
 COPY logger/mitm_logger.py /opt/mitm/
+COPY logger/http2-logger.js /opt/mitm/
 COPY logger/start-mitm.sh /opt/mitm/
 RUN chmod +x /opt/mitm/start-mitm.sh
 
