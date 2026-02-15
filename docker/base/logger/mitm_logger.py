@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional, Set
 from mitmproxy import http  # type: ignore
 
 LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/var/log/mitm/http.log"))
-MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "32000"))
+MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "524288"))  # 512KB default
 
 # Domain filter: only log traffic to these domains (empty = log all)
 _raw_domains = os.environ.get("MITM_TRACKED_DOMAINS", "").strip()
@@ -107,6 +107,28 @@ def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
     }
 
 
+def _serialize_response_with_body(
+    flow: http.HTTPFlow, body_info: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Like _serialize_response but uses pre-computed body_info (from stream capture)."""
+    resp = flow.response
+    if resp is None:
+        return None
+
+    req = flow.request
+    return {
+        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        "direction": "response",
+        "status_code": resp.status_code,
+        "host": req.host,
+        "path": req.path,
+        "url": req.url,
+        "headers": dict(resp.headers),
+        "content_length": body_info.get("content_length", 0),
+        **body_info,
+    }
+
+
 def _write_entry(entry: Dict[str, Any]) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOG_PATH.open("a", encoding="utf-8") as f:
@@ -120,17 +142,37 @@ def request(flow: http.HTTPFlow) -> None:
 
 
 def responseheaders(flow: http.HTTPFlow) -> None:
-    """Enable streaming for all responses.
+    """Enable streaming while capturing full body for logging.
 
-    Without this, mitmproxy buffers entire response before forwarding,
-    which breaks HTTP/2 server-streaming (e.g. AgentService/Run).
+    Without streaming, mitmproxy buffers entire response before forwarding,
+    which breaks HTTP/2 server-streaming (e.g. AgentService/Run, SSE).
+    A callable interceptor lets us stream AND accumulate the body for logging.
     """
-    flow.response.stream = True
+    if not _should_log(flow.request.host):
+        flow.response.stream = True
+        return
+
+    buf = bytearray()
+
+    def _intercept(data: bytes) -> bytes:
+        buf.extend(data)
+        return data
+
+    flow.response.stream = _intercept
+    flow.metadata["_body_buf"] = buf
 
 
 def response(flow: http.HTTPFlow) -> None:
     if not _should_log(flow.request.host):
         return
-    entry = _serialize_response(flow)
+
+    buf: Optional[bytearray] = flow.metadata.get("_body_buf")
+    if buf is not None:
+        ct = flow.response.headers.get("content-type", "")
+        body_info = _encode_body(bytes(buf), ct)
+        entry = _serialize_response_with_body(flow, body_info)
+    else:
+        entry = _serialize_response(flow)
+
     if entry:
         _write_entry(entry)

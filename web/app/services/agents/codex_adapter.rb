@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
+require "base64"
+
 module Agents
   # OpenAI Codex CLI adapter for credential handling
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
-    METRIC_EVENT_NAME = "codex.sse_event"
-    METRIC_EVENT_KIND_COMPLETED = "response.completed"
     def self.default_config_paths
       [ "~/.codex/config.toml", "AGENTS.md" ]
     end
@@ -114,31 +114,174 @@ module Agents
     end
 
     # Default environment variables for Codex CLI runtime.
-    def default_env_vars(session)
-      route_token = session.route_token
-      resource_attributes = "terminal_session_token=#{route_token}"
-
+    # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
+    def default_env_vars(_session)
       {
-        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
-      }.compact
+        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
+        "MITM_TRACKED_DOMAINS" => "chatgpt.com"
+      }
     end
 
-    # Parse OTLP payload and persist usage statistics for a terminal session.
-    def ingest_usage(payload, terminal_session)
-      totals = extract_usage_from_otlp_logs(payload, terminal_session.route_token)
-      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+    # Log files to collect from container after session ends.
+    def session_log_paths
+      %w[/var/log/mitm/http.log]
+    end
 
-      UsageStatistic.transaction do
-        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
-        usage.tokens += totals[:tokens]
-        usage.cost_cents += totals[:cost_cents]
-        usage.save!
+    # Collect usage from MITM log at session cleanup.
+    #
+    # Flow:
+    #   1. Parse MITM log for chatgpt.com/backend-api/codex/responses responses
+    #   2. Extract `response.completed` SSE events from each response body tail
+    #   3. Build normalized events with token breakdown from OpenAI `usage` object
+    #   4. Persist as UsageStatistic
+    def collect_usage(terminal_session, artifacts = {})
+      mitm_log = artifacts["logs/http.log"]
+      events = extract_events_from_mitm(mitm_log)
+
+      if events.empty?
+        Rails.logger.warn("[CodexAdapter] No response.completed events in MITM log for session #{terminal_session.id}")
+        return
       end
 
-      :ok
+      persist_usage_statistic(terminal_session, events)
     end
 
     private
+
+    CODEX_RESPONSES_PATH = "/backend-api/codex/responses"
+
+    # =========================================================================
+    # MITM Log Parsing → Normalized Events
+    # =========================================================================
+
+    # Parse MITM log and extract usage from /codex/responses response bodies.
+    #
+    # Codex uses OpenAI Responses API with chunked NDJSON (not SSE).
+    # The final chunk is a large response.completed JSON with `usage` at the end.
+    # Our tail buffer may only capture the end — so we regex-extract usage directly.
+    def extract_events_from_mitm(log_content)
+      events = []
+
+      (log_content || "").each_line do |line|
+        entry = JSON.parse(line.strip)
+        next unless entry["direction"] == "response"
+        next unless entry["path"]&.start_with?(CODEX_RESPONSES_PATH)
+        next unless entry["status_code"] == 200
+
+        text = decode_body(entry)
+        next if text.blank?
+
+        event = extract_usage_from_response_body(text, entry["ts"])
+        events << event if event
+      rescue JSON::ParserError
+        next
+      end
+
+      events
+    end
+
+    # Decode MITM log body: base64 → text, or pass through if already text.
+    def decode_body(entry)
+      body = entry["body"].to_s
+      return "" if body.blank?
+
+      if entry["body_encoding"] == "base64"
+        Base64.decode64(body).force_encoding("UTF-8")
+      else
+        body
+      end
+    rescue ArgumentError
+      ""
+    end
+
+    # Extract usage data from the tail of a chunked Responses API body.
+    #
+    # The response.completed JSON can be >32KB (includes tool definitions),
+    # so our tail buffer may cut off the beginning. We regex-extract:
+    #   - "usage":{...} — token counts (always near the end)
+    #   - "model":"..." — model name (may be truncated away)
+    def extract_usage_from_response_body(text, timestamp)
+      usage_match = text.match(
+        /"usage"\s*:\s*\{[^}]*"input_tokens"\s*:\s*(\d+).*?"output_tokens"\s*:\s*(\d+).*?"total_tokens"\s*:\s*(\d+)\s*\}/m
+      )
+      return nil unless usage_match
+
+      input_tokens = usage_match[1].to_i
+      output_tokens = usage_match[2].to_i
+
+      cached_match = text.match(/"cached_tokens"\s*:\s*(\d+)/)
+      cached_tokens = cached_match ? cached_match[1].to_i : 0
+
+      reasoning_match = text.match(/"reasoning_tokens"\s*:\s*(\d+)/)
+      reasoning_tokens = reasoning_match ? reasoning_match[1].to_i : 0
+
+      model_match = text.match(/"model"\s*:\s*"([^"]+)"/)
+      model = model_match ? model_match[1] : nil
+
+      {
+        "model" => model,
+        "timestamp" => timestamp,
+        "tokenUsage" => {
+          "inputTokens" => input_tokens,
+          "outputTokens" => output_tokens,
+          "cacheReadTokens" => cached_tokens,
+          "cacheWriteTokens" => 0,
+          "reasoningTokens" => reasoning_tokens,
+          "totalCents" => 0.0
+        },
+        "source" => "mitm"
+      }
+    end
+
+    # =========================================================================
+    # Usage Persistence
+    # =========================================================================
+
+    def persist_usage_statistic(terminal_session, events)
+      totals = aggregate_events(events)
+      models = events.filter_map { |e| e["model"] }.uniq
+
+      stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic
+      stat.assign_attributes(
+        input_tokens: totals[:input_tokens],
+        output_tokens: totals[:output_tokens],
+        cache_write_tokens: totals[:cache_write_tokens],
+        cache_read_tokens: totals[:cache_read_tokens],
+        total_cents_precise: totals[:total_cents],
+        cost_cents: totals[:total_cents].ceil,
+        models: models,
+        source: "mitm",
+        events_count: events.size,
+        events_data: events
+      )
+      stat.save!
+
+      Rails.logger.info(
+        "[CodexAdapter] Session #{terminal_session.id} usage: " \
+        "#{events.size} events, " \
+        "in=#{totals[:input_tokens]} out=#{totals[:output_tokens]} " \
+        "cache_r=#{totals[:cache_read_tokens]} " \
+        "models=#{models.join(', ')}"
+      )
+    end
+
+    def aggregate_events(events)
+      events.each_with_object(
+        { input_tokens: 0, output_tokens: 0, cache_write_tokens: 0,
+          cache_read_tokens: 0, total_cents: 0.0 }
+      ) do |event, totals|
+        usage = event["tokenUsage"] || {}
+        totals[:input_tokens] += usage["inputTokens"].to_i
+        totals[:output_tokens] += usage["outputTokens"].to_i
+        totals[:cache_write_tokens] += usage["cacheWriteTokens"].to_i
+        totals[:cache_read_tokens] += usage["cacheReadTokens"].to_i
+        totals[:total_cents] += usage["totalCents"].to_f
+      end
+    end
+
+    # =========================================================================
+    # Config Generation
+    # =========================================================================
 
     def generate_config_toml(workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"
@@ -152,90 +295,10 @@ module Agents
         [projects."#{workspace}"]
         trust_level = "trusted"
 
-        [otel]
-        environment = "prod"
-        log_user_prompt = false
-        exporter = { otlp-http = { endpoint = "#{Settings.otel.logs_endpoint}", protocol = "json" } }
-        metrics_exporter = { otlp-http = { endpoint = "#{Settings.otel.metrics_endpoint}", protocol = "json" } }
-
         [notice]
         hide_full_access_warning = true
       TOML
     end
 
-    def extract_usage_from_otlp_logs(payload, terminal_session_token)
-      usage = { tokens: 0, cost_cents: 0 }
-      return usage if terminal_session_token.blank?
-
-      resource_logs = payload["resourceLogs"] || []
-      resource_logs.each do |resource_log|
-        resource_attrs = resource_log.dig("resource", "attributes") || []
-        scope_logs = resource_log["scopeLogs"] || []
-
-        scope_logs.each do |scope_log|
-          log_records = scope_log["logRecords"] || []
-          log_records.each do |log_record|
-            attrs = log_record["attributes"] || []
-            token_value = extract_terminal_session_token(attrs, resource_attrs)
-            next if token_value != terminal_session_token
-
-            event_name = attribute_string(attrs, "event.name")
-            event_kind = attribute_string(attrs, "event.kind")
-            next unless event_name == METRIC_EVENT_NAME && event_kind == METRIC_EVENT_KIND_COMPLETED
-
-            total_tokens = attribute_number(attrs, "tool_token_count")
-            if total_tokens.nil?
-              input_tokens = attribute_number(attrs, "input_token_count")
-              output_tokens = attribute_number(attrs, "output_token_count")
-              total_tokens = input_tokens.to_i + output_tokens.to_i
-            end
-
-            usage[:tokens] += total_tokens.to_i if total_tokens
-          end
-        end
-      end
-
-      usage
-    end
-
-    def extract_terminal_session_token(attrs, resource_attrs)
-      value = attribute_string(attrs, "terminal_session_token")
-      value ||= attribute_string(resource_attrs, "terminal_session_token")
-
-      normalize_terminal_session_token(value)
-    end
-
-    def attribute_string(attrs, key)
-      attrs.each do |kv|
-        next unless kv["key"] == key
-
-        value = kv["value"] || {}
-        return value["stringValue"].to_s if value.key?("stringValue")
-        return value["intValue"].to_s if value.key?("intValue")
-        return value["doubleValue"].to_s if value.key?("doubleValue")
-      end
-
-      nil
-    end
-
-    def attribute_number(attrs, key)
-      attrs.each do |kv|
-        next unless kv["key"] == key
-
-        value = kv["value"] || {}
-        return value["intValue"].to_f if value.key?("intValue")
-        return value["doubleValue"].to_f if value.key?("doubleValue")
-        return value["stringValue"].to_f if value.key?("stringValue")
-      end
-
-      nil
-    end
-
-    def normalize_terminal_session_token(raw)
-      token = raw.to_s.strip
-      return nil if token.blank?
-
-      token
-    end
   end
 end

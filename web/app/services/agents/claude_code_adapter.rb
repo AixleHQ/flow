@@ -151,16 +151,36 @@ module Agents
       }.compact
     end
 
-    # Parse OTLP payload and persist usage statistics for a terminal session.
+    # Parse OTLP payload, collect events, and persist usage statistics.
+    # Each OTLP batch (delta) becomes one event with token breakdown.
     def ingest_usage(payload, terminal_session)
-      totals = extract_usage_from_otlp(payload, terminal_session.route_token)
-      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+      new_events = extract_events_from_otlp(payload, terminal_session.route_token)
+      return :accepted if new_events.empty?
 
       UsageStatistic.transaction do
-        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
-        usage.tokens += totals[:tokens]
-        usage.cost_cents += totals[:cost_cents]
-        usage.save!
+        stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic(
+          tokens: 0, cost_cents: 0, input_tokens: 0, output_tokens: 0,
+          cache_write_tokens: 0, cache_read_tokens: 0, source: "otlp",
+          events_count: 0, events_data: []
+        )
+
+        all_events = (stat.events_data || []) + new_events
+        totals = aggregate_events(all_events)
+        models = all_events.filter_map { |e| e["model"] }.uniq
+
+        stat.assign_attributes(
+          input_tokens: totals[:input_tokens],
+          output_tokens: totals[:output_tokens],
+          cache_write_tokens: totals[:cache_write_tokens],
+          cache_read_tokens: totals[:cache_read_tokens],
+          total_cents_precise: totals[:total_cents],
+          cost_cents: totals[:total_cents].ceil,
+          models: models,
+          source: "otlp",
+          events_count: all_events.size,
+          events_data: all_events
+        )
+        stat.save!
       end
 
       :ok
@@ -168,40 +188,77 @@ module Agents
 
     private
 
-    def extract_usage_from_otlp(payload, terminal_session_token)
-      usage = { tokens: 0, cost_cents: 0 }
-      return usage if terminal_session_token.blank?
+    # Build normalized events from OTLP payload (same format as Cursor API events).
+    def extract_events_from_otlp(payload, terminal_session_token)
+      events = []
+      return events if terminal_session_token.blank?
 
-      resource_metrics = payload["resourceMetrics"] || []
-      resource_metrics.each do |resource_metric|
-        resource_attrs = resource_metric.dig("resource", "attributes") || []
-        scope_metrics = resource_metric["scopeMetrics"] || []
+      (payload["resourceMetrics"] || []).each do |rm|
+        resource_attrs = rm.dig("resource", "attributes") || []
 
-        scope_metrics.each do |scope_metric|
-          metrics = scope_metric["metrics"] || []
-          metrics.each do |metric|
-            metric_name = normalize_metric_name(metric["name"].to_s)
-            next if metric_name.blank?
+        (rm["scopeMetrics"] || []).each do |sm|
+          token_breakdown = {}
+          cost_usd = 0.0
+          model = nil
+          timestamp_ns = nil
 
-            data_points = extract_data_points(metric)
-            data_points.each do |data_point|
-              token_value = extract_terminal_session_token(data_point["attributes"] || [], resource_attrs)
-              next if token_value != terminal_session_token
+          (sm["metrics"] || []).each do |metric|
+            name = normalize_metric_name(metric["name"].to_s)
+            next if name.blank?
 
-              value = number_from_data_point(data_point)
+            extract_data_points(metric).each do |dp|
+              token = extract_terminal_session_token(dp["attributes"] || [], resource_attrs)
+              next if token != terminal_session_token
+
+              value = number_from_data_point(dp)
               next if value.nil?
 
-              if metric_name == METRIC_TOKENS_NAME
-                usage[:tokens] += value.to_i
-              elsif metric_name == METRIC_COST_NAME
-                usage[:cost_cents] += dollars_to_cents(value)
+              dp_attrs = dp["attributes"] || []
+              model ||= attribute_value(dp_attrs, "model")
+              timestamp_ns ||= dp["timeUnixNano"]
+
+              case name
+              when METRIC_TOKENS_NAME
+                type = attribute_value(dp_attrs, "type") || "unknown"
+                token_breakdown[type] = (token_breakdown[type] || 0) + value.to_i
+              when METRIC_COST_NAME
+                cost_usd += value.to_f
               end
             end
           end
+
+          next if token_breakdown.values.sum.zero? && cost_usd.zero?
+
+          events << {
+            "model" => model,
+            "timestamp" => timestamp_ns ? (timestamp_ns.to_i / 1_000_000).to_s : nil,
+            "tokenUsage" => {
+              "inputTokens" => token_breakdown["input"] || 0,
+              "outputTokens" => token_breakdown["output"] || 0,
+              "cacheReadTokens" => token_breakdown["cacheRead"] || 0,
+              "cacheWriteTokens" => token_breakdown["cacheCreation"] || 0,
+              "totalCents" => (cost_usd * 100).round(6)
+            },
+            "source" => "otlp"
+          }
         end
       end
 
-      usage
+      events
+    end
+
+    def aggregate_events(events)
+      events.each_with_object(
+        { input_tokens: 0, output_tokens: 0, cache_write_tokens: 0,
+          cache_read_tokens: 0, total_cents: 0.0 }
+      ) do |event, totals|
+        usage = event["tokenUsage"] || {}
+        totals[:input_tokens] += usage["inputTokens"].to_i
+        totals[:output_tokens] += usage["outputTokens"].to_i
+        totals[:cache_write_tokens] += usage["cacheWriteTokens"].to_i
+        totals[:cache_read_tokens] += usage["cacheReadTokens"].to_i
+        totals[:total_cents] += usage["totalCents"].to_f
+      end
     end
 
     def normalize_metric_name(name)
