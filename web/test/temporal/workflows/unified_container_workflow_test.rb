@@ -122,17 +122,6 @@ module Workflows
       assert_equal false, @workflow.instance_variable_get(:@cancelled)
     end
 
-    test "container_cancelled signal sets both flags" do
-      # Initialize flags first (as run does)
-      @workflow.instance_variable_set(:@finished, false)
-      @workflow.instance_variable_set(:@cancelled, false)
-
-      @workflow.container_cancelled
-
-      assert_equal true, @workflow.instance_variable_get(:@finished)
-      assert_equal true, @workflow.instance_variable_get(:@cancelled)
-    end
-
     test "cancelled flag is included in result" do
       pull_result = { status: "cached" }
       execute_result = { container_id: "abc123" }

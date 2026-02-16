@@ -1,4 +1,4 @@
- # frozen_string_literal: true
+# frozen_string_literal: true
 
 class AddTokenBreakdownToUsageStatistics < ActiveRecord::Migration[8.1]
   def change

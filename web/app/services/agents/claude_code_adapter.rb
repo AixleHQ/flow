@@ -10,7 +10,7 @@ module Agents
     METRIC_COST_NAME = "claude_code.cost.usage"
     LEGACY_METRIC_NAMES = {
       "terminal.session.tokens" => METRIC_TOKENS_NAME,
-      "terminal.session.cost" => METRIC_COST_NAME,
+      "terminal.session.cost" => METRIC_COST_NAME
     }.freeze
 
     def self.default_config_paths
@@ -26,9 +26,7 @@ module Agents
     end
 
     def session_log_paths
-      [
-        "/workspace/output/mitmproxy.log"  # MITM proxy logs (if enabled)
-      ]
+      %w[/var/log/mitm/http.log]
     end
 
     # Built-in Claude Code tools (always allowed)
@@ -142,6 +140,10 @@ module Agents
       resource_attributes = "terminal_session_token=#{route_token}"
 
       {
+        # MITM proxy — intercept Anthropic API traffic
+        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
+        "MITM_TRACKED_DOMAINS" => "api.anthropic.com",
+        # OTLP telemetry
         "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
         "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",

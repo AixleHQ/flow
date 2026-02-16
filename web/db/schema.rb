@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_15_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_16_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -221,13 +221,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_15_100000) do
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
+    t.integer "cache_read_tokens", default: 0, null: false
+    t.integer "cache_write_tokens", default: 0, null: false
     t.datetime "collected_at"
     t.string "container_id"
+    t.integer "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
     t.text "error_message"
     t.datetime "finished_at"
+    t.integer "input_tokens", default: 0, null: false
     t.string "mcp_key"
     t.jsonb "metadata", default: {}
+    t.string "models", default: [], null: false, array: true
+    t.integer "output_tokens", default: 0, null: false
     t.bigint "project_id"
     t.string "route_token"
     t.jsonb "session_config", default: {}, null: false
@@ -236,6 +242,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_15_100000) do
     t.string "state", null: false
     t.string "temporal_run_id"
     t.string "temporal_workflow_id"
+    t.integer "total_tokens", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true

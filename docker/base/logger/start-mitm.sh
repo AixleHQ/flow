@@ -29,7 +29,7 @@ fi
 # Configuration with defaults
 MITM_PROXY_PORT="${MITM_PROXY_PORT:-8888}"
 MITM_LOG_PATH="${MITM_LOG_PATH:-${WORKSPACE:-/workspace}/output/mitmproxy.log}"
-MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-16000}"
+MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-0}"
 MITM_CA_CERT="${HOME:-/root}/.mitmproxy/mitmproxy-ca-cert.pem"
 
 # Export for mitm_logger.py and http2-logger.js

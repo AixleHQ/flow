@@ -136,10 +136,23 @@ module Agents
     #   4. Persist as UsageStatistic
     def collect_usage(terminal_session, artifacts = {})
       mitm_log = artifacts["logs/http.log"]
+
+      log_lines = (mitm_log || "").lines.size
+      Rails.logger.info("[CodexAdapter] Session #{terminal_session.id}: MITM log #{mitm_log.present? ? "#{mitm_log.bytesize}B, #{log_lines} lines" : 'EMPTY'}")
+
+      if mitm_log.present?
+        mitm_log.each_line.first(20).each_with_index do |line, i|
+          entry = JSON.parse(line.strip) rescue nil
+          next unless entry
+
+          Rails.logger.info("[CodexAdapter] line #{i}: dir=#{entry['direction']} host=#{entry['host']} path=#{entry['path']} status=#{entry['status_code']} body_enc=#{entry['body_encoding']} body_len=#{entry['body']&.length}")
+        end
+      end
+
       events = extract_events_from_mitm(mitm_log)
 
       if events.empty?
-        Rails.logger.warn("[CodexAdapter] No response.completed events in MITM log for session #{terminal_session.id}")
+        Rails.logger.warn("[CodexAdapter] No usage events in MITM log for session #{terminal_session.id}")
         return
       end
 
@@ -171,7 +184,11 @@ module Agents
         text = decode_body(entry)
         next if text.blank?
 
+        Rails.logger.info("[CodexAdapter] Response body (#{text.bytesize}B): first 500 chars: #{text[0..499].inspect}")
+        Rails.logger.info("[CodexAdapter] Response body last 500 chars: #{text[-500..].inspect}")
+
         event = extract_usage_from_response_body(text, entry["ts"])
+        Rails.logger.info("[CodexAdapter] Usage extracted: #{event ? 'YES' : 'NO'}")
         events << event if event
       rescue JSON::ParserError
         next
@@ -297,8 +314,10 @@ module Agents
 
         [notice]
         hide_full_access_warning = true
+
+        [notice.model_migrations]
+        "gpt-5.2-codex" = "gpt-5.3-codex"
       TOML
     end
-
   end
 end

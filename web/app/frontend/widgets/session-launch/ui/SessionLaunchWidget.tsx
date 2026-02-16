@@ -11,7 +11,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { enqueueSnackbar } from 'notistack';
+import { closeSnackbar, enqueueSnackbar } from 'notistack';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { McpServer } from 'entities/mcp-server';
@@ -24,9 +24,15 @@ import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
 import { useGetCompanyToolsQuery, useGetProjectToolsQuery } from 'features/tools-management';
-import { useCreateTerminalSessionMutation, useCancelSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
+import { useCreateTerminalSessionMutation, useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
 import { useTerminalSessionChannel } from 'shared/lib';
-import { TerminalSessionWidget } from 'widgets/terminal-session';
+import { Routes } from 'shared/routes';
+
+/** Props passed to the terminal renderer */
+export interface TerminalRenderProps {
+  sessionId: number;
+  session: ITerminalSession | null;
+}
 
 export interface SessionLaunchWidgetProps {
   projectId?: number;
@@ -34,6 +40,8 @@ export interface SessionLaunchWidgetProps {
   initialSessionId?: number;
   /** Called when active session changes — parent can update URL */
   onSessionChange?: (sessionId: number | null) => void;
+  /** Render prop for terminal widget (avoids cross-widget import) */
+  renderTerminal?: (props: TerminalRenderProps) => React.ReactNode;
 }
 
 const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
@@ -47,6 +55,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   projectId,
   initialSessionId,
   onSessionChange,
+  renderTerminal,
 }) => {
   const { data: currentUser } = useGetCurrentUserQuery();
   const configuredAgents = currentUser?.configuredAgents ?? [];
@@ -91,10 +100,28 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
         setSelectedAgent(updated.agentType);
       }
       if (updated.state === 'stopped' || updated.state === 'collected') {
-        enqueueSnackbar('Session completed', { variant: 'info' });
+        const sessionsPath = projectId
+          ? Routes.frontend.companyProjectPath(String(projectId))
+          : Routes.frontend.companySessionsPath;
+
+        enqueueSnackbar('Session completed', {
+          variant: 'info',
+          action: (key) => (
+            <Button
+              size="small"
+              sx={{ color: 'inherit', textTransform: 'none' }}
+              onClick={() => {
+                closeSnackbar(key);
+                window.location.href = sessionsPath;
+              }}
+            >
+              All Sessions
+            </Button>
+          ),
+        });
       }
     },
-    [selectedAgent],
+    [selectedAgent, projectId],
   );
 
   useTerminalSessionChannel({
@@ -120,7 +147,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const mcpServers: McpServer[] = (projectId ? projectMcp.data : companyMcp.data) ?? [];
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
-  const [cancelSession] = useCancelSessionMutation();
+  const [finishSession] = useFinishSessionMutation();
   const [isStopping, setIsStopping] = useState(false);
 
   const canSubmit = selectedAgent !== null && (mode === 'interactive' || initialPrompt.trim().length > 0);
@@ -185,14 +212,14 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     }
   };
 
-  const handleStop = async () => {
+  const handleFinish = async () => {
     if (!activeSessionId) return;
     setIsStopping(true);
     try {
-      await cancelSession(activeSessionId).unwrap();
-      enqueueSnackbar('Session stopped', { variant: 'info' });
+      await finishSession({ sessionId: activeSessionId }).unwrap();
+      enqueueSnackbar('Session finishing...', { variant: 'info' });
     } catch {
-      enqueueSnackbar('Failed to stop session', { variant: 'error' });
+      enqueueSnackbar('Failed to finish session', { variant: 'error' });
       setIsStopping(false);
     }
   };
@@ -293,8 +320,8 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {!isTerminal && (
-              <Button size="small" variant="outlined" color="error" onClick={handleStop} disabled={isStopping}>
-                {isStopping ? 'Stopping…' : 'Stop'}
+              <Button size="small" variant="outlined" color="error" onClick={handleFinish} disabled={isStopping}>
+                {isStopping ? 'Finishing…' : 'Finish'}
               </Button>
             )}
             <Button size="small" variant="outlined" onClick={handleNewSession}>
@@ -346,13 +373,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           </Box>
         ) : (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <TerminalSessionWidget
-              sessionId={activeSessionId}
-              session={activeSession}
-              showFileTree={true}
-              showFileViewer={true}
-              showTerminal={true}
-            />
+            {renderTerminal ? renderTerminal({ sessionId: activeSessionId, session: activeSession }) : null}
           </Box>
         )}
       </Box>

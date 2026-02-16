@@ -42,6 +42,18 @@ export interface ITerminalSession {
   collectedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  // Usage (denormalized)
+  totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costCents: number;
+  models: string[];
+  // Relations
+  userName: string | null;
+  userEmail: string | null;
+  projectName: string | null;
 }
 
 export interface ICreateTerminalSessionRequest {
@@ -62,8 +74,24 @@ export interface IGetTerminalSessionResponse {
   data: ITerminalSession;
 }
 
+export interface IPaginationMeta {
+  page: number;
+  perPage: number;
+  totalPages: number;
+  totalCount: number;
+}
+
 export interface IListTerminalSessionsResponse {
   items: ITerminalSession[];
+  meta: IPaginationMeta;
+}
+
+export interface IListTerminalSessionsParams {
+  projectId?: number;
+  sessionType?: TerminalSessionType;
+  state?: TerminalSessionState;
+  page?: number;
+  perPage?: number;
 }
 
 export interface IFinishAuthResponse {

@@ -30,6 +30,15 @@ class TerminalSession < ApplicationRecord
   validate :validate_session_config
   validate :validate_non_interactive_prompt
 
+  # Ransack
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[agent_type project_id session_type state created_at user_id]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[user project]
+  end
+
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }

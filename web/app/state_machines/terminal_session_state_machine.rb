@@ -29,20 +29,16 @@ module TerminalSessionStateMachine
 
       event :stop do
         # Allow from running or collected (after auth collection, container stops)
-        transitions from: %i[running collected], to: :stopped
+        transitions from: %i[running collected], to: :stopped, after: :mark_finished_at
       end
 
       event :collect do
         # Allow from running (auth flow) or stopped
-        transitions from: %i[running stopped], to: :collected, after: :mark_collected_at
+        transitions from: %i[running stopped], to: :collected, after: %i[sync_usage mark_collected_at mark_finished_at]
       end
 
       event :fail do
-        transitions from: %i[not_started started running stopped], to: :failed, after: :cleanup_resources
-      end
-
-      event :cancel do
-        transitions from: %i[not_started started running], to: :cancelled, after: :cleanup_resources
+        transitions from: %i[not_started started running stopped], to: :failed, after: %i[sync_usage cleanup_resources mark_finished_at]
       end
     end
   end
@@ -75,8 +71,34 @@ module TerminalSessionStateMachine
     end
   end
 
+  def sync_usage
+    stat = usage_statistic&.reload
+    return if stat.nil?
+
+    update!(
+      total_tokens: stat.total_tokens,
+      input_tokens: stat.input_tokens,
+      output_tokens: stat.output_tokens,
+      cache_read_tokens: stat.cache_read_tokens,
+      cache_write_tokens: stat.cache_write_tokens,
+      cost_cents: stat.cost_cents,
+      models: stat.models
+    )
+
+    Rails.logger.info(
+      "[SessionStateMachine] Synced usage to session #{id}: " \
+      "tokens=#{stat.total_tokens} cost=#{stat.cost_cents}¢ models=#{stat.models.join(', ')}"
+    )
+  rescue StandardError => e
+    Rails.logger.error("[SessionStateMachine] Failed to sync usage for session #{id}: #{e.message}")
+  end
+
   def mark_collected_at
     update!(collected_at: Time.current)
+  end
+
+  def mark_finished_at
+    update!(finished_at: Time.current) if finished_at.nil?
   end
 
   def cleanup_resources

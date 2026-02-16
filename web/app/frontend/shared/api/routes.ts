@@ -87,15 +87,11 @@ export function apiV1CurrentUserPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "current_user" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/terminal_sessions/:id/finish_auth(.:format) */
-export function finishAuthApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish_auth" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+/** /api/v1/terminal_sessions/:id/finish(.:format) */
+export function finishApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /api/v1/terminal_sessions/:id/cancel(.:format) */
-export function cancelApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "cancel" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
 
 /** /api/v1/terminal_sessions(.:format) */
 export function apiV1TerminalSessionsPath(options?: object): string {

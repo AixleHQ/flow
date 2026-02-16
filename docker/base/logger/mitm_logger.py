@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional, Set
 from mitmproxy import http  # type: ignore
 
 LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/var/log/mitm/http.log"))
-MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "524288"))  # 512KB default
+MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "0"))  # 0 = unlimited
 
 # Domain filter: only log traffic to these domains (empty = log all)
 _raw_domains = os.environ.get("MITM_TRACKED_DOMAINS", "").strip()
@@ -36,18 +36,27 @@ def _is_text_content(content_type: str) -> bool:
     return any(t in content_type.lower() for t in text_types)
 
 
+def _looks_like_text(raw: bytes) -> bool:
+    """Heuristic: treat as text if first 256 bytes are valid UTF-8 without control chars."""
+    try:
+        sample = raw[:256].decode("utf-8")
+        return not any(c < " " and c not in "\r\n\t" for c in sample)
+    except (UnicodeDecodeError, ValueError):
+        return False
+
+
 def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
     """Encode body for JSON storage. Returns dict with body + metadata."""
     if not raw:
         return {"body": "", "body_encoding": "text", "body_truncated": False}
 
-    if _is_text_content(content_type):
+    if _is_text_content(content_type) or (not content_type and _looks_like_text(raw)):
         try:
             text = raw.decode("utf-8", errors="replace")
         except Exception:
             text = "<decode-error>"
         truncated = False
-        if len(text) > MAX_BODY:
+        if MAX_BODY > 0 and len(text) > MAX_BODY:
             text = text[:MAX_BODY] + f"...[truncated {len(text) - MAX_BODY} chars]"
             truncated = True
         return {"body": text, "body_encoding": "text", "body_truncated": truncated}
@@ -55,7 +64,7 @@ def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
     # Binary content — base64 encode
     truncated = False
     data = raw
-    if len(data) > MAX_BODY:
+    if MAX_BODY > 0 and len(data) > MAX_BODY:
         data = data[:MAX_BODY]
         truncated = True
     return {

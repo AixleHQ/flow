@@ -17,11 +17,17 @@ module Api
       end
 
       # INDEX tests
-      test "#index returns all terminal sessions for current user" do
+      test "#index returns sessions for the current user's company" do
         session1 = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code")
         session2 = create(:terminal_session, :auth_setup, user: @user, agent_type: "cursor_cli")
-        other_user = create(:user, :with_company)
-        other_user_session = create(:terminal_session, :auth_setup, user: other_user, agent_type: "codex")
+
+        # Same company, different user — should be included
+        teammate = create(:user, company: @company)
+        teammate_session = create(:terminal_session, :auth_setup, user: teammate, agent_type: "codex")
+
+        # Different company — should NOT be included
+        outsider = create(:user, :with_company)
+        outsider_session = create(:terminal_session, :auth_setup, user: outsider, agent_type: "codex")
 
         get :index
         assert_response :success
@@ -29,10 +35,11 @@ module Api
         session_ids = json["items"].pluck("id")
         assert_includes session_ids, session1.id
         assert_includes session_ids, session2.id
-        assert_not_includes session_ids, other_user_session.id
+        assert_includes session_ids, teammate_session.id
+        assert_not_includes session_ids, outsider_session.id
       end
 
-      test "#index orders by created_at desc" do
+      test "#index orders by created_at desc and returns pagination meta" do
         old_session = create(:terminal_session, :auth_setup, user: @user, created_at: 2.days.ago)
         new_session = create(:terminal_session, :auth_setup, user: @user, created_at: 1.hour.ago)
 
@@ -41,6 +48,37 @@ module Api
 
         session_ids = json["items"].pluck("id")
         assert_equal [ new_session.id, old_session.id ], session_ids
+
+        meta = json["meta"]
+        assert_equal 1, meta["page"]
+        assert meta["total_count"] >= 2
+      end
+
+      test "#index filters by project_id via ransack" do
+        project = create(:project, company: @company, owner: @user)
+        project_session = create(:terminal_session, :auth_setup, user: @user, project: project)
+        other_session = create(:terminal_session, :auth_setup, user: @user)
+
+        get :index, params: { q: { project_id_eq: project.id } }
+        assert_response :success
+
+        session_ids = json["items"].pluck("id")
+        assert_includes session_ids, project_session.id
+        assert_not_includes session_ids, other_session.id
+      end
+
+      test "#index returns usage fields" do
+        session = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code",
+                         total_tokens: 1000, cost_cents: 5, models: [ "claude-4" ])
+
+        get :index
+        assert_response :success
+
+        item = json["items"].find { |s| s["id"] == session.id }
+        assert_equal 1000, item["total_tokens"]
+        assert_equal 5, item["cost_cents"]
+        assert_equal [ "claude-4" ], item["models"]
+        assert_equal @user.name, item["user_name"]
       end
 
       # SHOW tests
@@ -175,11 +213,11 @@ module Api
         assert_response :not_found
       end
 
-      # FINISH_AUTH tests
-      test "#finish_auth marks session as stopped and triggers artifact collection" do
+      # FINISH tests
+      test "#finish marks auth_setup session as stopped" do
         session = create(:terminal_session, user: @user, state: "running", session_type: "auth_setup")
 
-        post :finish_auth, params: { id: session.id }
+        post :finish, params: { id: session.id }
         assert_response :success
 
         session.reload
@@ -187,39 +225,23 @@ module Api
         assert_not_nil json["message"]
       end
 
-      test "#finish_auth returns error for non-auth_setup sessions" do
+      test "#finish marks agent_session as stopped" do
         project = create(:project, owner: @user, company: @company)
         session = create(:terminal_session, :agent_session, user: @user, project: project, state: "running")
 
-        post :finish_auth, params: { id: session.id }
-        assert_response :bad_request
-        assert_includes json["error"], "auth_setup"
-      end
-
-      test "#finish_auth returns error if session cannot be stopped" do
-        session = create(:terminal_session, user: @user, state: "not_started")
-
-        post :finish_auth, params: { id: session.id }
-        assert_response :bad_request
-        assert_includes json["error"], "cannot be stopped"
-      end
-
-      # CANCEL tests
-      test "#cancel cancels active session" do
-        session = create(:terminal_session, user: @user, state: "running")
-
-        post :cancel, params: { id: session.id }
+        post :finish, params: { id: session.id }
         assert_response :success
 
         session.reload
-        assert_equal "cancelled", session.state
+        assert_equal "stopped", session.state
       end
 
-      test "#cancel returns error if session cannot be cancelled" do
-        session = create(:terminal_session, :collected, user: @user)
+      test "#finish returns error if session cannot be stopped" do
+        session = create(:terminal_session, user: @user, state: "not_started")
 
-        post :cancel, params: { id: session.id }
+        post :finish, params: { id: session.id }
         assert_response :bad_request
+        assert_includes json["error"], "cannot be stopped"
       end
 
       # DESTROY tests

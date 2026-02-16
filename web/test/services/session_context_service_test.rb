@@ -305,10 +305,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # Read existing settings (merge_json strategy reads first)
+    # read_file uses exec cat — returns existing settings
     existing_settings = { "security" => { "auth" => { "selectedType" => "oauth-personal" } } }
-    tar_stream = build_tar_stream("/home/gemini/.gemini/settings.json", existing_settings.to_json)
-    runtime_mock.expects(:copy_from).with("abc123", "/home/gemini/.gemini/settings.json").returns(tar_stream)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "cat /home/gemini/.gemini/settings.json" ]).returns([ [ existing_settings.to_json ], [], 0 ])
 
     # Write merged settings
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
@@ -333,10 +332,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # Read existing config.toml (append_toml strategy reads first)
+    # read_file uses exec cat — returns existing config.toml
     existing_toml = "approval_policy = \"never\"\n"
-    tar_stream = build_tar_stream("/home/codex/.codex/config.toml", existing_toml)
-    runtime_mock.expects(:copy_from).with("abc123", "/home/codex/.codex/config.toml").returns(tar_stream)
+    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "cat /home/codex/.codex/config.toml" ]).returns([ [ existing_toml ], [], 0 ])
 
     # Write appended config
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
@@ -410,8 +408,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # read existing GEMINI.md — returns nil (file doesn't exist)
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(nil)
+    # read_file uses exec cat — file doesn't exist (exit code 1)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [], [], 1 ])
     # write appended content
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -432,9 +430,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    existing_content = "# Project Context\nExisting content"
-    tar_stream = build_tar_stream("/home/gemini/.gemini/GEMINI.md", existing_content)
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(tar_stream)
+    # read_file uses exec cat — returns existing content
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [ "# Project Context\nExisting content" ], [], 0 ])
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -455,8 +452,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_to).with("ctr1", "/home/cursor/.cursor/rules/review-guide.md", skill.content).returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/rules/review-guide.md" ])
+    runtime_mock.expects(:copy_to).with do |ctr, path, content|
+      ctr == "ctr1" &&
+        path == "/home/cursor/.cursor/skills/review-guide/SKILL.md" &&
+        content.include?("# Review Guide\nCheck these things")
+    end.returns(true)
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/skills/review-guide/SKILL.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -576,7 +577,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = adapter.skill_files(skills)
 
     assert_equal 1, result.size
-    assert_equal "# Review", result["/home/cursor/.cursor/rules/review.md"]
+    content = result["/home/cursor/.cursor/skills/review/SKILL.md"]
+    assert content.present?
+    assert_includes content, "# Review"
   end
 
   test "Base adapter skill_files returns empty hash" do
@@ -612,9 +615,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "/home/claude/.claude/CLAUDE.md", adapter.context_file_path
   end
 
-  test "Codex adapter context_file_path returns home dir AGENTS.md" do
+  test "Codex adapter context_file_path returns workspace AGENTS.md" do
     adapter = Agents::CodexAdapter.new
-    assert_equal "/home/codex/.codex/AGENTS.md", adapter.context_file_path
+    assert_equal "/workspace/AGENTS.md", adapter.context_file_path
   end
 
   test "Gemini adapter context_file_path returns home dir GEMINI.md" do
@@ -622,9 +625,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "/home/gemini/.gemini/GEMINI.md", adapter.context_file_path
   end
 
-  test "Cursor adapter context_file_path returns home dir .cursorrules" do
+  test "Cursor adapter context_file_path returns workspace AGENTS.md" do
     adapter = Agents::CursorCliAdapter.new
-    assert_equal "/home/cursor/.cursor/rules/.cursorrules", adapter.context_file_path
+    assert_equal "/workspace/AGENTS.md", adapter.context_file_path
   end
 
   test "Base adapter context_file_path returns nil" do
@@ -650,22 +653,22 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_includes result, "You are an expert coder."
   end
 
-  test "build_agent_persona returns empty string when agent_id is blank" do
+  test "build_agent_persona returns nil when agent_id is blank" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: {})
 
     result = SessionContextService.send(:build_agent_persona, session)
 
-    assert_equal "", result
+    assert_nil result
   end
 
-  test "build_agent_persona returns empty string when agent not found" do
+  test "build_agent_persona returns nil when agent not found" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: { "agent_id" => 999_999 })
 
     result = SessionContextService.send(:build_agent_persona, session)
 
-    assert_equal "", result
+    assert_nil result
   end
 
   test "build_mcp_descriptions always includes palad-tools" do
@@ -724,13 +727,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_includes result, "Parameters: query (string), max_results (integer)"
   end
 
-  test "build_tool_descriptions returns empty string when no tools" do
+  test "build_tool_descriptions returns nil when no tools" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: {})
 
     result = SessionContextService.send(:build_tool_descriptions, session)
 
-    assert_equal "", result
+    assert_nil result
   end
 
   test "build_context_content combines persona, MCP, and tools" do
@@ -782,38 +785,29 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    # read existing CLAUDE.md — returns nil (no existing content)
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
-    # write context file (no separator since no existing content)
+    # write context file fresh (no copy_from — always writes complete document)
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
         path == "/home/claude/.claude/CLAUDE.md" &&
         content.include?("## Available MCP Servers") &&
         content.include?("### palad-tools") &&
-        content.include?("### tavily") &&
-        !content.start_with?("\n\n---")
+        content.include?("### tavily")
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
   end
 
-  test "inject_context_file appends to existing content with separator" do
+  test "inject_context_file writes fresh context (always complete document)" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      session_config: {})
 
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    existing_content = "# Existing Config\nSome previous content"
-    tar_stream = build_tar_stream("/home/claude/.claude/CLAUDE.md", existing_content)
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(tar_stream)
-
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
         path == "/home/claude/.claude/CLAUDE.md" &&
-        content.start_with?("# Existing Config\nSome previous content") &&
-        content.include?("\n\n---\n\n") &&
         content.include?("## Available MCP Servers")
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
@@ -828,7 +822,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(nil)
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
         path == "/home/gemini/.gemini/GEMINI.md" &&
@@ -847,31 +840,29 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/codex/.codex/AGENTS.md").returns(nil)
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
-        path == "/home/codex/.codex/AGENTS.md" &&
+        path == "/workspace/AGENTS.md" &&
         content.include?("## Available MCP Servers")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/AGENTS.md" ])
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/AGENTS.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
   end
 
-  test "inject_context_file writes Cursor context to .cursorrules" do
+  test "inject_context_file writes Cursor context to AGENTS.md" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
                      session_config: {})
 
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/cursor/.cursor/rules/.cursorrules").returns(nil)
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
-        path == "/home/cursor/.cursor/rules/.cursorrules" &&
+        path == "/workspace/AGENTS.md" &&
         content.include?("## Available MCP Servers")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/rules/.cursorrules" ])
+    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/AGENTS.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
   end
@@ -887,7 +878,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
     runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
       content.include?("# Code Reviewer") &&
         content.include?("You review code carefully.") &&
@@ -908,7 +898,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     SessionContextService.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
     runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
       content.include?("## Available Tools") &&
         content.include?("### deploy_tool") &&
@@ -929,10 +918,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "claude", adapter.session_command(mode: "interactive")
   end
 
-  test "Claude adapter session_command returns claude -p for non_interactive mode" do
+  test "Claude adapter session_command returns claude for non_interactive mode" do
     adapter = Agents::ClaudeCodeAdapter.new
+    # Prompt is passed via AGENT_PROMPT env var, not in command
     result = adapter.session_command(mode: "non_interactive", prompt: "Fix the bug")
-    assert_equal "claude -p Fix\\ the\\ bug", result
+    assert_equal "claude", result
   end
 
   test "Claude adapter session_command returns claude when non_interactive but no prompt" do
@@ -947,8 +937,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex -q for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
+    # Prompt is passed via AGENT_PROMPT env var, not in command
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex -q Run\\ tests", result
+    assert_equal "codex -q", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
@@ -958,19 +949,21 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Gemini adapter session_command returns gemini -p for non_interactive mode" do
     adapter = Agents::GeminiCliAdapter.new
+    # Prompt is passed via AGENT_PROMPT env var, not in command
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
-    assert_equal "gemini -p Deploy\\ staging", result
+    assert_equal "gemini -p", result
   end
 
-  test "Cursor adapter session_command returns agent for interactive mode" do
+  test "Cursor adapter session_command returns agent --force for interactive mode" do
     adapter = Agents::CursorCliAdapter.new
-    assert_equal "agent", adapter.session_command(mode: "interactive")
+    assert_equal "agent --force", adapter.session_command(mode: "interactive")
   end
 
-  test "Cursor adapter session_command returns agent -m for non_interactive mode" do
+  test "Cursor adapter session_command returns agent --force -p for non_interactive mode" do
     adapter = Agents::CursorCliAdapter.new
+    # Prompt is passed via AGENT_PROMPT env var, not in command
     result = adapter.session_command(mode: "non_interactive", prompt: "Refactor auth")
-    assert_equal "agent -m Refactor\\ auth", result
+    assert_equal "agent --force -p", result
   end
 
   test "Base adapter session_command raises NotImplementedError" do
@@ -980,13 +973,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test "session_command escapes shell special characters in prompt" do
+  test "session_command returns same command regardless of prompt content" do
     adapter = Agents::ClaudeCodeAdapter.new
+    # Prompt is passed via AGENT_PROMPT env var, not in command
     result = adapter.session_command(mode: "non_interactive", prompt: 'Fix the "bug" && deploy')
-    assert_includes result, "claude -p"
-    # Ensure special chars are escaped
-    assert_not_includes result, '"bug"'
-    assert_not_includes result, "&&"
+    assert_equal "claude", result
   end
 
   # ====================================================================
@@ -1004,8 +995,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     call_order = sequence("assembly_order")
 
-    # Step 1: Credentials
-    credential_mock.expects(:write_to_container).with("ctr1").in_sequence(call_order)
+    # Step 1: Credentials (with workflow_config for MCP pre-approval)
+    credential_mock.expects(:write_to_container).with do |ctr, config|
+      ctr == "ctr1" && config.is_a?(Hash) && config[:enabled_mcp_servers].is_a?(Array)
+    end.in_sequence(call_order)
 
     # Step 2: Config files — no config_files in session_config, skipped internally
 
@@ -1017,8 +1010,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     # Step 4: Skills — no skill_ids, skipped internally
 
-    # Step 5: Context file — always generates content (palad-tools)
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil).in_sequence(call_order)
+    # Step 5: Context file — writes fresh (no copy_from)
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true).in_sequence(call_order)
@@ -1042,8 +1034,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
-    # Context file
-    runtime_mock.expects(:copy_from).with("ctr1", "/home/claude/.claude/CLAUDE.md").returns(nil)
+    # Context file — writes fresh (no copy_from)
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true)

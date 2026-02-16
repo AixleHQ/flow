@@ -22,8 +22,7 @@ Rails.application.routes.draw do
       resource :current_user, only: %i[show update], controller: "current_user"
       resources :terminal_sessions, only: %i[index show create update destroy] do
         member do
-          post :finish_auth
-          post :cancel
+          post :finish
         end
       end
 

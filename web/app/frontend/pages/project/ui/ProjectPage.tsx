@@ -12,7 +12,7 @@ import { RunWorkflowModal } from 'features/run-workflow';
 import { SkillsPanel } from 'features/skills-management';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
-import { SessionLaunchWidget } from 'widgets/session-launch';
+import { SessionHistoryWidget } from 'widgets/session-history';
 
 import {
   useProjectQuery,
@@ -573,7 +573,30 @@ const ProjectPage = () => {
         {activeTab === 'workflows' && renderWorkflowsTab()}
         {activeTab === 'artifacts' && renderArtifactsTab()}
         {activeTab === 'tasks' && renderTasksTab()}
-        {activeTab === 'sessions' && <SessionLaunchWidget projectId={Number(projectId)} />}
+        {activeTab === 'sessions' && (
+          <Box>
+            <Box sx={{ px: 2, pt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() =>
+                  navigate({
+                    to: Routes.frontend.companySessionNewPath as string,
+                    search: { projectId: String(projectId) },
+                  })
+                }
+              >
+                New Session
+              </Button>
+            </Box>
+            <Box sx={{ px: 2, py: 2 }}>
+              <SessionHistoryWidget
+                projectId={Number(projectId)}
+                onSessionSelect={(id) => navigate({ to: Routes.frontend.companySessionPath(String(id)) as string })}
+              />
+            </Box>
+          </Box>
+        )}
         {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
         {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}

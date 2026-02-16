@@ -32,12 +32,6 @@ module Workflows
       @finished = true
     end
 
-    workflow_signal
-    def container_cancelled
-      @cancelled = true
-      @finished = true
-    end
-
     def run(input)
       @finished = false
       @cancelled = false
@@ -150,7 +144,6 @@ module Workflows
       end
 
       # Add status flags
-      merged[:cancelled] = @cancelled
       merged[:timed_out] = @timed_out
 
       merged

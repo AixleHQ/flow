@@ -36,6 +36,7 @@ const frontend = {
   companySkillsPath: '/company/skills',
   companyBrandingPath: '/company/branding',
   companySessionsPath: '/company/sessions',
+  companySessionNewPath: '/company/sessions/new',
   companySessionPath: (sessionId: string) => `/company/sessions/${sessionId}`,
 
   // Workflow routes
