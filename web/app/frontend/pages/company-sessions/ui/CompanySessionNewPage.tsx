@@ -1,33 +1,35 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Box, Button, Typography } from '@mui/material';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
 import { Routes } from 'shared/routes';
 import { SessionLaunchWidget } from 'widgets/session-launch';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
-function useProjectIdFromUrl(): number | undefined {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get('projectId');
-    return raw ? Number(raw) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 const CompanySessionNewPage = () => {
   const navigate = useNavigate();
-  const projectId = useMemo(() => useProjectIdFromUrl(), []);
+  const params = useParams({ strict: false }) as { projectId?: string };
+  const projectId = useMemo(() => {
+    if (params.projectId) return Number(params.projectId);
+    try {
+      const raw = new URLSearchParams(window.location.search).get('projectId');
+      return raw ? Number(raw) : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [params.projectId]);
 
   const handleSessionChange = useCallback(
     (sessionId: number | null) => {
       if (sessionId) {
-        navigate({ to: Routes.frontend.companySessionPath(String(sessionId)) as string });
+        const to = projectId
+          ? Routes.frontend.companyProjectSessionPath(String(projectId), String(sessionId))
+          : Routes.frontend.companySessionPath(String(sessionId));
+        navigate({ to: to as string });
       }
     },
-    [navigate],
+    [navigate, projectId],
   );
 
   const renderTerminal = useCallback(
@@ -42,7 +44,7 @@ const CompanySessionNewPage = () => {
   );
 
   const backTo = projectId
-    ? Routes.frontend.companyProjectPath(String(projectId))
+    ? Routes.frontend.companyProjectTabPath(String(projectId), 'sessions')
     : Routes.frontend.companySessionsPath;
 
   return (

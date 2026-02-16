@@ -17,9 +17,10 @@ const AGENT_LABELS: Record<string, string> = {
 };
 
 const CompanySessionViewPage = () => {
-  const { sessionId } = useParams({ strict: false }) as { sessionId: string };
+  const params = useParams({ strict: false }) as { sessionId: string; projectId?: string };
   const navigate = useNavigate();
-  const id = Number(sessionId);
+  const id = Number(params.sessionId);
+  const routeProjectId = params.projectId;
 
   const [session, setSession] = useState<ITerminalSession | null>(null);
   const [isStopping, setIsStopping] = useState(false);
@@ -98,7 +99,12 @@ const CompanySessionViewPage = () => {
           <Button
             size="small"
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate({ to: Routes.frontend.companySessionsPath as string })}
+            onClick={() => {
+              const backTo = routeProjectId
+                ? Routes.frontend.companyProjectTabPath(routeProjectId, 'sessions')
+                : Routes.frontend.companySessionsPath;
+              navigate({ to: backTo as string });
+            }}
             sx={{ color: 'text.secondary', minWidth: 'auto' }}
           >
             Back
@@ -124,7 +130,12 @@ const CompanySessionViewPage = () => {
           <Button
             size="small"
             variant="outlined"
-            onClick={() => navigate({ to: Routes.frontend.companySessionNewPath as string })}
+            onClick={() => {
+              const to = routeProjectId
+                ? Routes.frontend.companyProjectSessionNewPath(routeProjectId)
+                : Routes.frontend.companySessionNewPath;
+              navigate({ to: to as string });
+            }}
           >
             New Session
           </Button>
@@ -155,15 +166,25 @@ const CompanySessionViewPage = () => {
             <Button
               variant="outlined"
               onClick={() => {
-                const path = session?.projectId
-                  ? Routes.frontend.companyProjectPath(String(session.projectId))
+                const pid = routeProjectId || (session?.projectId ? String(session.projectId) : null);
+                const path = pid
+                  ? Routes.frontend.companyProjectTabPath(pid, 'sessions')
                   : Routes.frontend.companySessionsPath;
                 navigate({ to: path as string });
               }}
             >
               All Sessions
             </Button>
-            <Button variant="contained" onClick={() => navigate({ to: Routes.frontend.companySessionNewPath as string })}>
+            <Button
+              variant="contained"
+              onClick={() => {
+                const pid = routeProjectId || (session?.projectId ? String(session.projectId) : null);
+                const to = pid
+                  ? Routes.frontend.companyProjectSessionNewPath(pid)
+                  : Routes.frontend.companySessionNewPath;
+                navigate({ to: to as string });
+              }}
+            >
               New Session
             </Button>
           </Box>

@@ -6,13 +6,12 @@ module Api
       before_action :set_terminal_session, only: %i[show update destroy finish]
 
       # GET /api/v1/terminal_sessions
-      # Supports ransack filters: ?q[project_id_eq]=1&q[state_eq]=running etc.
+      # User-scoped sessions (for auth/onboarding/profile).
+      # Company/project-wide history → /api/v1/company/terminal_sessions
       def index
-        scope = TerminalSession.joins(:user)
-                               .where(users: { company_id: current_user.company_id })
-                               .includes(:user, :project)
-                               .ransack(q_params).result
-                               .order(created_at: :desc)
+        scope = current_user.terminal_sessions
+                            .includes(:project)
+                            .order(created_at: :desc)
 
         respond_with paginate(scope), each_serializer: TerminalSessionSerializer
       end

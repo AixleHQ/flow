@@ -33,18 +33,24 @@ export const terminalSessionApi = baseApi.injectEndpoints({
       providesTags: (result) => (result ? [{ type: QueryTag.TerminalSession, id: result.data.id }] : []),
     }),
 
-    // List terminal sessions with optional ransack filters and pagination
+    // List terminal sessions — routes to company or project endpoint based on projectId
     listTerminalSessions: builder.query<IListTerminalSessionsResponse, IListTerminalSessionsParams | void>({
       query: (params) => {
+        const baseUrl = params?.projectId
+          ? Routes.backend.apiV1CompanyProjectTerminalSessionsPath(params.projectId)
+          : Routes.backend.apiV1CompanyTerminalSessionsPath();
+
         const searchParams = new URLSearchParams();
-        if (params?.projectId) searchParams.set('q[project_id_eq]', String(params.projectId));
         if (params?.sessionType) searchParams.set('q[session_type_eq]', params.sessionType);
+        if (params?.agentType) searchParams.set('q[agent_type_eq]', params.agentType);
         if (params?.state) searchParams.set('q[state_eq]', params.state);
+        if (params?.createdAfter) searchParams.set('q[created_at_gteq]', params.createdAfter);
+        if (params?.createdBefore) searchParams.set('q[created_at_lteq]', params.createdBefore);
         if (params?.page) searchParams.set('page', String(params.page));
         if (params?.perPage) searchParams.set('per_page', String(params.perPage));
         const qs = searchParams.toString();
         return {
-          url: `${Routes.backend.apiV1TerminalSessionsPath()}${qs ? `?${qs}` : ''}`,
+          url: `${baseUrl}${qs ? `?${qs}` : ''}`,
           method: 'GET',
         };
       },

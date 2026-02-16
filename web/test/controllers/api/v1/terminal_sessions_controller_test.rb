@@ -16,27 +16,20 @@ module Api
         JSON.parse(response.body)
       end
 
-      # INDEX tests
-      test "#index returns sessions for the current user's company" do
-        session1 = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code")
-        session2 = create(:terminal_session, :auth_setup, user: @user, agent_type: "cursor_cli")
+      # INDEX tests (user-scoped — for auth/onboarding/profile)
+      test "#index returns only current user sessions" do
+        my_session = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code")
 
-        # Same company, different user — should be included
+        # Same company, different user — should NOT be included (user-scoped)
         teammate = create(:user, company: @company)
         teammate_session = create(:terminal_session, :auth_setup, user: teammate, agent_type: "codex")
-
-        # Different company — should NOT be included
-        outsider = create(:user, :with_company)
-        outsider_session = create(:terminal_session, :auth_setup, user: outsider, agent_type: "codex")
 
         get :index
         assert_response :success
 
         session_ids = json["items"].pluck("id")
-        assert_includes session_ids, session1.id
-        assert_includes session_ids, session2.id
-        assert_includes session_ids, teammate_session.id
-        assert_not_includes session_ids, outsider_session.id
+        assert_includes session_ids, my_session.id
+        assert_not_includes session_ids, teammate_session.id
       end
 
       test "#index orders by created_at desc and returns pagination meta" do
@@ -52,33 +45,6 @@ module Api
         meta = json["meta"]
         assert_equal 1, meta["page"]
         assert meta["total_count"] >= 2
-      end
-
-      test "#index filters by project_id via ransack" do
-        project = create(:project, company: @company, owner: @user)
-        project_session = create(:terminal_session, :auth_setup, user: @user, project: project)
-        other_session = create(:terminal_session, :auth_setup, user: @user)
-
-        get :index, params: { q: { project_id_eq: project.id } }
-        assert_response :success
-
-        session_ids = json["items"].pluck("id")
-        assert_includes session_ids, project_session.id
-        assert_not_includes session_ids, other_session.id
-      end
-
-      test "#index returns usage fields" do
-        session = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code",
-                         total_tokens: 1000, cost_cents: 5, models: [ "claude-4" ])
-
-        get :index
-        assert_response :success
-
-        item = json["items"].find { |s| s["id"] == session.id }
-        assert_equal 1000, item["total_tokens"]
-        assert_equal 5, item["cost_cents"]
-        assert_equal [ "claude-4" ], item["models"]
-        assert_equal @user.name, item["user_name"]
       end
 
       # SHOW tests

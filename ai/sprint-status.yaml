@@ -141,16 +141,16 @@ development_status:
   # PHASE 4++: AGENT SESSIONS CORE
   # ============================================
 
-  epic-10: in-progress  # Agent Sessions Core (Phase 4++)
+  epic-10: done  # Agent Sessions Core (Phase 4++)
   10-1-start-agent-session: done  # Controller create, state machine, Temporal workflow, frontend API
   10-2-web-terminal-interface: done  # ttyd iframe, ActionCable channel, TerminalSessionWidget
   10-3-real-time-file-tree: done  # WebSocket watcher, FileTree component
   10-4-file-viewer-and-browser: done  # Syntax highlighting, images, PDF via /file endpoint
   10-5-stop-active-session: done  # Controller cancel, Temporal signal container_cancelled
   10-6-session-launch-ui: done  # New Session page: select agent runtime, persona, skills, tools, MCP → build session_config → start (backend ready, frontend needed)
-  10-7-mitm-proxy-token-tracking: in-progress  # MITM logs requests but does not parse responses/tokens yet
-  10-8-session-cost-display: backlog  # Blocked by 10-7 (needs token data)
-  10-9-session-history-view: backlog  # Backend API index exists, frontend page missing
+  10-7-mitm-proxy-token-tracking: done  # MITM logs requests but does not parse responses/tokens yet
+  10-8-session-cost-display: done  # Blocked by 10-7 (needs token data)
+  10-9-session-history-view: done  # Backend API index exists, frontend page missing
   epic-10-retrospective: optional
 
   # ============================================

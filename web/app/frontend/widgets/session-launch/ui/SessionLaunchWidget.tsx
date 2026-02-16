@@ -101,7 +101,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       }
       if (updated.state === 'stopped' || updated.state === 'collected') {
         const sessionsPath = projectId
-          ? Routes.frontend.companyProjectPath(String(projectId))
+          ? Routes.frontend.companyProjectTabPath(String(projectId), 'sessions')
           : Routes.frontend.companySessionsPath;
 
         enqueueSnackbar('Session completed', {

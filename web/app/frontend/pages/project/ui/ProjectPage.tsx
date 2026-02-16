@@ -1,7 +1,7 @@
 import { Box, Breadcrumbs, Button, Chip, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { ArtifactCard, type IArtifact } from 'entities/artifact';
 import type { IProject } from 'entities/project';
@@ -319,11 +319,20 @@ const getStatusColor = (status: string): string => {
   }
 };
 
+const VALID_TABS: ProjectTab[] = [
+  'overview', 'workflows', 'artifacts', 'tasks', 'sessions',
+  'members', 'config', 'agents', 'tools', 'mcp-servers', 'skills', 'settings',
+];
+
 const ProjectPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const projectId = (params as { projectId?: string }).projectId || '';
-  const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
+  const tabParam = (params as { tab?: string }).tab || 'overview';
+  const activeTab = useMemo<ProjectTab>(
+    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : 'overview'),
+    [tabParam],
+  );
   const [runWorkflowModalOpen, setRunWorkflowModalOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<IWorkflow | null>(null);
 
@@ -333,7 +342,6 @@ const ProjectPage = () => {
   const { data: artifactsData } = useProjectArtifactsQuery(projectId);
   const { data: tasksData } = useProjectTasksQuery(projectId);
 
-  // Use mock data if API returns empty
   const project = projectData?.data || mockProject;
   const workflows: IWorkflow[] = workflowsData?.items?.length ? workflowsData.items : mockWorkflows;
   const runs: IWorkflowRun[] = runsData?.items?.length ? runsData.items : mockWorkflowRuns;
@@ -341,7 +349,7 @@ const ProjectPage = () => {
   const tasks: ITask[] = tasksData?.items?.length ? tasksData.items : mockTasks;
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: ProjectTab) => {
-    setActiveTab(newValue);
+    navigate({ to: Routes.frontend.companyProjectTabPath(projectId, newValue) });
   };
 
   const handleWorkflowRunClick = (runId: string) => {
@@ -581,8 +589,7 @@ const ProjectPage = () => {
                 size="small"
                 onClick={() =>
                   navigate({
-                    to: Routes.frontend.companySessionNewPath as string,
-                    search: { projectId: String(projectId) },
+                    to: Routes.frontend.companyProjectSessionNewPath(projectId) as string,
                   })
                 }
               >
@@ -592,7 +599,7 @@ const ProjectPage = () => {
             <Box sx={{ px: 2, py: 2 }}>
               <SessionHistoryWidget
                 projectId={Number(projectId)}
-                onSessionSelect={(id) => navigate({ to: Routes.frontend.companySessionPath(String(id)) as string })}
+                onSessionSelect={(id) => navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(id)) as string })}
               />
             </Box>
           </Box>

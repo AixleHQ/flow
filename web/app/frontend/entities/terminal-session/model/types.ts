@@ -89,7 +89,10 @@ export interface IListTerminalSessionsResponse {
 export interface IListTerminalSessionsParams {
   projectId?: number;
   sessionType?: TerminalSessionType;
+  agentType?: AgentType;
   state?: TerminalSessionState;
+  createdAfter?: string;
+  createdBefore?: string;
   page?: number;
   perPage?: number;
 }

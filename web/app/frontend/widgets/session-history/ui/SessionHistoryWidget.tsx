@@ -2,9 +2,14 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import {
   Box,
   Chip,
+  FormControl,
   IconButton,
+  InputLabel,
+  MenuItem,
   Pagination,
+  Select,
   Skeleton,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -90,39 +95,108 @@ function formatDuration(
   return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 }
 
+const AGENT_FILTER_OPTIONS: { value: AgentType; label: string }[] = [
+  { value: 'claude_code', label: 'Claude Code' },
+  { value: 'cursor_cli', label: 'Cursor CLI' },
+  { value: 'codex', label: 'Codex' },
+  { value: 'gemini_cli', label: 'Gemini CLI' },
+];
+
+const STATE_FILTER_OPTIONS: { value: TerminalSessionState; label: string }[] = [
+  { value: 'running', label: 'Running' },
+  { value: 'stopped', label: 'Stopped' },
+  { value: 'collected', label: 'Completed' },
+  { value: 'failed', label: 'Failed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
 const PER_PAGE = 20;
 
 export const SessionHistoryWidget: FC<SessionHistoryWidgetProps> = ({ projectId, onSessionSelect }) => {
   const [page, setPage] = React.useState(1);
+  const [agentFilter, setAgentFilter] = React.useState<AgentType | ''>('');
+  const [stateFilter, setStateFilter] = React.useState<TerminalSessionState | ''>('');
 
   const { data, isLoading, isFetching } = useListTerminalSessionsQuery(
-    { projectId, page, perPage: PER_PAGE },
+    {
+      projectId,
+      page,
+      perPage: PER_PAGE,
+      agentType: agentFilter || undefined,
+      state: stateFilter || undefined,
+    },
     { pollingInterval: 15_000 },
   );
 
   const sessions = data?.items ?? [];
   const totalPages = data?.meta?.totalPages ?? 1;
+  const totalCount = data?.meta?.totalCount ?? 0;
 
-  if (isLoading) {
-    return (
-      <Box sx={{ p: 2 }}>
-        {[...Array(5)].map((_, i) => (
-          <Skeleton key={i} height={52} sx={{ mb: 0.5 }} />
-        ))}
-      </Box>
-    );
-  }
+  const handleAgentChange = (value: string) => {
+    setAgentFilter(value as AgentType | '');
+    setPage(1);
+  };
 
-  if (sessions.length === 0) {
-    return (
-      <Box sx={{ p: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">No sessions yet</Typography>
-      </Box>
-    );
-  }
+  const handleStateChange = (value: string) => {
+    setStateFilter(value as TerminalSessionState | '');
+    setPage(1);
+  };
 
   return (
     <Box sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.2s' }}>
+      {/* Filters */}
+      <Stack direction="row" spacing={1.5} sx={{ px: 2, py: 1.5 }} alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel>Agent</InputLabel>
+          <Select
+            value={agentFilter}
+            label="Agent"
+            onChange={(e) => handleAgentChange(e.target.value)}
+          >
+            <MenuItem value="">All</MenuItem>
+            {AGENT_FILTER_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl size="small" sx={{ minWidth: 130 }}>
+          <InputLabel>Status</InputLabel>
+          <Select
+            value={stateFilter}
+            label="Status"
+            onChange={(e) => handleStateChange(e.target.value)}
+          >
+            <MenuItem value="">All</MenuItem>
+            {STATE_FILTER_OPTIONS.map((o) => (
+              <MenuItem key={o.value} value={o.value}>
+                {o.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto !important' }}>
+          {totalCount} session{totalCount !== 1 ? 's' : ''}
+        </Typography>
+      </Stack>
+
+      {isLoading ? (
+        <Box sx={{ p: 2 }}>
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} height={52} sx={{ mb: 0.5 }} />
+          ))}
+        </Box>
+      ) : sessions.length === 0 ? (
+        <Box sx={{ p: 4, textAlign: 'center' }}>
+          <Typography color="text.secondary">
+            {agentFilter || stateFilter ? 'No sessions match filters' : 'No sessions yet'}
+          </Typography>
+        </Box>
+      ) : (
+      <>
       <TableContainer>
         <Table size="small">
           <TableHead>
@@ -155,6 +229,8 @@ export const SessionHistoryWidget: FC<SessionHistoryWidgetProps> = ({ projectId,
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
           <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} size="small" />
         </Box>
+      )}
+      </>
       )}
     </Box>
   );

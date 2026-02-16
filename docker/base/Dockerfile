@@ -81,8 +81,9 @@ COPY inputrc /etc/inputrc
 RUN printf '%s\n' \
     'set -g history-limit 50000' \
     'set -g remain-on-exit on' \
-    'set -g mouse on' \
     'set -g status off' \
+    'set -g set-clipboard on' \
+    'set -g allow-passthrough on' \
     > /etc/tmux.conf
 
 # -----------------------------------------------------------------------------
