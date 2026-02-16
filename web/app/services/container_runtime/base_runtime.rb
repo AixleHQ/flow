@@ -31,6 +31,26 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #copy_to"
     end
 
+    # Store file using Docker archive API (works on created/stopped containers)
+    def store_file(_id, _path, _content)
+      raise NotImplementedError, "#{self.class.name} must implement #store_file"
+    end
+
+    # Read file using Docker archive API (works on stopped containers)
+    def read_file(_id, _path)
+      raise NotImplementedError, "#{self.class.name} must implement #read_file"
+    end
+
+    # Wait for container to exit, returns Hash with StatusCode
+    def wait_container(_id, _timeout = nil)
+      raise NotImplementedError, "#{self.class.name} must implement #wait_container"
+    end
+
+    # Get container logs (works on stopped containers)
+    def container_logs(_id, _opts = {})
+      raise NotImplementedError, "#{self.class.name} must implement #container_logs"
+    end
+
     def stop_container(_id, _timeout = nil, _options = {})
       raise NotImplementedError, "#{self.class.name} must implement #stop_container"
     end

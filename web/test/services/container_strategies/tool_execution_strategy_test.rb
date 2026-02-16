@@ -10,9 +10,11 @@ module ContainerStrategies
       @project = create(:project, company: @company, owner: @user)
       @tool = create(:tool, :with_files, scope: @company, docker_image: "alpine:latest", command: "echo 'hello'")
 
-      # Create config items
       @api_key = create(:config_item, name: "API_KEY", value: "secret123", scope: @company)
       @tool.update!(required_config_items: [ "API_KEY" ])
+
+      @runtime_mock = mock("runtime")
+      ContainerRuntime.stubs(:build).returns(@runtime_mock)
 
       Rails.logger.stubs(:info)
       Rails.logger.stubs(:warn)
@@ -76,7 +78,55 @@ module ContainerStrategies
 
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
-      assert_empty strategy.build_env_vars
+      env_vars = strategy.build_env_vars
+      # Only project vars if project is present, none otherwise
+      assert_empty env_vars
+    end
+
+    test "injects MCP parameters as env vars" do
+      @tool.update!(required_config_items: [])
+
+      strategy = ToolExecutionStrategy.new(
+        tool: @tool,
+        parameters: { "SLACK_RANGE" => "30d", "custom_param" => "value" }
+      )
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "SLACK_RANGE=30d"
+      assert_includes env_vars, "CUSTOM_PARAM=value"
+    end
+
+    test "config items take precedence over parameters" do
+      strategy = ToolExecutionStrategy.new(
+        tool: @tool,
+        parameters: { "API_KEY" => "from_param" }
+      )
+
+      env_vars = strategy.build_env_vars
+
+      # Config item value wins over parameter
+      assert_includes env_vars, "API_KEY=secret123"
+      refute_includes env_vars, "API_KEY=from_param"
+    end
+
+    test "injects project context as env vars" do
+      strategy = ToolExecutionStrategy.new(tool: @tool, project: @project)
+      @tool.update!(required_config_items: [])
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "PALAD_PROJECT_ID=#{@project.id}"
+      assert_includes env_vars, "PALAD_PROJECT_NAME=#{@project.name}"
+    end
+
+    test "does not inject project vars when project is nil" do
+      strategy = ToolExecutionStrategy.new(tool: @tool, project: nil)
+      @tool.update!(required_config_items: [])
+
+      env_vars = strategy.build_env_vars
+
+      refute env_vars.any? { |v| v.start_with?("PALAD_PROJECT") }
     end
 
     # == Labels Tests ==
@@ -106,10 +156,47 @@ module ContainerStrategies
 
     # == Command Tests ==
 
-    test "builds cmd with sleep for file injection" do
+    test "builds cmd with file setup and tool command when tool has files" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
+      cmd = strategy.build_cmd
 
-      assert_equal [ "sleep", "infinity" ], strategy.build_cmd
+      assert_equal "/bin/sh", cmd[0]
+      assert_equal "-c", cmd[1]
+      # CMD should contain mkdir + base64 decode for each file, then the tool command
+      @tool.tool_files.each do |tf|
+        assert_includes cmd[2], "mkdir -p"
+        assert_includes cmd[2], "base64 -d"
+      end
+      assert cmd[2].end_with?("echo 'hello'"), "CMD should end with tool command"
+    end
+
+    test "builds cmd without file setup when no tool files" do
+      @tool.tool_files.destroy_all
+
+      strategy = ToolExecutionStrategy.new(tool: @tool.reload)
+
+      assert_equal [ "/bin/sh", "-c", "echo 'hello'" ], strategy.build_cmd
+    end
+
+    test "builds cmd with parameter substitution" do
+      @tool.tool_files.destroy_all
+      @tool.update!(command: "python {{script}} --env={{env}}")
+
+      strategy = ToolExecutionStrategy.new(
+        tool: @tool.reload,
+        parameters: { script: "main.py", env: "production" }
+      )
+
+      assert_equal [ "/bin/sh", "-c", "python main.py --env=production" ], strategy.build_cmd
+    end
+
+    test "builds cmd with /bin/sh when no command specified" do
+      @tool.tool_files.destroy_all
+      @tool.update!(command: nil)
+
+      strategy = ToolExecutionStrategy.new(tool: @tool.reload)
+
+      assert_equal [ "/bin/sh", "-c", "/bin/sh" ], strategy.build_cmd
     end
 
     test "builds working directory" do
@@ -145,71 +232,36 @@ module ContainerStrategies
       assert_nil strategy.timeout_for(:cleanup)
     end
 
-    # == File Injection Tests ==
+    # == Start Tests (skip health check) ==
 
-    test "before_exec injects tool files" do
+    test "start skips health check for tool containers" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns("abc123")
+
+      @runtime_mock.expects(:start_container).with(container_mock).returns(container_mock)
+      @runtime_mock.expects(:wait_for_ready).never
+
+      context = { container: container_mock }
+      strategy.start(context)
+
+      assert_equal container_mock, context[:container]
+      assert_equal "abc123", context[:container_id]
+    end
+
+    # == Exec Tests (wait + logs) ==
+
+    test "exec waits for container and collects logs" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
       container_mock = mock("container")
 
-      # Tool has 2 files (from :with_files trait), both in /workspace
-      # Expect mkdir and file write for each file (2 files = 4 calls)
-      container_mock.expects(:exec).with([ "mkdir", "-p", "/workspace" ]).twice
-      container_mock.expects(:exec).with do |args|
-        args[0] == "/bin/sh" && args[1] == "-c" && args[2].include?("base64 -d")
-      end.twice
+      @runtime_mock.expects(:wait_container).with(container_mock).returns({ "StatusCode" => 0 })
+      @runtime_mock.expects(:container_logs).with(container_mock).returns({
+        stdout: "hello\n",
+        stderr: ""
+      })
 
-      strategy = ToolExecutionStrategy.new(tool: @tool)
       context = { container: container_mock }
-
-      strategy.before_exec(context)
-
-      assert true # Expectations verified by mocha
-    end
-
-    test "before_exec skips when no tool files" do
-      @tool.tool_files.destroy_all
-
-      container_mock = mock("container")
-      container_mock.expects(:exec).never
-
-      strategy = ToolExecutionStrategy.new(tool: @tool.reload)
-      context = { container: container_mock }
-
-      strategy.before_exec(context)
-    end
-
-    # == Command Building Tests ==
-
-    test "builds command with parameter substitution" do
-      @tool.update!(command: "python {{script}} --env={{env}}")
-
-      strategy = ToolExecutionStrategy.new(tool: @tool, parameters: { script: "main.py", env: "production" })
-      command = strategy.send(:build_command, @tool, { script: "main.py", env: "production" })
-
-      assert_equal "python main.py --env=production", command
-    end
-
-    test "uses /bin/sh when no command specified" do
-      @tool.update!(command: nil)
-
-      strategy = ToolExecutionStrategy.new(tool: @tool)
-      command = strategy.send(:build_command, @tool, {})
-
-      assert_equal "/bin/sh", command
-    end
-
-    # == Exec Phase Tests ==
-
-    test "exec sets result in context" do
-      container_mock = mock("container")
-      container_mock.expects(:exec).with(
-        [ "/bin/sh", "-c", "echo 'hello'" ],
-        stdout: true,
-        stderr: true
-      ).returns([ [ "hello\n" ], [], 0 ])
-
-      strategy = ToolExecutionStrategy.new(tool: @tool)
-      context = { container: container_mock }
-
       strategy.exec(context)
 
       assert_equal 0, context[:result][:exit_code]
@@ -219,11 +271,64 @@ module ContainerStrategies
       assert context[:result][:duration_ms] >= 0
     end
 
+    test "exec handles non-zero exit code" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      container_mock = mock("container")
+
+      @runtime_mock.expects(:wait_container).with(container_mock).returns({ "StatusCode" => 1 })
+      @runtime_mock.expects(:container_logs).with(container_mock).returns({
+        stdout: "",
+        stderr: "error occurred"
+      })
+
+      context = { container: container_mock }
+      strategy.exec(context)
+
+      assert_equal 1, context[:result][:exit_code]
+      assert_equal "error occurred", context[:result][:stderr]
+    end
+
+    test "exec handles timeout by killing container and collecting partial logs" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      container_mock = mock("container")
+
+      @runtime_mock.expects(:wait_container).with(container_mock).raises(Timeout::Error)
+      container_mock.expects(:kill)
+      @runtime_mock.expects(:container_logs).with(container_mock).returns({
+        stdout: "partial output",
+        stderr: "partial err"
+      })
+
+      context = { container: container_mock }
+      strategy.exec(context)
+
+      assert_equal 124, context[:result][:exit_code]
+      assert_equal true, context[:result][:timed_out]
+      assert_equal "partial output", context[:result][:stdout]
+      assert_includes context[:result][:stderr], "timed out"
+      assert_includes context[:result][:stderr], "partial err"
+    end
+
+    test "exec handles timeout when kill and logs fail" do
+      strategy = ToolExecutionStrategy.new(tool: @tool)
+      container_mock = mock("container")
+
+      @runtime_mock.expects(:wait_container).raises(Timeout::Error)
+      container_mock.expects(:kill).raises(StandardError.new("already dead"))
+      @runtime_mock.expects(:container_logs).raises(StandardError.new("no logs"))
+
+      context = { container: container_mock }
+      strategy.exec(context)
+
+      assert_equal 124, context[:result][:exit_code]
+      assert_equal true, context[:result][:timed_out]
+    end
+
     # == Output Truncation Tests ==
 
     test "truncates large output" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
-      large_output = "x" * (15 * 1024 * 1024) # 15MB (exceeds 10MB limit)
+      large_output = "x" * (15 * 1024 * 1024)
 
       truncated = strategy.send(:truncate_output, large_output)
 
@@ -246,24 +351,6 @@ module ContainerStrategies
       assert_equal "", strategy.send(:truncate_output, nil)
     end
 
-    # == Timeout Handling Tests ==
-
-    test "handles execution timeout" do
-      strategy = ToolExecutionStrategy.new(tool: @tool)
-
-      container_mock = mock("container")
-      container_mock.expects(:kill)
-
-      context = { container: container_mock }
-      start_time = Time.current - 10.seconds
-
-      strategy.send(:handle_execution_timeout, context, start_time, 5)
-
-      assert_equal 124, context[:result][:exit_code]
-      assert_equal true, context[:result][:timed_out]
-      assert context[:result][:stderr].include?("timed out")
-    end
-
     # == Full before_create Flow Test ==
 
     test "before_create populates context correctly" do
@@ -274,20 +361,26 @@ module ContainerStrategies
 
       assert_equal "alpine:latest", context[:image]
       assert_includes context[:env_vars], "API_KEY=secret123"
+      assert_includes context[:env_vars], "PALAD_PROJECT_ID=#{@project.id}"
+      assert_includes context[:env_vars], "PALAD_PROJECT_NAME=#{@project.name}"
       assert_equal "tool_execution", context[:labels]["palad.type"]
-      assert_equal [ "sleep", "infinity" ], context[:cmd]
+      # CMD includes file setup when tool has files
+      assert_equal "/bin/sh", context[:cmd][0]
+      assert_equal "-c", context[:cmd][1]
+      assert context[:cmd][2].end_with?("echo 'hello'")
       assert_equal "/workspace", context[:working_dir]
       assert context[:host_config]["Memory"] > 0
     end
 
-    # == before_cleanup Tests ==
+    # == before_cleanup Tests (archive-based) ==
 
-    test "before_cleanup collects output files when tool has output_paths" do
+    test "before_cleanup collects output files via read_file" do
       @tool.define_singleton_method(:output_paths) { [ "/output/result.json" ] }
 
       container_mock = mock("container")
       strategy = ToolExecutionStrategy.new(tool: @tool)
-      strategy.stubs(:read_file_from_container).with(container_mock, "/output/result.json").returns('{"result": "ok"}')
+
+      @runtime_mock.expects(:read_file).with(container_mock, "/output/result.json").returns('{"result": "ok"}')
 
       context = { container: container_mock }
       strategy.before_cleanup(context)
@@ -299,11 +392,12 @@ module ContainerStrategies
     test "before_cleanup skips when tool has no output_paths" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
+      @runtime_mock.expects(:read_file).never
+
       container_mock = mock("container")
       context = { container: container_mock }
       strategy.before_cleanup(context)
 
-      # Should complete without errors
       assert true
     end
 
@@ -312,10 +406,10 @@ module ContainerStrategies
 
       container_mock = mock("container")
       strategy = ToolExecutionStrategy.new(tool: @tool)
-      strategy.stubs(:read_file_from_container).raises(StandardError.new("File not found"))
+
+      @runtime_mock.expects(:read_file).with(container_mock, "/missing/file").raises(StandardError.new("Not found"))
 
       context = { container: container_mock }
-      # Should not raise
       strategy.before_cleanup(context)
 
       assert context[:result][:output_files].empty?
@@ -338,23 +432,6 @@ module ContainerStrategies
       env_vars = strategy.build_env_vars
 
       assert_includes env_vars, "API_KEY=secret123"
-    end
-
-    # == Timeout Handling with Kill Error ==
-
-    test "handles container kill errors during timeout" do
-      strategy = ToolExecutionStrategy.new(tool: @tool)
-
-      container_mock = mock("container")
-      container_mock.stubs(:kill).raises(StandardError.new("Already dead"))
-
-      context = { container: container_mock }
-      start_time = Time.current
-
-      # Should not raise
-      strategy.send(:handle_execution_timeout, context, start_time, 5)
-
-      assert_equal 124, context[:result][:exit_code]
     end
   end
 end
