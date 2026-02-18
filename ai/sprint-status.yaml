@@ -157,8 +157,8 @@ development_status:
   # PHASE 6: ARTIFACTS
   # ============================================
 
-  epic-11: backlog  # Artifacts (Phase 6)
-  11-1-upload-assets-to-project: backlog
+  epic-11: in-progress  # Artifacts (Phase 6)
+  11-1-upload-assets-to-project: review
   11-2-view-artifacts-list: backlog
   11-3-download-artifacts: backlog
   11-4-delete-artifacts: backlog

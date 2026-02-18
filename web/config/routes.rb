@@ -38,6 +38,7 @@ Rails.application.routes.draw do
         resources :tools, only: %i[index create update destroy]
         resources :mcp_servers, only: %i[index create update destroy]
         resources :skills, only: %i[index create update destroy]
+        resources :assets, only: %i[index create update destroy]
         resources :terminal_sessions, only: %i[index show]
         resources :projects, only: %i[index show create] do
           scope module: :projects do
@@ -47,6 +48,7 @@ Rails.application.routes.draw do
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
             resources :skills, only: %i[index create update destroy]
+            resources :assets, only: %i[index create update destroy]
             resources :terminal_sessions, only: %i[index show]
           end
         end

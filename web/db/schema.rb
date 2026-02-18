@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_16_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_18_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -122,6 +122,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_16_130000) do
     t.datetime "updated_at", null: false
     t.index ["scope_type", "scope_id", "name"], name: "index_agents_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_agents_on_scope_type_and_scope_id"
+  end
+
+  create_table "asset_versions", force: :cascade do |t|
+    t.bigint "asset_id", null: false
+    t.string "content_type"
+    t.datetime "created_at", null: false
+    t.text "file_data"
+    t.bigint "file_size"
+    t.jsonb "provenance", default: {}
+    t.datetime "updated_at", null: false
+    t.bigint "uploaded_by_id", null: false
+    t.integer "version", default: 1, null: false
+    t.index ["asset_id", "version"], name: "index_asset_versions_on_asset_id_and_version", unique: true
+    t.index ["asset_id"], name: "index_asset_versions_on_asset_id"
+  end
+
+  create_table "assets", force: :cascade do |t|
+    t.string "asset_type", default: "document", null: false
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "folder"
+    t.string "name", null: false
+    t.boolean "public", default: false
+    t.string "public_token"
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.bigint "step_run_id"
+    t.string "tags", default: [], array: true
+    t.datetime "updated_at", null: false
+    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true
+    t.index ["created_by_id"], name: "index_assets_on_created_by_id"
+    t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
+    t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
   end
 
   create_table "companies", force: :cascade do |t|
@@ -340,6 +373,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_16_130000) do
   add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
   add_foreign_key "action_mcp_session_tasks", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_tasks_session_id", on_update: :cascade, on_delete: :cascade
   add_foreign_key "agent_credentials", "users"
+  add_foreign_key "asset_versions", "assets"
+  add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
+  add_foreign_key "assets", "users", column: "created_by_id"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
