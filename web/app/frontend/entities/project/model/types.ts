@@ -13,7 +13,6 @@ export interface IProject {
 }
 
 export interface IProjectStats {
-  totalArtifacts: number;
   totalTasks: number;
   activeTasks: number;
   totalWorkflowRuns: number;

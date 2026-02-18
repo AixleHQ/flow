@@ -1,4 +1,4 @@
-import type { IArtifact } from 'entities/artifact';
+import type { Asset } from 'features/assets-management';
 import type { IProject } from 'entities/project';
 import type { ApiResponse, ApiCollectionResponse } from 'shared/api';
 import { baseApi, QueryTag } from 'shared/api';
@@ -35,15 +35,12 @@ export const projectApi = baseApi.injectEndpoints({
           : [{ type: QueryTag.WorkflowRun, id: 'LIST' }],
     }),
 
-    projectArtifacts: builder.query<ApiCollectionResponse<IArtifact>, string>({
-      query: (projectId) => ({ url: `/projects/${projectId}/artifacts` }),
+    projectAssets: builder.query<ApiCollectionResponse<Asset>, string>({
+      query: (projectId) => ({ url: `/projects/${projectId}/assets` }),
       providesTags: (result) =>
         result?.items
-          ? [
-              { type: QueryTag.Artifact, id: 'LIST' },
-              ...result.items.map(({ id }) => ({ type: QueryTag.Artifact, id })),
-            ]
-          : [{ type: QueryTag.Artifact, id: 'LIST' }],
+          ? [{ type: QueryTag.Assets, id: 'LIST' }, ...result.items.map(({ id }) => ({ type: QueryTag.Assets, id }))]
+          : [{ type: QueryTag.Assets, id: 'LIST' }],
     }),
 
     projectTasks: builder.query<ApiCollectionResponse<ITask>, string>({
@@ -60,6 +57,6 @@ export const {
   useProjectQuery,
   useProjectWorkflowsQuery,
   useProjectWorkflowRunsQuery,
-  useProjectArtifactsQuery,
+  useProjectAssetsQuery,
   useProjectTasksQuery,
 } = projectApi;

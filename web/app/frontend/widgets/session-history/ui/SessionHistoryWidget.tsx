@@ -148,11 +148,7 @@ export const SessionHistoryWidget: FC<SessionHistoryWidgetProps> = ({ projectId,
       <Stack direction="row" spacing={1.5} sx={{ px: 2, py: 1.5 }} alignItems="center">
         <FormControl size="small" sx={{ minWidth: 140 }}>
           <InputLabel>Agent</InputLabel>
-          <Select
-            value={agentFilter}
-            label="Agent"
-            onChange={(e) => handleAgentChange(e.target.value)}
-          >
+          <Select value={agentFilter} label="Agent" onChange={(e) => handleAgentChange(e.target.value)}>
             <MenuItem value="">All</MenuItem>
             {AGENT_FILTER_OPTIONS.map((o) => (
               <MenuItem key={o.value} value={o.value}>
@@ -164,11 +160,7 @@ export const SessionHistoryWidget: FC<SessionHistoryWidgetProps> = ({ projectId,
 
         <FormControl size="small" sx={{ minWidth: 130 }}>
           <InputLabel>Status</InputLabel>
-          <Select
-            value={stateFilter}
-            label="Status"
-            onChange={(e) => handleStateChange(e.target.value)}
-          >
+          <Select value={stateFilter} label="Status" onChange={(e) => handleStateChange(e.target.value)}>
             <MenuItem value="">All</MenuItem>
             {STATE_FILTER_OPTIONS.map((o) => (
               <MenuItem key={o.value} value={o.value}>
@@ -196,41 +188,43 @@ export const SessionHistoryWidget: FC<SessionHistoryWidgetProps> = ({ projectId,
           </Typography>
         </Box>
       ) : (
-      <>
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow
-              sx={{ '& th': { fontWeight: 600, fontSize: 12, color: 'text.secondary', py: 1, whiteSpace: 'nowrap' } }}
-            >
-              <TableCell>ID</TableCell>
-              <TableCell>Agent</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>User</TableCell>
-              {!projectId && <TableCell>Project</TableCell>}
-              <TableCell align="right">Tokens</TableCell>
-              <TableCell align="right">Cost</TableCell>
-              <TableCell>Models</TableCell>
-              <TableCell>Duration</TableCell>
-              <TableCell>Started</TableCell>
-              <TableCell />
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {sessions.map((s) => (
-              <SessionRow key={s.id} session={s} showProject={!projectId} onSelect={onSessionSelect} />
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        <>
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow
+                  sx={{
+                    '& th': { fontWeight: 600, fontSize: 12, color: 'text.secondary', py: 1, whiteSpace: 'nowrap' },
+                  }}
+                >
+                  <TableCell>ID</TableCell>
+                  <TableCell>Agent</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>User</TableCell>
+                  {!projectId && <TableCell>Project</TableCell>}
+                  <TableCell align="right">Tokens</TableCell>
+                  <TableCell align="right">Cost</TableCell>
+                  <TableCell>Models</TableCell>
+                  <TableCell>Duration</TableCell>
+                  <TableCell>Started</TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sessions.map((s) => (
+                  <SessionRow key={s.id} session={s} showProject={!projectId} onSelect={onSessionSelect} />
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
 
-      {totalPages > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-          <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} size="small" />
-        </Box>
-      )}
-      </>
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <Pagination count={totalPages} page={page} onChange={(_, p) => setPage(p)} size="small" />
+            </Box>
+          )}
+        </>
       )}
     </Box>
   );

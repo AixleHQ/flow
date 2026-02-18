@@ -143,14 +143,16 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: Routes.frontend.companyProjectsPath, label: 'Projects' },
   { path: Routes.frontend.companySessionsPath, label: 'Sessions' },
+  { path: Routes.frontend.companyAssetsPath, label: 'Assets', adminOnly: true },
   { path: Routes.frontend.companyMembersPath, label: 'Members', adminOnly: true },
   { path: Routes.frontend.companyConfigItemsPath, label: 'Secrets & Variables', adminOnly: true },
   { path: Routes.frontend.companyAgentsPath, label: 'Agents', adminOnly: true },
   { path: Routes.frontend.companyToolsPath, label: 'Tools', adminOnly: true },
   { path: Routes.frontend.companyMcpServersPath, label: 'MCP Servers', adminOnly: true },
   { path: Routes.frontend.companySkillsPath, label: 'Skills', adminOnly: true },
-  { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
-  { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
+
+  // { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
+  // { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
 ];
 
 export const AppHeader: React.FC = () => {

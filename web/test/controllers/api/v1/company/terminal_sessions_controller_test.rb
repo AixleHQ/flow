@@ -43,7 +43,7 @@ module Api
           assert_response :success
 
           ids = json["items"].pluck("id")
-          assert_equal [new_session.id, old_session.id], ids
+          assert_equal [ new_session.id, old_session.id ], ids
 
           meta = json["meta"]
           assert_equal 1, meta["page"]
@@ -76,7 +76,7 @@ module Api
 
         test "#index returns usage and user fields" do
           session = create(:terminal_session, :auth_setup, user: @user, agent_type: "claude_code",
-                           total_tokens: 1000, cost_cents: 5, models: ["claude-4"])
+                           total_tokens: 1000, cost_cents: 5, models: [ "claude-4" ])
 
           get :index
           assert_response :success
@@ -84,7 +84,7 @@ module Api
           item = json["items"].find { |s| s["id"] == session.id }
           assert_equal 1000, item["total_tokens"]
           assert_equal 5, item["cost_cents"]
-          assert_equal ["claude-4"], item["models"]
+          assert_equal [ "claude-4" ], item["models"]
           assert_equal @user.name, item["user_name"]
         end
 

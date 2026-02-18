@@ -3,9 +3,9 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
-import { ArtifactCard, type IArtifact } from 'entities/artifact';
-import type { IProject } from 'entities/project';
+import { AssetCard, type IAsset } from 'entities/assets';
 import { AgentsPanel } from 'features/agents-management';
+import { AssetsPanel } from 'features/assets-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
 import { RunWorkflowModal } from 'features/run-workflow';
@@ -18,10 +18,10 @@ import {
   useProjectQuery,
   useProjectWorkflowsQuery,
   useProjectWorkflowRunsQuery,
-  useProjectArtifactsQuery,
+  useProjectAssetsQuery,
   useProjectTasksQuery,
 } from '../api/projectApi';
-import type { ProjectTab, IWorkflow, IWorkflowRun, ITask } from '../lib/types';
+import type { ProjectTab, IWorkflow } from '../lib/types';
 
 import MembersTab from './MembersTab';
 import SettingsTab from './SettingsTab';
@@ -188,122 +188,6 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-// Mock data
-const mockProject: IProject = {
-  id: 1,
-  name: 'Palad Platform',
-  description: 'AI coding agents orchestration platform',
-  slug: 'palad-platform',
-  state: 'active',
-  company_id: 1,
-  owner_id: 1,
-  collaborators_count: 3,
-  last_activity_at: new Date().toISOString(),
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-const mockWorkflows: IWorkflow[] = [
-  {
-    id: '1',
-    name: 'Create PRD',
-    description: 'Generate a Product Requirements Document',
-    stepsCount: 5,
-    lastRunAt: new Date().toISOString(),
-    lastRunStatus: 'completed',
-    parameters: [
-      { name: 'product_name', type: 'string', description: 'Name of the product', required: true },
-      { name: 'target_audience', type: 'string', description: 'Target audience description', required: false },
-      {
-        name: 'include_mockups',
-        type: 'boolean',
-        description: 'Include mockup designs',
-        defaultValue: false,
-        required: false,
-      },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Design UX',
-    description: 'Create UX design specification and mockups',
-    stepsCount: 8,
-    lastRunAt: new Date().toISOString(),
-    lastRunStatus: 'running',
-    parameters: [
-      { name: 'project_type', type: 'string', description: 'Type of project (web, mobile, desktop)', required: true },
-      { name: 'complexity', type: 'number', description: 'Complexity level (1-10)', defaultValue: 5, required: false },
-    ],
-  },
-  { id: '3', name: 'Implement Feature', stepsCount: 12 },
-];
-
-const mockWorkflowRuns: IWorkflowRun[] = [
-  {
-    id: '1',
-    workflowId: '2',
-    workflowName: 'Design UX',
-    status: 'running',
-    startedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    userId: '1',
-    userName: 'Artem',
-    currentStep: 4,
-    totalSteps: 8,
-    totalCost: 2.45,
-  },
-  {
-    id: '2',
-    workflowId: '1',
-    workflowName: 'Create PRD',
-    status: 'completed',
-    startedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    completedAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-    userId: '1',
-    userName: 'Artem',
-    currentStep: 5,
-    totalSteps: 5,
-    totalCost: 5.12,
-  },
-];
-
-const mockArtifacts: IArtifact[] = [
-  {
-    id: '1',
-    name: 'prd.md',
-    type: 'document',
-    workflowName: 'Create PRD',
-    stepName: 'Generate PRD',
-    userName: 'Artem',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    name: 'ux-design-specification.md',
-    type: 'document',
-    workflowName: 'Design UX',
-    stepName: 'UX Spec',
-    userName: 'Artem',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    name: 'mockups.html',
-    type: 'code',
-    workflowName: 'Design UX',
-    stepName: 'Mockups',
-    userName: 'Artem',
-    createdAt: new Date().toISOString(),
-  },
-];
-
-const mockTasks: ITask[] = [
-  { id: '1', title: 'Setup project structure', status: 'done', assigneeName: 'Artem' },
-  { id: '2', title: 'Create PRD document', status: 'done', assigneeName: 'Artem' },
-  { id: '3', title: 'Design UX specification', status: 'in_progress', assigneeName: 'Artem' },
-  { id: '4', title: 'Implement frontend components', status: 'todo', assigneeName: 'Artem' },
-  { id: '5', title: 'Setup CI/CD pipeline', status: 'backlog' },
-];
-
 const getStatusColor = (status: string): string => {
   switch (status) {
     case 'completed':
@@ -320,8 +204,18 @@ const getStatusColor = (status: string): string => {
 };
 
 const VALID_TABS: ProjectTab[] = [
-  'overview', 'workflows', 'artifacts', 'tasks', 'sessions',
-  'members', 'config', 'agents', 'tools', 'mcp-servers', 'skills', 'settings',
+  'overview',
+  'workflows',
+  'assets',
+  'tasks',
+  'sessions',
+  'members',
+  'config',
+  'agents',
+  'tools',
+  'mcp-servers',
+  'skills',
+  'settings',
 ];
 
 const ProjectPage = () => {
@@ -339,14 +233,14 @@ const ProjectPage = () => {
   const { data: projectData, isLoading: isLoadingProject } = useProjectQuery(projectId);
   const { data: workflowsData } = useProjectWorkflowsQuery(projectId);
   const { data: runsData } = useProjectWorkflowRunsQuery(projectId);
-  const { data: artifactsData } = useProjectArtifactsQuery(projectId);
+  const { data: assetsData } = useProjectAssetsQuery(projectId);
   const { data: tasksData } = useProjectTasksQuery(projectId);
 
-  const project = projectData?.data || mockProject;
-  const workflows: IWorkflow[] = workflowsData?.items?.length ? workflowsData.items : mockWorkflows;
-  const runs: IWorkflowRun[] = runsData?.items?.length ? runsData.items : mockWorkflowRuns;
-  const artifacts: IArtifact[] = artifactsData?.items?.length ? artifactsData.items : mockArtifacts;
-  const tasks: ITask[] = tasksData?.items?.length ? tasksData.items : mockTasks;
+  const project = projectData?.data;
+  const workflows = workflowsData?.items ?? [];
+  const runs = runsData?.items ?? [];
+  const assets = assetsData?.items ?? [];
+  const tasks = tasksData?.items ?? [];
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: ProjectTab) => {
     navigate({ to: Routes.frontend.companyProjectTabPath(projectId, newValue) });
@@ -431,12 +325,12 @@ const ProjectPage = () => {
         </Grid>
       </Box>
 
-      {/* Recent Artifacts */}
+      {/* Recent Assets */}
       <Box>
-        <Typography sx={styles.sectionTitle}>Recent Artifacts</Typography>
+        <Typography sx={styles.sectionTitle}>Recent Assets</Typography>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {artifacts.slice(0, 5).map((artifact) => (
-            <ArtifactCard key={artifact.id} artifact={artifact} />
+          {assets.slice(0, 5).map((asset) => (
+            <AssetCard key={asset.id} asset={asset as unknown as IAsset} />
           ))}
         </Box>
       </Box>
@@ -464,17 +358,6 @@ const ProjectPage = () => {
           </Grid>
         ))}
       </Grid>
-    </Box>
-  );
-
-  const renderArtifactsTab = () => (
-    <Box>
-      <Typography sx={styles.sectionTitle}>All Artifacts ({artifacts.length})</Typography>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {artifacts.map((artifact) => (
-          <ArtifactCard key={artifact.id} artifact={artifact} />
-        ))}
-      </Box>
     </Box>
   );
 
@@ -522,10 +405,10 @@ const ProjectPage = () => {
           <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}>
             Projects
           </Link>
-          <Typography color="text.primary">{project.name}</Typography>
+          <Typography color="text.primary">{project?.name}</Typography>
         </Breadcrumbs>
         <Box sx={styles.titleRow}>
-          <Typography sx={styles.title}>{project.name}</Typography>
+          <Typography sx={styles.title}>{project?.name}</Typography>
           <Button variant="contained">Run Workflow</Button>
         </Box>
       </Box>
@@ -545,13 +428,8 @@ const ProjectPage = () => {
             sx={styles.tab}
           />
           <Tab
-            value="artifacts"
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                Artifacts
-                <Chip label={artifacts.length} size="small" />
-              </Box>
-            }
+            value="assets"
+            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>Assets</Box>}
             sx={styles.tab}
           />
           <Tab
@@ -579,7 +457,7 @@ const ProjectPage = () => {
       <Box sx={styles.content}>
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'workflows' && renderWorkflowsTab()}
-        {activeTab === 'artifacts' && renderArtifactsTab()}
+        {activeTab === 'assets' && <AssetsPanel projectId={Number(projectId)} />}
         {activeTab === 'tasks' && renderTasksTab()}
         {activeTab === 'sessions' && (
           <Box>
@@ -599,12 +477,14 @@ const ProjectPage = () => {
             <Box sx={{ px: 2, py: 2 }}>
               <SessionHistoryWidget
                 projectId={Number(projectId)}
-                onSessionSelect={(id) => navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(id)) as string })}
+                onSessionSelect={(id) =>
+                  navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(id)) as string })
+                }
               />
             </Box>
           </Box>
         )}
-        {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project.owner_id} />}
+        {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project?.owner_id ?? 0} />}
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
         {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}
         {activeTab === 'tools' && <ToolsPanel projectId={Number(projectId)} />}

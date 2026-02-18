@@ -63,7 +63,7 @@ export const terminalSessionApi = baseApi.injectEndpoints({
           : [{ type: QueryTag.TerminalSession, id: 'LIST' }],
     }),
 
-    // Gracefully finish session (stop → collect artifacts → collect usage)
+    // Gracefully finish session (stop → collect assets → collect usage)
     finishSession: builder.mutation<IFinishAuthResponse, { sessionId: number }>({
       query: ({ sessionId }) => ({
         url: Routes.backend.finishApiV1TerminalSessionPath(sessionId),

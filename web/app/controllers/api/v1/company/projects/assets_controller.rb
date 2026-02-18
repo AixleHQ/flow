@@ -6,8 +6,28 @@ module Api
       module Projects
         class AssetsController < ApplicationController
           def index
-            assets = Asset.merged_for_project(current_project)
-            respond_with assets, each_serializer: Api::V1::AssetSerializer
+            assets = Asset.scoped_to_project(current_project).ransack(params[:q]).result.includes(:versions)
+            respond_with assets, each_serializer: AssetSerializer
+          end
+
+          def show
+            asset = Asset.accessible_from_project(current_project).find(params[:id])
+            respond_with asset, serializer: AssetDetailSerializer
+          end
+
+          def versions
+            asset = Asset.accessible_from_project(current_project).find(params[:id])
+            respond_with asset.versions.order(version: :desc),
+                         each_serializer: AssetVersionSerializer
+          end
+
+          def download
+            asset = Asset.accessible_from_project(current_project).find(params[:id])
+            version = asset.resolve_version(params[:version])
+
+            redirect_to version.file_url(
+              response_content_disposition: ::ContentDisposition.attachment(asset.name)
+            ), allow_other_host: true
           end
 
           def create
@@ -15,46 +35,55 @@ module Api
 
             version = asset.versions.build(version_params)
             version.uploaded_by = current_user
+            version.source = :upload
 
             ActiveRecord::Base.transaction do
               asset.save!
               version.save!
             end
 
-            respond_with asset, serializer: Api::V1::AssetSerializer, status: :created
+            respond_with asset, serializer: AssetSerializer, status: :created
           end
 
           def update
             asset = current_project.assets.find(params[:id])
             asset.update(asset_update_params)
-            respond_with asset, serializer: Api::V1::AssetSerializer
+            respond_with asset, serializer: AssetSerializer
           end
 
           def destroy
             asset = current_project.assets.find(params[:id])
-            asset.destroy
+            asset.soft_delete!
             respond_with asset
+          end
+
+          def restore
+            asset = current_project.assets.find(params[:id])
+            asset.restore!
+            respond_with asset, serializer: AssetSerializer
           end
 
           private
 
           def find_or_initialize_asset(scope)
-            scope.assets.find_or_initialize_by(name: asset_params[:name]) do |a|
+            asset = scope.assets.find_or_initialize_by(name: asset_params[:name]) do |a|
               a.created_by = current_user
-              a.asset_type = asset_params[:asset_type] || "document"
             end
+            asset.restore! if asset.persisted? && asset.deleted?
+            asset.assign_attributes(asset_params.except(:name))
+            asset
           end
 
           def asset_params
-            params.require(:asset).permit(:name, :asset_type, :folder, :public, tags: [])
+            params.require(:asset).permit(:name, :folder, :public, tags: [])
           end
 
           def asset_update_params
-            params.require(:asset).permit(:folder, :public, :asset_type, tags: [])
+            params.require(:asset).permit(:folder, :public, tags: [])
           end
 
           def version_params
-            params.require(:asset).permit(:file, :cached_attachment_data, :content_type, provenance: {})
+            params.require(:asset).permit(:content_type, file: {})
           end
         end
       end

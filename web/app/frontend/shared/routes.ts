@@ -35,12 +35,14 @@ const frontend = {
   companyToolsPath: '/company/tools',
   companyMcpServersPath: '/company/mcp-servers',
   companySkillsPath: '/company/skills',
+  companyAssetsPath: '/company/assets',
   companyBrandingPath: '/company/branding',
   companySessionsPath: '/company/sessions',
   companySessionNewPath: '/company/sessions/new',
   companySessionPath: (sessionId: string) => `/company/sessions/${sessionId}`,
   companyProjectSessionNewPath: (projectId: string) => `/company/projects/${projectId}/sessions/new`,
-  companyProjectSessionPath: (projectId: string, sessionId: string) => `/company/projects/${projectId}/sessions/${sessionId}`,
+  companyProjectSessionPath: (projectId: string, sessionId: string) =>
+    `/company/projects/${projectId}/sessions/${sessionId}`,
 
   // Workflow routes
   workflowRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/workflow-runs/${runId}`,

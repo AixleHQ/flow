@@ -95,20 +95,6 @@ class AssetTest < ActiveSupport::TestCase
     assert { !asset.valid? }
   end
 
-  # ====== Enumerize ======
-
-  test "asset_type defaults to document" do
-    asset = build(:asset, scope: @company, created_by: @owner)
-    assert { asset.asset_type == "document" }
-  end
-
-  test "asset_type allows all valid types" do
-    %w[document image archive code diagram data html repository other].each do |type|
-      asset = build(:asset, asset_type: type, scope: @company, created_by: @owner)
-      assert { asset.asset_type == type }
-    end
-  end
-
   # ====== Scopes ======
 
   test ".for_company returns company-scoped assets" do
@@ -184,6 +170,88 @@ class AssetTest < ActiveSupport::TestCase
 
     result = Asset.merged_for_project(@project)
     assert { result.map(&:name) == result.map(&:name).sort }
+  end
+
+  # ====== Soft Delete ======
+
+  test "#soft_delete! sets deleted_at" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    assert { asset.deleted_at.nil? }
+
+    asset.soft_delete!
+    assert { asset.deleted_at.present? }
+    assert { asset.deleted? }
+  end
+
+  test "#restore! clears deleted_at" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    asset.soft_delete!
+    assert { asset.deleted? }
+
+    asset.restore!
+    assert { asset.deleted_at.nil? }
+    assert { !asset.deleted? }
+  end
+
+  test ".active excludes deleted assets" do
+    active = create(:asset, name: "active.md", scope: @project, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @project, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.active
+    assert { result.include?(active) }
+    assert { !result.include?(deleted) }
+  end
+
+  test ".deleted returns only deleted assets" do
+    create(:asset, name: "active.md", scope: @project, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @project, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.deleted
+    assert { result.include?(deleted) }
+    assert { result.count == 1 }
+  end
+
+  test ".for_company excludes deleted assets" do
+    create(:asset, name: "active.md", scope: @company, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.for_company(@company)
+    assert { result.count == 1 }
+    assert { result.first.name == "active.md" }
+  end
+
+  test ".for_project excludes deleted assets" do
+    create(:asset, name: "active.md", scope: @project, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @project, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.for_project(@project)
+    assert { result.count == 1 }
+    assert { result.first.name == "active.md" }
+  end
+
+  test ".merged_for_project excludes deleted assets" do
+    create(:asset, name: "active.md", scope: @project, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.merged_for_project(@project)
+    names = result.map(&:name)
+    assert { names.include?("active.md") }
+    assert { !names.include?("deleted.md") }
+  end
+
+  test ".accessible_from_project excludes deleted assets" do
+    active = create(:asset, name: "active.md", scope: @project, created_by: @owner)
+    deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @owner)
+    deleted.soft_delete!
+
+    result = Asset.accessible_from_project(@project)
+    assert { result.include?(active) }
+    assert { !result.include?(deleted) }
   end
 
   # ====== latest_version ======

@@ -8,6 +8,18 @@ module Api
           current_user.admin?
         end
 
+        def show?
+          current_user.admin?
+        end
+
+        def versions?
+          current_user.admin?
+        end
+
+        def download?
+          current_user.admin?
+        end
+
         def create?
           current_user.admin?
         end
@@ -17,6 +29,10 @@ module Api
         end
 
         def destroy?
+          current_user.admin?
+        end
+
+        def restore?
           current_user.admin?
         end
       end

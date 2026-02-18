@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 class AssetSerializer < ApplicationSerializer
-  attributes :id, :name, :asset_type, :folder, :tags, :public,
-              :scope_type, :scope_id, :scope_indicator,
-              :created_by_id, :step_run_id,
-              :latest_version, :versions_count,
-              :created_at, :updated_at
+  attributes :id, :name, :folder, :tags, :public,
+             :scope_type, :scope_id, :scope_indicator,
+             :created_by_id, :step_run_id,
+             :latest_version, :versions_count,
+             :deleted_at, :created_at, :updated_at
 
   def scope_indicator
     if object.respond_to?(:scope_indicator)
@@ -27,6 +27,7 @@ class AssetSerializer < ApplicationSerializer
       content_type: version.content_type,
       file_size: version.file_size,
       uploaded_by_id: version.uploaded_by_id,
+      source: version.source,
       created_at: version.created_at
     }
   end

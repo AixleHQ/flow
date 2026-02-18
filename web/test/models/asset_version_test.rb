@@ -67,30 +67,35 @@ class AssetVersionTest < ActiveSupport::TestCase
     assert { version.uploaded_by == @owner }
   end
 
-  # ====== Provenance ======
+  # ====== Source ======
 
-  test "provenance defaults to empty hash" do
+  test "source defaults to upload" do
     version = AssetVersion.create!(asset: @asset, uploaded_by: @owner)
-    assert { version.provenance == {} }
+    assert { version.source == "upload" }
+    assert { version.upload? }
   end
 
-  test "stores upload provenance" do
-    version = AssetVersion.create!(
-      asset: @asset,
-      uploaded_by: @owner,
-      provenance: { source: "upload", user_id: @owner.id }
-    )
-    assert { version.provenance["source"] == "upload" }
-    assert { version.provenance["user_id"] == @owner.id }
+  test "source accepts workflow" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner, source: :workflow)
+    assert { version.workflow? }
   end
 
-  test "stores workflow provenance" do
-    version = AssetVersion.create!(
-      asset: @asset,
-      uploaded_by: @owner,
-      provenance: { source: "workflow", step_run_id: 42, step_name: "Create Architecture" }
+  test "source accepts github" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner, source: :github)
+    assert { version.github? }
+  end
+
+  # ====== S3 key location ======
+
+  test "generate_location produces scoped path" do
+    version = create(:asset_version, :with_file, asset: @asset, uploaded_by: @owner)
+    uploader = version.file
+
+    location = AssetFileUploader.new(:store).generate_location(
+      StringIO.new("x"),
+      record: version
     )
-    assert { version.provenance["source"] == "workflow" }
-    assert { version.provenance["step_run_id"] == 42 }
+
+    assert { location.start_with?("project/#{@project.id}/assets/#{@asset.id}/v#{version.version}/") }
   end
 end

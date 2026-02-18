@@ -42,7 +42,6 @@ module Workflows
       assert_equal "abc123", result[:container_id]
       assert_equal "pulled", result[:image_pull_status]
       assert_equal :cleaned_up, result[:cleanup_status]
-      assert_equal false, result[:cancelled]
     end
 
     test "respects custom tool timeout" do
@@ -112,38 +111,11 @@ module Workflows
     # == Signal Tests ==
 
     test "container_finished signal sets finished flag" do
-      # Initialize flags first (as run does)
       @workflow.instance_variable_set(:@finished, false)
-      @workflow.instance_variable_set(:@cancelled, false)
 
       @workflow.container_finished
 
       assert_equal true, @workflow.instance_variable_get(:@finished)
-      assert_equal false, @workflow.instance_variable_get(:@cancelled)
-    end
-
-    test "cancelled flag is included in result" do
-      pull_result = { status: "cached" }
-      execute_result = { container_id: "abc123" }
-      cleanup_result = { status: :cleaned_up }
-
-      activities = setup_activity_mocks(pull_result, execute_result, cleanup_result)
-      @workflow.stubs(:activities).returns(activities)
-
-      # Simulate cancellation signal
-      Temporalio::Workflow.stubs(:wait_condition).with do
-        @workflow.container_cancelled
-        true
-      end.returns(true)
-
-      input = Hashie::Mash.new(
-        strategy_type: "agent_auth",
-        strategy_input: { session_id: 1 }
-      )
-
-      result = @workflow.run(input)
-
-      assert_equal true, result[:cancelled]
     end
 
     # == Input Handling Tests ==
@@ -233,7 +205,7 @@ module Workflows
     # == Result Building Tests ==
 
     test "build_result merges all results correctly" do
-      @workflow.instance_variable_set(:@cancelled, false)
+      @workflow.instance_variable_set(:@timed_out, false)
 
       result = { container_id: "abc", exit_code: 0 }
       pull_result = { status: "pulled", duration_seconds: 10.5 }
@@ -248,11 +220,11 @@ module Workflows
       assert_equal :cleaned_up, merged[:cleanup_status]
       assert_equal :collected, merged[:artifacts_status]
       assert_equal 99, merged[:credential_id]
-      assert_equal false, merged[:cancelled]
+      assert_equal false, merged[:timed_out]
     end
 
     test "build_result handles nil cleanup_result" do
-      @workflow.instance_variable_set(:@cancelled, true)
+      @workflow.instance_variable_set(:@timed_out, false)
 
       result = { container_id: "abc" }
       pull_result = { status: "cached" }
@@ -262,11 +234,10 @@ module Workflows
       assert_equal "abc", merged[:container_id]
       assert_equal "cached", merged[:image_pull_status]
       assert_nil merged[:cleanup_status]
-      assert_equal true, merged[:cancelled]
     end
 
     test "build_result handles string keys in results" do
-      @workflow.instance_variable_set(:@cancelled, false)
+      @workflow.instance_variable_set(:@timed_out, false)
 
       result = { "container_id" => "abc" }
       pull_result = { "status" => "pulled", "duration_seconds" => 5.0 }

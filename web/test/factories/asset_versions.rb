@@ -7,6 +7,12 @@ FactoryBot.define do
     version { 1 }
     content_type { "text/markdown" }
     file_size { 1024 }
-    provenance { { source: "upload" } }
+    source { :upload }
+
+    trait :with_file do
+      after(:build) do |version|
+        version.file = AssetFileUploader.upload(StringIO.new("test file content"), :store)
+      end
+    end
   end
 end

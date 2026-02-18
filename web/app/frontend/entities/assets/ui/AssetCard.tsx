@@ -3,10 +3,10 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import { formatSize } from 'shared/lib';
 
-import { getArtifactType, type IArtifact } from '../model/types';
+import { getAssetType, type IAsset } from '../model/types';
 
-interface IArtifactCardProps {
-  artifact: IArtifact;
+interface IAssetCardProps {
+  asset: IAsset;
   onClick?: () => void;
   onDownload?: () => void;
 }
@@ -91,8 +91,8 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const getTypeIcon = (type: string): string => {
-  const artifactType = getArtifactType(undefined, type);
-  switch (artifactType) {
+  const assetType = getAssetType(undefined, type);
+  switch (assetType) {
     case 'image':
       return '🖼️';
     case 'code':
@@ -121,8 +121,8 @@ const formatRelativeTime = (dateString: string): string => {
   return date.toLocaleDateString();
 };
 
-const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => {
-  const hasProvenance = artifact.workflowName || artifact.stepName || artifact.userName;
+const AssetCard = ({ asset, onClick, onDownload }: IAssetCardProps) => {
+  const hasProvenance = asset.workflowName || asset.stepName || asset.userName;
 
   return (
     <Card sx={styles.card} elevation={0}>
@@ -133,26 +133,24 @@ const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => 
           onClick={onClick}
         >
           {/* Icon */}
-          <Box sx={styles.icon}>{getTypeIcon(artifact.name)}</Box>
+          <Box sx={styles.icon}>{getTypeIcon(asset.name)}</Box>
 
           {/* Content */}
           <Box sx={styles.content}>
-            <Typography sx={styles.name}>{artifact.name}</Typography>
+            <Typography sx={styles.name}>{asset.name}</Typography>
             {hasProvenance && (
               <Typography sx={styles.provenance}>
-                {artifact.workflowName && (
+                {asset.workflowName && (
                   <>
-                    <span>{artifact.workflowName}</span>
-                    {artifact.stepName && <span style={{ color: 'inherit' }}>→</span>}
+                    <span>{asset.workflowName}</span>
+                    {asset.stepName && <span style={{ color: 'inherit' }}>→</span>}
                   </>
                 )}
-                {artifact.stepName && <span>{artifact.stepName}</span>}
-                {(artifact.workflowName || artifact.stepName) && artifact.userName && (
-                  <span style={{ margin: '0 4px' }}>•</span>
-                )}
-                {artifact.userName && <span>{artifact.userName}</span>}
+                {asset.stepName && <span>{asset.stepName}</span>}
+                {(asset.workflowName || asset.stepName) && asset.userName && <span style={{ margin: '0 4px' }}>•</span>}
+                {asset.userName && <span>{asset.userName}</span>}
                 <span style={{ margin: '0 4px' }}>•</span>
-                <span>{formatRelativeTime(artifact.createdAt)}</span>
+                <span>{formatRelativeTime(asset.createdAt)}</span>
               </Typography>
             )}
           </Box>
@@ -160,7 +158,7 @@ const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => 
 
         {/* Meta & Actions */}
         <Box sx={styles.meta}>
-          {artifact.size && <Typography sx={styles.size}>{formatSize(artifact.size)}</Typography>}
+          {asset.size && <Typography sx={styles.size}>{formatSize(asset.size)}</Typography>}
           <Box sx={styles.actions}>
             <Tooltip title="Download">
               <IconButton sx={styles.actionButton} size="small" onClick={onDownload}>
@@ -174,4 +172,4 @@ const ArtifactCard = ({ artifact, onClick, onDownload }: IArtifactCardProps) => 
   );
 };
 
-export default ArtifactCard;
+export default AssetCard;

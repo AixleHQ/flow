@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_18_100002) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -130,7 +130,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100002) do
     t.datetime "created_at", null: false
     t.text "file_data"
     t.bigint "file_size"
-    t.jsonb "provenance", default: {}
+    t.string "source", default: "upload", null: false
     t.datetime "updated_at", null: false
     t.bigint "uploaded_by_id", null: false
     t.integer "version", default: 1, null: false
@@ -139,9 +139,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100002) do
   end
 
   create_table "assets", force: :cascade do |t|
-    t.string "asset_type", default: "document", null: false
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
+    t.datetime "deleted_at"
     t.string "folder"
     t.string "name", null: false
     t.boolean "public", default: false
@@ -153,6 +153,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100002) do
     t.datetime "updated_at", null: false
     t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true
     t.index ["created_by_id"], name: "index_assets_on_created_by_id"
+    t.index ["deleted_at"], name: "index_assets_on_deleted_at"
     t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
     t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
   end

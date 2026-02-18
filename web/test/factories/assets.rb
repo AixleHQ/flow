@@ -3,7 +3,6 @@
 FactoryBot.define do
   factory :asset do
     sequence(:name) { |n| "asset-#{n}.md" }
-    asset_type { :document }
     scope { nil }
     association :created_by, factory: :user
 

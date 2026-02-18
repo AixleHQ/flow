@@ -2,7 +2,7 @@ import { Box, Button, Chip, IconButton, Tab, Tabs, Typography } from '@mui/mater
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useState } from 'react';
 
-interface IArtifact {
+interface IAsset {
   id: string;
   name: string;
   type: 'markdown' | 'code' | 'json' | 'text' | 'image' | 'binary';
@@ -15,8 +15,8 @@ interface IArtifact {
   stepName?: string;
 }
 
-interface ArtifactPreviewProps {
-  artifact: IArtifact;
+interface AssetPreviewProps {
+  asset: IAsset;
   onClose?: () => void;
 }
 
@@ -205,11 +205,11 @@ const formatSize = (size: number): string => {
   return size + ' B';
 };
 
-const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
+const AssetPreview = ({ asset, onClose }: AssetPreviewProps) => {
   const [viewMode, setViewMode] = useState<'preview' | 'raw'>('preview');
 
   const renderContent = () => {
-    if (!artifact.content && !artifact.url) {
+    if (!asset.content && !asset.url) {
       return (
         <Box sx={styles.emptyState}>
           <Typography sx={styles.emptyIcon}>📄</Typography>
@@ -218,31 +218,31 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
       );
     }
 
-    switch (artifact.type) {
+    switch (asset.type) {
       case 'markdown':
         if (viewMode === 'raw') {
           return (
             <Box sx={styles.codeBlock} component="pre">
-              {artifact.content}
+              {asset.content}
             </Box>
           );
         }
         // In a real app, you'd use a markdown renderer like react-markdown
-        return <Box sx={styles.markdownContent} dangerouslySetInnerHTML={{ __html: artifact.content || '' }} />;
+        return <Box sx={styles.markdownContent} dangerouslySetInnerHTML={{ __html: asset.content || '' }} />;
 
       case 'code':
       case 'json':
       case 'text':
         return (
           <Box sx={styles.codeBlock} component="pre">
-            {artifact.content}
+            {asset.content}
           </Box>
         );
 
       case 'image':
         return (
           <Box sx={styles.imageContainer}>
-            <Box component="img" src={artifact.url} alt={artifact.name} sx={styles.image} />
+            <Box component="img" src={asset.url} alt={asset.name} sx={styles.image} />
           </Box>
         );
 
@@ -251,10 +251,10 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
           <Box sx={styles.binaryContainer}>
             <Typography sx={styles.binaryIcon}>📦</Typography>
             <Typography sx={{ fontSize: '14px', color: 'text.secondary', marginBottom: '8px' }}>
-              Binary file: {formatSize(artifact.size)}
+              Binary file: {formatSize(asset.size)}
             </Typography>
-            {artifact.url && (
-              <Button variant="outlined" href={artifact.url} download={artifact.name} sx={styles.downloadButton}>
+            {asset.url && (
+              <Button variant="outlined" href={asset.url} download={asset.name} sx={styles.downloadButton}>
                 Download File
               </Button>
             )}
@@ -265,7 +265,7 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
         return (
           <Box sx={styles.emptyState}>
             <Typography sx={styles.emptyIcon}>❓</Typography>
-            <Typography sx={styles.emptyText}>Unsupported artifact type</Typography>
+            <Typography sx={styles.emptyText}>Unsupported asset type</Typography>
           </Box>
         );
     }
@@ -275,16 +275,16 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
     <Box sx={styles.container}>
       <Box sx={styles.header}>
         <Box sx={styles.headerLeft}>
-          <Typography sx={styles.title}>{artifact.name}</Typography>
+          <Typography sx={styles.title}>{asset.name}</Typography>
           <Box sx={styles.meta}>
-            <Chip label={artifact.type} size="small" sx={{ height: '20px', fontSize: '11px' }} />
-            <Typography>{formatSize(artifact.size)}</Typography>
-            {artifact.stepName && <Typography>• {artifact.stepName}</Typography>}
-            <Typography>• {new Date(artifact.createdAt).toLocaleString()}</Typography>
+            <Chip label={asset.type} size="small" sx={{ height: '20px', fontSize: '11px' }} />
+            <Typography>{formatSize(asset.size)}</Typography>
+            {asset.stepName && <Typography>• {asset.stepName}</Typography>}
+            <Typography>• {new Date(asset.createdAt).toLocaleString()}</Typography>
           </Box>
         </Box>
         <Box sx={styles.headerActions}>
-          {(artifact.type === 'markdown' || artifact.type === 'code' || artifact.type === 'json') && (
+          {(asset.type === 'markdown' || asset.type === 'code' || asset.type === 'json') && (
             <Tabs value={viewMode} onChange={(_, v) => setViewMode(v)} sx={styles.tabs}>
               <Tab label="Preview" value="preview" sx={{ minHeight: '48px', textTransform: 'none' }} />
               <Tab label="Raw" value="raw" sx={{ minHeight: '48px', textTransform: 'none' }} />
@@ -303,4 +303,4 @@ const ArtifactPreview = ({ artifact, onClose }: ArtifactPreviewProps) => {
   );
 };
 
-export default ArtifactPreview;
+export default AssetPreview;

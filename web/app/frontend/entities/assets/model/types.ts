@@ -1,4 +1,4 @@
-export interface IArtifact {
+export interface IAsset {
   id: string;
   name: string;
   type: string;
@@ -14,9 +14,9 @@ export interface IArtifact {
   createdAt: string;
 }
 
-export type ArtifactType = 'document' | 'code' | 'image' | 'data' | 'other';
+export type AssetType = 'document' | 'code' | 'image' | 'data' | 'other';
 
-export const getArtifactType = (mimeType?: string, name?: string): ArtifactType => {
+export const getAssetType = (mimeType?: string, name?: string): AssetType => {
   if (!mimeType && !name) return 'other';
 
   const type = mimeType?.toLowerCase() || '';

@@ -9,6 +9,18 @@ module Api
             project_accessible?
           end
 
+          def show?
+            project_accessible?
+          end
+
+          def versions?
+            project_accessible?
+          end
+
+          def download?
+            project_accessible?
+          end
+
           def create?
             project_accessible?
           end
@@ -18,6 +30,10 @@ module Api
           end
 
           def destroy?
+            project_accessible?
+          end
+
+          def restore?
             project_accessible?
           end
 

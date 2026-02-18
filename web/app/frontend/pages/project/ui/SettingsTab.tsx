@@ -22,7 +22,7 @@ interface IIntegration {
 //   requests: number;
 // }
 
-const mockIntegrations: IIntegration[] = [
+const INTEGRATIONS: IIntegration[] = [
   {
     id: 'linear',
     name: 'Linear',
@@ -209,7 +209,7 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
   const { enqueueSnackbar } = useSnackbar();
   const [projectName, setProjectName] = useState('Palad Platform');
   const [projectDescription, setProjectDescription] = useState('AI coding agents orchestration platform');
-  const [integrations, setIntegrations] = useState<IIntegration[]>(mockIntegrations);
+  const [integrations, setIntegrations] = useState<IIntegration[]>(INTEGRATIONS);
   const [autoSyncLinear, setAutoSyncLinear] = useState(false);
   const [autoCreatePRs, setAutoCreatePRs] = useState(true);
 

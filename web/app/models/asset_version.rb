@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 class AssetVersion < ApplicationRecord
+  extend Enumerize
   include AssetFileUploader::Attachment(:file)
 
   belongs_to :asset
   belongs_to :uploaded_by, class_name: "User"
+
+  enumerize :source, in: %i[upload workflow github], default: :upload, predicates: true
 
   validates :version, presence: true
 

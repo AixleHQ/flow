@@ -7,8 +7,16 @@
       "message": "SSL certificate verification was bypassed",
       "file": "app/services/container_runtime/kubernetes_runtime.rb",
       "note": "In-cluster health check to Traefik service uses self-signed certificate. This is an internal pod-to-service call within the Kubernetes cluster, not an external request."
+    },
+    {
+      "fingerprint": "3f337b115b8de37354e987d97d193f444691c627e474a1d1456c989e63be8152",
+      "warning_type": "Redirect",
+      "check_name": "Redirect",
+      "message": "Possible unprotected redirect",
+      "file": "app/controllers/api/v1/company/projects/assets_controller.rb",
+      "note": "Redirect to Shrine-generated file URL (S3 presigned URL) for asset downloads. The URL is generated server-side from a trusted source, not from user input."
     }
   ],
-  "updated": "2026-02-10",
+  "updated": "2026-02-18",
   "brakeman_version": "7.0.0"
 }

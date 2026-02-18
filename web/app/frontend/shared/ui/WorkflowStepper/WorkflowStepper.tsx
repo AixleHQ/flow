@@ -12,7 +12,7 @@ interface IWorkflowStep {
   user?: string;
   duration?: string;
   cost?: number;
-  artifacts?: Array<{
+  assets?: Array<{
     id: string;
     name: string;
     type: string;
@@ -149,16 +149,16 @@ const styles = {
     color: 'text.secondary',
     fontFamily: '"JetBrains Mono", monospace',
   },
-  artifactsList: {
+  assetsList: {
     marginTop: '12px',
   },
-  artifactsTitle: {
+  assetsTitle: {
     fontSize: '11px',
     color: 'text.disabled',
     textTransform: 'uppercase',
     marginBottom: '8px',
   },
-  artifact: {
+  asset: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
@@ -171,10 +171,10 @@ const styles = {
       backgroundColor: 'action.hover',
     },
   },
-  artifactIcon: {
+  assetIcon: {
     fontSize: '14px',
   },
-  artifactName: {
+  assetName: {
     fontSize: '12px',
     color: 'text.primary',
     fontFamily: '"JetBrains Mono", monospace',
@@ -210,7 +210,7 @@ const getIndicatorStyles = (status: StepStatus): SxProps<Theme> => {
   }
 };
 
-const getArtifactIcon = (type: string): string => {
+const getAssetIcon = (type: string): string => {
   if (type.includes('image')) return '🖼️';
   if (type.includes('pdf')) return '📄';
   if (type.includes('json')) return '{}';
@@ -240,7 +240,7 @@ const WorkflowStepper = ({ steps, currentStepId, onStepClick }: IWorkflowStepper
         const isLast = index === steps.length - 1;
         const isExpanded = expandedSteps.has(step.id);
         const hasDetails =
-          step.agent || step.duration || step.cost !== undefined || (step.artifacts && step.artifacts.length > 0);
+          step.agent || step.duration || step.cost !== undefined || (step.assets && step.assets.length > 0);
 
         return (
           <Box key={step.id} sx={styles.step}>
@@ -300,21 +300,21 @@ const WorkflowStepper = ({ steps, currentStepId, onStepClick }: IWorkflowStepper
                     </Box>
                   )}
 
-                  {/* Artifacts */}
-                  {step.artifacts && step.artifacts.length > 0 && (
-                    <Box sx={styles.artifactsList}>
-                      <Typography sx={styles.artifactsTitle}>Artifacts ({step.artifacts.length})</Typography>
-                      {step.artifacts.map((artifact) => (
+                  {/* Assets */}
+                  {step.assets && step.assets.length > 0 && (
+                    <Box sx={styles.assetsList}>
+                      <Typography sx={styles.assetsTitle}>Assets ({step.assets.length})</Typography>
+                      {step.assets.map((asset) => (
                         <Box
-                          key={artifact.id}
-                          sx={styles.artifact}
+                          key={asset.id}
+                          sx={styles.asset}
                           onClick={(e) => {
                             e.stopPropagation();
                             onStepClick?.(step.id);
                           }}
                         >
-                          <span style={{ fontSize: '14px' }}>{getArtifactIcon(artifact.type)}</span>
-                          <Typography sx={styles.artifactName}>{artifact.name}</Typography>
+                          <span style={{ fontSize: '14px' }}>{getAssetIcon(asset.type)}</span>
+                          <Typography sx={styles.assetName}>{asset.name}</Typography>
                         </Box>
                       ))}
                     </Box>

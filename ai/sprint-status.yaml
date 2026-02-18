@@ -157,14 +157,14 @@ development_status:
   # PHASE 6: ARTIFACTS
   # ============================================
 
-  epic-11: in-progress  # Artifacts (Phase 6)
-  11-1-upload-assets-to-project: review
-  11-2-view-artifacts-list: backlog
-  11-3-download-artifacts: backlog
-  11-4-delete-artifacts: backlog
-  11-5-s3-storage-integration: backlog
-  11-6-artifact-history-and-versioning: backlog
-  11-7-artifact-provenance-tracking: backlog
+  epic-11: done  # Artifacts (Phase 6)
+  11-1-upload-assets-to-project: done
+  11-2-view-artifacts-list: done
+  11-3-download-artifacts: done
+  11-4-delete-artifacts: done
+  11-5-s3-storage-integration: done
+  11-6-artifact-history-and-versioning: done
+  11-7-artifact-provenance-tracking: done
   epic-11-retrospective: optional
 
   # ============================================
