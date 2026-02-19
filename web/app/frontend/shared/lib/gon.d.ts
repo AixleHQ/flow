@@ -10,6 +10,7 @@ declare global {
       otpEnabled: boolean;
       domain: string;
       protocol: string;
+      githubAppSlug: string | null;
     };
   }
 }

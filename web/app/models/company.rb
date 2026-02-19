@@ -16,6 +16,7 @@ class Company < ApplicationRecord
   has_many :mcp_servers, as: :scope, dependent: :destroy, class_name: "MCPServer"
   has_many :skills, as: :scope, dependent: :destroy
   has_many :assets, as: :scope, dependent: :destroy
+  has_many :integrations, dependent: :destroy
   has_many :terminal_sessions, through: :users
 
   # Virtual attributes for initial admin creation (used in admin form)

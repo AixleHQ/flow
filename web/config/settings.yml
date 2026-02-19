@@ -76,6 +76,12 @@ temporal:
 encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
+  integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || "integrations test key" %>
+
+github:
+  app_id: <%= ENV['GITHUB_APP_ID'] %>
+  app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
+  private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
 
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>

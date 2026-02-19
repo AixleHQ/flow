@@ -477,6 +477,16 @@ export function letterOpenerWebPath(options?: object): string {
   return "/" + "letter_opener" + $buildOptions(options, []);
 }
 
+/** /api/v1/company/integrations(.:format) */
+export function apiV1CompanyIntegrationsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/integrations/:id(.:format) */
+export function apiV1CompanyIntegrationPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /letter_opener/ */
 export function letterOpenerWebLettersPath(options?: object): string {
   return "/" + "letter_opener" + "/" + $buildOptions(options, []);

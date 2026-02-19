@@ -39,6 +39,11 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
+        resources :integrations, only: %i[index show create destroy] do
+          collection do
+            get :github_setup, defaults: { format: :html }
+          end
+        end
         resources :users, only: %i[index create update destroy]
         resources :config_items, only: %i[index create update destroy]
         resources :agents, only: %i[index create update destroy]

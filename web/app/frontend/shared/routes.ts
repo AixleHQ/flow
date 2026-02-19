@@ -36,6 +36,7 @@ const frontend = {
   companyMcpServersPath: '/company/mcp-servers',
   companySkillsPath: '/company/skills',
   companyAssetsPath: '/company/assets',
+  companyIntegrationsPath: '/company/integrations',
   companyBrandingPath: '/company/branding',
   companySessionsPath: '/company/sessions',
   companySessionNewPath: '/company/sessions/new',
