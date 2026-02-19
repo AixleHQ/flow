@@ -10,6 +10,7 @@ export type ProjectTab =
   | 'tools'
   | 'mcp-servers'
   | 'skills'
+  | 'repositories'
   | 'settings';
 
 export interface IWorkflowParameter {

@@ -2,3 +2,6 @@
 # Replaces Sidekiq-cron schedules
 
 schedules:
+  - workflow: stale_session_cleanup_workflow
+    cron: "0 * * * *"
+    enabled: true

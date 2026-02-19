@@ -22,6 +22,11 @@ import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
 import type { Asset } from 'features/assets-management';
 import { useGetCompanyAssetsQuery, useGetProjectAssetsQuery } from 'features/assets-management';
+import {
+  useGetCompanyRepositoriesQuery,
+  useGetProjectRepositoriesQuery,
+} from 'features/repositories-management/api/repositoriesApi';
+import type { Repository } from 'features/repositories-management/lib/types';
 import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
@@ -69,6 +74,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<McpServer[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
+  const [selectedRepos, setSelectedRepos] = useState<Repository[]>([]);
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
 
@@ -153,6 +159,10 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const companyAssets = useGetCompanyAssetsQuery(undefined, { skip: !!projectId });
   const assets: Asset[] = (projectId ? projectAssets.data : companyAssets.data) ?? [];
 
+  const projectRepos = useGetProjectRepositoriesQuery(projectId!, { skip: !projectId });
+  const companyRepos = useGetCompanyRepositoriesQuery(undefined, { skip: !!projectId });
+  const repositories: Repository[] = (projectId ? projectRepos.data : companyRepos.data) ?? [];
+
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
   const [finishSession] = useFinishSessionMutation();
   const [isStopping, setIsStopping] = useState(false);
@@ -184,6 +194,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       selectedSkills.length > 0 ||
       selectedMcpServers.length > 0 ||
       selectedAssets.length > 0 ||
+      selectedRepos.length > 0 ||
       mode === 'non_interactive';
 
     try {
@@ -200,6 +211,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
                   ...(selectedSkills.length > 0 ? { skillIds: selectedSkills.map((s) => s.id) } : {}),
                   ...(selectedMcpServers.length > 0 ? { mcpServerIds: selectedMcpServers.map((m) => m.id) } : {}),
                   ...(selectedAssets.length > 0 ? { assetIds: selectedAssets.map((a) => a.id) } : {}),
+                  ...(selectedRepos.length > 0 ? { repositoryIds: selectedRepos.map((r) => r.id) } : {}),
                   mode: mode,
                   ...(mode === 'non_interactive' ? { initialPrompt } : {}),
                 },
@@ -511,6 +523,35 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
               label={option.folder ? `${option.folder}/${option.name}` : option.name}
               size="small"
             />
+          ))
+        }
+        sx={{ mb: 3 }}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
+      />
+
+      {/* Repositories */}
+      <Autocomplete
+        multiple
+        options={repositories}
+        getOptionLabel={(option) => option.fullName}
+        value={selectedRepos}
+        onChange={(_, newValue) => setSelectedRepos(newValue)}
+        renderInput={(params) => <TextField {...params} label="Repositories (optional)" size="small" />}
+        renderOption={(props, option) => (
+          <li {...props} key={option.id}>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="body2">{option.fullName}</Typography>
+              {option.purpose && (
+                <Typography variant="caption" color="text.secondary">
+                  {option.purpose}
+                </Typography>
+              )}
+            </Box>
+          </li>
+        )}
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => (
+            <Chip {...getTagProps({ index })} key={option.id} label={option.repoName} size="small" />
           ))
         }
         sx={{ mb: 3 }}

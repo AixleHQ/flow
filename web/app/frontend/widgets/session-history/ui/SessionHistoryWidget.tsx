@@ -69,7 +69,6 @@ function formatTokens(n: number): string {
 
 function formatCost(cents: number): string {
   if (cents === 0) return '—';
-  if (cents < 100) return `${cents}¢`;
   return `$${(cents / 100).toFixed(2)}`;
 }
 

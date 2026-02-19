@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_19_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -192,6 +192,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
+  create_table "integrations", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.bigint "connected_by_id", null: false
+    t.datetime "created_at", null: false
+    t.text "credentials"
+    t.string "name", null: false
+    t.string "provider", null: false
+    t.jsonb "settings", default: {}
+    t.string "status", default: "inactive", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
+    t.index ["company_id"], name: "index_integrations_on_company_id"
+    t.index ["status"], name: "index_integrations_on_status"
+  end
+
   create_table "mcp_servers", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
@@ -235,6 +250,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.index ["company_id"], name: "index_projects_on_company_id"
     t.index ["owner_id"], name: "index_projects_on_owner_id"
     t.index ["state"], name: "index_projects_on_state"
+  end
+
+  create_table "repositories", force: :cascade do |t|
+    t.string "clone_url", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "full_name", null: false
+    t.bigint "integration_id", null: false
+    t.boolean "is_private", default: false
+    t.datetime "last_fetched_at"
+    t.text "purpose"
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.string "source_branch", default: "main", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id"], name: "index_repositories_on_integration_id"
+    t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
+    t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
   end
 
   create_table "skills", force: :cascade do |t|
@@ -316,6 +349,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.datetime "updated_at", null: false
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
   create_table "usage_statistics", force: :cascade do |t|
@@ -323,6 +357,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.bigint "cache_write_tokens", default: 0, null: false
     t.bigint "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
+    t.decimal "cursor_token_fee_cents", precision: 12, scale: 6, default: "0.0"
     t.integer "events_count", default: 0, null: false
     t.jsonb "events_data", default: []
     t.bigint "input_tokens", default: 0, null: false
@@ -375,10 +410,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
   add_foreign_key "asset_versions", "assets"
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
   add_foreign_key "assets", "users", column: "created_by_id"
+  add_foreign_key "integrations", "companies"
+  add_foreign_key "integrations", "users", column: "connected_by_id"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "repositories", "integrations"
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"

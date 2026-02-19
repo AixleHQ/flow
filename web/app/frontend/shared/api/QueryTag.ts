@@ -14,4 +14,6 @@ export enum QueryTag {
   McpServers = 'McpServers',
   Skills = 'Skills',
   Assets = 'Assets',
+  Integrations = 'Integrations',
+  Repositories = 'Repositories',
 }

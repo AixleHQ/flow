@@ -9,3 +9,9 @@ workflows:
       - name: cleanup_container_activity
         task_queue: palad_ruby
 
+  - name: stale_session_cleanup_workflow
+    owner: palad_ruby
+    activities:
+      - name: cleanup_stale_sessions_activity
+        task_queue: palad_ruby
+

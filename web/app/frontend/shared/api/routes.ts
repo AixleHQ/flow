@@ -477,6 +477,56 @@ export function letterOpenerWebPath(options?: object): string {
   return "/" + "letter_opener" + $buildOptions(options, []);
 }
 
+/** /api/v1/company/repositories(.:format) */
+export function apiV1CompanyRepositoriesPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/repositories/:id(.:format) */
+export function apiV1CompanyRepositoryPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/company/repositories/available(.:format) */
+export function availableApiV1CompanyRepositoriesPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + "/" + "available" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/repositories/branches(.:format) */
+export function branchesApiV1CompanyRepositoriesPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + "/" + "branches" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/projects/:project_id/repositories(.:format) */
+export function apiV1CompanyProjectRepositoriesPath(projectId: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "repositories" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/repositories/available(.:format) */
+export function availableApiV1CompanyProjectRepositoriesPath(projectId: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "repositories" + "/" + "available" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/repositories/branches(.:format) */
+export function branchesApiV1CompanyProjectRepositoriesPath(projectId: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "repositories" + "/" + "branches" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/repositories/:id(.:format) */
+export function apiV1CompanyProjectRepositoryPath(projectId: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + projectId + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/company/integrations(.:format) */
+export function apiV1CompanyIntegrationsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/integrations/:id(.:format) */
+export function apiV1CompanyIntegrationPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /letter_opener/ */
 export function letterOpenerWebLettersPath(options?: object): string {
   return "/" + "letter_opener" + "/" + $buildOptions(options, []);

@@ -19,6 +19,7 @@ export interface ISessionConfig {
   toolIds?: number[];
   skillIds?: number[];
   mcpServerIds?: number[];
+  repositoryIds?: number[];
   mode?: SessionMode;
   initialPrompt?: string;
 }

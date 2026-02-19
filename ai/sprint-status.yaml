@@ -199,9 +199,17 @@ development_status:
   # PHASE 7: EXTERNAL INTEGRATIONS
   # ============================================
 
-  epic-14: backlog  # External Integrations (Phase 7)
-  14-1-configure-github-repositories: backlog
-  14-2-load-code-context-from-github: backlog
-  14-3-create-pr-in-github: backlog
-  14-4-export-tasks-to-linear: backlog
+  epic-14: in-progress  # External Integrations (Phase 7)
+
+  # --- GitHub Integration ---
+  14-1-integration-model-github-app-credentials: done  # Integration model (encrypted credentials), GitHub App connection test, API + UI
+  14-2-repository-model-crud: done  # Repository model (polymorphic scope), list available repos from GitHub API, CRUD + UI
+  14-3-repository-clone-at-session-injection: done  # Shallow clone repos into container at session start, context file section
+  14-4-create-pr-from-session: backlog  # Internal Tool: create branch + PR via GitHub API, PR links in session UI
+
+  # --- Linear Integration ---
+  14-5-linear-oauth-integration: backlog  # Linear OAuth flow, Integration model reuse, connection test
+  14-6-linear-tasks-read: backlog  # Internal Tool: list issues, get workspace info (teams/states/labels), Redis cache
+  14-7-linear-task-actions: backlog  # Internal Tools: create issue, update issue (move states), cache invalidation
+
   epic-14-retrospective: optional

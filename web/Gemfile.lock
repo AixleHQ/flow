@@ -769,6 +769,7 @@ DEPENDENCIES
   haml-rails
   hashie
   image_processing (~> 1.14)
+  jwt
   kramdown
   kramdown-parser-gfm
   kubeclient (~> 4.13)

@@ -168,7 +168,8 @@ module ContainerStrategies
       end
 
       context[:result] ||= {}
-      context[:result][:output_files] = output_files
+      context[:result][:output_files_count] = output_files.size
+      context[:result][:output_files_paths] = output_files.keys
       Rails.logger.info("[ToolExecution] Collected #{output_files.size} output files")
     end
 

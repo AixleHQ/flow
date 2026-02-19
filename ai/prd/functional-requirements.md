@@ -100,8 +100,17 @@
 
 ## Integrations
 
-- **FR66:** System can export tasks to Linear from workflow output
-- **FR67:** System can load code context from GitHub repository
-- **FR68:** System can create PR in GitHub from session output
+### GitHub
+
+- **FR66:** Admin can connect GitHub App to company (app_id, private_key, installation_id) with encrypted credential storage and connection test
+- **FR67:** User can add GitHub repositories to company or project scope with repo picker from GitHub API
+- **FR68:** System shallow-clones selected repositories into agent session container at startup (always fresh, --depth=1)
+- **FR69:** Agent can create Pull Request in GitHub from session changes (branch, commit, PR via API)
+
+### Linear
+
+- **FR70:** Admin can connect Linear workspace to company via OAuth flow
+- **FR71:** Agent can read Linear issues (list, filter by team/state/assignee) via internal tool
+- **FR72:** Agent can create and update Linear issues (create, move state, assign) via internal tool
 
 ---
