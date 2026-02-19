@@ -120,12 +120,6 @@ module ContainerStrategies
         end
       end
 
-      context[:result] ||= {}
-      context[:result][:artifacts] = artifacts
-      context[:result][:artifacts_count] = artifacts.size
-
-      Rails.logger.info("[AgentSession] Collected #{artifacts.size} artifacts")
-
       # 3. Collect and verify usage statistics (if adapter supports it)
       if agent_service.adapter.respond_to?(:collect_usage)
         begin
@@ -138,6 +132,15 @@ module ContainerStrategies
           Rails.logger.error("[AgentSession] Failed to collect usage: #{e.message}")
         end
       end
+
+      # 4. Persist artifacts to session metadata (not Temporal payload)
+      persist_artifacts_to_session(artifacts)
+
+      context[:result] ||= {}
+      context[:result][:artifacts_count] = artifacts.size
+      context[:result][:artifacts_paths] = artifacts.keys
+
+      Rails.logger.info("[AgentSession] Collected #{artifacts.size} artifacts")
     end
 
     protected
@@ -158,6 +161,19 @@ module ContainerStrategies
     end
 
     private
+
+    def persist_artifacts_to_session(artifacts)
+      return if artifacts.empty?
+
+      session = TerminalSession.find_by(id: input[:session_id])
+      return unless session
+
+      meta = session.metadata || {}
+      meta["artifacts"] = artifacts.transform_values { |v| v.to_s.truncate(500_000) }
+      session.update_column(:metadata, meta)
+    rescue StandardError => e
+      Rails.logger.error("[AgentSession] Failed to persist artifacts: #{e.message}")
+    end
 
     # List files in container matching pattern
     #

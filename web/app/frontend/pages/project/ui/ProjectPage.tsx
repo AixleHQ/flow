@@ -1,4 +1,4 @@
-import { Box, Breadcrumbs, Button, Chip, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Breadcrumbs, Button, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
@@ -8,8 +8,8 @@ import { AgentsPanel } from 'features/agents-management';
 import { AssetsPanel } from 'features/assets-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
-import { RunWorkflowModal } from 'features/run-workflow';
 import { RepositoriesPanel } from 'features/repositories-management/ui/RepositoriesPanel';
+import { RunWorkflowModal } from 'features/run-workflow';
 import { SkillsPanel } from 'features/skills-management';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
@@ -419,31 +419,13 @@ const ProjectPage = () => {
       <Box sx={styles.tabsContainer}>
         <Tabs value={activeTab} onChange={handleTabChange} sx={styles.tabs}>
           <Tab value="overview" label="Overview" sx={styles.tab} />
-          <Tab
-            value="workflows"
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                Workflows
-                <Chip label={workflows.length} size="small" />
-              </Box>
-            }
-            sx={styles.tab}
-          />
+          <Tab value="workflows" label="Workflows" sx={styles.tab} />
           <Tab
             value="assets"
             label={<Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>Assets</Box>}
             sx={styles.tab}
           />
-          <Tab
-            value="tasks"
-            label={
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                Tasks
-                <Chip label={tasks.length} size="small" />
-              </Box>
-            }
-            sx={styles.tab}
-          />
+          <Tab value="tasks" label="Tasks" sx={styles.tab} />
           <Tab value="sessions" label="Sessions" sx={styles.tab} />
           <Tab value="members" label="Members" sx={styles.tab} />
           <Tab value="config" label="Secrets & Variables" sx={styles.tab} />

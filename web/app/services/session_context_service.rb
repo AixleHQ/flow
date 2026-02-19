@@ -52,6 +52,9 @@ class SessionContextService
       # Step 6: Assets
       measure_step("assets") { inject_assets(container_id, session) }
 
+      # Step 7: Repositories (shallow clone from GitHub)
+      measure_step("repositories") { inject_repositories(container_id, session) }
+
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
     end
 
@@ -263,7 +266,11 @@ class SessionContextService
         sections << skills_section if skills_section.present?
       end
 
-      # Section 6: General instructions
+      # Section 6: Repositories
+      repos_section = build_repositories_section(session)
+      sections << repos_section if repos_section.present?
+
+      # Section 7: General instructions
       sections << build_general_instructions(session)
 
       # Section 7: Workflow instructions (placeholder for future use)
@@ -453,11 +460,93 @@ class SessionContextService
 
         folder = asset.folder.present? ? "#{asset.folder}/" : ""
         target_path = "/workspace/assets/#{folder}#{asset.name}"
+        url = container_accessible_url(version.file.url)
 
-        content = version.file.open { |io| io.read }
-        write_file(container_id, target_path, content, uid)
-        Rails.logger.info("[SessionContext] Injected asset: #{target_path} (#{content.bytesize} bytes)")
+        download_file_to_container(container_id, url, target_path, uid)
       end
+    end
+
+    # == Repository Injection ==
+
+    def inject_repositories(container_id, session)
+      ids = session.repository_ids
+      return if ids.blank?
+
+      repos = Repository.where(id: ids).includes(:integration).to_a
+      return if repos.empty?
+
+      adapter = adapter_for(session)
+      uid = adapter.tmpfs_uid
+
+      repos.group_by(&:integration_id).each do |_integration_id, group_repos|
+        integration = group_repos.first.integration
+        unless integration&.active?
+          group_repos.each { |r| record_failed_repo(session, r, "Integration not active") }
+          next
+        end
+
+        begin
+          token = Github::TokenService.new(integration).generate_installation_token
+        rescue => e
+          Rails.logger.error("[SessionContext] Failed to generate token for integration #{integration.id}: #{e.message}")
+          group_repos.each { |r| record_failed_repo(session, r, "Token generation failed: #{e.message}") }
+          next
+        end
+
+        group_repos.each { |repo| clone_repository(container_id, repo, token, uid, session) }
+      end
+    end
+
+    def clone_repository(container_id, repo, token, uid, session)
+      clone_url = "https://x-access-token:#{token}@github.com/#{repo.full_name}.git"
+      target_path = "/workspace/repo/#{repo.repo_name}"
+      branch = Shellwords.escape(repo.source_branch)
+
+      cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path}" ]
+      result = runtime.exec(container_id, cmd)
+      exit_code = result[2]
+
+      if exit_code.to_i.zero?
+        repo.update_column(:last_fetched_at, Time.current)
+        Rails.logger.info("[SessionContext] Cloned repository: #{repo.full_name} → #{target_path}")
+      else
+        stderr = Array(result[1]).join
+        raise "git clone exited with #{exit_code}: #{stderr}"
+      end
+    rescue => e
+      Rails.logger.error("[SessionContext] Failed to clone #{repo.full_name}: #{e.message}")
+      record_failed_repo(session, repo, e.message)
+    end
+
+    def record_failed_repo(session, repo, error)
+      meta = session.metadata || {}
+      meta["failed_repos"] ||= []
+      meta["failed_repos"] << { "id" => repo.id, "full_name" => repo.full_name, "error" => error.to_s.truncate(500) }
+      session.update_column(:metadata, meta)
+    end
+
+    def build_repositories_section(session)
+      ids = session.repository_ids
+      return nil if ids.blank?
+
+      repos = Repository.where(id: ids).to_a
+      return nil if repos.empty?
+
+      failed = (session.metadata || {}).fetch("failed_repos", []).map { |f| f["id"] }
+      cloned = repos.reject { |r| failed.include?(r.id) }
+      return nil if cloned.empty?
+
+      lines = [ "## Available Repositories" ]
+      lines << ""
+      lines << "The following code repositories have been cloned into this session:"
+      lines << ""
+      lines << "| Repository | Path | Branch | Purpose |"
+      lines << "|---|---|---|---|"
+      cloned.each do |repo|
+        purpose = repo.purpose.presence || "—"
+        lines << "| #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{purpose} |"
+      end
+      lines.join("\n")
     end
 
     # == Container File Operations ==
@@ -472,6 +561,35 @@ class SessionContextService
       safe_path = Shellwords.escape(path.to_s)
       cmd = [ "sh", "-c", "chown #{owner}:#{owner} #{safe_path}" ]
       runtime.exec(container_id, cmd)
+    end
+
+    def download_file_to_container(container_id, url, target_path, uid)
+      safe_dir = Shellwords.escape(File.dirname(target_path))
+      safe_path = Shellwords.escape(target_path)
+      safe_url = Shellwords.escape(url)
+
+      cmd = [ "sh", "-c", "mkdir -p #{safe_dir} && curl -fsSL -o #{safe_path} #{safe_url} && chown #{uid}:#{uid} #{safe_path}" ]
+      result = runtime.exec(container_id, cmd)
+      exit_code = result[2]
+
+      if exit_code.to_i.zero?
+        Rails.logger.info("[SessionContext] Downloaded asset: #{target_path}")
+      else
+        stderr = Array(result[1]).join
+        Rails.logger.error("[SessionContext] Failed to download asset to #{target_path}: exit=#{exit_code} #{stderr}")
+      end
+    end
+
+    def container_accessible_url(url)
+      host = Settings.container_asset_host
+      return url if host.blank?
+
+      override = URI.parse(host.start_with?("http") ? host : "http://#{host}")
+      uri = URI.parse(url)
+      uri.scheme = override.scheme
+      uri.host = override.host
+      uri.port = override.port
+      uri.to_s
     end
 
     def read_file(container_id, path)

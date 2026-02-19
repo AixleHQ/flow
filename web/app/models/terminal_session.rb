@@ -48,7 +48,7 @@ class TerminalSession < ApplicationRecord
 
   # == session_config accessors ==
 
-  ALLOWED_SESSION_CONFIG_KEYS = %w[config_files env_vars mcp_server_ids tool_ids agent_id skill_ids asset_ids mode initial_prompt].freeze
+  ALLOWED_SESSION_CONFIG_KEYS = %w[config_files env_vars mcp_server_ids tool_ids agent_id skill_ids asset_ids repository_ids mode initial_prompt].freeze
 
   def config_files
     session_config["config_files"] || {}
@@ -72,6 +72,10 @@ class TerminalSession < ApplicationRecord
 
   def asset_ids
     session_config["asset_ids"] || []
+  end
+
+  def repository_ids
+    session_config["repository_ids"] || []
   end
 
   def configured_agent_id

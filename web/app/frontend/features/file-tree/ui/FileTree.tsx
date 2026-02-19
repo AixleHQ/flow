@@ -73,13 +73,15 @@ interface ITreeNode {
   };
 }
 
-// Collect all directory IDs for auto-expand
+const SKIP_AUTO_EXPAND = new Set(['repo']);
+
+// Collect directory IDs for auto-expand, skipping heavy subtrees (e.g. cloned repos)
 const collectDirectoryIds = (nodes: IWatcherTreeNode[]): string[] => {
   const ids: string[] = [];
   for (const node of nodes) {
     if (node.type === 'directory') {
       ids.push(node.path || node.name);
-      if (node.children) {
+      if (node.children && !SKIP_AUTO_EXPAND.has(node.name)) {
         ids.push(...collectDirectoryIds(node.children));
       }
     }

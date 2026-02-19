@@ -1103,6 +1103,196 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal [], Agents::BaseAdapter.default_config_paths
   end
 
+  # ====================================================================
+  # Story 14.3: inject_repositories
+  # ====================================================================
+
+  test "inject_repositories clones repos via runtime.exec with correct command" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo = create(:repository, full_name: "acme/my-app", source_branch: "main",
+                  integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    token_service_mock = mock("token_service")
+    token_service_mock.expects(:generate_installation_token).returns("ghs_test_token")
+    Github::TokenService.expects(:new).with(integration).returns(token_service_mock)
+
+    runtime_mock.expects(:exec).with do |ctr, cmd|
+      ctr == "ctr1" &&
+        cmd[0] == "sh" && cmd[1] == "-c" &&
+        cmd[2].include?("git clone --depth=1 --branch=main") &&
+        cmd[2].include?("x-access-token:ghs_test_token@github.com/acme/my-app.git") &&
+        cmd[2].include?("/workspace/repo/my-app") &&
+        cmd[2].include?("chown -R 1001:1001 /workspace/repo/my-app")
+    end.returns([ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    repo.reload
+    assert_not_nil repo.last_fetched_at
+  end
+
+  test "inject_repositories reuses token for repos from same integration" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo1 = create(:repository, full_name: "acme/app", source_branch: "main",
+                   integration: integration, scope: @company)
+    repo2 = create(:repository, full_name: "acme/infra", source_branch: "develop",
+                   integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo1.id, repo2.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    token_service_mock = mock("token_service")
+    token_service_mock.expects(:generate_installation_token).once.returns("ghs_shared")
+    Github::TokenService.expects(:new).once.returns(token_service_mock)
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("acme/app.git")
+    end.returns([ [], [], 0 ])
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("acme/infra.git")
+    end.returns([ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+  end
+
+  test "inject_repositories handles clone failure gracefully" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
+                     integration: integration, scope: @company)
+    repo_fail = create(:repository, full_name: "acme/bad", source_branch: "main",
+                       integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo_fail.id, repo_ok.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+
+    token_service_mock = mock("token_service")
+    token_service_mock.expects(:generate_installation_token).returns("ghs_token")
+    Github::TokenService.expects(:new).returns(token_service_mock)
+
+    Rails.logger.expects(:error).at_least_once
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("acme/bad.git")
+    end.returns([ [], [ "fatal: repo not found" ], 128 ])
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("acme/good.git")
+    end.returns([ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    session.reload
+    failed = session.metadata["failed_repos"]
+    assert_equal 1, failed.size
+    assert_equal repo_fail.id, failed.first["id"]
+    assert_equal "acme/bad", failed.first["full_name"]
+
+    repo_ok.reload
+    assert_not_nil repo_ok.last_fetched_at
+  end
+
+  test "inject_repositories skips inactive integration" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :inactive)
+    repo = create(:repository, full_name: "acme/repo", source_branch: "main",
+                  integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo.id ] })
+
+    runtime_mock = mock("runtime")
+    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    runtime_mock.expects(:exec).never
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    session.reload
+    assert_equal 1, session.metadata["failed_repos"].size
+  end
+
+  test "inject_repositories skips when repository_ids is empty" do
+    session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
+
+    result = SessionContextService.send(:inject_repositories, "ctr1", session)
+    assert_nil result
+  end
+
+  # ====================================================================
+  # Story 14.3: build_repositories_section
+  # ====================================================================
+
+  test "build_repositories_section returns markdown table with cloned repos" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo = create(:repository, full_name: "acme/my-app", source_branch: "main",
+                  purpose: "Our main Rails application",
+                  integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo.id ] })
+
+    result = SessionContextService.send(:build_repositories_section, session)
+
+    assert_includes result, "## Available Repositories"
+    assert_includes result, "| acme/my-app | /workspace/repo/my-app | main | Our main Rails application |"
+  end
+
+  test "build_repositories_section excludes failed repos" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
+                     integration: integration, scope: @company)
+    repo_fail = create(:repository, full_name: "acme/bad", source_branch: "main",
+                       integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo_ok.id, repo_fail.id ] },
+                     metadata: { "failed_repos" => [ { "id" => repo_fail.id, "full_name" => "acme/bad" } ] })
+
+    result = SessionContextService.send(:build_repositories_section, session)
+
+    assert_includes result, "acme/good"
+    assert_not_includes result, "acme/bad"
+  end
+
+  test "build_repositories_section returns nil when no repos" do
+    session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
+
+    result = SessionContextService.send(:build_repositories_section, session)
+    assert_nil result
+  end
+
+  test "build_repositories_section uses dash for missing purpose" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo = create(:repository, full_name: "acme/no-purpose", source_branch: "develop",
+                  purpose: nil, integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ repo.id ] })
+
+    result = SessionContextService.send(:build_repositories_section, session)
+
+    assert_includes result, "| acme/no-purpose | /workspace/repo/no-purpose | develop | — |"
+  end
+
+  # ====================================================================
+  # Story 14.3: TerminalSession#repository_ids accessor
+  # ====================================================================
+
+  test "terminal_session repository_ids returns configured ids" do
+    session = create(:terminal_session, user: @user, agent_type: "claude_code",
+                     session_config: { "repository_ids" => [ 1, 2, 3 ] })
+    assert_equal [ 1, 2, 3 ], session.repository_ids
+  end
+
+  test "terminal_session repository_ids returns empty array when not configured" do
+    session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
+    assert_equal [], session.repository_ids
+  end
+
   private
 
   # Build a tar stream containing a single file (mirrors ContainerRuntime.copy_from output)
