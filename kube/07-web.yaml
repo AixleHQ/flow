@@ -44,3 +44,54 @@ spec:
     - name: http
       port: 4000
       targetPort: 4000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp
+  namespace: palad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp
+  template:
+    metadata:
+      labels:
+        app: mcp
+    spec:
+      serviceAccountName: palad-runtime
+      containers:
+        - name: mcp
+          image: web
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: palad-app-config
+          env:
+            - name: MCP_PORT
+              value: "4002"
+          ports:
+            - containerPort: 4002
+          command: ["bundle", "exec", "puma", "-C", "config/puma_mcp.rb"]
+          volumeMounts:
+            - name: workflows
+              mountPath: /app/app/temporal/workflows.yml
+              subPath: workflows.yml
+      volumes:
+        - name: workflows
+          configMap:
+            name: palad-workflows
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp
+  namespace: palad
+spec:
+  selector:
+    app: mcp
+  ports:
+    - name: http
+      port: 4002
+      targetPort: 4002

@@ -28,3 +28,5 @@ data:
   TRAEFIK_CORS_ORIGINS: https://k8s.orb.local
   CONTAINER_RUNTIME: k8s
   K8S_IMAGE_PULL_POLICY: IfNotPresent
+  MCP_SERVER_URL: http://mcp:4002/action_mcp
+  MCP_PORT: "4002"
