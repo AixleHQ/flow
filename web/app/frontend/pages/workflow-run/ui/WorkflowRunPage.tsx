@@ -335,99 +335,9 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-// Mock data
-const mockWorkflowRun: IWorkflowRunDetail = {
-  id: '1',
-  workflowId: '2',
-  workflowName: 'Design UX',
-  projectId: '1',
-  projectName: 'Palad Platform',
-  status: 'running',
-  startedAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-  userId: '1',
-  userName: 'Artem',
-  totalCost: 3.45,
-  steps: [
-    {
-      id: '1',
-      name: 'Initialize Project',
-      status: 'completed',
-      agent: 'Claude Code',
-      duration: '2m 15s',
-      cost: 0.12,
-      artifacts: [{ id: '1', name: 'project-config.json', type: 'json' }],
-    },
-    {
-      id: '2',
-      name: 'Analyze Requirements',
-      status: 'completed',
-      agent: 'Claude Code',
-      duration: '5m 30s',
-      cost: 0.45,
-      artifacts: [
-        { id: '2', name: 'requirements.md', type: 'markdown' },
-        { id: '3', name: 'user-stories.md', type: 'markdown' },
-      ],
-    },
-    {
-      id: '3',
-      name: 'Create UX Specification',
-      status: 'completed',
-      agent: 'Claude Code',
-      duration: '12m 45s',
-      cost: 1.23,
-      artifacts: [{ id: '4', name: 'ux-design-specification.md', type: 'markdown' }],
-    },
-    {
-      id: '4',
-      name: 'Generate Mockups',
-      status: 'running',
-      agent: 'Claude Code',
-      user: 'Artem',
-      cost: 0.89,
-    },
-    {
-      id: '5',
-      name: 'Review & Iterate',
-      status: 'pending',
-    },
-    {
-      id: '6',
-      name: 'Implement Components',
-      status: 'pending',
-    },
-    {
-      id: '7',
-      name: 'Write Unit Tests',
-      status: 'pending',
-    },
-    {
-      id: '8',
-      name: 'Integration Testing',
-      status: 'pending',
-    },
-    {
-      id: '9',
-      name: 'Code Review',
-      status: 'pending',
-    },
-    {
-      id: '10',
-      name: 'Documentation',
-      status: 'pending',
-    },
-    {
-      id: '11',
-      name: 'Deploy to Staging',
-      status: 'pending',
-    },
-    {
-      id: '12',
-      name: 'Finalize & Release',
-      status: 'pending',
-    },
-  ],
-};
+function useWorkflowRun(): IWorkflowRunDetail | null {
+  return null; // TODO: fetch from API using useParams projectId, runId
+}
 
 const WorkflowRunPage = () => {
   const navigate = useNavigate();
@@ -436,13 +346,8 @@ const WorkflowRunPage = () => {
   const [activeStepId, setActiveStepId] = useState<string | null>(null);
   const [showExplorer, setShowExplorer] = useState(true);
 
-  // In real app, fetch from API
-  const workflowRun = mockWorkflowRun;
-
-  const currentStep = workflowRun.steps.find((s) => s.status === 'running');
-  const selectedStep = activeStepId ? workflowRun.steps.find((s) => s.id === activeStepId) : currentStep;
-  const sessionStatus =
-    workflowRun.status === 'running' ? 'running' : workflowRun.status === 'completed' ? 'completed' : 'error';
+  // TODO: fetch from API using useParams runId, projectId
+  const workflowRun = useWorkflowRun();
 
   const formatDuration = (startedAt: string, completedAt?: string): string => {
     const start = new Date(startedAt);
@@ -501,6 +406,21 @@ const WorkflowRunPage = () => {
       </Box>
     );
   }
+
+  if (!workflowRun) {
+    return (
+      <Box sx={styles.root}>
+        <Box sx={styles.loading}>
+          <Typography sx={{ color: 'text.secondary' }}>Workflow run not found</Typography>
+        </Box>
+      </Box>
+    );
+  }
+
+  const currentStep = workflowRun.steps.find((s) => s.status === 'running');
+  const selectedStep = activeStepId ? workflowRun.steps.find((s) => s.id === activeStepId) : currentStep;
+  const sessionStatus =
+    workflowRun.status === 'running' ? 'running' : workflowRun.status === 'completed' ? 'completed' : 'error';
 
   return (
     <Box sx={styles.root}>
@@ -634,8 +554,8 @@ const WorkflowRunPage = () => {
               </Box>
             </Box>
 
-            {/* File Viewer (Right) - only shown when artifact selected */}
-            {selectedStep?.artifacts?.[0] && (
+            {/* File Viewer (Right) - only shown when asset selected */}
+            {selectedStep?.assets?.[0] && (
               <>
                 {/* Resizer */}
                 <Box sx={styles.resizer} />
@@ -643,20 +563,20 @@ const WorkflowRunPage = () => {
                 <Box sx={styles.fileViewerPanel}>
                   <Box sx={styles.panelHeader}>
                     <Box sx={styles.panelTitle}>
-                      <span style={{ fontSize: '14px' }}>{getFileIcon(selectedStep.artifacts[0].type)}</span>
+                      <span style={{ fontSize: '14px' }}>{getFileIcon(selectedStep.assets[0].type)}</span>
                       <Typography component="span" sx={styles.panelFileName}>
-                        {selectedStep.artifacts[0].name}
+                        {selectedStep.assets[0].name}
                       </Typography>
                     </Box>
-                    {selectedStep.artifacts.length > 1 && (
+                    {selectedStep.assets.length > 1 && (
                       <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>
-                        +{selectedStep.artifacts.length - 1} more
+                        +{selectedStep.assets.length - 1} more
                       </Typography>
                     )}
                   </Box>
                   <Box sx={styles.panelContent}>
                     <Box sx={styles.placeholder}>
-                      <Typography sx={styles.placeholderText}>Preview: {selectedStep.artifacts[0].name}</Typography>
+                      <Typography sx={styles.placeholderText}>Preview: {selectedStep.assets[0].name}</Typography>
                       <Typography sx={styles.placeholderSubtext}>File content would render here</Typography>
                     </Box>
                   </Box>

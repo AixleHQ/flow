@@ -1,58 +1,54 @@
-import { Box, Typography } from '@mui/material';
-import { useParams } from '@tanstack/react-router';
-import { useCallback, useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import { Box, Button, Typography } from '@mui/material';
+import { useNavigate } from '@tanstack/react-router';
 
 import { Routes } from 'shared/routes';
-import { SessionLaunchWidget } from 'widgets/session-launch';
+import { SessionHistoryWidget } from 'widgets/session-history';
 
 const CompanySessionsPage = () => {
-  const params = useParams({ strict: false });
-  const sessionId = (params as { sessionId?: string }).sessionId;
-  const initialSessionId = sessionId ? Number(sessionId) : undefined;
+  const navigate = useNavigate();
 
-  // Track active session locally (replaceState doesn't update useParams)
-  const [hasActiveSession, setHasActiveSession] = useState(!!initialSessionId);
-
-  // Use replaceState to update URL without triggering route remount
-  const handleSessionChange = useCallback((newSessionId: number | null) => {
-    setHasActiveSession(!!newSessionId);
-    const newUrl = newSessionId
-      ? Routes.frontend.companySessionPath(String(newSessionId))
-      : Routes.frontend.companySessionsPath;
-    window.history.replaceState(null, '', newUrl);
-  }, []);
+  const handleSessionSelect = (id: number) => {
+    navigate({ to: Routes.frontend.companySessionPath(String(id)) as string });
+  };
 
   return (
     <Box
       sx={{
         backgroundColor: 'background.default',
+        minHeight: 'calc(100vh - 64px)',
         display: 'flex',
         flexDirection: 'column',
-        ...(hasActiveSession
-          ? { height: 'calc(100vh - 64px)', overflow: 'hidden' }
-          : { minHeight: 'calc(100vh - 64px)' }),
       }}
     >
-      {!hasActiveSession && (
-        <Box
-          sx={{
-            padding: '24px 32px',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-            backgroundColor: 'background.paper',
-          }}
-        >
+      <Box
+        sx={{
+          padding: '24px 32px',
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          backgroundColor: 'background.paper',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Box>
           <Typography sx={{ fontSize: '28px', fontWeight: 600, color: 'text.primary' }}>Sessions</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Launch a standalone agent session with company-level resources
+            Agent session history across the company
           </Typography>
         </Box>
-      )}
-      <Box sx={{ flex: 1, overflow: 'hidden' }}>
-        <SessionLaunchWidget
-          initialSessionId={initialSessionId}
-          onSessionChange={handleSessionChange}
-        />
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => navigate({ to: Routes.frontend.companySessionNewPath as string })}
+        >
+          New Session
+        </Button>
+      </Box>
+
+      <Box sx={{ px: 4, py: 2, flex: 1 }}>
+        <SessionHistoryWidget onSessionSelect={handleSessionSelect} />
       </Box>
     </Box>
   );

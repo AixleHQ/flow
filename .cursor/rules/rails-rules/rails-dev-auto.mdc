@@ -44,3 +44,9 @@ alwaysApply: false
 - Protect against common web vulnerabilities (XSS, CSRF, SQL injection)
 - Implement proper error logging with user-friendly messages
 
+
+## Database Migrations
+
+- NEVER modify existing migration files that have already been run
+- Always create a new migration to change columns, rename fields, or alter tables
+- Existing migrations are immutable historical records of the database schema evolution

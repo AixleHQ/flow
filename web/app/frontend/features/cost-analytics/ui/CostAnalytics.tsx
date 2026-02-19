@@ -149,8 +149,7 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-// Mock data generators
-const generateMockData = (period: string): ICostDataPoint[] => {
+const generateSampleData = (period: string): ICostDataPoint[] => {
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
   const data: ICostDataPoint[] = [];
   const baseDate = new Date();
@@ -169,16 +168,15 @@ const generateMockData = (period: string): ICostDataPoint[] => {
   return data;
 };
 
-const mockBreakdown: ICostBreakdown[] = [
+const SAMPLE_BREAKDOWN: ICostBreakdown[] = [
   { category: 'Claude API', cost: 847.3, percentage: 68 },
   { category: 'OpenAI API', cost: 312.2, percentage: 25 },
   { category: 'Storage (S3)', cost: 88.0, percentage: 7 },
 ];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CostAnalytics = ({ period: initialPeriod = '30d', projectId: _projectId }: CostAnalyticsProps) => {
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>(initialPeriod);
-  const data = generateMockData(period);
+  const data = generateSampleData(period);
 
   const totalCost = data.reduce((sum, d) => sum + d.cost, 0);
   const totalTokens = data.reduce((sum, d) => sum + d.tokens, 0);
@@ -247,7 +245,7 @@ const CostAnalytics = ({ period: initialPeriod = '30d', projectId: _projectId }:
       {/* Cost Breakdown */}
       <Card sx={styles.breakdownCard}>
         <Typography sx={styles.breakdownTitle}>Cost Breakdown</Typography>
-        {mockBreakdown.map((item) => (
+        {SAMPLE_BREAKDOWN.map((item) => (
           <Box key={item.category} sx={styles.breakdownItem}>
             <Box sx={{ flex: 1 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -274,7 +272,7 @@ const CostAnalytics = ({ period: initialPeriod = '30d', projectId: _projectId }:
         >
           <Typography sx={{ ...styles.breakdownCategory, fontWeight: 600 }}>Total</Typography>
           <Typography sx={{ ...styles.breakdownCost, fontWeight: 600 }}>
-            ${mockBreakdown.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}
+            ${SAMPLE_BREAKDOWN.reduce((sum, item) => sum + item.cost, 0).toFixed(2)}
           </Typography>
         </Box>
       </Card>

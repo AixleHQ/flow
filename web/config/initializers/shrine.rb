@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "shrine"
+require "content_disposition"
 require "image_processing/vips"
 
 def dev_setup

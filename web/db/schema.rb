@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -124,6 +124,40 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
     t.index ["scope_type", "scope_id"], name: "index_agents_on_scope_type_and_scope_id"
   end
 
+  create_table "asset_versions", force: :cascade do |t|
+    t.bigint "asset_id", null: false
+    t.string "content_type"
+    t.datetime "created_at", null: false
+    t.text "file_data"
+    t.bigint "file_size"
+    t.string "source", default: "upload", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "uploaded_by_id", null: false
+    t.integer "version", default: 1, null: false
+    t.index ["asset_id", "version"], name: "index_asset_versions_on_asset_id_and_version", unique: true
+    t.index ["asset_id"], name: "index_asset_versions_on_asset_id"
+  end
+
+  create_table "assets", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.datetime "deleted_at"
+    t.string "folder"
+    t.string "name", null: false
+    t.boolean "public", default: false
+    t.string "public_token"
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.bigint "step_run_id"
+    t.string "tags", default: [], array: true
+    t.datetime "updated_at", null: false
+    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true
+    t.index ["created_by_id"], name: "index_assets_on_created_by_id"
+    t.index ["deleted_at"], name: "index_assets_on_deleted_at"
+    t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
+    t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
+  end
+
   create_table "companies", force: :cascade do |t|
     t.boolean "auto_accept_users", default: false, null: false
     t.datetime "created_at", null: false
@@ -221,13 +255,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
+    t.integer "cache_read_tokens", default: 0, null: false
+    t.integer "cache_write_tokens", default: 0, null: false
     t.datetime "collected_at"
     t.string "container_id"
+    t.integer "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
     t.text "error_message"
     t.datetime "finished_at"
+    t.integer "input_tokens", default: 0, null: false
     t.string "mcp_key"
     t.jsonb "metadata", default: {}
+    t.string "models", default: [], null: false, array: true
+    t.integer "output_tokens", default: 0, null: false
     t.bigint "project_id"
     t.string "route_token"
     t.jsonb "session_config", default: {}, null: false
@@ -236,6 +276,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
     t.string "state", null: false
     t.string "temporal_run_id"
     t.string "temporal_workflow_id"
+    t.integer "total_tokens", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
@@ -275,13 +316,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
     t.datetime "updated_at", null: false
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
   create_table "usage_statistics", force: :cascade do |t|
+    t.bigint "cache_read_tokens", default: 0, null: false
+    t.bigint "cache_write_tokens", default: 0, null: false
     t.bigint "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
+    t.decimal "cursor_token_fee_cents", precision: 12, scale: 6, default: "0.0"
+    t.integer "events_count", default: 0, null: false
+    t.jsonb "events_data", default: []
+    t.bigint "input_tokens", default: 0, null: false
+    t.string "models", default: [], null: false, array: true
+    t.bigint "output_tokens", default: 0, null: false
+    t.string "source", default: "unknown", null: false
     t.bigint "terminal_session_id", null: false
     t.bigint "tokens", default: 0, null: false
+    t.decimal "total_cents_precise", precision: 12, scale: 6, default: "0.0"
     t.datetime "updated_at", null: false
     t.index ["terminal_session_id"], name: "index_usage_statistics_on_terminal_session_id", unique: true
   end
@@ -322,6 +374,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_13_120000) do
   add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
   add_foreign_key "action_mcp_session_tasks", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_tasks_session_id", on_update: :cascade, on_delete: :cascade
   add_foreign_key "agent_credentials", "users"
+  add_foreign_key "asset_versions", "assets"
+  add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
+  add_foreign_key "assets", "users", column: "created_by_id"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"

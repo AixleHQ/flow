@@ -20,10 +20,16 @@ Rails.application.routes.draw do
 
       resource :sessions, only: %i[create destroy]
       resource :current_user, only: %i[show update], controller: "current_user"
+
+      resources :assets, only: [], controller: "assets" do
+        collection do
+          get :presign
+          post :upload
+        end
+      end
       resources :terminal_sessions, only: %i[index show create update destroy] do
         member do
-          post :finish_auth
-          post :cancel
+          post :finish
         end
       end
 
@@ -39,6 +45,14 @@ Rails.application.routes.draw do
         resources :tools, only: %i[index create update destroy]
         resources :mcp_servers, only: %i[index create update destroy]
         resources :skills, only: %i[index create update destroy]
+        resources :assets, only: %i[index show create update destroy] do
+          member do
+            get :download
+            get :versions
+            post :restore
+          end
+        end
+        resources :terminal_sessions, only: %i[index show]
         resources :projects, only: %i[index show create] do
           scope module: :projects do
             resources :collaborators, only: %i[index create destroy]
@@ -47,6 +61,14 @@ Rails.application.routes.draw do
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
             resources :skills, only: %i[index create update destroy]
+            resources :assets, only: %i[index show create update destroy] do
+              member do
+                get :download
+                get :versions
+                post :restore
+              end
+            end
+            resources :terminal_sessions, only: %i[index show]
           end
         end
       end

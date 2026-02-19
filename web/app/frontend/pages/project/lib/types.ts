@@ -1,7 +1,7 @@
 export type ProjectTab =
   | 'overview'
   | 'workflows'
-  | 'artifacts'
+  | 'assets'
   | 'tasks'
   | 'sessions'
   | 'members'

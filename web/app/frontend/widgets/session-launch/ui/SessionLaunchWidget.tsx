@@ -11,7 +11,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { enqueueSnackbar } from 'notistack';
+import { closeSnackbar, enqueueSnackbar } from 'notistack';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { McpServer } from 'entities/mcp-server';
@@ -20,13 +20,21 @@ import type { AgentType, ITerminalSession, SessionMode } from 'entities/terminal
 import { useGetCurrentUserQuery } from 'entities/user';
 import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
+import type { Asset } from 'features/assets-management';
+import { useGetCompanyAssetsQuery, useGetProjectAssetsQuery } from 'features/assets-management';
 import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
 import { useGetCompanyToolsQuery, useGetProjectToolsQuery } from 'features/tools-management';
-import { useCreateTerminalSessionMutation, useCancelSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
+import { useCreateTerminalSessionMutation, useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
 import { useTerminalSessionChannel } from 'shared/lib';
-import { TerminalSessionWidget } from 'widgets/terminal-session';
+import { Routes } from 'shared/routes';
+
+/** Props passed to the terminal renderer */
+export interface TerminalRenderProps {
+  sessionId: number;
+  session: ITerminalSession | null;
+}
 
 export interface SessionLaunchWidgetProps {
   projectId?: number;
@@ -34,6 +42,8 @@ export interface SessionLaunchWidgetProps {
   initialSessionId?: number;
   /** Called when active session changes — parent can update URL */
   onSessionChange?: (sessionId: number | null) => void;
+  /** Render prop for terminal widget (avoids cross-widget import) */
+  renderTerminal?: (props: TerminalRenderProps) => React.ReactNode;
 }
 
 const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
@@ -47,6 +57,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   projectId,
   initialSessionId,
   onSessionChange,
+  renderTerminal,
 }) => {
   const { data: currentUser } = useGetCurrentUserQuery();
   const configuredAgents = currentUser?.configuredAgents ?? [];
@@ -57,6 +68,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<McpServer[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
 
@@ -91,10 +103,28 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
         setSelectedAgent(updated.agentType);
       }
       if (updated.state === 'stopped' || updated.state === 'collected') {
-        enqueueSnackbar('Session completed', { variant: 'info' });
+        const sessionsPath = projectId
+          ? Routes.frontend.companyProjectTabPath(String(projectId), 'sessions')
+          : Routes.frontend.companySessionsPath;
+
+        enqueueSnackbar('Session completed', {
+          variant: 'info',
+          action: (key) => (
+            <Button
+              size="small"
+              sx={{ color: 'inherit', textTransform: 'none' }}
+              onClick={() => {
+                closeSnackbar(key);
+                window.location.href = sessionsPath;
+              }}
+            >
+              All Sessions
+            </Button>
+          ),
+        });
       }
     },
-    [selectedAgent],
+    [selectedAgent, projectId],
   );
 
   useTerminalSessionChannel({
@@ -119,8 +149,12 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const companyMcp = useGetMcpServersQuery(undefined, { skip: !!projectId });
   const mcpServers: McpServer[] = (projectId ? projectMcp.data : companyMcp.data) ?? [];
 
+  const projectAssets = useGetProjectAssetsQuery(projectId!, { skip: !projectId });
+  const companyAssets = useGetCompanyAssetsQuery(undefined, { skip: !!projectId });
+  const assets: Asset[] = (projectId ? projectAssets.data : companyAssets.data) ?? [];
+
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
-  const [cancelSession] = useCancelSessionMutation();
+  const [finishSession] = useFinishSessionMutation();
   const [isStopping, setIsStopping] = useState(false);
 
   const canSubmit = selectedAgent !== null && (mode === 'interactive' || initialPrompt.trim().length > 0);
@@ -149,6 +183,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       selectedTools.length > 0 ||
       selectedSkills.length > 0 ||
       selectedMcpServers.length > 0 ||
+      selectedAssets.length > 0 ||
       mode === 'non_interactive';
 
     try {
@@ -164,6 +199,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
                   ...(selectedTools.length > 0 ? { toolIds: selectedTools.map((t) => t.id) } : {}),
                   ...(selectedSkills.length > 0 ? { skillIds: selectedSkills.map((s) => s.id) } : {}),
                   ...(selectedMcpServers.length > 0 ? { mcpServerIds: selectedMcpServers.map((m) => m.id) } : {}),
+                  ...(selectedAssets.length > 0 ? { assetIds: selectedAssets.map((a) => a.id) } : {}),
                   mode: mode,
                   ...(mode === 'non_interactive' ? { initialPrompt } : {}),
                 },
@@ -185,14 +221,14 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     }
   };
 
-  const handleStop = async () => {
+  const handleFinish = async () => {
     if (!activeSessionId) return;
     setIsStopping(true);
     try {
-      await cancelSession(activeSessionId).unwrap();
-      enqueueSnackbar('Session stopped', { variant: 'info' });
+      await finishSession({ sessionId: activeSessionId }).unwrap();
+      enqueueSnackbar('Session finishing...', { variant: 'info' });
     } catch {
-      enqueueSnackbar('Failed to stop session', { variant: 'error' });
+      enqueueSnackbar('Failed to finish session', { variant: 'error' });
       setIsStopping(false);
     }
   };
@@ -293,8 +329,8 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {!isTerminal && (
-              <Button size="small" variant="outlined" color="error" onClick={handleStop} disabled={isStopping}>
-                {isStopping ? 'Stopping…' : 'Stop'}
+              <Button size="small" variant="outlined" color="error" onClick={handleFinish} disabled={isStopping}>
+                {isStopping ? 'Finishing…' : 'Finish'}
               </Button>
             )}
             <Button size="small" variant="outlined" onClick={handleNewSession}>
@@ -346,13 +382,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           </Box>
         ) : (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            <TerminalSessionWidget
-              sessionId={activeSessionId}
-              session={activeSession}
-              showFileTree={true}
-              showFileViewer={true}
-              showTerminal={true}
-            />
+            {renderTerminal ? renderTerminal({ sessionId: activeSessionId, session: activeSession }) : null}
           </Box>
         )}
       </Box>
@@ -459,6 +489,28 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
         renderTags={(value, getTagProps) =>
           value.map((option, index) => (
             <Chip {...getTagProps({ index })} key={option.id} label={option.displayName || option.name} size="small" />
+          ))
+        }
+        sx={{ mb: 2 }}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
+      />
+
+      {/* Assets */}
+      <Autocomplete
+        multiple
+        options={assets}
+        getOptionLabel={(option) => (option.folder ? `${option.folder}/${option.name}` : option.name)}
+        value={selectedAssets}
+        onChange={(_, newValue) => setSelectedAssets(newValue)}
+        renderInput={(params) => <TextField {...params} label="Assets (optional)" size="small" />}
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => (
+            <Chip
+              {...getTagProps({ index })}
+              key={option.id}
+              label={option.folder ? `${option.folder}/${option.name}` : option.name}
+              size="small"
+            />
           ))
         }
         sx={{ mb: 3 }}

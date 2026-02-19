@@ -20,7 +20,14 @@ const AgentsPage = lazyRouteComponent(() => import('../pages/agents'));
 const ToolsPage = lazyRouteComponent(() => import('../pages/tools'));
 const McpServersPage = lazyRouteComponent(() => import('../pages/mcp-servers'));
 const SkillsPage = lazyRouteComponent(() => import('../pages/skills'));
+const AssetsPage = lazyRouteComponent(() => import('../pages/assets'));
 const CompanySessionsPage = lazyRouteComponent(() => import('../pages/company-sessions'));
+const CompanySessionNewPage = lazyRouteComponent(() =>
+  import('../pages/company-sessions').then((m) => ({ default: m.CompanySessionNewPage })),
+);
+const CompanySessionViewPage = lazyRouteComponent(() =>
+  import('../pages/company-sessions').then((m) => ({ default: m.CompanySessionViewPage })),
+);
 
 // Define the root route
 export const rootRoute = createRootRoute({
@@ -65,11 +72,35 @@ export const companyProjectsRoute = createRoute({
   component: ProjectsPage,
 });
 
-// Single project route (under company)
+// Single project route - redirects to overview tab
 export const projectRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.companyProjectPath('$projectId'),
+  beforeLoad: ({ params }: { params: { projectId: string } }) => {
+    throw redirect({ to: Routes.frontend.companyProjectTabPath(params.projectId, 'overview') });
+  },
   component: ProjectPage,
+});
+
+// Project tab route
+export const projectTabRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyProjectTabPath('$projectId', '$tab'),
+  component: ProjectPage,
+});
+
+// Project session new route
+export const projectSessionNewRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyProjectSessionNewPath('$projectId'),
+  component: CompanySessionNewPage,
+});
+
+// Project session view route
+export const projectSessionViewRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyProjectSessionPath('$projectId', '$sessionId'),
+  component: CompanySessionViewPage,
 });
 
 // Workflow run route - nested under project
@@ -149,6 +180,13 @@ export const companySkillsRoute = createRoute({
   component: SkillsPage,
 });
 
+// Company assets route
+export const companyAssetsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyAssetsPath,
+  component: AssetsPage,
+});
+
 // Company settings route (placeholder)
 export const companySettingsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
@@ -170,10 +208,16 @@ export const companySessionsRoute = createRoute({
   component: CompanySessionsPage,
 });
 
+export const companySessionNewRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companySessionNewPath,
+  component: CompanySessionNewPage,
+});
+
 export const companySessionRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.companySessionPath('$sessionId'),
-  component: CompanySessionsPage,
+  component: CompanySessionViewPage,
 });
 
 export const routeTree = rootRoute.addChildren([
@@ -183,6 +227,9 @@ export const routeTree = rootRoute.addChildren([
     indexRoute,
     companyProjectsRoute,
     projectRoute,
+    projectTabRoute,
+    projectSessionNewRoute,
+    projectSessionViewRoute,
     workflowRunRoute,
     workflowBuilderRoute,
     terminalTestRoute,
@@ -194,9 +241,11 @@ export const routeTree = rootRoute.addChildren([
     companyToolsRoute,
     companyMcpServersRoute,
     companySkillsRoute,
+    companyAssetsRoute,
     companySettingsRoute,
     companyBrandingRoute,
     companySessionsRoute,
+    companySessionNewRoute,
     companySessionRoute,
   ]),
 ]);

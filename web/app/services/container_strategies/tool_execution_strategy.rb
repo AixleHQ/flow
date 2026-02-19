@@ -1,35 +1,33 @@
 # frozen_string_literal: true
 
 require "base64"
+require "shellwords"
 require "timeout"
 
 module ContainerStrategies
   # ToolExecutionStrategy
   # Strategy for executing custom tools in Docker containers
   #
+  # Key design: tool command runs as the container's main process (not via exec).
+  # Container exits naturally when command finishes — no orphaned sleep containers.
+  #
+  # File injection is embedded directly into CMD: the container creates tool files
+  # (via base64 decode) then runs the actual command. This is more reliable than
+  # Docker archive API on created containers.
+  #
   # Lifecycle phases:
-  #   - before_create: Resolve image, build env vars from config items
-  #   - create: Create container with resource limits
-  #   - start: Start container (runs sleep infinity)
-  #   - before_exec: Inject tool files
-  #   - exec: Execute tool command with timeout
-  #   - before_cleanup: Collect output artifacts
-  #   - cleanup: Stop and remove container
+  #   - before_create: Resolve image, build env vars from config items + project context
+  #   - create: Create container with resource limits, CMD = file setup + tool command
+  #   - start: Start container (files are created, then command runs immediately)
+  #   - exec: Wait for container to exit, collect stdout/stderr from logs
+  #   - before_cleanup: Collect output artifacts via archive API (works on exited container)
+  #   - cleanup: Remove exited container
   #
   # Input:
   #   - tool: Tool model instance
   #   - parameters: Hash of command parameters
-  #   - project: Project model instance (optional, for config resolution)
+  #   - project: Project model instance (optional, for config resolution + context)
   #   - timeout: Execution timeout in seconds (optional, default 300)
-  #
-  # @example
-  #   strategy = ToolExecutionStrategy.new(
-  #     tool: tool,
-  #     parameters: { query: "hello" },
-  #     project: project,
-  #     timeout: 600
-  #   )
-  #   result = ContainerService.execute(strategy: strategy, input: strategy.input)
   #
   class ToolExecutionStrategy < BaseStrategy
     DEFAULT_TIMEOUT = 300      # 5 minutes
@@ -54,7 +52,25 @@ module ContainerStrategies
     end
 
     def build_env_vars
-      env_hash = resolve_config_items
+      env_hash = {}
+
+      # 1. MCP tool parameters (lowest priority)
+      parameters = input[:parameters] || {}
+      parameters.each do |key, value|
+        env_name = key.to_s.upcase.gsub(/[^A-Z0-9_]/, "_")
+        env_hash[env_name] = value.to_s
+      end
+
+      # 2. Config items override parameters (secrets take precedence)
+      env_hash.merge!(resolve_config_items)
+
+      # 3. Project context
+      project = input[:project]
+      if project
+        env_hash["PALAD_PROJECT_ID"] = project.id.to_s
+        env_hash["PALAD_PROJECT_NAME"] = project.name
+      end
+
       env_hash.map { |k, v| "#{k}=#{v}" }
     end
 
@@ -72,8 +88,17 @@ module ContainerStrategies
     end
 
     def build_cmd
-      # Start with sleep to allow file injection before exec
-      [ "sleep", "infinity" ]
+      tool = input[:tool]
+      parameters = input[:parameters] || {}
+      command = build_command(tool, parameters)
+
+      if tool.tool_files.any?
+        setup = tool.tool_files.map { |tf| file_setup_command(tf) }
+        full_command = (setup + [ command ]).join(" && ")
+        [ "/bin/sh", "-c", full_command ]
+      else
+        [ "/bin/sh", "-c", command ]
+      end
     end
 
     def build_working_dir
@@ -87,54 +112,46 @@ module ContainerStrategies
       [ requested.to_i, MAX_TIMEOUT ].min
     end
 
-    # == Lifecycle: before_exec ==
-    # Inject tool files into container
+    # == Lifecycle: start ==
+    # Start container — command begins executing immediately, skip health check
 
-    def before_exec(context)
-      tool = input[:tool]
-      return if tool.tool_files.empty?
-
-      container = context[:container]
-      tool.tool_files.each do |tool_file|
-        inject_file_into_container(container, tool_file)
-      end
-
-      Rails.logger.info("[ToolExecution] Injected #{tool.tool_files.count} files")
+    def start(context)
+      target = context[:container] || context[:container_id]
+      context[:container] = runtime.start_container(target)
+      context[:container_id] ||= runtime_container_id(context[:container] || target)
+      # Tool containers run command directly and may exit quickly — skip health check
     end
 
     # == Lifecycle: exec ==
-    # Execute tool command with timeout
+    # Wait for container to exit and collect output from logs
 
     def exec(context)
-      tool = input[:tool]
-      parameters = input[:parameters] || {}
-      timeout = timeout_for(:exec)
-
-      command = build_command(tool, parameters)
-      Rails.logger.info("[ToolExecution] Executing: #{command} (timeout: #{timeout}s)")
-
+      container = context[:container]
       start_time = Time.current
 
       begin
-        result = execute_command_in_container(context[:container], command)
+        wait_result = runtime.wait_container(container)
+        exit_code = wait_result["StatusCode"] || wait_result[:StatusCode] || -1
+
+        logs = runtime.container_logs(container)
         duration_ms = ((Time.current - start_time) * 1000).to_i
 
         context[:result] = {
-          exit_code: result[:exit_code],
-          stdout: truncate_output(result[:stdout]),
-          stderr: truncate_output(result[:stderr]),
+          exit_code: exit_code,
+          stdout: truncate_output(logs[:stdout]),
+          stderr: truncate_output(logs[:stderr]),
           duration_ms: duration_ms,
           timed_out: false
         }
 
-        Rails.logger.info("[ToolExecution] Completed: exit_code=#{result[:exit_code]}, duration=#{duration_ms}ms")
+        Rails.logger.info("[ToolExecution] Completed: exit_code=#{exit_code}, duration=#{duration_ms}ms")
       rescue Timeout::Error
-        handle_execution_timeout(context, start_time, timeout)
+        handle_execution_timeout(context, start_time, timeout_for(:exec))
       end
     end
 
     # == Lifecycle: before_cleanup ==
-    # Collect output artifacts from specified paths
+    # Collect output artifacts from exited container via archive API
 
     def before_cleanup(context)
       tool = input[:tool]
@@ -144,7 +161,7 @@ module ContainerStrategies
       output_files = {}
 
       tool.output_paths.each do |path|
-        content = read_file_from_container(container, path)
+        content = runtime.read_file(container, path)
         output_files[path] = content if content.present?
       rescue StandardError => e
         Rails.logger.warn("[ToolExecution] Failed to extract #{path}: #{e.message}")
@@ -174,7 +191,6 @@ module ContainerStrategies
         config_item = find_config_item(name, project, company)
         next unless config_item
 
-        # Convert name to env var format (uppercase, sanitize)
         env_name = name.upcase.gsub(/[^A-Z0-9_]/, "_")
         env_vars[env_name] = config_item.decrypted_value
       end
@@ -197,18 +213,16 @@ module ContainerStrategies
       end
     end
 
-    # Inject file into container via exec
+    # Build shell command to create a tool file inside container via base64 decode
+    # Used in CMD to inject files before running the tool command
     #
-    # @param container [Docker::Container] Container instance
-    # @param tool_file [ToolFile] File to inject
-    def inject_file_into_container(container, tool_file)
-      # Create parent directory
-      dir = File.dirname(tool_file.path)
-      container.exec([ "mkdir", "-p", dir ])
-
-      # Write file content using base64 to handle binary/special chars
+    # @param tool_file [ToolFile] File to create
+    # @return [String] Shell command string
+    def file_setup_command(tool_file)
+      dir = Shellwords.escape(File.dirname(tool_file.path))
+      path = Shellwords.escape(tool_file.path)
       encoded = Base64.strict_encode64(tool_file.content || "")
-      container.exec([ "/bin/sh", "-c", "echo '#{encoded}' | base64 -d > #{tool_file.path}" ])
+      "mkdir -p #{dir} && echo '#{encoded}' | base64 -d > #{path}"
     end
 
     # Build command from tool definition and parameters
@@ -227,27 +241,7 @@ module ContainerStrategies
       command
     end
 
-    # Execute command in container
-    #
-    # @param container [Docker::Container] Container instance
-    # @param command [String] Command to execute
-    # @return [Hash] { exit_code:, stdout:, stderr: }
-    def execute_command_in_container(container, command)
-      # exec returns [stdout_array, stderr_array, exit_code]
-      stdout_lines, stderr_lines, exit_code = container.exec(
-        [ "/bin/sh", "-c", command ],
-        stdout: true,
-        stderr: true
-      )
-
-      {
-        exit_code: exit_code,
-        stdout: stdout_lines.join,
-        stderr: stderr_lines.join
-      }
-    end
-
-    # Handle execution timeout
+    # Handle execution timeout — kill container and collect partial output
     #
     # @param context [Hash] Execution context
     # @param start_time [Time] Execution start time
@@ -255,17 +249,23 @@ module ContainerStrategies
     def handle_execution_timeout(context, start_time, timeout)
       duration_ms = ((Time.current - start_time) * 1000).to_i
 
-      # Kill container immediately to stop any running process
       begin
         context[:container].kill
       rescue StandardError
         nil
       end
 
+      # Collect partial output from killed container
+      logs = begin
+        runtime.container_logs(context[:container])
+      rescue StandardError
+        { stdout: "", stderr: "" }
+      end
+
       context[:result] = {
         exit_code: TIMEOUT_EXIT_CODE,
-        stdout: "",
-        stderr: "Tool execution timed out after #{timeout} seconds",
+        stdout: truncate_output(logs[:stdout]),
+        stderr: "Tool execution timed out after #{timeout} seconds\n#{truncate_output(logs[:stderr])}",
         duration_ms: duration_ms,
         timed_out: true
       }

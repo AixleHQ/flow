@@ -11,7 +11,7 @@ interface IWorkflowStep {
   name: string;
   agent: string;
   prompt: string;
-  artifacts: string[];
+  assets: string[];
   dependsOn?: string[];
 }
 
@@ -162,13 +162,13 @@ const styles = {
       backgroundColor: 'background.paper',
     },
   },
-  artifactsList: {
+  assetsList: {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
     marginTop: '8px',
   },
-  artifactChip: {
+  assetChip: {
     padding: '6px 12px',
     backgroundColor: 'background.elevated',
     borderRadius: '6px',
@@ -239,7 +239,7 @@ const WorkflowBuilderPage = () => {
   });
 
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
-  const [artifactInput, setArtifactInput] = useState('');
+  const [assetInput, setAssetInput] = useState('');
 
   const selectedStep = workflow.steps.find((s) => s.id === selectedStepId);
 
@@ -249,7 +249,7 @@ const WorkflowBuilderPage = () => {
       name: `Step ${workflow.steps.length + 1}`,
       agent: 'claude_code',
       prompt: '',
-      artifacts: [],
+      assets: [],
     };
     setWorkflow((prev) => ({ ...prev, steps: [...prev.steps, newStep] }));
     setSelectedStepId(newStep.id);
@@ -272,18 +272,18 @@ const WorkflowBuilderPage = () => {
     }
   };
 
-  const handleAddArtifact = () => {
-    if (!selectedStep || !artifactInput.trim()) return;
+  const handleAddAsset = () => {
+    if (!selectedStep || !assetInput.trim()) return;
     handleUpdateStep(selectedStep.id, {
-      artifacts: [...selectedStep.artifacts, artifactInput.trim()],
+      assets: [...selectedStep.assets, assetInput.trim()],
     });
-    setArtifactInput('');
+    setAssetInput('');
   };
 
-  const handleRemoveArtifact = (artifact: string) => {
+  const handleRemoveAsset = (asset: string) => {
     if (!selectedStep) return;
     handleUpdateStep(selectedStep.id, {
-      artifacts: selectedStep.artifacts.filter((a) => a !== artifact),
+      assets: selectedStep.assets.filter((a) => a !== asset),
     });
   };
 
@@ -437,9 +437,9 @@ const WorkflowBuilderPage = () => {
                 </Box>
               </Box>
 
-              {/* Artifacts */}
+              {/* Assets */}
               <Box sx={styles.section}>
-                <Typography sx={styles.sectionTitle}>Expected Artifacts</Typography>
+                <Typography sx={styles.sectionTitle}>Expected Assets</Typography>
                 <Typography sx={{ fontSize: '13px', color: 'text.secondary', marginBottom: '12px' }}>
                   Specify files or outputs that should be produced by this step
                 </Typography>
@@ -448,27 +448,27 @@ const WorkflowBuilderPage = () => {
                   <TextField
                     fullWidth
                     size="small"
-                    value={artifactInput}
-                    onChange={(e) => setArtifactInput(e.target.value)}
+                    value={assetInput}
+                    onChange={(e) => setAssetInput(e.target.value)}
                     placeholder="e.g. 'src/api/endpoints.ts'"
                     sx={styles.input}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
-                        handleAddArtifact();
+                        handleAddAsset();
                       }
                     }}
                   />
-                  <Button variant="outlined" onClick={handleAddArtifact} disabled={!artifactInput.trim()}>
+                  <Button variant="outlined" onClick={handleAddAsset} disabled={!assetInput.trim()}>
                     Add
                   </Button>
                 </Box>
 
-                {selectedStep.artifacts.length > 0 && (
-                  <Box sx={styles.artifactsList}>
-                    {selectedStep.artifacts.map((artifact) => (
-                      <Box key={artifact} sx={styles.artifactChip}>
-                        📄 {artifact}
-                        <IconButton sx={styles.removeButton} onClick={() => handleRemoveArtifact(artifact)}>
+                {selectedStep.assets.length > 0 && (
+                  <Box sx={styles.assetsList}>
+                    {selectedStep.assets.map((asset) => (
+                      <Box key={asset} sx={styles.assetChip}>
+                        📄 {asset}
+                        <IconButton sx={styles.removeButton} onClick={() => handleRemoveAsset(asset)}>
                           ✕
                         </IconButton>
                       </Box>

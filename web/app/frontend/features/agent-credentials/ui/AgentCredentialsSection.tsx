@@ -89,13 +89,10 @@ export const AgentCredentialsSection: FC = () => {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const configuredAgents = currentUser?.configuredAgents ?? [];
-  const credentialsMap = (currentUser?.agentCredentials ?? []).reduce<Record<string, IAgentCredential>>(
-    (acc, cred) => {
-      acc[cred.agentType] = cred;
-      return acc;
-    },
-    {},
-  );
+  const credentialsMap = (currentUser?.agentCredentials ?? []).reduce<Record<string, IAgentCredential>>((acc, cred) => {
+    acc[cred.agentType] = cred;
+    return acc;
+  }, {});
 
   const handleAuthComplete = useCallback(
     (agentType: AgentType) => {
@@ -170,9 +167,7 @@ export const AgentCredentialsSection: FC = () => {
                 </Box>
 
                 <Box sx={styles.actions}>
-                  {isConfigured && (
-                    <Chip label="Connected" color="success" size="small" variant="outlined" />
-                  )}
+                  {isConfigured && <Chip label="Connected" color="success" size="small" variant="outlined" />}
 
                   <Button
                     variant={isConfigured ? 'outlined' : 'contained'}

@@ -89,6 +89,7 @@ services:
     depends_on:
       - db
       - redis
+      - otlp-ingest
     environment:
       <<: *web-environment
     labels:
@@ -153,6 +154,15 @@ services:
       - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowHeaders=Content-Type,Authorization,X-Requested-With,Cookie"
       - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowCredentials=true"
+    attach: false
+
+  otlp-ingest:
+    build:
+      context: ./docker/otlp-ingest
+      dockerfile: Dockerfile
+    image: palad/otlp-ingest:latest
+    ports:
+      - '4318:4318'
     attach: false
 
   # Base image for all AI agents

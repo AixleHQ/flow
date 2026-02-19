@@ -10,7 +10,7 @@ export interface IWorkflowStep {
   cost?: number;
   startedAt?: string;
   completedAt?: string;
-  artifacts?: Array<{
+  assets?: Array<{
     id: string;
     name: string;
     type: string;

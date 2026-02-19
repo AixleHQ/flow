@@ -197,11 +197,37 @@ module Agents
     end
 
     # Parse and persist usage statistics for a terminal session.
+    # Called on each OTLP trace payload (hooks, native traces).
     # @param payload [Hash] parsed OTLP JSON payload
     # @param terminal_session [TerminalSession]
     # @return [Symbol] :ok when persisted, :accepted when no usage found
     def ingest_usage(_payload, _terminal_session)
-      raise NotImplementedError, "#{self.class} must implement #ingest_usage"
+      pp _payload
+    end
+
+    # =================================================================
+    # Usage Collection (called once at session cleanup)
+    # =================================================================
+
+    # Domains tracked by MITM proxy for usage logging.
+    # Empty = log all traffic (default for agents without usage tracking).
+    # @return [Array<String>]
+    def mitm_tracked_domains
+      []
+    end
+
+    # Log files inside container to collect as artifacts after session ends.
+    # @return [Array<String>]
+    def session_log_paths
+      []
+    end
+
+    # Collect and verify usage data at session cleanup.
+    # Called from AgentSessionStrategy#before_cleanup after artifact collection.
+    # @param terminal_session [TerminalSession]
+    # @param artifacts [Hash<String, String>] collected artifacts (path => content)
+    def collect_usage(_terminal_session, _artifacts = {})
+      # No-op by default. Override in adapters with usage tracking.
     end
 
     protected

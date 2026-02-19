@@ -75,7 +75,7 @@ module Agents
       settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
       assert_equal "oauth-personal", settings.dig("security", "auth", "selectedType")
       assert_equal false, settings.dig("security", "folderTrust", "enabled")
-      assert_equal "yolo", settings.dig("tools", "approvalMode")
+      assert_equal "auto_edit", settings.dig("tools", "approvalMode")
       assert_equal true, settings.dig("tools", "autoAccept")
     end
 

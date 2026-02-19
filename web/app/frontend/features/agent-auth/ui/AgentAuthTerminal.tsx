@@ -3,7 +3,7 @@ import { enqueueSnackbar } from 'notistack';
 import { useCallback, useEffect, useState, useRef } from 'react';
 
 import type { AgentType, ITerminalSession } from 'entities/terminal-session';
-import { useCreateTerminalSessionMutation, useFinishAuthMutation, useCancelSessionMutation } from 'shared/api';
+import { useCreateTerminalSessionMutation, useFinishSessionMutation } from 'shared/api';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 // Agent-specific env fields that must be configured before starting container
@@ -39,8 +39,8 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
   const authCompleteCalledRef = useRef(false);
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
-  const [finishAuth, { isLoading: isFinishing }] = useFinishAuthMutation();
-  const [cancelSession, { isLoading: isCancelling }] = useCancelSessionMutation();
+  const [finishSession, { isLoading: isFinishing }] = useFinishSessionMutation();
+  const isCancelling = isFinishing;
 
   const handleSessionUpdate = useCallback((s: ITerminalSession) => setSession(s), []);
 
@@ -101,7 +101,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
     finishingRef.current = true;
     stopPolling();
     try {
-      await finishAuth({ sessionId }).unwrap();
+      await finishSession({ sessionId }).unwrap();
       enqueueSnackbar('Authentication saved!', { variant: 'success' });
       setStep('completed');
       if (!authCompleteCalledRef.current) {
@@ -112,7 +112,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
       enqueueSnackbar('Failed to finish', { variant: 'error' });
       finishingRef.current = false;
     }
-  }, [sessionId, finishAuth, onAuthComplete, stopPolling]);
+  }, [sessionId, finishSession, onAuthComplete, stopPolling]);
 
   const handleCancel = async () => {
     if (!sessionId) {
@@ -120,7 +120,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
       return;
     }
     try {
-      await cancelSession(sessionId).unwrap();
+      await finishSession({ sessionId }).unwrap();
       stopPolling();
       onCancel?.();
     } catch {

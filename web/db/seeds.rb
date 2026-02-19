@@ -476,13 +476,14 @@ puts "Creating config items for MCP server authentication..."
 tool = test_company.tools.find_or_create_by!(name: "slack_history", scope: test_company) do |t|
   t.display_name = "Slack History"
   t.description = "Fetch messages from a Slack channel for a given time range"
-  t.docker_image = "ruby:3.3-slim"
+  t.docker_image = "ruby:alpine"
   t.command = "ruby /workspace/main.rb"
-  t.required_config_items = %w[SLACK_TOKEN SLACK_CHANNEL SLACK_RANGE]
+  t.required_config_items = %w[SLACK_TOKEN SLACK_CHANNEL]
   t.input_schema = {
     type: "object",
     properties: {
-      SLACK_RANGE: { type: "string", description: "Time range (e.g. 24h, 7d, 1w)", default: "24h" }
+      channel: { type: "string", description: "Slack channel name or ID (overrides default from config)" },
+      SLACK_RANGE: { type: "string", description: "Time range (e.g. 24h, 7d, 1w)", default: "7d" }
     }
   }
 end
@@ -532,8 +533,13 @@ tool.tool_files.find_or_create_by!(path: "/workspace/main.rb") do |f|
     end
 
     token   = env!("SLACK_TOKEN")
-    channel = resolve_channel(env!("SLACK_CHANNEL"), token)
-    range   = ENV.fetch("SLACK_RANGE", "24h")
+
+    # Priority: CHANNEL parameter > SLACK_CHANNEL config item
+    channel = [ENV["CHANNEL"], ENV["SLACK_CHANNEL"]].map { |v| v.to_s.strip }.reject(&:empty?).first
+    abort("missing CHANNEL or SLACK_CHANNEL") unless channel
+
+    channel = resolve_channel(channel, token)
+    range   = ENV.fetch("SLACK_RANGE", "7d")
 
     now = Time.now.to_i
     oldest = (now - secs(range)).to_s

@@ -57,8 +57,8 @@ module ContainerStrategies
 
       env_vars = strategy.build_env_vars
 
-      # Session command for cursor_cli is "agent" (not "agent login")
-      assert_includes env_vars, "TTYD_CMD=agent"
+      # Session command for cursor_cli is "agent --force" (yolo mode)
+      assert_includes env_vars, "TTYD_CMD=agent --force"
     end
 
     test "codex session uses yolo flag" do
@@ -171,7 +171,8 @@ module ContainerStrategies
 
       cmd = strategy.send(:ttyd_command)
 
-      assert_equal "claude -p Fix\\ the\\ tests", cmd
+      # Prompt is passed via AGENT_PROMPT env var, not in command
+      assert_equal "claude", cmd
     end
 
     test "ttyd_command uses adapter session_command for codex non-interactive" do
@@ -184,7 +185,8 @@ module ContainerStrategies
 
       cmd = strategy.send(:ttyd_command)
 
-      assert_equal "codex -q Run\\ all\\ tests", cmd
+      # Prompt is passed via AGENT_PROMPT env var, not in command
+      assert_equal "codex -q", cmd
     end
 
     # == before_exec delegates to assembler ==
@@ -276,6 +278,7 @@ module ContainerStrategies
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
       mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(false)
+      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
       mock_adapter.stubs(:session_log_paths).returns([ "/tmp/session.log" ])
 
       mock_service = mock("service")
@@ -299,6 +302,7 @@ module ContainerStrategies
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
       mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(false)
+      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
       mock_adapter.stubs(:session_log_paths).returns([ "/tmp/error.log" ])
 
       mock_service = mock("service")
@@ -322,6 +326,7 @@ module ContainerStrategies
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
       mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(true)
+      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
       mock_adapter.stubs(:output_artifact_paths).returns([ "/output/*.json" ])
 
       mock_service = mock("service")
@@ -346,6 +351,7 @@ module ContainerStrategies
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
       mock_adapter.stubs(:respond_to?).with(:output_artifact_paths).returns(true)
+      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
       mock_adapter.stubs(:output_artifact_paths).returns([ "/error/*.json" ])
 
       mock_service = mock("service")

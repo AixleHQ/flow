@@ -125,6 +125,19 @@ module ContainerStrategies
       context[:result][:artifacts_count] = artifacts.size
 
       Rails.logger.info("[AgentSession] Collected #{artifacts.size} artifacts")
+
+      # 3. Collect and verify usage statistics (if adapter supports it)
+      if agent_service.adapter.respond_to?(:collect_usage)
+        begin
+          session = TerminalSession.find_by(id: input[:session_id])
+          if session
+            agent_service.adapter.collect_usage(session, artifacts)
+            Rails.logger.info("[AgentSession] Usage statistics collected for session #{session.id}")
+          end
+        rescue StandardError => e
+          Rails.logger.error("[AgentSession] Failed to collect usage: #{e.message}")
+        end
+      end
     end
 
     protected

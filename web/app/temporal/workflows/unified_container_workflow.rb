@@ -32,15 +32,8 @@ module Workflows
       @finished = true
     end
 
-    workflow_signal
-    def container_cancelled
-      @cancelled = true
-      @finished = true
-    end
-
     def run(input)
       @finished = false
-      @cancelled = false
       @timed_out = false
 
       strategy_type = (input.strategy_type || input["strategy_type"]).to_sym
@@ -81,7 +74,7 @@ module Workflows
           Temporalio::Workflow.logger.warn("[UnifiedWorkflow] Timed out waiting for signal, proceeding to cleanup")
         end
 
-        Temporalio::Workflow.logger.info("[UnifiedWorkflow] Done waiting, cancelled: #{@cancelled}, timed_out: #{@timed_out}")
+        Temporalio::Workflow.logger.info("[UnifiedWorkflow] Done waiting, timed_out: #{@timed_out}")
       end
 
       # Step 4: Cleanup (before_cleanup runs artifact collection via strategy)
@@ -150,7 +143,6 @@ module Workflows
       end
 
       # Add status flags
-      merged[:cancelled] = @cancelled
       merged[:timed_out] = @timed_out
 
       merged

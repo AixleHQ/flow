@@ -3,16 +3,17 @@
 module Api
   module V1
     class TerminalSessionsController < ApplicationController
-      before_action :set_terminal_session, only: %i[show update destroy finish_auth cancel]
+      before_action :set_terminal_session, only: %i[show update destroy finish]
 
       # GET /api/v1/terminal_sessions
-      # List all terminal sessions for current user
+      # User-scoped sessions (for auth/onboarding/profile).
+      # Company/project-wide history → /api/v1/company/terminal_sessions
       def index
-        @sessions = current_user.terminal_sessions
-                                .order(created_at: :desc)
-                                .limit(50)
+        scope = current_user.terminal_sessions
+                            .includes(:project)
+                            .order(created_at: :desc)
 
-        respond_with @sessions, each_serializer: TerminalSessionSerializer
+        respond_with paginate(scope), each_serializer: TerminalSessionSerializer
       end
 
       # GET /api/v1/terminal_sessions/:id
@@ -41,13 +42,10 @@ module Api
         respond_with @session, serializer: TerminalSessionSerializer
       end
 
-      # POST /api/v1/terminal_sessions/:id/finish_auth
-      # Mark authentication as finished (triggers artifact collection)
-      def finish_auth
-        unless @session.session_type == "auth_setup"
-          return render json: { error: "Can only finish auth for auth_setup sessions" }, status: :bad_request
-        end
-
+      # POST /api/v1/terminal_sessions/:id/finish
+      # Gracefully finish session — stop, collect artifacts, collect usage.
+      # Works for any session type (auth_setup, agent_session, etc.)
+      def finish
         unless @session.may_stop?
           return render json: { error: "Session cannot be stopped in current state: #{@session.state}" },
                         status: :bad_request
@@ -61,33 +59,11 @@ module Api
         end
 
         render json: {
-          data: TerminalSessionSerializer.new(@session).as_json,
-          message: "Authentication finished, collecting artifacts..."
+          data: TerminalSessionSerializer.new(@session).attributes,
+          message: "Session finishing, collecting artifacts..."
         }
       end
 
-      # POST /api/v1/terminal_sessions/:id/cancel
-      # Cancel/stop active session (sends signal to gracefully shutdown and cleanup)
-      def cancel
-        unless @session.may_cancel?
-          return render json: { error: "Session cannot be cancelled in current state: #{@session.state}" },
-                        status: :bad_request
-        end
-
-        # Send cancel signal to Temporal workflow to trigger graceful cleanup
-        # This allows the workflow to run stop_container activity without collecting artifacts
-        if @session.temporal_workflow_id.present?
-          TemporalService.send_signal(@session.temporal_workflow_id, :container_cancelled)
-        end
-
-        # Update state to cancelled
-        @session.cancel!
-
-        render json: {
-          data: TerminalSessionSerializer.new(@session).as_json,
-          message: "Session cancelled"
-        }
-      end
 
       # DELETE /api/v1/terminal_sessions/:id
       # Delete a terminal session (only if not active)

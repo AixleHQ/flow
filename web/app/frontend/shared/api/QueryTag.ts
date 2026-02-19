@@ -4,7 +4,6 @@ export enum QueryTag {
   TerminalSession = 'TerminalSession',
   Project = 'Project',
   ProjectCollaborators = 'ProjectCollaborators',
-  Artifact = 'Artifact',
   Workflow = 'Workflow',
   WorkflowRun = 'WorkflowRun',
   Task = 'Task',
@@ -14,4 +13,5 @@ export enum QueryTag {
   Tools = 'Tools',
   McpServers = 'McpServers',
   Skills = 'Skills',
+  Assets = 'Assets',
 }

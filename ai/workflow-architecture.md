@@ -292,37 +292,49 @@ end
 3. After workflow completes → user sees all WorkflowRunAssets and can export selected ones to project-level Assets
 4. `export_asset` tool can also promote during workflow execution
 
-### 2.8 Asset (Project-level)
+### 2.8 Asset (Polymorphic Scope + Separate Versions)
+
+> **Updated 2026-02-18:** Redesigned from `belongs_to :project` to polymorphic `scope` (Company | Project), matching Agent/Tool/Skill pattern. Versioning moved to separate `AssetVersion` model. `step_run_id` for workflow provenance.
 
 ```ruby
 class Asset < ApplicationRecord
-  belongs_to :project
-  belongs_to :source_workflow_run_asset, class_name: 'WorkflowRunAsset', optional: true
-  belongs_to :parent, class_name: 'Asset', optional: true  # versioning
-  has_many :versions, class_name: 'Asset', foreign_key: :parent_id
+  belongs_to :scope, polymorphic: true          # Company | Project (same pattern as Agent/Tool/Skill)
+  belongs_to :created_by, class_name: 'User'
+  belongs_to :step_run, optional: true          # provenance: created during workflow step
+  has_many :versions, class_name: 'AssetVersion', dependent: :destroy
 
   # name: string
-  # asset_type: enum (document, diagram, code, repository, data, image, html, other)
-  # content_type: string (mime type)
-  # s3_key: string
-  # file_size: integer
-  # version: integer (auto-increment within parent chain)
-  #
+  # asset_type: enum (document, image, archive, code, diagram, data, html, repository, other)
   # folder: string (optional, one-level nesting — "architecture", "stories", "reports")
   # tags: string[] (postgres array — ["prd", "v2", "approved", "client-facing"])
-  #
   # public: boolean (default: false)
   # public_token: string (unique, generated when public=true)
-  #   → URL: https://app.example.com/shared/{public_token}
-  #
+
+  scope :for_company, ->(company) { where(scope_type: 'Company', scope_id: company.id) }
+  scope :for_project, ->(project) { where(scope_type: 'Project', scope_id: project.id) }
+
+  def self.merged_for_project(project)
+    where(scope_type: 'Project', scope_id: project.id)
+      .or(where(scope_type: 'Company', scope_id: project.company_id))
+  end
+end
+
+class AssetVersion < ApplicationRecord
+  belongs_to :asset
+  belongs_to :uploaded_by, class_name: 'User'
+
+  # version: integer (auto-increment within asset)
+  # file_data: text (Shrine attachment data)
+  # content_type: string (mime type)
+  # file_size: integer
   # provenance: jsonb
   #   { source: "upload", user_id: X }
-  #   { source: "workflow", workflow_run_id: X, step_run_id: Y, step_name: "..." }
+  #   { source: "workflow", step_run_id: Y, step_name: "..." }
   #   { source: "github", repo_url: "...", branch: "...", commit: "..." }
 end
 ```
 
-**Versioning:** When export creates an Asset with a name that already exists in the project → new version (parent_id chain). User controls via naming: `report.html` → new version; `report-2026-02.html` → new asset.
+**Versioning:** Same name upload to same scope → new AssetVersion on existing Asset (auto-increment). Different name → new Asset. Metadata (name, folder, tags, public) lives on Asset, not duplicated per version.
 
 ### 2.9 Relationships with Existing Models
 

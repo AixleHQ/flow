@@ -1,9 +1,14 @@
 #!/bin/bash
 # =============================================================================
-# MITM Proxy Startup Script
+# MITM Proxy + HTTP/2 Logger Startup Script
 #
-# Source this script from agent entrypoints to start mitmproxy
-# and configure proxy environment variables.
+# Two complementary logging mechanisms:
+#   1. mitmproxy (regular proxy mode) — captures http/https via HTTPS_PROXY
+#      Works for api2.cursor.sh calls that use Node http/https modules
+#   2. http2-logger.js (NODE_OPTIONS --require) — patches http2.connect()
+#      Captures AgentService/Run calls that use HTTP/2 directly
+#
+# Both write to the same MITM_LOG_PATH file.
 #
 # Usage:
 #   source /opt/mitm/start-mitm.sh
@@ -24,11 +29,14 @@ fi
 # Configuration with defaults
 MITM_PROXY_PORT="${MITM_PROXY_PORT:-8888}"
 MITM_LOG_PATH="${MITM_LOG_PATH:-${WORKSPACE:-/workspace}/output/mitmproxy.log}"
-MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-16000}"
+MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-0}"
 MITM_CA_CERT="${HOME:-/root}/.mitmproxy/mitmproxy-ca-cert.pem"
 
-# Export for mitm_logger.py
-export MITM_LOG_PATH MITM_LOG_MAX_BODY
+# Export for mitm_logger.py and http2-logger.js
+export MITM_LOG_PATH MITM_LOG_MAX_BODY MITM_TRACKED_DOMAINS
+
+# Ensure log directory exists
+mkdir -p "$(dirname "${MITM_LOG_PATH}")" 2>/dev/null || true
 
 echo -e "${CYAN:-}🛡️  Starting MITM proxy on port ${MITM_PROXY_PORT}...${NC:-}"
 
@@ -41,7 +49,7 @@ HTTPS_PROXY="$HTTP_PROXY"
 NO_PROXY="localhost,127.0.0.1,::1"
 export HTTP_PROXY HTTPS_PROXY NO_PROXY
 
-# Start mitmdump in background
+# Start mitmdump in background with logging addon
 mitmdump --listen-host 0.0.0.0 --listen-port "${MITM_PROXY_PORT}" \
     --set block_global=false \
     -q -s /opt/mitm/mitm_logger.py &
@@ -52,7 +60,6 @@ for _ in {1..20}; do
     if [ -f "$MITM_CA_CERT" ]; then
         # Node.js uses NODE_EXTRA_CA_CERTS
         export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
-        # Rust/rustls uses SSL_CERT_FILE (need to append mitmproxy CA to system certs)
         # Create combined cert bundle with system certs + mitmproxy CA
         COMBINED_CERTS="${HOME:-/root}/.mitmproxy/combined-ca-bundle.pem"
         cat /etc/ssl/certs/ca-certificates.crt "$MITM_CA_CERT" > "$COMBINED_CERTS" 2>/dev/null || \
@@ -63,9 +70,14 @@ for _ in {1..20}; do
     sleep 0.1
 done
 
+# HTTP/2 logger: patches http2.connect() to log request headers
+# This captures traffic that bypasses HTTPS_PROXY (e.g. AgentService/Run)
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /opt/mitm/http2-logger.js"
+
 # Verify startup
 if kill -0 $MITM_PID 2>/dev/null; then
     echo -e "${GREEN:-}✅ MITM proxy started (PID: $MITM_PID) - logging to ${MITM_LOG_PATH}${NC:-}"
+    echo -e "${GREEN:-}✅ HTTP/2 logger enabled via NODE_OPTIONS${NC:-}"
 else
     echo -e "${YELLOW:-}⚠️  MITM proxy failed to start${NC:-}"
 fi

@@ -118,7 +118,7 @@ class ContainerWorkflowService
     # Signal workflow to finish
     #
     # @param workflow_id [String] Workflow ID
-    # @param signal [Symbol] Signal name (:container_finished, :container_cancelled)
+    # @param signal [Symbol] Signal name (:container_finished, :container_finished)
     # @return [Hash] { ok: true/false, error: }
     def signal_workflow(workflow_id, signal: :container_finished)
       TemporalService.send_signal(workflow_id, signal)

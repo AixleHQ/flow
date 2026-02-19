@@ -19,6 +19,7 @@ class Project < ApplicationRecord
   has_many :tools, as: :scope, dependent: :destroy
   has_many :mcp_servers, as: :scope, dependent: :destroy, class_name: "MCPServer"
   has_many :skills, as: :scope, dependent: :destroy
+  has_many :assets, as: :scope, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

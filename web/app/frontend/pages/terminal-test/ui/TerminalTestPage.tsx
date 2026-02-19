@@ -14,7 +14,7 @@ import { enqueueSnackbar } from 'notistack';
 import { useState, useEffect } from 'react';
 
 import type { AgentType, ITerminalSession } from 'entities/terminal-session';
-import { useCreateTerminalSessionMutation, useCancelSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
+import { useCreateTerminalSessionMutation, useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
 import { Routes } from 'shared/routes';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
@@ -40,7 +40,7 @@ export const TerminalTestPage: React.FC = () => {
   const [session, setSession] = useState<ITerminalSession | null>(null);
 
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
-  const [cancelSession, { isLoading: isCancelling }] = useCancelSessionMutation();
+  const [finishSession, { isLoading: isCancelling }] = useFinishSessionMutation();
 
   // Fetch existing session by routeToken if provided
   const { data: existingSession, isLoading: isLoadingExisting } = useGetTerminalSessionQuery(routeToken as string, {
@@ -95,7 +95,7 @@ export const TerminalTestPage: React.FC = () => {
     if (!sessionId) return;
 
     try {
-      await cancelSession(sessionId).unwrap();
+      await finishSession({ sessionId }).unwrap();
       setSessionId(null);
       setSession(null);
       // Navigate back to terminal-test without routeToken

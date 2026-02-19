@@ -65,6 +65,7 @@ COPY watcher/index.js ./
 # MITM logger script
 # -----------------------------------------------------------------------------
 COPY logger/mitm_logger.py /opt/mitm/
+COPY logger/http2-logger.js /opt/mitm/
 COPY logger/start-mitm.sh /opt/mitm/
 RUN chmod +x /opt/mitm/start-mitm.sh
 
@@ -80,8 +81,9 @@ COPY inputrc /etc/inputrc
 RUN printf '%s\n' \
     'set -g history-limit 50000' \
     'set -g remain-on-exit on' \
-    'set -g mouse on' \
     'set -g status off' \
+    'set -g set-clipboard on' \
+    'set -g allow-passthrough on' \
     > /etc/tmux.conf
 
 # -----------------------------------------------------------------------------

@@ -49,6 +49,9 @@ class SessionContextService
       # Step 5: Context file (after skills — append to same file for Gemini)
       measure_step("context_file") { inject_context_file(container_id, session) }
 
+      # Step 6: Assets
+      measure_step("assets") { inject_assets(container_id, session) }
+
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
     end
 
@@ -426,6 +429,35 @@ class SessionContextService
 
       missing.each { |id| Rails.logger.warn("[SessionContext] Skill #{id} not found, skipping") }
       skills
+    end
+
+    # == Asset Injection ==
+
+    def inject_assets(container_id, session)
+      ids = session.asset_ids
+      return if ids.blank?
+
+      assets = Asset.where(id: ids).includes(:versions).to_a
+      missing = ids - assets.map(&:id)
+      missing.each { |id| Rails.logger.warn("[SessionContext] Asset #{id} not found, skipping") }
+
+      adapter = adapter_for(session)
+      uid = adapter.tmpfs_uid
+
+      assets.each do |asset|
+        version = asset.latest_version
+        unless version&.file
+          Rails.logger.warn("[SessionContext] Asset '#{asset.name}' has no file, skipping")
+          next
+        end
+
+        folder = asset.folder.present? ? "#{asset.folder}/" : ""
+        target_path = "/workspace/assets/#{folder}#{asset.name}"
+
+        content = version.file.open { |io| io.read }
+        write_file(container_id, target_path, content, uid)
+        Rails.logger.info("[SessionContext] Injected asset: #{target_path} (#{content.bytesize} bytes)")
+      end
     end
 
     # == Container File Operations ==

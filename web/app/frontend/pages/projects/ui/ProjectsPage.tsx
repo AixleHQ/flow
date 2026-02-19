@@ -126,7 +126,7 @@ const ProjectsPage = () => {
       <Box sx={styles.header}>
         <Box sx={styles.headerText}>
           <Typography sx={styles.title}>Projects</Typography>
-          <Typography sx={styles.subtitle}>Select a project to view workflows, artifacts, and tasks</Typography>
+          <Typography sx={styles.subtitle}>Select a project to view workflows, assets, and tasks</Typography>
         </Box>
         <Button variant="contained" onClick={() => setIsCreateDialogOpen(true)}>
           Create Project
