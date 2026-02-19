@@ -20,6 +20,8 @@ import type { AgentType, ITerminalSession, SessionMode } from 'entities/terminal
 import { useGetCurrentUserQuery } from 'entities/user';
 import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
+import type { Asset } from 'features/assets-management';
+import { useGetCompanyAssetsQuery, useGetProjectAssetsQuery } from 'features/assets-management';
 import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
@@ -66,6 +68,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [selectedTools, setSelectedTools] = useState<Tool[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<McpServer[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<Asset[]>([]);
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
 
@@ -146,6 +149,10 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const companyMcp = useGetMcpServersQuery(undefined, { skip: !!projectId });
   const mcpServers: McpServer[] = (projectId ? projectMcp.data : companyMcp.data) ?? [];
 
+  const projectAssets = useGetProjectAssetsQuery(projectId!, { skip: !projectId });
+  const companyAssets = useGetCompanyAssetsQuery(undefined, { skip: !!projectId });
+  const assets: Asset[] = (projectId ? projectAssets.data : companyAssets.data) ?? [];
+
   const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
   const [finishSession] = useFinishSessionMutation();
   const [isStopping, setIsStopping] = useState(false);
@@ -176,6 +183,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       selectedTools.length > 0 ||
       selectedSkills.length > 0 ||
       selectedMcpServers.length > 0 ||
+      selectedAssets.length > 0 ||
       mode === 'non_interactive';
 
     try {
@@ -191,6 +199,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
                   ...(selectedTools.length > 0 ? { toolIds: selectedTools.map((t) => t.id) } : {}),
                   ...(selectedSkills.length > 0 ? { skillIds: selectedSkills.map((s) => s.id) } : {}),
                   ...(selectedMcpServers.length > 0 ? { mcpServerIds: selectedMcpServers.map((m) => m.id) } : {}),
+                  ...(selectedAssets.length > 0 ? { assetIds: selectedAssets.map((a) => a.id) } : {}),
                   mode: mode,
                   ...(mode === 'non_interactive' ? { initialPrompt } : {}),
                 },
@@ -480,6 +489,28 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
         renderTags={(value, getTagProps) =>
           value.map((option, index) => (
             <Chip {...getTagProps({ index })} key={option.id} label={option.displayName || option.name} size="small" />
+          ))
+        }
+        sx={{ mb: 2 }}
+        isOptionEqualToValue={(option, value) => option.id === value.id}
+      />
+
+      {/* Assets */}
+      <Autocomplete
+        multiple
+        options={assets}
+        getOptionLabel={(option) => (option.folder ? `${option.folder}/${option.name}` : option.name)}
+        value={selectedAssets}
+        onChange={(_, newValue) => setSelectedAssets(newValue)}
+        renderInput={(params) => <TextField {...params} label="Assets (optional)" size="small" />}
+        renderTags={(value, getTagProps) =>
+          value.map((option, index) => (
+            <Chip
+              {...getTagProps({ index })}
+              key={option.id}
+              label={option.folder ? `${option.folder}/${option.name}` : option.name}
+              size="small"
+            />
           ))
         }
         sx={{ mb: 3 }}
