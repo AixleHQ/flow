@@ -14,7 +14,7 @@ esac
 OS=linux
 
 # docker cli
-apt-get update && apt-get install -y --no-install-recommends docker.io docker-compose && rm -rf /var/lib/apt/lists/*
+apk add --no-cache docker docker-cli-compose
 
 # kubectl
 KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)

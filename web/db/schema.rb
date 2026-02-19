@@ -316,7 +316,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.datetime "updated_at", null: false
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
-    t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
   create_table "usage_statistics", force: :cascade do |t|
@@ -324,7 +323,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_18_100005) do
     t.bigint "cache_write_tokens", default: 0, null: false
     t.bigint "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
-    t.decimal "cursor_token_fee_cents", precision: 12, scale: 6, default: "0.0"
     t.integer "events_count", default: 0, null: false
     t.jsonb "events_data", default: []
     t.bigint "input_tokens", default: 0, null: false
