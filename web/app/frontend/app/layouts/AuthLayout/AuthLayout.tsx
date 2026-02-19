@@ -5,12 +5,26 @@ import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
 import { Loader, Logo } from 'shared/ui';
 import { AppHeader } from 'widgets/AppHeader';
+import { AppSidebar } from 'widgets/AppSidebar';
 
 const styles = {
   root: {
     display: 'flex',
     flexDirection: 'column',
-    minHeight: '100vh',
+    height: '100vh',
+  },
+  body: {
+    display: 'flex',
+    flex: 1,
+    minHeight: 0,
+  },
+  contentColumn: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    overflow: 'auto',
   },
   main: {
     flexGrow: 1,
@@ -60,21 +74,25 @@ const AuthLayout = () => {
     return <Loader />;
   }
 
-  const showHeader = isOnboardingCompleted && !isOnboardingPath;
-  const showFooter = showHeader;
+  const showChrome = isOnboardingCompleted && !isOnboardingPath;
 
   return (
     <Box sx={styles.root}>
-      {showHeader && <AppHeader />}
-      <Box component="main" sx={styles.main}>
-        <Outlet />
-      </Box>
-      {showFooter && (
-        <Box component="footer" sx={styles.footer}>
-          <Typography sx={styles.footerText}>Powered by</Typography>
-          <Logo width={60} />
+      {showChrome && <AppHeader />}
+      <Box sx={styles.body}>
+        {showChrome && <AppSidebar />}
+        <Box sx={styles.contentColumn}>
+          <Box component="main" sx={styles.main}>
+            <Outlet />
+          </Box>
+          {showChrome && (
+            <Box component="footer" sx={styles.footer}>
+              <Typography sx={styles.footerText}>Powered by</Typography>
+              <Logo width={60} />
+            </Box>
+          )}
         </Box>
-      )}
+      </Box>
     </Box>
   );
 };

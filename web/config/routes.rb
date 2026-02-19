@@ -50,6 +50,12 @@ Rails.application.routes.draw do
         resources :tools, only: %i[index create update destroy]
         resources :mcp_servers, only: %i[index create update destroy]
         resources :skills, only: %i[index create update destroy]
+        resources :repositories, only: %i[index show create update destroy] do
+          collection do
+            get :available
+            get :branches
+          end
+        end
         resources :assets, only: %i[index show create update destroy] do
           member do
             get :download
@@ -66,6 +72,12 @@ Rails.application.routes.draw do
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
             resources :skills, only: %i[index create update destroy]
+            resources :repositories, only: %i[index create update destroy] do
+              collection do
+                get :available
+                get :branches
+              end
+            end
             resources :assets, only: %i[index show create update destroy] do
               member do
                 get :download

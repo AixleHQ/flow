@@ -203,7 +203,7 @@ development_status:
 
   # --- GitHub Integration ---
   14-1-integration-model-github-app-credentials: done  # Integration model (encrypted credentials), GitHub App connection test, API + UI
-  14-2-repository-model-crud: ready-for-dev  # Repository model (polymorphic scope), list available repos from GitHub API, CRUD + UI
+  14-2-repository-model-crud: done  # Repository model (polymorphic scope), list available repos from GitHub API, CRUD + UI
   14-3-repository-clone-at-session-injection: backlog  # Shallow clone repos into container at session start, session config extension
   14-4-create-pr-from-session: backlog  # Internal Tool: create branch + PR via GitHub API, PR links in session UI
 

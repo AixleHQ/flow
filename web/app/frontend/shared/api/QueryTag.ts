@@ -15,4 +15,5 @@ export enum QueryTag {
   Skills = 'Skills',
   Assets = 'Assets',
   Integrations = 'Integrations',
+  Repositories = 'Repositories',
 }

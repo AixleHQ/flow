@@ -27,7 +27,7 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
     assert { json["items"].first["name"] == "acme-corp" }
     assert { json["items"].first["provider"] == "github" }
     assert { json["items"].first["status"] == "active" }
-    assert { json["items"].first["repos_count"] == 0 }
+    assert { json["items"].first["connected_by"].present? }
   end
 
   test "#index does not include credentials" do

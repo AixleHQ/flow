@@ -8,7 +8,7 @@ class Integration < ApplicationRecord
 
   belongs_to :company
   belongs_to :connected_by, class_name: "User"
-  # has_many :repositories will be added in Story 14.2 when repositories table exists
+  has_many :repositories, dependent: :destroy
 
   validates :name, presence: true
   validates :provider, presence: true

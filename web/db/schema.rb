@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_19_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_19_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -252,6 +252,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_19_100000) do
     t.index ["state"], name: "index_projects_on_state"
   end
 
+  create_table "repositories", force: :cascade do |t|
+    t.string "clone_url", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.string "full_name", null: false
+    t.bigint "integration_id", null: false
+    t.boolean "is_private", default: false
+    t.datetime "last_fetched_at"
+    t.text "purpose"
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.string "source_branch", default: "main", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id"], name: "index_repositories_on_integration_id"
+    t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
+    t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
+  end
+
   create_table "skills", force: :cascade do |t|
     t.text "content"
     t.datetime "created_at", null: false
@@ -398,6 +416,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_19_100000) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "repositories", "integrations"
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"

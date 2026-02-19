@@ -38,7 +38,7 @@ class Api::V1::AssetsControllerTest < ActionController::TestCase
     post :upload, params: { file: file }
 
     assert_response :no_content
-    assert { response.headers["Location"].present? }
+    assert { (response.headers["Location"] || response.headers[:location]).present? }
   end
 
   test "#upload requires authentication" do

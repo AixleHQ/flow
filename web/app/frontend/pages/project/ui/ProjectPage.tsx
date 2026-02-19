@@ -9,6 +9,7 @@ import { AssetsPanel } from 'features/assets-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
 import { RunWorkflowModal } from 'features/run-workflow';
+import { RepositoriesPanel } from 'features/repositories-management/ui/RepositoriesPanel';
 import { SkillsPanel } from 'features/skills-management';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
@@ -215,6 +216,7 @@ const VALID_TABS: ProjectTab[] = [
   'tools',
   'mcp-servers',
   'skills',
+  'repositories',
   'settings',
 ];
 
@@ -449,6 +451,7 @@ const ProjectPage = () => {
           <Tab value="tools" label="Tools" sx={styles.tab} />
           <Tab value="mcp-servers" label="MCP Servers" sx={styles.tab} />
           <Tab value="skills" label="Skills" sx={styles.tab} />
+          <Tab value="repositories" label="Repositories" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
@@ -490,6 +493,7 @@ const ProjectPage = () => {
         {activeTab === 'tools' && <ToolsPanel projectId={Number(projectId)} />}
         {activeTab === 'mcp-servers' && <McpServersPanel projectId={Number(projectId)} />}
         {activeTab === 'skills' && <SkillsPanel projectId={Number(projectId)} />}
+        {activeTab === 'repositories' && <RepositoriesPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && renderSettingsTab()}
       </Box>
 

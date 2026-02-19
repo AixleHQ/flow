@@ -22,6 +22,7 @@ const McpServersPage = lazyRouteComponent(() => import('../pages/mcp-servers'));
 const SkillsPage = lazyRouteComponent(() => import('../pages/skills'));
 const AssetsPage = lazyRouteComponent(() => import('../pages/assets'));
 const IntegrationsPage = lazyRouteComponent(() => import('../pages/integrations'));
+const RepositoriesPage = lazyRouteComponent(() => import('../pages/repositories'));
 const CompanySessionsPage = lazyRouteComponent(() => import('../pages/company-sessions'));
 const CompanySessionNewPage = lazyRouteComponent(() =>
   import('../pages/company-sessions').then((m) => ({ default: m.CompanySessionNewPage })),
@@ -194,6 +195,12 @@ export const companyIntegrationsRoute = createRoute({
   component: IntegrationsPage,
 });
 
+export const companyRepositoriesRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyRepositoriesPath,
+  component: RepositoriesPage,
+});
+
 // Company settings route (placeholder)
 export const companySettingsRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
@@ -250,6 +257,7 @@ export const routeTree = rootRoute.addChildren([
     companySkillsRoute,
     companyAssetsRoute,
     companyIntegrationsRoute,
+    companyRepositoriesRoute,
     companySettingsRoute,
     companyBrandingRoute,
     companySessionsRoute,

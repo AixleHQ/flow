@@ -5,7 +5,6 @@ import {
   AppBar,
   Avatar,
   Box,
-  Button,
   Divider,
   IconButton,
   ListItemIcon,
@@ -27,13 +26,14 @@ const styles = {
     borderBottom: '1px solid',
     borderColor: 'divider',
     boxShadow: 'none',
+    zIndex: (theme: Theme) => theme.zIndex.drawer + 1,
   },
   toolbar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: '64px',
-    padding: '0 24px',
+    minHeight: '48px !important',
+    padding: '0 16px',
   },
   logoSection: {
     display: 'flex',
@@ -41,13 +41,13 @@ const styles = {
     textDecoration: 'none',
   },
   companyLogo: {
-    height: 32,
+    height: 28,
     maxWidth: 120,
     objectFit: 'contain' as const,
   },
   companyLogoPlaceholder: {
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -55,50 +55,24 @@ const styles = {
     borderRadius: 1,
     color: 'text.secondary',
   },
-  rightSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 2,
-  },
-  navSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 1,
-  },
-  navButton: {
-    textTransform: 'none',
-    fontWeight: 500,
-    fontSize: '14px',
-    color: 'text.secondary',
-    px: 2,
-    '&:hover': {
-      backgroundColor: 'action.hover',
-    },
-  },
-  navButtonActive: {
-    color: 'primary.main',
-    backgroundColor: 'action.selected',
-  },
   userSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '10px',
   },
   userName: {
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 500,
     color: 'text.primary',
   },
   avatar: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     backgroundColor: 'primary.main',
-    fontSize: '14px',
+    fontSize: '13px',
     fontWeight: 600,
     cursor: 'pointer',
-    '&:hover': {
-      opacity: 0.9,
-    },
+    '&:hover': { opacity: 0.9 },
   },
   menuPaper: {
     mt: 1.5,
@@ -109,9 +83,7 @@ const styles = {
   },
   menuItem: {
     padding: '10px 16px',
-    '&:hover': {
-      backgroundColor: 'action.hover',
-    },
+    '&:hover': { backgroundColor: 'action.hover' },
   },
   menuItemActive: {
     backgroundColor: 'action.selected',
@@ -128,33 +100,9 @@ const styles = {
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
-
-interface NavItem {
-  path: string;
-  label: string;
-  adminOnly?: boolean;
-}
-
-const navItems: NavItem[] = [
-  { path: Routes.frontend.companyProjectsPath, label: 'Projects' },
-  { path: Routes.frontend.companySessionsPath, label: 'Sessions' },
-  { path: Routes.frontend.companyAssetsPath, label: 'Assets', adminOnly: true },
-  { path: Routes.frontend.companyMembersPath, label: 'Members', adminOnly: true },
-  { path: Routes.frontend.companyConfigItemsPath, label: 'Secrets & Variables', adminOnly: true },
-  { path: Routes.frontend.companyAgentsPath, label: 'Agents', adminOnly: true },
-  { path: Routes.frontend.companyToolsPath, label: 'Tools', adminOnly: true },
-  { path: Routes.frontend.companyMcpServersPath, label: 'MCP Servers', adminOnly: true },
-  { path: Routes.frontend.companySkillsPath, label: 'Skills', adminOnly: true },
-  { path: Routes.frontend.companyIntegrationsPath, label: 'Integrations', adminOnly: true },
-
-  // { path: Routes.frontend.companySettingsPath, label: 'Settings', adminOnly: true },
-  // { path: Routes.frontend.companyBrandingPath, label: 'Branding', adminOnly: true },
-];
 
 export const AppHeader: React.FC = () => {
   const navigate = useNavigate();
@@ -163,18 +111,11 @@ export const AppHeader: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
-  const currentPath = routerState.location.pathname;
-  const isProfileActive = currentPath === Routes.frontend.profilePath;
-  const isAdmin = currentUser?.role === 'admin';
+  const isProfileActive = routerState.location.pathname === Routes.frontend.profilePath;
   const company = currentUser?.company;
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleProfileClick = () => {
     handleMenuClose();
@@ -186,14 +127,12 @@ export const AppHeader: React.FC = () => {
     try {
       await fetch('/api/v1/sessions', { method: 'DELETE' });
     } catch {
-      // Ignore errors, we're logging out anyway
+      // noop
     }
     window.location.href = Routes.frontend.loginPath;
   };
 
-  if (!currentUser) {
-    return null;
-  }
+  if (!currentUser) return null;
 
   const renderCompanyLogo = () => {
     if (company?.logoUrl) {
@@ -206,74 +145,34 @@ export const AppHeader: React.FC = () => {
     );
   };
 
-  const isNavItemActive = (path: string) => {
-    // For projects, check if we're on projects page or a specific project page
-    if (path === Routes.frontend.companyProjectsPath) {
-      return currentPath.startsWith('/company/projects');
-    }
-    return currentPath === path;
-  };
-
   return (
     <AppBar position="static" sx={styles.appBar}>
       <Toolbar sx={styles.toolbar}>
-        {/* Company Logo */}
         <Link to={Routes.frontend.companyProjectsPath} style={styles.logoSection as React.CSSProperties}>
           {renderCompanyLogo()}
         </Link>
 
-        {/* Right Section: Navigation + User */}
-        <Box sx={styles.rightSection}>
-          {/* Navigation */}
-          <Box sx={styles.navSection}>
-            {navItems
-              .filter((item) => !item.adminOnly || isAdmin)
-              .map((item) => {
-                const isActive = isNavItemActive(item.path);
-                return (
-                  <Button
-                    key={item.path}
-                    component={Link}
-                    to={item.path}
-                    sx={{
-                      ...styles.navButton,
-                      ...(isActive ? styles.navButtonActive : {}),
-                    }}
-                  >
-                    {item.label}
-                  </Button>
-                );
-              })}
-          </Box>
-
-          {/* User Section */}
-          <Box sx={styles.userSection}>
-            <Typography sx={styles.userName}>{currentUser.name}</Typography>
-            <IconButton
-              onClick={handleMenuOpen}
-              size="small"
-              aria-label="User menu"
-              aria-controls={open ? 'user-menu' : undefined}
-              aria-haspopup="true"
-              aria-expanded={open ? 'true' : undefined}
-            >
-              <Avatar sx={styles.avatar}>{getInitials(currentUser.name)}</Avatar>
-            </IconButton>
-          </Box>
+        <Box sx={styles.userSection}>
+          <Typography sx={styles.userName}>{currentUser.name}</Typography>
+          <IconButton
+            onClick={handleMenuOpen}
+            size="small"
+            aria-label="User menu"
+            aria-controls={open ? 'user-menu' : undefined}
+            aria-haspopup="true"
+            aria-expanded={open ? 'true' : undefined}
+          >
+            <Avatar sx={styles.avatar}>{getInitials(currentUser.name)}</Avatar>
+          </IconButton>
         </Box>
 
-        {/* User Menu */}
         <Menu
           id="user-menu"
           anchorEl={anchorEl}
           open={open}
           onClose={handleMenuClose}
           onClick={handleMenuClose}
-          slotProps={{
-            paper: {
-              sx: styles.menuPaper,
-            },
-          }}
+          slotProps={{ paper: { sx: styles.menuPaper } }}
           transformOrigin={{ horizontal: 'right', vertical: 'top' }}
           anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         >
