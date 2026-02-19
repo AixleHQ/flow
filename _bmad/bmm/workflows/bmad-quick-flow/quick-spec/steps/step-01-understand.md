@@ -2,10 +2,9 @@
 name: 'step-01-understand'
 description: 'Analyze the requirement delta between current state and what user wants to build'
 
-workflow_path: '{project-root}/_bmad/bmm/workflows/bmad-quick-flow/create-tech-spec'
 nextStepFile: './step-02-investigate.md'
 skipToStepFile: './step-03-generate.md'
-templateFile: '{workflow_path}/tech-spec-template.md'
+templateFile: '../tech-spec-template.md'
 wipFile: '{implementation_artifacts}/tech-spec-wip.md'
 ---
 
@@ -47,20 +46,20 @@ Hey {user_name}! Found a tech-spec in progress:
 
 Is this what you're here to continue?
 
-[y] Yes, pick up where I left off
-[n] No, archive it and start something new
+[Y] Yes, pick up where I left off
+[N] No, archive it and start something new
 ```
 
 4. **HALT and wait for user selection.**
 
 a) **Menu Handling:**
 
-- **[y] Continue existing:**
+- **[Y] Continue existing:**
   - Jump directly to the appropriate step based on `stepsCompleted`:
     - `[1]` → Load `{nextStepFile}` (Step 2)
     - `[1, 2]` → Load `{skipToStepFile}` (Step 3)
     - `[1, 2, 3]` → Load `./step-04-review.md` (Step 4)
-- **[n] Archive and start fresh:**
+- **[N] Archive and start fresh:**
   - Rename `{wipFile}` to `{implementation_artifacts}/tech-spec-{slug}-archived-{date}.md`
 
 ### 1. Greet and Ask for Initial Request
@@ -77,7 +76,7 @@ a) **Before asking detailed questions, do a rapid scan to understand the landsca
 
 b) **Check for existing context docs:**
 
-- Check `{output_folder}` and `{planning_artifacts}`for planning documents (PRD, architecture, epics, research)
+- Check `{implementation_artifacts}` and `{planning_artifacts}`for planning documents (PRD, architecture, epics, research)
 - Check for `**/project-context.md` - if it exists, skim for patterns and conventions
 - Check for any existing stories or specs related to user's request
 
@@ -162,19 +161,22 @@ b) **Report to user:**
 
 a) **Display menu:**
 
-```
-[a] Advanced Elicitation - dig deeper into requirements
-[c] Continue - proceed to next step
-[p] Party Mode - bring in other experts
-```
+Display: "**Select:** [A] Advanced Elicitation [P] Party Mode [C] Continue to Deep Investigation (Step 2 of 4)"
 
 b) **HALT and wait for user selection.**
 
-#### Menu Handling:
+#### Menu Handling Logic:
 
-- **[a]**: Load and execute `{advanced_elicitation}`, then return here and redisplay menu
-- **[c]**: Load and execute `{nextStepFile}` (Map Technical Constraints)
-- **[p]**: Load and execute `{party_mode_exec}`, then return here and redisplay menu
+- IF A: Read fully and follow: `{advanced_elicitation}` with current tech-spec content, process enhanced insights, ask user "Accept improvements? (y/n)", if yes update WIP file then redisplay menu, if no keep original then redisplay menu
+- IF P: Read fully and follow: `{party_mode_exec}` with current tech-spec content, process collaborative insights, ask user "Accept changes? (y/n)", if yes update WIP file then redisplay menu, if no keep original then redisplay menu
+- IF C: Verify `{wipFile}` has `stepsCompleted: [1]`, then read fully and follow: `{nextStepFile}`
+- IF Any other comments or queries: respond helpfully then redisplay menu
+
+#### EXECUTION RULES:
+
+- ALWAYS halt and wait for user input after presenting menu
+- ONLY proceed to next step when user selects 'C'
+- After A or P execution, return to this menu
 
 ---
 
@@ -186,4 +188,4 @@ b) **HALT and wait for user selection.**
 
 - [ ] WIP check performed FIRST before any greeting.
 - [ ] `{wipFile}` created with correct frontmatter, Overview, Context for Development, and `stepsCompleted: [1]`.
-- [ ] User selected [c] to continue.
+- [ ] User selected [C] to continue.

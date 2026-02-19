@@ -143,3 +143,7 @@ If all validations pass:
 **All validations complete!** [C] Complete Workflow
 
 When C is selected, the workflow is complete and the epics.md is ready for development.
+
+Epics and Stories complete. Read fully and follow: `_bmad/core/tasks/help.md` with argument `Create Epics and Stories`.
+
+Upon Completion of task output: offer to answer any questions about the Epics and Stories.

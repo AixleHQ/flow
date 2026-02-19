@@ -2,8 +2,6 @@
 name: 'step-05-adversarial-review'
 description: 'Construct diff and invoke adversarial review task'
 
-workflow_path: '{project-root}/_bmad/bmm/workflows/bmad-quick-flow/quick-dev'
-thisStepFile: './step-05-adversarial-review.md'
 nextStepFile: './step-06-resolve-findings.md'
 ---
 
@@ -59,13 +57,13 @@ Merge all changes into `{diff_output}`.
 
 ### 2. Invoke Adversarial Review
 
-With `{diff_output}` constructed, invoke the review task. If possible, use information asymmetry: run this step, and only it, in a separate subagent or process with read access to the project, but no context except the `{diff_output}`.
+With `{diff_output}` constructed, load and follow the review task. If possible, use information asymmetry: load this step, and only it, in a separate subagent or process with read access to the project, but no context except the `{diff_output}`.
 
 ```xml
 <invoke-task>Review {diff_output} using {project-root}/_bmad/core/tasks/review-adversarial-general.xml</invoke-task>
 ```
 
-**Platform fallback:** If task invocation not available, load the task file and execute its instructions inline, passing `{diff_output}` as the content.
+**Platform fallback:** If task invocation not available, load the task file and follow its instructions inline, passing `{diff_output}` as the content.
 
 The task should: review `{diff_output}` and return a list of findings.
 
@@ -85,7 +83,7 @@ If TodoWrite or similar tool is available, turn each finding into a TODO, includ
 
 ## NEXT STEP
 
-With findings in hand, load `step-06-resolve-findings.md` for user to choose resolution approach.
+With findings in hand, read fully and follow: `step-06-resolve-findings.md` for user to choose resolution approach.
 
 ---
 

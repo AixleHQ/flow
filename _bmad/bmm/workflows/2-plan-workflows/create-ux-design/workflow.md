@@ -1,7 +1,6 @@
 ---
 name: create-ux-design
 description: Work with a peer UX Design expert to plan your applications UX patterns, look and feel.
-web_bundle: true
 ---
 
 # Create UX Design Workflow
@@ -40,4 +39,4 @@ Load config from `{project-root}/_bmad/bmm/config.yaml` and resolve:
 ## EXECUTION
 
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
-- Load and execute `steps/step-01-init.md` to begin the UX design workflow.
+- Read fully and follow: `steps/step-01-init.md` to begin the UX design workflow.

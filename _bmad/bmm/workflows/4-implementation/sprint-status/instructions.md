@@ -24,6 +24,7 @@
 </step>
 
 <step n="1" goal="Locate sprint status file">
+  <action>Load {project_context} for project-wide patterns and conventions (if exists)</action>
   <action>Try {sprint_status_file}</action>
   <check if="file not found">
     <output>❌ sprint-status.yaml not found.
@@ -96,7 +97,7 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
   3. Else if any story status == ready-for-dev → recommend `dev-story`
   4. Else if any story status == backlog → recommend `create-story`
   5. Else if any retrospective status == optional → recommend `retrospective`
-  6. Else → All implementation items done; suggest `workflow-status` to plan next phase
+  6. Else → All implementation items done; congratulate the user - you both did amazing work together!
   <action>Store selected recommendation as: next_story_id, next_workflow_id, next_agent (SM/DEV as appropriate)</action>
 </step>
 

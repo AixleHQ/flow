@@ -122,22 +122,21 @@ Present enthusiastic celebration:
 
 **Key Steps:**
 1. **Create a module folder:** Name it something descriptive (e.g., `my-custom-stuff`)
-2. **Add module.yaml:** Include a `module.yaml` file with `unitary: true`
-3. **Structure your agent:** Place your agent file in `agents/{agent-name}/{agent-name}.agent.yaml`
-4. **Include sidecar (if Expert):** For Expert agents, include the `_memory/{sidecar-folder}/` structure
+2. **Add module.yaml:** Include a `module.yaml` file with `code`, `name`, `version`
+3. **Copy your agent:** Copy the entire folder from `_bmad-creations/{agent-name}/` to `agents/`
+4. **The workflow handles structure:** Sidecar folders are already in the right place
 
 **Module Structure Example:**
 ```
 my-custom-stuff/
-├── module.yaml          # Contains: unitary: true
-├── agents/              # Custom agents go here
+├── module.yaml
+├── agents/                              # Copy entire folder from _bmad-creations/
 │   └── {agent-name}/
 │       ├── {agent-name}.agent.yaml
-│       └── _memory/              # Expert agents only
-│           └── {sidecar-folder}/
-│               ├── memories.md
-│               └── instructions.md
-└── workflows/           # Optional: standalone custom workflows
+│       └── {agent-name}-sidecar/        # Already created by workflow if hasSidecar: true
+│           ├── memories.md
+│           └── instructions.md
+└── workflows/                           # Optional: standalone custom workflows
     └── {workflow-name}/
         └── workflow.md
 ```
@@ -175,16 +174,15 @@ my-custom-stuff/
 
 ### Installation
 
-Package your agent as a standalone module with `module.yaml` containing `unitary: true`.
+Package your agent as a standalone module with a `module.yaml` file.
 See: {installationDocs}
 
 ### Quick Start
 
 1. Create a module folder
-2. Add module.yaml with `unitary: true`
-3. Place agent in `agents/{agent-name}/` structure
-4. Include sidecar folder for Expert agents
-5. Install via BMAD installer
+2. Add module.yaml with code, name, version
+3. Copy entire agent folder from `_bmad-creations/{agent-name}/` to `agents/`
+4. Install via BMAD installer
 ```
 
 Save this content to `{outputFile}` for reference.
