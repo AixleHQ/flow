@@ -31,6 +31,13 @@
 
 	// Install kubectl/helm/minikube on Alpine-based image
 	"postCreateCommand": "bash .devcontainer/install-k8s-tools.sh",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Shopify.ruby-lsp"
+			]
+		}
+	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
