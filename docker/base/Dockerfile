@@ -4,7 +4,9 @@
 # Components:
 #   - Node.js 22 (Debian slim for glibc compatibility)
 #   - ttyd (web terminal)
-#   - File watcher service (WebSocket streaming)
+#   - OpenVSCode Server (browser IDE)
+#   - File watcher service (WebSocket streaming, auth_setup only)
+#   - Auth-check service (auth_setup only)
 #   - MITM proxy for request/response logging
 #   - Common development tools
 # =============================================================================
@@ -52,6 +54,20 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod +x /usr/local/bin/ttyd
 
 # -----------------------------------------------------------------------------
+# Install OpenVSCode Server from GitHub releases
+# -----------------------------------------------------------------------------
+ARG OPENVSCODE_VERSION=1.106.3
+RUN ARCH=$(dpkg --print-architecture) && \
+    if [ "$ARCH" = "amd64" ]; then OVS_ARCH="x64"; else OVS_ARCH="arm64"; fi && \
+    curl -fsSL "https://github.com/gitpod-io/openvscode-server/releases/download/openvscode-server-v${OPENVSCODE_VERSION}/openvscode-server-v${OPENVSCODE_VERSION}-linux-${OVS_ARCH}.tar.gz" | \
+    tar -xz -C /opt/ && \
+    mv /opt/openvscode-server-v${OPENVSCODE_VERSION}-linux-${OVS_ARCH} /opt/openvscode-server && \
+    chmod -R 755 /opt/openvscode-server
+
+# Pre-seed VS Code settings (Palad dark theme with brand colors)
+COPY vscode-settings.json /opt/openvscode-server/default-settings.json
+
+# -----------------------------------------------------------------------------
 # File Watcher dependencies
 # -----------------------------------------------------------------------------
 WORKDIR /opt/watcher
@@ -60,6 +76,11 @@ RUN npm install --production && npm cache clean --force
 
 # Copy watcher source
 COPY watcher/index.js ./
+
+# -----------------------------------------------------------------------------
+# Auth Check — lightweight standalone service for auth_setup sessions
+# -----------------------------------------------------------------------------
+COPY auth-check/index.js /opt/auth-check/index.js
 
 # -----------------------------------------------------------------------------
 # MITM logger script
@@ -100,14 +121,15 @@ RUN chmod +x /app/entrypoint.sh
 # -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
-RUN mkdir -p /workspace/repo /workspace/output
+RUN mkdir -p /workspace/repo /workspace/outputs
 
 WORKDIR /workspace
 
 # Ports:
 #   7681 - ttyd web terminal
 #   4040 - file watcher WebSocket + HTTP API
+#   8443 - OpenVSCode Server (IDE)
 #   8888 - MITM proxy (internal)
-EXPOSE 7681 4040
+EXPOSE 7681 4040 8443
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

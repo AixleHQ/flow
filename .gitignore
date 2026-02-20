@@ -7,272 +7,70 @@
 # `$XDG_CONFIG_HOME/git/ignore` or `~/.config/git/ignore`
 
 # web-specific
-/web/tmp/
-/web/log/
-web/.bundle
+/tmp/
+/log/
+.bundle
 
 # Ignore all environment files.
-web/.env*
-!web/.env.example
+.env*
+!.env.example
 
 # Ignore all logfiles and tempfiles.
-web/log/*
-web/tmp/*
-!/web/log/.keep
-!/web/tmp/.keep
+log/*
+tmp/*
+!/log/.keep
+!/tmp/.keep
 
 # Ignore pidfiles, but keep the directory.
-web/tmp/pids/*
-!/web/tmp/pids/
-!/web/tmp/pids/.keep
+tmp/pids/*
+!/tmp/pids/
+!/tmp/pids/.keep
 
 # Ignore storage (uploaded files in development and any SQLite databases).
-web/storage/*
-!/web/storage/.keep
-web/tmp/storage/*
-!/web/tmp/storage/
-!/web/tmp/storage/.keep
+storage/*
+!/storage/.keep
+tmp/storage/*
+!/tmp/storage/
+!/tmp/storage/.keep
 
-web/public/assets
+public/assets
 
 # Ignore master key for decrypting credentials and more.
-web/config/master.key
-web/app/temporal/workflows.yml
+config/master.key
+app/temporal/workflows.yml
 web_reference
 initializer_reference
 
-web/.yarn/*
-!web/.yarn/patches
-!web/.yarn/plugins
-!web/.yarn/releases
-!web/.yarn/sdks
-!web/.yarn/versions
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
 
 # Vite Ruby
-web/.vite
-web/public/vite*
-web/public/cache
-web/public/store
+.vite
+public/vite*
+public/cache
+public/store
 
 # Node modules (all levels)
 node_modules/
 # Vite uses dotenv and suggests to ignore local-only env files. See
 # https://vitejs.dev/guide/env-and-mode.html#env-files
 *.local
-web/coverage
+coverage
 
-web/.env.development
+.env.development
 
 # Private individual user cursor rules
 .cursor/rules/_*.mdc
-web/.byebug_history
+.byebug_history
 
-web/.ruby-lsp/
+.ruby-lsp/
 
-web/docker/remote/db_dumps/*
-!/web/docker/remote/db_dumps/.keep
-
-# Byte-compiled / optimized / DLL files
-ai-engine/app/__pycache__/
-ai-engine/app/*.py[cod]
-ai-engine/app/*$py.class
-
-# C extensions
-ai-engine/app/*.so
-
-# Distribution / packaging
-ai-engine/app/.Python
-ai-engine/app/build/
-ai-engine/app/develop-eggs/
-ai-engine/app/dist/
-ai-engine/app/downloads/
-ai-engine/app/eggs/
-ai-engine/app/.eggs/
-ai-engine/app/lib/
-ai-engine/app/lib64/
-ai-engine/app/parts/
-ai-engine/app/sdist/
-ai-engine/app/var/
-ai-engine/app/wheels/
-ai-engine/app/pip-wheel-metadata/
-ai-engine/app/shareai-engine-wheels/
-ai-engine/app/*.egg-info/
-ai-engine/app/.installed.cfg/
-ai-engine/app/*.egg
-ai-engine/app/MANIFEST
-
-# PyInstaller
-ai-engine/app/*.manifest
-ai-engine/app/*.spec
-
-# Installer logs
-ai-engine/app/pip-log.txt
-ai-engine/app/pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-ai-engine/app/htmlcov/
-ai-engine/app/.tox/
-ai-engine/app/.nox/
-ai-engine/app/.coverage
-ai-engine/app/.coverage.*
-ai-engine/app/.cache
-ai-engine/app/nosetests.xml
-ai-engine/app/coverage.xml
-ai-engine/app/*.cover
-ai-engine/app/*.py,cover
-ai-engine/app/.hypothesis/
-ai-engine/app/.pytest_cache
-ai-engine/app/.ruff_cache
-ai-engine/app/cover/
-ai-engine/.coverage
-
-# Translations
-ai-engine/app/*.mo
-ai-engine/app/*.pot
-
-# Django stuff:
-ai-engine/app/*.log
-ai-engine/app/local_settings.py
-ai-engine/app/db.sqlite3
-ai-engine/app/db.sqlite3-journal
-
-# Flask stuff:
-ai-engine/app/instance/
-ai-engine/app/.webassets-cache
-
-# Scrapy stuff:
-ai-engine/app/.scrapy
-
-# Sphinx documentation
-ai-engine/app/docs/_build/
-
-# PyBuilder
-ai-engine/app/target/
-
-# Jupyter Notebook
-ai-engine/app/.ipynb_checkpoints
-
-# IPython
-ai-engine/app/profile_default/
-ai-engine/app/ipython_config.py
-
-# pyenv
-ai-engine/app/.python-version
-
-# pipenv
-ai-engine/app/Pipfile.lock
-
-# PEP 582
-ai-engine/app/__pypackages__/
-
-# Celery stuff
-ai-engine/app/celerybeat-schedule
-ai-engine/app/celerybeat.pid
-
-# SageMath parsed files
-ai-engine/app/*.sage.py
-
-# Environments
-ai-engine/*.env
-ai-engine/app/.venv
-ai-engine/app/env/
-ai-engine/app/venv/
-ai-engine/app/ENV/
-ai-engine/app/env.bak/
-ai-engine/app/venv.bak/
-
-# Spyder project settings
-ai-engine/app/.spyderproject
-ai-engine/app/.spyproject
-
-# Rope project settings
-ai-engine/app/.ropeproject
-
-# mkdocs documentation
-ai-engine/app/site
-
-# mypy
-ai-engine/app/.mypy_cache/
-ai-engine/app/.dmypy.json
-ai-engine/app/dmypy.json
-
-# Pyre type checker
-ai-engine/app/.pyre/
-
-# pytype static type analyzer
-ai-engine/app/.pytype/
-
-# Cython debug symbols
-ai-engine/app/cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to your project. However JetBrains also recommends that you follow the guidelines in
-#  https://www.jetbrains.com/help/pycharm/disabling-and-enabling-inspection.html#prettier
-
-#  User-specific stuff
-ai-engine/app/.idea/**/workspace.xml
-ai-engine/app/.idea/**/tasks.xml
-ai-engine/app/.idea/**/usage.statistics.xml
-ai-engine/app/.idea/**/dictionaries
-ai-engine/app/.idea/**/shelf
-ai-engine/app/.idea/**/contentModel.xml
-
-# Sensitive or high-churn files:
-ai-engine/app/.idea/**/dataSources/
-ai-engine/app/.idea/**/dataSources.ids
-ai-engine/app/.idea/**/dataSources.xml
-ai-engine/app/.idea/**/dataSources.local.xml
-ai-engine/app/.idea/**/sqlDataSources.xml
-ai-engine/app/.idea/**/dynamic.xml
-ai-engine/app/.idea/**/uiDesigner.xml
-ai-engine/app/.idea/**/dbnavigator.xml
-
-# Gradle
-ai-engine/app/.gradle/
-
-# Package in the Jenkins CI philosphy
-ai-engine/app/target
-
-# Cell
-ai-engine/app/cell
-
-# IPython
-ai-engine/app/profile_default/
-
-# vi
-ai-engine/app/*.swp
-ai-engine/app/*.swo
-
-# Emacs
-ai-engine/app/*~
-
-# Django
-ai-engine/app/*.pyc
-ai-engine/app/*.pyo
-ai-engine/app/*.pyd
-ai-engine/app/.Python
-ai-engine/app/env/
-ai-engine/app/venv/
-ai-engine/app/ENV/
-ai-engine/app/env.bak/
-ai-engine/app/venv.bak/
-
-# Database
-ai-engine/app/*.db
-ai-engine/app/*.sqlite3
-
-# Logs
-ai-engine/app/*.log
-
-# Environment variables
-ai-engine/app/.env
-
-# Virtualenv
-ai-engine/app/.venv
-ai-engine/app/env/
-ai-engine/app/venv/
+docker/remote/db_dumps/*
+!/docker/remote/db_dumps/.keep
 
 # IDE
 **/.vscode/
@@ -284,33 +82,5 @@ ai-engine/app/.idea/
 .DS_Store
 ai-engine/app/Thumbs.db
 
-# Dagster specific (from project)
-dagster_home/
-alembic/
-dist/
-*.egg-info/
-tests/cassettes/
-
-# Specific to python/app
-ai-engine/app/__pycache__/
-*__pycache__/
-ai-engine/app/*.pyc
-ai-engine/app/.venv/
-ai-engine/app/.env
-ai-engine/app/.env
-ai-engine/app/dagster_home/
-ai-engine/app/migrations/
-ai-engine/app/dist/
-ai-engine/app/*.egg-info/
-ai-engine/app/workflows/workflows.yml
-
-# Dev scripts
-ai-engine/scripts/dev/
-
-# Legacy
-legacy_python/
 docker/remote/db_dumps/latest.sql.gz
 
-# Claude Code auth (contains OAuth tokens)
-docker/claude-code/claude-home/.claude.json
-docker/claude-code/claude-home/.claude/

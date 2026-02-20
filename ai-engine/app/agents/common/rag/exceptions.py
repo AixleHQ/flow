@@ -1,2 +1,0 @@
-class NoDocumentsFoundError(Exception):
-    pass

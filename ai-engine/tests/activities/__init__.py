@@ -1,1 +1,0 @@
-"""Activities tests module."""
