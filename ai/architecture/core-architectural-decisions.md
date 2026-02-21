@@ -1,167 +1,129 @@
 # Core Architectural Decisions
 
-## Decision Priority Analysis
+**Updated:** 2026-02-21
 
-**Critical Decisions (Block Implementation):**
-- Data modeling approach (ActiveRecord primary)
-- Authentication method (Google OAuth)
-- API design pattern (REST)
-- State management (Redux Toolkit + Zustand)
-- Hosting strategy (AWS ECS Fargate)
-
-**Important Decisions (Shape Architecture):**
-- Authorization patterns (RBAC + Pundit)
-- Error handling (Rails standard)
-- Performance optimization (code splitting, lazy loading)
-- CI/CD pipeline (GitHub Actions)
-- Monitoring (Lograge + Sentry + Temporal UI)
-
-**Deferred Decisions (Post-MVP):**
-- Rate limiting (skipped for MVP)
-- Scaling strategy (deferred due to Docker sessions)
-- Multiple OAuth providers (expansion later)
+---
 
 ## Data Architecture
 
-**Database Choice:** PostgreSQL 15.3 (already in use)
+**Database:** PostgreSQL 15.3
 
-**Data Modeling Approach:**
-- **Primary:** ActiveRecord ORM (main approach)
-- **Fallback:** Raw SQL for complex analytical queries
-- **Rationale:** ActiveRecord provides simplicity and productivity for most cases, raw SQL for optimization where necessary
+**ORM:** ActiveRecord — primary for all operations.
 
-**Data Validation Strategy:**
-- **Multi-level validation:** Database constraints + Model validations + Service-level validation
-- **Database constraints:** NOT NULL, foreign keys, check constraints for data integrity
-- **Model validations:** Rails validations for UX and business rules
-- **Service-level:** Complex business logic in service classes
-- **Rationale:** Three-tier protection ensures data integrity at all levels
+**Multi-tenancy:** Company → Project hierarchy with polymorphic `scope` (Company/Project) for scoped resources. All tenant queries filter by `company_id`.
 
-**Migration Strategy:**
-- **Approach:** Rails migrations
-- **Rationale:** Standard Rails approach, already used in the project
+**State machines:** AASM gem. Three active: User (account + onboarding), Company, TerminalSession.
 
-**Caching Strategy:**
-- **Redis:** Session state, frequent queries, real-time data
-- **Rails cache:** Application-level caching
-- **CDN:** Static files and assets
-- **Database query caching:** Automatic via ActiveRecord
-- **Rationale:** Multi-layered caching for performance optimization
+**Enums:** `enumerize` gem. Never `ActiveRecord::Enum`.
 
-## Authentication & Security
+**Encryption:** `ActiveSupport::MessageEncryptor` for agent credentials, integration credentials, config item secrets.
 
-**Authentication Method:**
-- **Approach:** Google OAuth only (for MVP)
-- **Future:** Ability to expand to other OAuth providers
-- **Rationale:** Simplicity for MVP, internal tool, Google OAuth already implemented
+**Validation:** Three levels — DB constraints (NOT NULL, FK, unique) → Model validations (Rails) → Service-level business rules.
 
-**Authorization Patterns:**
-- **Approach:** RBAC (Role-Based Access Control) + Pundit policies everywhere
-- **Roles:** Admin, Collaborator
-- **Policy objects:** Pundit for flexible checks at the project/resource level
-- **Rationale:** RBAC provides the basic structure, Pundit gives flexibility for complex cases
+**Migrations:** Standard Rails migrations. Schema tracked in `db/schema.rb`.
 
-**Security Middleware:**
-- **Approach:** Rails built-in security + Rack middleware
-- **Components:** CSRF protection, secure headers, rate limiting middleware
-- **Rationale:** Rails built-in provides baseline protection, Rack middleware for additional requirements
+**Caching:** Redis for session state and frequent queries. Rails cache for app-level. CDN for static assets.
 
-**Data Encryption Approach:**
-- **Secrets:** ActiveSupport::MessageEncryptor
-- **Rationale:** Simplicity and integration with Rails credentials
+---
 
-**API Security Strategy:**
-- **Approach:** Session-based authentication for all APIs (including the UI API)
-- **Rationale:** Simplification for MVP, all APIs are used only for the UI, no external clients
+## Authentication & Authorization
 
-## API & Communication Patterns
+**Authentication:** Google OAuth via OmniAuth. Session-based (no JWT). Internal-only platform, no external API clients.
 
-**API Design Pattern:**
-- **Approach:** REST API for all endpoints
-- **Rationale:** Standard approach, already in use, suitable for all cases
+**Authorization:** Pundit policies. Auto-matched to controllers via `AuthorizationConcern#dynamic_authorize!`. Policy hierarchy mirrors controller namespace hierarchy.
 
-**API Documentation Approach:**
-- **Approach:** OAS Rails (OpenAPI Specification for Rails)
-- **Rationale:** Automatic documentation generation from Rails controllers
+**Roles:** `employee`, `admin`, `super_admin` (via enumerize). Super admin protected — only via seeds/DB.
 
-**Error Handling Standards:**
-- **Approach:** Rails standard errors
-- **Rationale:** Simplicity and consistency with the Rails approach
+**Multi-tenancy auth:** Company resolved from `current_user.company`. Project access checked via ownership + collaborator relationship.
 
-**Rate Limiting Strategy:**
-- **Approach:** Skipped for MVP
-- **Rationale:** Internal tool, rate limiting is not critical at the initial stage
+---
 
-**Communication Between Services:**
-- **Approach:** Temporal for orchestration
-- **Rationale:** Temporal is already in use and sufficient for all inter-service communications
+## Container Execution Architecture
+
+**Core decision:** Strategy + Runtime pattern. Strategies define WHAT to do, Runtimes define WHERE.
+
+**Strategies:**
+- `AgentAuthStrategy` — OAuth credential collection via file watching inside container
+- `AgentSessionStrategy` — interactive/non-interactive agent sessions with credential injection, log/usage collection
+- `ToolExecutionStrategy` — custom tool execution with command, parameters, file mounts, exit code tracking
+
+**Runtimes:**
+- `DockerRuntime` — docker-api gem, local Docker daemon
+- `KubernetesRuntime` — kubeclient + websocket, Kubernetes Pods + Services + Traefik IngressRoutes
+
+**Phase lifecycle:** `pull_image → create_container → start_container → exec → cleanup` with `before_/after_` hooks.
+
+**Orchestration:** Temporal workflows. `ContainerWorkflow` manages full container lifecycle with signal support for interactive sessions.
+
+**Agent adapters:** Per-agent credential/config handling. Four adapters: ClaudeCode, CursorCli, Codex, GeminiCli. Each defines auth paths, config generation, usage collection method (OTLP or MITM).
+
+---
+
+## API Design
+
+**Pattern:** REST API only. No GraphQL.
+
+**Format:** JSON. `respond_with` for auto format + status.
+
+**Response wrapping:** Lists in `{ items: [...] }`, singles in `{ data: {...} }`.
+
+**Filtering:** Ransack — `Model.ransack(params[:q]).result`.
+
+**Pagination:** Pagy via `PaginationConcern`.
+
+**Documentation:** OAS Rails (auto-generated OpenAPI from controllers).
+
+**Case conversion:** snake_case in API, automatic camelCase ↔ snake_case in frontend via `baseApi.ts`.
+
+**Real-time:** ActionCable for terminal session state updates (`TerminalSessionChannel`).
+
+**Internal endpoints:** `/api/v1/internal/` — WebSocket auth, OTLP usage ingestion. No Pundit.
+
+---
 
 ## Frontend Architecture
 
-**State Management Approach:**
-- **Approach:** Redux Toolkit + Zustand (hybrid)
-- **Redux Toolkit:** Global state (API cache, user state)
-- **Zustand:** Local component state
-- **Rationale:** Optimal balance between centralized and local state
+**Framework:** React 19 + TypeScript 5.9 + Vite 7.3.
 
-**Component Architecture:**
-- **Approach:** Feature-Sliced Design
-- **Rationale:** Already in use, well-structured architecture
+**Architecture:** Feature-Sliced Design (app → pages → features → entities → shared).
 
-**Routing Strategy:**
-- **Approach:** TanStack Router
-- **Rationale:** Type-safe routing, already in use
+**State management:** Redux Toolkit (global: API cache, user) + Zustand (local component state). Never mix.
 
-**Performance Optimization:**
-- **Code splitting:** Vite dynamic imports
-- **Lazy loading:** Components and routes
-- **Memoization:** React.memo, useMemo, useCallback where necessary
-- **Virtual scrolling:** For large artifact lists
-- **Rationale:** Comprehensive optimization for performance
+**Routing:** TanStack Router — type-safe, generated routes.
 
-**Bundle Optimization:**
-- **Approach:** Vite build optimization + chunk splitting
-- **Rationale:** Optimization of bundle size and load time
+**UI:** Material UI 6.x.
 
-## Infrastructure & Deployment
+**Forms:** React Hook Form + Zod. Validate on blur + on submit.
 
-**Hosting Strategy:**
-- **Approach:** AWS ECS Fargate
-- **Rationale:** Serverless containers, managed service, suitable for Docker-based architecture
+**API client:** RTK Query with auto case conversion interceptors. CSRF from meta tag.
 
-**CI/CD Pipeline Approach:**
-- **Approach:** GitHub Actions
-- **Rationale:** Integration with GitHub, automation of tests and deployment
+---
 
-**Environment Configuration:**
-- **Development:** .env and .env.development + Docker Compose + settings.yml
-- **Production:** AWS environment variables + AWS Secrets Manager
-- **Rationale:** Simplicity for development, security for production
+## Infrastructure
 
-**Monitoring and Logging:**
-- **Structured logging:** Lograge
-- **Error tracking:** Sentry
-- **Workflow monitoring:** Temporal UI
-- **Rationale:** Comprehensive monitoring at all levels
+**Development:** Docker Compose — web (Rails + Vite), Temporal, PostgreSQL, Redis.
 
-**Scaling Strategy:**
-- **Approach:** Deferred
-- **Rationale:** Docker sessions for terminals do not scale horizontally, fixed resources for MVP
+**Agent containers:** Custom Docker images per agent (claude-code, cursor-cli, codex, gemini-cli) built from shared base image.
 
-## Decision Impact Analysis
+**Kubernetes:** Optional runtime for agent containers (Pods + Services + Traefik IngressRoutes). Config in `kube/`.
 
-**Implementation Sequence:**
-1. Data models and migrations (ActiveRecord)
-2. Authentication setup (Google OAuth)
-3. Authorization policies (Pundit)
-4. API endpoints (REST)
-5. Frontend state management (Redux Toolkit + Zustand)
-6. Performance optimizations (code splitting, lazy loading)
-7. CI/CD pipeline (GitHub Actions)
-8. Deployment setup (AWS ECS Fargate)
+**File storage:** Shrine + AWS S3 for asset versions, session logs.
 
-**Cross-Component Dependencies:**
-- Authentication → Authorization → API endpoints
-- Data models → API endpoints → Frontend state
-- Frontend architecture → Performance optimizations
-- Infrastructure → CI/CD → Deployment
+**Monitoring:** Lograge (structured JSON logging), Rollbar (error tracking), Temporal UI (workflow monitoring).
+
+**CI/CD:** GitHub Actions. Quality gate: `make check` (tests + rubocop + brakeman + eslint).
+
+---
+
+## Key Trade-offs
+
+| Decision | Chosen | Alternative | Rationale |
+|----------|--------|-------------|-----------|
+| Auth | Google OAuth only | Multi-provider | Internal tool, simplicity for MVP |
+| API style | REST | GraphQL | Standard, fits CRUD patterns well |
+| State mgmt | Redux + Zustand | Redux only | RTK for API cache, Zustand for local — cleaner separation |
+| Enums | enumerize gem | AR::Enum | Better scopes, i18n, no DB-level integers |
+| Container orchestration | Temporal | Sidekiq/Rails jobs | Complex multi-phase lifecycle needs workflow engine |
+| Runtime abstraction | Strategy + Runtime | Single Docker implementation | Kubernetes support needed for production scaling |
+| Admin panel | Administrate | Custom admin | Fast setup, standard CRUD is sufficient |
+| Session auth | Cookie-based | JWT | No external API clients, simpler security model |

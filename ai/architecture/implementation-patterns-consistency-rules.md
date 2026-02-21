@@ -1,239 +1,180 @@
 # Implementation Patterns & Consistency Rules
 
-## Pattern Categories Defined
+**Updated:** 2026-02-21
 
-**Critical Conflict Points Identified:**
-5 main categories of patterns that will prevent conflicts between AI agents during project implementation.
+---
 
-## Naming Patterns
+## Naming Conventions
 
-**Database Naming Conventions:**
-- **Tables:** snake_case, plural — `users`, `workflows`, `workflow_runs`
-- **Columns:** snake_case — `user_id`, `created_at`, `company_id`
+### Database
+- **Tables:** snake_case, plural — `users`, `terminal_sessions`, `config_items`
+- **Columns:** snake_case — `user_id`, `created_at`, `scope_type`
 - **Foreign keys:** `{table}_id` — `user_id`, `project_id`
-- **Indexes:** `idx_{table}_{column}` — `idx_users_email`, `idx_workflows_project_id`
-- **Rationale:** Rails convention, consistency with ActiveRecord
+- **Polymorphic:** `scope_type` + `scope_id` (not `{model}_type`)
+- **JSONB columns:** snake_case — `metadata`, `session_config`, `settings`
+- **Array columns:** plural — `models`, `tags`, `selected_agents`
 
-**API Naming Conventions:**
-- **Endpoints:** Plural resources — `/api/v1/users`, `/api/v1/projects`
-- **Nested resources:** `/api/v1/projects/:project_id/workflows`
-- **Route parameters:** `:id` format — `/api/v1/users/:id`
-- **Query parameters:** snake_case — `user_id`, `project_id`
-- **Headers:** `X-Custom-Header` format for custom headers
-- **Rationale:** RESTful conventions, consistency with Rails routing
+### API
+- **Endpoints:** plural resources — `/api/v1/company/tools`, `/api/v1/company/projects/:id/agents`
+- **Nested:** max 2 levels — `/api/v1/company/projects/:project_id/terminal_sessions`
+- **Custom actions:** member/collection routes — `POST /terminal_sessions/:id/finish`
+- **Query params:** snake_case — `params[:q]` for Ransack search
 
-**Code Naming Conventions:**
+### Code
 
-**Frontend (TypeScript/React):**
-- **Components:** PascalCase — `UserCard.tsx`, `WorkflowStepper.tsx`
-- **Files:** PascalCase for components — `UserCard.tsx`
-- **Functions/Variables:** camelCase — `getUserData()`, `userId`
-- **Constants:** UPPER_SNAKE_CASE — `API_BASE_URL`, `MAX_RETRIES`
+| Context | Convention | Example |
+|---------|-----------|---------|
+| Ruby classes | PascalCase | `ContainerService`, `AgentAuthStrategy` |
+| Ruby methods/vars | snake_case | `pull_image`, `container_id` |
+| Ruby constants | UPPER_SNAKE_CASE | `HEALTH_CHECK_TIMEOUT` |
+| TS components | PascalCase files | `UserCard.tsx`, `SessionLauncher.tsx` |
+| TS functions/vars | camelCase | `getUserData()`, `sessionId` |
+| TS constants | UPPER_SNAKE_CASE | `API_BASE_URL` |
 
-**Backend (Ruby):**
-- **Classes:** PascalCase — `UserCard`, `WorkflowService`
-- **Methods/Variables:** snake_case — `get_user_data`, `user_id`
-- **Constants:** UPPER_SNAKE_CASE — `API_BASE_URL`
+### Field Naming
+- **State columns:** `state` (not `status`) — AASM convention
+- **Enums:** via `enumerize` gem, never `ActiveRecord::Enum`
+- **Encrypted:** `encrypted_config_data` (column), `config_data` (accessor)
+
+---
+
+## API Controller Patterns
+
+### Minimalist Style
+Controllers: 2-3 lines per action max. Use `respond_with` for automatic format + status.
+
+```ruby
+module Api::V1::Company
+  class ToolsController < ApplicationController
+    def index
+      tools = Tool.merged_for_company(current_company).ransack(params[:q]).result
+      respond_with paginate(tools)
+    end
+
+    def create
+      tool = current_company.tools.create(tool_params)
+      respond_with tool
+    end
+
+    def update
+      tool = current_company.tools.find(params[:id])
+      tool.update(tool_params)
+      respond_with tool
+    end
+  end
+end
+```
+
+### Controller Hierarchy
+
+```ruby
+ApplicationController                    # Auth, browser, gon
+  Api::V1::ApplicationController         # JSON API, pagination, rescue_from
+    Api::V1::Company::ApplicationController  # current_company, dynamic_authorize!
+      Api::V1::Company::Projects::ApplicationController  # current_project
+```
+
+Each namespace base sets: `before_action :dynamic_authorize!` + scope helper (`current_company`, `current_project`).
+
+### Dynamic Authorization (AuthorizationConcern)
+
+Authorization is automatic via `dynamic_authorize!`:
+1. Controller name → Policy class: `Api::V1::Company::ToolsController` → `Api::V1::Company::ToolsPolicy`
+2. Action name → policy method: `index` → `index?`, `create` → `create?`
+3. `policy_record` is overridable per controller
+
+### Response Formats
+- **Lists:** `{ items: [...] }` — via `ApplicationSerializer` base
+- **Single:** `{ data: {...} }` — via `ApplicationSerializer` base
+- **Errors:** `{ errors: { field: ["msg"] } }` (validation) or `{ error: "msg" }` (other)
+- **Pagination:** `PaginationConcern` with pagy — adds `X-Total`, `X-Per-Page` headers
+
+### Key Principles
+- `respond_with` — auto format + status
+- `Ransack` — filtering: `Model.ransack(params[:q]).result`
+- `paginate` — via PaginationConcern
+- No `before_action :set_resource` — find record inline for explicitness
+- `@variable ||=` — memoization within request
+
+---
 
 ## Structure Patterns
 
-**Project Organization:**
+### Backend (Rails)
+- **Services:** `app/services/` — all business logic
+- **Strategies:** `app/services/container_strategies/` — Strategy pattern for container types
+- **Runtimes:** `app/services/container_runtime/` — Runtime abstraction for Docker/K8s
+- **Adapters:** `app/services/agents/` — per-agent credential/config logic
+- **Concerns:** `app/controllers/concerns/`, `app/models/concerns/`
+- **State machines:** `app/state_machines/` — AASM definitions
+- **Temporal:** `app/temporal/workflows/`, `app/temporal/activities/`
 
-**Backend (Rails):**
-- **Tests:** `test/` directory (Rails convention, Minitest)
-- **Services:** `app/services/` for business logic
-- **Utils:** `lib/` for shared utilities
-- **Concerns:** `app/models/concerns/` for shared model logic
+### Frontend (Feature-Sliced Design)
+- **Layers:** app → pages → features → entities → shared
+- **Import rule:** upper layers import only from lower layers
+- **Co-located tests:** `*.test.tsx` next to component
+- **API:** `shared/api/baseApi.ts` — RTK Query with auto case conversion
 
-**Frontend (React/TypeScript):**
-- **Tests:** Co-located — `UserCard.test.tsx` next to `UserCard.tsx`
-- **Components:** Feature-Sliced Design structure
-- **Shared utilities:** `app/frontend/shared/lib/`
-- **Feature utilities:** inside feature folders
-- **API clients:** `app/frontend/shared/api/`
+### Test Organization
+- **Mirrors app structure:** `test/controllers/`, `test/services/`, `test/models/`
+- **Factories:** `test/factories/` — FactoryBot with sequences, traits
+- **Support:** `test/support/` — shared helpers (auth, stubs, uploads)
+- **Integration:** `test/integration/` — cross-cutting tests
 
-**Configuration File Organization:**
-- **Rails:** `config/` directory + `settings.yml` for configuration
-- **Frontend:** Environment variables + `config/` for constants
-- **Docker:** `docker-compose.yml` + `.env` files
-
-## Format Patterns
-
-**API Response Formats:**
-- **Lists:** Wrapped in `items` — `{items: [{id: 1, ...}, ...]}`
-- **Single resources:** Wrapped in `data` — `{data: {id: 1, ...}}`
-- **Implementation:** A base serializer automatically adds wrappers
-- **Rationale:** Consistency of API responses, uniformity
-
-**Frontend API Response Types:**
-```typescript
-// shared/api/types.ts
-export interface ApiResponse<T> {
-  data: T;  // Single resource response
-}
-
-export interface ApiCollectionResponse<T> {
-  items: T[];  // List response
-}
-```
-
-**RTK Query transformResponse:**
-- **Single resources:** `transformResponse: (response: ApiResponse<T>) => response.data`
-- **Lists:** `transformResponse: (response: ApiCollectionResponse<T>) => response.items`
-- **Rationale:** Extracting data from the wrapper for convenient use in components
-
-**Error Response Structure:**
-- **Validation errors:** Rails standard — `{errors: {field: ["message"]}}`
-- **Other errors:** `{error: "message"}` or `{errors: ["message"]}`
-- **Rationale:** Rails convention, consistency
-
-**Date/Time Formats:**
-- **Format:** ISO 8601 strings — `"2026-01-21T10:30:00Z"`
-- **Rationale:** Standard, consistency between frontend and backend
-
-**JSON Field Naming:**
-- **API responses:** snake_case — `user_id`, `created_at` (Rails default)
-- **Frontend transformation:** The frontend converts to camelCase when necessary
-- **Rationale:** Rails convention in the API, JavaScript convention on the frontend
-
-## Communication Patterns
-
-**Event System Patterns:**
-- **Status:** Deferred (events are not used in the MVP)
-- **Future:** snake_case with dot notation — `user.created`, `workflow.started`
-
-**State Management Patterns:**
-
-**Redux Toolkit:**
-- **Updates:** Immutable via Immer (automatically)
-- **Action naming:** `feature/action` — `users/fetchUsers`, `workflows/createWorkflow`
-- **Selectors:** `select{Entity}{By}` — `selectUserById`, `selectWorkflowsByProject`
-- **Usage:** Global state (API cache, user state)
-
-**Zustand:**
-- **Updates:** Immer for immutable updates
-- **Actions:** Store methods — `fetchUsers()`, `createWorkflow()`
-- **Usage:** Local component state
-
-**Logging Formats:**
-- **Backend:** Structured JSON via Lograge — `{"level": "info", "message": "...", "context": {...}}`
-- **Frontend:** Structured logging — `console.log({level: "info", message: "...", context: {...}})`
-- **Rationale:** Consistency, convenience for log analysis
+---
 
 ## Process Patterns
 
-**Error Handling Patterns:**
+### State Machines (AASM)
+- Located in `app/state_machines/`
+- `StateEventConcern` auto-generates `{column}_event=` setters for API use
+- Frontend sends: `{ onboarding_state_event: "go_next" }` — setter triggers AASM event
+- Active machines:
+  - **User:** `state` (active/pending/suspended/archived), `onboarding_state` (step1→completed)
+  - **Company:** `state` (active/suspended/archived)
+  - **TerminalSession:** `state` (not_started/running/ready/finished/failed)
 
-**Backend (Rails):**
-- **Global exception handler:** `ApplicationController` rescue_from
-- **Service-level errors:** Custom exceptions in services
-- **Validation errors:** ActiveRecord validations
+### Polymorphic Scoping
+- Agent, Tool, MCPServer, Skill, Asset, ConfigItem, Repository
+- `scope_type` + `scope_id` → Company or Project
+- `merged_for_project(project)` → combines internal + company + project (project overrides by name)
+- `merged_for_company(company)` → combines internal + company
 
-**Frontend:**
-- **Error boundaries:** React Error Boundaries for components
-- **API error handling:** RTK Query error handling
-- **User-facing errors:** Toast notifications (MUI Snackbar)
+### Encrypted Fields
+- `AgentCredential#config_data` — via `ActiveSupport::MessageEncryptor`
+- `Integration#credentials` — encrypted
+- `ConfigItem#encrypted_value` — for secrets
+- **Rule:** Always use setter (`config_data=`), never write `encrypted_config_data` directly
 
-**Loading State Patterns:**
-- **Per-request loading:** RTK Query automatically manages loading states
-- **Component-level loading:** Zustand for local loading states
-- **Rationale:** Separation of responsibilities, automation where possible
+### Case Conversion (Frontend ↔ Backend)
+- **Request:** `decamelizeKeys(data)` — `{ currentUser: {...} }` → `{ current_user: {...} }`
+- **Response:** `camelcaseKeys(result.data)` — reverse
+- **Location:** `app/frontend/shared/api/baseApi.ts`
+- **TS interfaces:** always camelCase
 
-**Validation Timing:**
-- **Field validation:** On blur (when focus is lost)
-- **Form validation:** On submit (when the form is submitted)
-- **Implementation:** React Hook Form default behavior
-- **Rationale:** Balance between UX and performance
+### Error Handling
+- **Controllers:** `rescue_from` in `ApplicationController` for global errors
+- **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
+- **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`
+- **Frontend:** RTK Query error handling + MUI Snackbar toasts
 
-## Enforcement Guidelines
+### Logging
+- **Backend:** Lograge (structured JSON) + Rollbar (error tracking)
+- **Frontend:** structured console logging
 
-**All AI Agents MUST:**
+---
 
-1. **Follow naming conventions:**
-   - Database: snake_case for all tables and columns
-   - API: Plural resources, snake_case in responses
-   - Code: PascalCase for components/classes, camelCase/snake_case for functions/variables
+## Anti-Patterns
 
-2. **Maintain structure consistency:**
-   - Backend: Rails conventions (`test/controllers/`, `app/services/`, `lib/`)
-   - Frontend: Feature-Sliced Design structure
-   - Tests: Co-located for frontend, `test/controllers/` for backend (controllers only)
-
-3. **Use consistent formats:**
-   - API responses: `{items: [...]}` for lists, `{data: {...}}` for single resources
-   - Errors: Rails standard format
-   - Dates: ISO 8601 strings
-
-4. **Follow communication patterns:**
-   - State management: Redux Toolkit for global, Zustand for local
-   - Logging: Structured JSON everywhere
-   - Error handling: Error boundaries + RTK Query + toasts
-
-5. **Implement process patterns:**
-   - Loading states: RTK Query for API, Zustand for local
-   - Validation: On blur + on submit
-
-**Pattern Enforcement:**
-- ESLint/Rubocop for automatic checking of naming conventions
-- Code review for checking structure and patterns
-- Documentation of patterns in this document as a reference
-
-## Pattern Examples
-
-**Good Examples:**
-
-**Database Naming:**
-```ruby
-# ✅ Correct
-create_table :workflow_runs do |t|
-  t.references :workflow, null: false, foreign_key: true
-  t.references :user, null: false, foreign_key: true
-  t.datetime :started_at
-end
-
-# ❌ Incorrect
-create_table :WorkflowRuns do |t|
-  t.references :WorkflowId
-  t.datetime :StartedAt
-end
-```
-
-**API Response Format:**
-```json
-// ✅ Correct - List
-{
-  "items": [
-    {"id": 1, "name": "Workflow 1"},
-    {"id": 2, "name": "Workflow 2"}
-  ]
-}
-
-// ✅ Correct - Single resource
-{
-  "data": {"id": 1, "name": "Workflow 1"}
-}
-
-// ❌ Incorrect - Direct response
-[
-  {"id": 1, "name": "Workflow 1"},
-  {"id": 2, "name": "Workflow 2"}
-]
-```
-
-**Component Naming:**
-```typescript
-// ✅ Correct
-// UserCard.tsx
-export const UserCard = () => { ... }
-
-// ❌ Incorrect
-// user-card.tsx
-export const userCard = () => { ... }
-```
-
-**Anti-Patterns:**
-- ❌ Mixing naming conventions (snake_case and camelCase in the same place)
-- ❌ Direct API responses without wrappers
-- ❌ Global loading states instead of per-request
-- ❌ Validation only on submit without on blur
-- ❌ Unstructured logging
+- **Never** use `ActiveRecord::Enum` → use `enumerize`
+- **Never** use fixtures → use FactoryBot factories
+- **Never** hardcode values in factories → use sequences
+- **Never** write `encrypted_config_data` directly → use `config_data=` setter
+- **Never** mix camelCase/snake_case in same context
+- **Never** forget `company_id` filter in multi-tenant queries
+- **Never** skip `# frozen_string_literal: true`
+- **Never** create `before_action :set_resource` → find inline
+- **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
+- **Never** return bare arrays from API → always wrap in `items`/`data`
+- **Never** use global loading states → use per-request via RTK Query
+- **Never** validate only on submit → use on blur + on submit

@@ -1,94 +1,130 @@
 # Project Structure & Boundaries
 
-## Complete Project Directory Structure
+**Updated:** 2026-02-21
+
+## Directory Structure
 
 ```
-app/                                    # Root directory
-├── _bmad/                             # BMAD Method framework
-│   ├── _config/                        # BMAD configuration
-│   ├── bmm/                            # BMM module
-│   └── core/                           # Core workflows
-├── _bmad-output/                       # BMAD output artifacts
-│   ├── implementation-artifacts/
-│   └── planning-artifacts/
-├── ai/                                 # Planning artifacts & documentation
-│   ├── architecture.md                 # This document
-│   ├── prd.md                          # Product Requirements Document
-│   ├── ux-design-specification.md      # UX Design Specification
-│   └── ...                             # Other planning docs
-├── ai-engine/                          # Python AI Engine (Legacy)
-│   ├── app/
-│   │   ├── agents/                     # AI Agents
-│   │   ├── temporal/                   # Temporal workflows & activities
-│   │   └── vector_engine/              # Qdrant integration
-│   ├── tests/
-│   ├── Dockerfile
-│   └── pyproject.toml
-├── config/                             # Root configuration
-│   └── workflows.yml
-├── docker/                             # Docker configurations
-│   ├── base/                           # Base Docker image
-│   ├── claude-code/                    # Claude Code agent container
-│   ├── codex/                          # Codex agent container
-│   ├── cursor-cli/                     # Cursor CLI agent container
-│   └── shared/                         # Shared Docker utilities
-├── docker-compose.yml                  # Development environment
-├── docker-compose.ci.yml               # CI environment
-├── kb/                                 # Knowledge base
-│   ├── product/                        # Product documentation
-│   └── operations/                     # Operations docs
-├── Makefile                            # Root Makefile
-└── web/                                # Rails + React application
-    ├── app/
-    │   ├── assets/                     # Rails assets (SCSS, images)
-    │   ├── channels/                   # ActionCable channels
-    │   ├── controllers/                # Rails controllers
-    │   │   ├── api/v1/                # REST API endpoints
-    │   │   └── web/                   # Web controllers
-    │   ├── frontend/                   # React SPA (Feature-Sliced Design)
-    │   │   ├── app/                   # App shell, providers
-    │   │   ├── entities/              # Domain entities
-    │   │   ├── features/              # Feature modules
-    │   │   ├── pages/                 # Route pages
-    │   │   ├── shared/                # Shared code
-    │   │   │   ├── api/               # RTK Query API
-    │   │   │   ├── lib/               # Utilities
-    │   │   │   ├── theme/             # MUI theme
-    │   │   │   └── ui/                # UI components
-    │   │   └── widgets/               # Composite UI blocks
-    │   ├── models/                     # ActiveRecord models
-    │   ├── policies/                   # Pundit policies
-    │   ├── serializers/                # API serializers
-    │   ├── services/                   # Business logic services
-    │   │   ├── container_manager.rb   # Docker orchestration
-    │   │   ├── temporal_service.rb    # Temporal client
-    │   │   └── workflow_service.rb     # Workflow management
-    │   ├── temporal/                   # Temporal integration
-    │   │   ├── activities/            # Ruby activities
-    │   │   └── workflows/             # Ruby workflows
-    │   └── validators/                 # Custom validators
-    ├── bin/                            # Executables
-    │   ├── dev                         # Development server
-    │   └── temporal_worker            # Ruby Temporal worker
-    ├── config/                         # Rails configuration
-    │   ├── application.rb
-    │   ├── routes.rb                  # API routes
-    │   ├── settings.yml               # Application settings
-    │   └── initializers/              # Rails initializers
-    ├── db/                             # Database
-    │   ├── migrate/                   # Rails migrations
-    │   └── schema.rb                  # Database schema
-    ├── lib/                            # Shared libraries
-    │   └── tasks/                     # Rake tasks
-    ├── test/                           # Rails tests (Minitest)
-    │   ├── controllers/                # Controller tests only
-    │   └── integration/                # Integration tests (controllers)
-    ├── public/                         # Static assets
-    ├── Dockerfile                      # Web container
-    ├── Gemfile                         # Ruby dependencies
-    ├── package.json                    # Node dependencies
-    ├── tsconfig.json                   # TypeScript config
-    └── vite.config.ts                  # Vite configuration
+app/                                    # Root (Rails monolith)
+├── Gemfile                             # Ruby dependencies
+├── Dockerfile                          # Web container
+├── Makefile                            # Build/test commands
+├── docker-compose.yml                  # Dev environment
+├── docker-compose.ci.yml              # CI environment
+│
+├── app/                                # Rails application
+│   ├── channels/                       # ActionCable
+│   │   └── terminal_session_channel.rb
+│   ├── controllers/
+│   │   ├── concerns/                   # Auth, Authorization, Pagination
+│   │   ├── api/v1/                     # Public API
+│   │   │   ├── company/                # Company-scoped
+│   │   │   │   ├── projects/           # Project-scoped (nested)
+│   │   │   │   └── terminal_sessions/  # Session-nested (artifacts)
+│   │   │   └── internal/              # Internal (ws_auth, usage_statistics)
+│   │   ├── admin/                      # Administrate panel
+│   │   └── web/                        # SPA catch-all
+│   ├── dashboards/                     # Administrate dashboards
+│   ├── frontend/                       # React SPA (Feature-Sliced Design)
+│   │   ├── app/                        # App shell, layouts, providers
+│   │   ├── entities/                   # Domain entities (asset, project, user, terminal-session, mcp-server)
+│   │   ├── features/                   # Feature modules (15+ features)
+│   │   ├── pages/                      # Route pages (20+ pages)
+│   │   ├── shared/                     # API, config, lib, model, theme, ui
+│   │   └── widgets/                    # AppHeader, AppSidebar, session-*
+│   ├── models/                         # ActiveRecord (19 models)
+│   ├── policies/                       # Pundit (mirrors controller hierarchy)
+│   │   └── api/v1/company/             # Policy per controller
+│   │       └── projects/
+│   ├── serializers/                    # ActiveModelSerializers (20 serializers)
+│   ├── services/
+│   │   ├── agents/                     # Agent adapters (4 agents)
+│   │   ├── container_strategies/       # Strategies (5: base, agent_base, auth, session, tool)
+│   │   ├── container_runtime/          # Runtimes (3: base, docker, k8s)
+│   │   ├── github/                     # GitHub API (token, repository)
+│   │   ├── container_runtime.rb        # Runtime factory
+│   │   ├── container_service.rb        # Phase runner
+│   │   ├── agent_credentials_service.rb
+│   │   ├── session_context_service.rb
+│   │   ├── temporal_service.rb
+│   │   ├── usage_statistics_service.rb
+│   │   ├── workflow_service.rb
+│   │   └── google_omni_auth_service.rb
+│   ├── state_machines/                 # AASM state machines
+│   ├── temporal/
+│   │   ├── activities/
+│   │   │   ├── container/phase_activity.rb
+│   │   │   ├── session/cleanup_stale_activity.rb
+│   │   │   └── asset/cleanup_dismissed_activity.rb
+│   │   ├── workflows/
+│   │   │   ├── container_workflow.rb
+│   │   │   ├── stale_session_cleanup_workflow.rb
+│   │   │   └── dismissed_asset_cleanup_workflow.rb
+│   │   └── temporal_exceptions.rb
+│   ├── uploaders/                      # Shrine uploaders
+│   ├── validators/                     # Custom validators
+│   ├── mcp/                            # ActionMCP
+│   ├── contexts/                       # Application contexts
+│   ├── forms/                          # Form objects
+│   └── responders/                     # Custom responders
+│
+├── bin/
+│   ├── dev                             # Foreman (Rails + Vite)
+│   ├── temporal_worker                 # Temporal Ruby worker
+│   ├── docker-entrypoint
+│   └── setup
+│
+├── config/
+│   ├── routes.rb                       # API routes
+│   ├── settings.yml                    # Application settings (container_runtime, etc.)
+│   ├── workflows.yml                   # Workflow definitions
+│   ├── mcp.yml                         # MCP configuration
+│   ├── storage.yml                     # S3 storage config
+│   └── initializers/
+│
+├── db/
+│   ├── migrate/                        # Rails migrations
+│   └── schema.rb
+│
+├── docker/                             # Agent Docker images
+│   ├── base/                           # Base image (auth-check, logger, watcher)
+│   ├── claude-code/
+│   ├── cursor-cli/
+│   ├── codex/
+│   ├── gemini-cli/
+│   ├── otlp-ingest/                    # OTLP telemetry collector
+│   ├── remote/                         # Remote DB tools
+│   └── shared/                         # Shared utilities (watcher)
+│
+├── kube/                               # Kubernetes manifests
+│
+├── test/
+│   ├── controllers/                    # Controller tests (mirrors app/controllers/)
+│   │   ├── admin/
+│   │   ├── api/v1/company/projects/
+│   │   └── api/v1/internal/
+│   ├── integration/                    # Integration tests
+│   │   └── container_workflow_integration_test.rb
+│   ├── models/                         # Model tests
+│   ├── services/                       # Service tests (mirrors app/services/)
+│   │   ├── agents/
+│   │   ├── container_runtime/
+│   │   ├── container_strategies/
+│   │   └── github/
+│   ├── temporal/                       # Temporal tests
+│   ├── serializers/
+│   ├── channels/
+│   ├── validators/
+│   ├── factories/                      # FactoryBot factories
+│   ├── support/                        # Test helpers (auth_helper, stub_support, upload_support)
+│   └── test_helper.rb
+│
+├── ai/                                 # AI planning & architecture docs
+│   ├── architecture/
+│   ├── epics/
+│   └── prd/
+│
+└── _bmad/                              # BMAD framework
 ```
 
 ## Architectural Boundaries
@@ -350,32 +386,37 @@ app/                                    # Root directory
 5. Services → Models (data persistence)
 6. Temporal → Frontend (status updates via WebSocket)
 
-**Artifact Flow:**
-1. Workflow Step → Generate artifact
-2. Artifact → Upload to S3 (via Shrine)
-3. Metadata → Save to DB (via Model)
-4. Frontend → Fetch artifact (via API)
-5. API → Load from S3 + return metadata
+```
+Controller → Service → Model
+         → Temporal (async)
+         → Runtime (containers)
 
-## File Organization Patterns
+PhaseActivity → ContainerService → Strategy → Runtime
+                                 → SessionContextService
+                                 → AgentCredentialsService
+                                 → Adapter
+```
 
-**Configuration Files:**
-- **Rails:** `config/` directory
-- **Settings:** `config/settings.yml` (Dynaconf)
-- **Environment:** `.env.development`, `.env.production`
-- **Docker:** `docker-compose.yml`, `.env` files
-- **Frontend:** `vite.config.ts`, `tsconfig.json`
+### Data Access
 
-**Source Organization:**
-- **Backend:** Rails MVC structure (`app/controllers/`, `app/models/`, `app/services/`)
-- **Frontend:** Feature-Sliced Design (`app/frontend/`)
-- **Shared:** `lib/` for Ruby, `app/frontend/shared/` for TypeScript
+- **Models:** ActiveRecord ORM for all DB operations
+- **Multi-tenancy:** Company → Project polymorphic scoping
+- **Serializers:** ActiveModelSerializers for API responses
+- **Encryption:** ActiveSupport::MessageEncryptor for credentials, secrets
 
-**Test Organization:**
-- **Backend:** `test/controllers/` directory (Minitest) - controller tests only
-- **Frontend:** Co-located tests (`*.test.tsx` next to components)
-- **Integration:** `test/integration/` for Rails (controllers only)
-- **Note:** Tests run in Docker. We write tests only for controllers, not for models.
+### Frontend Boundaries (Feature-Sliced Design)
+```
+app (shell, layouts, providers)
+  ↑
+pages (route-level, compose features + widgets)
+  ↑
+features (business logic UI modules)
+  ↑
+entities (domain objects: user, project, asset, session)
+  ↑
+shared (api, lib, ui, theme, config, model)
+```
+
 
 **Testing Patterns:**
 - **Factories & Sequences:** Always use FactoryBot with sequences for data generation
@@ -399,11 +440,17 @@ app/                                    # Root directory
 - **No custom dashboard:** Standard resource controllers without a custom dashboard controller
 - **Rationale:** Administrate provides all the needed features out of the box
 
-**Super Admin Role Management:**
-- **Approach:** The super admin role is protected via strong params and cannot be changed through the UI
-- **Validation:** Only at the strong params level in the controller, not in the model
-- **Seeds:** The super admin is created only via seeds or a direct DB update
-- **Enumerize:** Supports symbols for role assignment (`:super_admin` works correctly)
+| Integration | Mechanism | Location |
+|-------------|-----------|----------|
+| Docker | docker-api gem (Unix socket) | `container_runtime/docker_runtime.rb` |
+| Kubernetes | kubeclient + websocket | `container_runtime/kubernetes_runtime.rb` |
+| Temporal | gRPC (temporalio gem) | `temporal_service.rb` |
+| S3 | aws-sdk-s3 via Shrine | `uploaders/`, `config/storage.yml` |
+| GitHub | Octokit + GitHub App JWT | `services/github/` |
+| Google OAuth | OmniAuth | `config/initializers/omniauth.rb` |
+| ActionCable | WebSocket | `channels/terminal_session_channel.rb` |
+| MCP | ActionMCP engine | `app/mcp/`, `config/mcp.yml` |
+| OTLP | HTTP endpoint | `internal/usage_statistics_controller.rb` |
 
 **Field Naming Decisions:**
 - **`state` vs `status`:** Use `state` for the User model (team preference)
@@ -424,7 +471,20 @@ app/                                    # Root directory
 - **Static files:** `public/` directory
 - **S3:** Artifacts via Shrine uploader
 
-## Development Workflow Integration
+```
+Frontend → POST /api/v1/terminal_sessions
+  → TerminalSessionsController#create
+    → TerminalSession.create! (state: not_started)
+    → TemporalService.start_workflow(ContainerWorkflow)
+      → PhaseActivity.run(pull_image)    → Strategy → Runtime
+      → PhaseActivity.run(create_container) → Strategy → Runtime
+      → PhaseActivity.run(start_container)  → Strategy → Runtime (wait_for_ready)
+      → Signal: mark_ready → TerminalSession.mark_ready!
+      → ActionCable broadcast → Frontend
+      → Await finish signal
+      → PhaseActivity.run(exec)          → Strategy (collect logs, usage)
+      → PhaseActivity.run(cleanup)       → Strategy → Runtime (stop, remove)
+```
 
 **Development Server Structure:**
 - **Command:** `bin/dev` (Foreman)
@@ -432,13 +492,30 @@ app/                                    # Root directory
 - **Hot reloading:** Vite HMR for frontend
 - **Docker:** `docker-compose up` for infrastructure
 
-**Build Process Structure:**
-- **Frontend:** Vite build → `public/vite-build/`
-- **Backend:** Rails assets → `public/assets/`
-- **Docker:** Multi-stage builds for production
+### Data Flow: Tool Execution
 
-**Deployment Structure:**
-- **Platform:** AWS ECS Fargate
-- **CI/CD:** GitHub Actions
-- **Containers:** Web container + Temporal workers
-- **Storage:** S3 for artifacts, RDS for PostgreSQL
+```
+Frontend → POST /api/v1/terminal_sessions (with tool_id)
+  → TerminalSession.create! → TemporalService.start_workflow
+    → PhaseActivity(pull_image)      → ToolExecutionStrategy → Runtime
+    → PhaseActivity(create_container) → env vars, tool_files mount
+    → PhaseActivity(start_container)  → no wait_for_ready (no ports)
+    → PhaseActivity(exec)             → wait_container + collect stdout/stderr
+    → PhaseActivity(cleanup)          → stop + remove
+```
+
+## Testing Patterns
+
+- **Factories:** FactoryBot with sequences — never hardcode values in factories
+- **Backend runner:** `docker exec app-web-1 bundle exec rails test`
+- **Integration tests:** `test/integration/` — combinatorial strategy × runtime × agent tests
+- **Stubs:** `test/support/stub_support.rb` — reusable Docker/K8s runtime mocks
+- **Coverage:** controllers, models, services, strategies, runtimes, adapters, temporal, serializers, channels, validators
+
+## Quality Checks
+
+```bash
+make check     # Inside Docker: rails test + rubocop -a + brakeman + yarn lint:fix
+make test      # Rails tests only
+make lint      # Rubocop + ESLint
+```
