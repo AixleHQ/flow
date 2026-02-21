@@ -22,7 +22,7 @@ module Github
         }
       end
     rescue Octokit::Error => e
-      Rails.logger.error("[Github::RepositoryService] Failed to list repos: #{e.message}")
+      Rails.logger.warn("[Github::RepositoryService] Failed to list repos: #{e.message}")
       []
     end
 
@@ -39,7 +39,7 @@ module Github
         description: repo.description
       }
     rescue Octokit::Error => e
-      Rails.logger.error("[Github::RepositoryService] Failed to find repo #{full_name}: #{e.message}")
+      Rails.logger.warn("[Github::RepositoryService] Failed to find repo #{full_name}: #{e.message}")
       nil
     end
 
@@ -50,7 +50,7 @@ module Github
 
       client.branches(full_name).map(&:name)
     rescue Octokit::Error => e
-      Rails.logger.error("[Github::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
+      Rails.logger.warn("[Github::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
       []
     end
   end

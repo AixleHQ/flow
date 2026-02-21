@@ -114,7 +114,7 @@ module ContainerStrategies
     end
 
     def services_ports
-      non_interactive? ? [7681] : [7681, 8443]
+      non_interactive? ? [ 7681 ] : [ 7681, 8443 ]
     end
 
     private
@@ -130,7 +130,7 @@ module ContainerStrategies
       loop do
         result = runtime.exec(
           container,
-          ["/bin/sh", "-c", "cat /tmp/.agent_done 2>/dev/null"],
+          [ "/bin/sh", "-c", "cat /tmp/.agent_done 2>/dev/null" ],
           stdout: true, stderr: true
         )
 
@@ -171,7 +171,7 @@ module ContainerStrategies
     end
 
     def collect_logs(container, session, agent_service)
-      return [0, {}] unless agent_service.adapter.respond_to?(:session_log_paths)
+      return [ 0, {} ] unless agent_service.adapter.respond_to?(:session_log_paths)
 
       count = 0
       contents = {}
@@ -196,7 +196,7 @@ module ContainerStrategies
       rescue StandardError => e
         Rails.logger.warn("[AgentSession] Failed to collect log #{path}: #{e.message}")
       end
-      [count, contents]
+      [ count, contents ]
     end
 
     def collect_outputs(container, session)
@@ -204,7 +204,7 @@ module ContainerStrategies
 
       result = runtime.exec(
         container,
-        ["/bin/sh", "-c", "find #{output_dir} -maxdepth 1 -type f 2>/dev/null || true"],
+        [ "/bin/sh", "-c", "find #{output_dir} -maxdepth 1 -type f 2>/dev/null || true" ],
         stdout: true, stderr: true
       )
       return 0 unless result[2].zero?
@@ -220,7 +220,7 @@ module ContainerStrategies
         content = read_file_from_container(container, file_path)
         next if content.blank?
 
-        tmpfile = Tempfile.new(["output-", File.extname(filename)])
+        tmpfile = Tempfile.new([ "output-", File.extname(filename) ])
         tmpfile.binmode
         tmpfile.write(content)
         tmpfile.rewind
@@ -247,7 +247,7 @@ module ContainerStrategies
     end
 
     def resolve_output_scope(session)
-      session.project.present? ? ["Project", session.project_id] : ["Company", session.user.company_id]
+      session.project.present? ? [ "Project", session.project_id ] : [ "Company", session.user.company_id ]
     end
 
     def collect_usage(session, agent_service, log_contents = {})

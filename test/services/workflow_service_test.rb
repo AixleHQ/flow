@@ -71,7 +71,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   test "WorkflowsCollection provides method access to workflows" do
     workflows_data = [
       {
-        "name" => "agent_container_workflow",
+        "name" => "container_workflow",
         "owner" => "web",
         "activities" => []
       }
@@ -79,8 +79,8 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
     collection = WorkflowService::WorkflowsCollection.new(workflows_data)
 
-    assert collection.agent_container_workflow.is_a?(WorkflowService::WorkflowDef)
-    assert_equal "web", collection.agent_container_workflow.owner
+    assert collection.container_workflow.is_a?(WorkflowService::WorkflowDef)
+    assert_equal "web", collection.container_workflow.owner
   end
 
   test "WorkflowsCollection bracket access works" do
@@ -143,7 +143,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     WorkflowService.instance_variable_set(:@workflows, nil)
     WorkflowService.instance_variable_set(:@workflows_data, nil)
 
-    workflow = WorkflowService.agent_container_workflow
+    workflow = WorkflowService.container_workflow
 
     assert workflow.is_a?(WorkflowService::WorkflowDef)
   end

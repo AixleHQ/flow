@@ -27,10 +27,9 @@ module ContainerStrategies
       internal_tool = create(:tool, :internal, name: "internal_tool")
 
       strategy = ToolExecutionStrategy.new(tool: internal_tool)
-      context = {}
 
       assert_raises(ArgumentError) do
-        strategy.before_create(context)
+        strategy.before_create_container
       end
     end
 
@@ -38,10 +37,9 @@ module ContainerStrategies
       @tool.update_column(:docker_image, nil)
 
       strategy = ToolExecutionStrategy.new(tool: @tool.reload)
-      context = {}
 
       assert_raises(ArgumentError) do
-        strategy.before_create(context)
+        strategy.before_create_container
       end
     end
 
@@ -205,48 +203,43 @@ module ContainerStrategies
       assert_equal "/workspace", strategy.build_working_dir
     end
 
-    # == Timeout Tests ==
+    # == Phase Config Tests ==
 
     test "returns default timeout for exec phase" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
-      assert_equal 300, strategy.timeout_for(:exec)
+      assert_equal 300, strategy.phase_config(:exec)[:timeout]
     end
 
     test "respects custom timeout" do
       strategy = ToolExecutionStrategy.new(tool: @tool, timeout: 600)
 
-      assert_equal 600, strategy.timeout_for(:exec)
+      assert_equal 600, strategy.phase_config(:exec)[:timeout]
     end
 
     test "caps timeout at max value" do
       strategy = ToolExecutionStrategy.new(tool: @tool, timeout: 9999)
 
-      assert_equal 1800, strategy.timeout_for(:exec)
+      assert_equal 1800, strategy.phase_config(:exec)[:timeout]
     end
 
-    test "returns nil for non-exec phases" do
+    test "returns config for non-exec phases" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
-      assert_nil strategy.timeout_for(:before_create)
-      assert_nil strategy.timeout_for(:cleanup)
+      assert_equal 120, strategy.phase_config(:before_create_container)[:timeout]
+      assert_equal 60, strategy.phase_config(:cleanup)[:timeout]
     end
 
     # == Start Tests (skip health check) ==
 
-    test "start skips health check for tool containers" do
+    test "start_container skips health check for tool containers" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123")
 
-      @runtime_mock.expects(:start_container).with(container_mock).returns(container_mock)
+      @runtime_mock.expects(:resolve_container).with("abc123").returns("container-ref")
+      @runtime_mock.expects(:start_container).with("container-ref").returns("container-ref")
       @runtime_mock.expects(:wait_for_ready).never
 
-      context = { container: container_mock }
-      strategy.start(context)
-
-      assert_equal container_mock, context[:container]
-      assert_equal "abc123", context[:container_id]
+      strategy.start_container(container_id: "abc123")
     end
 
     # == Exec Tests (wait + logs) ==
@@ -255,43 +248,44 @@ module ContainerStrategies
       strategy = ToolExecutionStrategy.new(tool: @tool)
       container_mock = mock("container")
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:wait_container).with(container_mock).returns({ "StatusCode" => 0 })
       @runtime_mock.expects(:container_logs).with(container_mock).returns({
         stdout: "hello\n",
         stderr: ""
       })
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      result = strategy.exec(container_id: "abc123")
 
-      assert_equal 0, context[:result][:exit_code]
-      assert_equal "hello\n", context[:result][:stdout]
-      assert_equal "", context[:result][:stderr]
-      assert_equal false, context[:result][:timed_out]
-      assert context[:result][:duration_ms] >= 0
+      assert_equal 0, result[:exit_code]
+      assert_equal "hello\n", result[:stdout]
+      assert_equal "", result[:stderr]
+      assert_equal false, result[:timed_out]
+      assert result[:duration_ms] >= 0
     end
 
     test "exec handles non-zero exit code" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
       container_mock = mock("container")
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:wait_container).with(container_mock).returns({ "StatusCode" => 1 })
       @runtime_mock.expects(:container_logs).with(container_mock).returns({
         stdout: "",
         stderr: "error occurred"
       })
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      result = strategy.exec(container_id: "abc123")
 
-      assert_equal 1, context[:result][:exit_code]
-      assert_equal "error occurred", context[:result][:stderr]
+      assert_equal 1, result[:exit_code]
+      assert_equal "error occurred", result[:stderr]
     end
 
     test "exec handles timeout by killing container and collecting partial logs" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
       container_mock = mock("container")
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:wait_container).with(container_mock).raises(Timeout::Error)
       container_mock.expects(:kill)
       @runtime_mock.expects(:container_logs).with(container_mock).returns({
@@ -299,29 +293,28 @@ module ContainerStrategies
         stderr: "partial err"
       })
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      result = strategy.exec(container_id: "abc123")
 
-      assert_equal 124, context[:result][:exit_code]
-      assert_equal true, context[:result][:timed_out]
-      assert_equal "partial output", context[:result][:stdout]
-      assert_includes context[:result][:stderr], "timed out"
-      assert_includes context[:result][:stderr], "partial err"
+      assert_equal 124, result[:exit_code]
+      assert_equal true, result[:timed_out]
+      assert_equal "partial output", result[:stdout]
+      assert_includes result[:stderr], "timed out"
+      assert_includes result[:stderr], "partial err"
     end
 
     test "exec handles timeout when kill and logs fail" do
       strategy = ToolExecutionStrategy.new(tool: @tool)
       container_mock = mock("container")
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:wait_container).raises(Timeout::Error)
       container_mock.expects(:kill).raises(StandardError.new("already dead"))
       @runtime_mock.expects(:container_logs).raises(StandardError.new("no logs"))
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      result = strategy.exec(container_id: "abc123")
 
-      assert_equal 124, context[:result][:exit_code]
-      assert_equal true, context[:result][:timed_out]
+      assert_equal 124, result[:exit_code]
+      assert_equal true, result[:timed_out]
     end
 
     # == Output Truncation Tests ==
@@ -353,23 +346,21 @@ module ContainerStrategies
 
     # == Full before_create Flow Test ==
 
-    test "before_create populates context correctly" do
+    test "before_create_container populates result correctly" do
       strategy = ToolExecutionStrategy.new(tool: @tool, project: @project)
-      context = {}
 
-      strategy.before_create(context)
+      result = strategy.before_create_container
 
-      assert_equal "alpine:latest", context[:image]
-      assert_includes context[:env_vars], "API_KEY=secret123"
-      assert_includes context[:env_vars], "PALAD_PROJECT_ID=#{@project.id}"
-      assert_includes context[:env_vars], "PALAD_PROJECT_NAME=#{@project.name}"
-      assert_equal "tool_execution", context[:labels]["palad.type"]
-      # CMD includes file setup when tool has files
-      assert_equal "/bin/sh", context[:cmd][0]
-      assert_equal "-c", context[:cmd][1]
-      assert context[:cmd][2].end_with?("echo 'hello'")
-      assert_equal "/workspace", context[:working_dir]
-      assert context[:host_config]["Memory"] > 0
+      assert_equal "alpine:latest", result[:image]
+      assert_includes result[:env_vars], "API_KEY=secret123"
+      assert_includes result[:env_vars], "PALAD_PROJECT_ID=#{@project.id}"
+      assert_includes result[:env_vars], "PALAD_PROJECT_NAME=#{@project.name}"
+      assert_equal "tool_execution", result[:labels]["palad.type"]
+      assert_equal "/bin/sh", result[:cmd][0]
+      assert_equal "-c", result[:cmd][1]
+      assert result[:cmd][2].end_with?("echo 'hello'")
+      assert_equal "/workspace", result[:working_dir]
+      assert result[:host_config]["Memory"] > 0
     end
 
     # == before_cleanup Tests (archive-based) ==
@@ -380,13 +371,13 @@ module ContainerStrategies
       container_mock = mock("container")
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:read_file).with(container_mock, "/outputs/result.json").returns('{"result": "ok"}')
 
-      context = { container: container_mock }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert_equal 1, context[:result][:output_files_count]
-      assert_includes context[:result][:output_files_paths], "/outputs/result.json"
+      assert_equal 1, result[:output_files_count]
+      assert_includes result[:output_files_paths], "/outputs/result.json"
     end
 
     test "before_cleanup skips when tool has no output_paths" do
@@ -394,11 +385,9 @@ module ContainerStrategies
 
       @runtime_mock.expects(:read_file).never
 
-      container_mock = mock("container")
-      context = { container: container_mock }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert true
+      assert_equal({}, result)
     end
 
     test "before_cleanup handles file read errors gracefully" do
@@ -407,12 +396,12 @@ module ContainerStrategies
       container_mock = mock("container")
       strategy = ToolExecutionStrategy.new(tool: @tool)
 
+      @runtime_mock.expects(:resolve_container).with("abc123").returns(container_mock)
       @runtime_mock.expects(:read_file).with(container_mock, "/missing/file").raises(StandardError.new("Not found"))
 
-      context = { container: container_mock }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert_equal 0, context[:result][:output_files_count]
+      assert_equal 0, result[:output_files_count]
     end
 
     # == Config Item Resolution Tests ==

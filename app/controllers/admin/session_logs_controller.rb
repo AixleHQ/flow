@@ -27,7 +27,7 @@ module Admin
         redirect_to url, allow_other_host: true
       else
         flash[:error] = "File not available"
-        redirect_to [:admin, log]
+        redirect_to [ :admin, log ]
       end
     end
   end

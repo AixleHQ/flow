@@ -197,7 +197,7 @@ class Api::V1::Company::AssetsControllerTest < ActionController::TestCase
 
   # ====== INDEX Ransack Filter Tests ======
 
-  test "#index returns all assets including deleted by default" do
+  test "#index returns active assets excluding deleted by default" do
     sign_in @admin
     deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @admin)
     deleted.soft_delete!
@@ -207,7 +207,7 @@ class Api::V1::Company::AssetsControllerTest < ActionController::TestCase
     json = response.parsed_body
     names = json["items"].map { |a| a["name"] }
     assert { names.include?("report.md") }
-    assert { names.include?("deleted.md") }
+    assert { !names.include?("deleted.md") }
   end
 
   test "#index with q[deleted_at_null]=1 returns only active assets" do
@@ -223,7 +223,7 @@ class Api::V1::Company::AssetsControllerTest < ActionController::TestCase
     assert { !names.include?("deleted.md") }
   end
 
-  test "#index with q[deleted_at_not_null]=1 returns only deleted assets" do
+  test "#index with q[deleted_at_not_null]=1 returns empty when base scope excludes deleted" do
     sign_in @admin
     deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @admin)
     deleted.soft_delete!
@@ -232,8 +232,8 @@ class Api::V1::Company::AssetsControllerTest < ActionController::TestCase
 
     json = response.parsed_body
     names = json["items"].map { |a| a["name"] }
-    assert { names.include?("deleted.md") }
-    assert { !names.include?("report.md") }
+    assert { names.exclude?("report.md") }
+    assert { names.exclude?("deleted.md") }
   end
 
   # ====== CREATE Source Tests ======

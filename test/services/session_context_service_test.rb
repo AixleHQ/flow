@@ -877,15 +877,15 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "claude", adapter.session_command(mode: "interactive")
   end
 
-  test "Claude adapter session_command returns claude for non_interactive mode" do
+  test "Claude adapter session_command returns claude -p --verbose for non_interactive mode" do
     adapter = Agents::ClaudeCodeAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Fix the bug")
-    assert_equal "claude", result
+    assert_equal "claude -p --verbose", result
   end
 
-  test "Claude adapter session_command returns claude when non_interactive but no prompt" do
+  test "Claude adapter session_command returns claude -p --verbose when non_interactive but no prompt" do
     adapter = Agents::ClaudeCodeAdapter.new
-    assert_equal "claude", adapter.session_command(mode: "non_interactive", prompt: nil)
+    assert_equal "claude -p --verbose", adapter.session_command(mode: "non_interactive", prompt: nil)
   end
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
@@ -893,10 +893,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Codex adapter session_command returns codex -q for non_interactive mode" do
+  test "Codex adapter session_command returns codex exec --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex -q", result
+    assert_equal "codex exec --yolo", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
@@ -931,7 +931,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "session_command returns same command regardless of prompt content" do
     adapter = Agents::ClaudeCodeAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: 'Fix the "bug" && deploy')
-    assert_equal "claude", result
+    assert_equal "claude -p --verbose", result
   end
 
   # ====================================================================

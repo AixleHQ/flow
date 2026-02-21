@@ -47,7 +47,6 @@ module Api
           end
 
           private
-
         end
       end
     end

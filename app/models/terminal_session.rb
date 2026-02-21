@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class TerminalSession < ApplicationRecord
+  class InvalidStateError < StandardError; end
+
   include TerminalSessionStateMachine
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours

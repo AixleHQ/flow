@@ -27,7 +27,7 @@ module Palad
 
     config.lograge.enabled = true
     config.lograge.ignore_actions = [
-      "Rails::HealthController#show",
+      "Rails::HealthController#show"
       # "Api::V1::Internal::WsAuthController#show"
     ]
     config.lograge.custom_options = lambda do |event|

@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import AwsS3 from '@uppy/aws-s3';
 import Uppy from '@uppy/core';
-import type { Meta, UppyFile } from '@uppy/core';
+import type { Body, Meta, UppyFile } from '@uppy/core';
 import { useSnackbar } from 'notistack';
 import { type FC, useCallback, useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -60,11 +60,11 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
 
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [uppyFiles, setUppyFiles] = useState<UppyFile<Meta, Record<string, never>>[]>([]);
+  const [uppyFiles, setUppyFiles] = useState<UppyFile<Meta, Body>[]>([]);
 
-  const uppyRef = useRef<Uppy<Meta, Record<string, never>> | null>(null);
+  const uppyRef = useRef<InstanceType<typeof Uppy<Meta, Body>> | null>(null);
   if (!uppyRef.current) {
-    uppyRef.current = new Uppy<Meta, Record<string, never>>({
+    uppyRef.current = new Uppy<Meta, Body>({
       restrictions: { maxFileSize: MAX_FILE_SIZE, maxNumberOfFiles: 1 },
       autoProceed: false,
     }).use(AwsS3, {
@@ -80,7 +80,7 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
       },
     });
   }
-  const uppy = uppyRef.current;
+  const uppy = uppyRef.current!;
 
   const methods = useForm<UploadAssetFormData>({
     resolver: zodResolver(uploadAssetSchema),
@@ -91,10 +91,10 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
     const onFileAdded = () => setUppyFiles(uppy.getFiles());
     const onFileRemoved = () => setUppyFiles(uppy.getFiles());
     const onProgress = (
-      _file: UppyFile<Meta, Record<string, never>> | undefined,
+      _file: UppyFile<Meta, Body> | undefined,
       progress: { bytesUploaded: number; bytesTotal: number | null },
     ) => {
-      if (progress.bytesTotal && progress.bytesTotal > 0) {
+      if (progress?.bytesTotal && progress.bytesTotal > 0) {
         setUploadProgress(Math.round((progress.bytesUploaded / progress.bytesTotal) * 100));
       }
     };

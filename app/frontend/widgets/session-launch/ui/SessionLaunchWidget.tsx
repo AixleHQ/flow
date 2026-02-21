@@ -265,9 +265,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     const agentLabel = selectedAgent
       ? AGENT_TYPES.find((a) => a.type === selectedAgent)?.label
       : activeSession?.agentType;
-    const isTerminal =
-      activeSession?.state === 'finished' ||
-      activeSession?.state === 'failed';
+    const isTerminal = activeSession?.state === 'finished' || activeSession?.state === 'failed';
 
     // Reset isStopping once backend confirms terminal state
     if (isTerminal && isStopping) {

@@ -6,7 +6,7 @@ module Activities
       GRACE_PERIOD = 7.days
 
       def run(_input = nil)
-        assets = Asset.dismissed
+        assets = ::Asset.dismissed
                       .where.not(reviewed_at: nil)
                       .where(reviewed_at: ...GRACE_PERIOD.ago)
 

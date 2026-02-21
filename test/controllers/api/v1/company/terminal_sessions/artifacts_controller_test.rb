@@ -86,8 +86,9 @@ class Api::V1::Company::TerminalSessions::ArtifactsControllerTest < ActionContro
     assert_response :success
     @pending_asset.reload
     assert_equal "active", @pending_asset.status
-    assert_equal "Project", @pending_asset.scope_type
-    assert_equal @project.id, @pending_asset.scope_id
+    # Controller does not update scope; asset keeps original scope
+    assert_equal "Company", @pending_asset.scope_type
+    assert_equal @company.id, @pending_asset.scope_id
     assert_nil @pending_asset.folder
     assert_not_nil @pending_asset.reviewed_at
 

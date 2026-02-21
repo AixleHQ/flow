@@ -70,18 +70,10 @@ function formatCost(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-function formatDuration(
-  startedAt: string | null,
-  finishedAt: string | null,
-  state: string,
-): string {
+function formatDuration(startedAt: string | null, finishedAt: string | null, state: string): string {
   if (!startedAt) return '—';
   const start = new Date(startedAt);
-  const end = finishedAt
-    ? new Date(finishedAt)
-    : state === 'running' || state === 'ready'
-      ? new Date()
-      : null;
+  const end = finishedAt ? new Date(finishedAt) : state === 'running' || state === 'ready' ? new Date() : null;
   if (!end) return '—';
   const seconds = Math.round((end.getTime() - start.getTime()) / 1000);
   if (seconds < 60) return `${seconds}s`;

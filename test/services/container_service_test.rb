@@ -3,99 +3,80 @@
 require "test_helper"
 
 class ContainerServiceTest < ActiveSupport::TestCase
-  # Mock strategy for testing
   class MockStrategy
-    attr_accessor :phases_called, :should_timeout, :should_error, :error_phase
-    attr_reader :input
+    attr_accessor :phases_called, :should_error, :error_phase
 
-    def initialize(input = {})
-      @input = input
+    def initialize
       @phases_called = []
-      @should_timeout = false
       @should_error = false
       @error_phase = nil
     end
 
-    def before_create(context)
-      @phases_called << :before_create
-      context[:image] = "test-image:latest"
-      context[:env_vars] = [ "TEST=1" ]
-      context[:labels] = { "test" => "true" }
-      context[:host_config] = { "NetworkMode" => "bridge" }
-      maybe_timeout_or_error(:before_create)
+    def before_create_container(**)
+      @phases_called << :before_create_container
+      { image: "test-image:latest", env_vars: [ "TEST=1" ], labels: { "test" => "true" }, host_config: { "NetworkMode" => "bridge" } }
     end
 
-    def create(context)
-      @phases_called << :create
-      context[:container] = "mock-container-123"
-      context[:container_id] = "mock-container-123"
-      maybe_timeout_or_error(:create)
+    def create_container(image:, **)
+      @phases_called << :create_container
+      raise StandardError, "Simulated error in create_container" if @should_error && @error_phase == :create_container
+
+      { container_id: "mock-container-123" }
     end
 
-    def before_start(context)
-      @phases_called << :before_start
-      maybe_timeout_or_error(:before_start)
+    def before_start_container(**)
+      @phases_called << :before_start_container
+      {}
     end
 
-    def start(context)
-      @phases_called << :start
-      maybe_timeout_or_error(:start)
+    def start_container(container_id:, **)
+      @phases_called << :start_container
+      {}
     end
 
-    def before_exec(context)
+    def before_exec(**)
       @phases_called << :before_exec
-      maybe_timeout_or_error(:before_exec)
+      {}
     end
 
-    def exec(context)
+    def exec(container_id:, **)
       @phases_called << :exec
-      context[:result] = { exit_code: 0, stdout: "success" }
-      maybe_timeout_or_error(:exec)
+      raise StandardError, "Simulated error in exec" if @should_error && @error_phase == :exec
+
+      { exit_code: 0, stdout: "success" }
     end
 
-    def before_cleanup(context)
+    def before_cleanup(**)
       @phases_called << :before_cleanup
-      maybe_timeout_or_error(:before_cleanup)
+      {}
     end
 
-    def cleanup(context)
+    def cleanup(container_id:, **)
       @phases_called << :cleanup
-      maybe_timeout_or_error(:cleanup)
-    end
-
-    def timeout_for(_phase)
-      nil
-    end
-
-    private
-
-    def maybe_timeout_or_error(phase)
-      if @should_timeout && @error_phase == phase
-        sleep(10)
-      end
-
-      if @should_error && @error_phase == phase
-        raise StandardError, "Simulated error in #{phase}"
-      end
+      { status: :cleaned_up }
     end
   end
 
-  # Strategy without some phases
   class PartialStrategy
     attr_reader :phases_called
 
-    def initialize(_input = {})
+    def initialize
       @phases_called = []
     end
 
-    def before_create(context)
-      @phases_called << :before_create
-      context[:image] = "test:latest"
+    def before_create_container(**)
+      @phases_called << :before_create_container
+      { image: "test:latest" }
     end
 
-    def exec(context)
+    def create_container(image:, **)
+      @phases_called << :create_container
+      { container_id: "partial-123" }
+    end
+
+    def exec(container_id:, **)
       @phases_called << :exec
-      context[:result] = { status: :done }
+      { status: :done }
     end
   end
 
@@ -103,243 +84,73 @@ class ContainerServiceTest < ActiveSupport::TestCase
     Rails.logger.stubs(:info)
     Rails.logger.stubs(:warn)
     Rails.logger.stubs(:error)
-
-    @runtime_mock = mock("runtime")
-    ContainerRuntime.stubs(:build).returns(@runtime_mock)
   end
 
-  # == Phase Execution Order Tests ==
-
-  test "executes all lifecycle phases in correct order" do
+  test "run_phase create_container executes before_create_container, create_container, after_create_container" do
     strategy = MockStrategy.new
+    service = ContainerService.new(strategy: strategy, state: {})
 
-    result = ContainerService.execute(strategy: strategy, input: {})
+    state = service.run_phase(:create_container)
 
-    expected_order = [
-      :before_create,
-      :create,
-      :before_start,
-      :start,
-      :before_exec,
-      :exec
-    ]
-
-    assert_equal expected_order, strategy.phases_called
-    assert_equal 0, result[:exit_code]
-    assert_equal "success", result[:stdout]
+    assert_equal [ :before_create_container, :create_container ], strategy.phases_called
+    assert_equal "mock-container-123", state[:container_id]
+    assert_equal "test-image:latest", state[:image]
   end
 
-  test "skips phases that strategy does not implement" do
+  test "run_phase exec passes container_id and returns merged state" do
+    strategy = MockStrategy.new
+    service = ContainerService.new(strategy: strategy, state: { container_id: "abc" })
+
+    state = service.run_phase(:exec)
+
+    assert_equal [ :before_exec, :exec ], strategy.phases_called
+    assert_equal 0, state[:exit_code]
+    assert_equal "success", state[:stdout]
+    assert_equal "abc", state[:container_id]
+  end
+
+  test "run_phase skips hooks strategy does not implement" do
     strategy = PartialStrategy.new
+    service = ContainerService.new(strategy: strategy, state: {})
 
-    result = ContainerService.execute(strategy: strategy, input: {})
+    state = service.run_phase(:create_container)
 
-    assert_equal [ :before_create, :exec ], strategy.phases_called
-    assert_equal :done, result[:status]
+    assert_equal [ :before_create_container, :create_container ], strategy.phases_called
+    assert_equal "partial-123", state[:container_id]
   end
 
-  # == Context Sharing Tests ==
-
-  test "shares context between phases" do
-    context_received = {}
-
+  test "run_phase cleanup executes before_cleanup and cleanup" do
     strategy = MockStrategy.new
-    strategy.define_singleton_method(:exec) do |context|
-      context_received[:image] = context[:image]
-      context_received[:container] = context[:container]
-      context[:result] = { received_context: true }
-    end
+    service = ContainerService.new(strategy: strategy, state: { container_id: "container-abc" })
 
-    ContainerService.execute(strategy: strategy, input: { foo: "bar" })
+    state = service.run_phase(:cleanup)
 
-    assert_equal "test-image:latest", context_received[:image]
-    assert_not_nil context_received[:container]
+    assert_equal [ :before_cleanup, :cleanup ], strategy.phases_called
+    assert_equal :cleaned_up, state[:status]
   end
-
-  test "input is available in context" do
-    received_input = nil
-
-    strategy = MockStrategy.new
-    strategy.define_singleton_method(:before_create) do |context|
-      received_input = context[:input]
-      context[:image] = "test:latest"
-    end
-
-    ContainerService.execute(strategy: strategy, input: { key: "value" })
-
-    assert_equal "value", received_input[:key]
-  end
-
-  # == Error Handling Tests ==
 
   test "wraps phase errors in PhaseError" do
     strategy = MockStrategy.new
     strategy.should_error = true
     strategy.error_phase = :exec
-
-    # Emergency cleanup via runtime
-    @runtime_mock.stubs(:stop_container)
-    @runtime_mock.stubs(:remove_container)
+    service = ContainerService.new(strategy: strategy, state: { container_id: "abc" })
 
     error = assert_raises(ContainerService::PhaseError) do
-      ContainerService.execute(strategy: strategy, input: {})
+      service.run_phase(:exec)
     end
 
     assert_equal :exec, error.phase
     assert_match(/Simulated error/, error.original_error.message)
   end
 
-  test "performs emergency cleanup on error" do
+  test "merges state between phases" do
     strategy = MockStrategy.new
-    strategy.should_error = true
-    strategy.error_phase = :exec
+    service = ContainerService.new(strategy: strategy, state: { session_id: 1, foo: "bar" })
 
-    @runtime_mock.expects(:stop_container).with("mock-container-123", 5)
-    @runtime_mock.expects(:remove_container).with("mock-container-123", force: true)
+    state = service.run_phase(:create_container)
 
-    assert_raises(ContainerService::PhaseError) do
-      ContainerService.execute(strategy: strategy, input: {})
-    end
-  end
-
-  test "emergency cleanup handles errors gracefully" do
-    strategy = MockStrategy.new
-    strategy.should_error = true
-    strategy.error_phase = :exec
-
-    @runtime_mock.stubs(:stop_container).raises(StandardError.new("stop failed"))
-    @runtime_mock.stubs(:remove_container).raises(StandardError.new("remove failed"))
-
-    assert_raises(ContainerService::PhaseError) do
-      ContainerService.execute(strategy: strategy, input: {})
-    end
-  end
-
-  # == Timeout Tests ==
-
-  test "raises ExecutionTimeout when phase exceeds timeout" do
-    strategy = MockStrategy.new
-
-    strategy.define_singleton_method(:exec) do |_context|
-      sleep(5)
-    end
-
-    strategy.define_singleton_method(:timeout_for) do |phase|
-      phase == :exec ? 0.1 : nil
-    end
-
-    @runtime_mock.stubs(:stop_container)
-    @runtime_mock.stubs(:remove_container)
-
-    error = assert_raises(ContainerService::ExecutionTimeout) do
-      ContainerService.execute(strategy: strategy, input: {})
-    end
-
-    assert_match(/exec exceeded timeout/, error.message)
-  end
-
-  # == Default Timeouts Tests ==
-
-  test "uses default timeouts when not configured" do
-    service = ContainerService.new(MockStrategy.new, {})
-
-    assert_equal 30, service.send(:phase_timeout, :before_create)
-    assert_equal 60, service.send(:phase_timeout, :create)
-    assert_equal 300, service.send(:phase_timeout, :exec)
-  end
-
-  test "strategy can override timeout" do
-    strategy = MockStrategy.new
-    strategy.define_singleton_method(:timeout_for) do |phase|
-      phase == :exec ? 999 : nil
-    end
-
-    service = ContainerService.new(strategy, {})
-
-    assert_equal 999, service.send(:phase_timeout, :exec)
-    assert_equal 30, service.send(:phase_timeout, :before_create)
-  end
-
-  # == Result Tests ==
-
-  test "returns result from context" do
-    strategy = MockStrategy.new
-
-    result = ContainerService.execute(strategy: strategy, input: {})
-
-    assert_equal 0, result[:exit_code]
-    assert_equal "success", result[:stdout]
-  end
-
-  test "returns empty hash when no result set" do
-    strategy = PartialStrategy.new
-    strategy.define_singleton_method(:exec) do |_context|
-      # Don't set context[:result]
-    end
-
-    result = ContainerService.execute(strategy: strategy, input: {})
-
-    assert_equal({}, result)
-  end
-
-  # == Session-based execute Tests ==
-
-  test "execute with session: delegates to session.strategy" do
-    mock_strategy = MockStrategy.new
-    session = mock("session")
-    session.stubs(:strategy).returns(mock_strategy)
-    mock_strategy.stubs(:input).returns({})
-
-    result = ContainerService.execute(session: session)
-
-    assert_equal 0, result[:exit_code]
-    assert_includes mock_strategy.phases_called, :exec
-  end
-
-  test "execute with session: takes priority over strategy:" do
-    mock_strategy = MockStrategy.new
-    session_strategy = MockStrategy.new
-    session = mock("session")
-    session.stubs(:strategy).returns(session_strategy)
-    session_strategy.stubs(:input).returns({})
-
-    result = ContainerService.execute(strategy: mock_strategy, session: session)
-
-    assert_includes session_strategy.phases_called, :exec
-    assert_empty mock_strategy.phases_called
-  end
-
-  # == Session-based cleanup Tests ==
-
-  test "cleanup with session: runs before_cleanup and cleanup" do
-    cleanup_strategy = mock("cleanup_strategy")
-    cleanup_strategy.expects(:before_cleanup).once
-    cleanup_strategy.expects(:cleanup).returns({ status: :cleaned_up })
-
-    session = mock("session")
-    session.stubs(:strategy).returns(cleanup_strategy)
-    session.stubs(:container_id).returns("container-abc")
-    session.stubs(:id).returns(1)
-
-    @runtime_mock.stubs(:resolve_container).with("container-abc").returns("container-abc")
-
-    result = ContainerService.cleanup(session: session)
-
-    assert_equal :cleaned_up, result[:status]
-  end
-
-  test "cleanup with session: handles missing container gracefully" do
-    cleanup_strategy = mock("cleanup_strategy")
-    cleanup_strategy.expects(:before_cleanup).never
-    cleanup_strategy.expects(:cleanup).returns({ status: :skipped })
-
-    session = mock("session")
-    session.stubs(:strategy).returns(cleanup_strategy)
-    session.stubs(:container_id).returns(nil)
-    session.stubs(:id).returns(1)
-
-    result = ContainerService.cleanup(session: session)
-
-    assert_equal :skipped, result[:status]
+    assert_equal 1, state[:session_id]
+    assert_equal "bar", state[:foo]
+    assert_equal "mock-container-123", state[:container_id]
   end
 end

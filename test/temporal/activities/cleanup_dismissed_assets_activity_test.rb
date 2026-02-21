@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
+class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
     @user = create(:user, :admin, company: @company)
@@ -23,7 +23,7 @@ class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
     )
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user)
 
-    activity = Activities::CleanupDismissedAssetsActivity.new
+    activity = Activities::Asset::CleanupDismissedActivity.new
 
     assert_difference "Asset.count", -1 do
       result = activity.run
@@ -41,7 +41,7 @@ class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
       reviewed_at: 2.days.ago
     )
 
-    activity = Activities::CleanupDismissedAssetsActivity.new
+    activity = Activities::Asset::CleanupDismissedActivity.new
 
     assert_no_difference "Asset.count" do
       result = activity.run
@@ -59,7 +59,7 @@ class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
       reviewed_at: nil
     )
 
-    activity = Activities::CleanupDismissedAssetsActivity.new
+    activity = Activities::Asset::CleanupDismissedActivity.new
 
     assert_no_difference "Asset.count" do
       result = activity.run
@@ -75,7 +75,7 @@ class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
       status: "active"
     )
 
-    activity = Activities::CleanupDismissedAssetsActivity.new
+    activity = Activities::Asset::CleanupDismissedActivity.new
 
     assert_no_difference "Asset.count" do
       result = activity.run
@@ -95,7 +95,7 @@ class Activities::CleanupDismissedAssetsActivityTest < ActiveSupport::TestCase
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user)
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user, version: 2)
 
-    activity = Activities::CleanupDismissedAssetsActivity.new
+    activity = Activities::Asset::CleanupDismissedActivity.new
     activity.run
 
     assert_equal 0, Asset.where(id: asset.id).count

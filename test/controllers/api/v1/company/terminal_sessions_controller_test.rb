@@ -64,13 +64,13 @@ module Api
 
         test "#index filters by state via ransack" do
           running = create(:terminal_session, user: @user, state: "running")
-          collected = create(:terminal_session, :collected, user: @user)
+          finished = create(:terminal_session, :collected, user: @user)
 
-          get :index, params: { q: { state_eq: "collected" } }
+          get :index, params: { q: { state_eq: "finished" } }
           assert_response :success
 
           ids = json["items"].pluck("id")
-          assert_includes ids, collected.id
+          assert_includes ids, finished.id
           assert_not_includes ids, running.id
         end
 

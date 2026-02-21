@@ -23,7 +23,7 @@ module ContainerStrategies
         route_token: @session.route_token
       )
 
-      assert_raises(ArgumentError) { strategy.before_create({}) }
+      assert_raises(ArgumentError) { strategy.before_create_container }
     end
 
     test "raises error when agent_type is invalid" do
@@ -34,7 +34,7 @@ module ContainerStrategies
         route_token: @session.route_token
       )
 
-      error = assert_raises(ArgumentError) { strategy.before_create({}) }
+      error = assert_raises(ArgumentError) { strategy.before_create_container }
       assert_match(/Invalid agent_type/, error.message)
     end
 
@@ -45,7 +45,7 @@ module ContainerStrategies
         route_token: "abc123"
       )
 
-      assert_raises(ArgumentError) { strategy.before_create({}) }
+      assert_raises(ArgumentError) { strategy.before_create_container }
     end
 
     test "raises error when route_token is missing" do
@@ -55,7 +55,7 @@ module ContainerStrategies
         session_id: @session.id
       )
 
-      assert_raises(ArgumentError) { strategy.before_create({}) }
+      assert_raises(ArgumentError) { strategy.before_create_container }
     end
 
     # == Image Resolution Tests ==
@@ -236,7 +236,7 @@ module ContainerStrategies
 
       host_config = strategy.build_host_config
 
-      assert_equal "app_default", host_config["NetworkMode"]
+      assert_equal Settings.docker.network, host_config["NetworkMode"]
     end
 
     # == Exposed Ports Tests ==
@@ -263,40 +263,45 @@ module ContainerStrategies
     test "exec returns container URLs" do
       strategy = build_strategy
 
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123def456789")
+      strategy.stubs(:resolve_container).returns(mock("container"))
+      strategy.stubs(:wait_for_traefik_route)
+      strategy.stubs(:mark_session_ready)
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.stubs(:container_identifier).returns("abc123def456")
 
-      assert_equal "abc123def456", context[:result][:container_id]
-      assert_equal "terminal-#{@session.route_token}", context[:result][:container_name]
-      assert context[:result][:websocket_url].include?(@session.route_token)
-      assert context[:result][:watcher_url].include?(@session.route_token)
+      result = strategy.exec(container_id: "abc123")
+
+      assert_equal "abc123def456", result[:container_id]
+      assert_equal "terminal-#{@session.route_token}", result[:container_name]
+      assert result[:websocket_url].include?(@session.route_token)
+      assert result[:watcher_url].include?(@session.route_token)
     end
 
     test "exec returns ide_url with trailing slash" do
       strategy = build_strategy
 
-      container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123def456789")
+      strategy.stubs(:resolve_container).returns(mock("container"))
+      strategy.stubs(:wait_for_traefik_route)
+      strategy.stubs(:mark_session_ready)
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.stubs(:container_identifier).returns("abc123")
 
-      assert context[:result][:ide_url].include?(@session.route_token)
-      assert context[:result][:ide_url].end_with?("/ide/")
+      result = strategy.exec(container_id: "abc123")
+
+      assert result[:ide_url].include?(@session.route_token)
+      assert result[:ide_url].end_with?("/ide/")
     end
 
-    # == before_create Tests ==
-
-    test "before_create sets container_name in context" do
+    test "before_create_container sets container_name in result" do
       strategy = build_strategy
-      context = {}
 
-      strategy.before_create(context)
+      result = strategy.before_create_container
 
-      assert_equal "terminal-#{@session.route_token}", context[:container_name]
+      assert_equal "terminal-#{@session.route_token}", result[:container_name]
     end
 
     # == Services Ports Tests ==
@@ -332,44 +337,6 @@ module ContainerStrategies
       # Gemini adapter returns GOOGLE_CLOUD_PROJECT from metadata
       # This may or may not be present depending on adapter implementation
       assert env_vars.is_a?(Array)
-    end
-
-    # == Parse Auth Files Tests ==
-
-    test "parse_auth_files parses JSON content" do
-      strategy = build_strategy
-      auth_files = {
-        "/path/to/config.json" => '{"api_key": "test-key"}'
-      }
-
-      result = strategy.send(:parse_auth_files, auth_files)
-
-      assert_equal "test-key", result["api_key"]
-    end
-
-    test "parse_auth_files handles invalid JSON" do
-      strategy = build_strategy
-      auth_files = {
-        "/path/to/file.txt" => "not json content"
-      }
-
-      result = strategy.send(:parse_auth_files, auth_files)
-
-      # Stores raw content under path key
-      assert_equal "not json content", result["/path/to/file.txt"]
-    end
-
-    test "parse_auth_files merges multiple files" do
-      strategy = build_strategy
-      auth_files = {
-        "/path/to/file1.json" => '{"key1": "value1"}',
-        "/path/to/file2.json" => '{"key2": "value2"}'
-      }
-
-      result = strategy.send(:parse_auth_files, auth_files)
-
-      assert_equal "value1", result["key1"]
-      assert_equal "value2", result["key2"]
     end
 
     private

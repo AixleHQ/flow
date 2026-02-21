@@ -17,8 +17,8 @@ module ContainerStrategies
 
     # == Inheritance Tests ==
 
-    test "inherits from AgentAuthStrategy" do
-      assert AgentSessionStrategy < AgentAuthStrategy
+    test "inherits from AgentBaseStrategy" do
+      assert AgentSessionStrategy < AgentBaseStrategy
     end
 
     # == Environment Variables Tests ==
@@ -86,17 +86,19 @@ module ContainerStrategies
     test "before_exec loads credentials into container via assembler" do
       strategy = build_strategy
 
+      container_mock = mock("container")
+      ContainerRuntime.stubs(:build).returns(mock("rt").tap { |m| m.stubs(:resolve_container).returns(container_mock) })
+      strategy.stubs(:resolve_container).returns(container_mock)
+
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
-      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
+      runtime_mock.expects(:container_identifier).with(container_mock).returns("abc123")
 
-      # Expect assemble_session_context to be called with credential
       SessionContextService.expects(:assemble_session_context).with(
-        "container_ref", @session, credential: @credential
+        container_mock, @session, credential: @credential
       )
 
-      context = { container: "container_ref" }
-      strategy.before_exec(context)
+      strategy.before_exec(container_id: "container_ref")
     end
 
     test "before_exec skips credential when nil" do
@@ -108,17 +110,18 @@ module ContainerStrategies
         credential: nil
       )
 
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
-      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
+      runtime_mock.expects(:container_identifier).with(container_mock).returns("abc123")
 
-      # Expect assemble_session_context to be called with credential: nil
       SessionContextService.expects(:assemble_session_context).with(
-        "container_ref", @session, credential: nil
+        container_mock, @session, credential: nil
       )
 
-      context = { container: "container_ref" }
-      strategy.before_exec(context)
+      strategy.before_exec(container_id: "container_ref")
     end
 
     # == before_cleanup Tests ==
@@ -126,6 +129,7 @@ module ContainerStrategies
     test "before_cleanup sets logs_count and outputs_count in result" do
       strategy = build_strategy
       container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
 
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
@@ -136,12 +140,14 @@ module ContainerStrategies
       AgentCredentialsService.stubs(:for).returns(mock_service)
 
       strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_logs).returns([ 0, {} ])
+      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_usage)
 
-      context = { container: container_mock, result: {} }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert context[:result].key?(:logs_count)
-      assert context[:result].key?(:outputs_count)
+      assert result.key?(:logs_count)
+      assert result.key?(:outputs_count)
     end
 
     # == Full Flow Tests ==
@@ -164,16 +170,22 @@ module ContainerStrategies
 
     test "exec result does not include watcher_url" do
       strategy = build_strategy
+      @session.update!(mode: "interactive")
 
       container_mock = mock("container")
-      container_mock.stubs(:id).returns("abc123def456789")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:wait_for_traefik_route)
+      strategy.stubs(:mark_session_ready)
 
-      context = { container: container_mock }
-      strategy.exec(context)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.stubs(:container_identifier).returns("abc123")
 
-      refute context[:result].key?(:watcher_url)
-      assert context[:result].key?(:websocket_url)
-      assert context[:result].key?(:ide_url)
+      result = strategy.exec(container_id: "abc123")
+
+      refute result.key?(:watcher_url)
+      assert result.key?(:websocket_url)
+      assert result.key?(:ide_url)
     end
 
     test "ttyd_command returns session command for claude_code" do
@@ -190,8 +202,7 @@ module ContainerStrategies
 
       cmd = strategy.send(:ttyd_command)
 
-      # Prompt is passed via AGENT_PROMPT env var, not in command
-      assert_equal "claude", cmd
+      assert_equal "claude -p --verbose", cmd
     end
 
     test "ttyd_command uses adapter session_command for codex non-interactive" do
@@ -201,8 +212,7 @@ module ContainerStrategies
 
       cmd = strategy.send(:ttyd_command)
 
-      # Prompt is passed via AGENT_PROMPT env var, not in command
-      assert_equal "codex -q", cmd
+      assert_equal "codex exec --yolo", cmd
     end
 
     # == before_exec delegates to assembler ==
@@ -210,78 +220,34 @@ module ContainerStrategies
     test "before_exec delegates to SessionContextService.assemble_session_context" do
       strategy = build_strategy
 
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
-      runtime_mock.expects(:container_identifier).with("container_ref").returns("abc123")
+      runtime_mock.expects(:container_identifier).with(container_mock).returns("abc123")
 
       SessionContextService.expects(:assemble_session_context).with(
-        "container_ref", @session, credential: @credential
+        container_mock, @session, credential: @credential
       )
 
-      context = { container: "container_ref" }
-      strategy.before_exec(context)
+      strategy.before_exec(container_id: "container_ref")
     end
 
     test "before_exec raises when container not ready" do
       strategy = build_strategy
 
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.expects(:container_identifier).returns(nil)
 
-      assert_raises(RuntimeError, /Container not ready/) do
-        strategy.before_exec(container: "bad_ref")
+      error = assert_raises(RuntimeError) do
+        strategy.before_exec(container_id: "bad_ref")
       end
-    end
-
-    test "list_files_in_container returns path directly for non-glob" do
-      strategy = build_strategy
-      container_mock = mock("container")
-
-      files = strategy.send(:list_files_in_container, container_mock, "/path/to/file.log")
-
-      assert_equal [ "/path/to/file.log" ], files
-    end
-
-    test "list_files_in_container executes find for glob pattern" do
-      strategy = build_strategy
-      runtime_mock = mock("runtime")
-      strategy.stubs(:runtime).returns(runtime_mock)
-
-      runtime_mock.expects(:exec).with(
-        "container_ref",
-        [ "/bin/sh", "-c", "find /tmp -name '*.log' 2>/dev/null || true" ],
-        stdout: true,
-        stderr: true
-      ).returns([ [ "/tmp/app.log\n/tmp/error.log\n" ], [], 0 ])
-
-      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
-
-      assert_equal [ "/tmp/app.log", "/tmp/error.log" ], files
-    end
-
-    test "list_files_in_container returns empty array on error" do
-      strategy = build_strategy
-      runtime_mock = mock("runtime")
-      strategy.stubs(:runtime).returns(runtime_mock)
-
-      runtime_mock.expects(:exec).raises(StandardError.new("Exec failed"))
-
-      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
-
-      assert_equal [], files
-    end
-
-    test "list_files_in_container returns empty array on non-zero exit" do
-      strategy = build_strategy
-      runtime_mock = mock("runtime")
-      strategy.stubs(:runtime).returns(runtime_mock)
-
-      runtime_mock.expects(:exec).returns([ [], [], 1 ])
-
-      files = strategy.send(:list_files_in_container, "container_ref", "/tmp/*.log")
-
-      assert_equal [], files
+      assert_match(/Container not ready/, error.message)
     end
 
     # == before_cleanup Tests ==
@@ -289,6 +255,7 @@ module ContainerStrategies
     test "before_cleanup creates SessionLog records when adapter supports session_log_paths" do
       strategy = build_strategy
       container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
 
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
@@ -301,14 +268,14 @@ module ContainerStrategies
 
       strategy.stubs(:read_file_from_container).with(container_mock, "/tmp/session.log").returns("log content here")
       strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_usage)
 
-      context = { container: container_mock }
       assert_difference "SessionLog.count", 1 do
-        strategy.before_cleanup(context)
+        result = strategy.before_cleanup(container_id: "abc123")
+        assert_equal 1, result[:logs_count]
+        assert_equal 0, result[:outputs_count]
       end
-
-      assert_equal 1, context[:result][:logs_count]
-      assert_equal 0, context[:result][:outputs_count]
 
       log = @session.session_logs.last
       assert_equal "session.log", log.name
@@ -318,6 +285,7 @@ module ContainerStrategies
     test "before_cleanup handles log collection errors gracefully" do
       strategy = build_strategy
       container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
 
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
@@ -330,16 +298,18 @@ module ContainerStrategies
 
       strategy.stubs(:read_file_from_container).raises(StandardError.new("Read error"))
       strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_usage)
 
-      context = { container: container_mock }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert_equal 0, context[:result][:logs_count]
+      assert_equal 0, result[:logs_count]
     end
 
     test "before_cleanup skips blank log content" do
       strategy = build_strategy
       container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
 
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
@@ -352,18 +322,19 @@ module ContainerStrategies
 
       strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:collect_usage)
 
-      context = { container: container_mock }
       assert_no_difference "SessionLog.count" do
-        strategy.before_cleanup(context)
+        result = strategy.before_cleanup(container_id: "abc123")
+        assert_equal 0, result[:logs_count]
       end
-
-      assert_equal 0, context[:result][:logs_count]
     end
 
     test "before_cleanup collects usage when adapter supports it" do
       strategy = build_strategy
       container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
 
       mock_adapter = mock("adapter")
       mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
@@ -375,12 +346,13 @@ module ContainerStrategies
       AgentCredentialsService.stubs(:for).returns(mock_service)
 
       strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_logs).returns([ 0, {} ])
+      strategy.stubs(:collect_terminal_output).returns(0)
 
-      context = { container: container_mock }
-      strategy.before_cleanup(context)
+      result = strategy.before_cleanup(container_id: "abc123")
 
-      assert_equal 0, context[:result][:logs_count]
-      assert_equal 0, context[:result][:outputs_count]
+      assert_equal 0, result[:logs_count]
+      assert_equal 0, result[:outputs_count]
     end
 
     # == Credential metadata env vars ==

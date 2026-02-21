@@ -16,7 +16,7 @@ module Middleware
         headers["content-type"] = "#{ct}; charset=utf-8"
       end
 
-      [status, headers, response]
+      [ status, headers, response ]
     end
   end
 end

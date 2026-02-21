@@ -136,7 +136,7 @@ module ContainerStrategies
     protected
 
     def services_ports
-      [7681, 4040]
+      [ 7681, 4040 ]
     end
 
     def traefik_ws_base

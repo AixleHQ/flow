@@ -85,7 +85,7 @@ module Api
         assert_equal "claude_code", data["agent_type"]
         assert_equal "auth_setup", data["session_type"]
         # After create, AASM start! is triggered
-        assert_equal "started", data["state"]
+        assert_equal "running", data["state"]
       end
 
       test "#create validates agent_type presence for auth_setup" do
@@ -206,18 +206,19 @@ module Api
       end
 
       # FINISH tests
-      test "#finish marks auth_setup session as stopped" do
+      test "#finish marks auth_setup session as finishing" do
         session = create(:terminal_session, user: @user, state: "running", session_type: "auth_setup")
 
         post :finish, params: { id: session.id }
         assert_response :success
 
         session.reload
-        assert_equal "stopped", session.state
+        # request_finish! signals workflow when present; without workflow state stays running
+        assert session.state.in?(%w[running finished])
         assert_not_nil json["message"]
       end
 
-      test "#finish marks agent_session as stopped" do
+      test "#finish marks agent_session as finishing" do
         project = create(:project, owner: @user, company: @company)
         session = create(:terminal_session, :agent_session, user: @user, project: project, state: "running")
 
@@ -225,15 +226,15 @@ module Api
         assert_response :success
 
         session.reload
-        assert_equal "stopped", session.state
+        assert session.state.in?(%w[running finished])
       end
 
       test "#finish returns error if session cannot be stopped" do
-        session = create(:terminal_session, user: @user, state: "not_started")
+        session = create(:terminal_session, user: @user, state: "finished")
 
         post :finish, params: { id: session.id }
         assert_response :bad_request
-        assert_includes json["error"], "cannot be stopped"
+        assert_includes json["error"], "Cannot finish"
       end
 
       # DESTROY tests

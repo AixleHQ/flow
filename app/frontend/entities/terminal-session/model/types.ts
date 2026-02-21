@@ -1,10 +1,5 @@
 // Terminal Session Types
-export type TerminalSessionState =
-  | 'not_started'
-  | 'running'
-  | 'ready'
-  | 'finished'
-  | 'failed';
+export type TerminalSessionState = 'not_started' | 'running' | 'ready' | 'finished' | 'failed';
 
 export type TerminalSessionType = 'auth_setup' | 'agent_session' | 'tool_setup' | 'workflow_step';
 

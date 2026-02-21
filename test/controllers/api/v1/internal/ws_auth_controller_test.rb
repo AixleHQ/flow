@@ -9,7 +9,7 @@ module Api
         setup do
           @company = create(:company)
           @user = create(:user, company: @company)
-          @session = create(:terminal_session, :running, user: @user)
+          @session = create(:terminal_session, user: @user, state: "ready")
 
           Rails.logger.stubs(:info)
           Rails.logger.stubs(:warn)
@@ -109,17 +109,17 @@ module Api
           assert_response :forbidden
         end
 
-        test "allows access to started session" do
-          started_session = create(:terminal_session, :started, user: @user)
+        test "allows access to ready session" do
+          ready_session = create(:terminal_session, user: @user, state: "ready")
           sign_in @user
-          request.headers["X-Forwarded-Uri"] = "/t/#{started_session.route_token}/tty/ws"
+          request.headers["X-Forwarded-Uri"] = "/t/#{ready_session.route_token}/tty/ws"
 
           get :show
 
           assert_response :ok
         end
 
-        test "allows access to running session" do
+        test "allows access when session is ready" do
           sign_in @user
           request.headers["X-Forwarded-Uri"] = "/t/#{@session.route_token}/tty/ws"
 

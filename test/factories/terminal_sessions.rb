@@ -54,7 +54,7 @@ FactoryBot.define do
     # == State Traits ==
 
     trait :started do
-      state { "started" }
+      state { "running" }
       container_id { "container-#{SecureRandom.hex(8)}" }
       route_token { SecureRandom.hex(16) }
       started_at { Time.current }
@@ -68,7 +68,7 @@ FactoryBot.define do
     end
 
     trait :collected do
-      state { "collected" }
+      state { "finished" }
       container_id { "container-#{SecureRandom.hex(8)}" }
       artifacts_path { "/tmp/artifacts/#{SecureRandom.hex(8)}.json" }
       started_at { 10.minutes.ago }

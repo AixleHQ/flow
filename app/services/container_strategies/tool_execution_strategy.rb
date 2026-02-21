@@ -19,7 +19,7 @@ module ContainerStrategies
 
     def phase_config(phase)
       case phase
-      when :exec    then { timeout: [input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT].min }
+      when :exec    then { timeout: [ input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT ].min }
       when :cleanup then { timeout: 60, always: true }
       else               { timeout: 120 }
       end
@@ -78,9 +78,9 @@ module ContainerStrategies
 
       if tool.tool_files.any?
         setup = tool.tool_files.map { |tf| file_setup_command(tf) }
-        ["/bin/sh", "-c", (setup + [command]).join(" && ")]
+        [ "/bin/sh", "-c", (setup + [ command ]).join(" && ") ]
       else
-        ["/bin/sh", "-c", command]
+        [ "/bin/sh", "-c", command ]
       end
     end
 
@@ -99,7 +99,7 @@ module ContainerStrategies
 
     def exec(container_id:, **)
       container = resolve_container(container_id)
-      exec_timeout = [input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT].min
+      exec_timeout = [ input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT ].min
       start_time = Time.current
 
       begin

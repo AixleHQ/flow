@@ -13,25 +13,25 @@ module Workflows
     end
 
     test "executes cleanup activity and returns result" do
-      expected_result = { cleaned_started: 2, cleaned_running: 1 }
+      expected_result = { cleaned_running: 2, cleaned_ready: 1 }
 
       activities = mock("activities")
-      activities.stubs(:cleanup_stale_sessions_activity).returns(:cleanup_activity)
+      activities.stubs(:session_cleanup_stale_activity).returns(:session_cleanup_stale_activity)
 
       @workflow.stubs(:activities).returns(activities)
       @workflow.stubs(:execute_activity)
-        .with(:cleanup_activity, {}, has_entries(start_to_close_timeout: 300))
+        .with(:session_cleanup_stale_activity, {}, has_entries(start_to_close_timeout: 300))
         .returns(expected_result)
 
       result = @workflow.run
 
-      assert_equal 2, result[:cleaned_started]
-      assert_equal 1, result[:cleaned_running]
+      assert_equal 2, result[:cleaned_running]
+      assert_equal 1, result[:cleaned_ready]
     end
 
     test "uses limited retry policy" do
       activities = mock("activities")
-      activities.stubs(:cleanup_stale_sessions_activity).returns(:cleanup_activity)
+      activities.stubs(:session_cleanup_stale_activity).returns(:session_cleanup_stale_activity)
 
       @workflow.stubs(:activities).returns(activities)
 

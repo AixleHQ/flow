@@ -30,14 +30,14 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
   end
 
   test "active? returns true for active states" do
-    %w[not_started started running].each do |state|
+    %w[not_started running ready].each do |state|
       session = build(:terminal_session, state: state, user: @user)
       assert session.active?, "Expected #{state} to be active"
     end
   end
 
   test "active? returns false for inactive states" do
-    %w[collected failed cancelled].each do |state|
+    %w[finished failed].each do |state|
       session = build(:terminal_session, state: state, user: @user)
       assert_not session.active?, "Expected #{state} to be inactive"
     end
