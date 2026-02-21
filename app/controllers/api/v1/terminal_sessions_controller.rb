@@ -46,29 +46,21 @@ module Api
       # Gracefully finish session — stop, collect artifacts, collect usage.
       # Works for any session type (auth_setup, agent_session, etc.)
       def finish
-        unless @session.may_stop?
-          return render json: { error: "Session cannot be stopped in current state: #{@session.state}" },
-                        status: :bad_request
-        end
-
-        @session.stop!
-
-        # Send signal to Temporal workflow to finish and cleanup
-        if @session.temporal_workflow_id.present?
-          TemporalService.send_signal(@session.temporal_workflow_id, :container_finished)
-        end
+        @session.request_finish!
 
         render json: {
           data: TerminalSessionSerializer.new(@session).attributes,
           message: "Session finishing, collecting artifacts..."
         }
+      rescue TerminalSession::InvalidStateError => e
+        render json: { error: e.message }, status: :bad_request
       end
 
 
       # DELETE /api/v1/terminal_sessions/:id
       # Delete a terminal session (only if not active)
       def destroy
-        unless @session.state.in?(%w[not_started collected failed cancelled])
+        unless @session.state.in?(%w[not_started finished failed])
           return render json: { error: "Cannot delete active session. Cancel it first." }, status: :bad_request
         end
 

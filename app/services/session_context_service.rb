@@ -669,7 +669,7 @@ class SessionContextService
     def build_internal_mcp(session)
       OpenStruct.new(
         name: "palad-tools",
-        url: ENV.fetch("MCP_SERVER_URL", "http://web:4002/action_mcp"),
+        url: Settings.mcp.server_url,
         transport: "streamable-http",
         headers: { "X-Session-Key" => session.mcp_key }
       )

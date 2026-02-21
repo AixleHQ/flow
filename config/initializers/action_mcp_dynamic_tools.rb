@@ -66,9 +66,7 @@ Rails.application.config.after_initialize do
     private
 
     def execute_tool_via_temporal(tool, arguments, session)
-      # Use unified container workflow (blocking execution)
-      ContainerWorkflowService.execute_tool(
-        tool: tool,
+      tool.execute(
         parameters: arguments || {},
         project: session.project,
         timeout: 300

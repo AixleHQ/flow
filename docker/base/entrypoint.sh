@@ -34,7 +34,7 @@ mkdir -p "$HOME/.config" 2>/dev/null || true
 # -----------------------------------------------------------------------------
 # Setup workspace
 # -----------------------------------------------------------------------------
-mkdir -p "$WORKSPACE/repo" "$WORKSPACE/output"
+mkdir -p "$WORKSPACE/repo" "$WORKSPACE/outputs"
 
 # Clone repo if URL provided
 if [ -n "$REPO_URL" ]; then
@@ -77,6 +77,36 @@ else
 fi
 
 # -----------------------------------------------------------------------------
+# Start OpenVSCode Server (interactive sessions only)
+# Skipped when AGENT_PROMPT is set (non-interactive / autonomous mode)
+# -----------------------------------------------------------------------------
+if [ -z "$AGENT_PROMPT" ]; then
+    VSCODE_PORT="${VSCODE_PORT:-8443}"
+    SERVER_BASE_PATH="/t/${ROUTE_TOKEN}/ide"
+
+    VSCODE_DATA_DIR="$HOME/.openvscode-server/data"
+    mkdir -p "$VSCODE_DATA_DIR/Machine" "$VSCODE_DATA_DIR/User"
+    cp /opt/openvscode-server/default-settings.json "$VSCODE_DATA_DIR/Machine/settings.json"
+    cp /opt/openvscode-server/default-settings.json "$VSCODE_DATA_DIR/User/settings.json"
+
+    /opt/openvscode-server/bin/openvscode-server \
+        --port "$VSCODE_PORT" \
+        --host 0.0.0.0 \
+        --server-base-path "$SERVER_BASE_PATH" \
+        --connection-token "$VSCODE_TOKEN" \
+        --default-folder /workspace \
+        > /dev/null 2>&1 &
+    VSCODE_PID=$!
+
+    sleep 1
+    if kill -0 $VSCODE_PID 2>/dev/null; then
+        echo -e "${GREEN}✅ OpenVSCode Server ready on port ${VSCODE_PORT}${NC}"
+    else
+        echo -e "${YELLOW}⚠️  OpenVSCode Server failed to start${NC}"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
 # Start ttyd Web Terminal (with tmux session persistence)
 #
 # All commands run inside tmux:
@@ -89,10 +119,14 @@ TTYD_CMD="${TTYD_CMD:-bash}"
 
 if [ -n "$AGENT_PROMPT" ]; then
     # Non-interactive: write prompt to file, build wrapper script
+    # On exit, write exit code to /tmp/.agent_done so poll_for_completion detects it
     printf '%s' "$AGENT_PROMPT" > /tmp/.agent_prompt
-    cat > /tmp/run_agent.sh << 'AGENTEOF'
+    cat > /tmp/run_agent.sh <<AGENTEOF
 #!/bin/sh
-exec $TTYD_CMD "$(cat /tmp/.agent_prompt)"
+${TTYD_CMD} "\$(cat /tmp/.agent_prompt)"
+EC=\$?
+printf '%d' "\$EC" > /tmp/.agent_done
+exit \$EC
 AGENTEOF
     chmod +x /tmp/run_agent.sh
     TMUX_CMD="/tmp/run_agent.sh"
@@ -131,6 +165,7 @@ cleanup() {
     kill $MITM_PID 2>/dev/null || true
     kill $WATCHER_PID 2>/dev/null || true
     kill $TTYD_PID 2>/dev/null || true
+    kill $VSCODE_PID 2>/dev/null || true
     exit 0
 }
 
@@ -140,6 +175,6 @@ trap cleanup SIGTERM SIGINT
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    wait -n $WATCHER_PID $TTYD_PID 2>/dev/null || true
+    wait -n $WATCHER_PID $TTYD_PID ${VSCODE_PID:+$VSCODE_PID} 2>/dev/null || true
     cleanup
 fi

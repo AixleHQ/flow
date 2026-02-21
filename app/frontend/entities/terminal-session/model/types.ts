@@ -1,12 +1,10 @@
 // Terminal Session Types
 export type TerminalSessionState =
   | 'not_started'
-  | 'started'
   | 'running'
-  | 'stopped'
-  | 'collected'
-  | 'failed'
-  | 'cancelled';
+  | 'ready'
+  | 'finished'
+  | 'failed';
 
 export type TerminalSessionType = 'auth_setup' | 'agent_session' | 'tool_setup' | 'workflow_step';
 
@@ -44,8 +42,8 @@ export interface ITerminalSession {
   mode: SessionMode;
   initialPrompt: string | null;
   startedAt: string | null;
+  readyAt: string | null;
   finishedAt: string | null;
-  collectedAt: string | null;
   createdAt: string;
   updatedAt: string;
   // Usage (denormalized)

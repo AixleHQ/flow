@@ -87,12 +87,12 @@ module Agents
       }
     end
 
-    # Session command: always interactive mode for TUI with streaming output.
-    # For non-interactive sessions, prompt is passed as positional argument
-    # via AGENT_PROMPT env var → /tmp/.agent_prompt → run_agent.sh
-    # (claude -p is print/pipe mode — no TUI, no streaming, silent until done)
+    # Session command for agent terminal.
+    # Interactive: `claude` (TUI REPL, user types prompts).
+    # Non-interactive: `claude -p --verbose` (executes prompt, exits on completion).
+    #   --verbose preserves streaming turn-by-turn output in ttyd terminal.
     def session_command(mode:, prompt: nil)
-      "claude"
+      mode == "non_interactive" ? "claude -p --verbose" : "claude"
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)

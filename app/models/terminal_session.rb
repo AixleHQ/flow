@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 class TerminalSession < ApplicationRecord
-  # State machine
   include TerminalSessionStateMachine
+
+  WORKFLOW_TIMEOUT = 86_400 # 24 hours
 
   # Associations
   belongs_to :user
@@ -51,11 +52,14 @@ class TerminalSession < ApplicationRecord
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
-  scope :active, -> { where(state: %w[not_started started running]) }
-  scope :completed, -> { where(state: %w[collected]) }
+  scope :active, -> { where(state: %w[not_started running ready]) }
+  scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
 
-  # Dynamic key-value config (config_files, env_vars remain in JSONB)
+  def active?
+    state.in?(%w[not_started running ready])
+  end
+
   def config_files
     session_config["config_files"] || {}
   end
@@ -64,12 +68,40 @@ class TerminalSession < ApplicationRecord
     session_config["env_vars"] || {}
   end
 
-  def active?
-    state.in?(%w[not_started started running])
+  # == Workflow ==
+
+  def workflow_id
+    "agent-session-#{id}"
   end
 
-  # Build the container execution strategy for this session.
-  # Resolves strategy class from session_type and initializes with all required params.
+  def start_workflow!
+    result = TemporalService.start_workflow(
+      WorkflowService.container_workflow,
+      { session_id: id, manifest: strategy.build_manifest },
+      id: workflow_id,
+      execution_timeout: WORKFLOW_TIMEOUT
+    )
+    raise result[:error] unless result[:ok]
+
+    update!(
+      temporal_workflow_id: result[:workflow_id],
+      temporal_run_id: result[:run_id],
+      started_at: Time.current
+    )
+  end
+
+  def request_finish!
+    raise InvalidStateError, "Cannot finish session in state: #{state}" unless may_finish?
+
+    signal_workflow(:container_finished) if temporal_workflow_id.present?
+  end
+
+  def cancel!
+    cancel_workflow if temporal_workflow_id.present?
+  end
+
+  # == Strategy ==
+
   def strategy
     case session_type
     when "auth_setup"
@@ -95,6 +127,57 @@ class TerminalSession < ApplicationRecord
 
   private
 
+  # == Temporal ==
+
+  def signal_workflow(signal_name)
+    TemporalService.send_signal(workflow_id, signal_name)
+  end
+
+  def cancel_workflow
+    TemporalService.cancel_workflow(workflow_id)
+  end
+
+  # == State machine callbacks ==
+
+  def on_started
+    start_workflow!
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to start workflow for #{id}: #{e.message}")
+    update!(error_message: "Failed to start workflow: #{e.message}")
+    fail!
+  end
+
+  def on_ready
+    update!(ready_at: Time.current)
+  end
+
+  def on_finished
+    sync_usage
+    update!(finished_at: Time.current, container_id: nil)
+  end
+
+  def on_failed
+    sync_usage
+    update!(finished_at: Time.current, container_id: nil)
+  end
+
+  def sync_usage
+    stat = usage_statistic&.reload
+    return if stat.nil?
+
+    update!(
+      total_tokens: stat.total_tokens,
+      input_tokens: stat.input_tokens,
+      output_tokens: stat.output_tokens,
+      cache_read_tokens: stat.cache_read_tokens,
+      cache_write_tokens: stat.cache_write_tokens,
+      cost_cents: stat.cost_cents,
+      models: stat.models
+    )
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
+  end
+
   def strategy_params
     {
       user_id: user_id,
@@ -112,7 +195,6 @@ class TerminalSession < ApplicationRecord
     self.mcp_key ||= SecureRandom.urlsafe_base64(32)
   end
 
-  # Broadcast updates to ActionCable subscribers
   def broadcast_update
     TerminalSessionChannel.broadcast_update(self)
   end

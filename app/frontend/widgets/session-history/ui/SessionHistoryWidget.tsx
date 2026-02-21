@@ -45,12 +45,10 @@ const STATE_CONFIG: Record<
   { label: string; color: 'default' | 'success' | 'error' | 'warning' | 'info' }
 > = {
   not_started: { label: 'Pending', color: 'default' },
-  started: { label: 'Starting', color: 'info' },
-  running: { label: 'Running', color: 'success' },
-  stopped: { label: 'Stopped', color: 'warning' },
-  collected: { label: 'Completed', color: 'default' },
+  running: { label: 'Starting', color: 'info' },
+  ready: { label: 'Running', color: 'success' },
+  finished: { label: 'Finished', color: 'default' },
   failed: { label: 'Failed', color: 'error' },
-  cancelled: { label: 'Cancelled', color: 'default' },
 };
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -75,18 +73,15 @@ function formatCost(cents: number): string {
 function formatDuration(
   startedAt: string | null,
   finishedAt: string | null,
-  collectedAt: string | null,
   state: string,
 ): string {
   if (!startedAt) return '—';
   const start = new Date(startedAt);
-  const end = collectedAt
-    ? new Date(collectedAt)
-    : finishedAt
-      ? new Date(finishedAt)
-      : state === 'running' || state === 'started'
-        ? new Date()
-        : null;
+  const end = finishedAt
+    ? new Date(finishedAt)
+    : state === 'running' || state === 'ready'
+      ? new Date()
+      : null;
   if (!end) return '—';
   const seconds = Math.round((end.getTime() - start.getTime()) / 1000);
   if (seconds < 60) return `${seconds}s`;
@@ -102,11 +97,10 @@ const AGENT_FILTER_OPTIONS: { value: AgentType; label: string }[] = [
 ];
 
 const STATE_FILTER_OPTIONS: { value: TerminalSessionState; label: string }[] = [
-  { value: 'running', label: 'Running' },
-  { value: 'stopped', label: 'Stopped' },
-  { value: 'collected', label: 'Completed' },
+  { value: 'running', label: 'Starting' },
+  { value: 'ready', label: 'Running' },
+  { value: 'finished', label: 'Finished' },
   { value: 'failed', label: 'Failed' },
-  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 const PER_PAGE = 20;
@@ -283,7 +277,7 @@ const SessionRow: FC<SessionRowProps> = ({ session: s, showProject, onSelect }) 
             variant="outlined"
             sx={{ fontSize: 11, height: 22 }}
           />
-          {s.state === 'collected' && !s.artifactsReviewed && (s.pendingArtifactsCount ?? 0) > 0 && (
+          {s.state === 'finished' && !s.artifactsReviewed && (s.pendingArtifactsCount ?? 0) > 0 && (
             <Chip
               label={`${s.pendingArtifactsCount} pending`}
               color="warning"
@@ -331,7 +325,7 @@ const SessionRow: FC<SessionRowProps> = ({ session: s, showProject, onSelect }) 
       </TableCell>
       <TableCell>
         <Typography variant="body2" sx={{ fontSize: 12, fontFamily: 'monospace', color: 'text.secondary' }}>
-          {formatDuration(s.startedAt, s.finishedAt, s.collectedAt, s.state)}
+          {formatDuration(s.startedAt, s.finishedAt, s.state)}
         </Typography>
       </TableCell>
       <TableCell>
@@ -342,7 +336,7 @@ const SessionRow: FC<SessionRowProps> = ({ session: s, showProject, onSelect }) 
         </Tooltip>
       </TableCell>
       <TableCell>
-        {s.state === 'running' && (
+        {s.state === 'ready' && (
           <Tooltip title="Open session" arrow>
             <IconButton
               size="small"

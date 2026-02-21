@@ -101,7 +101,7 @@ const styles = {
   },
 } as const;
 
-const TERMINAL_STATES = ['stopped', 'collected', 'failed'];
+const FINISHED_STATES = ['finished', 'failed'];
 
 export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   sessionId,
@@ -159,9 +159,9 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     setEditorCollapsed(false);
   }
 
-  const isSessionRunning = session?.state === 'running';
-  const canShowEditor = showEditor && !editorCollapsed && isSessionRunning && !!ideUrl;
-  const canShowTerminal = showTerminal && isSessionRunning && !!ttydUrl;
+  const isSessionReady = session?.state === 'ready';
+  const canShowEditor = showEditor && !editorCollapsed && isSessionReady && !!ideUrl;
+  const canShowTerminal = showTerminal && isSessionReady && !!ttydUrl;
 
   // --- Status screens ---
 
@@ -199,8 +199,8 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     );
   }
 
-  if (!isSessionRunning) {
-    const isFinished = TERMINAL_STATES.includes(session.state);
+  if (!isSessionReady) {
+    const isFinished = FINISHED_STATES.includes(session.state);
 
     return (
       <Box sx={styles.centeredBox}>
@@ -214,7 +214,9 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
         ) : (
           <>
             <CircularProgress size={24} sx={{ color: '#4ec9b0' }} />
-            <Typography sx={styles.loadingText}>Waiting for container ({session.state})...</Typography>
+            <Typography sx={styles.loadingText}>
+              {session.state === 'running' ? 'Starting container…' : `Waiting (${session.state})…`}
+            </Typography>
           </>
         )}
         <SessionSummaryCard session={session} />
@@ -265,7 +267,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   // --- Single panel ---
 
   if (!canShowEditor && canShowTerminal) {
-    const showCollapseToggle = showEditor && isSessionRunning && !!ideUrl && editorCollapsed;
+    const showCollapseToggle = showEditor && isSessionReady && !!ideUrl && editorCollapsed;
     return (
       <Box sx={styles.container}>
         {showCollapseToggle && (

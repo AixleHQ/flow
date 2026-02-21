@@ -60,6 +60,7 @@ aws:
 
 mcp:
   name: palad-mcp-server
+  server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
 
 otel:
   endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>
@@ -87,10 +88,14 @@ github:
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
   http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>
+  internal_url: <%= ENV['TRAEFIK_INTERNAL_URL'] || 'http://traefik' %>
   dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
   cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
 
 container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
+
+docker:
+  network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
 
 kubernetes:
   namespace: <%= ENV['K8S_NAMESPACE'] || 'palad' %>

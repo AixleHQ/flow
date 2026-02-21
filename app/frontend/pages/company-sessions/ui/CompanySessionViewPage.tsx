@@ -43,7 +43,7 @@ const CompanySessionViewPage = () => {
     onUpdate: useCallback((updated: ITerminalSession) => setSession(updated), []),
   });
 
-  const isTerminal = ['stopped', 'collected', 'failed', 'cancelled'].includes(session?.state ?? '');
+  const isTerminal = ['finished', 'failed'].includes(session?.state ?? '');
 
   useEffect(() => {
     if (isTerminal && isStopping) setIsStopping(false);
@@ -114,7 +114,15 @@ const CompanySessionViewPage = () => {
             <Chip
               size="small"
               label={session.state}
-              color={session.state === 'running' ? 'success' : session.state === 'failed' ? 'error' : 'default'}
+              color={
+                session.state === 'ready'
+                  ? 'success'
+                  : session.state === 'failed'
+                    ? 'error'
+                    : session.state === 'running'
+                      ? 'info'
+                      : 'default'
+              }
             />
           )}
           <Typography variant="caption" color="text.secondary">

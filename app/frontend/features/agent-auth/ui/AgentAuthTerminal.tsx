@@ -134,7 +134,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
       stopPolling();
       return;
     }
-    if (!session?.routeToken || session.state !== 'running') {
+    if (!session?.routeToken || session.state !== 'ready') {
       stopPolling();
       return;
     }
@@ -169,15 +169,15 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
   // Auto-complete when session collected/stopped
   useEffect(() => {
-    if ((session?.state === 'collected' || session?.state === 'stopped') && !authCompleteCalledRef.current) {
+    if (session?.state === 'finished' && !authCompleteCalledRef.current) {
       setStep('completed');
       authCompleteCalledRef.current = true;
       onAuthComplete?.();
     }
   }, [session?.state, onAuthComplete]);
 
-  const isRunning = session?.state === 'running';
-  const canCancel = session?.state && !['collected', 'cancelled', 'stopped'].includes(session.state);
+  const isReady = session?.state === 'ready';
+  const canCancel = session?.state && !['finished', 'failed'].includes(session.state);
 
   // Step 1: Env fields form (for agents that require pre-config like GOOGLE_CLOUD_PROJECT)
   if (step === 'env_fields') {
@@ -290,7 +290,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
           </Typography>
         )}
         {session?.state && (
-          <Typography variant="caption" sx={{ color: session.state === 'running' ? '#4caf50' : '#888' }}>
+          <Typography variant="caption" sx={{ color: session.state === 'ready' ? '#4caf50' : '#888' }}>
             {session.state}
           </Typography>
         )}
@@ -313,7 +313,7 @@ export const AgentAuthTerminal: React.FC<AgentAuthTerminalProps> = ({ agentType,
 
       {/* Action buttons */}
       <Box sx={{ display: 'flex', gap: 1, p: 1, borderTop: '1px solid #3d3d3d', alignItems: 'center' }}>
-        {isRunning && (
+        {isReady && (
           <>
             <Button
               variant="contained"

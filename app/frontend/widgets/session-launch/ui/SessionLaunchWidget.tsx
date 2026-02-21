@@ -108,7 +108,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       if (!selectedAgent && updated.agentType) {
         setSelectedAgent(updated.agentType);
       }
-      if (updated.state === 'stopped' || updated.state === 'collected') {
+      if (updated.state === 'finished') {
         const sessionsPath = projectId
           ? Routes.frontend.companyProjectTabPath(String(projectId), 'sessions')
           : Routes.frontend.companySessionsPath;
@@ -266,10 +266,8 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       ? AGENT_TYPES.find((a) => a.type === selectedAgent)?.label
       : activeSession?.agentType;
     const isTerminal =
-      activeSession?.state === 'stopped' ||
-      activeSession?.state === 'collected' ||
-      activeSession?.state === 'failed' ||
-      activeSession?.state === 'cancelled';
+      activeSession?.state === 'finished' ||
+      activeSession?.state === 'failed';
 
     // Reset isStopping once backend confirms terminal state
     if (isTerminal && isStopping) {
@@ -299,7 +297,13 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
                 size="small"
                 label={activeSession.state}
                 color={
-                  activeSession.state === 'running' ? 'success' : activeSession.state === 'failed' ? 'error' : 'default'
+                  activeSession.state === 'ready'
+                    ? 'success'
+                    : activeSession.state === 'failed'
+                      ? 'error'
+                      : activeSession.state === 'running'
+                        ? 'info'
+                        : 'default'
                 }
               />
             )}

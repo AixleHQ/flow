@@ -9,7 +9,7 @@ module Api
         #
         # Supported filters (via q[] params):
         #   q[agent_type_eq]    - filter by agent type (claude_code, cursor_cli, codex, gemini_cli)
-        #   q[state_eq]         - filter by state (running, collected, failed, etc.)
+        #   q[state_eq]         - filter by state (running, ready, finished, failed)
         #   q[session_type_eq]  - filter by session type (agent_session, auth_setup, etc.)
         #   q[created_at_gteq]  - sessions created after date
         #   q[created_at_lteq]  - sessions created before date

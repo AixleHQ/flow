@@ -92,6 +92,42 @@ class Tool < ApplicationRecord
     result.sort_by(&:name)
   end
 
+  WORKFLOW_TIMEOUT = 3600 # 1 hour
+
+  # Execute tool in a container via Temporal (blocking).
+  #
+  # @param parameters [Hash] Tool parameters
+  # @param project [Project, nil] Project context
+  # @param timeout [Integer] Execution timeout in seconds
+  # @return [Hash] { exit_code:, stdout:, stderr:, duration_ms: }
+  def execute(parameters: {}, project: nil, timeout: 300)
+    strategy = ContainerStrategies::ToolExecutionStrategy.new(
+      tool: self, parameters: parameters, project: project, timeout: timeout
+    )
+
+    TemporalService.execute_workflow(
+      WorkflowService.container_workflow,
+      { tool_id: id, parameters: parameters, project_id: project&.id,
+        timeout: timeout, manifest: strategy.build_manifest }
+    )
+  end
+
+  # Start tool execution async (non-blocking).
+  def start_execution(parameters: {}, project: nil, timeout: 300)
+    strategy = ContainerStrategies::ToolExecutionStrategy.new(
+      tool: self, parameters: parameters, project: project, timeout: timeout
+    )
+    workflow_id = "tool-execution-#{id}-#{SecureRandom.hex(8)}"
+
+    TemporalService.start_workflow(
+      WorkflowService.container_workflow,
+      { tool_id: id, parameters: parameters, project_id: project&.id,
+        timeout: timeout, manifest: strategy.build_manifest },
+      id: workflow_id,
+      execution_timeout: WORKFLOW_TIMEOUT
+    )
+  end
+
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
     %w[name display_name kind scope_type enabled created_at updated_at]

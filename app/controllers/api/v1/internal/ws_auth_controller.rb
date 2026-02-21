@@ -48,7 +48,7 @@ module Api
             return head :forbidden
           end
 
-          unless terminal_session.state.in?(%w[started running])
+          unless terminal_session.state.in?(%w[ready])
             Rails.logger.debug("[WsAuth] Session #{terminal_session.id} not running (state: #{terminal_session.state})")
             return head :forbidden
           end
