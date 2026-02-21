@@ -3,72 +3,28 @@
 require "temporalio/error"
 
 module TemporalExceptions
-  # Base class for custom Temporal errors
-  class BaseError < Temporalio::Error::ApplicationError
-    def initialize(message, **options)
-      super(message, **options)
-    end
-  end
+  BENIGN = Temporalio::Error::ApplicationError::Category::BENIGN
+  UNSPECIFIED = Temporalio::Error::ApplicationError::Category::UNSPECIFIED
 
-  # Retryable error - will be retried according to retry policy
+  # Wrap any Ruby error into Temporal ApplicationError.
   #
-  # Use for transient errors:
-  # - Network timeouts
-  # - Rate limits
-  # - Temporary service unavailability
+  # Called inside a rescue block — Ruby automatically preserves the cause chain.
   #
-  # Example:
-  #   raise TemporalExceptions::RetryableError.new("Rate limit exceeded")
-  class RetryableError < BaseError
-    def initialize(message, type: nil)
-      super(
-        message,
-        type: type || "RetryableError",
-        non_retryable: false # Will retry
-      )
-    end
-  end
-
-  # Non-retryable error - activity will fail immediately without retries
-  #
-  # Use for permanent errors:
-  # - Invalid input data
-  # - Missing required resources
-  # - Business logic violations
-  #
-  # Example:
-  #   raise TemporalExceptions::NonRetryableError.new("Invalid workspace ID")
-  class NonRetryableError < BaseError
-    def initialize(message, type: nil)
-      super(
-        message,
-        type: type || "NonRetryableError",
-        non_retryable: true # Won't retry
-      )
-    end
-  end
-
-  # Wrap any Ruby error into Temporal ApplicationError
-  #
-  # Args:
-  #   error: Original exception (ArgumentError, ActiveRecord::RecordNotFound, etc)
-  #   retryable: Whether error should be retried (default: true)
-  #
-  # Returns:
-  #   Temporalio::Error::ApplicationError with appropriate settings
-  #
-  # Example:
-  #   begin
-  #     user = User.find(id)
-  #   rescue ActiveRecord::RecordNotFound => e
-  #     raise TemporalExceptions.wrap(e, retryable: false)
-  #   end
-  def self.wrap(error, retryable: true, type: nil, details: nil)
-    error_class = retryable ? RetryableError : NonRetryableError
-
-    error_class.new(
+  # @param error [StandardError] original exception
+  # @param retryable [Boolean] whether Temporal should retry (default: true)
+  # @param benign [Boolean] expected error — suppresses metrics and downgrades logs to DEBUG
+  # @param type [String, nil] error type for workflow-side matching (defaults to error class name)
+  def self.wrap(error, retryable: true, benign: false, type: nil)
+    Temporalio::Error::ApplicationError.new(
       error.message,
-      type: type || error.class.name
+      type: type || error.class.name,
+      non_retryable: !retryable,
+      category: benign ? BENIGN : UNSPECIFIED
     )
+  end
+
+  # Convenience for non-retryable wrap.
+  def self.non_retryable(error, benign: false, type: nil)
+    wrap(error, retryable: false, benign: benign, type: type)
   end
 end

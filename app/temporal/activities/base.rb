@@ -19,10 +19,12 @@ class Activities::Base < Temporalio::Activity::Definition
     result = run(hashie_input)
     log(:info, "[#{name}] activity execution completed")
     result
-  rescue ActiveRecord::RecordNotFound, ActiveRecord::RecordInvalid => e
-    log(:error, "[#{name}] activity execution failed: #{e.message}")
-    log(:error, e.backtrace.join("\n"))
-    raise TemporalExceptions.wrap(e, retryable: false)
+  rescue ActiveRecord::RecordNotFound => e
+    log(:warn, "[#{name}] record not found: #{e.message}")
+    raise TemporalExceptions.non_retryable(e, benign: true)
+  rescue ActiveRecord::RecordInvalid => e
+    log(:error, "[#{name}] validation failed: #{e.message}")
+    raise TemporalExceptions.non_retryable(e)
   end
 
   def log(level, message)

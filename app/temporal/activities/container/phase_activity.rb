@@ -4,11 +4,14 @@ module Activities
   module Container
     class PhaseActivity < Base
       def run(input)
+        @cleanup_phase = false
         phase = input.phase.to_sym
         raw_state = input.state || input.context || {}
         state = raw_state.is_a?(Hash) ? {}.merge(raw_state).deep_symbolize_keys : {}
         state[:session_id] ||= input.session_id.to_i if input.respond_to?(:session_id) && input.session_id
         state[:error] = input.error if input.respond_to?(:error) && input.error.present?
+
+        @cleanup_phase = phase == :cleanup
 
         strategy = resolve_strategy(input)
         service = ContainerService.new(strategy: strategy, state: state)
@@ -16,9 +19,9 @@ module Activities
         log(:info, "[ContainerPhase] #{phase} for #{strategy.class.name.demodulize}")
         service.run_phase(phase)
       rescue ContainerService::PhaseError, ArgumentError => e
-        raise TemporalExceptions.wrap(e, retryable: false)
+        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase)
       rescue Docker::Error::NotFoundError => e
-        raise TemporalExceptions.wrap(e, retryable: false)
+        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase)
       rescue Docker::Error::DockerError => e
         raise TemporalExceptions.wrap(e, retryable: true)
       end

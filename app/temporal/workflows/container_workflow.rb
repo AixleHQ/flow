@@ -13,6 +13,11 @@ module Workflows
   #
   # Cleanup always runs (even on failure), with optional retry policy.
   #
+  # Error handling:
+  #   - ActivityError from failed phases: caught, stored, passed to cleanup
+  #   - Cleanup errors: caught, logged, surfaced in result (not swallowed)
+  #   - Non-Temporal errors (bugs): NOT caught — cause Workflow Task Failure → auto-retry
+  #
   # IMPORTANT: Workflow code runs inside Temporal sandbox — no autoloading,
   # no ActiveSupport, no Thread::Mutex. Keep it plain Ruby.
   #
@@ -44,18 +49,33 @@ module Workflows
 
           await_signal_if_needed(config, state)
         end
-      rescue StandardError => e
-        Temporalio::Workflow.logger.error("[ContainerWorkflow] Failed: #{e.message}")
-        execution_error = e.message
+      rescue Temporalio::Error::ActivityError => e
+        Temporalio::Workflow.logger.error("[ContainerWorkflow] Phase failed: #{e.message}")
+        execution_error = extract_error_message(e)
       end
 
-      run_cleanup(input, state, execution_error, manifest)
+      cleanup_error = run_cleanup(input, state, execution_error, manifest)
+
+      if execution_error && cleanup_error
+        raise Temporalio::Error::ApplicationError.new(
+          "Execution failed: #{execution_error}; Cleanup also failed: #{cleanup_error}",
+          type: "ContainerWorkflowError",
+          non_retryable: true
+        )
+      elsif execution_error
+        raise Temporalio::Error::ApplicationError.new(
+          execution_error,
+          type: "ContainerExecutionError",
+          non_retryable: true
+        )
+      end
 
       state
     end
 
     private
 
+    # @return [String, nil] cleanup error message, or nil on success
     def run_cleanup(input, state, execution_error, manifest)
       config = phase_config(manifest, "cleanup")
 
@@ -65,8 +85,16 @@ module Workflows
         start_to_close_timeout: config_timeout(config, 120),
         retry_policy: Temporalio::RetryPolicy.new(max_attempts: 2, initial_interval: 5)
       )
-    rescue StandardError => e
-      Temporalio::Workflow.logger.error("[ContainerWorkflow] Cleanup failed: #{e.message}")
+      nil
+    rescue Temporalio::Error::ActivityError => e
+      msg = extract_error_message(e)
+      Temporalio::Workflow.logger.error("[ContainerWorkflow] Cleanup failed: #{msg}")
+      msg
+    end
+
+    def extract_error_message(activity_error)
+      cause = activity_error.cause
+      cause ? cause.message : activity_error.message
     end
 
     def await_signal_if_needed(config, state)
@@ -85,7 +113,7 @@ module Workflows
       Temporalio::Workflow.timeout(timeout) do
         Temporalio::Workflow.wait_condition { @finished }
       rescue Timeout::Error
-        Temporalio::Workflow.logger.warn("[ContainerWorkflow] Signal timed out")
+        Temporalio::Workflow.logger.info("[ContainerWorkflow] Signal wait timed out after #{timeout}s")
       end
     end
 

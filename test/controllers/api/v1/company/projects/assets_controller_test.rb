@@ -15,6 +15,37 @@ class Api::V1::Company::Projects::AssetsControllerTest < ActionController::TestC
     @company_version = create(:asset_version, :with_file, asset: @company_asset, uploaded_by: @admin, version: 1)
   end
 
+  # ====== INDEX Tests ======
+
+  test "#index returns project and company assets for collaborator" do
+    sign_in @admin
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+    json = response.parsed_body
+    items = json["items"]
+    assert items.length >= 2
+    names = items.map { |a| a["name"] }
+    assert_includes names, "project-doc.md"
+    assert_includes names, "company-doc.md"
+  end
+
+  test "#index requires project access" do
+    non_collaborator = create(:user, :employee, company: @company)
+    sign_in non_collaborator
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :forbidden
+  end
+
+  test "#index requires authentication" do
+    get :index, params: { project_id: @project.id }
+
+    assert_response :unauthorized
+  end
+
   # ====== SHOW Tests ======
 
   test "#show returns project-scoped asset with versions" do
@@ -151,5 +182,118 @@ class Api::V1::Company::Projects::AssetsControllerTest < ActionController::TestC
     get :versions, params: { project_id: @project.id, id: @project_asset.id }
 
     assert_response :unauthorized
+  end
+
+  # ====== CREATE Tests ======
+
+  test "#create adds new asset for collaborator" do
+    sign_in @admin
+
+    assert_difference("Asset.count", 1) do
+      assert_difference("AssetVersion.count", 1) do
+        post :create, params: {
+          project_id: @project.id,
+          asset: {
+            name: "new-asset.md",
+            file: document_file_cache_data
+          }
+        }, as: :json
+      end
+    end
+
+    assert_response :created
+    data = response.parsed_body["data"]
+    assert_equal "new-asset.md", data["name"]
+    assert_equal @project.id, data["scope_id"]
+  end
+
+  test "#create requires project access" do
+    non_collaborator = create(:user, :employee, company: @company)
+    sign_in non_collaborator
+
+    assert_no_difference("Asset.count") do
+      post :create, params: {
+        project_id: @project.id,
+        asset: { name: "hacked.md", file: document_file_cache_data }
+      }, as: :json
+    end
+
+    assert_response :forbidden
+  end
+
+  # ====== UPDATE Tests ======
+
+  test "#update modifies asset for collaborator" do
+    sign_in @admin
+
+    patch :update, params: {
+      project_id: @project.id,
+      id: @project_asset.id,
+      asset: { folder: "docs", public: true }
+    }, as: :json
+
+    assert_response :success
+    @project_asset.reload
+    assert_equal "docs", @project_asset.folder
+    assert_equal true, @project_asset.public
+  end
+
+  test "#update requires project access" do
+    non_collaborator = create(:user, :employee, company: @company)
+    sign_in non_collaborator
+
+    patch :update, params: {
+      project_id: @project.id,
+      id: @project_asset.id,
+      asset: { folder: "hacked" }
+    }, as: :json
+
+    assert_response :forbidden
+  end
+
+  # ====== DESTROY Tests ======
+
+  test "#destroy soft-deletes asset for collaborator" do
+    sign_in @admin
+
+    delete :destroy, params: { project_id: @project.id, id: @project_asset.id }
+
+    assert_response :success
+    @project_asset.reload
+    assert @project_asset.deleted_at.present?
+  end
+
+  test "#destroy requires project access" do
+    non_collaborator = create(:user, :employee, company: @company)
+    sign_in non_collaborator
+
+    delete :destroy, params: { project_id: @project.id, id: @project_asset.id }
+
+    assert_response :forbidden
+    @project_asset.reload
+    assert @project_asset.deleted_at.nil?
+  end
+
+  # ====== RESTORE Tests ======
+
+  test "#restore clears deleted_at for collaborator" do
+    sign_in @admin
+    @project_asset.soft_delete!
+
+    post :restore, params: { project_id: @project.id, id: @project_asset.id }
+
+    assert_response :success
+    @project_asset.reload
+    assert @project_asset.deleted_at.nil?
+  end
+
+  test "#restore requires project access" do
+    non_collaborator = create(:user, :employee, company: @company)
+    sign_in non_collaborator
+    @project_asset.soft_delete!
+
+    post :restore, params: { project_id: @project.id, id: @project_asset.id }
+
+    assert_response :forbidden
   end
 end

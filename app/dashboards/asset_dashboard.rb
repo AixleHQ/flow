@@ -12,7 +12,7 @@ class AssetDashboard < Administrate::BaseDashboard
     scope_id: Field::Number,
     created_by: Field::BelongsTo,
     terminal_session: Field::BelongsTo.with_options(optional: true),
-    versions: Field::HasMany.with_options(class_name: "AssetVersion"),
+    versions: Field::HasMany.with_options,
     tags: Field::String,
     public: Field::Boolean,
     deleted_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),

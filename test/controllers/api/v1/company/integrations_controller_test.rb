@@ -14,6 +14,58 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
       company: @company, connected_by: @admin, name: "acme-corp")
   end
 
+  # ====== GITHUB_SETUP ======
+
+  test "#github_setup redirects when installation_id blank" do
+    sign_in @admin
+
+    get :github_setup, params: { installation_id: "" }, format: :html
+
+    assert_redirected_to "/company/integrations"
+  end
+
+  test "#github_setup creates integration when verification succeeds" do
+    sign_in @admin
+    initial_count = Integration.count
+
+    mock_service = mock("token_service")
+    mock_service.expects(:verify_installation).returns({
+      id: 88_888,
+      account_login: "setup-org",
+      account_type: "Organization",
+      target_type: "Organization",
+      permissions: {}
+    })
+    Github::TokenService.expects(:new).returns(mock_service)
+
+    get :github_setup, params: { installation_id: "88888" }, format: :html
+
+    assert_redirected_to "/company/integrations"
+    assert_equal initial_count + 1, Integration.count
+    integration = @company.integrations.find { |i| i.installation_id == "88888" }
+    assert integration.present?
+    assert_equal "setup-org", integration.name
+    assert_equal "active", integration.status
+  end
+
+  test "#github_setup sets error status when verification fails" do
+    sign_in @admin
+    initial_count = Integration.count
+
+    Github::TokenService.expects(:new).raises(
+      Github::TokenService::AuthenticationError.new("Invalid token")
+    )
+
+    get :github_setup, params: { installation_id: "77777" }, format: :html
+
+    assert_redirected_to "/company/integrations"
+    assert_equal initial_count + 1, Integration.count
+    integration = @company.integrations.find { |i| i.installation_id == "77777" }
+    assert integration.present?
+    assert_equal "error", integration.status
+    assert integration.settings["error"].present?
+  end
+
   # ====== INDEX ======
 
   test "#index returns company integrations for admin" do

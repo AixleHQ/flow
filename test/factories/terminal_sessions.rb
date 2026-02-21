@@ -7,6 +7,7 @@ FactoryBot.define do
     session_type { "auth_setup" }
     agent_type { "claude_code" }
     state { "not_started" }
+    route_token { SecureRandom.hex(16) }
     temporal_workflow_id { nil }
     temporal_run_id { nil }
     container_id { nil }

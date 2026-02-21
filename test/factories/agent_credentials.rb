@@ -2,12 +2,10 @@
 
 FactoryBot.define do
   factory :agent_credential do
-    user { nil }  # Default: no user (requires explicit user:)
+    user { nil }
     agent_type { "claude_code" }
-    encrypted_config_data do
-      {
-        "~/.#{agent_type.split('_').first}/config" => "api_key: test-token-#{SecureRandom.hex(8)}\ntheme: dark"
-      }.to_json
+    config_data do
+      { "api_key" => "test-token-#{SecureRandom.hex(8)}", "theme" => "dark" }
     end
     metadata { { collected_at: Time.current } }
     last_used_at { nil }
