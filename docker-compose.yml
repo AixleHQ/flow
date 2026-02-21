@@ -1,17 +1,9 @@
 x-web-volumes: &web-volumes
-  - ./web:/app:cached
-  - ./config/workflows.yml:/app/app/temporal/workflows.yml:cached
+  - .:/app:cached
   - ~/.bash_history:/root/.bash_history
   - bundle_cache:/bundle_cache
   - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
-
-x-ai-engine-volumes: &ai-engine-volumes
-  - ~/.bash_history:/root/.bash_history
-  - ./ai-engine:/app:cached
-  - ./config/workflows.yml:/app/app/workflows/workflows.yml:cached
-  - uv_cache:/root/.cache/uv
-  - py_venv:/app/.venv
 
 x-db-environment: &db-environment
   DB_HOST: db
@@ -30,10 +22,6 @@ x-web-environment: &web-environment
   RAILS_LOG_TO_STDOUT: 'true'
   PORT: 4000
   REDIS_URL: redis://redis:6379/1
-
-x-ai-engine-environment: &ai-engine-environment
-  <<: *db-environment
-  ENVIRONMENT: development
 
 x-toolbox-environment: &toolbox-environment
   - PROJECT=palad
@@ -79,7 +67,7 @@ services:
 
   web:
     build:
-      dockerfile: ./web/Dockerfile
+      dockerfile: ./Dockerfile
     image: web
     volumes: *web-volumes
     ports:
@@ -94,12 +82,11 @@ services:
       <<: *web-environment
     labels:
       - "traefik.enable=true"
-      # Rails app route (for ForwardAuth callbacks)
       - "traefik.http.routers.web.rule=PathPrefix(`/api`)"
       - "traefik.http.services.web.loadbalancer.server.port=4000"
     command: dev
 
-  worker-ruby:
+  worker:
     profiles: [worker]
     image: web
     volumes: *web-volumes
@@ -165,42 +152,6 @@ services:
       - '4318:4318'
     attach: false
 
-  # Base image for all AI agents
-  agent-base:
-    profiles: [build]
-    build:
-      context: ./docker/base
-      dockerfile: Dockerfile
-    image: palad/agent-base:latest
-
-  claude-code:
-    profiles: [agents]
-    build:
-      context: ./docker/claude-code
-      dockerfile: Dockerfile
-    image: palad/claude-code:latest
-
-  cursor-cli:
-    profiles: [agents]
-    build:
-      context: ./docker/cursor-cli
-      dockerfile: Dockerfile
-    image: palad/cursor-cli:latest
-
-  codex:
-    profiles: [agents]
-    build:
-      context: ./docker/codex
-      dockerfile: Dockerfile
-    image: palad/codex:latest
-
-  gemini-cli:
-    profiles: [agents]
-    build:
-      context: ./docker/gemini-cli
-      dockerfile: Dockerfile
-    image: palad/gemini-cli:latest
-
   remote:
     profiles: [infra]
     build:
@@ -226,10 +177,3 @@ services:
 volumes:
   bundle_cache:
   redis_data:
-  qdrant_data:
-  py_venv:
-  uv_cache:
-  claude_workspace:
-  cursor_workspace:
-  codex_workspace:
-  gemini_workspace:

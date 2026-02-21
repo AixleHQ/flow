@@ -8,16 +8,20 @@
 # ==================
 # Epics reorganized by Implementation Phases from workflow-architecture.md
 # Dependency: Secrets → Agents → Tools → MCP → Container Framework → Session Context → Sessions → Artifacts → Workflows
+# Dependency: Sessions → Monaco + VS Code Server (Epic 15)
+# Dependency: Sessions + Artifacts → Session Outputs & Config Normalization (Epic 16)
 #
 # Phase 0: Secrets Management (Epic 4)
 # Phase 1: Agent Management (Epic 5)
 # Phase 2: Tools Framework (Epic 6)
 # Phase 3: MCP Servers (Epic 7)
-# Phase 4: Unified Container Execution (Epic 8) ← NEW
+# Phase 4: Unified Container Execution (Epic 8)
 # Phase 4+: Session Context (Epic 9)
 # Phase 4++: Agent Sessions (Epic 10)
 # Phase 5-6: Workflows + Artifacts (Epic 12, 11)
 # Phase 7: Billing & Integrations (Epic 13, 14)
+# Phase 8: Monaco + VS Code Server (Epic 15)
+# Phase 9: Session Outputs & Config Normalization (Epic 16)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -213,3 +217,65 @@ development_status:
   14-7-linear-task-actions: backlog  # Internal Tools: create issue, update issue (move states), cache invalidation
 
   epic-14-retrospective: optional
+
+  # ============================================
+  # PHASE 8: VS CODE SERVER
+  # ============================================
+
+  epic-15: done  # VS Code Server Integration (Phase 8) — replace custom watcher/viewer with OpenVSCode Server
+  15-1-install-openvscode-server-in-base-image: done  # Download + install OpenVSCode Server binary, entrypoint integration, port 8443
+  15-2-traefik-routing-for-vscode-server: done  # Route /t/{token}/ide/ via Traefik, WebSocket upgrade, base path config
+  15-3-backend-update-container-strategies: done  # Expose IDE URL in exec result, add port 8443 to readiness checks, ActionCable broadcast
+  15-4-connection-token-management: done  # Per-session token generation, --connection-token-file, token in IDE URL
+  15-5-frontend-embed-vscode-editor: done  # TerminalSessionWidget: 3 layout modes (editor+terminal, terminal-only, editor-only), iframe embed
+  15-6-auth-detection-extract-from-watcher: done  # Extract /auth endpoint into standalone script, keep watcher for auth_setup only
+  15-7-cleanup-remove-custom-viewer: done  # Remove FileTree/FileViewer from agent session path, deprecation markers, port cleanup
+  15-8-vscode-file-watching-tuning: done  # Polling mode, inotify limits, exclude patterns, resource limits
+  epic-15-retrospective: optional
+
+  # ============================================
+  # PHASE 9: SESSION OUTPUTS & CONFIG NORMALIZATION
+  # ============================================
+
+  epic-16: done  # Session Outputs, Logs & Config Normalization (Phase 9) — Shrine logs, output review, JSONB→relations
+
+  # --- Part A: Session Log Collection ---
+  16-1-session-log-model-and-uploader: done  # SessionLog model, Shrine uploader (1GB limit), belongs_to terminal_session
+  16-2-collect-logs-in-before-cleanup: done  # Refactored before_cleanup → collect_logs + collect_outputs + collect_usage
+
+  # --- Part B: Session Output Collection & Review ---
+  16-3-rename-output-directory: done  # /workspace/output/ → /workspace/outputs/ in entrypoint + context service
+  16-4-collect-outputs-as-pending-assets: done  # Asset status field (active/pending_review/dismissed), collect files from /workspace/outputs/
+  16-5-artifact-review-api: done  # ArtifactsController: index, review (save/dismiss), download, Pundit policy
+  16-6-artifact-review-page-frontend: done  # SessionArtifactsPage: table, checkboxes, scope selector, RTK Query
+  16-7-session-view-and-list-integration: done  # Review button on session view, pending badge on list, SessionSummaryCard updates
+  16-8-dismissed-assets-cleanup: done  # Temporal workflow + activity, daily schedule, 7-day grace period
+
+  # --- Part C: Session Config Normalization ---
+  16-9-session-config-join-tables: done  # 5 join tables (tools/skills/mcp_servers/input_assets/repositories), configured_agent_id + mode + initial_prompt columns
+  16-10-migrate-existing-session-config-data: done  # Data migration JSONB → join tables, idempotent, batched, reversible
+  16-11-update-services-and-api-for-normalized-config: done  # Removed JSONB accessors, updated serializer/controller/frontend/tests — HABTM provides _ids methods
+
+  epic-16-retrospective: optional
+
+  # ============================================
+  # PHASE 10: CONTAINER ARCHITECTURE SIMPLIFICATION
+  # ============================================
+
+  epic-17: in-progress  # Container Architecture Simplification (Phase 10) — Docker optimization, workflow split, thin activities
+
+  # --- Part A: Docker Build Optimization ---
+  17-1-two-tier-base-image: done  # Dockerfile.core + restructured agent Dockerfiles, parallel builds, layer caching
+
+  # --- Part B: Workflow Split & Simplification ---
+  17-2-agent-container-workflow: done  # AgentContainerWorkflow (session_id only), signal wait, error-resilient cleanup
+  17-3-tool-execution-workflow: done  # ToolExecutionWorkflow (tool_id + params), no signals, linear flow
+  17-4-strategy-resolution-from-session: done  # TerminalSession#strategy, ContainerService.execute(session:)
+  17-5-thin-activities: done  # 5-line delegator activities, remove ContainerActivityBase routing
+  17-6-update-workflow-initiation: done  # ContainerWorkflowService dispatches to new workflows, controller simplification
+  17-7-remove-unified-container-workflow: done  # Delete UnifiedContainerWorkflow + old activities + base
+
+  # --- Part C: Strategy-Driven State ---
+  17-8-strategy-driven-session-state: done  # mark_running/failed/collected in strategies, conditional ports (partially done)
+
+  epic-17-retrospective: optional

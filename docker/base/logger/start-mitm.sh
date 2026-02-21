@@ -15,7 +15,7 @@
 #
 # Environment variables (optional):
 #   MITM_PROXY_PORT   - proxy port (default: 8888)
-#   MITM_LOG_PATH     - log file path (default: $WORKSPACE/output/mitmproxy.log)
+#   MITM_LOG_PATH     - log file path (default: /var/log/mitm/http.log)
 #   MITM_LOG_MAX_BODY - max body size to log (default: 16000)
 #   MITM_DISABLED     - set to "true" to skip starting mitm proxy
 # =============================================================================
@@ -28,7 +28,7 @@ fi
 
 # Configuration with defaults
 MITM_PROXY_PORT="${MITM_PROXY_PORT:-8888}"
-MITM_LOG_PATH="${MITM_LOG_PATH:-${WORKSPACE:-/workspace}/output/mitmproxy.log}"
+MITM_LOG_PATH="${MITM_LOG_PATH:-/var/log/mitm/http.log}"
 MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-0}"
 MITM_CA_CERT="${HOME:-/root}/.mitmproxy/mitmproxy-ca-cert.pem"
 

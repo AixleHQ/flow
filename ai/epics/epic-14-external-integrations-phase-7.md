@@ -8,6 +8,8 @@ System integrates with external development services (GitHub, Linear) to enable 
 
 **Phase:** 7 (Depends on: Epic 10 Sessions, Epic 11 Artifacts)
 
+**Related:** Epic 15 (Monaco + VS Code Server) — when VS Code Server is deployed, cloned repositories (Story 14.3) are browsable and editable in a full IDE instead of the read-only file viewer. Story 14.4 (Create PR) benefits from VS Code's built-in git UI.
+
 **User Outcome:** Users can connect GitHub repositories for code context in agent sessions, create PRs from session output, and manage Linear tasks through agents.
 
 ---

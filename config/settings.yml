@@ -1,0 +1,137 @@
+project_name: Palad
+
+domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
+asset_host: <%= ENV['ASSET_HOST'] || "lvh.me:4000" %>
+container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:4000" %>
+protocol: "https"
+
+google_oauth:
+  client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
+  client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
+
+rails:
+  secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] || "secret" %>
+  port: <%= ENV['RAILS_PORT'] || 4000 %>
+
+app:
+  version: <%= ENV['APP_VERSION'] || `git rev-parse HEAD`.strip %>
+  last_commiter:
+    name: <%= ENV['AUTHOR_NAME'] || `git log -1 --pretty=format:'%an'`.strip %>
+    email: <%= ENV['AUTHOR_EMAIL'] || `git log -1 --pretty=format:'%ae'`.strip %>
+
+rollbar: # move tokens to infra code
+  access_token: <%= ENV['ROLLBAR_ACCESS_TOKEN'] %>
+  js_access_token: <%= ENV['ROLLBAR_JS_ACCESS_TOKEN'] %>
+  deploy_endpoint: <%= ENV['ROLLBAR_DEPLOY_ENDPOINT'] %>
+
+database:
+  name: <%= ENV['DB_NAME'] %>
+  host: <%= ENV['DB_HOST'] || "127.0.0.1" %>
+  port: <%= ENV['DB_PORT'] || 5432 %>
+  pool: <%= ENV['RAILS_MAX_THREADS'] || 5 %>
+  username: <%= ENV['DB_USERNAME'] || "postgres" %>
+  password: <%= ENV['DB_PASSWORD'] || "" %>
+
+mailer:
+  address: <%= ENV["MAILER_ADDRESS"] %>
+  port: <%= ENV["MAILER_PORT"] %>
+  domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
+  user_name: <%= ENV['MAILER_USERNAME'] %>
+  password: <%= ENV['MAILER_PASSWORD'] %>
+  authentication: <%= ENV["MAILER_AUTHENTICATION"] || 'plain' %>
+
+redis:
+  url: <%= ENV['REDIS_URL'] || 'redis://redis:6379/1'%>
+  ui_url: <%= ENV['REDIS_UI_URL'] || 'http://localhost:8081' %>
+
+docs:
+  login: <%= ENV['DOCS_LOGIN'] || 'user' %>
+  password: <%= ENV['DOCS_PASSWORD'] || 'password' %>
+
+admin:
+  password: <%= ENV['ADMIN_PASSWORD'] || "adminpass" %>
+  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@palad.ai" %>
+
+aws:
+  access_key_id:     <%= ENV['AWS_ACCESS_KEY_ID']%>
+  secret_access_key: <%= ENV['AWS_SECRET_ACCESS_KEY']%>
+  bucket:            <%= ENV['AWS_S3_BUCKET'] || 'fake' %>
+  region:            <%= ENV['AWS_DEFAULT_REGION'] || 'fake' %>
+
+mcp:
+  name: palad-mcp-server
+  server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
+
+otel:
+  endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>
+  metrics_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/metrics' %>
+  logs_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/logs' %>
+
+temporal:
+  enabled: <%= ENV['TEMPORAL_ENABLED'] %>
+  host: <%= ENV['TEMPORAL_HOST'] || 'temporal' %>
+  port: <%= ENV['TEMPORAL_PORT'] || 7233 %>
+  namespace: <%= ENV['TEMPORAL_NAMESPACE'] || 'default' %>
+  task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'palad_ruby' %>
+  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
+
+encryption:
+  credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
+  config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
+  integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || "integrations test key" %>
+
+github:
+  app_id: <%= ENV['GITHUB_APP_ID'] %>
+  app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
+  private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
+
+traefik:
+  ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
+  http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>
+  internal_url: <%= ENV['TRAEFIK_INTERNAL_URL'] || 'http://traefik' %>
+  dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
+  cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
+
+container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
+
+docker:
+  network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
+
+kubernetes:
+  namespace: <%= ENV['K8S_NAMESPACE'] || 'palad' %>
+  service_host: <%= ENV['KUBERNETES_SERVICE_HOST'] || 'kubernetes.default.svc' %>
+  service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
+  traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>
+  traefik_auth_middleware: <%= ENV['TRAEFIK_AUTH_MIDDLEWARE'] || 'terminal-auth' %>
+  traefik_cors_middleware: <%= ENV['TRAEFIK_CORS_MIDDLEWARE'] || 'terminal-cors' %>
+  service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
+  workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
+  image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
+  kubeconfig_path: <%= ENV['KUBECONFIG'] || File.join(ENV.fetch('HOME', '/root'), '.kube', 'config') %>
+  service_account_token_path: <%= ENV['K8S_SA_TOKEN_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/token' %>
+  service_account_ca_path: <%= ENV['K8S_SA_CA_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' %>
+  ready_timeout: <%= ENV['K8S_READY_TIMEOUT'] || 60 %>
+  ready_interval: <%= ENV['K8S_READY_INTERVAL'] || 1 %>
+
+# Container Execution Framework (Epic 8)
+# Timeouts and resource limits for container lifecycle execution
+container_execution:
+  timeouts:
+    pull_image: 600        # 10 minutes for large images
+    before_create: 30      # 30 seconds
+    create: 60             # 1 minute
+    before_start: 30       # 30 seconds
+    start: 60              # 1 minute
+    before_exec: 120       # 2 minutes
+    exec_default: 300      # 5 minutes (default for tools)
+    exec_max: 1800         # 30 minutes (absolute max for tools)
+    before_cleanup: 120    # 2 minutes
+    cleanup: 30            # 30 seconds
+
+  limits:
+    tool_execution:
+      memory_mb: 1024      # Max memory per tool container (1GB)
+      cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
+      pids_limit: 100      # Max processes
+      max_timeout: 1800    # Absolute max timeout (30 min)
+

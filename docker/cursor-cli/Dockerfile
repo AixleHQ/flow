@@ -1,44 +1,62 @@
 # =============================================================================
 # Cursor CLI Interactive Session Image
 #
-# Components:
-#   - Cursor CLI (official installer from cursor.com)
-#   - ttyd (web terminal)
-#   - File watcher service (WebSocket streaming)
+# Build context: docker/ (parent dir, for access to base/ scripts)
+# Build command: docker build -f cursor-cli/Dockerfile -t palad/cursor-cli:latest .
 # =============================================================================
-FROM palad/agent-base:latest
+FROM palad/agent-base-core:latest
 
-# -----------------------------------------------------------------------------
-# Create non-root user first
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Agent-specific layers (CACHED when only shared scripts change)
+# =============================================================================
 RUN useradd -m -d /home/cursor -s /bin/bash cursor \
-    && chown -R cursor:cursor /workspace /opt/watcher
+    && chown -R cursor:cursor /workspace /home/cursor
 
-# -----------------------------------------------------------------------------
-# Cursor CLI Installation
-# Install via official script from https://cursor.com/cli
-# Install as cursor user so it goes to correct location
-# -----------------------------------------------------------------------------
 USER cursor
 WORKDIR /home/cursor
 RUN curl https://cursor.com/install -fsS | bash
-
-# Add agent to PATH via .bashrc
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
-# Switch back to root for remaining setup
 USER root
-
-# Create symlink to /usr/local/bin so it survives tmpfs mount on config dirs
-# Note: We'll mount tmpfs only on config directories, not entire home
 RUN ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
     && mkdir -p /home/cursor/.config/cursor /home/cursor/.cursor \
     && chown -R cursor:cursor /home/cursor
 
-# -----------------------------------------------------------------------------
-# Configuration
-# -----------------------------------------------------------------------------
+# =============================================================================
+# Shared scripts — ordered by stability (most stable first, entrypoint last)
+# =============================================================================
+RUN printf '%s\n' \
+    'set -g history-limit 50000' \
+    'set -g remain-on-exit on' \
+    'set -g status off' \
+    'set -g set-clipboard on' \
+    'set -g allow-passthrough on' \
+    > /etc/tmux.conf
+
+COPY base/inputrc /etc/inputrc
+COPY base/vscode-settings.json /opt/openvscode-server/default-settings.json
+
+WORKDIR /opt/watcher
+COPY base/watcher/package.json ./
+RUN npm install --production && npm cache clean --force
+COPY base/watcher/index.js ./
+
+COPY base/auth-check/index.js /opt/auth-check/index.js
+COPY base/logger/ /opt/mitm/
+RUN chmod +x /opt/mitm/start-mitm.sh
+
+COPY base/entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
+
+# =============================================================================
+# Final setup
+# =============================================================================
+RUN chown -R cursor:cursor /opt/watcher
+
 WORKDIR /workspace
 ENV HOME=/home/cursor \
     AGENT_NAME="Cursor CLI" \
-    PATH="/home/cursor/.local/bin:${PATH}"
+    PATH="/home/cursor/.local/bin:${PATH}" \
+    LANG=C.UTF-8
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

@@ -6,12 +6,8 @@ metadata:
 data:
   workflows.yml: |
     workflows:
-      - name: unified_container_workflow
+      - name: container_workflow
         owner: palad_ruby
         activities:
-          - name: pull_docker_image_activity
-            task_queue: palad_ruby
-          - name: execute_container_activity
-            task_queue: palad_ruby
-          - name: cleanup_container_activity
+          - name: container_phase_activity
             task_queue: palad_ruby

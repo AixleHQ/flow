@@ -16,20 +16,6 @@ services:
       ENVIRONMENT: test
       RAILS_ENV: test
 
-  ai-engine:
-    image: ${AI_ENGINE_IMAGE}
-    depends_on:
-      - qdrant
-      - db
-    environment:
-      ENVIRONMENT: test
-      LOG_LEVEL: DEBUG
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_USERNAME: postgres
-      DB_NAME: palad_test
-    command: python app/temporal/worker.py
-
   db:
     image: quay.io/debezium/postgres:15-alpine
     environment:
@@ -37,9 +23,3 @@ services:
 
   redis:
     image: ghcr.io/redisgrafana/redis-opencv:latest
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    ports:
-      - "6333:6333"
-      - "6334:6334"

@@ -1,36 +1,52 @@
 # =============================================================================
 # Gemini CLI Interactive Session Image
 #
-# Components:
-#   - Gemini CLI (@google/gemini-cli)
-#   - ttyd (web terminal)
-#   - File watcher service (WebSocket streaming)
+# Build context: docker/ (parent dir, for access to base/ scripts)
+# Build command: docker build -f gemini-cli/Dockerfile -t palad/gemini-cli:latest .
 # =============================================================================
-FROM palad/agent-base:latest
+FROM palad/agent-base-core:latest
 
-# -----------------------------------------------------------------------------
-# Create non-root user first
-# -----------------------------------------------------------------------------
-RUN useradd -m -d /home/gemini -s /bin/bash gemini \
-    && chown -R gemini:gemini /workspace /opt/watcher
+# =============================================================================
+# Agent-specific layers (CACHED when only shared scripts change)
+# =============================================================================
+RUN useradd -m -d /home/gemini -s /bin/bash gemini
 
-# -----------------------------------------------------------------------------
-# Gemini CLI Installation
-# Install via npm global package
-# -----------------------------------------------------------------------------
-USER root
 RUN npm install -g @google/gemini-cli
 
-# Switch to gemini user for configuration
-USER gemini
-WORKDIR /home/gemini
+# =============================================================================
+# Shared scripts — ordered by stability (most stable first, entrypoint last)
+# =============================================================================
+RUN printf '%s\n' \
+    'set -g history-limit 50000' \
+    'set -g remain-on-exit on' \
+    'set -g status off' \
+    'set -g set-clipboard on' \
+    'set -g allow-passthrough on' \
+    > /etc/tmux.conf
 
-# Switch back to root for remaining setup
-USER root
+COPY base/inputrc /etc/inputrc
+COPY base/vscode-settings.json /opt/openvscode-server/default-settings.json
 
-# -----------------------------------------------------------------------------
-# Configuration
-# -----------------------------------------------------------------------------
+WORKDIR /opt/watcher
+COPY base/watcher/package.json ./
+RUN npm install --production && npm cache clean --force
+COPY base/watcher/index.js ./
+
+COPY base/auth-check/index.js /opt/auth-check/index.js
+COPY base/logger/ /opt/mitm/
+RUN chmod +x /opt/mitm/start-mitm.sh
+
+COPY base/entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
+
+# =============================================================================
+# Final setup
+# =============================================================================
+RUN chown -R gemini:gemini /workspace /opt/watcher /home/gemini
+
 WORKDIR /workspace
 ENV HOME=/home/gemini \
-    AGENT_NAME="Gemini CLI"
+    AGENT_NAME="Gemini CLI" \
+    LANG=C.UTF-8
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]
