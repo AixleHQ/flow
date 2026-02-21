@@ -3,7 +3,11 @@ require "dotenv"
 
 Dotenv.load
 
+require_relative "../../lib/middleware/utf8_content_type"
+
 Rails.application.configure do
+  config.middleware.insert_before ActionDispatch::Static, Middleware::Utf8ContentType
+
   # Settings specified here will take precedence over those in config/application.rb.
 
   # Make code changes take effect immediately without server restart.

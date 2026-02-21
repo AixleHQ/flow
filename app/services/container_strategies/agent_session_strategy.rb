@@ -95,6 +95,7 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
+      logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
       collect_usage(session, agent_service, log_contents)
 
@@ -142,6 +143,31 @@ module ContainerStrategies
 
         sleep POLL_INTERVAL
       end
+    end
+
+    def collect_terminal_output(container, session)
+      runtime.exec(container, [
+        "sh", "-c",
+        "tmux capture-pane -t agent -p -S - > /tmp/terminal_output.log 2>/dev/null"
+      ])
+
+      content = read_file_from_container(container, "/tmp/terminal_output.log")
+      return 0 if content.blank?
+
+      io = StringIO.new(content)
+      io.define_singleton_method(:original_filename) { "terminal_output.log" }
+
+      SessionLog.create!(
+        terminal_session: session,
+        name: "terminal_output.log",
+        file: io,
+        file_size: content.bytesize,
+        content_type: "text/plain"
+      )
+      1
+    rescue StandardError => e
+      Rails.logger.warn("[AgentSession] Failed to collect terminal output: #{e.message}")
+      0
     end
 
     def collect_logs(container, session, agent_service)

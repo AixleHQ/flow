@@ -116,6 +116,10 @@ Rails.application.routes.draw do
     resources :projects
     resources :project_collaborators
     resources :agent_credentials
+    resources :terminal_sessions, only: %i[index show]
+    resources :session_logs, only: %i[index show]
+    resources :assets, only: %i[index show]
+    resources :asset_versions, only: %i[index show]
   end
 
   scope module: :web, defaults: { format: :html } do

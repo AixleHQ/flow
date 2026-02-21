@@ -81,6 +81,6 @@ class Asset < ApplicationRecord
   end
 
   def self.ransackable_associations(_auth_object = nil)
-    %w[scope created_by]
+    %w[scope created_by terminal_session versions]
   end
 end

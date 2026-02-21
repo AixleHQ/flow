@@ -46,7 +46,7 @@ class TerminalSession < ApplicationRecord
   end
 
   def self.ransackable_associations(_auth_object = nil)
-    %w[user project]
+    %w[user project session_logs]
   end
 
   # Scopes

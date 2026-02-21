@@ -13,6 +13,14 @@ class AssetVersion < ApplicationRecord
 
   before_validation :set_version, on: :create
 
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[id asset_id version source uploaded_by_id created_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[asset uploaded_by]
+  end
+
   private
 
   def set_version
