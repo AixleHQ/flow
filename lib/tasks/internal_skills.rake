@@ -59,5 +59,5 @@ def parse_front_matter(raw)
     end
   end
 
-  [nil, nil, raw.strip]
+  [ nil, nil, raw.strip ]
 end
