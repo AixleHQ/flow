@@ -1,6 +1,8 @@
 import { Box, Button, Chip, IconButton, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface IAsset {
   id: string;
@@ -227,8 +229,11 @@ const AssetPreview = ({ asset, onClose }: AssetPreviewProps) => {
             </Box>
           );
         }
-        // In a real app, you'd use a markdown renderer like react-markdown
-        return <Box sx={styles.markdownContent} dangerouslySetInnerHTML={{ __html: asset.content || '' }} />;
+        return (
+          <Box sx={styles.markdownContent}>
+            <Markdown remarkPlugins={[remarkGfm]}>{asset.content || ''}</Markdown>
+          </Box>
+        );
 
       case 'code':
       case 'json':
