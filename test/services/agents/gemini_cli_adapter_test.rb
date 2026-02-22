@@ -6,6 +6,10 @@ module Agents
   class GeminiCliAdapterTest < ActiveSupport::TestCase
     setup do
       @adapter = GeminiCliAdapter.new
+      @company = create(:company)
+      @user = create(:user, :admin, company: @company)
+      @project = create(:project, company: @company, owner: @user)
+      @session = create(:terminal_session, :running, user: @user, project: @project)
     end
 
     test "config_path returns gemini oauth_creds.json path" do
@@ -108,6 +112,159 @@ module Agents
       env_vars = @adapter.env_vars_from_metadata(metadata)
 
       refute env_vars.key?("GOOGLE_CLOUD_PROJECT")
+    end
+
+    test "ingest_usage returns accepted when no OTLP usage events found" do
+      payload = { "resourceMetrics" => [], "resourceLogs" => [] }
+
+      result = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :accepted, result
+    end
+
+    test "ingest_usage persists metric token breakdown and cost" do
+      payload = {
+        "resourceMetrics" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeMetrics" => [ {
+            "metrics" => [
+              {
+                "name" => "gemini_cli.token.usage",
+                "sum" => {
+                  "dataPoints" => [
+                    {
+                      "attributes" => [
+                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                        { "key" => "type", "value" => { "stringValue" => "input" } },
+                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
+                      ],
+                      "asInt" => "100",
+                      "timeUnixNano" => "1700000000000000000"
+                    },
+                    {
+                      "attributes" => [
+                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                        { "key" => "type", "value" => { "stringValue" => "output" } },
+                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
+                      ],
+                      "asInt" => "40",
+                      "timeUnixNano" => "1700000000000000000"
+                    },
+                    {
+                      "attributes" => [
+                        { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                        { "key" => "type", "value" => { "stringValue" => "cacheRead" } },
+                        { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
+                      ],
+                      "asInt" => "60",
+                      "timeUnixNano" => "1700000000000000000"
+                    }
+                  ]
+                }
+              },
+              {
+                "name" => "gemini_cli.cost.usage",
+                "sum" => {
+                  "dataPoints" => [ {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } }
+                    ],
+                    "asDouble" => 0.123456
+                  } ]
+                }
+              }
+            ]
+          } ]
+        } ]
+      }
+
+      result = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :ok, result
+      @session.reload
+      stat = @session.usage_statistic
+
+      assert_equal 100, stat.input_tokens
+      assert_equal 40, stat.output_tokens
+      assert_equal 60, stat.cache_read_tokens
+      assert_equal 0, stat.cache_write_tokens
+      assert_equal BigDecimal("12.3456"), stat.total_cents_precise
+      assert_equal 13, stat.cost_cents
+      assert_equal [ "gemini-2.5-pro" ], stat.models
+      assert_equal 1, stat.events_count
+      assert_equal 200, stat.tokens
+    end
+
+    test "ingest_usage falls back to OTLP logs when metrics are absent" do
+      payload = {
+        "resourceLogs" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeLogs" => [ {
+            "logRecords" => [ {
+              "timeUnixNano" => "1700000000000001000",
+              "attributes" => [
+                { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                { "key" => "event.name", "value" => { "stringValue" => "gemini_cli.api_response" } },
+                { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                { "key" => "input_token_count", "value" => { "intValue" => "11" } },
+                { "key" => "output_token_count", "value" => { "intValue" => "7" } },
+                { "key" => "cached_content_token_count", "value" => { "intValue" => "5" } },
+                { "key" => "thoughts_token_count", "value" => { "intValue" => "3" } },
+                { "key" => "tool_token_count", "value" => { "intValue" => "2" } },
+                { "key" => "cost_usd", "value" => { "doubleValue" => 0.01 } }
+              ]
+            } ]
+          } ]
+        } ]
+      }
+
+      result = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :ok, result
+      @session.reload
+      stat = @session.usage_statistic
+
+      assert_equal 11, stat.input_tokens
+      assert_equal 12, stat.output_tokens
+      assert_equal 5, stat.cache_read_tokens
+      assert_equal 1, stat.cost_cents
+      assert_equal BigDecimal("1.0"), stat.total_cents_precise
+      assert_equal [ "gemini-2.5-flash" ], stat.models
+      assert_equal 1, stat.events_count
+    end
+
+    test "ingest_usage appends new events to existing usage statistic" do
+      payload = {
+        "resourceMetrics" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeMetrics" => [ {
+            "metrics" => [ {
+              "name" => "gemini_cli.token.usage",
+              "sum" => {
+                "dataPoints" => [ {
+                  "attributes" => [
+                    { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                    { "key" => "type", "value" => { "stringValue" => "input" } }
+                  ],
+                  "asInt" => "10"
+                } ]
+              }
+            } ]
+          } ]
+        } ]
+      }
+
+      first = @adapter.ingest_usage(payload, @session)
+      second = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :ok, first
+      assert_equal :ok, second
+
+      @session.reload
+      stat = @session.usage_statistic
+      assert_equal 20, stat.input_tokens
+      assert_equal 2, stat.events_count
+      assert_equal 2, stat.events_data.size
     end
   end
 end
