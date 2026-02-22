@@ -10,6 +10,7 @@ export interface AssetVersion {
   fileSize: number | null;
   uploadedById: number;
   source: AssetSource;
+  fileUrl: string | null;
   createdAt: string;
 }
 

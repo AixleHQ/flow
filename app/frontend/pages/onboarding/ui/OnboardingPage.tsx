@@ -11,6 +11,7 @@ import type { AgentType, OnboardingState } from 'entities/user';
 import {
   AGENT_COLORS,
   AVAILABLE_AGENTS,
+  LANGUAGE_OPTIONS,
   getAgentInfo,
   useGetCurrentUserQuery,
   useUpdateCurrentUserMutation,
@@ -49,15 +50,6 @@ const POSITION_OPTIONS = [
   { value: 'cto', label: 'CTO' },
 ];
 
-const LANGUAGE_OPTIONS = [
-  { value: 'en', label: 'English' },
-  { value: 'ru', label: 'Russian' },
-  { value: 'es', label: 'Spanish' },
-  { value: 'de', label: 'German' },
-  { value: 'fr', label: 'French' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'zh', label: 'Chinese' },
-];
 
 const styles = {
   root: {

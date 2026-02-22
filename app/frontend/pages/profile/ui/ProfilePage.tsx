@@ -1,12 +1,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import LockIcon from '@mui/icons-material/Lock';
-import { Box, Button, Card, CardContent, Chip, CircularProgress, TextField, Tooltip, Typography } from '@mui/material';
+import {
+  Box, Button, Card, CardContent, Chip, CircularProgress,
+  FormControl, FormHelperText, InputLabel, MenuItem, Select,
+  TextField, Tooltip, Typography,
+} from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
 import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
-import { useGetCurrentUserQuery, useUpdateCurrentUserMutation, type UserRole } from 'entities/user';
+import {
+  LANGUAGE_OPTIONS, useGetCurrentUserQuery, useUpdateCurrentUserMutation,
+  type AgentLanguage, type UserRole,
+} from 'entities/user';
 import { AgentCredentialsSection } from 'features/agent-credentials';
 
 import { profileSchema, type IProfileFormData } from '../lib/profileSchema';
@@ -110,6 +117,7 @@ const ProfilePage: React.FC = () => {
     resolver: zodResolver(profileSchema),
     defaultValues: {
       name: '',
+      preferredAgentLanguage: undefined,
     },
     mode: 'onChange',
   });
@@ -117,16 +125,23 @@ const ProfilePage: React.FC = () => {
   // Reset form when user data loads
   useEffect(() => {
     if (currentUser) {
-      reset({ name: currentUser.name });
+      reset({
+        name: currentUser.name,
+        preferredAgentLanguage: currentUser.preferredAgentLanguage as AgentLanguage,
+      });
     }
   }, [currentUser, reset]);
 
   const onSubmit = async (data: IProfileFormData) => {
     try {
-      await updateUser({ currentUser: { name: data.name } }).unwrap();
+      await updateUser({
+        currentUser: {
+          name: data.name,
+          preferredAgentLanguage: data.preferredAgentLanguage,
+        },
+      }).unwrap();
       enqueueSnackbar('Profile updated successfully', { variant: 'success' });
-      // Reset form state to mark as "not dirty" after successful save
-      reset({ name: data.name });
+      reset(data);
     } catch {
       enqueueSnackbar('Failed to update profile. Please try again.', { variant: 'error' });
     }
@@ -177,6 +192,33 @@ const ProfilePage: React.FC = () => {
                       helperText={errors.name?.message}
                       disabled={isUpdating}
                     />
+                  )}
+                />
+              </Box>
+
+              {/* Preferred Agent Language (Editable) */}
+              <Box sx={styles.fieldContainer}>
+                <Controller
+                  name="preferredAgentLanguage"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.preferredAgentLanguage}>
+                      <InputLabel>Agent Language</InputLabel>
+                      <Select
+                        {...field}
+                        label="Agent Language"
+                        disabled={isUpdating}
+                      >
+                        {LANGUAGE_OPTIONS.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormHelperText>
+                        {errors.preferredAgentLanguage?.message ?? 'Language AI agents will use to communicate with you'}
+                      </FormHelperText>
+                    </FormControl>
                   )}
                 />
               </Box>
