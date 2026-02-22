@@ -29,6 +29,8 @@ class MCPServer < ApplicationRecord
   validates :kind, presence: true
   validates :url, presence: true, if: :custom?
   validates :scope, presence: true, if: :custom?
+  validate :url_scheme_allowed, if: -> { custom? && url.present? }
+  validate :url_not_private_network, if: -> { custom? && url.present? }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
@@ -96,5 +98,54 @@ class MCPServer < ApplicationRecord
 
   def self.ransackable_associations(_auth_object = nil)
     %w[scope]
+  end
+
+  private
+
+  BLOCKED_HOSTS = %w[
+    localhost
+    metadata.google.internal
+    metadata.goog
+  ].freeze
+
+  def url_scheme_allowed
+    uri = URI.parse(url)
+    return if %w[http https].include?(uri.scheme)
+
+    errors.add(:url, "must use http or https")
+  rescue URI::InvalidURIError
+    errors.add(:url, "is not a valid URL")
+  end
+
+  def url_not_private_network
+    uri = URI.parse(url)
+    host = uri.host.to_s.downcase
+
+    if BLOCKED_HOSTS.include?(host)
+      errors.add(:url, "cannot point to internal services")
+      return
+    end
+
+    return unless blocked_ip?(host)
+
+    errors.add(:url, "cannot point to private or internal network addresses")
+  rescue URI::InvalidURIError
+    errors.add(:url, "is not a valid URL")
+  end
+
+  def blocked_ip?(host)
+    ip = IPAddr.new(host)
+    ip.private? || ip.loopback? || ip.link_local?
+  rescue IPAddr::InvalidAddressError
+    resolved_to_private?(host)
+  end
+
+  def resolved_to_private?(hostname)
+    Resolv.getaddresses(hostname).any? do |addr|
+      ip = IPAddr.new(addr)
+      ip.private? || ip.loopback? || ip.link_local?
+    end
+  rescue Resolv::ResolvError
+    false
   end
 end
