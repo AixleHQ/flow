@@ -104,6 +104,8 @@ services:
     image: postgres:15.3-alpine
     environment:
       - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     attach: false
 
   redis:
@@ -176,6 +178,7 @@ services:
 
 volumes:
   bundle_cache:
+  pg_data:
   redis_data:
 
 networks:
