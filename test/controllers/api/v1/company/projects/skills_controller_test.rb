@@ -56,7 +56,7 @@ module Api
             assert_equal false, project["internal"]
           end
 
-          test "index shows override indicator when project overrides company" do
+          test "index shows both company and project skills with same name" do
             create(:skill, name: "b-company", scope: @project)
 
             sign_in_as @member
@@ -66,9 +66,9 @@ module Api
             skills = response.parsed_body["items"]
 
             shared = skills.select { |s| s["name"] == "b-company" }
-            assert_equal 1, shared.count
-            assert_equal "overrides_company", shared.first["scope_indicator"]
-            assert_equal "Project", shared.first["scope_type"]
+            assert_equal 2, shared.count
+            scope_types = shared.map { |s| s["scope_type"] }.sort
+            assert_equal %w[Company Project], scope_types
           end
 
           test "index fails for outsider" do
