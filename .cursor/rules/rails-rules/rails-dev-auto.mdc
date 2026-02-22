@@ -50,3 +50,24 @@ alwaysApply: false
 - NEVER modify existing migration files that have already been run
 - Always create a new migration to change columns, rename fields, or alter tables
 - Existing migrations are immutable historical records of the database schema evolution
+
+## Model Query Methods & Scopes
+
+- Model methods used by controllers for listing/filtering MUST return `ActiveRecord::Relation`, not Ruby arrays
+- Use `scope` with `.where` / `.or` for composable queries — this enables `ransack`, `paginate`, and further chaining
+- If complex Ruby logic (deduplication, overrides) is needed, keep it in a separate method and document why it returns an array
+- NEVER use `define_singleton_method` to inject virtual attributes on AR records — use serializer logic instead
+- When adding a new scope, check if existing controller actions can benefit from it before creating one-off array merges
+
+## Changing Existing Code
+
+- Before modifying a controller action, read its existing tests and run them
+- If a controller action already works correctly with complex logic (e.g. `merged_for_project` with deduplication), do NOT replace it with a simpler scope unless the scope preserves the same behavior
+- Only modify code directly related to the current task — don't "improve" adjacent code as a side effect without explicit request
+
+## Testing Conventions
+
+- Match the style of existing tests in the same file — look at what's already there before writing new tests
+- Test behavior: what the query includes and excludes, not implementation details (return types, method existence)
+- Don't test framework behavior (ransack filtering, ActiveRecord::Relation type) — test your logic
+- Controller tests: verify response status and that expected records are present/absent in the response body

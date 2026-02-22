@@ -31,6 +31,25 @@ class Api::V1::Company::SkillsControllerTest < ActionController::TestCase
     assert { json["items"].first["name"] == "coding-standards" }
   end
 
+  test "#index includes internal skills" do
+    create(:skill, :internal, name: "a-internal",
+           title: "Internal Skill", content: "Internal content")
+    sign_in @admin
+
+    get :index
+
+    assert_response :success
+    json = response.parsed_body
+    names = json["items"].map { |i| i["name"] }
+    assert_includes names, "a-internal"
+    assert_includes names, "coding-standards"
+
+    internal = json["items"].find { |i| i["name"] == "a-internal" }
+    assert_equal "internal", internal["kind"]
+    assert_equal "internal", internal["scope_indicator"]
+    assert_equal true, internal["internal"]
+  end
+
   test "#index does not return other company skills" do
     @other_company.skills.create!(
       name: "other-skill",

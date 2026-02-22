@@ -188,6 +188,73 @@ class SkillTest < ActiveSupport::TestCase
     assert { result.first.name == "project-skill" }
   end
 
+  # ====== visible_for_company ======
+
+  test ".visible_for_company includes internal and company skills" do
+    create(:skill, :internal, name: "a-internal")
+    create(:skill, name: "b-company", scope: @company)
+    create(:skill, name: "c-project", scope: @project)
+
+    result = Skill.visible_for_company(@company)
+    names = result.pluck(:name)
+
+    assert_includes names, "a-internal"
+    assert_includes names, "b-company"
+    refute_includes names, "c-project"
+  end
+
+  test ".visible_for_company excludes other company skills" do
+    other_company = create(:company, email_domain: "other-visible.com")
+    create(:skill, name: "other-skill", scope: other_company)
+    create(:skill, name: "my-skill", scope: @company)
+
+    result = Skill.visible_for_company(@company)
+    names = result.pluck(:name)
+
+    assert_includes names, "my-skill"
+    refute_includes names, "other-skill"
+  end
+
+  test ".visible_for_company returns ActiveRecord::Relation" do
+    result = Skill.visible_for_company(@company)
+    assert { result.is_a?(ActiveRecord::Relation) }
+  end
+
+  # ====== visible_for_project ======
+
+  test ".visible_for_project includes internal, company, and project skills" do
+    create(:skill, :internal, name: "a-internal")
+    create(:skill, name: "b-company", scope: @company)
+    create(:skill, name: "c-project", scope: @project)
+
+    result = Skill.visible_for_project(@project)
+    names = result.pluck(:name)
+
+    assert_includes names, "a-internal"
+    assert_includes names, "b-company"
+    assert_includes names, "c-project"
+  end
+
+  test ".visible_for_project excludes other company and project skills" do
+    other_company = create(:company, email_domain: "other-proj-visible.com")
+    other_owner = create(:user, :employee, company: other_company)
+    other_project = create(:project, company: other_company, owner: other_owner)
+
+    create(:skill, name: "other-company-skill", scope: other_company)
+    create(:skill, name: "other-project-skill", scope: other_project)
+
+    result = Skill.visible_for_project(@project)
+    names = result.pluck(:name)
+
+    refute_includes names, "other-company-skill"
+    refute_includes names, "other-project-skill"
+  end
+
+  test ".visible_for_project returns ActiveRecord::Relation" do
+    result = Skill.visible_for_project(@project)
+    assert { result.is_a?(ActiveRecord::Relation) }
+  end
+
   # ====== merged_for_project ======
 
   test ".merged_for_project includes internal, company, and project skills" do
