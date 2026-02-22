@@ -83,3 +83,5 @@ ai-engine/app/Thumbs.db
 
 docker/remote/db_dumps/latest.sql.gz
 
+# Personal AI memos
+andrew-memo/

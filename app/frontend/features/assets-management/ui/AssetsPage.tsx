@@ -19,6 +19,7 @@ import { useDebouncedCallback } from 'use-debounce';
 import { useGetCompanyAssetsQuery, useGetProjectAssetsQuery } from '../api/assetsApi';
 import type { Asset, AssetsFilters } from '../lib/types';
 
+import { AssetPreviewDialog } from './AssetPreviewDialog';
 import { AssetsTable } from './AssetsTable';
 import { DeleteAssetDialog } from './DeleteAssetDialog';
 import { EditAssetDialog } from './EditAssetDialog';
@@ -88,6 +89,7 @@ export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId }) => {
   const [filters, setFilters] = useState<AssetsFilters>({});
   const [searchInput, setSearchInput] = useState('');
   const [isUploadOpen, setUploadOpen] = useState(false);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [deleteAsset, setDeleteAsset] = useState<Asset | null>(null);
   const [historyAsset, setHistoryAsset] = useState<Asset | null>(null);
@@ -203,11 +205,19 @@ export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId }) => {
           assets={filteredAssets}
           isProjectContext={isProjectContext}
           projectId={projectId}
+          onPreview={setPreviewAsset}
           onEdit={setEditAsset}
           onDelete={setDeleteAsset}
           onHistory={setHistoryAsset}
         />
       )}
+
+      <AssetPreviewDialog
+        open={!!previewAsset}
+        onClose={() => setPreviewAsset(null)}
+        asset={previewAsset}
+        projectId={projectId}
+      />
 
       <UploadAssetDialog open={isUploadOpen} onClose={() => setUploadOpen(false)} projectId={projectId} />
 

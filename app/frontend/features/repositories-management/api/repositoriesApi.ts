@@ -43,10 +43,11 @@ export const repositoriesApi = baseApi.injectEndpoints({
           ? Routes.backend.availableApiV1CompanyProjectRepositoriesPath(projectId)
           : Routes.backend.availableApiV1CompanyRepositoriesPath(),
         method: 'GET',
-        params: { integration_id: integrationId },
+        params: { integrationId },
       }),
       transformResponse: (response: AvailableRepo[] | AvailableReposResponse) =>
         Array.isArray(response) ? response : response.items,
+      providesTags: [QueryTag.Repositories],
     }),
 
     getBranches: builder.query<string[], { integrationId: number; fullName: string; projectId?: number }>({
@@ -55,10 +56,11 @@ export const repositoriesApi = baseApi.injectEndpoints({
           ? Routes.backend.branchesApiV1CompanyProjectRepositoriesPath(projectId)
           : Routes.backend.branchesApiV1CompanyRepositoriesPath(),
         method: 'GET',
-        params: { integration_id: integrationId, full_name: fullName },
+        params: { integrationId, fullName },
       }),
       transformResponse: (response: string[] | BranchesResponse) =>
         Array.isArray(response) ? response : response.items,
+      providesTags: [QueryTag.Repositories],
     }),
 
     createCompanyRepository: builder.mutation<Repository, CreateRepositoryRequest>({

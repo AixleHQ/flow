@@ -114,6 +114,7 @@ export const assetsApi = baseApi.injectEndpoints({
       }),
       transformResponse: (response: DetailedAssetVersion[] | { items: DetailedAssetVersion[] }) =>
         Array.isArray(response) ? response : response.items,
+      providesTags: (_result, _error, assetId) => [{ type: QueryTag.Assets, id: `versions-${assetId}` }],
     }),
 
     getProjectAssetVersions: builder.query<DetailedAssetVersion[], { projectId: number; assetId: number }>({
@@ -123,6 +124,7 @@ export const assetsApi = baseApi.injectEndpoints({
       }),
       transformResponse: (response: DetailedAssetVersion[] | { items: DetailedAssetVersion[] }) =>
         Array.isArray(response) ? response : response.items,
+      providesTags: (_result, _error, { assetId }) => [{ type: QueryTag.Assets, id: `versions-${assetId}` }],
     }),
   }),
 });

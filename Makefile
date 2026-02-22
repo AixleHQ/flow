@@ -91,6 +91,7 @@ default: check
 setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
+	@make build-agents
 
 # Full Kubernetes setup: CRDs, manifests, wait for pods, migrate and seed
 kube-setup:
@@ -223,10 +224,8 @@ help:
 	@echo "  make kube-apply-dev          - Apply manifests with WEB_HOST_PATH for web"
 	@echo "  make kube-rm                - Delete Kubernetes manifests"
 	@echo "  make up                     - Run all main services"
-	@echo "  make workers                - Run workers (3 Python + 1 Ruby)"
-	@echo "  make shell-web              - Open shell in web container"
-	@echo "  make shell-ai-engine        - Open shell in ai-engine container"
-	@echo "  make browser-tools-server   - Run browser tools server"
+	@echo "  make worker                 - Run worker (in a separate terminal)"
+	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "AWS Operations (require PROFILE=profile_name):"
 	@echo "  make login_aws              - Login to AWS account with AWS-Vault"

@@ -3,6 +3,7 @@ import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import FolderIcon from '@mui/icons-material/Folder';
 import HistoryIcon from '@mui/icons-material/History';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
   IconButton,
@@ -28,6 +29,7 @@ interface AssetsTableProps {
   assets: Asset[];
   isProjectContext: boolean;
   projectId?: number;
+  onPreview: (asset: Asset) => void;
   onEdit: (asset: Asset) => void;
   onDelete: (asset: Asset) => void;
   onHistory: (asset: Asset) => void;
@@ -88,7 +90,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-const AssetsTable: FC<AssetsTableProps> = ({ assets, isProjectContext, projectId, onEdit, onDelete, onHistory }) => {
+const AssetsTable: FC<AssetsTableProps> = ({ assets, isProjectContext, projectId, onPreview, onEdit, onDelete, onHistory }) => {
   const canEdit = (asset: Asset): boolean => {
     if (isProjectContext) return asset.scopeType === 'Project';
     return true;
@@ -161,6 +163,13 @@ const AssetsTable: FC<AssetsTableProps> = ({ assets, isProjectContext, projectId
               </TableCell>
               <TableCell sx={styles.tableCell} align="right">
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5 }}>
+                  {asset.latestVersion && (
+                    <Tooltip title="Preview">
+                      <IconButton size="small" onClick={() => onPreview(asset)}>
+                        <VisibilityIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  )}
                   {asset.versionsCount > 0 && (
                     <Tooltip title="Version history">
                       <IconButton size="small" onClick={() => onHistory(asset)}>

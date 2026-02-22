@@ -28,6 +28,7 @@ class AssetSerializer < ApplicationSerializer
       file_size: version.file_size,
       uploaded_by_id: version.uploaded_by_id,
       source: version.source,
+      file_url: version.file&.url,
       created_at: version.created_at
     }
   end
