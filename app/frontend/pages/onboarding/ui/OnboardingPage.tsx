@@ -447,12 +447,7 @@ const OnboardingPage = () => {
   const [updateCurrentUser, { isLoading: isTransitioning }] = useUpdateCurrentUserMutation();
 
   // Form state with react-hook-form + Zod validation
-  const {
-    control,
-    watch,
-    setValue,
-    formState: { isValid },
-  } = useForm<ProfileFormData>({
+  const { control, watch, setValue } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     mode: 'onChange',
     defaultValues: {
@@ -472,6 +467,8 @@ const OnboardingPage = () => {
     codex: 'pending',
     gemini_cli: 'pending',
   });
+  // Track if user has attempted to submit (to show validation errors only after attempt)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
 
   // Track if this is a user-initiated change (vs initial load)
   const isUserChange = useRef(false);
@@ -513,7 +510,7 @@ const OnboardingPage = () => {
 
     // Pre-fill position
     if (currentUser.position) {
-      setValue('position', currentUser.position);
+      setValue('position', currentUser.position, { shouldValidate: true });
     }
 
     // Pre-fill language
@@ -521,6 +518,7 @@ const OnboardingPage = () => {
       setValue(
         'preferredAgentLanguage',
         currentUser.preferredAgentLanguage as ProfileFormData['preferredAgentLanguage'],
+        { shouldValidate: true },
       );
     }
 
@@ -604,6 +602,14 @@ const OnboardingPage = () => {
   };
 
   const handleNext = async () => {
+    // Mark that user attempted to submit (to show validation errors)
+    setHasAttemptedSubmit(true);
+
+    // Validate before proceeding
+    if (currentStep === 'profile' && !isProfileComplete) {
+      return; // Don't proceed if profile is not complete
+    }
+
     if (currentStep === 'agents' && selectedAgents.length > 0) {
       setActiveLoginAgent(selectedAgents[0]);
     }
@@ -616,6 +622,8 @@ const OnboardingPage = () => {
           onboardingStateEvent: 'go_next',
         },
       }).unwrap();
+      // Reset submit attempt flag when successfully moving to next step
+      setHasAttemptedSubmit(false);
     } catch {
       enqueueSnackbar('Failed to proceed to next step', { variant: 'error' });
     }
@@ -624,6 +632,8 @@ const OnboardingPage = () => {
   const handleBack = async () => {
     try {
       await updateCurrentUser({ currentUser: { onboardingStateEvent: 'go_previous' } }).unwrap();
+      // Reset submit attempt flag when going back
+      setHasAttemptedSubmit(false);
     } catch {
       enqueueSnackbar('Failed to go back', { variant: 'error' });
     }
@@ -647,8 +657,8 @@ const OnboardingPage = () => {
   const authenticatedCount = selectedAgents.filter((agent) => configuredAgents.includes(agent)).length;
   const allAgentsAuthenticated = selectedAgents.every((agent) => configuredAgents.includes(agent));
 
-  // Validation flags
-  const isProfileComplete = isValid;
+  // Validation flags (check that values are not empty strings)
+  const isProfileComplete = Boolean(position) && position.length > 0 && Boolean(preferredLanguage) && preferredLanguage.length > 0;
   const isAgentsSelected = selectedAgents.length >= 1;
   const isAgentsAuthenticated = authenticatedCount >= 1;
 
@@ -743,7 +753,7 @@ const OnboardingPage = () => {
               <>
                 <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
                   <MenuItem value="" disabled>
-                    Select your position
+                    Please select an option
                   </MenuItem>
                   {POSITION_OPTIONS.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
@@ -774,7 +784,7 @@ const OnboardingPage = () => {
               <>
                 <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
                   <MenuItem value="" disabled>
-                    Select your preferred language
+                    Please select an option
                   </MenuItem>
                   {LANGUAGE_OPTIONS.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
@@ -792,7 +802,7 @@ const OnboardingPage = () => {
           />
         </Box>
 
-        {!isProfileComplete && (
+        {hasAttemptedSubmit && !isProfileComplete && (
           <Typography sx={styles.validationMessage}>⚠️ Please fill in all required fields to continue</Typography>
         )}
       </Box>
@@ -803,9 +813,9 @@ const OnboardingPage = () => {
           variant="contained"
           sx={styles.continueButton}
           onClick={handleNext}
-          disabled={!isProfileComplete || isTransitioning}
+          disabled={isTransitioning || isLoading}
         >
-          {isTransitioning ? 'Saving...' : 'Continue'}
+          {isTransitioning ? 'Saving...' : isLoading ? 'Loading...' : 'Continue'}
         </Button>
       </Box>
     </>

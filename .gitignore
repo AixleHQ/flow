@@ -83,3 +83,9 @@ ai-engine/app/Thumbs.db
 
 docker/remote/db_dumps/latest.sql.gz
 
+# Claude Code auth (contains OAuth tokens)
+docker/claude-code/claude-home/.claude.json
+docker/claude-code/claude-home/.claude/
+
+# Personal AI memos
+andrew-memo/
