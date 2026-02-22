@@ -5,7 +5,7 @@ module Api
     module Company
       class SkillsController < ApplicationController
         def index
-          skills = Skill.merged_for_company(current_company)
+          skills = Skill.visible_for_company(current_company).ransack(params[:q]).result
           respond_with skills, each_serializer: SkillSerializer
         end
 
