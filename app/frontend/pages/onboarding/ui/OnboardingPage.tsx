@@ -753,7 +753,7 @@ const OnboardingPage = () => {
               <>
                 <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
                   <MenuItem value="" disabled>
-                    Please select an option
+                    Select your position
                   </MenuItem>
                   {POSITION_OPTIONS.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
@@ -784,7 +784,7 @@ const OnboardingPage = () => {
               <>
                 <Select {...field} sx={styles.select} displayEmpty error={!!fieldState.error}>
                   <MenuItem value="" disabled>
-                    Please select an option
+                    Select your preferred language
                   </MenuItem>
                   {LANGUAGE_OPTIONS.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
