@@ -14,22 +14,32 @@ git clone https://github.com/palad-ai/palad-app.git
 cd palad-app
 ```
 
-2. Set up the project using Docker:
+2. Copy environment file and fill in secrets from 1Password:
+```bash
+cp .env.example .env.development
+```
+
+3. Set up the project using Docker:
 ```bash
 make setup
 ```
 This command will:
-- Build Docker containers
+- Build Docker containers (including worker)
 - Install Ruby dependencies (via Bundler)
 - Install JavaScript dependencies (via Yarn)
 - Create and set up the database
+- Build agent Docker images
 
-3. Start the development server:
+4. Start the application (two terminals required):
 ```bash
-docker-compose up
+# Terminal 1 — main services (web, db, redis, traefik, temporal)
+make up
+
+# Terminal 2 — background worker (Temporal)
+make worker
 ```
 
-4. Access the application at `http://localhost:4000`
+5. Access the application at `http://localhost:4000`
 
 ## Google OAuth Configuration
 
@@ -51,7 +61,7 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
    - For production, add: `https://yourdomain.com/api/v1/auth/google/callback`
 
 4. **Set Environment Variables:**
-   Create `.env` file in the `web/` directory:
+   Add to `.env.development` in the project root:
    ```bash
    GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
    GOOGLE_CLIENT_SECRET=your-client-secret
@@ -85,7 +95,10 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Run FSD (Feature-Sliced Design) analysis: `make fsd`
 - Fix FSD issues: `make fsd-fix`
 
-### Other Commands
+### Docker & Runtime
+- Start main services: `make up`
+- Start worker (separate terminal): `make worker`
+- Build agent images: `make build-agents`
 - Open shell in web container: `make shell`
 - Show available commands: `make help`
 
@@ -216,7 +229,7 @@ To configure AWS Vault, run: `aws-vault add {your_aws_vault_profile}`
 
 To execute into QA container, run:
 ```
-make exec-qa PROFILE={your_aws_vault_profile}
+make qa-web-exec PROFILE={your_aws_vault_profile}
 ```
 
 ## Login to AWS account with AWS-Vault
@@ -224,11 +237,3 @@ make exec-qa PROFILE={your_aws_vault_profile}
 ```
 make login_aws PROFILE={your_aws_vault_profile}
 ```
-
-## Run browser tools server
-
-```
-make browser-tools-server
-```
-
-It will run browser tools server that will be listening on http://0.0.0.0:3025

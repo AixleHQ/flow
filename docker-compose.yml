@@ -177,3 +177,7 @@ services:
 volumes:
   bundle_cache:
   redis_data:
+
+networks:
+  default:
+    name: app_default
