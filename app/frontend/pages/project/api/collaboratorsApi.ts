@@ -27,7 +27,7 @@ export const collaboratorsApi = baseApi.injectEndpoints({
       query: ({ projectId, userId }) => ({
         url: Routes.backend.apiV1CompanyProjectCollaboratorsPath(projectId),
         method: 'POST',
-        data: { collaborator: { user_id: userId } },
+        data: { collaborator: { userId } },
       }),
       invalidatesTags: (_result, _error, { projectId }) => [{ type: QueryTag.ProjectCollaborators, id: projectId }],
     }),
@@ -44,6 +44,7 @@ export const collaboratorsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyUsersPath(),
         method: 'GET',
       }),
+      providesTags: [QueryTag.CompanyUsers],
     }),
   }),
 });

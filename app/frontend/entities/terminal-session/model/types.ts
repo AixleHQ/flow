@@ -1,9 +1,11 @@
+import type { AgentType } from 'entities/user/model/types';
+
 // Terminal Session Types
 export type TerminalSessionState = 'not_started' | 'running' | 'ready' | 'finished' | 'failed';
 
 export type TerminalSessionType = 'auth_setup' | 'agent_session' | 'tool_setup' | 'workflow_step';
 
-export type AgentType = 'claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli';
+export type { AgentType };
 
 export type SessionMode = 'interactive' | 'non_interactive';
 

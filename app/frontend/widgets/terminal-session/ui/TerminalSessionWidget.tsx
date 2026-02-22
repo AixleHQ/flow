@@ -1,7 +1,7 @@
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Box, CircularProgress, IconButton, Typography } from '@mui/material';
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 
 import { type ITerminalSession, SessionSummaryCard } from 'entities/terminal-session';
@@ -152,12 +152,14 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
 
   // Reset state when session changes
   const prevSessionIdRef = useRef(sessionId);
-  if (sessionId !== prevSessionIdRef.current) {
-    prevSessionIdRef.current = sessionId;
-    setTerminalLoaded(false);
-    setEditorLoaded(false);
-    setEditorCollapsed(false);
-  }
+  useEffect(() => {
+    if (sessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = sessionId;
+      setTerminalLoaded(false);
+      setEditorLoaded(false);
+      setEditorCollapsed(false);
+    }
+  }, [sessionId]);
 
   const isSessionReady = session?.state === 'ready';
   const canShowEditor = showEditor && !editorCollapsed && isSessionReady && !!ideUrl;

@@ -24,7 +24,7 @@ export const integrationsApi = baseApi.injectEndpoints({
       query: (data) => ({
         url: Routes.backend.apiV1CompanyIntegrationsPath(),
         method: 'POST',
-        data: { installation_id: data.installationId },
+        data: { installationId: data.installationId },
       }),
       invalidatesTags: [QueryTag.Integrations],
     }),
