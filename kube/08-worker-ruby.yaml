@@ -33,11 +33,3 @@ spec:
           envFrom:
             - configMapRef:
                 name: palad-app-config
-          volumeMounts:
-            - name: workflows
-              mountPath: /app/app/temporal/workflows.yml
-              subPath: workflows.yml
-      volumes:
-        - name: workflows
-          configMap:
-            name: palad-workflows
