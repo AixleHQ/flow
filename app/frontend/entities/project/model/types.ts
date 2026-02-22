@@ -4,12 +4,12 @@ export interface IProject {
   description?: string | null;
   slug: string;
   state: 'active' | 'paused' | 'archived';
-  company_id: number;
-  owner_id: number;
-  collaborators_count: number;
-  last_activity_at?: string | null;
-  created_at: string;
-  updated_at: string;
+  companyId: number;
+  ownerId: number;
+  collaboratorsCount: number;
+  lastActivityAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface IProjectStats {

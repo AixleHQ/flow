@@ -109,9 +109,9 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
           <Box>
             <Typography sx={styles.title}>{project.name}</Typography>
           </Box>
-          {project.state === 'active' && project.collaborators_count > 0 && (
+          {project.state === 'active' && project.collaboratorsCount > 0 && (
             <Chip
-              label={`${project.collaborators_count} collaborator${project.collaborators_count > 1 ? 's' : ''}`}
+              label={`${project.collaboratorsCount} collaborator${project.collaboratorsCount > 1 ? 's' : ''}`}
               size="small"
               sx={styles.chip}
             />
@@ -122,13 +122,13 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
 
         <Box sx={styles.stats}>
           <Box sx={styles.stat}>
-            <Typography sx={styles.statValue}>{project.collaborators_count}</Typography>
+            <Typography sx={styles.statValue}>{project.collaboratorsCount}</Typography>
             <Typography sx={styles.statLabel}>Collaborators</Typography>
           </Box>
         </Box>
 
-        {project.last_activity_at && (
-          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.last_activity_at)}</Typography>
+        {project.lastActivityAt && (
+          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.lastActivityAt)}</Typography>
         )}
       </CardActionArea>
     </Card>

@@ -383,7 +383,7 @@ const ProjectPage = () => {
             </Box>
           </Box>
         )}
-        {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project?.owner_id ?? 0} />}
+        {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project?.ownerId ?? 0} />}
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}
         {activeTab === 'agents' && <AgentsPanel projectId={Number(projectId)} />}
         {activeTab === 'tools' && <ToolsPanel projectId={Number(projectId)} />}
