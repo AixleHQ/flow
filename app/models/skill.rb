@@ -36,6 +36,13 @@ class Skill < ApplicationRecord
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
+  # Get merged list of skills for a company (internal + company)
+  def self.merged_for_company(company)
+    internals = internal_skills.to_a
+    company_items = for_company(company).to_a
+    (internals + company_items).sort_by(&:name)
+  end
+
   # Get merged list of skills for a project (internal + company + project)
   # Returns array with scope_indicator method on each skill
   def self.merged_for_project(project)

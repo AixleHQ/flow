@@ -5,10 +5,7 @@ module Api
     module Company
       class SkillsController < ApplicationController
         def index
-          company_skills = current_company.skills.ransack(params[:q]).result.to_a
-          internal = Skill.internal_skills.to_a
-          internal.each { |s| s.define_singleton_method(:scope_indicator) { "internal" } }
-          skills = (internal + company_skills).sort_by(&:name)
+          skills = Skill.merged_for_company(current_company)
           respond_with skills, each_serializer: SkillSerializer
         end
 
