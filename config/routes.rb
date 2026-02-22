@@ -50,6 +50,15 @@ Rails.application.routes.draw do
         resources :tools, only: %i[index create update destroy]
         resources :mcp_servers, only: %i[index create update destroy]
         resources :skills, only: %i[index create update destroy]
+        resources :workflows, only: %i[index show create update destroy] do
+          scope module: :workflows do
+            resources :steps, only: %i[index show create update destroy] do
+              collection do
+                patch :reorder
+              end
+            end
+          end
+        end
         resources :repositories, only: %i[index show create update destroy] do
           collection do
             get :available
@@ -83,6 +92,18 @@ Rails.application.routes.draw do
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
             resources :skills, only: %i[index create update destroy]
+            resources :workflows, only: %i[index show create update destroy] do
+              member do
+                post :duplicate
+              end
+              scope module: :workflows do
+                resources :steps, only: %i[index show create update destroy] do
+                  collection do
+                    patch :reorder
+                  end
+                end
+              end
+            end
             resources :repositories, only: %i[index create update destroy] do
               collection do
                 get :available
@@ -97,6 +118,22 @@ Rails.application.routes.draw do
               end
             end
             resources :terminal_sessions, only: %i[index show]
+            resources :workflow_runs, only: %i[index show create] do
+              member do
+                post :approve_step
+                post :retry_step
+                post :skip_step
+                post :cancel
+              end
+              resources :workflow_run_assets, only: %i[index], path: "assets" do
+                member do
+                  post :export
+                end
+                collection do
+                  post :export_all
+                end
+              end
+            end
           end
         end
       end

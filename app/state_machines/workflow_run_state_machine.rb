@@ -1,0 +1,60 @@
+# frozen_string_literal: true
+
+module WorkflowRunStateMachine
+  extend ActiveSupport::Concern
+
+  included do
+    include AASM
+
+    aasm column: :state do
+      state :pending, initial: true
+      state :running
+      state :paused
+      state :completed
+      state :failed
+      state :cancelled
+
+      event :start do
+        transitions from: :pending, to: :running, after: :on_started
+      end
+
+      event :pause do
+        transitions from: :running, to: :paused
+      end
+
+      event :resume do
+        transitions from: :paused, to: :running
+      end
+
+      event :complete do
+        transitions from: %i[running paused], to: :completed, after: :on_completed
+      end
+
+      event :fail do
+        transitions from: %i[running paused], to: :failed, after: :on_completed
+      end
+
+      event :cancel do
+        transitions from: %i[pending running paused], to: :cancelled, after: :on_completed
+      end
+    end
+  end
+
+  private
+
+  def on_started
+    update_column(:started_at, Time.current)
+    broadcast_run_update!
+  end
+
+  def on_completed
+    update_column(:completed_at, Time.current)
+    broadcast_run_update!
+  end
+
+  def broadcast_run_update!
+    WorkflowRunChannel.broadcast_update(id)
+  rescue StandardError => e
+    Rails.logger.warn("[WorkflowRunStateMachine#broadcast] #{e.message}")
+  end
+end

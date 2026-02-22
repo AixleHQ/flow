@@ -37,6 +37,7 @@ const frontend = {
   companySkillsPath: '/company/skills',
   companyAssetsPath: '/company/assets',
   companyIntegrationsPath: '/company/integrations',
+  companyWorkflowsPath: '/company/workflows',
   companyRepositoriesPath: '/company/repositories',
   companyBrandingPath: '/company/branding',
   companySessionsPath: '/company/sessions',
@@ -51,7 +52,9 @@ const frontend = {
 
   // Workflow routes
   workflowRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/workflow-runs/${runId}`,
-  workflowBuilderPath: (workflowId: string) => `/workflow-builder/${workflowId}`,
+  companyWorkflowBuilderPath: (workflowId: string) => `/company/workflows/${workflowId}/builder`,
+  projectWorkflowBuilderPath: (projectId: string, workflowId: string) =>
+    `/company/projects/${projectId}/workflows/${workflowId}/builder`,
 } as const;
 
 // Combine both types of routes into a single export

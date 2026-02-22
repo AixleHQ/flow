@@ -14,6 +14,7 @@ class TerminalSession < ApplicationRecord
   has_one :usage_statistic, dependent: :destroy
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
+  has_one :step_run, dependent: :nullify
 
   has_and_belongs_to_many :tools, join_table: :session_tools
   has_and_belongs_to_many :skills, join_table: :session_skills

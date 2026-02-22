@@ -1,15 +1,17 @@
-import { Box, Breadcrumbs, Button, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Breadcrumbs, Button, Chip, CircularProgress, Grid, Link, Tab, Tabs, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useSnackbar } from 'notistack';
+import { useCallback, useMemo, useState } from 'react';
 
-import { AssetCard, type IAsset } from 'entities/asset';
 import { AgentsPanel } from 'features/agents-management';
 import { AssetsPanel } from 'features/assets-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
 import { RepositoriesPanel } from 'features/repositories-management';
 import { RunWorkflowModal } from 'features/run-workflow';
+import { CreateWorkflowDialog } from 'features/workflows/ui/CreateWorkflowDialog';
+import { useDuplicateWorkflowToProjectMutation } from 'features/workflows/api/workflowsApi';
 import { SkillsPanel } from 'features/skills-management';
 import { ToolsPanel } from 'features/tools-management';
 import { Routes } from 'shared/routes';
@@ -18,8 +20,6 @@ import { SessionHistoryWidget } from 'widgets/session-history';
 import {
   useProjectQuery,
   useProjectWorkflowsQuery,
-  useProjectWorkflowRunsQuery,
-  useProjectAssetsQuery,
   useProjectTasksQuery,
 } from '../api/projectApi';
 import type { ProjectTab, IWorkflow } from '../lib/types';
@@ -105,38 +105,6 @@ const styles = {
     fontSize: '12px',
     color: 'text.secondary',
   },
-  runCard: {
-    padding: '12px 16px',
-    backgroundColor: 'background.paper',
-    border: '1px solid',
-    borderColor: 'divider',
-    borderRadius: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    '&:hover': {
-      borderColor: 'primary.main',
-    },
-  },
-  runStatus: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-  },
-  runInfo: {
-    flex: 1,
-  },
-  runName: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: 'text.primary',
-  },
-  runMeta: {
-    fontSize: '12px',
-    color: 'text.secondary',
-  },
   taskColumn: {
     backgroundColor: 'background.paper',
     borderRadius: '8px',
@@ -189,34 +157,18 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'completed':
-    case 'done':
-      return '#22C55E';
-    case 'running':
-    case 'in_progress':
-      return '#3B82F6';
-    case 'error':
-      return '#EF4444';
-    default:
-      return '#666666';
-  }
-};
-
 const VALID_TABS: ProjectTab[] = [
-  'overview',
-  'workflows',
   'assets',
+  'repositories',
+  'workflows',
   'tasks',
   'sessions',
-  'members',
   'config',
   'agents',
   'tools',
   'mcp-servers',
   'skills',
-  'repositories',
+  'members',
   'settings',
 ];
 
@@ -224,32 +176,42 @@ const ProjectPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const projectId = (params as { projectId?: string }).projectId || '';
-  const tabParam = (params as { tab?: string }).tab || 'overview';
+  const tabParam = (params as { tab?: string }).tab || 'assets';
   const activeTab = useMemo<ProjectTab>(
-    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : 'overview'),
+    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : 'assets'),
     [tabParam],
   );
+  const { enqueueSnackbar } = useSnackbar();
   const [runWorkflowModalOpen, setRunWorkflowModalOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<IWorkflow | null>(null);
+  const [createWorkflowOpen, setCreateWorkflowOpen] = useState(false);
+  const [duplicateWorkflow] = useDuplicateWorkflowToProjectMutation();
+
+  const handleDuplicateAndConfigure = useCallback(
+    async (workflow: IWorkflow) => {
+      try {
+        const copy = await duplicateWorkflow({ projectId: Number(projectId), id: workflow.id }).unwrap();
+        enqueueSnackbar(`Copied "${workflow.name}" to project`, { variant: 'success' });
+        navigate({
+          to: Routes.frontend.projectWorkflowBuilderPath(projectId, String(copy.id)),
+        });
+      } catch {
+        enqueueSnackbar('Failed to copy workflow', { variant: 'error' });
+      }
+    },
+    [projectId, duplicateWorkflow, enqueueSnackbar, navigate],
+  );
 
   const { data: projectData, isLoading: isLoadingProject } = useProjectQuery(projectId);
   const { data: workflowsData } = useProjectWorkflowsQuery(projectId);
-  const { data: runsData } = useProjectWorkflowRunsQuery(projectId);
-  const { data: assetsData } = useProjectAssetsQuery(projectId);
   const { data: tasksData } = useProjectTasksQuery(projectId);
 
   const project = projectData?.data;
   const workflows = workflowsData?.items ?? [];
-  const runs = runsData?.items ?? [];
-  const assets = assetsData?.items ?? [];
   const tasks = tasksData?.items ?? [];
 
   const handleTabChange = (_: React.SyntheticEvent, newValue: ProjectTab) => {
     navigate({ to: Routes.frontend.companyProjectTabPath(projectId, newValue) });
-  };
-
-  const handleWorkflowRunClick = (runId: string) => {
-    navigate({ to: Routes.frontend.workflowRunPath(projectId, runId) });
   };
 
   const handleWorkflowClick = (workflow: IWorkflow) => {
@@ -257,11 +219,6 @@ const ProjectPage = () => {
     setRunWorkflowModalOpen(true);
   };
 
-  const handleRunWorkflow = (workflowParams: Record<string, string | number | boolean>) => {
-    // In real app, this would trigger the workflow run
-    console.log('Running workflow:', selectedWorkflow?.id, 'with params:', workflowParams);
-    navigate({ to: Routes.frontend.workflowRunPath(projectId, 'new-run-id') });
-  };
 
   if (isLoadingProject) {
     return (
@@ -273,92 +230,55 @@ const ProjectPage = () => {
     );
   }
 
-  const renderOverviewTab = () => (
-    <Box>
-      {/* Active Runs */}
-      {runs.filter((r) => r.status === 'running').length > 0 && (
-        <Box sx={{ marginBottom: '32px' }}>
-          <Typography sx={styles.sectionTitle}>Active Runs</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {runs
-              .filter((r) => r.status === 'running')
-              .map((run) => (
-                <Box key={run.id} sx={styles.runCard} onClick={() => handleWorkflowRunClick(run.id)}>
-                  <Box sx={{ ...styles.runStatus, backgroundColor: getStatusColor(run.status) }} />
-                  <Box sx={styles.runInfo}>
-                    <Typography sx={styles.runName}>{run.workflowName}</Typography>
-                    <Typography sx={styles.runMeta}>
-                      Step {run.currentStep}/{run.totalSteps} • {run.userName}
-                    </Typography>
-                  </Box>
-                  {run.totalCost !== undefined && (
-                    <Typography
-                      sx={{ color: 'success.main', fontFamily: '"JetBrains Mono", monospace', fontSize: '14px' }}
-                    >
-                      ${run.totalCost.toFixed(2)}
-                    </Typography>
-                  )}
-                </Box>
-              ))}
-          </Box>
-        </Box>
-      )}
-
-      {/* Workflows */}
-      <Box sx={{ marginBottom: '32px' }}>
-        <Typography sx={styles.sectionTitle}>Workflows</Typography>
-        <Grid container spacing={2}>
-          {workflows.map((workflow) => (
-            <Grid item xs={12} sm={6} md={4} key={workflow.id}>
-              <Box sx={styles.workflowCard} onClick={() => handleWorkflowClick(workflow)}>
-                <Typography sx={styles.workflowName}>{workflow.name}</Typography>
-                <Typography sx={styles.workflowMeta}>
-                  {workflow.stepsCount} steps
-                  {workflow.lastRunStatus && (
-                    <>
-                      {' '}
-                      • <span style={{ color: getStatusColor(workflow.lastRunStatus) }}>{workflow.lastRunStatus}</span>
-                    </>
-                  )}
-                </Typography>
-              </Box>
-            </Grid>
-          ))}
-        </Grid>
-      </Box>
-
-      {/* Recent Assets */}
-      <Box>
-        <Typography sx={styles.sectionTitle}>Recent Assets</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {assets.slice(0, 5).map((asset) => (
-            <AssetCard key={asset.id} asset={asset as unknown as IAsset} />
-          ))}
-        </Box>
-      </Box>
-    </Box>
-  );
-
   const renderWorkflowsTab = () => (
     <Box>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <Typography sx={styles.sectionTitle}>All Workflows</Typography>
-        <Button
-          variant="contained"
-          onClick={() => navigate({ to: Routes.frontend.workflowBuilderPath('new') as string })}
-        >
+        <Button variant="contained" onClick={() => setCreateWorkflowOpen(true)}>
           Create Workflow
         </Button>
       </Box>
       <Grid container spacing={2}>
-        {workflows.map((workflow) => (
-          <Grid item xs={12} sm={6} md={4} key={workflow.id}>
-            <Box sx={styles.workflowCard} onClick={() => handleWorkflowClick(workflow)}>
-              <Typography sx={styles.workflowName}>{workflow.name}</Typography>
-              <Typography sx={styles.workflowMeta}>{workflow.stepsCount} steps</Typography>
-            </Box>
-          </Grid>
-        ))}
+        {workflows.map((workflow) => {
+          const isInherited = workflow.scopeIndicator === 'company';
+          return (
+            <Grid item xs={12} sm={6} md={4} key={workflow.id}>
+              <Box sx={styles.workflowCard}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography sx={styles.workflowName}>{workflow.name}</Typography>
+                  {isInherited && <Chip label="company" size="small" color="primary" variant="outlined" />}
+                </Box>
+                <Typography sx={styles.workflowMeta}>{workflow.stepsCount} steps</Typography>
+                <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
+                  {isInherited ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => handleDuplicateAndConfigure(workflow)}
+                    >
+                      Copy & Configure
+                    </Button>
+                  ) : (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() =>
+                        navigate({
+                          to: Routes.frontend.projectWorkflowBuilderPath(projectId, String(workflow.id)),
+                        })
+                      }
+                    >
+                      Configure
+                    </Button>
+                  )}
+                  <Button size="small" variant="contained" onClick={() => handleWorkflowClick(workflow)}>
+                    Run
+                  </Button>
+                </Box>
+              </Box>
+            </Grid>
+          );
+        })}
       </Grid>
     </Box>
   );
@@ -417,30 +337,24 @@ const ProjectPage = () => {
 
       {/* Tabs */}
       <Box sx={styles.tabsContainer}>
-        <Tabs value={activeTab} onChange={handleTabChange} sx={styles.tabs}>
-          <Tab value="overview" label="Overview" sx={styles.tab} />
+        <Tabs value={activeTab} onChange={handleTabChange} sx={styles.tabs} variant="scrollable" scrollButtons="auto">
+          <Tab value="assets" label="Assets" sx={styles.tab} />
+          <Tab value="repositories" label="Repositories" sx={styles.tab} />
           <Tab value="workflows" label="Workflows" sx={styles.tab} />
-          <Tab
-            value="assets"
-            label={<Box sx={{ display: 'flex', alignItems: 'center', gap: '8px' }}>Assets</Box>}
-            sx={styles.tab}
-          />
           <Tab value="tasks" label="Tasks" sx={styles.tab} />
           <Tab value="sessions" label="Sessions" sx={styles.tab} />
-          <Tab value="members" label="Members" sx={styles.tab} />
           <Tab value="config" label="Secrets & Variables" sx={styles.tab} />
           <Tab value="agents" label="Agents" sx={styles.tab} />
           <Tab value="tools" label="Tools" sx={styles.tab} />
           <Tab value="mcp-servers" label="MCP Servers" sx={styles.tab} />
           <Tab value="skills" label="Skills" sx={styles.tab} />
-          <Tab value="repositories" label="Repositories" sx={styles.tab} />
+          <Tab value="members" label="Members" sx={styles.tab} />
           <Tab value="settings" label="Settings" sx={styles.tab} />
         </Tabs>
       </Box>
 
       {/* Content */}
       <Box sx={styles.content}>
-        {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'workflows' && renderWorkflowsTab()}
         {activeTab === 'assets' && <AssetsPanel projectId={Number(projectId)} />}
         {activeTab === 'tasks' && renderTasksTab()}
@@ -483,11 +397,22 @@ const ProjectPage = () => {
       <RunWorkflowModal
         open={runWorkflowModalOpen}
         workflow={selectedWorkflow}
+        projectId={Number(projectId)}
         onClose={() => {
           setRunWorkflowModalOpen(false);
           setSelectedWorkflow(null);
         }}
-        onRun={handleRunWorkflow}
+      />
+
+      <CreateWorkflowDialog
+        open={createWorkflowOpen}
+        onClose={() => setCreateWorkflowOpen(false)}
+        projectId={Number(projectId)}
+        onSuccess={(id) =>
+          navigate({
+            to: Routes.frontend.projectWorkflowBuilderPath(projectId, String(id)),
+          })
+        }
       />
     </Box>
   );

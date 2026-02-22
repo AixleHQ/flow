@@ -1,5 +1,6 @@
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined';
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
+import SourceOutlined from '@mui/icons-material/SourceOutlined';
 import BuildOutlined from '@mui/icons-material/BuildOutlined';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
@@ -40,6 +41,7 @@ const navGroups: NavItem[][] = [
     { path: Routes.frontend.companyToolsPath, label: 'Tools', icon: <BuildOutlined />, adminOnly: true },
     { path: Routes.frontend.companyMcpServersPath, label: 'MCP Servers', icon: <DnsOutlined />, adminOnly: true },
     { path: Routes.frontend.companySkillsPath, label: 'Skills', icon: <AutoAwesomeOutlined />, adminOnly: true },
+    { path: Routes.frontend.companyWorkflowsPath, label: 'Workflows', icon: <AccountTreeOutlined /> },
   ],
   [
     { path: Routes.frontend.companyMembersPath, label: 'Members', icon: <GroupOutlined />, adminOnly: true },
@@ -52,7 +54,7 @@ const navGroups: NavItem[][] = [
     {
       path: Routes.frontend.companyRepositoriesPath,
       label: 'Repositories',
-      icon: <AccountTreeOutlined />,
+      icon: <SourceOutlined />,
       adminOnly: true,
     },
     {

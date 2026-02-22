@@ -14,7 +14,7 @@ export const projectApi = baseApi.injectEndpoints({
     }),
 
     projectWorkflows: builder.query<ApiCollectionResponse<IWorkflow>, string>({
-      query: (projectId) => ({ url: `/projects/${projectId}/workflows` }),
+      query: (projectId) => ({ url: Routes.backend.apiV1CompanyProjectWorkflowsPath(projectId) }),
       providesTags: (result) =>
         result?.items
           ? [

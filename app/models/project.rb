@@ -21,6 +21,8 @@ class Project < ApplicationRecord
   has_many :skills, as: :scope, dependent: :destroy
   has_many :assets, as: :scope, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
+  has_many :workflows, as: :scope, dependent: :destroy
+  has_many :workflow_runs, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

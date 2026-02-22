@@ -21,6 +21,7 @@ const McpServersPage = lazyRouteComponent(() => import('../pages/mcp-servers'));
 const SkillsPage = lazyRouteComponent(() => import('../pages/skills'));
 const AssetsPage = lazyRouteComponent(() => import('../pages/assets'));
 const IntegrationsPage = lazyRouteComponent(() => import('../pages/integrations'));
+const WorkflowsPage = lazyRouteComponent(() => import('../pages/workflows'));
 const RepositoriesPage = lazyRouteComponent(() => import('../pages/repositories'));
 const CompanySessionsPage = lazyRouteComponent(() => import('../pages/company-sessions'));
 const CompanySessionNewPage = lazyRouteComponent(() =>
@@ -112,10 +113,16 @@ export const workflowRunRoute = createRoute({
   component: WorkflowRunPage,
 });
 
-// Workflow builder route
-export const workflowBuilderRoute = createRoute({
+// Workflow builder routes (company & project scoped)
+export const companyWorkflowBuilderRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: Routes.frontend.workflowBuilderPath('$workflowId'),
+  path: Routes.frontend.companyWorkflowBuilderPath('$workflowId'),
+  component: WorkflowBuilderPage,
+});
+
+export const projectWorkflowBuilderRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.projectWorkflowBuilderPath('$projectId', '$workflowId'),
   component: WorkflowBuilderPage,
 });
 
@@ -181,6 +188,12 @@ export const companyIntegrationsRoute = createRoute({
   component: IntegrationsPage,
 });
 
+export const companyWorkflowsRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: Routes.frontend.companyWorkflowsPath,
+  component: WorkflowsPage,
+});
+
 export const companyRepositoriesRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.companyRepositoriesPath,
@@ -243,7 +256,8 @@ export const routeTree = rootRoute.addChildren([
     projectSessionNewRoute,
     projectSessionViewRoute,
     workflowRunRoute,
-    workflowBuilderRoute,
+    companyWorkflowBuilderRoute,
+    projectWorkflowBuilderRoute,
     profileRoute,
     companyMembersRoute,
     companyConfigItemsRoute,
@@ -253,6 +267,7 @@ export const routeTree = rootRoute.addChildren([
     companySkillsRoute,
     companyAssetsRoute,
     companyIntegrationsRoute,
+    companyWorkflowsRoute,
     companyRepositoriesRoute,
     companySettingsRoute,
     companyBrandingRoute,

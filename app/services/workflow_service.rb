@@ -113,6 +113,16 @@ class WorkflowService
       workflows.respond_to_missing?(method_name, include_private) || super
     end
 
+    def start_workflow_execution(workflow_run)
+      wf = workflow_execution_workflow
+      TemporalService.start_workflow(
+        wf,
+        { workflow_run_id: workflow_run.id },
+        id: "workflow-execution-#{workflow_run.id}",
+        execution_timeout: 86_400
+      )
+    end
+
     private
 
     def load_workflows_yaml

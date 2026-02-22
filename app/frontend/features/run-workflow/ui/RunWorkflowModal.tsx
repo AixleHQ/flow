@@ -1,40 +1,46 @@
 import {
+  Autocomplete,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
-  Switch,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-interface IWorkflowParameter {
-  name: string;
-  type: 'string' | 'number' | 'boolean';
-  description?: string;
-  defaultValue?: string | number | boolean;
-  required: boolean;
-}
-
-interface IWorkflow {
-  id: string;
-  name: string;
-  description?: string;
-  parameters?: IWorkflowParameter[];
-}
+import { useGetCompanyRepositoriesQuery } from 'features/repositories-management/api/repositoriesApi';
+import type { Repository } from 'features/repositories-management/lib/types';
+import { useCreateWorkflowRunMutation } from 'features/workflow-execution/api/workflowRunsApi';
+import type { CreateWorkflowRunRequest } from 'features/workflow-execution/lib/types';
+import { Routes } from 'shared/routes';
 
 interface RunWorkflowModalProps {
   open: boolean;
-  workflow: IWorkflow | null;
+  workflow: { id: number; name: string; description?: string } | null;
+  projectId: number;
   onClose: () => void;
-  onRun: (params: Record<string, string | number | boolean>) => void;
 }
+
+const RUNTIME_OPTIONS = [
+  { value: 'docker', label: 'Docker (default)' },
+  { value: 'local', label: 'Local' },
+  { value: 'cloud', label: 'Cloud' },
+];
+
+const MODE_OPTIONS = [
+  { value: 'interactive', label: 'Interactive — pause at each step for review' },
+  { value: 'non_interactive', label: 'Non-interactive — run all steps automatically' },
+  { value: 'mixed', label: 'Mixed — auto-advance compatible steps' },
+];
 
 const styles = {
   dialog: {
@@ -75,97 +81,75 @@ const styles = {
     fontSize: '13px',
     fontWeight: 500,
     color: 'text.primary',
-    marginBottom: '8px',
-  },
-  input: {
-    '& .MuiOutlinedInput-root': {
-      backgroundColor: 'background.elevated',
-    },
-  },
-  select: {
-    '& .MuiOutlinedInput-root': {
-      backgroundColor: 'background.elevated',
-    },
-  },
-  switchLabel: {
-    fontSize: '13px',
-    color: 'text.primary',
+    marginBottom: '6px',
   },
   actions: {
     padding: '16px 24px',
     borderTop: '1px solid',
     borderColor: 'divider',
   },
-  cancelButton: {
-    textTransform: 'none',
-  },
-  runButton: {
-    textTransform: 'none',
-    minWidth: '120px',
-  },
   emptyState: {
     textAlign: 'center',
     padding: '32px',
   },
-  emptyIcon: {
-    fontSize: '48px',
-    marginBottom: '16px',
-  },
-  emptyText: {
-    fontSize: '14px',
-    color: 'text.secondary',
-  },
 } satisfies Record<string, SxProps<Theme>>;
 
-const RunWorkflowModal = ({ open, workflow, onClose, onRun }: RunWorkflowModalProps) => {
+const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowModalProps) => {
+  const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const [params, setParams] = useState<Record<string, string | number | boolean>>({});
-  const [autoStart, setAutoStart] = useState(true);
 
-  const handleParamChange = (name: string, value: string | number | boolean) => {
-    setParams((prev) => ({ ...prev, [name]: value }));
-  };
+  const [mode, setMode] = useState<CreateWorkflowRunRequest['mode']>('interactive');
+  const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
+  const [agentRuntime, setAgentRuntime] = useState('docker');
 
-  const handleRun = () => {
+  const { data: repositories = [] } = useGetCompanyRepositoriesQuery();
+  const [createRun, { isLoading }] = useCreateWorkflowRunMutation();
+
+  const selectedRepos = useMemo(
+    () => repositories.filter((r: Repository) => selectedRepoIds.includes(r.id)),
+    [repositories, selectedRepoIds],
+  );
+
+  const handleRun = useCallback(async () => {
     if (!workflow) return;
-
-    // Validate required parameters
-    const requiredParams = workflow.parameters?.filter((p) => p.required) || [];
-    const missingParams = requiredParams.filter((p) => !params[p.name] && params[p.name] !== false);
-
-    if (missingParams.length > 0) {
-      enqueueSnackbar(`Please fill in required parameters: ${missingParams.map((p) => p.name).join(', ')}`, {
-        variant: 'warning',
+    try {
+      const result = await createRun({
+        projectId,
+        workflowId: workflow.id,
+        mode,
+        repositoryIds: selectedRepoIds,
+        agentRuntime,
+      }).unwrap();
+      enqueueSnackbar('Workflow run started', { variant: 'success' });
+      handleClose();
+      navigate({
+        to: Routes.frontend.workflowRunPath(String(projectId), String(result.id)),
       });
-      return;
+    } catch {
+      enqueueSnackbar('Failed to start workflow run', { variant: 'error' });
     }
+  }, [workflow, projectId, mode, selectedRepoIds, agentRuntime, createRun, enqueueSnackbar, navigate]);
 
-    onRun({
-      ...params,
-      autoStart,
-    });
-    handleClose();
-  };
-
-  const handleClose = () => {
-    setParams({});
-    setAutoStart(true);
+  const handleClose = useCallback(() => {
+    setMode('interactive');
+    setSelectedRepoIds([]);
+    setAgentRuntime('docker');
     onClose();
-  };
+  }, [onClose]);
 
   if (!workflow) {
     return (
       <Dialog open={open} onClose={handleClose} sx={styles.dialog}>
         <DialogContent>
           <Box sx={styles.emptyState}>
-            <Typography sx={styles.emptyIcon}>⚠️</Typography>
-            <Typography sx={styles.emptyText}>No workflow selected</Typography>
+            <Typography sx={{ fontSize: '48px', mb: 2 }}>&#9888;&#65039;</Typography>
+            <Typography variant="body2" color="text.secondary">
+              No workflow selected
+            </Typography>
           </Box>
         </DialogContent>
         <DialogActions sx={styles.actions}>
-          <Button onClick={handleClose} sx={styles.cancelButton}>
-            Close
-          </Button>
+          <Button onClick={handleClose}>Close</Button>
         </DialogActions>
       </Dialog>
     );
@@ -173,83 +157,81 @@ const RunWorkflowModal = ({ open, workflow, onClose, onRun }: RunWorkflowModalPr
 
   return (
     <Dialog open={open} onClose={handleClose} sx={styles.dialog}>
-      <DialogTitle sx={styles.title}>Run Workflow</DialogTitle>
+      <DialogTitle sx={styles.title}>Run: {workflow.name}</DialogTitle>
       {workflow.description && <Typography sx={styles.description}>{workflow.description}</Typography>}
 
       <DialogContent sx={styles.content}>
-        {/* Workflow Parameters */}
-        {workflow.parameters && workflow.parameters.length > 0 ? (
-          <Box sx={styles.section}>
-            <Typography sx={styles.sectionTitle}>Parameters</Typography>
-            {workflow.parameters.map((param) => (
-              <Box key={param.name} sx={styles.formField}>
-                <Typography sx={styles.label}>
-                  {param.name}
-                  {param.required && <span style={{ color: 'error.main', marginLeft: '4px' }}>*</span>}
-                  {param.description && (
-                    <Typography sx={{ fontSize: '12px', color: 'text.disabled', marginTop: '4px' }}>
-                      {param.description}
-                    </Typography>
-                  )}
-                </Typography>
-                {param.type === 'boolean' ? (
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={Boolean(params[param.name] ?? param.defaultValue ?? false)}
-                        onChange={(e) => handleParamChange(param.name, e.target.checked)}
-                      />
-                    }
-                    label={(params[param.name] ?? param.defaultValue ?? false) ? 'Yes' : 'No'}
-                    sx={styles.switchLabel}
-                  />
-                ) : param.type === 'number' ? (
-                  <TextField
-                    fullWidth
-                    size="small"
-                    type="number"
-                    value={params[param.name] ?? param.defaultValue ?? ''}
-                    onChange={(e) => handleParamChange(param.name, Number(e.target.value))}
-                    placeholder={`Enter ${param.name}`}
-                    sx={styles.input}
-                  />
-                ) : (
-                  <TextField
-                    fullWidth
-                    size="small"
-                    value={params[param.name] ?? param.defaultValue ?? ''}
-                    onChange={(e) => handleParamChange(param.name, e.target.value)}
-                    placeholder={`Enter ${param.name}`}
-                    sx={styles.input}
-                  />
-                )}
-              </Box>
-            ))}
-          </Box>
-        ) : (
-          <Box sx={styles.emptyState}>
-            <Typography sx={styles.emptyIcon}>🚀</Typography>
-            <Typography sx={styles.emptyText}>This workflow has no parameters</Typography>
-          </Box>
-        )}
-
-        {/* Options */}
+        {/* Execution Mode */}
         <Box sx={styles.section}>
-          <Typography sx={styles.sectionTitle}>Options</Typography>
-          <FormControlLabel
-            control={<Switch checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />}
-            label="Start immediately after creation"
-            sx={styles.switchLabel}
+          <Typography sx={styles.sectionTitle}>Execution Mode</Typography>
+          <Select
+            fullWidth
+            size="small"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as CreateWorkflowRunRequest['mode'])}
+          >
+            {MODE_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+
+        {/* Agent Runtime */}
+        <Box sx={styles.section}>
+          <Typography sx={styles.sectionTitle}>Agent Runtime</Typography>
+          <Select
+            fullWidth
+            size="small"
+            value={agentRuntime}
+            onChange={(e) => setAgentRuntime(e.target.value)}
+          >
+            {RUNTIME_OPTIONS.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </MenuItem>
+            ))}
+          </Select>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Environment where agents will execute steps
+          </Typography>
+        </Box>
+
+        {/* Repositories */}
+        <Box sx={styles.section}>
+          <Typography sx={styles.sectionTitle}>Repositories</Typography>
+          <Autocomplete
+            multiple
+            size="small"
+            options={repositories}
+            getOptionLabel={(r: Repository) => r.fullName || r.repoName}
+            value={selectedRepos}
+            onChange={(_, newValue) => setSelectedRepoIds(newValue.map((r: Repository) => r.id))}
+            renderInput={(params) => <TextField {...params} placeholder="Select repositories to mount..." />}
+            renderTags={(value, getTagProps) =>
+              value.map((repo, index) => (
+                <Chip
+                  {...getTagProps({ index })}
+                  key={repo.id}
+                  label={repo.repoName}
+                  size="small"
+                  variant="outlined"
+                />
+              ))
+            }
+            isOptionEqualToValue={(opt, val) => opt.id === val.id}
           />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Selected repos will be available to steps that have &quot;Mount repositories&quot; enabled
+          </Typography>
         </Box>
       </DialogContent>
 
       <DialogActions sx={styles.actions}>
-        <Button onClick={handleClose} sx={styles.cancelButton}>
-          Cancel
-        </Button>
-        <Button variant="contained" onClick={handleRun} sx={styles.runButton}>
-          Run Workflow
+        <Button onClick={handleClose}>Cancel</Button>
+        <Button variant="contained" onClick={handleRun} disabled={isLoading} sx={{ minWidth: 120 }}>
+          {isLoading ? 'Starting...' : 'Run Workflow'}
         </Button>
       </DialogActions>
     </Dialog>

@@ -175,16 +175,17 @@ development_status:
   # PHASE 5-6: WORKFLOWS
   # ============================================
 
-  epic-12: backlog  # Workflows (Phase 5-6)
-  12-1-create-new-workflow: backlog
-  12-2-define-workflow-steps: backlog
-  12-3-edit-existing-workflow: backlog
-  12-4-delete-workflow: backlog
-  12-5-view-workflows-list: backlog
-  12-6-start-workflow-execution: backlog
-  12-7-interactive-mode-execution: backlog
-  12-8-non-interactive-mode-execution: backlog
-  12-9-artifact-passing-between-steps: backlog
+  epic-12: in-progress  # Workflows (Phase 5-6)
+  12-1-create-new-workflow: done
+  12-2-define-workflow-steps: done
+  12-3-edit-existing-workflow: done
+  12-4-delete-workflow: done
+  12-5-view-workflows-list: done
+  12-6-start-workflow-execution: done
+  12-7-interactive-mode-execution: done
+  12-8-non-interactive-mode-execution: done
+  12-9-artifact-passing-between-steps: done
+  12-10-workflow-builder-page: done  # Wire WorkflowBuilderPage to real Steps/Agents/Tools API, replace local state
   epic-12-retrospective: optional
 
   # ============================================

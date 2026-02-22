@@ -1,16 +1,15 @@
 export type ProjectTab =
-  | 'overview'
-  | 'workflows'
   | 'assets'
+  | 'repositories'
+  | 'workflows'
   | 'tasks'
   | 'sessions'
-  | 'members'
   | 'config'
   | 'agents'
   | 'tools'
   | 'mcp-servers'
   | 'skills'
-  | 'repositories'
+  | 'members'
   | 'settings';
 
 export interface IWorkflowParameter {
@@ -22,10 +21,11 @@ export interface IWorkflowParameter {
 }
 
 export interface IWorkflow {
-  id: string;
+  id: number;
   name: string;
   description?: string;
   stepsCount: number;
+  scopeIndicator?: 'company' | 'project';
   lastRunAt?: string;
   lastRunStatus?: 'completed' | 'running' | 'error';
   parameters?: IWorkflowParameter[];

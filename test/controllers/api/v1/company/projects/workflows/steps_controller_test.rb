@@ -1,0 +1,105 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionController::TestCase
+  setup do
+    @company = create(:company)
+    @admin = create(:user, :admin, company: @company)
+    @project = create(:project, company: @company, owner: @admin)
+    @workflow = create(:workflow, scope: @project)
+  end
+
+  test "#index returns steps with sub_steps" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    create(:sub_step, step: step, position: 1, name: "SS1")
+
+    get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+    assert_response :success
+    body = response.parsed_body
+    assert_equal 1, body["items"].size
+    assert_equal 1, body["items"][0]["sub_steps"].size
+  end
+
+  test "#show returns step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+
+    get :show, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
+    assert_response :success
+    body = response.parsed_body
+    assert_equal step.name, body["data"]["name"]
+  end
+
+  test "#create creates step" do
+    sign_in @admin
+    assert_difference "Step.count" do
+      post :create, params: {
+        project_id: @project.id, workflow_id: @workflow.id,
+        step: { name: "Build", position: 1, instructions: "Build the project" }
+      }
+    end
+    assert_response :created
+  end
+
+  test "#create with nested sub_steps" do
+    sign_in @admin
+    post :create, params: {
+      project_id: @project.id, workflow_id: @workflow.id,
+      step: {
+        name: "Build", position: 1,
+        sub_steps_attributes: [
+          { name: "SS1", position: 1 },
+          { name: "SS2", position: 2 }
+        ]
+      }
+    }
+    assert_response :created
+    assert_equal 2, Step.last.sub_steps.count
+  end
+
+  test "#update modifies step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+
+    patch :update, params: {
+      project_id: @project.id, workflow_id: @workflow.id, id: step.id,
+      step: { name: "Updated" }
+    }
+    assert_response :success
+    assert_equal "Updated", step.reload.name
+  end
+
+  test "#destroy removes step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+
+    assert_difference "Step.count", -1 do
+      delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
+    end
+    assert_response :no_content
+  end
+
+  test "#reorder updates positions" do
+    sign_in @admin
+    s1 = create(:step, workflow: @workflow, position: 1)
+    s2 = create(:step, workflow: @workflow, position: 2)
+
+    patch :reorder, params: {
+      project_id: @project.id, workflow_id: @workflow.id,
+      positions: { s1.id.to_s => 2, s2.id.to_s => 1 }
+    }
+    assert_response :ok
+    assert_equal 2, s1.reload.position
+    assert_equal 1, s2.reload.position
+  end
+
+  test "non-member cannot access" do
+    other_user = create(:user, :employee, company: @company)
+    sign_in other_user
+
+    get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+    assert_response :forbidden
+  end
+end

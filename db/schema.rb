@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_21_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -331,6 +331,75 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_21_100000) do
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
   end
 
+  create_table "step_runs", force: :cascade do |t|
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.text "error_message"
+    t.string "skip_reason"
+    t.datetime "started_at"
+    t.string "state", default: "pending", null: false
+    t.bigint "step_id", null: false
+    t.text "step_note"
+    t.bigint "terminal_session_id"
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_run_id", null: false
+    t.index ["step_id"], name: "index_step_runs_on_step_id"
+    t.index ["terminal_session_id"], name: "index_step_runs_on_terminal_session_id"
+    t.index ["workflow_run_id", "state"], name: "index_step_runs_on_workflow_run_id_and_state"
+    t.index ["workflow_run_id"], name: "index_step_runs_on_workflow_run_id"
+  end
+
+  create_table "steps", force: :cascade do |t|
+    t.bigint "agent_id"
+    t.boolean "allow_non_interactive", default: false, null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.jsonb "input_asset_specs", default: [], null: false
+    t.text "instructions"
+    t.integer "max_retries", default: 0, null: false
+    t.jsonb "mcp_server_ids", default: [], null: false
+    t.boolean "mount_repositories", default: true, null: false
+    t.string "name", null: false
+    t.string "on_failure", default: "fail", null: false
+    t.jsonb "output_asset_specs", default: [], null: false
+    t.integer "position", null: false
+    t.jsonb "skill_ids", default: [], null: false
+    t.string "skip_policy", default: "never", null: false
+    t.jsonb "tool_ids", default: [], null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_id", null: false
+    t.index ["agent_id"], name: "index_steps_on_agent_id"
+    t.index ["workflow_id", "position"], name: "index_steps_on_workflow_id_and_position", unique: true
+    t.index ["workflow_id"], name: "index_steps_on_workflow_id"
+  end
+
+  create_table "sub_step_runs", force: :cascade do |t|
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.jsonb "data"
+    t.text "note"
+    t.datetime "started_at"
+    t.string "state"
+    t.bigint "step_run_id", null: false
+    t.bigint "sub_step_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["step_run_id"], name: "index_sub_step_runs_on_step_run_id"
+    t.index ["sub_step_id"], name: "index_sub_step_runs_on_sub_step_id"
+  end
+
+  create_table "sub_steps", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.text "instructions"
+    t.string "name", null: false
+    t.integer "position", null: false
+    t.boolean "required", default: true, null: false
+    t.bigint "step_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["step_id", "position"], name: "index_sub_steps_on_step_id_and_position", unique: true
+    t.index ["step_id"], name: "index_sub_steps_on_step_id"
+  end
+
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
@@ -454,6 +523,55 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_21_100000) do
     t.index ["state"], name: "index_users_on_state"
   end
 
+  create_table "workflow_run_assets", force: :cascade do |t|
+    t.string "content_type"
+    t.datetime "created_at", null: false
+    t.jsonb "file_data"
+    t.integer "file_size"
+    t.string "name", null: false
+    t.bigint "produced_by_step_run_id"
+    t.string "s3_key"
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_run_id", null: false
+    t.index ["produced_by_step_run_id"], name: "index_workflow_run_assets_on_produced_by_step_run_id"
+    t.index ["workflow_run_id"], name: "index_workflow_run_assets_on_workflow_run_id"
+  end
+
+  create_table "workflow_runs", force: :cascade do |t|
+    t.string "agent_runtime"
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.jsonb "input_asset_ids", default: []
+    t.string "mode", default: "interactive", null: false
+    t.bigint "project_id", null: false
+    t.jsonb "repository_ids", default: [], null: false
+    t.jsonb "shared_context", default: {}
+    t.datetime "started_at"
+    t.string "state", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.bigint "workflow_id", null: false
+    t.index ["project_id"], name: "index_workflow_runs_on_project_id"
+    t.index ["state"], name: "index_workflow_runs_on_state"
+    t.index ["user_id"], name: "index_workflow_runs_on_user_id"
+    t.index ["workflow_id", "state"], name: "index_workflow_runs_on_workflow_id_and_state"
+    t.index ["workflow_id"], name: "index_workflow_runs_on_workflow_id"
+  end
+
+  create_table "workflows", force: :cascade do |t|
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "deleted_at"
+    t.text "description"
+    t.string "name", null: false
+    t.integer "scope_id", null: false
+    t.string "scope_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
+    t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
+  end
+
   add_foreign_key "action_mcp_session_messages", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_messages_session_id", on_update: :cascade, on_delete: :cascade
   add_foreign_key "action_mcp_session_resources", "action_mcp_sessions", column: "session_id", on_delete: :cascade
   add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
@@ -481,6 +599,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_21_100000) do
   add_foreign_key "session_skills", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_tools", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_tools", "tools", on_delete: :cascade
+  add_foreign_key "step_runs", "steps"
+  add_foreign_key "step_runs", "terminal_sessions"
+  add_foreign_key "step_runs", "workflow_runs"
+  add_foreign_key "steps", "agents"
+  add_foreign_key "steps", "workflows"
+  add_foreign_key "sub_step_runs", "step_runs"
+  add_foreign_key "sub_step_runs", "sub_steps"
+  add_foreign_key "sub_steps", "steps"
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
@@ -488,4 +614,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_21_100000) do
   add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
+  add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id"
+  add_foreign_key "workflow_run_assets", "workflow_runs"
+  add_foreign_key "workflow_runs", "projects"
+  add_foreign_key "workflow_runs", "users"
+  add_foreign_key "workflow_runs", "workflows"
 end
