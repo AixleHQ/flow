@@ -152,11 +152,12 @@ module ContainerRuntime
     private
 
     def resolve_handle(id)
-      return id if id.is_a?(OpenStruct)
       return id if id.respond_to?(:pod_name)
 
-      pod_name = sanitize_name(id.to_s)
-      route_token = extract_route_token(id.to_s)
+      identifier = extract_pod_identifier(id)
+      pod_name = sanitize_name(identifier)
+      route_token = extract_route_token(pod_name)
+      service_ports = infer_service_ports(pod_name, route_token)
 
       OpenStruct.new(
         pod_name: pod_name,
@@ -166,8 +167,36 @@ module ContainerRuntime
         ingress_name: "#{pod_name}-ingress",
         middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip" ],
         route_token: route_token,
-        service_ports: []
+        service_ports: service_ports
       )
+    end
+
+    def extract_pod_identifier(id)
+      if id.is_a?(Hash)
+        value = id[:pod_name] || id["pod_name"] || id[:id] || id["id"]
+        return value if value.present?
+      end
+
+      raw = id.to_s
+      raw[/pod_name=\"([^\"]+)\"/, 1] || raw
+    end
+
+    def infer_service_ports(pod_name, route_token)
+      ports = pod_service_ports(pod_name)
+      return ports if ports.any?
+
+      route_token.present? ? DEFAULT_SERVICE_PORTS : []
+    end
+
+    def pod_service_ports(pod_name)
+      pod = core_client.get_pod(pod_name, runtime_namespace)
+      containers = pod&.spec&.containers || []
+      container = containers.find { |c| c.name == DEFAULT_CONTAINER_NAME } || containers.first
+      return [] unless container.respond_to?(:ports)
+
+      Array(container.ports).map { |port| port.containerPort.to_i }.select(&:positive?).uniq
+    rescue StandardError
+      []
     end
 
     def build_handle(spec)
