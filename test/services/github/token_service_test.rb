@@ -25,13 +25,27 @@ module Github
     test "generate_installation_token returns token string" do
       mock_client = mock("octokit_client")
       token_response = OpenStruct.new(token: "ghs_test_token_abc123")
-      mock_client.expects(:create_app_installation_access_token).with(12_345).returns(token_response)
+      mock_client.expects(:create_app_installation_access_token).with(12_345, {}).returns(token_response)
 
       Octokit::Client.expects(:new).returns(mock_client)
 
       service = Github::TokenService.new(@integration)
       token = service.generate_installation_token
       assert_equal "ghs_test_token_abc123", token
+    end
+
+    test "generate_installation_token scopes to specific repositories" do
+      mock_client = mock("octokit_client")
+      token_response = OpenStruct.new(token: "ghs_scoped_token")
+      mock_client.expects(:create_app_installation_access_token)
+        .with(12_345, { repositories: %w[my-repo] })
+        .returns(token_response)
+
+      Octokit::Client.expects(:new).returns(mock_client)
+
+      service = Github::TokenService.new(@integration)
+      token = service.generate_installation_token(repositories: %w[my-repo])
+      assert_equal "ghs_scoped_token", token
     end
 
     test "verify_installation returns installation info" do
@@ -73,7 +87,9 @@ module Github
 
     test "raises AuthenticationError on Octokit failure" do
       mock_client = mock("octokit_client")
-      mock_client.expects(:create_app_installation_access_token).raises(Octokit::Unauthorized.new(method: :post, status: 401))
+      mock_client.expects(:create_app_installation_access_token)
+        .with(12_345, {})
+        .raises(Octokit::Unauthorized.new(method: :post, status: 401))
 
       Octokit::Client.expects(:new).returns(mock_client)
 

@@ -511,7 +511,8 @@ class SessionContextService
         end
 
         begin
-          token = Github::TokenService.new(integration).generate_installation_token
+          repo_names = group_repos.map(&:repo_name)
+          token = Github::TokenService.new(integration).generate_installation_token(repositories: repo_names)
         rescue => e
           Rails.logger.error("[SessionContext] Failed to generate token for integration #{integration.id}: #{e.message}")
           group_repos.each { |r| record_failed_repo(session, r, "Token generation failed: #{e.message}") }
