@@ -53,14 +53,11 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
   // Local state for headers editor
   const [headersList, setHeadersList] = useState<{ key: string; value: string }[]>([]);
 
-  const [serverError, setServerError] = useState<string | null>(null);
-
   const {
     control,
     handleSubmit,
     reset,
     setValue,
-    setError,
     formState: { errors },
   } = useForm<McpServerFormData>({
     resolver: zodResolver(mcpServerSchema),
@@ -103,7 +100,6 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
         enabled: true,
       });
     }
-    setServerError(null);
   }, [editServer, reset, open]);
 
   // Update form value when headers list changes
@@ -133,38 +129,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
     setHeadersList(newList);
   };
 
-  const applyServerErrors = (error: unknown) => {
-    const data = (error as { data?: { errors?: Record<string, string[]> } })?.data;
-    const fieldErrors = data?.errors;
-    if (!fieldErrors) {
-      setServerError('Failed to save MCP server');
-      return;
-    }
-
-    const fieldMap: Record<string, keyof McpServerFormData> = {
-      name: 'name',
-      display_name: 'displayName',
-      url: 'url',
-      transport: 'transport',
-    };
-
-    let hasFieldError = false;
-    for (const [serverField, messages] of Object.entries(fieldErrors)) {
-      const formField = fieldMap[serverField];
-      if (formField) {
-        setError(formField, { message: messages.join(', ') });
-        hasFieldError = true;
-      }
-    }
-
-    if (!hasFieldError) {
-      const allMessages = Object.values(fieldErrors).flat().join('; ');
-      setServerError(allMessages);
-    }
-  };
-
   const onSubmit = async (data: McpServerFormData) => {
-    setServerError(null);
     try {
       if (isEdit && editServer) {
         if (isProjectContext) {
@@ -191,7 +156,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
       }
       onClose();
     } catch (error) {
-      applyServerErrors(error);
+      console.error('Failed to save MCP server:', error);
     }
   };
 
@@ -326,12 +291,6 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
               <FormControlLabel control={<Switch {...field} checked={field.value} />} label="Enabled" />
             )}
           />
-
-          {serverError && (
-            <Typography color="error" variant="body2">
-              {serverError}
-            </Typography>
-          )}
         </Box>
       </DialogContent>
       <DialogActions>
