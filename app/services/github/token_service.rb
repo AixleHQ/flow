@@ -10,15 +10,10 @@ module Github
       validate_configuration!
     end
 
-    # Generate a scoped installation access token.
-    # @param repositories [Array<String>] repo names to restrict access to (e.g. ["my-repo"])
-    #   When empty, the token has access to all repos in the installation.
-    def generate_installation_token(repositories: [])
+    def generate_installation_token
       jwt = generate_jwt
       client = Octokit::Client.new(bearer_token: jwt)
-      options = {}
-      options[:repositories] = repositories if repositories.present?
-      token = client.create_app_installation_access_token(installation_id, options)
+      token = client.create_app_installation_access_token(installation_id)
       token.token
     rescue Octokit::Error => e
       raise AuthenticationError, "Failed to generate installation token: #{e.message}"
