@@ -152,11 +152,12 @@ module ContainerRuntime
     private
 
     def resolve_handle(id)
-      return id if id.is_a?(OpenStruct)
       return id if id.respond_to?(:pod_name)
 
-      pod_name = sanitize_name(id.to_s)
-      route_token = extract_route_token(id.to_s)
+      identifier = extract_pod_identifier(id)
+      pod_name = sanitize_name(identifier)
+      route_token = extract_route_token(pod_name)
+      service_ports = infer_service_ports(pod_name, route_token)
 
       OpenStruct.new(
         pod_name: pod_name,
@@ -166,8 +167,36 @@ module ContainerRuntime
         ingress_name: "#{pod_name}-ingress",
         middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip" ],
         route_token: route_token,
-        service_ports: []
+        service_ports: service_ports
       )
+    end
+
+    def extract_pod_identifier(id)
+      if id.is_a?(Hash)
+        value = id[:pod_name] || id["pod_name"] || id[:id] || id["id"]
+        return value if value.present?
+      end
+
+      raw = id.to_s
+      raw[/pod_name=\"([^\"]+)\"/, 1] || raw
+    end
+
+    def infer_service_ports(pod_name, route_token)
+      ports = pod_service_ports(pod_name)
+      return ports if ports.any?
+
+      route_token.present? ? DEFAULT_SERVICE_PORTS : []
+    end
+
+    def pod_service_ports(pod_name)
+      pod = core_client.get_pod(pod_name, runtime_namespace)
+      containers = pod&.spec&.containers || []
+      container = containers.find { |c| c.name == DEFAULT_CONTAINER_NAME } || containers.first
+      return [] unless container.respond_to?(:ports)
+
+      Array(container.ports).map { |port| port.containerPort.to_i }.select(&:positive?).uniq
+    rescue StandardError
+      []
     end
 
     def build_handle(spec)
@@ -355,6 +384,8 @@ module ContainerRuntime
       error = nil
       mutex = Mutex.new
       cv = ConditionVariable.new
+      ws_state = { closed: false }
+      runtime = self
 
       ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
       exit_code_parser = method(:exit_code_from_status_payload)
@@ -366,9 +397,10 @@ module ContainerRuntime
           begin
             stdin_io.rewind if stdin_io.respond_to?(:rewind)
             while (chunk = stdin_io.read(16_384))
+              break if runtime.send(:websocket_closed?, ws, ws_state)
               ws.send([ 0 ].pack("C") + chunk)
             end
-            ws.close if close_on_stdin_eof
+            ws.close if close_on_stdin_eof && !runtime.send(:websocket_closed?, ws, ws_state)
           rescue StandardError => e
             mutex.synchronize do
               error = e
@@ -411,6 +443,8 @@ module ContainerRuntime
       end
 
       ws.on(:error) do |msg|
+        next if runtime.send(:websocket_closed?, ws, ws_state)
+
         Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
         mutex.synchronize do
           error = msg
@@ -422,6 +456,7 @@ module ContainerRuntime
 
       ws.on(:close) do |_msg|
         mutex.synchronize do
+          ws_state[:closed] = true
           done = true
           cv.broadcast
         end
@@ -434,7 +469,11 @@ module ContainerRuntime
         end
       end
 
-      ws.close if websocket_open?(ws)
+      begin
+        ws.close if !websocket_closed?(ws, ws_state)
+      rescue StandardError => e
+        Rails.logger.warn("[KubernetesRuntime] Failed to close WebSocket: #{e.message}")
+      end
 
       if error.is_a?(StandardError)
         raise error
@@ -483,9 +522,13 @@ module ContainerRuntime
       return ws.open? if ws.respond_to?(:open?)
       return ws.state.to_s == "open" if ws.respond_to?(:state)
 
-      true
+      false
     rescue StandardError
-      true
+      false
+    end
+
+    def websocket_closed?(ws, ws_state)
+      ws_state[:closed] || !websocket_open?(ws)
     end
 
     def build_exec_command(cmd, tty)

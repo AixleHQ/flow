@@ -23,14 +23,6 @@ spec:
                 name: palad-app-config
           ports:
             - containerPort: 4000
-          volumeMounts:
-            - name: workflows
-              mountPath: /app/app/temporal/workflows.yml
-              subPath: workflows.yml
-      volumes:
-        - name: workflows
-          configMap:
-            name: palad-workflows
 ---
 apiVersion: v1
 kind: Service
@@ -74,14 +66,6 @@ spec:
           ports:
             - containerPort: 4002
           command: ["bundle", "exec", "puma", "-C", "config/puma_mcp.rb"]
-          volumeMounts:
-            - name: workflows
-              mountPath: /app/app/temporal/workflows.yml
-              subPath: workflows.yml
-      volumes:
-        - name: workflows
-          configMap:
-            name: palad-workflows
 ---
 apiVersion: v1
 kind: Service

@@ -181,6 +181,10 @@ module ContainerStrategies
     end
 
     def runtime_container_id(container)
+      if container.respond_to?(:pod_name)
+        return container.pod_name
+      end
+
       return container.id if container.respond_to?(:id)
       container.to_s
     end

@@ -30,3 +30,10 @@ data:
   K8S_IMAGE_PULL_POLICY: IfNotPresent
   MCP_SERVER_URL: http://mcp:4002/action_mcp
   MCP_PORT: "4002"
+  GITHUB_PRIVATE_PEM: "Get value from 1password. DO NOT REMOVE single quotes"
+  GITHUB_CLIENT_ID: "get_from_1password"
+  GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
+  BITBUCKET_OAUTH_KEY: "get_from_1password"
+  BITBUCKET_OAUTH_SECRET: "get_from_1password"
+  GITLAB_APP_ID: "get_from_1password"
+  GITLAB_APP_SECRET: "get_from_1password"

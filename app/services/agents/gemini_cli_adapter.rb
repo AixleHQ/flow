@@ -10,7 +10,12 @@ module Agents
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
     METRIC_TOKENS_NAME = "gemini_cli.token.usage"
+    METRIC_COST_NAME = "gemini_cli.cost.usage"
     LOG_EVENT_NAME = "gemini_cli.api_response"
+    LEGACY_METRIC_NAMES = {
+      "terminal.session.tokens" => METRIC_TOKENS_NAME,
+      "terminal.session.cost" => METRIC_COST_NAME
+    }.freeze
 
     def self.default_config_paths
       [ "~/.gemini/settings.json", "GEMINI.md" ]
@@ -139,14 +144,36 @@ module Agents
 
     # Parse OTLP payload and persist usage statistics for a terminal session.
     def ingest_usage(payload, terminal_session)
-      totals = extract_usage_from_otlp(payload, terminal_session.route_token)
-      return :accepted if totals[:tokens].zero? && totals[:cost_cents].zero?
+      Rails.logger.info("[GeminiCliAdapter] Session #{terminal_session.id}: OTLP payload=#{payload.to_json}")
+
+      new_events = extract_events_from_otlp(payload, terminal_session.route_token)
+      return :accepted if new_events.empty?
 
       UsageStatistic.transaction do
-        usage = terminal_session.usage_statistic || terminal_session.build_usage_statistic(tokens: 0, cost_cents: 0)
-        usage.tokens += totals[:tokens]
-        usage.cost_cents += totals[:cost_cents]
-        usage.save!
+        stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic(
+          tokens: 0, cost_cents: 0, input_tokens: 0, output_tokens: 0,
+          cache_write_tokens: 0, cache_read_tokens: 0, source: "otlp",
+          events_count: 0, events_data: []
+        )
+
+        all_events = (stat.events_data || []) + new_events
+        totals = aggregate_events(all_events)
+        models = all_events.filter_map { |event| event["model"] }.uniq
+
+        stat.assign_attributes(
+          tokens: totals[:input_tokens] + totals[:output_tokens] + totals[:cache_write_tokens] + totals[:cache_read_tokens],
+          input_tokens: totals[:input_tokens],
+          output_tokens: totals[:output_tokens],
+          cache_write_tokens: totals[:cache_write_tokens],
+          cache_read_tokens: totals[:cache_read_tokens],
+          total_cents_precise: totals[:total_cents],
+          cost_cents: totals[:total_cents].ceil,
+          models: models,
+          source: "otlp",
+          events_count: all_events.size,
+          events_data: all_events
+        )
+        stat.save!
       end
 
       :ok
@@ -208,20 +235,17 @@ module Agents
       }
     end
 
-    def extract_usage_from_otlp(payload, terminal_session_token)
-      usage = { tokens: 0, cost_cents: 0 }
-      return usage if terminal_session_token.blank?
+    def extract_events_from_otlp(payload, terminal_session_token)
+      return [] if terminal_session_token.blank?
 
-      usage[:tokens] += extract_usage_from_otlp_metrics(payload, terminal_session_token)
-      if usage[:tokens].zero?
-        usage[:tokens] += extract_usage_from_otlp_logs(payload, terminal_session_token)
-      end
+      metric_events = extract_events_from_otlp_metrics(payload, terminal_session_token)
+      return metric_events unless metric_events.empty?
 
-      usage
+      extract_events_from_otlp_logs(payload, terminal_session_token)
     end
 
-    def extract_usage_from_otlp_metrics(payload, terminal_session_token)
-      total = 0
+    def extract_events_from_otlp_metrics(payload, terminal_session_token)
+      events = []
 
       resource_metrics = payload["resourceMetrics"] || []
       resource_metrics.each do |resource_metric|
@@ -229,9 +253,19 @@ module Agents
         scope_metrics = resource_metric["scopeMetrics"] || []
 
         scope_metrics.each do |scope_metric|
+          per_model = Hash.new do |hash, key|
+            hash[key] = {
+              model: nil,
+              token_breakdown: Hash.new(0),
+              cost_usd: 0.0,
+              timestamp_ns: nil
+            }
+          end
+
           metrics = scope_metric["metrics"] || []
           metrics.each do |metric|
-            next unless metric["name"].to_s == METRIC_TOKENS_NAME
+            name = normalize_metric_name(metric["name"].to_s)
+            next if name.blank?
 
             data_points = extract_data_points(metric)
             data_points.each do |data_point|
@@ -241,17 +275,46 @@ module Agents
               value = number_from_data_point(data_point)
               next if value.nil?
 
-              total += value.to_i
+              dp_attrs = data_point["attributes"] || []
+              point_model = extract_model(dp_attrs)
+              model_key = point_model.presence || "__unknown__"
+              entry = per_model[model_key]
+              entry[:model] ||= point_model
+              entry[:timestamp_ns] ||= data_point["timeUnixNano"]
+
+              case name
+              when METRIC_TOKENS_NAME
+                token_type = normalize_token_type(attribute_string(dp_attrs, "type") || attribute_string(dp_attrs, "token_type"))
+                entry[:token_breakdown][token_type] += value.to_i
+              when METRIC_COST_NAME
+                entry[:cost_usd] += value.to_f
+              end
             end
+          end
+
+          per_model.each_value do |entry|
+            token_breakdown = entry[:token_breakdown]
+            cost_usd = entry[:cost_usd]
+            next if token_breakdown.values.sum.zero? && cost_usd.zero?
+
+            events << build_usage_event(
+              model: entry[:model],
+              timestamp_ns: entry[:timestamp_ns],
+              input_tokens: token_breakdown["input"],
+              output_tokens: token_breakdown["output"],
+              cache_read_tokens: token_breakdown["cacheRead"],
+              cache_write_tokens: token_breakdown["cacheCreation"],
+              total_cents: (cost_usd * 100).round(6)
+            )
           end
         end
       end
 
-      total
+      events
     end
 
-    def extract_usage_from_otlp_logs(payload, terminal_session_token)
-      total = 0
+    def extract_events_from_otlp_logs(payload, terminal_session_token)
+      events = []
 
       resource_logs = payload["resourceLogs"] || []
       resource_logs.each do |resource_log|
@@ -268,24 +331,90 @@ module Agents
             event_name = attribute_string(attrs, "event.name")
             next unless event_name == LOG_EVENT_NAME
 
-            total += sum_token_attributes(attrs)
+            input_tokens = attribute_number(attrs, "input_token_count").to_i
+            output_tokens = attribute_number(attrs, "output_token_count").to_i
+            cache_read_tokens = attribute_number(attrs, "cached_content_token_count").to_i
+            # Gemini logs can include internal "thoughts/tool" buckets; treat as output-like generated tokens.
+            output_tokens += attribute_number(attrs, "thoughts_token_count").to_i
+            output_tokens += attribute_number(attrs, "tool_token_count").to_i
+            total_cents = log_cost_cents(attrs)
+
+            next if input_tokens.zero? && output_tokens.zero? && cache_read_tokens.zero? && total_cents.zero?
+
+            events << build_usage_event(
+              model: extract_model(attrs),
+              timestamp_ns: log_record["timeUnixNano"],
+              input_tokens: input_tokens,
+              output_tokens: output_tokens,
+              cache_read_tokens: cache_read_tokens,
+              cache_write_tokens: 0,
+              total_cents: total_cents
+            )
           end
         end
       end
 
-      total
+      events
     end
 
-    def sum_token_attributes(attrs)
-      keys = %w[
-        input_token_count
-        output_token_count
-        cached_content_token_count
-        thoughts_token_count
-        tool_token_count
-      ]
+    def aggregate_events(events)
+      events.each_with_object(
+        { input_tokens: 0, output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, total_cents: 0.0 }
+      ) do |event, totals|
+        usage = event["tokenUsage"] || {}
+        totals[:input_tokens] += usage["inputTokens"].to_i
+        totals[:output_tokens] += usage["outputTokens"].to_i
+        totals[:cache_write_tokens] += usage["cacheWriteTokens"].to_i
+        totals[:cache_read_tokens] += usage["cacheReadTokens"].to_i
+        totals[:total_cents] += usage["totalCents"].to_f
+      end
+    end
 
-      keys.sum { |key| attribute_number(attrs, key).to_i }
+    def build_usage_event(model:, timestamp_ns:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:, total_cents:)
+      {
+        "model" => model,
+        "timestamp" => timestamp_ns ? (timestamp_ns.to_i / 1_000_000).to_s : nil,
+        "tokenUsage" => {
+          "inputTokens" => input_tokens,
+          "outputTokens" => output_tokens,
+          "cacheReadTokens" => cache_read_tokens,
+          "cacheWriteTokens" => cache_write_tokens,
+          "totalCents" => total_cents.to_f
+        },
+        "source" => "otlp"
+      }
+    end
+
+    def normalize_metric_name(name)
+      return name if name == METRIC_TOKENS_NAME || name == METRIC_COST_NAME
+
+      LEGACY_METRIC_NAMES[name]
+    end
+
+    def normalize_token_type(raw_type)
+      case raw_type.to_s
+      when "input", "prompt", "promptTokens", "input_token_count" then "input"
+      when "output", "completion", "completionTokens", "output_token_count" then "output"
+      when "thought", "tool" then "output"
+      when "cache" then "cacheRead"
+      when "cacheRead", "cache_read", "cached_content", "cached_content_token_count" then "cacheRead"
+      when "cacheCreation", "cacheWrite", "cache_write", "cache_write_token_count" then "cacheCreation"
+      else raw_type.to_s
+      end
+    end
+
+    def extract_model(attrs)
+      attribute_string(attrs, "model") || attribute_string(attrs, "model_id")
+    end
+
+    def log_cost_cents(attrs)
+      cents = attribute_number(attrs, "cost_cents")
+      return cents.to_f if cents.present?
+
+      usd = attribute_number(attrs, "cost_usd")
+      return (usd * 100).round(6) if usd.present?
+
+      0.0
     end
 
     def extract_data_points(metric)
