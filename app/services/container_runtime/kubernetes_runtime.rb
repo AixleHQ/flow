@@ -384,6 +384,8 @@ module ContainerRuntime
       error = nil
       mutex = Mutex.new
       cv = ConditionVariable.new
+      ws_state = { closed: false }
+      runtime = self
 
       ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
       exit_code_parser = method(:exit_code_from_status_payload)
@@ -395,9 +397,10 @@ module ContainerRuntime
           begin
             stdin_io.rewind if stdin_io.respond_to?(:rewind)
             while (chunk = stdin_io.read(16_384))
+              break if runtime.send(:websocket_closed?, ws, ws_state)
               ws.send([ 0 ].pack("C") + chunk)
             end
-            ws.close if close_on_stdin_eof
+            ws.close if close_on_stdin_eof && !runtime.send(:websocket_closed?, ws, ws_state)
           rescue StandardError => e
             mutex.synchronize do
               error = e
@@ -440,6 +443,8 @@ module ContainerRuntime
       end
 
       ws.on(:error) do |msg|
+        next if runtime.send(:websocket_closed?, ws, ws_state)
+
         Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
         mutex.synchronize do
           error = msg
@@ -451,6 +456,7 @@ module ContainerRuntime
 
       ws.on(:close) do |_msg|
         mutex.synchronize do
+          ws_state[:closed] = true
           done = true
           cv.broadcast
         end
@@ -463,7 +469,11 @@ module ContainerRuntime
         end
       end
 
-      ws.close if websocket_open?(ws)
+      begin
+        ws.close if !websocket_closed?(ws, ws_state)
+      rescue StandardError => e
+        Rails.logger.warn("[KubernetesRuntime] Failed to close WebSocket: #{e.message}")
+      end
 
       if error.is_a?(StandardError)
         raise error
@@ -512,9 +522,13 @@ module ContainerRuntime
       return ws.open? if ws.respond_to?(:open?)
       return ws.state.to_s == "open" if ws.respond_to?(:state)
 
-      true
+      false
     rescue StandardError
-      true
+      false
+    end
+
+    def websocket_closed?(ws, ws_state)
+      ws_state[:closed] || !websocket_open?(ws)
     end
 
     def build_exec_command(cmd, tty)
