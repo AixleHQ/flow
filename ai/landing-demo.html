@@ -440,7 +440,7 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
       <div class="hero-orb hero-orb-1"></div>
       <div class="hero-orb hero-orb-2"></div>
       <div class="hero-orb hero-orb-3"></div>
-      <svg class="hero-logo-svg" viewBox="0 0 1280 960" preserveAspectRatio="xMidYMid meet">
+      <svg class="hero-logo-svg" viewBox="130 250 1020 470" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="heroLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#3B82F6"><animate attributeName="stop-color" values="#3B82F6;#A855F7;#06B6D4;#3B82F6" dur="8s" repeatCount="indefinite"/></stop>
@@ -475,26 +475,121 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
             <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
         </defs>
-        <!-- Energy dots traveling through the logo -->
-        <circle r="5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".9">
-          <animateMotion dur="4.5s" repeatCount="indefinite"
-            path="M 170,430 C 300,390 480,470 640,410 C 800,360 980,440 1110,400"/>
+        <!-- Track paths: actual letter outlines extracted via getPointAtLength, in viewBox coords -->
+        <defs>
+          <!-- path 0: l-top piece outline -->
+          <path id="trk0" d="M 654.1,286.5 L 648.6,291.6 L 643.2,296.7 L 638.7,302.2 L 638.8,317.2 L 639,339.6 L 639,354.6 L 644.1,367.5 L 651,379.6 L 651,409.5 L 651,431.9 L 655.1,437.7 L 668.3,442.6 L 670.5,437.3 L 670.6,414.8 L 670.7,392.4 L 670.8,362.5 L 670.8,332.6 L 670.8,302.7 L 670.4,272.8 L 665.1,276.4 L 659.6,281.4" fill="none" stroke="none"/>
+          <!-- path 3: l-mid staircase piece -->
+          <path id="trk3" d="M 632.5,306.4 L 623,315.2 L 618,326 L 618,352 L 618,377.9 L 618,403.9 L 618,429.9 L 618.1,455.8 L 618.1,475.3 L 629.4,483.9 L 648.9,484.1 L 668.4,484.3 L 670.5,473.5 L 658.5,472.2 L 645.5,472.4 L 637.2,466.1 L 649,469.9 L 670.5,465 L 660.7,444.9 L 648,425.2 L 648,399.3 L 646.5,373.9 L 636,352.3 L 635.8,313.4" fill="none" stroke="none"/>
+          <!-- path 12: l-lower piece -->
+          <path id="trk12" d="M 617.8,530.7 L 617.7,548.5 L 617.6,560.4 L 617.5,572.3 L 624.1,581.6 L 632.3,590.2 L 639.7,589.4 L 639.6,577.5 L 639.4,559.7 L 639.3,541.8 L 639.2,524 L 642,513.3 L 650.5,504.9 L 659.9,499 L 671.1,498.3 L 670.8,492.3 L 663.5,487.4 L 645.6,487.2 L 627.8,487.1 L 618,489.1 L 617.9,506.9 L 617.9,518.8" fill="none" stroke="none"/>
+          <!-- path 15: l-inner piece -->
+          <path id="trk15" d="M 649.7,509.8 L 643.5,516 L 642,524.2 L 642,541.7 L 642,559.3 L 642,576.9 L 642,590 L 647.7,592.8 L 652.7,584.1 L 653,566.6 L 653.2,557.8 L 653.4,549 L 657.6,537.6 L 663.9,531.5 L 671,521.4 L 671,508.2 L 668.4,502 L 659.6,502 L 652.8,506.7" fill="none" stroke="none"/>
+          <!-- path 16: l-core innermost -->
+          <path id="trk16" d="M 662.1,536.4 L 657.3,541.4 L 655,550.8 L 655,564.6 L 655,578.4 L 655,592.2 L 664.5,593 L 678.3,592.9 L 687.7,591.8 L 683.2,586.5 L 676.2,579 L 671.4,573.9 L 671,567.2 L 671,553.4 L 670.9,543.1 L 670.5,532.8 L 667.1,531.7" fill="none" stroke="none"/>
+          <!-- path 7: P-top small piece -->
+          <path id="trk7" d="M 178.2,436.2 L 178.3,449.5 L 178.5,467.2 L 189.5,469.6 L 207.3,469.8 L 225,470 L 232,462.5 L 227.4,458 L 214.1,458 L 206.2,455.7 L 199.9,449.4 L 195,442.6 L 195,429.3 L 193.2,416.7 L 186.9,410.4 L 178.5,405.2 L 178.2,418.5 L 178.2,431.8" fill="none" stroke="none"/>
+          <!-- path 8: P-bottom tall piece -->
+          <path id="trk8" d="M 178.7,472.7 L 178.1,508.5 L 178,544.3 L 178,580.1 L 178.2,633.9 L 178.8,687.6 L 205.3,664 L 210,648.1 L 210,612.3 L 210,576.5 L 213.3,524.2 L 227,513.1 L 212.8,504.7 L 199,534.9 L 197,568.3 L 197,550.4 L 198.6,515.2 L 211.5,502.8 L 227.9,498.9 L 226.4,487 L 208.5,487.2 L 193.5,488.4 L 222.7,485 L 230,474.4 L 196.6,472" fill="none" stroke="none"/>
+          <!-- path 4: P-body (the bowl of P) -->
+          <path id="trk4" d="M 280.5,376.5 L 255.9,385.9 L 235.2,402.3 L 231,385.8 L 198.1,379 L 171.6,379.2 L 170.2,390.6 L 188.9,409.4 L 198,432.1 L 220.9,456 L 248.8,434 L 272.4,422.5 L 298.5,424.3 L 319.8,439.5 L 334.5,475.8 L 353.6,484 L 380.1,483.8 L 389.2,466.8 L 383.3,441 L 371.8,417.2 L 354.4,397.4 L 332.2,383 L 306.9,375.8" fill="none" stroke="none"/>
+          <!-- path 11: P-leg (lower bowl) -->
+          <path id="trk11" d="M 334.5,493.2 L 327.1,519.7 L 309.2,540.4 L 283.3,548.9 L 256.9,542.7 L 237.9,523 L 212.5,535.6 L 212.7,577.1 L 213.1,632.4 L 227,644.1 L 231,618.1 L 231,576.7 L 244.5,579.2 L 268.7,592.2 L 296,595.9 L 323.2,591.8 L 347.4,578.7 L 366.8,559.2 L 380.6,535.3 L 390,495.1 L 370.4,487 L 342.8,487" fill="none" stroke="none"/>
+          <!-- path 9: a1-stem -->
+          <path id="trk9" d="M 580.1,490.4 L 573.8,498.2 L 573.9,513.8 L 574.1,534.7 L 574.3,555.5 L 574.6,576.4 L 575,592 L 590.3,592.8 L 605.9,592.5 L 598.9,584.8 L 591.9,577.1 L 588,568.2 L 588,547.3 L 588,526.5 L 588,505.6 L 587.6,490 L 583.8,486.8" fill="none" stroke="none"/>
+          <!-- path 10: a2-stem -->
+          <path id="trk10" d="M 869.7,489.8 L 864,497.9 L 864,518.9 L 864,539.8 L 864,560.7 L 864,581.7 L 864,592.1 L 878.8,593 L 894.5,593 L 888.9,585.7 L 881.8,578 L 877,569.4 L 877,548.5 L 877,527.6 L 877,506.6 L 876.6,490.9 L 873.5,486.2" fill="none" stroke="none"/>
+          <!-- path 1: d-stem right side -->
+          <path id="trk1" d="M 1101.5,280 L 1083.8,296.6 L 1080.9,319.5 L 1081,356 L 1094.3,374.6 L 1095.1,410.9 L 1095.4,435.1 L 1081,453.5 L 1058.6,458 L 1068.3,470 L 1091.2,465.2 L 1084.8,473.8 L 1060.6,472.2 L 1059,481.4 L 1080.1,484.7 L 1104.4,484.7 L 1110.7,465.8 L 1110.8,429.4 L 1110.8,393 L 1110.7,356.6 L 1110.6,320.1 L 1110.4,271.8" fill="none" stroke="none"/>
+          <!-- path 2: d-bowl -->
+          <path id="trk2" d="M 1067.2,311.2 L 1057,336.3 L 1057.2,366 L 1057.2,395.7 L 1042.1,391 L 1015.5,378.2 L 986.1,375.4 L 957.3,382.2 L 932.8,398.8 L 914.1,421.8 L 902.8,449.1 L 899,478.5 L 922.9,484 L 952.7,484 L 959.3,456.1 L 976.6,432.4 L 1003.8,421.6 L 1032.3,428.1 L 1052.2,449.6 L 1077.2,453.3 L 1093,430.1 L 1093,400.4 L 1088.6,372.6 L 1077.5,302.9" fill="none" stroke="none"/>
+          <!-- path 13: d-lower -->
+          <path id="trk13" d="M 899,493.2 L 902.1,518.3 L 910.9,542.1 L 924.8,563.3 L 943.3,580.5 L 965.8,591.9 L 990.7,596.3 L 1015.8,593.1 L 1038.8,582.7 L 1057.1,568.2 L 1057,580.9 L 1071.7,592.8 L 1097.1,592.7 L 1107.2,586.1 L 1089.5,568 L 1084,544.8 L 1068.4,515 L 1049.6,525.3 L 1031.5,542.8 L 1007.2,548.5 L 982.8,543.2 L 965,525.5 L 955.5,502.1 L 953.9,489.5 L 930.9,487 L 905.5,487" fill="none" stroke="none"/>
+          <!-- path 14: d-inner right -->
+          <path id="trk14" d="M 1059,488.3 L 1064.1,499 L 1080.7,500.3 L 1093.2,512.1 L 1099.5,523 L 1088.4,510.9 L 1074.9,501.7 L 1058.1,502.5 L 1062.2,513 L 1077.5,517.8 L 1087.2,530.8 L 1086.5,547.9 L 1089.2,563.8 L 1101.1,576.1 L 1112.9,588.5 L 1128,592.4 L 1117.2,579.4 L 1111,564.4 L 1110.9,547.2 L 1110.7,521.5 L 1110.5,495.7 L 1093,487.3 L 1075.8,487.1" fill="none" stroke="none"/>
+          <!-- path 5: first 'a' body -->
+          <path id="trk5" d="M 485.5,376.1 L 447.7,388 L 420.2,416.3 L 413.5,451 L 453.4,451 L 476.9,424 L 516.1,421.6 L 534.6,453.1 L 498.3,465.3 L 459.2,473.4 L 423.5,490.4 L 404.1,524.2 L 410.8,563 L 439.6,589.4 L 478.6,595.8 L 516.3,584.4 L 535.5,582.7 L 549,576.5 L 549,536.5 L 535.2,506.3 L 522,542.4 L 485.3,555.4 L 457.2,532.4 L 479.9,504.3 L 518.7,495 L 545.2,510.4 L 551.7,547.3 L 552,587.2 L 560.1,566.6 L 560.9,486.8 L 561,446.8 L 549.2,411.8 L 512.5,404 L 472.6,404 L 488.7,401 L 528.7,401 L 561.1,419.5 L 563,458.7 L 563,538.5 L 572,576.6 L 572,496.8 L 584.8,424.2 L 561.9,392.2 L 525.3,377.1" fill="none" stroke="none"/>
+          <!-- path 6: second 'a' body -->
+          <path id="trk6" d="M 774,376.1 L 736.4,388.2 L 709.2,416.8 L 704,451 L 743.8,451 L 766.6,423.9 L 805.6,421.9 L 824,453.4 L 788,465.2 L 749,473.3 L 713.2,489.9 L 694,523.7 L 700,562.6 L 728.6,589.4 L 767.5,595.9 L 805.2,584.4 L 825,581.3 L 838,577.9 L 838,538 L 824.6,506.3 L 811.7,542.4 L 775.1,555.5 L 747.1,532.4 L 769.6,504.1 L 808.4,494.8 L 835.1,510.8 L 841,548.1 L 841,587.9 L 849.6,566.3 L 849.9,486.6 L 849.9,446.7 L 838.2,411.7 L 801.6,404 L 761.7,404.1 L 780.1,401 L 820,401 L 851.4,421.1 L 852.9,460.2 L 852.2,539.9 L 861,575.6 L 861,495.8 L 873.6,423.5 L 850.3,391.9 L 813.7,377.1" fill="none" stroke="none"/>
+        </defs>
+
+        <!-- === L letter: dots running along the staircase outlines === -->
+        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".9">
+          <animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trk0"/></animateMotion>
         </circle>
-        <circle r="4" fill="#A855F7" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="6s" repeatCount="indefinite" begin="-2s"
-            path="M 180,560 C 360,520 540,600 720,545 C 880,500 1020,575 1110,550"/>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".8">
+          <animateMotion dur="11s" repeatCount="indefinite"><mpath href="#trk3"/></animateMotion>
         </circle>
-        <circle r="4" fill="#06B6D4" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="7s" repeatCount="indefinite" begin="-4s"
-            path="M 200,330 C 390,290 580,360 780,310 C 940,275 1060,345 1110,320"/>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".5">
+          <animateMotion dur="11s" repeatCount="indefinite" begin="-5.5s"><mpath href="#trk3"/></animateMotion>
         </circle>
-        <circle r="3.5" fill="#22C55E" filter="url(#dotGlow)" opacity=".65">
-          <animateMotion dur="5.5s" repeatCount="indefinite" begin="-1s"
-            path="M 1100,480 C 900,510 700,445 520,490 C 340,530 210,465 170,490"/>
+        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85">
+          <animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trk12"/></animateMotion>
         </circle>
-        <circle r="3" fill="#F59E0B" filter="url(#dotGlow)" opacity=".55">
-          <animateMotion dur="8s" repeatCount="indefinite" begin="-3s"
-            path="M 320,660 C 400,520 540,390 680,340 C 820,390 940,520 1000,660"/>
+        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".7">
+          <animateMotion dur="7s" repeatCount="indefinite" begin="-2s"><mpath href="#trk15"/></animateMotion>
+        </circle>
+        <circle r="2" fill="#06B6D4" filter="url(#dotGlow)" opacity=".6">
+          <animateMotion dur="6s" repeatCount="indefinite"><mpath href="#trk16"/></animateMotion>
+        </circle>
+
+        <!-- === P letter === -->
+        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85">
+          <animateMotion dur="7s" repeatCount="indefinite"><mpath href="#trk7"/></animateMotion>
+        </circle>
+        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".8">
+          <animateMotion dur="11s" repeatCount="indefinite"><mpath href="#trk8"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".5">
+          <animateMotion dur="11s" repeatCount="indefinite" begin="-5.5s"><mpath href="#trk8"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".75">
+          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk4"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#22C55E" filter="url(#dotGlow)" opacity=".7">
+          <animateMotion dur="9s" repeatCount="indefinite" begin="-2s"><mpath href="#trk11"/></animateMotion>
+        </circle>
+
+        <!-- === First a: body + stem === -->
+        <circle r="3" fill="#22C55E" filter="url(#dotGlow)" opacity=".8">
+          <animateMotion dur="20s" repeatCount="indefinite"><mpath href="#trk5"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#22C55E" filter="url(#dotGlow)" opacity=".45">
+          <animateMotion dur="20s" repeatCount="indefinite" begin="-10s"><mpath href="#trk5"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".7">
+          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk9"/></animateMotion>
+        </circle>
+
+        <!-- === Second a: body + stem === -->
+        <circle r="3" fill="#F59E0B" filter="url(#dotGlow)" opacity=".8">
+          <animateMotion dur="20s" repeatCount="indefinite" begin="-3s"><mpath href="#trk6"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#F59E0B" filter="url(#dotGlow)" opacity=".45">
+          <animateMotion dur="20s" repeatCount="indefinite" begin="-13s"><mpath href="#trk6"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".7">
+          <animateMotion dur="10s" repeatCount="indefinite" begin="-2s"><mpath href="#trk10"/></animateMotion>
+        </circle>
+
+        <!-- === D letter === -->
+        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".85">
+          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk1"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".5">
+          <animateMotion dur="10s" repeatCount="indefinite" begin="-5s"><mpath href="#trk1"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".75">
+          <animateMotion dur="9s" repeatCount="indefinite" begin="-2s"><mpath href="#trk2"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".7">
+          <animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trk13"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".5">
+          <animateMotion dur="9s" repeatCount="indefinite" begin="-4.5s"><mpath href="#trk13"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".6">
+          <animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trk14"/></animateMotion>
         </circle>
       </svg>
     </div>
