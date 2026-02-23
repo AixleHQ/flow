@@ -19,5 +19,7 @@
 | 15 | Monaco + VS Code Server | 8 | — | done |
 | 16 | Session Outputs, Logs & Config Normalization | 9 | — | done |
 | 17 | Container Architecture Simplification | 10 | — | done |
+| 18 | Internal Tools | 11 | — | backlog |
+| 19 | Tool Execution Framework | 12 | — | backlog |
 
 ---
