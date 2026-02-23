@@ -144,6 +144,8 @@ module Agents
 
     # Parse OTLP payload and persist usage statistics for a terminal session.
     def ingest_usage(payload, terminal_session)
+      Rails.logger.info("[GeminiCliAdapter] Session #{terminal_session.id}: OTLP payload=#{payload.to_json}")
+
       new_events = extract_events_from_otlp(payload, terminal_session.route_token)
       return :accepted if new_events.empty?
 
@@ -251,10 +253,14 @@ module Agents
         scope_metrics = resource_metric["scopeMetrics"] || []
 
         scope_metrics.each do |scope_metric|
-          token_breakdown = {}
-          cost_usd = 0.0
-          model = nil
-          timestamp_ns = nil
+          per_model = Hash.new do |hash, key|
+            hash[key] = {
+              model: nil,
+              token_breakdown: Hash.new(0),
+              cost_usd: 0.0,
+              timestamp_ns: nil
+            }
+          end
 
           metrics = scope_metric["metrics"] || []
           metrics.each do |metric|
@@ -270,30 +276,37 @@ module Agents
               next if value.nil?
 
               dp_attrs = data_point["attributes"] || []
-              model ||= extract_model(dp_attrs)
-              timestamp_ns ||= data_point["timeUnixNano"]
+              point_model = extract_model(dp_attrs)
+              model_key = point_model.presence || "__unknown__"
+              entry = per_model[model_key]
+              entry[:model] ||= point_model
+              entry[:timestamp_ns] ||= data_point["timeUnixNano"]
 
               case name
               when METRIC_TOKENS_NAME
                 token_type = normalize_token_type(attribute_string(dp_attrs, "type") || attribute_string(dp_attrs, "token_type"))
-                token_breakdown[token_type] = (token_breakdown[token_type] || 0) + value.to_i
+                entry[:token_breakdown][token_type] += value.to_i
               when METRIC_COST_NAME
-                cost_usd += value.to_f
+                entry[:cost_usd] += value.to_f
               end
             end
           end
 
-          next if token_breakdown.values.sum.zero? && cost_usd.zero?
+          per_model.each_value do |entry|
+            token_breakdown = entry[:token_breakdown]
+            cost_usd = entry[:cost_usd]
+            next if token_breakdown.values.sum.zero? && cost_usd.zero?
 
-          events << build_usage_event(
-            model: model,
-            timestamp_ns: timestamp_ns,
-            input_tokens: token_breakdown["input"] || 0,
-            output_tokens: token_breakdown["output"] || 0,
-            cache_read_tokens: token_breakdown["cacheRead"] || 0,
-            cache_write_tokens: token_breakdown["cacheCreation"] || 0,
-            total_cents: (cost_usd * 100).round(6)
-          )
+            events << build_usage_event(
+              model: entry[:model],
+              timestamp_ns: entry[:timestamp_ns],
+              input_tokens: token_breakdown["input"],
+              output_tokens: token_breakdown["output"],
+              cache_read_tokens: token_breakdown["cacheRead"],
+              cache_write_tokens: token_breakdown["cacheCreation"],
+              total_cents: (cost_usd * 100).round(6)
+            )
+          end
         end
       end
 
@@ -382,6 +395,8 @@ module Agents
       case raw_type.to_s
       when "input", "prompt", "promptTokens", "input_token_count" then "input"
       when "output", "completion", "completionTokens", "output_token_count" then "output"
+      when "thought", "tool" then "output"
+      when "cache" then "cacheRead"
       when "cacheRead", "cache_read", "cached_content", "cached_content_token_count" then "cacheRead"
       when "cacheCreation", "cacheWrite", "cache_write", "cache_write_token_count" then "cacheCreation"
       else raw_type.to_s

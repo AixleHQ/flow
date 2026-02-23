@@ -266,5 +266,128 @@ module Agents
       assert_equal 2, stat.events_count
       assert_equal 2, stat.events_data.size
     end
+
+    test "ingest_usage stores multiple models when one metric scope includes multiple models" do
+      payload = {
+        "resourceMetrics" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeMetrics" => [ {
+            "metrics" => [ {
+              "name" => "gemini_cli.token.usage",
+              "sum" => {
+                "dataPoints" => [
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash-lite" } },
+                      { "key" => "type", "value" => { "stringValue" => "input" } }
+                    ],
+                    "asInt" => "100"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-3-flash-preview" } },
+                      { "key" => "type", "value" => { "stringValue" => "input" } }
+                    ],
+                    "asInt" => "200"
+                  }
+                ]
+              }
+            } ]
+          } ]
+        } ]
+      }
+
+      result = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :ok, result
+      @session.reload
+      stat = @session.usage_statistic
+      assert_equal %w[gemini-2.5-flash-lite gemini-3-flash-preview].sort, stat.models.sort
+      assert_equal 300, stat.input_tokens
+      assert_equal 2, stat.events_count
+      assert_equal 2, stat.events_data.size
+    end
+
+    test "ingest_usage maps gemini token types to claude-style breakdown buckets" do
+      payload = {
+        "resourceMetrics" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeMetrics" => [ {
+            "metrics" => [ {
+              "name" => "gemini_cli.token.usage",
+              "sum" => {
+                "dataPoints" => [
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "input" } }
+                    ],
+                    "asInt" => "10"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "output" } }
+                    ],
+                    "asInt" => "20"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "cache" } }
+                    ],
+                    "asInt" => "30"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "thought" } }
+                    ],
+                    "asInt" => "40"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "tool" } }
+                    ],
+                    "asInt" => "50"
+                  },
+                  {
+                    "attributes" => [
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-flash" } },
+                      { "key" => "type", "value" => { "stringValue" => "cacheCreation" } }
+                    ],
+                    "asInt" => "60"
+                  }
+                ]
+              }
+            } ]
+          } ]
+        } ]
+      }
+
+      result = @adapter.ingest_usage(payload, @session)
+
+      assert_equal :ok, result
+      @session.reload
+      stat = @session.usage_statistic
+
+      assert_equal 10, stat.input_tokens
+      # output + thought + tool
+      assert_equal 110, stat.output_tokens
+      # cache token type maps to cacheReadTokens
+      assert_equal 30, stat.cache_read_tokens
+      # cacheCreation maps to cacheWriteTokens
+      assert_equal 60, stat.cache_write_tokens
+      assert_equal 210, stat.tokens
+    end
   end
 end
