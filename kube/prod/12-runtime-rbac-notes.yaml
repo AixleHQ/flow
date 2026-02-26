@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runtime-notes
+  namespace: palad
+data:
+  README: |
+    This file exists to keep all kube resources under version control.
+    It is safe to delete if not needed.
+
+    Production image pull setup (GHCR):
+    1) Create a GitHub token with package read access.
+    2) Run:
+       make kube-prod-ghcr-secret GHCR_USERNAME=<github-user> GHCR_TOKEN=<github-token>
+    3) Re-apply prod manifests:
+       make kube-apply-prod

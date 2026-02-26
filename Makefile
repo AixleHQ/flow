@@ -1,7 +1,10 @@
 # AI Engine Docker Management
-.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-apply kube-apply-dev kube-rm k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts help
+.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-prod-ghcr-secret kube-rm kube-rm-prod terraform-help k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts help
 
 TODAY = $$(date +"%d.%m.%Y")
+
+include kube/Makefile
+include terraform/Makefile
 
 # Setup dependencies
 deps:
@@ -92,129 +95,6 @@ setup:
 	docker-compose --profile worker build
 	docker-compose run --rm web make deps db-prepare
 	@make build-agents
-
-# Full Kubernetes setup: CRDs, manifests, wait for pods, migrate and seed
-kube-setup:
-	@make build-web
-	@make build-otlp-ingest
-	@make build-agents
-	kubectl apply -f https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
-	kubectl apply -f ./kube
-	kubectl wait --for=condition=ready pod -l app=db -n palad --timeout=120s
-	kubectl wait --for=condition=ready pod -l app=web -n palad --timeout=120s
-	kubectl exec -n palad deployment/web -- make db-prepare
-	@make kube-mount-dev
-
-kube-apply:
-	kubectl apply -f ./kube
-
-# Apply Kubernetes manifests and mount local source for development
-kube-apply-dev: kube-apply kube-mount-dev
-
-# Default to current directory's web folder if not provided
-WEB_HOST_PATH ?= $(shell pwd)
-
-# Apply Kubernetes manifests with a dev hostPath for the web container
-kube-mount-dev:
-	kubectl patch deployment web -n palad --type='strategic' -p "{\"spec\":{\"template\":{\"spec\":{\"volumes\":[{\"name\":\"web-source\",\"hostPath\":{\"path\":\"$(WEB_HOST_PATH)\",\"type\":\"Directory\"}}],\"containers\":[{\"name\":\"web\",\"volumeMounts\":[{\"name\":\"web-source\",\"mountPath\":\"/app\"}]}]}}}}"
-	kubectl rollout restart deployment/web -n palad
-	kubectl patch deployment worker-ruby -n palad --type='strategic' -p "{\"spec\":{\"template\":{\"spec\":{\"volumes\":[{\"name\":\"web-source\",\"hostPath\":{\"path\":\"$(WEB_HOST_PATH)\",\"type\":\"Directory\"}}],\"containers\":[{\"name\":\"worker-ruby\",\"volumeMounts\":[{\"name\":\"web-source\",\"mountPath\":\"/app\"}]}]}}}}"
-	kubectl rollout restart deployment/worker-ruby -n palad
-
-# Remove Kubernetes manifests
-kube-rm:
-	kubectl delete -f ./kube
-
-# K3S KUBECONFIG MANAGEMENT
-KUBECONFIG_LOCAL = ~/.kube/config-palad-k3s
-KUBECONFIG_TEMP = /tmp/kubeconfig-palad-k3s
-
-# Initialize kubeconfig from k3s instance
-k3s-init-kubeconfig:
-	@K3S_INSTANCE_ID=$$(cd terraform && terraform output -raw k3s_instance_id 2>/dev/null); \
-	K3S_INSTANCE_IP=$$(cd terraform && terraform output -raw k3s_instance_public_ip 2>/dev/null); \
-	if [ -z "$$K3S_INSTANCE_ID" ]; then \
-		echo "Error: Could not get instance ID from Terraform. Make sure k3s instance is deployed."; \
-		exit 1; \
-	fi; \
-	echo "Fetching kubeconfig from k3s instance ($$K3S_INSTANCE_ID at $$K3S_INSTANCE_IP)..."; \
-	echo "Sending command via AWS SSM..."; \
-	COMMAND_ID=$$(aws ssm send-command \
-		--instance-ids "$$K3S_INSTANCE_ID" \
-		--document-name "AWS-RunShellScript" \
-		--parameters 'commands=["sudo cat /etc/rancher/k3s/k3s.yaml"]' \
-		--query "Command.CommandId" \
-		--output text 2>&1); \
-	if echo "$$COMMAND_ID" | grep -q "error\|Error"; then \
-		echo "✗ SSM not available. Please use the manual method:"; \
-		echo ""; \
-		echo "1. SSH into the instance:"; \
-		echo "   ssh -i <your-key.pem> ubuntu@$$K3S_INSTANCE_IP"; \
-		echo ""; \
-		echo "2. Get the kubeconfig:"; \
-		echo "   sudo cat /etc/rancher/k3s/k3s.yaml"; \
-		echo ""; \
-		echo "3. Copy the output and save it to $(KUBECONFIG_LOCAL)"; \
-		echo ""; \
-		echo "4. Replace 127.0.0.1 with $$K3S_INSTANCE_IP in the file"; \
-		exit 1; \
-	fi; \
-	echo "Waiting for command to complete..."; \
-	sleep 3; \
-	aws ssm get-command-invocation \
-		--command-id "$$COMMAND_ID" \
-		--instance-id "$$K3S_INSTANCE_ID" \
-		--query "StandardOutputContent" \
-		--output text > $(KUBECONFIG_TEMP); \
-	if [ ! -s $(KUBECONFIG_TEMP) ]; then \
-		echo "✗ Could not retrieve kubeconfig. Trying alternative method..."; \
-		echo "Please manually copy the kubeconfig using:"; \
-		echo "  ssh -i <your-key.pem> ubuntu@$$K3S_INSTANCE_IP 'sudo cat /etc/rancher/k3s/k3s.yaml'"; \
-		rm -f $(KUBECONFIG_TEMP); \
-		exit 1; \
-	fi; \
-	echo "Updating kubeconfig to use IP address ($$K3S_INSTANCE_IP)..."; \
-	sed "s/127\.0\.0\.1/$$K3S_INSTANCE_IP/g; s/localhost/$$K3S_INSTANCE_IP/g" $(KUBECONFIG_TEMP) > $(KUBECONFIG_LOCAL); \
-	chmod 600 $(KUBECONFIG_LOCAL); \
-	rm -f $(KUBECONFIG_TEMP); \
-	echo "✓ Kubeconfig saved to: $(KUBECONFIG_LOCAL)"; \
-	echo ""; \
-	echo "To use this kubeconfig, run:"; \
-	echo "  export KUBECONFIG=$(KUBECONFIG_LOCAL)"; \
-	echo ""; \
-	echo "Or merge it with your default kubeconfig:"; \
-	echo "  KUBECONFIG=$(KUBECONFIG_LOCAL):~/.kube/config kubectl config view --flatten > ~/.kube/config.merged && mv ~/.kube/config.merged ~/.kube/config"
-
-# Show kubeconfig path for current session
-k3s-kubeconfig-path:
-	@echo "Kubeconfig location: $(KUBECONFIG_LOCAL)"
-	@if [ -f $(KUBECONFIG_LOCAL) ]; then \
-		echo "✓ Kubeconfig exists"; \
-		echo ""; \
-		echo "To use it, run:"; \
-		echo "  export KUBECONFIG=$(KUBECONFIG_LOCAL)"; \
-	else \
-		echo "✗ Kubeconfig not found. Run 'make k3s-init-kubeconfig' first"; \
-	fi
-
-# Test kubectl connection to k3s cluster
-k3s-test:
-	@if [ -z "$${KUBECONFIG}" ] && [ ! -f $(KUBECONFIG_LOCAL) ]; then \
-		echo "Error: KUBECONFIG not set. Run 'make k3s-init-kubeconfig' first"; \
-		exit 1; \
-	fi
-	@echo "Testing kubectl connection to k3s cluster..."
-	@KUBECONFIG=$${KUBECONFIG:=$(KUBECONFIG_LOCAL)} kubectl cluster-info
-	@echo ""
-	@echo "✓ Connection successful!"
-
-# Show kubectl contexts
-k3s-contexts:
-	@if [ -z "$${KUBECONFIG}" ] && [ ! -f $(KUBECONFIG_LOCAL) ]; then \
-		echo "Error: KUBECONFIG not set. Run 'make k3s-init-kubeconfig' first"; \
-		exit 1; \
-	fi
-	@KUBECONFIG=$${KUBECONFIG:=$(KUBECONFIG_LOCAL)} kubectl config get-contexts
 
 # Run all main services
 up:
@@ -313,19 +193,10 @@ help:
 	@echo "  make db_restore_remote      - Restore database remotely"
 	@echo "  make default                - Same as 'check'"
 	@echo "  make help                   - Show this help message"
-	@echo "  make kube-setup             - Apply Kubernetes manifests"
-	@echo "  make kube-apply             - Apply Kubernetes manifests only"
-	@echo "  make kube-apply-dev          - Apply manifests with WEB_HOST_PATH for web"
-	@echo "  make kube-rm                - Delete Kubernetes manifests"
-	@echo ""
-	@echo "K3S Cluster Management (requires k3s infrastructure deployed):"
-	@echo "  make k3s-init-kubeconfig    - Initialize kubeconfig from k3s instance (using IP)"
-	@echo "  make k3s-kubeconfig-path    - Show kubeconfig path and usage instructions"
-	@echo "  make k3s-test               - Test kubectl connection to k3s cluster"
-	@echo "  make k3s-contexts           - Show available kubectl contexts"
+	@echo "  make kube-help              - Show Kubernetes-related commands"
+	@echo "  make terraform-help         - Show Terraform/K3S-related commands"
 	@echo "  make up                     - Run all main services"
 	@echo "  make worker                 - Run worker (in a separate terminal)"
-	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "AWS Operations (require PROFILE=profile_name):"
 	@echo "  make login_aws              - Login to AWS account with AWS-Vault"
@@ -349,5 +220,3 @@ help:
 	@echo "Agent Docker Images:"
 	@echo "  make build-agents           - Build all agent images (core + 4 agents in parallel)"
 	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"
-	@echo ""
-	@echo "  make help                   - Show this help message"

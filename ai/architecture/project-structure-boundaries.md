@@ -96,7 +96,10 @@ app/                                    # Root (Rails monolith)
 │   ├── remote/                         # Remote DB tools
 │   └── shared/                         # Shared utilities (watcher)
 │
-├── kube/                               # Kubernetes manifests
+├── kube/                               # Kubernetes manifests by environment
+│   ├── common/
+│   ├── dev/
+│   └── prod/
 │
 ├── test/
 │   ├── controllers/                    # Controller tests (mirrors app/controllers/)

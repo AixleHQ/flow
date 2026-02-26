@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-ruby
+  namespace: palad
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker-ruby
+  template:
+    metadata:
+      labels:
+        app: worker-ruby
+    spec:
+      serviceAccountName: palad-runtime
+      initContainers:
+        - name: wait-for-temporal
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z temporal 7233; do
+                echo "waiting for temporal";
+                sleep 2;
+              done
+      containers:
+        - name: worker-ruby
+          image: ghcr.io/palad-ai/palad-app-web:latest
+          imagePullPolicy: Always
+          command: ["bin/temporal_worker"]
+          envFrom:
+            - configMapRef:
+                name: palad-app-config

@@ -83,7 +83,8 @@ export KUBECONFIG=./kubeconfig.yaml
 
 # Apply your Kubernetes manifests
 kubectl create namespace palad
-kubectl apply -f ../kube/
+kubectl apply -f ../kube/common/
+kubectl apply -f ../kube/prod/
 ```
 
 ## SSH Access
@@ -168,7 +169,7 @@ sudo journalctl -xe -u k3s | tail -100
 1. **Create SSH key pair** in AWS EC2 console (if you don't have one)
 2. **Deploy infrastructure** with `terraform apply`
 3. **Get kubeconfig** and test connection
-4. **Deploy Kubernetes manifests** from the `kube/` directory
+4. **Deploy Kubernetes manifests** from `kube/common/` and `kube/dev/` or `kube/prod/` depending on environment
 
 ## References
 
