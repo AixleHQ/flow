@@ -51,6 +51,7 @@ const frontend = {
     `/company/projects/${projectId}/sessions/${sessionId}/artifacts`,
 
   // Workflow routes
+  workflowRunsPath: (projectId: string) => `/company/projects/${projectId}/workflow-runs`,
   workflowRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/workflow-runs/${runId}`,
   companyWorkflowBuilderPath: (workflowId: string) => `/company/workflows/${workflowId}/builder`,
   projectWorkflowBuilderPath: (projectId: string, workflowId: string) =>

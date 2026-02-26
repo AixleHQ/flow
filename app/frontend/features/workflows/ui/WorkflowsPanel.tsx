@@ -1,32 +1,30 @@
 import AddIcon from '@mui/icons-material/Add';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import HistoryIcon from '@mui/icons-material/History';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SearchIcon from '@mui/icons-material/Search';
+import SettingsIcon from '@mui/icons-material/Settings';
 import {
   Box,
   Button,
   Chip,
   CircularProgress,
-  InputAdornment,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
+  Grid,
   IconButton,
+  InputAdornment,
+  TextField,
   Tooltip,
+  Typography,
   type SxProps,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import SettingsIcon from '@mui/icons-material/Settings';
-import { useState, useMemo, useCallback, type FC } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
+import { useCallback, useMemo, useState, type FC } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { RunWorkflowModal } from 'features/run-workflow';
 import { Routes } from 'shared/routes';
 
 import {
@@ -64,6 +62,39 @@ const styles = {
     borderColor: 'border.defaultAlt',
   },
   emptyStateText: { color: 'text.secondaryAlt', fontSize: 16, mt: 2 },
+  card: {
+    padding: '16px',
+    backgroundColor: 'background.paper',
+    border: '1px solid',
+    borderColor: 'divider',
+    borderRadius: '8px',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    transition: 'all 0.2s ease',
+    '&:hover': {
+      borderColor: 'primary.main',
+      backgroundColor: 'background.elevated',
+    },
+  },
+  cardName: {
+    fontSize: '16px',
+    fontWeight: 500,
+    color: 'text.primary',
+  },
+  cardMeta: {
+    fontSize: '12px',
+    color: 'text.secondary',
+    mt: 0.5,
+  },
+  cardActions: {
+    display: 'flex',
+    gap: 1,
+    mt: 'auto',
+    pt: 1.5,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
 } satisfies Record<string, SxProps>;
 
 export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
@@ -76,23 +107,8 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
   const [createOpen, setCreateOpen] = useState(false);
   const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
-  const [duplicateWorkflow] = useDuplicateWorkflowToProjectMutation();
-
-  const handleDuplicateAndConfigure = useCallback(
-    async (wf: Workflow) => {
-      if (!projectId) return;
-      try {
-        const copy = await duplicateWorkflow({ projectId, id: wf.id }).unwrap();
-        enqueueSnackbar(`Copied "${wf.name}" to project`, { variant: 'success' });
-        navigate({
-          to: Routes.frontend.projectWorkflowBuilderPath(String(projectId), String(copy.id)),
-        });
-      } catch {
-        enqueueSnackbar('Failed to copy workflow', { variant: 'error' });
-      }
-    },
-    [projectId, duplicateWorkflow, enqueueSnackbar, navigate],
-  );
+  const [runWorkflow, setRunWorkflow] = useState<Workflow | null>(null);
+  const [duplicateWorkflowMutation] = useDuplicateWorkflowToProjectMutation();
 
   const { data: companyWorkflows, isLoading: isLoadingCompany } = useGetCompanyWorkflowsQuery(undefined, {
     skip: isProjectContext,
@@ -105,7 +121,6 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
   const workflows = isProjectContext ? projectWorkflows : companyWorkflows;
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => setSearch(value), 300);
-
   const handleSearchChange = (value: string) => {
     setSearchInput(value);
     debouncedSetSearch(value);
@@ -120,6 +135,33 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
     );
   }, [workflows, search]);
 
+  const handleDuplicateAndConfigure = useCallback(
+    async (wf: Workflow) => {
+      if (!projectId) return;
+      try {
+        const copy = await duplicateWorkflowMutation({ projectId, id: wf.id }).unwrap();
+        enqueueSnackbar(`Copied "${wf.name}" to project`, { variant: 'success' });
+        navigate({
+          to: Routes.frontend.projectWorkflowBuilderPath(String(projectId), String(copy.id)),
+        });
+      } catch {
+        enqueueSnackbar('Failed to copy workflow', { variant: 'error' });
+      }
+    },
+    [projectId, duplicateWorkflowMutation, enqueueSnackbar, navigate],
+  );
+
+  const navigateToBuilder = useCallback(
+    (wf: Workflow) => {
+      navigate({
+        to: projectId
+          ? Routes.frontend.projectWorkflowBuilderPath(String(projectId), String(wf.id))
+          : Routes.frontend.companyWorkflowBuilderPath(String(wf.id)),
+      });
+    },
+    [navigate, projectId],
+  );
+
   return (
     <Box sx={styles.root}>
       <Box sx={styles.header}>
@@ -131,9 +173,20 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
               : 'Manage company-wide workflow templates available in all projects.'}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
-          New Workflow
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {isProjectContext && (
+            <Button
+              variant="outlined"
+              startIcon={<HistoryIcon />}
+              onClick={() => navigate({ to: Routes.frontend.companyProjectTabPath(String(projectId), 'runs') })}
+            >
+              Run History
+            </Button>
+          )}
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+            New Workflow
+          </Button>
+        </Box>
       </Box>
 
       <Box sx={styles.filters}>
@@ -170,98 +223,80 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
           )}
         </Box>
       ) : (
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Scope</TableCell>
-                <TableCell>Steps</TableCell>
-                <TableCell>Last Run</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filtered.map((wf) => {
-                const isInherited = isProjectContext && wf.scopeIndicator === 'company';
+        <Grid container spacing={2}>
+          {filtered.map((wf) => {
+            const isInherited = isProjectContext && wf.scopeIndicator === 'company';
 
-                const handleNameClick = () => {
-                  if (isInherited) {
-                    handleDuplicateAndConfigure(wf);
-                    return;
-                  }
-                  navigate({
-                    to: projectId
-                      ? Routes.frontend.projectWorkflowBuilderPath(String(projectId), String(wf.id))
-                      : Routes.frontend.companyWorkflowBuilderPath(String(wf.id)),
-                  });
-                };
+            return (
+              <Grid item xs={12} sm={6} md={4} key={wf.id}>
+                <Box sx={styles.card}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography sx={styles.cardName}>{wf.name}</Typography>
+                    {isInherited && <Chip label="company" size="small" color="primary" variant="outlined" />}
+                  </Box>
+                  {wf.descriptionExcerpt && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }} noWrap>
+                      {wf.descriptionExcerpt}
+                    </Typography>
+                  )}
+                  <Typography sx={styles.cardMeta}>
+                    {wf.stepsCount} steps
+                    {wf.lastRunAt && <> &middot; Last run {new Date(wf.lastRunAt).toLocaleDateString()}</>}
+                  </Typography>
 
-                return (
-                  <TableRow key={wf.id} hover>
-                    <TableCell>
-                      <Typography
-                        variant="subtitle2"
-                        sx={{ cursor: 'pointer', '&:hover': { color: 'primary.main' } }}
-                        onClick={handleNameClick}
-                      >
-                        {wf.name}
-                      </Typography>
-                      {wf.descriptionExcerpt && (
-                        <Typography variant="body2" color="text.secondary">
-                          {wf.descriptionExcerpt}
-                        </Typography>
+                  <Box sx={styles.cardActions}>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      {isProjectContext && (
+                        <Button
+                          size="small"
+                          variant="contained"
+                          startIcon={<PlayArrowIcon />}
+                          onClick={() => setRunWorkflow(wf)}
+                        >
+                          Run
+                        </Button>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={wf.scopeIndicator}
-                        size="small"
-                        color={wf.scopeIndicator === 'company' ? 'primary' : 'default'}
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>{wf.stepsCount}</TableCell>
-                    <TableCell>
-                      {wf.lastRunAt ? new Date(wf.lastRunAt).toLocaleDateString() : <Typography variant="body2" color="text.secondary">Never</Typography>}
-                    </TableCell>
-                    <TableCell align="right">
                       {isInherited ? (
-                        <Tooltip title="Copy to project and configure">
-                          <IconButton size="small" onClick={() => handleDuplicateAndConfigure(wf)}>
-                            <ContentCopyIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<ContentCopyIcon />}
+                          onClick={() => handleDuplicateAndConfigure(wf)}
+                        >
+                          Copy & Configure
+                        </Button>
                       ) : (
-                        <>
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              navigate({
-                                to: projectId
-                                  ? Routes.frontend.projectWorkflowBuilderPath(String(projectId), String(wf.id))
-                                  : Routes.frontend.companyWorkflowBuilderPath(String(wf.id)),
-                              })
-                            }
-                            title="Configure steps"
-                          >
-                            <SettingsIcon fontSize="small" />
-                          </IconButton>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<SettingsIcon />}
+                          onClick={() => navigateToBuilder(wf)}
+                        >
+                          Configure
+                        </Button>
+                      )}
+                    </Box>
+
+                    {!isInherited && (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        <Tooltip title="Edit name & description">
                           <IconButton size="small" onClick={() => setEditWorkflow(wf)}>
                             <EditIcon fontSize="small" />
                           </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Delete workflow">
                           <IconButton size="small" color="error" onClick={() => setDeleteWorkflow(wf)}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
-                        </>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              </Grid>
+            );
+          })}
+        </Grid>
       )}
 
       <CreateWorkflowDialog
@@ -292,6 +327,15 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
           onClose={() => setDeleteWorkflow(null)}
           workflow={deleteWorkflow}
           projectId={projectId}
+        />
+      )}
+
+      {isProjectContext && (
+        <RunWorkflowModal
+          open={!!runWorkflow}
+          workflow={runWorkflow}
+          projectId={projectId!}
+          onClose={() => setRunWorkflow(null)}
         />
       )}
     </Box>

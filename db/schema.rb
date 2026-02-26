@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -92,6 +92,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
     t.string "status", default: "pre_initialize", null: false
     t.json "tool_registry", default: []
     t.datetime "updated_at", null: false
+  end
+
+  create_table "action_mcp_sse_events", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "data", null: false
+    t.integer "event_id", null: false
+    t.string "session_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_action_mcp_sse_events_on_created_at"
+    t.index ["session_id", "event_id"], name: "index_action_mcp_sse_events_on_session_id_and_event_id", unique: true
+    t.index ["session_id"], name: "index_action_mcp_sse_events_on_session_id"
   end
 
   create_table "agent_credentials", force: :cascade do |t|
@@ -353,6 +364,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
     t.bigint "agent_id"
     t.boolean "allow_non_interactive", default: false, null: false
     t.datetime "created_at", null: false
+    t.jsonb "depends_on_step_ids", default: [], null: false
     t.text "description"
     t.jsonb "input_asset_specs", default: [], null: false
     t.text "instructions"
@@ -396,7 +408,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
     t.boolean "required", default: true, null: false
     t.bigint "step_id", null: false
     t.datetime "updated_at", null: false
-    t.index ["step_id", "position"], name: "index_sub_steps_on_step_id_and_position", unique: true
+    t.index ["step_id", "position"], name: "index_sub_steps_on_step_id_and_position"
     t.index ["step_id"], name: "index_sub_steps_on_step_id"
   end
 
@@ -445,13 +457,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
   end
 
   create_table "tool_files", force: :cascade do |t|
-    t.text "content", null: false
+    t.text "content"
     t.datetime "created_at", null: false
+    t.text "file_data"
     t.string "path", null: false
     t.bigint "tool_id", null: false
     t.datetime "updated_at", null: false
     t.index ["tool_id", "path"], name: "index_tool_files_on_tool_id_and_path", unique: true
     t.index ["tool_id"], name: "index_tool_files_on_tool_id"
+  end
+
+  create_table "tool_results", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "duration_ms"
+    t.string "error"
+    t.string "execution_id", null: false
+    t.integer "exit_code"
+    t.text "output_data"
+    t.text "result_data_data"
+    t.string "state", default: "processing", null: false
+    t.text "stderr_data"
+    t.text "stdout_data"
+    t.bigint "step_run_id"
+    t.bigint "terminal_session_id"
+    t.bigint "tool_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["execution_id"], name: "index_tool_results_on_execution_id", unique: true
+    t.index ["step_run_id"], name: "index_tool_results_on_step_run_id"
+    t.index ["terminal_session_id"], name: "index_tool_results_on_terminal_session_id"
+    t.index ["tool_id"], name: "index_tool_results_on_tool_id"
   end
 
   create_table "tools", force: :cascade do |t|
@@ -461,6 +495,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
     t.string "display_name", null: false
     t.string "docker_image"
     t.boolean "enabled", default: true
+    t.string "execution_mode", default: "container", null: false
     t.jsonb "input_schema", default: {}
     t.string "kind", default: "custom", null: false
     t.string "name", null: false
@@ -548,6 +583,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
     t.jsonb "shared_context", default: {}
     t.datetime "started_at"
     t.string "state", default: "pending", null: false
+    t.jsonb "step_overrides", default: {}, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.bigint "workflow_id", null: false
@@ -576,6 +612,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
   add_foreign_key "action_mcp_session_resources", "action_mcp_sessions", column: "session_id", on_delete: :cascade
   add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
   add_foreign_key "action_mcp_session_tasks", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_tasks_session_id", on_update: :cascade, on_delete: :cascade
+  add_foreign_key "action_mcp_sse_events", "action_mcp_sessions", column: "session_id"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "asset_versions", "assets"
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
@@ -611,6 +648,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_22_160001) do
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"
+  add_foreign_key "tool_results", "step_runs"
+  add_foreign_key "tool_results", "terminal_sessions"
+  add_foreign_key "tool_results", "tools"
   add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"

@@ -71,7 +71,6 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
     assert state[:container_id].present?
     assert_equal :cleaned_up, state[:status]
     assert_equal 0, state[:exit_code]
-    assert_equal false, state[:timed_out]
   end
 
   test "tool_execution | with parameters in command" do

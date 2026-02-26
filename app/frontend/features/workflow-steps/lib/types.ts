@@ -28,6 +28,7 @@ export interface Step {
   mcpServerIds: number[];
   skillIds: number[];
   mountRepositories: boolean;
+  dependsOnStepIds: number[];
   subSteps: SubStep[];
   createdAt: string;
   updatedAt: string;
@@ -69,6 +70,7 @@ export interface UpdateStepRequest {
   mcpServerIds?: number[];
   skillIds?: number[];
   mountRepositories?: boolean;
+  dependsOnStepIds?: number[];
   subStepsAttributes?: SubStepAttribute[];
 }
 

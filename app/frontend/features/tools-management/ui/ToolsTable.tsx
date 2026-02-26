@@ -79,13 +79,10 @@ const styles = {
 
 const ToolsTable: FC<ToolsTableProps> = ({ tools, isProjectContext, onEdit, onDelete }) => {
   const canEdit = (tool: Tool): boolean => {
-    // Cannot edit internal tools
-    if (tool.internal) return false;
-    // In project context, can only edit project-scoped tools
+    if (tool.platformTool) return false;
     if (isProjectContext) {
       return tool.scopeIndicator === 'project' || tool.scopeIndicator === 'overrides_company';
     }
-    // In company context, can edit company tools
     return tool.scopeIndicator === 'company';
   };
 
@@ -149,8 +146,10 @@ const ToolsTable: FC<ToolsTableProps> = ({ tools, isProjectContext, onEdit, onDe
                       </IconButton>
                     </Tooltip>
                   )}
-                  {tool.internal && <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>System tool</Typography>}
-                  {!tool.internal && !canEdit(tool) && (
+                  {tool.platformTool && (
+                    <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>System tool</Typography>
+                  )}
+                  {!tool.platformTool && !canEdit(tool) && (
                     <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>Company-managed</Typography>
                   )}
                 </Box>

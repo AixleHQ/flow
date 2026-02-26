@@ -22,6 +22,9 @@
 # Phase 7: Billing & Integrations (Epic 13, 14)
 # Phase 8: Monaco + VS Code Server (Epic 15)
 # Phase 9: Session Outputs & Config Normalization (Epic 16)
+# Phase 10: Container Architecture Simplification (Epic 17)
+# Phase 11: Internal Tools (Epic 18)
+# Phase 12: Tool Execution Framework (Epic 19)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -280,3 +283,37 @@ development_status:
   17-8-strategy-driven-session-state: done  # mark_running/failed/collected in strategies, conditional ports (partially done)
 
   epic-17-retrospective: optional
+
+  # ============================================
+  # PHASE 11: INTERNAL TOOLS
+  # ============================================
+
+  epic-18: done  # Internal Tools (Phase 11) — Ruby-executed tools via MCP, workflow progress tracking, Code Climate
+  18-1-internal-tool-execution-router: done  # Route internal→Ruby handler, custom→Docker; InternalTools::Base
+  18-2-internal-tools-visible-in-mcp: done  # TerminalSession#available_tools includes internal tools, tools/list
+  18-3-list-sub-steps-tool: done  # InternalTools::ListSubSteps — list sub-step runs with statuses
+  18-4-mark-sub-step-tool: done  # InternalTools::MarkSubStep — update status/note/data on SubStepRun
+  18-5-write-step-note-tool: done  # InternalTools::WriteStepNote — append note to StepRun#step_note
+  18-6-code-climate-tool-and-strategy: done  # InternalTools::CodeClimate + CodeClimateStrategy — Docker-in-Docker with repo bind mount
+  18-7-internal-tool-seeds: done  # Seeds for all 4 internal tools with input_schema
+  epic-18-retrospective: optional
+
+  # ============================================
+  # PHASE 12: TOOL EXECUTION FRAMEWORK
+  # ============================================
+
+  epic-19: done  # Tool Execution Framework (Phase 12) — Unified strategy hierarchy, ToolResult + Shrine, async container execution
+  19-1-execution-mode-on-tool: done  # Add execution_mode (app/container) to Tool model, update routing
+  19-2-tool-result-model-and-uploader: done  # ToolResult model, 4 Shrine attachments (stdout/stderr/result_data/output), states
+  19-3-tool-result-serializer: done  # ToolResultSerializer with presigned URLs, compact agent payload
+  19-4-tool-strategy-base: done  # ToolStrategy < BaseStrategy — shared exec/timeout/persist logic for all container tools
+  19-5-custom-tool-strategy: done  # CustomToolStrategy < ToolStrategy — replaces ToolExecutionStrategy, sandboxed
+  19-6-internal-tool-strategy-dsl: done  # InternalToolStrategy < ToolStrategy — DSL-based tool definitions, privileged
+  19-7-code-climate-dsl-definition: done  # Code Climate as InternalToolStrategy.define block, delete old strategy+handler
+  19-8-read-tool-result: done  # InternalTools::ReadToolResult (app tool), returns serialized metadata + presigned URLs
+  19-9-mcp-handler-update: done  # MCP tools/call creates ToolResult for container tools, returns execution_id
+  19-10-tool-result-cleanup-job: done  # Daily cleanup of expired ToolResults, configurable retention
+  19-11-update-seeds-and-migration: done  # execution_mode on existing seeds, read_tool_result seed, migration
+  19-12-agent-context-instructions: done  # SessionContextService: tool execution modes section, app/container markers
+  19-13-delete-legacy-code: done  # Remove ToolExecutionStrategy, CodeClimateStrategy, InternalTools::CodeClimate
+  epic-19-retrospective: optional

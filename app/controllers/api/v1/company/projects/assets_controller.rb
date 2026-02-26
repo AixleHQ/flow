@@ -22,7 +22,7 @@ module Api
           end
 
           def download
-            asset = Asset.accessible_from_project(current_project).find(params[:id])
+            asset = Asset.downloadable_from_project(current_project).find(params[:id])
             version = asset.resolve_version(params[:version])
 
             redirect_to version.file_url(
@@ -79,7 +79,7 @@ module Api
           end
 
           def asset_update_params
-            params.require(:asset).permit(:folder, :public, tags: [])
+            params.require(:asset).permit(:name, :folder, :public, tags: [])
           end
 
           def version_params

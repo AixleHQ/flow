@@ -65,11 +65,7 @@ module Agents
     # Session command: codex --yolo (interactive), codex exec (non-interactive)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
-      if mode == "non_interactive" && prompt.present?
-        "codex exec --yolo"
-      else
-        "codex --yolo"
-      end
+      "codex --yolo"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)

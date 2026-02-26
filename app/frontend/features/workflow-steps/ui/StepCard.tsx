@@ -20,11 +20,12 @@ import type { Step } from '../lib/types';
 
 interface StepCardProps {
   step: Step;
+  allSteps?: Step[];
   onDelete: (id: number) => void;
   onEdit: (step: Step) => void;
 }
 
-const StepCard: FC<StepCardProps> = ({ step, onDelete, onEdit }) => {
+const StepCard: FC<StepCardProps> = ({ step, allSteps = [], onDelete, onEdit }) => {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -36,8 +37,21 @@ const StepCard: FC<StepCardProps> = ({ step, onDelete, onEdit }) => {
               {step.position}.
             </Typography>
             <Typography variant="subtitle2">{step.name}</Typography>
-            {step.allowNonInteractive && <Chip label="Auto" size="small" color="info" />}
+            {step.allowNonInteractive && <Chip label="Auto-run" size="small" color="info" />}
             {step.agentId && <Chip label="Agent" size="small" variant="outlined" />}
+            {(step.dependsOnStepIds ?? []).length === 0 && (
+              <Chip label="Root" size="small" variant="outlined" color="default" />
+            )}
+            {(step.dependsOnStepIds ?? []).length > 0 && (
+              <Chip
+                label={`after: ${(step.dependsOnStepIds ?? [])
+                  .map((id) => allSteps.find((s) => s.id === id)?.name ?? `#${id}`)
+                  .join(', ')}`}
+                size="small"
+                variant="outlined"
+                color="secondary"
+              />
+            )}
           </Stack>
           <Stack direction="row" spacing={0.5}>
             <IconButton size="small" onClick={() => setExpanded(!expanded)}>

@@ -8,14 +8,14 @@ interface ToolScopeBadgeProps {
 }
 
 const scopeLabels: Record<ScopeIndicator, string> = {
-  internal: 'Internal',
+  system: 'System',
   company: 'Company',
   project: 'Project',
   overrides_company: 'Overrides Company',
 };
 
 const scopeStyles: Record<ScopeIndicator, { bg: string; color: string; border: string }> = {
-  internal: {
+  system: {
     bg: 'rgba(139, 92, 246, 0.15)',
     color: '#A78BFA',
     border: 'rgba(139, 92, 246, 0.3)',

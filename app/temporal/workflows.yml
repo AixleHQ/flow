@@ -34,3 +34,5 @@ workflows:
         task_queue: palad_ruby
       - name: workflow_check_skip_activity
         task_queue: palad_ruby
+      - name: workflow_launch_step_session_activity
+        task_queue: palad_ruby

@@ -25,12 +25,13 @@ const EditAssetDialog: FC<EditAssetDialogProps> = ({ open, onClose, asset, proje
 
   const methods = useForm<EditAssetFormData>({
     resolver: zodResolver(editAssetSchema),
-    defaultValues: { folder: '', tags: '', public: false },
+    defaultValues: { name: '', folder: '', tags: '', public: false },
   });
 
   useEffect(() => {
     if (open && asset) {
       methods.reset({
+        name: asset.name,
         folder: asset.folder || '',
         tags: asset.tags?.join(', ') || '',
         public: asset.public,
@@ -55,6 +56,7 @@ const EditAssetDialog: FC<EditAssetDialogProps> = ({ open, onClose, asset, proje
 
     const updateData = {
       id: asset.id,
+      name: data.name,
       folder: data.folder || null,
       tags,
       public: data.public,
@@ -78,10 +80,19 @@ const EditAssetDialog: FC<EditAssetDialogProps> = ({ open, onClose, asset, proje
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Edit Asset: {asset.name}</DialogTitle>
+      <DialogTitle>Edit Asset</DialogTitle>
       <form onSubmit={methods.handleSubmit(onSubmit)}>
         <DialogContent>
           <Stack spacing={3}>
+            <TextField
+              {...methods.register('name')}
+              label="Name"
+              fullWidth
+              error={!!methods.formState.errors.name}
+              helperText={methods.formState.errors.name?.message}
+              autoFocus
+            />
+
             <TextField
               {...methods.register('folder')}
               label="Folder"

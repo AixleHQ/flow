@@ -34,7 +34,7 @@ module Api
             :name, :display_name, :description, :docker_image, :command, :enabled,
             required_config_items: [],
             input_schema: {},
-            tool_files_attributes: %i[id path content _destroy]
+            tool_files_attributes: %i[id path content file _destroy]
           )
         end
       end

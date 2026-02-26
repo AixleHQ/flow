@@ -21,6 +21,13 @@ class WorkflowRun < ApplicationRecord
     workflow.steps.all?(&:allow_non_interactive)
   end
 
+  def step_auto_run?(step_id)
+    override = step_overrides[step_id.to_s]
+    return override["auto_run"] unless override.nil?
+
+    nil
+  end
+
   def current_step_run
     step_runs.where(state: %w[pending running waiting_input]).order(:created_at).last
   end

@@ -227,7 +227,7 @@ module StubSupport
         Create two test files with sample content
 
 
-        Creating two test files in /workspace/output/.
+        Creating two test files in /workspace/outputs/.
 
         ✓ Wrote output/file1.txt (24 bytes)
         ✓ Wrote output/file2.txt (36 bytes)

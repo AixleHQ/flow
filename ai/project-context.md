@@ -48,7 +48,7 @@ Temporal Workflow → PhaseActivity → ContainerService → Strategy → Runtim
 - `ContainerService` — phase runner, calls `before_X`, `X`, `after_X` hooks
 - `ContainerRuntime.build` — factory, returns Docker or Kubernetes runtime based on Settings
 - `BaseStrategy` → `AgentBaseStrategy` → `AgentAuthStrategy` / `AgentSessionStrategy`
-- `BaseStrategy` → `ToolExecutionStrategy`
+- `BaseStrategy` → `ToolStrategy` → `CustomToolStrategy` / `InternalToolStrategy`
 - `BaseRuntime` → `DockerRuntime` / `KubernetesRuntime`
 - `BaseAdapter` → `ClaudeCodeAdapter` / `CursorCliAdapter` / `CodexAdapter` / `GeminiCliAdapter`
 
@@ -194,4 +194,21 @@ ai/                                    # AI planning & architecture docs
 
 ---
 
-**Last Updated:** 2026-02-21
+## Key Terminology
+
+| Term | Meaning | DB column | Examples |
+|------|---------|-----------|----------|
+| **Agent Runtime** | Which AI agent CLI to use for execution | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli` |
+| **Container Runtime** | Infrastructure that runs agent containers | `ContainerRuntime.build` (code-level) | Docker (local), Kubernetes (cluster) |
+| **Internal Tool** | System-provided tool, runs in-process (no Docker) | `tools.kind = 'internal'` | `code_climate`, `list_sub_steps` |
+| **Workflow Tool** | Internal tool requiring workflow context (`step_run`), auto-injected into `workflow_step` sessions | `tools.workflow_only = true` | `list_sub_steps`, `mark_sub_step`, `write_step_note` |
+| **Custom Tool** | User-created tool that runs in a Docker container | `tools.kind = 'custom'` | Company or project scoped |
+
+### Tool visibility rules
+- **Workflow-only tools** (`workflow_only: true`) are auto-injected into `workflow_step` sessions only
+- **Other internal tools** (e.g. `code_climate`) appear only when explicitly added to `session.tools`
+- **Custom tools** come from `session.tools`; fallback to project-level tools if none explicitly selected
+
+---
+
+**Last Updated:** 2026-02-22

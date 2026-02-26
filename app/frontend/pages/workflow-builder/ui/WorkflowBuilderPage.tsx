@@ -3,6 +3,7 @@ import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import {
   Accordion,
   AccordionDetails,
@@ -34,10 +35,10 @@ import { useSnackbar } from 'notistack';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
-import { useGetCompanyAgentsQuery } from 'features/agents-management/api/agentsApi';
-import type { Agent } from 'features/agents-management/lib/types';
 import { useGetMcpServersQuery } from 'entities/mcp-server';
 import type { McpServer } from 'entities/mcp-server';
+import { useGetCompanyAgentsQuery } from 'features/agents-management/api/agentsApi';
+import type { Agent } from 'features/agents-management/lib/types';
 import { useGetCompanySkillsQuery } from 'features/skills-management/api/skillsApi';
 import type { Skill } from 'features/skills-management/lib/types';
 import { useGetCompanyToolsQuery } from 'features/tools-management/api/toolsApi';
@@ -55,6 +56,7 @@ import {
   useReorderStepsMutation,
 } from 'features/workflow-steps/api/stepsApi';
 import type { Step, SubStepAttribute, AssetSpec, UpdateStepRequest } from 'features/workflow-steps/lib/types';
+import { RunWorkflowModal } from 'features/run-workflow';
 import {
   useGetCompanyWorkflowQuery,
   useUpdateCompanyWorkflowMutation,
@@ -206,6 +208,7 @@ const WorkflowBuilderPage = () => {
   const [workflowName, setWorkflowName] = useState('');
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [nameInitialized, setNameInitialized] = useState(false);
+  const [runModalOpen, setRunModalOpen] = useState(false);
 
   // Fetch workflow
   const {
@@ -417,54 +420,52 @@ const WorkflowBuilderPage = () => {
   };
 
   // Sub-steps handlers
+  const buildSubStepAttrs = (step: Step): SubStepAttribute[] =>
+    step.subSteps.map((ss) => ({
+      id: ss.id,
+      name: ss.name,
+      position: ss.position,
+      description: ss.description || undefined,
+      instructions: ss.instructions || undefined,
+      required: ss.required,
+    }));
+
   const handleAddSubStep = () => {
     if (!selectedStep) return;
-    const existing = selectedStep.subSteps || [];
-    const attrs: SubStepAttribute[] = [
-      ...existing.map((ss) => ({
-        id: ss.id,
-        name: ss.name,
-        position: ss.position,
-        description: ss.description || undefined,
-        instructions: ss.instructions || undefined,
-        required: ss.required,
-      })),
-      { name: `Sub-step ${existing.length + 1}`, position: existing.length + 1, required: true },
-    ];
+    const attrs = buildSubStepAttrs(selectedStep);
+    attrs.push({ name: `Sub-step ${attrs.length + 1}`, position: attrs.length + 1, required: true });
     updateStep(selectedStep.id, { subStepsAttributes: attrs });
   };
 
   const handleDeleteSubStep = (subStepId: number) => {
     if (!selectedStep) return;
-    const attrs: SubStepAttribute[] = selectedStep.subSteps.map((ss) =>
-      ss.id === subStepId
-        ? { id: ss.id, name: ss.name, position: ss.position, _destroy: true }
-        : {
-            id: ss.id,
-            name: ss.name,
-            position: ss.position,
-            description: ss.description || undefined,
-            instructions: ss.instructions || undefined,
-            required: ss.required,
-          },
-    );
+    const attrs = buildSubStepAttrs(selectedStep).map((a) => (a.id === subStepId ? { ...a, _destroy: true } : a));
     updateStep(selectedStep.id, { subStepsAttributes: attrs });
   };
 
   const handleUpdateSubStep = (subStepId: number, field: string, value: unknown) => {
     if (!selectedStep) return;
-    const attrs: SubStepAttribute[] = selectedStep.subSteps.map((ss) => {
-      const base = {
-        id: ss.id,
-        name: ss.name,
-        position: ss.position,
-        description: ss.description || undefined,
-        instructions: ss.instructions || undefined,
-        required: ss.required,
-      };
-      return ss.id === subStepId ? { ...base, [field]: value } : base;
-    });
+    const attrs = buildSubStepAttrs(selectedStep).map((a) => (a.id === subStepId ? { ...a, [field]: value } : a));
     debouncedUpdateStep(selectedStep.id, { subStepsAttributes: attrs });
+  };
+
+  const handleReorderSubStep = (subStepId: number, direction: 'up' | 'down') => {
+    if (!selectedStep) return;
+    const sorted = [...selectedStep.subSteps].sort((a, b) => a.position - b.position);
+    const idx = sorted.findIndex((ss) => ss.id === subStepId);
+    if (idx < 0) return;
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    const attrs = buildSubStepAttrs(selectedStep);
+    const attrIdx = attrs.findIndex((a) => a.id === subStepId);
+    const attrSwap = attrs.findIndex((a) => a.id === sorted[swapIdx].id);
+    if (attrIdx >= 0 && attrSwap >= 0) {
+      const tmpPos = attrs[attrIdx].position;
+      attrs[attrIdx].position = attrs[attrSwap].position;
+      attrs[attrSwap].position = tmpPos;
+    }
+    updateStep(selectedStep.id, { subStepsAttributes: attrs });
   };
 
   // Asset specs handlers
@@ -577,9 +578,24 @@ const WorkflowBuilderPage = () => {
                   <Typography sx={{ fontSize: '11px', color: 'text.secondary' }}>
                     {agent?.title || 'No agent'}
                   </Typography>
-                  {step.allowNonInteractive && (
-                    <Chip label="Non-interactive" size="small" sx={{ mt: 0.5, height: 18, fontSize: '10px' }} />
-                  )}
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                    {step.allowNonInteractive && (
+                      <Chip label="Auto-run" size="small" sx={{ height: 18, fontSize: '10px' }} />
+                    )}
+                    {(step.dependsOnStepIds ?? []).length === 0 ? (
+                      <Chip label="Root" size="small" variant="outlined" sx={{ height: 18, fontSize: '10px' }} />
+                    ) : (
+                      <Chip
+                        label={`after: ${(step.dependsOnStepIds ?? [])
+                          .map((id: number) => steps.find((s) => s.id === id)?.name ?? `#${id}`)
+                          .join(', ')}`}
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        sx={{ height: 18, fontSize: '10px', maxWidth: 180 }}
+                      />
+                    )}
+                  </Box>
                 </Box>
                 {!readOnly && (
                   <Box sx={styles.stepActions}>
@@ -634,7 +650,13 @@ const WorkflowBuilderPage = () => {
             <Typography variant="body2">
               This is a company-level workflow. Copy it to your project to customize.
             </Typography>
-            <Button size="small" variant="contained" color="inherit" sx={{ color: 'info.main' }} onClick={handleCopyToProject}>
+            <Button
+              size="small"
+              variant="contained"
+              color="inherit"
+              sx={{ color: 'info.main' }}
+              onClick={handleCopyToProject}
+            >
               Copy & Configure
             </Button>
           </Box>
@@ -661,13 +683,24 @@ const WorkflowBuilderPage = () => {
               fullWidth
             />
           </Box>
-          <Chip
-            label={workflow.scopeIndicator}
-            size="small"
-            color={isCompanyScope ? 'primary' : 'default'}
-            variant="outlined"
-            sx={{ ml: 2 }}
-          />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
+            {!readOnly && (projectId || routeProjectId) && (
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PlayArrowIcon />}
+                onClick={() => setRunModalOpen(true)}
+              >
+                Run
+              </Button>
+            )}
+            <Chip
+              label={workflow.scopeIndicator}
+              size="small"
+              color={isCompanyScope ? 'primary' : 'default'}
+              variant="outlined"
+            />
+          </Box>
         </Box>
 
         {/* Content */}
@@ -675,6 +708,7 @@ const WorkflowBuilderPage = () => {
           {selectedStep ? (
             <StepDetailPanel
               step={selectedStep}
+              allSteps={steps}
               agents={agents}
               tools={tools}
               mcpServers={mcpServers}
@@ -684,6 +718,7 @@ const WorkflowBuilderPage = () => {
               onAddSubStep={handleAddSubStep}
               onDeleteSubStep={handleDeleteSubStep}
               onUpdateSubStep={handleUpdateSubStep}
+              onReorderSubStep={handleReorderSubStep}
               onAddAssetSpec={handleAddAssetSpec}
               onRemoveAssetSpec={handleRemoveAssetSpec}
               onUpdateAssetSpec={handleUpdateAssetSpec}
@@ -725,6 +760,15 @@ const WorkflowBuilderPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {(projectId || routeProjectId) && (
+        <RunWorkflowModal
+          open={runModalOpen}
+          workflow={workflow ? { id: workflow.id, name: workflow.name, description: workflow.description } : null}
+          projectId={Number(projectId || routeProjectId)}
+          onClose={() => setRunModalOpen(false)}
+        />
+      )}
     </Box>
   );
 };
@@ -733,6 +777,7 @@ const WorkflowBuilderPage = () => {
 
 interface StepDetailPanelProps {
   step: Step;
+  allSteps: Step[];
   agents: Agent[];
   tools: Tool[];
   mcpServers: McpServer[];
@@ -746,6 +791,7 @@ interface StepDetailPanelProps {
   onAddSubStep: () => void;
   onDeleteSubStep: (id: number) => void;
   onUpdateSubStep: (id: number, field: string, value: unknown) => void;
+  onReorderSubStep: (id: number, direction: 'up' | 'down') => void;
   onAddAssetSpec: (field: 'inputAssetSpecs' | 'outputAssetSpecs') => void;
   onRemoveAssetSpec: (field: 'inputAssetSpecs' | 'outputAssetSpecs', index: number) => void;
   onUpdateAssetSpec: (
@@ -759,6 +805,7 @@ interface StepDetailPanelProps {
 
 function StepDetailPanel({
   step,
+  allSteps,
   agents,
   tools,
   mcpServers,
@@ -768,6 +815,7 @@ function StepDetailPanel({
   onAddSubStep,
   onDeleteSubStep,
   onUpdateSubStep,
+  onReorderSubStep,
   onAddAssetSpec,
   onRemoveAssetSpec,
   onUpdateAssetSpec,
@@ -889,7 +937,7 @@ function StepDetailPanel({
                 onChange={(e) => onFieldChange('allowNonInteractive', e.target.checked, true)}
               />
             }
-            label="Allow non-interactive execution"
+            label="Auto-run available (skip user approval in non-interactive/mixed modes)"
           />
         </Box>
 
@@ -1023,6 +1071,35 @@ function StepDetailPanel({
         </Typography>
       </Box>
 
+      {/* Dependencies */}
+      <Box sx={{ mb: 2, mt: 2 }}>
+        <Typography sx={styles.sectionTitle}>Dependencies</Typography>
+        <Autocomplete
+          multiple
+          size="small"
+          options={allSteps.filter((s) => s.id !== step.id)}
+          getOptionLabel={(s: Step) => `${s.position}. ${s.name}`}
+          value={allSteps.filter((s) => (step.dependsOnStepIds ?? []).includes(s.id))}
+          onChange={(_, newValue) =>
+            onFieldChange(
+              'dependsOnStepIds',
+              newValue.map((s: Step) => s.id),
+              true,
+            )
+          }
+          renderInput={(params) => (
+            <TextField {...params} placeholder="Select steps this step depends on..." />
+          )}
+          isOptionEqualToValue={(opt, val) => opt.id === val.id}
+          disabled={readOnly}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+          {(step.dependsOnStepIds ?? []).length === 0
+            ? 'No dependencies — this step can run in parallel with other root steps'
+            : 'This step will start after all selected steps complete'}
+        </Typography>
+      </Box>
+
       <Divider sx={{ my: 2 }} />
 
       {/* Sub-steps */}
@@ -1031,30 +1108,76 @@ function StepDetailPanel({
           <Typography sx={styles.sectionTitle}>Sub-steps ({step.subSteps?.length || 0})</Typography>
         </AccordionSummary>
         <AccordionDetails>
-          {step.subSteps?.map((ss) => (
-            <Box key={ss.id} sx={styles.subStepRow}>
-              <Typography sx={{ fontSize: '12px', color: 'text.secondary', width: 24 }}>#{ss.position}</Typography>
-              <TextField
-                size="small"
-                sx={{ flex: 1 }}
-                defaultValue={ss.name}
-                onBlur={(e) => onUpdateSubStep(ss.id, 'name', e.target.value)}
-              />
-              <FormControlLabel
-                control={
-                  <Switch
+          {[...(step.subSteps || [])]
+            .sort((a, b) => a.position - b.position)
+            .map((ss, idx, arr) => (
+              <Box
+                key={ss.id}
+                sx={{
+                  p: 1.5,
+                  mb: 1.5,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '6px',
+                  backgroundColor: 'background.elevated',
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Typography sx={{ fontSize: '12px', color: 'text.secondary', fontWeight: 600, width: 28 }}>
+                    #{ss.position}
+                  </Typography>
+                  <TextField
                     size="small"
-                    checked={ss.required}
-                    onChange={(e) => onUpdateSubStep(ss.id, 'required', e.target.checked)}
+                    sx={{ flex: 1 }}
+                    defaultValue={ss.name}
+                    placeholder="Sub-step name"
+                    onBlur={(e) => onUpdateSubStep(ss.id, 'name', e.target.value)}
                   />
-                }
-                label={<Typography sx={{ fontSize: '12px' }}>Required</Typography>}
-              />
-              <IconButton size="small" color="error" onClick={() => onDeleteSubStep(ss.id)}>
-                <DeleteIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Box>
-          ))}
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={ss.required}
+                        onChange={(e) => onUpdateSubStep(ss.id, 'required', e.target.checked)}
+                      />
+                    }
+                    label={<Typography sx={{ fontSize: '12px' }}>Required</Typography>}
+                  />
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <IconButton size="small" disabled={idx === 0} onClick={() => onReorderSubStep(ss.id, 'up')}>
+                      <ArrowUpwardIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                    <IconButton
+                      size="small"
+                      disabled={idx === arr.length - 1}
+                      onClick={() => onReorderSubStep(ss.id, 'down')}
+                    >
+                      <ArrowDownwardIcon sx={{ fontSize: 14 }} />
+                    </IconButton>
+                  </Box>
+                  <IconButton size="small" color="error" onClick={() => onDeleteSubStep(ss.id)}>
+                    <DeleteIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Box>
+                <TextField
+                  size="small"
+                  fullWidth
+                  placeholder="Description"
+                  defaultValue={ss.description || ''}
+                  onBlur={(e) => onUpdateSubStep(ss.id, 'description', e.target.value)}
+                  sx={{ mb: 1 }}
+                />
+                <TextField
+                  size="small"
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Instructions"
+                  defaultValue={ss.instructions || ''}
+                  onBlur={(e) => onUpdateSubStep(ss.id, 'instructions', e.target.value)}
+                />
+              </Box>
+            ))}
           <Button size="small" sx={{ mt: 1, textTransform: 'none' }} onClick={onAddSubStep}>
             + Add Sub-step
           </Button>

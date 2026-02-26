@@ -6,7 +6,7 @@ class Asset < ApplicationRecord
   belongs_to :step_run, optional: true
   belongs_to :terminal_session, optional: true
 
-  has_many :versions, class_name: "AssetVersion", dependent: :destroy
+  has_many :versions, class_name: "AssetVersion", dependent: :destroy, inverse_of: :asset
 
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id folder], message: "already exists in this scope" }
@@ -26,6 +26,16 @@ class Asset < ApplicationRecord
     active
       .where(scope_type: "Project", scope_id: project.id)
       .or(active.where(scope_type: "Company", scope_id: project.company_id))
+  }
+  scope :downloadable_from_project, ->(project) {
+    where(deleted_at: nil)
+      .where(status: %w[active pending_review])
+      .where(scope_type: "Project", scope_id: project.id)
+      .or(
+        where(deleted_at: nil)
+          .where(status: %w[active pending_review])
+          .where(scope_type: "Company", scope_id: project.company_id)
+      )
   }
   scope :scoped_to_project, ->(project) {
     where(scope_type: "Project", scope_id: project.id)

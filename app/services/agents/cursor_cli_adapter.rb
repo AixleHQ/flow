@@ -65,12 +65,7 @@ module Agents
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
-      base = "agent --force"
-      if mode == "non_interactive" && prompt.present?
-        "#{base} -p"
-      else
-        base
-      end
+      "agent --force"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)

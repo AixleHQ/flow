@@ -82,10 +82,10 @@ module ContainerRuntime
 
     # Store file using Docker archive API (works on created/stopped containers)
     # Unlike copy_to, this does NOT require a running container
-    def store_file(id, path, content)
+    def store_file(id, path, content, mode: 0o644)
       container = resolve_container(id)
-      tar_io = build_tar_stream(path, content.to_s)
-      container.archive_in(tar_io.read, "/", overwrite: true)
+      tar_io = build_tar_stream(path, content, mode: mode)
+      container.archive_in_stream("/", overwrite: true) { tar_io.read(Excon.defaults[:chunk_size]).to_s }
       true
     rescue StandardError => e
       Rails.logger.warn("[DockerRuntime] store_file failed for #{path}: #{e.message}")
@@ -113,11 +113,8 @@ module ContainerRuntime
     # Returns Docker wait result: { "StatusCode" => 0 }
     def wait_container(id, timeout = nil)
       container = resolve_container(id)
-      if timeout
-        Timeout.timeout(timeout) { container.wait }
-      else
-        container.wait
-      end
+      wait_seconds = timeout || 1800
+      container.wait(wait_seconds)
     end
 
     # Get container logs (works on stopped containers)

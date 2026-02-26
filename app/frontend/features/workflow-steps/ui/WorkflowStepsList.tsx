@@ -1,5 +1,5 @@
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { type FC, useState } from 'react';
 
 import { useGetStepsQuery, useDeleteStepMutation } from '../api/stepsApi';
@@ -46,7 +46,9 @@ const WorkflowStepsList: FC<WorkflowStepsListProps> = ({ projectId, workflowId }
   return (
     <Box>
       {steps && steps.length > 0 ? (
-        steps.map((step) => <StepCard key={step.id} step={step} onDelete={handleDelete} onEdit={handleEdit} />)
+        steps.map((step) => (
+          <StepCard key={step.id} step={step} allSteps={steps} onDelete={handleDelete} onEdit={handleEdit} />
+        ))
       ) : (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
           No steps yet. Add your first step to get started.

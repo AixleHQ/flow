@@ -48,11 +48,8 @@ development:
   # Use simple pub/sub adapter for development
   adapter: simple
 
-  # Session store examples for development
-  # Use volatile client sessions for faster development
-  # client_session_store_type: volatile
-  # Use persistent server sessions to maintain state across restarts
-  # server_session_store_type: active_record
+  # Persistent server sessions survive container restarts so MCP clients don't lose connection
+  server_session_store_type: active_record
 
   # Thread pool configuration (optional)
   # min_threads: 5     # Minimum number of threads in the pool

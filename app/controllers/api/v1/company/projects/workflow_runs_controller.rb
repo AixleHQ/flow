@@ -73,7 +73,9 @@ module Api
           private
 
           def workflow_run_params
-            params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, input_asset_ids: [], repository_ids: [])
+            permitted = params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, input_asset_ids: [], repository_ids: [])
+            permitted[:step_overrides] = params[:workflow_run][:step_overrides]&.to_unsafe_h || {}
+            permitted
           end
 
           def accessible_workflows
@@ -82,10 +84,17 @@ module Api
 
           def validate_mode!(run, workflow)
             return unless run.non_interactive?
-            return if workflow.steps.all?(&:allow_non_interactive)
 
-            blocking_steps = workflow.steps.reject(&:allow_non_interactive).map(&:name)
-            run.errors.add(:mode, "Cannot run non-interactive: steps #{blocking_steps.join(', ')} require user interaction.")
+            overrides = run.step_overrides || {}
+            blocking_steps = workflow.steps.reject do |step|
+              override = overrides[step.id.to_s]
+              override ? override["auto_run"] : step.allow_non_interactive
+            end
+
+            return if blocking_steps.empty?
+
+            names = blocking_steps.map(&:name)
+            run.errors.add(:mode, "Cannot run fully automatic: steps #{names.join(', ')} require user interaction")
           end
 
           def start_temporal_workflow(run)

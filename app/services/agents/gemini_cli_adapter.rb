@@ -62,11 +62,7 @@ module Agents
     # Session command: gemini --yolo (interactive), gemini -p (non-interactive)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil)
-      if mode == "non_interactive" && prompt.present?
-        "gemini -p"
-      else
-        "gemini --yolo"
-      end
+      "gemini --yolo"
     end
 
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)

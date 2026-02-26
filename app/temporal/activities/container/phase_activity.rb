@@ -29,7 +29,18 @@ module Activities
       private
 
       def resolve_strategy(input)
-        if input.session_id.present?
+        if input.tool_id.present?
+          tool = Tool.find(input.tool_id)
+          project = input.project_id.present? ? Project.find(input.project_id) : nil
+
+          tool.send(:build_strategy,
+            parameters: input.parameters || {},
+            project: project,
+            session: nil,
+            timeout: input.timeout,
+            tool_result_id: input.respond_to?(:tool_result_id) ? input.tool_result_id : nil
+          )
+        elsif input.session_id.present?
           session = TerminalSession.find(input.session_id)
 
           if input.error.present?
@@ -38,16 +49,6 @@ module Activities
           end
 
           session.strategy
-        elsif input.tool_id.present?
-          tool = Tool.find(input.tool_id)
-          project = input.project_id.present? ? Project.find(input.project_id) : nil
-
-          ContainerStrategies::ToolExecutionStrategy.new(
-            tool: tool,
-            parameters: input.parameters || {},
-            project: project,
-            timeout: input.timeout
-          )
         else
           raise ArgumentError, "Cannot resolve strategy: need session_id or tool_id"
         end

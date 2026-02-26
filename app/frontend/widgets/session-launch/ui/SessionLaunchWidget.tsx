@@ -553,7 +553,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
       {/* Mode */}
       <ToggleButtonGroup value={mode} exclusive onChange={handleModeChange} size="small" sx={{ mb: 2 }}>
         <ToggleButton value="interactive">Interactive</ToggleButton>
-        <ToggleButton value="non_interactive">Non-interactive</ToggleButton>
+        <ToggleButton value="non_interactive">Automatic</ToggleButton>
       </ToggleButtonGroup>
 
       {/* Initial Prompt (non-interactive only) */}

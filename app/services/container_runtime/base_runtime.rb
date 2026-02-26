@@ -77,7 +77,7 @@ module ContainerRuntime
 
     private
 
-    def build_tar_stream(path, content)
+    def build_tar_stream(path, content, mode: 0o644)
       normalized = normalize_tar_path(path)
       raise ArgumentError, "path is required" if normalized.blank?
 
@@ -85,7 +85,7 @@ module ContainerRuntime
       tar_io.binmode
 
       Gem::Package::TarWriter.new(tar_io) do |tar|
-        tar.add_file_simple(normalized, 0o644, content.bytesize) do |io|
+        tar.add_file_simple(normalized, mode, content.bytesize) do |io|
           io.write(content)
         end
       end

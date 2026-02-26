@@ -60,6 +60,7 @@ module Api
               tool_ids: [],
               mcp_server_ids: [],
               skill_ids: [],
+              depends_on_step_ids: [],
               sub_steps_attributes: %i[id position name description instructions required _destroy]
             )
           end

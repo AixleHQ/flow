@@ -1,11 +1,7 @@
-import { baseApi, QueryTag } from 'shared/api';
+import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
 import type { WorkflowRun, WorkflowRunAsset, CreateWorkflowRunRequest } from '../lib/types';
-
-interface WorkflowRunsResponse {
-  items: WorkflowRun[];
-}
 
 export const workflowRunsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -14,9 +10,7 @@ export const workflowRunsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowRunsPath(projectId),
         method: 'GET',
       }),
-      transformResponse: (response: WorkflowRun[] | WorkflowRunsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: (response: ApiCollectionResponse<WorkflowRun>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -25,21 +19,17 @@ export const workflowRunsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowRunPath(projectId, runId),
         method: 'GET',
       }),
-      transformResponse: (response: { data: WorkflowRun } | WorkflowRun) => {
-        return 'data' in response ? response.data : response;
-      },
+      transformResponse: (response: ApiResponse<WorkflowRun>) => response.data,
       providesTags: [QueryTag.Workflow],
     }),
 
-    createWorkflowRun: builder.mutation<
-      WorkflowRun,
-      { projectId: number } & CreateWorkflowRunRequest
-    >({
+    createWorkflowRun: builder.mutation<WorkflowRun, { projectId: number } & CreateWorkflowRunRequest>({
       query: ({ projectId, ...data }) => ({
         url: Routes.backend.apiV1CompanyProjectWorkflowRunsPath(projectId),
         method: 'POST',
         data: { workflowRun: data },
       }),
+      transformResponse: (response: ApiResponse<WorkflowRun>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
 
@@ -76,14 +66,12 @@ export const workflowRunsApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Workflow],
     }),
 
-    getWorkflowRunAssets: builder.query<
-      WorkflowRunAsset[],
-      { projectId: number; runId: number }
-    >({
+    getWorkflowRunAssets: builder.query<WorkflowRunAsset[], { projectId: number; runId: number }>({
       query: ({ projectId, runId }) => ({
         url: Routes.backend.apiV1CompanyProjectWorkflowRunAssetsPath(projectId, runId),
         method: 'GET',
       }),
+      transformResponse: (response: ApiCollectionResponse<WorkflowRunAsset>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -99,17 +87,16 @@ export const workflowRunsApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Workflow],
     }),
 
-    exportAllAssets: builder.mutation<
-      { exportedCount: number },
-      { projectId: number; runId: number; folder?: string }
-    >({
-      query: ({ projectId, runId, ...data }) => ({
-        url: Routes.backend.exportAllApiV1CompanyProjectWorkflowRunAssetsPath(projectId, runId),
-        method: 'POST',
-        data,
-      }),
-      invalidatesTags: [QueryTag.Workflow],
-    }),
+    exportAllAssets: builder.mutation<{ exportedCount: number }, { projectId: number; runId: number; folder?: string }>(
+      {
+        query: ({ projectId, runId, ...data }) => ({
+          url: Routes.backend.exportAllApiV1CompanyProjectWorkflowRunAssetsPath(projectId, runId),
+          method: 'POST',
+          data,
+        }),
+        invalidatesTags: [QueryTag.Workflow],
+      },
+    ),
   }),
 });
 
