@@ -7,3 +7,8 @@
 
 aws_region          = "us-east-1"
 tfstate_bucket_name = "palad-tfstate-prod"
+
+# k3s EC2 Instance Configuration
+# Options: t3.micro (1 GB), t3.small (2 GB), t3.medium (4 GB), t3.large (8 GB)
+# For production with PostgreSQL, Redis, Temporal: t3.small minimum, t3.medium recommended
+k3s_instance_type = "t3.small"
