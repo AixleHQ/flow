@@ -93,7 +93,9 @@ const ToolFormDialog: FC<ToolFormDialogProps> = ({ open, onClose, projectId, edi
           toolFilesAttributes: editTool.toolFiles.map((f) => ({
             id: f.id,
             path: f.path,
-            content: f.content,
+            content: f.content || '',
+            existingFileUrl: f.fileUrl || undefined,
+            existingFileName: f.fileName || undefined,
           })),
         });
       } else {
@@ -116,25 +118,94 @@ const ToolFormDialog: FC<ToolFormDialogProps> = ({ open, onClose, projectId, edi
     onClose();
   };
 
+  const buildFormData = (data: ToolFormData): FormData => {
+    const formData = new FormData();
+    formData.append('tool[name]', data.name);
+    formData.append('tool[display_name]', data.displayName);
+    if (data.description) formData.append('tool[description]', data.description);
+    formData.append('tool[docker_image]', data.dockerImage);
+    if (data.command) formData.append('tool[command]', data.command);
+
+    data.requiredConfigItems?.forEach((item) => {
+      formData.append('tool[required_config_items][]', item);
+    });
+
+    if (data.inputSchema && Object.keys(data.inputSchema).length > 0) {
+      formData.append('tool[input_schema]', JSON.stringify(data.inputSchema));
+    }
+
+    data.toolFilesAttributes?.forEach((tf, i) => {
+      const prefix = `tool[tool_files_attributes][${i}]`;
+      if (tf.id) formData.append(`${prefix}[id]`, String(tf.id));
+      formData.append(`${prefix}[path]`, tf.path);
+      if (tf._destroy) {
+        formData.append(`${prefix}[_destroy]`, '1');
+      } else if (tf.file) {
+        formData.append(`${prefix}[file]`, tf.file);
+      } else if (tf.content) {
+        formData.append(`${prefix}[content]`, tf.content);
+      }
+    });
+
+    return formData;
+  };
+
+  const hasFileUploads = (data: ToolFormData): boolean => {
+    return !!data.toolFilesAttributes?.some((tf) => tf.file instanceof File);
+  };
+
+  const toJsonPayload = (data: ToolFormData) => ({
+    name: data.name,
+    displayName: data.displayName,
+    description: data.description,
+    dockerImage: data.dockerImage,
+    command: data.command,
+    requiredConfigItems: data.requiredConfigItems,
+    inputSchema: data.inputSchema,
+    toolFilesAttributes: data.toolFilesAttributes?.map(({ id, path, content, _destroy }) => ({
+      id,
+      path,
+      content: content || '',
+      _destroy,
+    })),
+  });
+
   const onSubmit = async (data: ToolFormData) => {
     try {
-      if (isEditMode && editTool) {
-        const updateData = {
-          id: editTool.id,
-          ...data,
-        };
+      const useMultipart = hasFileUploads(data);
 
-        if (projectId && editTool.scopeType === 'Project') {
-          await updateProjectTool({ projectId, ...updateData }).unwrap();
+      if (isEditMode && editTool) {
+        if (useMultipart) {
+          const formData = buildFormData(data);
+          if (projectId && editTool.scopeType === 'Project') {
+            await updateProjectTool({ projectId, id: editTool.id, formData }).unwrap();
+          } else {
+            await updateCompanyTool({ id: editTool.id, formData }).unwrap();
+          }
         } else {
-          await updateCompanyTool(updateData).unwrap();
+          const payload = toJsonPayload(data);
+          if (projectId && editTool.scopeType === 'Project') {
+            await updateProjectTool({ projectId, id: editTool.id, ...payload }).unwrap();
+          } else {
+            await updateCompanyTool({ id: editTool.id, ...payload }).unwrap();
+          }
         }
         enqueueSnackbar('Tool updated successfully', { variant: 'success' });
       } else {
-        if (projectId) {
-          await createProjectTool({ projectId, ...data }).unwrap();
+        if (useMultipart) {
+          const formData = buildFormData(data);
+          if (projectId) {
+            await createProjectTool({ projectId, formData }).unwrap();
+          } else {
+            await createCompanyTool({ formData }).unwrap();
+          }
         } else {
-          await createCompanyTool(data).unwrap();
+          const payload = toJsonPayload(data);
+          if (projectId) {
+            await createProjectTool({ projectId, ...payload }).unwrap();
+          } else {
+            await createCompanyTool(payload).unwrap();
+          }
         }
         enqueueSnackbar('Tool created successfully', { variant: 'success' });
       }

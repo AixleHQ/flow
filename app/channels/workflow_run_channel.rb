@@ -43,15 +43,17 @@ class WorkflowRunChannel < ApplicationCable::Channel
 
   class << self
     def broadcast_update(workflow_run)
+      run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
       broadcast_to(
-        workflow_run,
-        { "type" => "run_update", "data" => WorkflowRunSerializer.new(workflow_run).serializable_hash }
+        run,
+        { "type" => "run_update", "data" => WorkflowRunSerializer.new(run).serializable_hash }
       )
     end
 
     def broadcast_step_update(workflow_run, step_run)
+      run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
       broadcast_to(
-        workflow_run,
+        run,
         {
           "type" => "step_run_update",
           "data" => StepRunSerializer.new(step_run).serializable_hash
@@ -60,8 +62,9 @@ class WorkflowRunChannel < ApplicationCable::Channel
     end
 
     def broadcast_sub_step_update(workflow_run, sub_step_run)
+      run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
       broadcast_to(
-        workflow_run,
+        run,
         {
           "type" => "sub_step_run_update",
           "data" => SubStepRunSerializer.new(sub_step_run).serializable_hash

@@ -5,6 +5,7 @@ class WorkflowRunSerializer < ApplicationSerializer
              :state, :mode,
              :input_asset_ids, :shared_context,
              :repository_ids, :agent_runtime,
+             :step_overrides,
              :started_at, :completed_at,
              :created_at, :updated_at
 

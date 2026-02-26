@@ -37,7 +37,7 @@ export const SessionSummaryCard: React.FC<{ session: ITerminalSession }> = ({ se
         {session.mode && (
           <Chip
             size="small"
-            label={session.mode === 'interactive' ? 'Interactive' : 'Non-interactive'}
+            label={session.mode === 'interactive' ? 'Interactive' : session.mode === 'mixed' ? 'Mixed' : 'Automatic'}
             variant="outlined"
           />
         )}

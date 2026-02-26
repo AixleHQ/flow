@@ -160,7 +160,7 @@ export const ToolsPanel: FC<ToolsPanelProps> = ({ projectId }) => {
           <Typography sx={styles.subtitle}>
             {isProjectContext
               ? 'Manage tools for this project. Project tools override company tools with the same name.'
-              : 'Manage company-wide tools. Internal tools are system-provided and read-only.'}
+              : 'Manage company-wide tools. System tools are platform-provided and read-only.'}
           </Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setFormDialogOpen(true)}>
@@ -185,7 +185,7 @@ export const ToolsPanel: FC<ToolsPanelProps> = ({ projectId }) => {
         />
         <ToggleButtonGroup value={filters.kind} exclusive onChange={handleKindFilterChange} size="small">
           <ToggleButton value="all">All</ToggleButton>
-          <ToggleButton value="internal">Internal</ToggleButton>
+          <ToggleButton value="system">System</ToggleButton>
           <ToggleButton value="custom">Custom</ToggleButton>
         </ToggleButtonGroup>
       </Box>

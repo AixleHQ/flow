@@ -57,10 +57,10 @@ class StepRun < ApplicationRecord
     self[:retry_count] || 0
   end
 
-  private
-
   def broadcast_update!
-    WorkflowRunChannel.broadcast_step_update(workflow_run_id, self)
+    wr = workflow_run
+    wr.touch
+    WorkflowRunChannel.broadcast_update(wr.reload)
   rescue StandardError => e
     Rails.logger.warn("[StepRun#broadcast_update!] #{e.message}")
   end

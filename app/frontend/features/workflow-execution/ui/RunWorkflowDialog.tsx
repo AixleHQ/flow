@@ -60,9 +60,7 @@ export const RunWorkflowDialog: FC<RunWorkflowDialogProps> = ({
           <FormLabel component="legend">Execution Mode</FormLabel>
           <RadioGroup
             value={mode}
-            onChange={(e) =>
-              setMode(e.target.value as 'interactive' | 'non_interactive' | 'mixed')
-            }
+            onChange={(e) => setMode(e.target.value as 'interactive' | 'non_interactive' | 'mixed')}
           >
             <FormControlLabel
               value="interactive"
@@ -87,7 +85,7 @@ export const RunWorkflowDialog: FC<RunWorkflowDialogProps> = ({
                     Mixed
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Non-interactive steps auto-advance, others wait for approval
+                    Steps marked "auto-run" advance automatically, others pause for approval
                   </Typography>
                 </>
               }
@@ -99,12 +97,12 @@ export const RunWorkflowDialog: FC<RunWorkflowDialogProps> = ({
               label={
                 <>
                   <Typography variant="body2" fontWeight={500}>
-                    Non-Interactive
+                    Fully Automatic
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {canRunNonInteractive
-                      ? 'All steps run automatically without approval'
-                      : 'Not all steps support non-interactive mode'}
+                      ? 'All steps run automatically without stopping'
+                      : 'Not all steps support automatic execution'}
                   </Typography>
                 </>
               }

@@ -1,11 +1,7 @@
-import { baseApi, QueryTag } from 'shared/api';
+import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
 import type { Workflow, CreateWorkflowRequest, UpdateWorkflowRequest } from '../lib/types';
-
-interface WorkflowsResponse {
-  items: Workflow[];
-}
 
 export const workflowsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -14,9 +10,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyWorkflowsPath(),
         method: 'GET',
       }),
-      transformResponse: (response: Workflow[] | WorkflowsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: (response: ApiCollectionResponse<Workflow>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -25,9 +19,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowsPath(projectId),
         method: 'GET',
       }),
-      transformResponse: (response: Workflow[] | WorkflowsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: (response: ApiCollectionResponse<Workflow>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -36,9 +28,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyWorkflowPath(id),
         method: 'GET',
       }),
-      transformResponse: (response: { data: Workflow } | Workflow) => {
-        return 'data' in response ? response.data : response;
-      },
+      transformResponse: (response: ApiResponse<Workflow>) => response.data,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -47,9 +37,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowPath(projectId, id),
         method: 'GET',
       }),
-      transformResponse: (response: { data: Workflow } | Workflow) => {
-        return 'data' in response ? response.data : response;
-      },
+      transformResponse: (response: ApiResponse<Workflow>) => response.data,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -59,9 +47,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { workflow: data },
       }),
-      transformResponse: (response: { workflow: Workflow } | Workflow) => {
-        return 'workflow' in response ? response.workflow : response;
-      },
+      transformResponse: (response: ApiResponse<Workflow>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
 
@@ -71,9 +57,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { workflow: data },
       }),
-      transformResponse: (response: { workflow: Workflow } | Workflow) => {
-        return 'workflow' in response ? response.workflow : response;
-      },
+      transformResponse: (response: ApiResponse<Workflow>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
 
@@ -116,9 +100,7 @@ export const workflowsApi = baseApi.injectEndpoints({
         url: Routes.backend.duplicateApiV1CompanyProjectWorkflowPath(projectId, id),
         method: 'POST',
       }),
-      transformResponse: (response: { workflow: Workflow } | Workflow) => {
-        return 'workflow' in response ? response.workflow : response;
-      },
+      transformResponse: (response: ApiResponse<Workflow>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
   }),

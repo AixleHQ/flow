@@ -54,6 +54,7 @@ export interface CreateAssetPayload {
 
 export interface UpdateAssetRequest {
   id: number;
+  name?: string;
   folder?: string | null;
   tags?: string[];
   public?: boolean;

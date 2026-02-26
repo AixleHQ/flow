@@ -40,6 +40,7 @@ export interface WorkflowRun {
   userId: number;
   state: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
   mode: 'interactive' | 'non_interactive' | 'mixed';
+  stepOverrides: Record<string, StepOverride>;
   inputAssetIds: number[];
   repositoryIds: number[];
   agentRuntime: string | null;
@@ -53,9 +54,14 @@ export interface WorkflowRun {
   updatedAt: string;
 }
 
+export interface StepOverride {
+  autoRun: boolean;
+}
+
 export interface CreateWorkflowRunRequest {
   workflowId: number;
   mode: 'interactive' | 'non_interactive' | 'mixed';
+  stepOverrides?: Record<string, StepOverride>;
   inputAssetIds?: number[];
   repositoryIds?: number[];
   agentRuntime?: string;
@@ -69,5 +75,6 @@ export interface WorkflowRunAsset {
   s3Key: string | null;
   contentType: string | null;
   fileSize: number | null;
+  downloadUrl: string | null;
   createdAt: string;
 }

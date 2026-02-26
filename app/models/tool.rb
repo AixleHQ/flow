@@ -1,25 +1,29 @@
 # frozen_string_literal: true
 
-# Tool — definition for executable tools (internal or custom)
+# Tool — definition for executable tools
 #
-# kind: internal | custom
-# - internal: system-provided by Palad, no scope, read-only
-# - custom: user-created tools with scope (Company or Project)
+# kind:
+# - custom:   user-created, scoped to Company or Project
+# - system:   platform-provided "big" tools, visible in UI, attached explicitly
+# - internal: invisible helpers, auto-injected when session has container tools (read_tool_result)
+# - workflow: invisible, auto-injected only in workflow_step sessions (list_sub_steps, mark_sub_step, write_step_note)
 #
-# scope: Company | Project (polymorphic, null for internal)
+# execution_mode: app | container
+# - app:       executes in Rails process (InternalToolExecutor), synchronous
+# - container: runs in Docker via Temporal workflow, async
+#
+# scope: Company | Project (polymorphic, null for system/internal/workflow)
 class Tool < ApplicationRecord
   extend Enumerize
 
-  enumerize :kind, in: %i[internal custom], default: :custom, predicates: true
+  enumerize :kind, in: %i[custom system internal workflow], default: :custom, predicates: true
+  enumerize :execution_mode, in: %i[app container], default: :container, predicates: true
 
-  # Polymorphic scope (Company or Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
 
-  # Files to mount into container
   has_many :tool_files, dependent: :destroy
   accepts_nested_attributes_for :tool_files, allow_destroy: true
 
-  # Auto-downcase name
   def name=(val)
     super(val&.downcase&.gsub(/[^a-z0-9_]/, "_"))
   end
@@ -34,36 +38,38 @@ class Tool < ApplicationRecord
   validates :docker_image, presence: true, if: :custom?
 
   # Scopes
-  scope :internal_tools, -> { where(kind: "internal") }
   scope :custom_tools, -> { where(kind: "custom") }
+  scope :system_tools, -> { where(kind: "system") }
+  scope :internal_tools, -> { where(kind: "internal") }
+  scope :workflow_tools, -> { where(kind: "workflow") }
+
   scope :for_company, ->(company) { custom_tools.where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { custom_tools.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Get merged list of tools for a project (internal + company + project)
-  # Returns array with scope_indicator method on each tool
+  # Tools visible in UI management (system + custom, not internal/workflow)
+  scope :ui_visible, -> { where(kind: %w[custom system]) }
+
+  # Get merged list of tools for a project (system + company + project)
   def self.merged_for_project(project)
-    all_internal = internal_tools.enabled.to_a
+    all_system = system_tools.enabled.to_a
     company_tools = for_company(project.company).enabled.to_a
     project_tools = for_project(project).enabled.to_a
     project_names = project_tools.map(&:name)
 
     result = []
 
-    # Add internal tools (always included)
-    all_internal.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "internal" }
+    all_system.each do |tool|
+      tool.define_singleton_method(:scope_indicator) { "system" }
       result << tool
     end
 
-    # Add project tools (they override company tools)
     project_tools.each do |tool|
       overrides = company_tools.any? { |ct| ct.name == tool.name }
       tool.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
       result << tool
     end
 
-    # Add company tools that are NOT overridden by project
     company_tools.reject { |ct| project_names.include?(ct.name) }.each do |tool|
       tool.define_singleton_method(:scope_indicator) { "company" }
       result << tool
@@ -72,15 +78,15 @@ class Tool < ApplicationRecord
     result.sort_by(&:name)
   end
 
-  # Get merged list for company level (internal + company)
+  # Get merged list for company level (system + company)
   def self.merged_for_company(company)
-    all_internal = internal_tools.enabled.to_a
+    all_system = system_tools.enabled.to_a
     company_tools = for_company(company).enabled.to_a
 
     result = []
 
-    all_internal.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "internal" }
+    all_system.each do |tool|
+      tool.define_singleton_method(:scope_indicator) { "system" }
       result << tool
     end
 
@@ -94,38 +100,64 @@ class Tool < ApplicationRecord
 
   WORKFLOW_TIMEOUT = 3600 # 1 hour
 
-  # Execute tool in a container via Temporal (blocking).
+  # Execute tool.
   #
-  # @param parameters [Hash] Tool parameters
-  # @param project [Project, nil] Project context
-  # @param timeout [Integer] Execution timeout in seconds
-  # @return [Hash] { exit_code:, stdout:, stderr:, duration_ms: }
-  def execute(parameters: {}, project: nil, timeout: 300)
-    strategy = ContainerStrategies::ToolExecutionStrategy.new(
-      tool: self, parameters: parameters, project: project, timeout: timeout
-    )
-
-    TemporalService.execute_workflow(
-      WorkflowService.container_workflow,
-      { tool_id: id, parameters: parameters, project_id: project&.id,
-        timeout: timeout, manifest: strategy.build_manifest }
-    )
+  # Routes based on execution_mode:
+  # - app       → InternalToolExecutor (Ruby handler, synchronous)
+  # - container → Temporal start_workflow (Docker container, async)
+  def execute(parameters: {}, project: nil, session: nil, timeout: 300, tool_result_id: nil)
+    case execution_mode.to_sym
+    when :app
+      InternalToolExecutor.execute(self, parameters, session)
+    when :container
+      start_container_execution(
+        parameters: parameters, project: project,
+        session: session, timeout: timeout,
+        tool_result_id: tool_result_id
+      )
+    end
   end
 
-  # Start tool execution async (non-blocking).
-  def start_execution(parameters: {}, project: nil, timeout: 300)
-    strategy = ContainerStrategies::ToolExecutionStrategy.new(
-      tool: self, parameters: parameters, project: project, timeout: timeout
+  # True for kinds not owned by users (system, internal, workflow)
+  def platform_tool?
+    !custom?
+  end
+
+  private
+
+  def start_container_execution(parameters:, project:, session:, timeout:, tool_result_id:)
+    strategy = build_strategy(
+      parameters: parameters, project: project,
+      session: session, timeout: timeout,
+      tool_result_id: tool_result_id
     )
-    workflow_id = "tool-execution-#{id}-#{SecureRandom.hex(8)}"
+    workflow_id = "tool-exec-#{id}-#{SecureRandom.hex(8)}"
 
     TemporalService.start_workflow(
       WorkflowService.container_workflow,
-      { tool_id: id, parameters: parameters, project_id: project&.id,
+      { tool_id: id, tool_result_id: tool_result_id,
+        parameters: parameters, project_id: project&.id,
         timeout: timeout, manifest: strategy.build_manifest },
       id: workflow_id,
       execution_timeout: WORKFLOW_TIMEOUT
     )
+  end
+
+  def build_strategy(parameters:, project:, session:, timeout:, tool_result_id:)
+    if ContainerStrategies::InternalToolStrategy.registered?(name)
+      ContainerStrategies::InternalToolStrategy.build_for(
+        name,
+        params: parameters,
+        session: session,
+        tool_result_id: tool_result_id,
+        timeout: timeout
+      )
+    else
+      ContainerStrategies::CustomToolStrategy.new(
+        tool: self, parameters: parameters, project: project,
+        timeout: timeout, tool_result_id: tool_result_id
+      )
+    end
   end
 
   # Ransack

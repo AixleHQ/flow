@@ -2,11 +2,13 @@ import {
   Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   MenuItem,
   Select,
   TextField,
@@ -15,12 +17,16 @@ import {
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useGetCompanyRepositoriesQuery } from 'features/repositories-management/api/repositoriesApi';
+import { useGetCurrentUserQuery, AVAILABLE_AGENTS, type AgentType } from 'entities/user';
+import { useGetProjectAssetsQuery } from 'features/assets-management';
+import type { Asset } from 'features/assets-management/lib/types';
+import { useGetProjectRepositoriesQuery } from 'features/repositories-management/api/repositoriesApi';
 import type { Repository } from 'features/repositories-management/lib/types';
 import { useCreateWorkflowRunMutation } from 'features/workflow-execution/api/workflowRunsApi';
-import type { CreateWorkflowRunRequest } from 'features/workflow-execution/lib/types';
+import { useGetStepsQuery } from 'features/workflow-steps/api/stepsApi';
+import type { Step } from 'features/workflow-steps/lib/types';
 import { Routes } from 'shared/routes';
 
 interface RunWorkflowModalProps {
@@ -30,16 +36,12 @@ interface RunWorkflowModalProps {
   onClose: () => void;
 }
 
-const RUNTIME_OPTIONS = [
-  { value: 'docker', label: 'Docker (default)' },
-  { value: 'local', label: 'Local' },
-  { value: 'cloud', label: 'Cloud' },
-];
+type UiMode = 'interactive' | 'non_interactive' | 'custom';
 
-const MODE_OPTIONS = [
+const MODE_OPTIONS: { value: UiMode; label: string }[] = [
   { value: 'interactive', label: 'Interactive — pause at each step for review' },
-  { value: 'non_interactive', label: 'Non-interactive — run all steps automatically' },
-  { value: 'mixed', label: 'Mixed — auto-advance compatible steps' },
+  { value: 'non_interactive', label: 'Fully automatic — run all steps without stopping' },
+  { value: 'custom', label: 'Custom — choose which steps to auto-run' },
 ];
 
 const styles = {
@@ -74,15 +76,6 @@ const styles = {
     color: 'text.primary',
     marginBottom: '12px',
   },
-  formField: {
-    marginBottom: '16px',
-  },
-  label: {
-    fontSize: '13px',
-    fontWeight: 500,
-    color: 'text.primary',
-    marginBottom: '6px',
-  },
   actions: {
     padding: '16px 24px',
     borderTop: '1px solid',
@@ -98,42 +91,144 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
-  const [mode, setMode] = useState<CreateWorkflowRunRequest['mode']>('interactive');
+  const [uiMode, setUiMode] = useState<UiMode>('interactive');
+  const [stepAutoRun, setStepAutoRun] = useState<Record<number, boolean>>({});
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
-  const [agentRuntime, setAgentRuntime] = useState('docker');
+  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
+  const [agentRuntime, setAgentRuntime] = useState<string>('');
 
-  const { data: repositories = [] } = useGetCompanyRepositoriesQuery();
+  const { data: currentUser } = useGetCurrentUserQuery();
+  const { data: repositories = [] } = useGetProjectRepositoriesQuery(projectId);
+  const { data: projectAssets = [] } = useGetProjectAssetsQuery(projectId);
+  const { data: steps = [] } = useGetStepsQuery({ projectId, workflowId: workflow?.id ?? 0 }, { skip: !workflow });
   const [createRun, { isLoading }] = useCreateWorkflowRunMutation();
+
+  useEffect(() => {
+    if (steps.length > 0) {
+      const defaults: Record<number, boolean> = {};
+      steps.forEach((s) => {
+        defaults[s.id] = s.allowNonInteractive ?? false;
+      });
+      setStepAutoRun(defaults);
+    }
+  }, [steps]);
+
+  interface Wave {
+    index: number;
+    steps: Step[];
+    deps: string;
+  }
+
+  const waves: Wave[] = useMemo(() => {
+    if (steps.length === 0) return [];
+
+    const sorted = [...steps].sort((a, b) => a.position - b.position);
+    const waveMap = new Map<number, number>();
+    const nameMap = new Map<number, string>();
+
+    sorted.forEach((s) => nameMap.set(s.id, s.name));
+
+    sorted.forEach((s) => {
+      const deps = s.dependsOnStepIds ?? [];
+      if (deps.length === 0) {
+        waveMap.set(s.id, 0);
+      } else {
+        const maxDep = Math.max(...deps.map((d) => waveMap.get(d) ?? 0));
+        waveMap.set(s.id, maxDep + 1);
+      }
+    });
+
+    const grouped = new Map<number, Step[]>();
+    sorted.forEach((s) => {
+      const w = waveMap.get(s.id) ?? 0;
+      grouped.set(w, [...(grouped.get(w) ?? []), s]);
+    });
+
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([idx, waveSteps]) => {
+        const depIds = new Set(waveSteps.flatMap((s) => s.dependsOnStepIds ?? []));
+        const depNames = Array.from(depIds)
+          .map((id) => nameMap.get(id))
+          .filter(Boolean);
+        return {
+          index: idx,
+          steps: waveSteps,
+          deps: depNames.join(', '),
+        };
+      });
+  }, [steps]);
+
+  const configuredAgents = currentUser?.configuredAgents ?? [];
+  const agentOptions = useMemo(
+    () => AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)),
+    [configuredAgents],
+  );
+
+  const effectiveRuntime = agentRuntime || agentOptions[0]?.type || '';
 
   const selectedRepos = useMemo(
     () => repositories.filter((r: Repository) => selectedRepoIds.includes(r.id)),
     [repositories, selectedRepoIds],
   );
 
+  const activeAssets = useMemo(
+    () => projectAssets.filter((a: Asset) => !a.deletedAt),
+    [projectAssets],
+  );
+
+  const selectedAssets = useMemo(
+    () => activeAssets.filter((a: Asset) => selectedAssetIds.includes(a.id)),
+    [activeAssets, selectedAssetIds],
+  );
+
   const handleRun = useCallback(async () => {
-    if (!workflow) return;
+    if (!workflow || !effectiveRuntime) return;
+
+    const backendMode = uiMode === 'custom' ? 'mixed' : uiMode;
+    const overrides: Record<string, { autoRun: boolean }> =
+      uiMode === 'custom' ? Object.fromEntries(Object.entries(stepAutoRun).map(([id, v]) => [id, { autoRun: v }])) : {};
+
     try {
       const result = await createRun({
         projectId,
         workflowId: workflow.id,
-        mode,
+        mode: backendMode,
+        stepOverrides: overrides,
         repositoryIds: selectedRepoIds,
-        agentRuntime,
+        inputAssetIds: selectedAssetIds,
+        agentRuntime: effectiveRuntime,
       }).unwrap();
       enqueueSnackbar('Workflow run started', { variant: 'success' });
       handleClose();
       navigate({
         to: Routes.frontend.workflowRunPath(String(projectId), String(result.id)),
       });
-    } catch {
-      enqueueSnackbar('Failed to start workflow run', { variant: 'error' });
+    } catch (err) {
+      const message =
+        (err as { data?: { errors?: Record<string, string[]> } })?.data?.errors?.mode?.[0] ||
+        (err as { data?: { error?: string } })?.data?.error ||
+        'Failed to start workflow run';
+      enqueueSnackbar(message, { variant: 'error' });
     }
-  }, [workflow, projectId, mode, selectedRepoIds, agentRuntime, createRun, enqueueSnackbar, navigate]);
+  }, [
+    workflow,
+    projectId,
+    uiMode,
+    stepAutoRun,
+    selectedRepoIds,
+    selectedAssetIds,
+    effectiveRuntime,
+    createRun,
+    enqueueSnackbar,
+    navigate,
+  ]);
 
   const handleClose = useCallback(() => {
-    setMode('interactive');
+    setUiMode('interactive');
     setSelectedRepoIds([]);
-    setAgentRuntime('docker');
+    setSelectedAssetIds([]);
+    setAgentRuntime('');
     onClose();
   }, [onClose]);
 
@@ -164,37 +259,142 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
         {/* Execution Mode */}
         <Box sx={styles.section}>
           <Typography sx={styles.sectionTitle}>Execution Mode</Typography>
-          <Select
-            fullWidth
-            size="small"
-            value={mode}
-            onChange={(e) => setMode(e.target.value as CreateWorkflowRunRequest['mode'])}
-          >
+          <Select fullWidth size="small" value={uiMode} onChange={(e) => setUiMode(e.target.value as UiMode)}>
             {MODE_OPTIONS.map((opt) => (
               <MenuItem key={opt.value} value={opt.value}>
                 {opt.label}
               </MenuItem>
             ))}
           </Select>
+
+          {uiMode !== 'custom' && waves.length > 0 && (
+            <Box sx={{ mt: 1, pl: 1 }}>
+              {waves.map((wave) => (
+                <Box key={wave.index} sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                  {wave.steps.map((s) => {
+                    const willAutoRun = uiMode === 'non_interactive' || s.allowNonInteractive;
+                    return (
+                      <Chip
+                        key={s.id}
+                        label={s.name}
+                        size="small"
+                        color={willAutoRun ? 'success' : 'default'}
+                        variant="outlined"
+                        sx={{ fontSize: '11px' }}
+                      />
+                    );
+                  })}
+                  {wave.index < waves.length - 1 && (
+                    <Typography variant="caption" sx={{ alignSelf: 'center', color: 'text.disabled', mx: 0.5 }}>
+                      {'\u2192'}
+                    </Typography>
+                  )}
+                </Box>
+              ))}
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                <Chip
+                  label=""
+                  size="small"
+                  color="success"
+                  variant="outlined"
+                  sx={{ width: 10, height: 14, mr: 0.5 }}
+                />
+                auto
+                <Chip label="" size="small" variant="outlined" sx={{ width: 10, height: 14, mx: 0.5, ml: 1.5 }} />
+                interactive
+              </Typography>
+            </Box>
+          )}
+
+          {uiMode === 'custom' && waves.length > 0 && (
+            <Box sx={{ mt: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                Select which steps to run automatically:
+              </Typography>
+              {waves.map((wave) => (
+                <Box
+                  key={wave.index}
+                  sx={{
+                    mb: 1.5,
+                    pl: 1,
+                    borderLeft: '2px solid',
+                    borderColor: wave.steps.length > 1 ? 'info.main' : 'divider',
+                  }}
+                >
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 600, color: 'text.secondary', mb: 0.5, display: 'block' }}
+                  >
+                    {wave.index === 0 ? 'Start' : `After ${wave.deps}`}
+                    {wave.steps.length > 1 && ' (parallel)'}
+                  </Typography>
+                  {wave.steps.map((step) => {
+                    const autoRun = stepAutoRun[step.id] ?? false;
+                    return (
+                      <FormControlLabel
+                        key={step.id}
+                        control={
+                          <Checkbox
+                            size="small"
+                            checked={autoRun}
+                            disabled={!step.allowNonInteractive}
+                            onChange={(e) => setStepAutoRun((prev) => ({ ...prev, [step.id]: e.target.checked }))}
+                          />
+                        }
+                        label={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <Typography variant="body2">{step.name}</Typography>
+                            <Chip
+                              label={autoRun ? 'auto' : 'interactive'}
+                              size="small"
+                              color={autoRun ? 'success' : 'default'}
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: '10px' }}
+                            />
+                            {!step.allowNonInteractive && (
+                              <Chip
+                                label="requires input"
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                sx={{ height: 18, fontSize: '10px' }}
+                              />
+                            )}
+                          </Box>
+                        }
+                        sx={{ display: 'flex', mb: 0.25 }}
+                      />
+                    );
+                  })}
+                </Box>
+              ))}
+            </Box>
+          )}
         </Box>
 
         {/* Agent Runtime */}
         <Box sx={styles.section}>
           <Typography sx={styles.sectionTitle}>Agent Runtime</Typography>
-          <Select
-            fullWidth
-            size="small"
-            value={agentRuntime}
-            onChange={(e) => setAgentRuntime(e.target.value)}
-          >
-            {RUNTIME_OPTIONS.map((opt) => (
-              <MenuItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </MenuItem>
-            ))}
-          </Select>
+          {agentOptions.length > 0 ? (
+            <Select
+              fullWidth
+              size="small"
+              value={effectiveRuntime}
+              onChange={(e) => setAgentRuntime(e.target.value as AgentType)}
+            >
+              {agentOptions.map((agent) => (
+                <MenuItem key={agent.type} value={agent.type}>
+                  {agent.name}
+                </MenuItem>
+              ))}
+            </Select>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No configured agents. Set up agent credentials in your profile first.
+            </Typography>
+          )}
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            Environment where agents will execute steps
+            AI agent that will execute workflow steps
           </Typography>
         </Box>
 
@@ -211,13 +411,7 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
             renderInput={(params) => <TextField {...params} placeholder="Select repositories to mount..." />}
             renderTags={(value, getTagProps) =>
               value.map((repo, index) => (
-                <Chip
-                  {...getTagProps({ index })}
-                  key={repo.id}
-                  label={repo.repoName}
-                  size="small"
-                  variant="outlined"
-                />
+                <Chip {...getTagProps({ index })} key={repo.id} label={repo.repoName} size="small" variant="outlined" />
               ))
             }
             isOptionEqualToValue={(opt, val) => opt.id === val.id}
@@ -226,11 +420,49 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
             Selected repos will be available to steps that have &quot;Mount repositories&quot; enabled
           </Typography>
         </Box>
+
+        {/* Input Assets */}
+        <Box sx={styles.section}>
+          <Typography sx={styles.sectionTitle}>Input Assets</Typography>
+          <Autocomplete
+            multiple
+            size="small"
+            options={activeAssets}
+            getOptionLabel={(a: Asset) => {
+              const folder = a.folder ? `${a.folder}/` : '';
+              return `${folder}${a.name}`;
+            }}
+            value={selectedAssets}
+            onChange={(_, newValue) => setSelectedAssetIds(newValue.map((a: Asset) => a.id))}
+            renderInput={(params) => <TextField {...params} placeholder="Select assets to include..." />}
+            renderTags={(value, getTagProps) =>
+              value.map((asset, index) => (
+                <Chip
+                  {...getTagProps({ index })}
+                  key={asset.id}
+                  label={asset.name}
+                  size="small"
+                  variant="outlined"
+                />
+              ))
+            }
+            groupBy={(a: Asset) => a.folder || 'Root'}
+            isOptionEqualToValue={(opt, val) => opt.id === val.id}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            Project assets that will be available as inputs to workflow steps
+          </Typography>
+        </Box>
       </DialogContent>
 
       <DialogActions sx={styles.actions}>
         <Button onClick={handleClose}>Cancel</Button>
-        <Button variant="contained" onClick={handleRun} disabled={isLoading} sx={{ minWidth: 120 }}>
+        <Button
+          variant="contained"
+          onClick={handleRun}
+          disabled={isLoading || !effectiveRuntime}
+          sx={{ minWidth: 120 }}
+        >
           {isLoading ? 'Starting...' : 'Run Workflow'}
         </Button>
       </DialogActions>

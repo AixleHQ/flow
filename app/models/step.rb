@@ -15,8 +15,36 @@ class Step < ApplicationRecord
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
+  validate :depends_on_step_ids_valid
 
   default_scope { order(:position) }
+
+  def dependency_steps
+    return Step.none if depends_on_step_ids.blank?
+
+    workflow.steps.where(id: depends_on_step_ids)
+  end
+
+  def root?
+    depends_on_step_ids.blank?
+  end
+
+  private
+
+  def depends_on_step_ids_valid
+    return if depends_on_step_ids.blank?
+
+    if depends_on_step_ids.include?(id)
+      errors.add(:depends_on_step_ids, "cannot include self")
+      return
+    end
+
+    sibling_ids = workflow.steps.where.not(id: id).pluck(:id)
+    invalid_ids = depends_on_step_ids - sibling_ids
+    if invalid_ids.any?
+      errors.add(:depends_on_step_ids, "contains invalid step ids: #{invalid_ids.join(', ')}")
+    end
+  end
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[name position created_at updated_at]

@@ -78,7 +78,7 @@ module Api
         end
 
         def asset_update_params
-          params.require(:asset).permit(:folder, :public, tags: [])
+          params.require(:asset).permit(:name, :folder, :public, tags: [])
         end
 
         def version_params

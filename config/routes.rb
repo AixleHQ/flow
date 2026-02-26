@@ -128,6 +128,7 @@ Rails.application.routes.draw do
               resources :workflow_run_assets, only: %i[index], path: "assets" do
                 member do
                   post :export
+                  get :download
                 end
                 collection do
                   post :export_all
@@ -157,6 +158,7 @@ Rails.application.routes.draw do
     resources :session_logs, only: %i[index show]
     resources :assets, only: %i[index show]
     resources :asset_versions, only: %i[index show]
+    resources :tool_results, only: %i[index show]
   end
 
   scope module: :web, defaults: { format: :html } do

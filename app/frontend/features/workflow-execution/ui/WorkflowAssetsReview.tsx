@@ -2,6 +2,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -26,6 +27,7 @@ import type { WorkflowRunAsset } from '../lib/types';
 interface Props {
   projectId: number;
   runId: number;
+  stepNameMap?: Record<number, string>;
 }
 
 function humanFileSize(bytes: number | null): string {
@@ -37,7 +39,7 @@ function humanFileSize(bytes: number | null): string {
 
 type ExportTarget = { type: 'single'; asset: WorkflowRunAsset } | { type: 'all' };
 
-export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
+export const WorkflowAssetsReview = ({ projectId, runId, stepNameMap = {} }: Props) => {
   const { data: assets, isLoading } = useGetWorkflowRunAssetsQuery({ projectId, runId });
   const [exportAsset] = useExportAssetMutation();
   const [exportAll, { isLoading: exportingAll }] = useExportAllAssetsMutation();
@@ -63,10 +65,10 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
           assetId: exportTarget.asset.id,
           folder: folderParam,
         }).unwrap();
-        setSnackbar(`Exported "${exportTarget.asset.name}" to project`);
+        setSnackbar(`Exported "${exportTarget.asset.name}" to project assets`);
       } else {
         const result = await exportAll({ projectId, runId, folder: folderParam }).unwrap();
-        setSnackbar(`Exported ${result.exportedCount} assets to project`);
+        setSnackbar(`Exported ${result.exportedCount} artifacts to project assets`);
       }
     } catch {
       setSnackbar('Export failed');
@@ -87,7 +89,9 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
   if (!assets || assets.length === 0) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>No artifacts produced</Typography>
+        <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>
+          No artifacts produced
+        </Typography>
       </Box>
     );
   }
@@ -98,6 +102,12 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
     acc[key].push(asset);
     return acc;
   }, {});
+
+  const stepLabel = (key: string) => {
+    if (key === 'manual') return 'Manual';
+    const id = Number(key);
+    return stepNameMap[id] ?? `Step Run #${key}`;
+  };
 
   return (
     <Box sx={{ p: 2 }}>
@@ -111,7 +121,7 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
           onClick={() => openExportDialog({ type: 'all' })}
           disabled={exportingAll}
         >
-          Export All to Project
+          Promote All to Project
         </Button>
       </Box>
 
@@ -124,11 +134,19 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
               backgroundColor: 'background.elevated',
               borderBottom: '1px solid',
               borderColor: 'divider',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
             }}
           >
             <Typography sx={{ fontSize: '12px', fontWeight: 600, color: 'text.secondary' }}>
-              Step Run #{stepKey}
+              {stepLabel(stepKey)}
             </Typography>
+            <Chip
+              label={`${stepAssets.length} file${stepAssets.length > 1 ? 's' : ''}`}
+              size="small"
+              sx={{ height: 18, fontSize: '10px' }}
+            />
           </Box>
           {stepAssets.map((asset) => (
             <Box
@@ -142,37 +160,63 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
                 '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                <Typography sx={{ fontSize: '13px', fontWeight: 500, color: 'text.primary' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                <Typography
+                  sx={{
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    color: 'text.primary',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {asset.name}
                 </Typography>
-                <Typography sx={{ fontSize: '11px', color: 'text.secondary' }}>
+                <Typography sx={{ fontSize: '11px', color: 'text.secondary', flexShrink: 0 }}>
                   {asset.contentType} &middot; {humanFileSize(asset.fileSize)}
                 </Typography>
               </Box>
-              <Tooltip title="Export to Project">
-                <IconButton size="small" onClick={() => openExportDialog({ type: 'single', asset })}>
-                  <span style={{ fontSize: '14px' }}>{'\u2B06'}</span>
-                </IconButton>
-              </Tooltip>
+              <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                {asset.downloadUrl && (
+                  <Tooltip title="Download">
+                    <IconButton
+                      size="small"
+                      component="a"
+                      href={asset.downloadUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <span style={{ fontSize: '14px' }}>{'\u2B07'}</span>
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <Tooltip title="Promote to Project Assets">
+                  <IconButton size="small" onClick={() => openExportDialog({ type: 'single', asset })}>
+                    <span style={{ fontSize: '14px' }}>{'\u2B06'}</span>
+                  </IconButton>
+                </Tooltip>
+              </Box>
             </Box>
           ))}
         </Paper>
       ))}
 
-      {/* Export folder dialog */}
       <Dialog open={!!exportTarget} onClose={() => setExportTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>
-          {exportTarget?.type === 'all' ? 'Export All Artifacts' : `Export "${(exportTarget as { type: 'single'; asset: WorkflowRunAsset })?.asset?.name}"`}
+          {exportTarget?.type === 'all'
+            ? 'Promote All Artifacts'
+            : `Promote "${(exportTarget as { type: 'single'; asset: WorkflowRunAsset })?.asset?.name}"`}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Optionally specify a folder to organize the exported asset(s) in your project.
+            This will create project-level assets from workflow artifacts. You can optionally specify
+            a folder to organize them.
           </Typography>
           <TextField
             fullWidth
             size="small"
-            label="Folder"
+            label="Folder (optional)"
             placeholder="Leave empty for root"
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
@@ -182,7 +226,7 @@ export const WorkflowAssetsReview = ({ projectId, runId }: Props) => {
         <DialogActions>
           <Button onClick={() => setExportTarget(null)}>Cancel</Button>
           <Button variant="contained" onClick={handleConfirmExport} disabled={exporting}>
-            {exporting ? 'Exporting...' : 'Export'}
+            {exporting ? 'Promoting...' : 'Promote'}
           </Button>
         </DialogActions>
       </Dialog>

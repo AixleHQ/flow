@@ -1,5 +1,6 @@
 import { Box, Typography } from '@mui/material';
-import { Outlet, useLocation, useRouter } from '@tanstack/react-router';
+import { Outlet, useLocation, useNavigate } from '@tanstack/react-router';
+import { useEffect } from 'react';
 
 import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
@@ -49,28 +50,27 @@ const styles = {
 
 const AuthLayout = () => {
   const { data: user, isLoading } = useGetCurrentUserQuery();
-  const router = useRouter();
+  const navigate = useNavigate();
   const location = useLocation();
 
-  if (isLoading) {
-    return <Loader />;
-  }
-
-  if (!user) {
-    router.navigate({ to: Routes.frontend.loginPath });
-    return <Loader />;
-  }
-
   const isOnboardingPath = location.pathname === Routes.frontend.onboardingPath;
-  const isOnboardingCompleted = user.onboardingState === 'completed';
+  const isOnboardingCompleted = user?.onboardingState === 'completed';
 
-  if (!isOnboardingCompleted && !isOnboardingPath) {
-    router.navigate({ to: Routes.frontend.onboardingPath });
-    return <Loader />;
-  }
+  const needsLogin = !isLoading && !user;
+  const needsOnboarding = !isLoading && user && !isOnboardingCompleted && !isOnboardingPath;
+  const needsRedirectFromOnboarding = !isLoading && user && isOnboardingCompleted && isOnboardingPath;
 
-  if (isOnboardingCompleted && isOnboardingPath) {
-    router.navigate({ to: Routes.frontend.companyProjectsPath });
+  useEffect(() => {
+    if (needsLogin) {
+      navigate({ to: Routes.frontend.loginPath });
+    } else if (needsOnboarding) {
+      navigate({ to: Routes.frontend.onboardingPath });
+    } else if (needsRedirectFromOnboarding) {
+      navigate({ to: Routes.frontend.companyProjectsPath });
+    }
+  }, [needsLogin, needsOnboarding, needsRedirectFromOnboarding, navigate]);
+
+  if (isLoading || needsLogin || needsOnboarding || needsRedirectFromOnboarding) {
     return <Loader />;
   }
 

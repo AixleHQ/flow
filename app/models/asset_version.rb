@@ -4,7 +4,7 @@ class AssetVersion < ApplicationRecord
   extend Enumerize
   include AssetFileUploader::Attachment(:file)
 
-  belongs_to :asset
+  belongs_to :asset, inverse_of: :versions
   belongs_to :uploaded_by, class_name: "User"
 
   enumerize :source, in: %i[upload workflow github session], default: :upload, predicates: true

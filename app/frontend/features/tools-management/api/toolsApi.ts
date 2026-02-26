@@ -7,9 +7,17 @@ interface ToolsResponse {
   items: Tool[];
 }
 
+type CreateToolArg = CreateToolRequest | { formData: FormData };
+type CreateProjectToolArg = { projectId: number } & (CreateToolRequest | { formData: FormData });
+type UpdateToolArg = UpdateToolRequest | { id: number; formData: FormData };
+type UpdateProjectToolArg = { projectId: number } & (UpdateToolRequest | { id: number; formData: FormData });
+
+const isFormDataArg = (arg: Record<string, unknown>): arg is { formData: FormData } => {
+  return 'formData' in arg && arg.formData instanceof FormData;
+};
+
 export const toolsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    // Company-level tools (internal + company)
     getCompanyTools: builder.query<Tool[], void>({
       query: () => ({
         url: Routes.backend.apiV1CompanyToolsPath(),
@@ -21,7 +29,6 @@ export const toolsApi = baseApi.injectEndpoints({
       providesTags: [QueryTag.Tools],
     }),
 
-    // Project-level tools (merged list)
     getProjectTools: builder.query<Tool[], number>({
       query: (projectId) => ({
         url: Routes.backend.apiV1CompanyProjectToolsPath(projectId),
@@ -33,45 +40,88 @@ export const toolsApi = baseApi.injectEndpoints({
       providesTags: [QueryTag.Tools],
     }),
 
-    // Create tool
-    createCompanyTool: builder.mutation<Tool, CreateToolRequest>({
-      query: (data) => ({
-        url: Routes.backend.apiV1CompanyToolsPath(),
-        method: 'POST',
-        data: { tool: data },
-      }),
+    createCompanyTool: builder.mutation<Tool, CreateToolArg>({
+      query: (arg) => {
+        if (isFormDataArg(arg as Record<string, unknown>)) {
+          return {
+            url: Routes.backend.apiV1CompanyToolsPath(),
+            method: 'POST',
+            data: (arg as { formData: FormData }).formData,
+            headers: { 'Content-Type': 'multipart/form-data' },
+          };
+        }
+        return {
+          url: Routes.backend.apiV1CompanyToolsPath(),
+          method: 'POST',
+          data: { tool: arg },
+        };
+      },
       invalidatesTags: [QueryTag.Tools],
     }),
 
-    createProjectTool: builder.mutation<Tool, { projectId: number } & CreateToolRequest>({
-      query: ({ projectId, ...data }) => ({
-        url: Routes.backend.apiV1CompanyProjectToolsPath(projectId),
-        method: 'POST',
-        data: { tool: data },
-      }),
+    createProjectTool: builder.mutation<Tool, CreateProjectToolArg>({
+      query: (arg) => {
+        const { projectId, ...rest } = arg;
+        if (isFormDataArg(rest as Record<string, unknown>)) {
+          return {
+            url: Routes.backend.apiV1CompanyProjectToolsPath(projectId),
+            method: 'POST',
+            data: (rest as { formData: FormData }).formData,
+            headers: { 'Content-Type': 'multipart/form-data' },
+          };
+        }
+        return {
+          url: Routes.backend.apiV1CompanyProjectToolsPath(projectId),
+          method: 'POST',
+          data: { tool: rest },
+        };
+      },
       invalidatesTags: [QueryTag.Tools],
     }),
 
-    // Update tool
-    updateCompanyTool: builder.mutation<Tool, UpdateToolRequest>({
-      query: ({ id, ...data }) => ({
-        url: Routes.backend.apiV1CompanyToolPath(id),
-        method: 'PATCH',
-        data: { tool: data },
-      }),
+    updateCompanyTool: builder.mutation<Tool, UpdateToolArg>({
+      query: (arg) => {
+        if (isFormDataArg(arg as Record<string, unknown>)) {
+          const { id, formData } = arg as { id: number; formData: FormData };
+          return {
+            url: Routes.backend.apiV1CompanyToolPath(id),
+            method: 'PATCH',
+            data: formData,
+            headers: { 'Content-Type': 'multipart/form-data' },
+          };
+        }
+        const { id, ...data } = arg as UpdateToolRequest;
+        return {
+          url: Routes.backend.apiV1CompanyToolPath(id),
+          method: 'PATCH',
+          data: { tool: data },
+        };
+      },
       invalidatesTags: [QueryTag.Tools],
     }),
 
-    updateProjectTool: builder.mutation<Tool, { projectId: number } & UpdateToolRequest>({
-      query: ({ projectId, id, ...data }) => ({
-        url: Routes.backend.apiV1CompanyProjectToolPath(projectId, id),
-        method: 'PATCH',
-        data: { tool: data },
-      }),
+    updateProjectTool: builder.mutation<Tool, UpdateProjectToolArg>({
+      query: (arg) => {
+        const { projectId, ...rest } = arg;
+        if (isFormDataArg(rest as Record<string, unknown>)) {
+          const { id, formData } = rest as { id: number; formData: FormData };
+          return {
+            url: Routes.backend.apiV1CompanyProjectToolPath(projectId, id),
+            method: 'PATCH',
+            data: formData,
+            headers: { 'Content-Type': 'multipart/form-data' },
+          };
+        }
+        const { id, ...data } = rest as UpdateToolRequest;
+        return {
+          url: Routes.backend.apiV1CompanyProjectToolPath(projectId, id),
+          method: 'PATCH',
+          data: { tool: data },
+        };
+      },
       invalidatesTags: [QueryTag.Tools],
     }),
 
-    // Delete tool
     deleteCompanyTool: builder.mutation<void, number>({
       query: (id) => ({
         url: Routes.backend.apiV1CompanyToolPath(id),

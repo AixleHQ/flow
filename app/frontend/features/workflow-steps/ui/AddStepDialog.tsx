@@ -179,7 +179,7 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
               render={({ field }) => (
                 <FormControlLabel
                   control={<Switch checked={field.value} onChange={field.onChange} />}
-                  label="Allow non-interactive execution"
+                  label="Auto-run available (skip user approval in non-interactive/mixed modes)"
                 />
               )}
             />

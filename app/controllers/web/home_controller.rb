@@ -1,5 +1,9 @@
 class Web::HomeController < Web::ApplicationController
   def show
-    redirect_to admin_users_path if current_user && current_user.super_admin?
+    if request.path == "/"
+      render html: "", layout: "web/landing"
+    elsif signed_in? && current_user.super_admin?
+      redirect_to admin_users_path
+    end
   end
 end

@@ -16,7 +16,7 @@ import {
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   useApproveStepMutation,
@@ -27,8 +27,11 @@ import {
 } from 'features/workflow-execution';
 import { WorkflowAssetsReview } from 'features/workflow-execution/ui/WorkflowAssetsReview';
 import type { StepRunInfo, WorkflowRun } from 'features/workflow-execution';
+import { useGetStepsQuery } from 'features/workflow-steps/api/stepsApi';
+import { useWorkflowRunChannel } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
+import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 const styles = {
   root: {
@@ -220,6 +223,48 @@ const styles = {
   placeholderText: { fontSize: '13px', color: 'text.secondary' },
   placeholderSubtext: { fontSize: '11px', color: 'text.disabled' },
   loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' },
+  subStepsPanel: {
+    width: 280,
+    minWidth: 240,
+    borderLeft: '1px solid',
+    borderColor: 'divider',
+    backgroundColor: 'background.paper',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  subStepsList: {
+    flex: 1,
+    overflow: 'auto',
+    padding: '8px 0',
+  },
+  subStepItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '10px',
+    padding: '8px 16px',
+    '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
+  },
+  subStepCheck: {
+    width: 20,
+    height: 20,
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    fontWeight: 700,
+    flexShrink: 0,
+    marginTop: '2px',
+  },
+  subStepCheckPending: { border: '2px solid', borderColor: 'divider', color: 'text.disabled' },
+  subStepCheckInProgress: { backgroundColor: 'primary.main', color: 'white', animation: 'pulse 2s infinite' },
+  subStepCheckCompleted: { backgroundColor: 'success.main', color: 'white' },
+  subStepCheckSkipped: { backgroundColor: 'text.disabled', color: 'white' },
+  subStepContent: { flex: 1, minWidth: 0 },
+  subStepName: { fontSize: '12px', fontWeight: 500, color: 'text.primary', lineHeight: 1.4 },
+  subStepNote: { fontSize: '11px', color: 'text.secondary', mt: '2px', fontStyle: 'italic' },
   stepActionBar: {
     padding: '12px 24px',
     borderTop: '1px solid',
@@ -241,8 +286,6 @@ const styles = {
     gap: '8px',
   },
 } satisfies Record<string, SxProps<Theme>>;
-
-const POLL_INTERVAL_MS = 5000;
 
 function getStepIndicatorStyle(state: string): SxProps<Theme> {
   switch (state) {
@@ -303,12 +346,23 @@ const WorkflowRunPage = () => {
   const [skipReason, setSkipReason] = useState('');
 
   const {
-    data: workflowRun,
+    data: initialRun,
     isLoading,
     isError,
   } = useGetWorkflowRunQuery(
     { projectId, runId },
-    { pollingInterval: POLL_INTERVAL_MS, skip: !projectId || !runId },
+    { skip: !projectId || !runId },
+  );
+
+  const { workflowRun: liveRun } = useWorkflowRunChannel({
+    runId: runId || null,
+  });
+
+  const workflowRun = liveRun ?? initialRun;
+
+  const { data: workflowSteps = [] } = useGetStepsQuery(
+    { projectId, workflowId: workflowRun?.workflowId ?? 0 },
+    { skip: !workflowRun?.workflowId },
   );
 
   const [approveStep, { isLoading: approving }] = useApproveStepMutation();
@@ -317,10 +371,79 @@ const WorkflowRunPage = () => {
   const [cancelRun, { isLoading: cancelling }] = useCancelWorkflowRunMutation();
 
   const stepRuns: StepRunInfo[] = workflowRun?.stepRuns ?? [];
+
+  interface TimelineStep {
+    stepId: number;
+    stepName: string;
+    position: number;
+    wave: number;
+    stepRun: StepRunInfo | null;
+    state: string;
+    isParallel: boolean;
+  }
+
+  const timelineSteps: TimelineStep[] = useMemo(() => {
+    if (workflowSteps.length === 0) {
+      return stepRuns.map((sr, i) => ({
+        stepId: sr.stepId,
+        stepName: sr.stepName,
+        position: i + 1,
+        wave: i,
+        stepRun: sr,
+        state: sr.state,
+        isParallel: false,
+      }));
+    }
+
+    const sorted = workflowSteps.slice().sort((a, b) => a.position - b.position);
+    const waveMap = new Map<number, number>();
+
+    sorted.forEach((step) => {
+      const deps = step.dependsOnStepIds ?? [];
+      if (deps.length === 0) {
+        waveMap.set(step.id, 0);
+      } else {
+        const maxDepWave = Math.max(...deps.map((d) => waveMap.get(d) ?? 0));
+        waveMap.set(step.id, maxDepWave + 1);
+      }
+    });
+
+    const waveCounts = new Map<number, number>();
+    sorted.forEach((step) => {
+      const w = waveMap.get(step.id) ?? 0;
+      waveCounts.set(w, (waveCounts.get(w) ?? 0) + 1);
+    });
+
+    return sorted.map((step) => {
+      const sr = stepRuns.find((r) => r.stepId === step.id) ?? null;
+      const wave = waveMap.get(step.id) ?? 0;
+      return {
+        stepId: step.id,
+        stepName: step.name,
+        position: step.position,
+        wave,
+        stepRun: sr,
+        state: sr?.state ?? 'pending',
+        isParallel: (waveCounts.get(wave) ?? 1) > 1,
+      };
+    });
+  }, [workflowSteps, stepRuns]);
+
+  const timelineWaves = useMemo(() => {
+    const grouped = new Map<number, TimelineStep[]>();
+    timelineSteps.forEach((ts) => {
+      grouped.set(ts.wave, [...(grouped.get(ts.wave) ?? []), ts]);
+    });
+    return Array.from(grouped.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([wave, steps]) => ({ wave, steps }));
+  }, [timelineSteps]);
+
   const currentStepRun = stepRuns.find((s) => s.state === 'running' || s.state === 'waiting_input');
-  const selectedStepRun = activeStepRunId
-    ? stepRuns.find((s) => s.id === activeStepRunId)
-    : currentStepRun;
+  const selectedTimelineStep = activeStepRunId
+    ? timelineSteps.find((t) => t.stepRun?.id === activeStepRunId)
+    : timelineSteps.find((t) => t.stepRun?.id === currentStepRun?.id) ?? timelineSteps[0] ?? null;
+  const selectedStepRun = selectedTimelineStep?.stepRun ?? null;
 
   const prevCurrentIdRef = useRef<number | undefined>(undefined);
   useEffect(() => {
@@ -370,7 +493,7 @@ const WorkflowRunPage = () => {
     );
   }
 
-  const completedCount = stepRuns.filter((s) => s.state === 'completed').length;
+  const completedCount = timelineSteps.filter((t) => t.state === 'completed').length;
   const progressIndex = completedCount + (currentStepRun ? 1 : 0);
   const canAct = selectedStepRun?.state === 'waiting_input' && isRunActive(workflowRun);
   const sessionStatus = isRunActive(workflowRun)
@@ -394,10 +517,18 @@ const WorkflowRunPage = () => {
             <Link
               sx={styles.breadcrumbLink}
               onClick={() =>
-                navigate({ to: Routes.frontend.companyProjectPath(workflowRun.projectId) })
+                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflows') })
               }
             >
               Project
+            </Link>
+            <Link
+              sx={styles.breadcrumbLink}
+              onClick={() =>
+                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })
+              }
+            >
+              Runs
             </Link>
             <Typography color="text.primary" sx={{ fontSize: '13px' }}>
               {workflowRun.workflowName ?? `Run #${workflowRun.id}`}
@@ -441,49 +572,78 @@ const WorkflowRunPage = () => {
         </Box>
       </Box>
 
-      {/* Step Timeline */}
+      {/* Step Timeline — GitHub CI style */}
       <Box sx={styles.stepsContainer}>
         <Box sx={styles.stepsHeader}>
           <Typography sx={styles.stepsTitle}>Workflow Steps</Typography>
           <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-            Step {progressIndex}/{stepRuns.length}
+            {completedCount}/{timelineSteps.length} completed
           </Typography>
         </Box>
-        <Box sx={styles.stepsList}>
-          {stepRuns.map((sr, index) => (
-            <Box key={sr.id} sx={{ display: 'flex', alignItems: 'center' }}>
-              <Box
-                sx={{
-                  ...styles.stepItem,
-                  ...(selectedStepRun?.id === sr.id ? styles.stepItemActive : {}),
-                }}
-                onClick={() => setActiveStepRunId(sr.id)}
-              >
-                <Box sx={{ ...styles.stepIndicator, ...getStepIndicatorStyle(sr.state) }}>
-                  {getStepIcon(sr.state, index)}
-                </Box>
-                <Box sx={styles.stepInfo}>
-                  <Typography sx={styles.stepName}>{sr.stepName}</Typography>
-                  <Box sx={styles.stepMeta}>
-                    <Typography component="span">{sr.state}</Typography>
-                    {sr.startedAt && (
-                      <Typography component="span">
-                        {formatDuration(sr.startedAt, sr.completedAt)}
-                      </Typography>
-                    )}
-                  </Box>
-                </Box>
-              </Box>
-              {index < stepRuns.length - 1 && (
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', pb: 1 }}>
+          {timelineWaves.map((wave, waveIdx) => {
+            const allCompleted = wave.steps.every((t) => t.state === 'completed');
+            return (
+              <Box key={wave.wave} sx={{ display: 'flex', alignItems: 'center' }}>
+                {/* Wave column */}
                 <Box
                   sx={{
-                    ...styles.stepConnector,
-                    ...(sr.state === 'completed' ? styles.stepConnectorCompleted : {}),
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    minWidth: 160,
                   }}
-                />
-              )}
-            </Box>
-          ))}
+                >
+                  {wave.steps.map((ts, stepIdx) => (
+                    <Box
+                      key={ts.stepId}
+                      sx={{
+                        ...styles.stepItem,
+                        ...(selectedTimelineStep?.stepId === ts.stepId ? styles.stepItemActive : {}),
+                      }}
+                      onClick={() => ts.stepRun && setActiveStepRunId(ts.stepRun.id)}
+                    >
+                      <Box sx={{ ...styles.stepIndicator, ...getStepIndicatorStyle(ts.state) }}>
+                        {getStepIcon(ts.state, stepIdx)}
+                      </Box>
+                      <Box sx={styles.stepInfo}>
+                        <Typography sx={styles.stepName}>{ts.stepName}</Typography>
+                        <Box sx={styles.stepMeta}>
+                          <Typography component="span">{ts.state}</Typography>
+                          {ts.stepRun?.startedAt && (
+                            <Typography component="span">
+                              {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt)}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+                {/* Connector between waves */}
+                {waveIdx < timelineWaves.length - 1 && (
+                  <Box
+                    sx={{
+                      width: 32,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      alignSelf: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 24,
+                        height: 2,
+                        backgroundColor: allCompleted ? 'success.main' : 'divider',
+                      }}
+                    />
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
         </Box>
       </Box>
 
@@ -498,32 +658,28 @@ const WorkflowRunPage = () => {
                   <Typography component="span" sx={{ color: 'text.primary' }}>
                     Terminal
                   </Typography>
-                  {selectedStepRun && (
+                  {selectedTimelineStep && (
                     <Typography component="span" sx={{ color: 'text.disabled', fontSize: '11px' }}>
-                      {'\u2014'} {selectedStepRun.stepName}
+                      {'\u2014'} {selectedTimelineStep.stepName}
                     </Typography>
                   )}
                 </Box>
               </Box>
-              <Box sx={styles.panelContent}>
+              <Box sx={{ ...styles.panelContent, position: 'relative' }}>
                 {selectedStepRun?.terminalSessionId ? (
-                  <Box sx={styles.placeholder}>
-                    <Typography sx={styles.placeholderText}>
-                      Terminal session #{selectedStepRun.terminalSessionId}
-                    </Typography>
-                    <Typography sx={styles.placeholderSubtext}>
-                      Connect to ttyd session
-                    </Typography>
-                  </Box>
+                  <TerminalSessionWidget
+                    sessionId={selectedStepRun.terminalSessionId}
+                    showEditor={false}
+                  />
                 ) : (
                   <Box sx={styles.placeholder}>
                     <Typography sx={styles.placeholderText}>
-                      {selectedStepRun
-                        ? `Terminal for "${selectedStepRun.stepName}"`
+                      {selectedTimelineStep
+                        ? `Terminal for "${selectedTimelineStep.stepName}"`
                         : 'Select a step to view terminal'}
                     </Typography>
                     <Typography sx={styles.placeholderSubtext}>
-                      {selectedStepRun
+                      {selectedTimelineStep
                         ? 'No terminal session assigned yet'
                         : 'Select a running step from the timeline above'}
                     </Typography>
@@ -531,6 +687,73 @@ const WorkflowRunPage = () => {
                 )}
               </Box>
             </Box>
+
+            {/* Sub-steps sidebar */}
+            {selectedStepRun && (selectedStepRun.subStepRuns ?? []).length > 0 && (
+              <Box sx={styles.subStepsPanel}>
+                <Box sx={styles.panelHeader}>
+                  <Box sx={styles.panelTitle}>
+                    <Typography component="span" sx={{ color: 'text.primary' }}>
+                      Sub-steps
+                    </Typography>
+                    <Typography component="span" sx={{ color: 'text.disabled', fontSize: '11px' }}>
+                      {(selectedStepRun.subStepRuns ?? []).filter((s) => s.state === 'completed').length}/
+                      {(selectedStepRun.subStepRuns ?? []).length}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box sx={styles.subStepsList}>
+                  {(selectedStepRun.subStepRuns ?? []).map((ssr) => (
+                    <Box key={ssr.id} sx={styles.subStepItem}>
+                      <Box
+                        sx={{
+                          ...styles.subStepCheck,
+                          ...(ssr.state === 'completed'
+                            ? styles.subStepCheckCompleted
+                            : ssr.state === 'in_progress'
+                              ? styles.subStepCheckInProgress
+                              : ssr.state === 'skipped'
+                                ? styles.subStepCheckSkipped
+                                : styles.subStepCheckPending),
+                        }}
+                      >
+                        {ssr.state === 'completed'
+                          ? '\u2713'
+                          : ssr.state === 'in_progress'
+                            ? '\u25CF'
+                            : ssr.state === 'skipped'
+                              ? '\u2192'
+                              : ''}
+                      </Box>
+                      <Box sx={styles.subStepContent}>
+                        <Typography sx={styles.subStepName}>{ssr.subStepName}</Typography>
+                        {ssr.note && (
+                          <Typography sx={styles.subStepNote}>{ssr.note}</Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+                {selectedStepRun.stepNote && (
+                  <Box
+                    sx={{
+                      borderTop: '1px solid',
+                      borderColor: 'divider',
+                      padding: '8px 16px',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: '4px' }}>
+                      Step Note
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: '12px', color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}
+                    >
+                      {selectedStepRun.stepNote}
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            )}
           </Box>
 
           {/* Step Action Bar */}
@@ -612,8 +835,14 @@ const WorkflowRunPage = () => {
             </Box>
           )}
 
-          {workflowRun.state === 'completed' && (
-            <WorkflowAssetsReview projectId={projectId} runId={runId} />
+          {(workflowRun.state === 'completed' || workflowRun.state === 'failed') && (
+            <WorkflowAssetsReview
+              projectId={projectId}
+              runId={runId}
+              stepNameMap={Object.fromEntries(
+                stepRuns.map((sr) => [sr.id, sr.stepName])
+              )}
+            />
           )}
 
           <StatusBar

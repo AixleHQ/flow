@@ -255,25 +255,28 @@ class SessionContextService
       # Section 3: Workspace layout
       sections << build_workspace_layout(session)
 
-      # Section 4: Available MCP servers
+      # Section 4: Available shell tools
+      sections << build_shell_tools_section
+
+      # Section 5: Available MCP servers
       mcp = build_mcp_descriptions(session)
       sections << mcp if mcp.present?
 
-      # Section 5: Available tools
+      # Section 6: Available tools
       tools = build_tool_descriptions(session)
       sections << tools if tools.present?
 
-      # Section 6: Skills (when adapter embeds them into context file)
+      # Section 7: Skills (when adapter embeds them into context file)
       if adapter.includes_skills_in_context?
         skills_section = build_skills_section(session)
         sections << skills_section if skills_section.present?
       end
 
-      # Section 7: Repositories
+      # Section 8: Repositories
       repos_section = build_repositories_section(session)
       sections << repos_section if repos_section.present?
 
-      # Section 8: General instructions
+      # Section 9: General instructions
       sections << build_general_instructions(session)
 
       # Workflow instructions (placeholder for future use)
@@ -335,6 +338,24 @@ class SessionContextService
       lines.join("\n")
     end
 
+    def build_shell_tools_section
+      <<~MD.strip
+        ## Available Shell Tools
+
+        The following command-line tools are pre-installed and available:
+
+        | Tool | Description | Example |
+        |------|-------------|---------|
+        | `tree` | Display directory structure | `tree -d -L 2` (dirs only), `tree -L 3 /workspace/repo/` |
+        | `cloc` | Count lines of code by language | `cloc .`, `cloc --by-file /workspace/repo/` |
+        | `rg` | ripgrep — fast code search | `rg 'TODO' --type ruby`, `rg -l 'class.*Service'` |
+        | `fd` | Fast file finder | `fd -e rb`, `fd -e tsx -x wc -l {}` |
+        | `jq` | JSON processor | `jq '.dependencies' package.json` |
+        | `git` | Version control | `git log --oneline -20`, `git diff` |
+        | `curl` | HTTP requests | `curl -s https://api.example.com` |
+      MD
+    end
+
     def build_mcp_descriptions(session)
       servers = resolve_mcp_servers_for_descriptions(session)
       return nil if servers.empty?
@@ -354,14 +375,25 @@ class SessionContextService
       tools = session.available_tools.to_a
       return nil if tools.empty?
 
-      lines = [ "## Available Tools" ]
+      has_container_tools = tools.any? { |t| t.respond_to?(:execution_mode) && t.execution_mode.to_s == "container" }
+
+      lines = ["## Available Tools"]
       lines << ""
       lines << "These tools are provided via the **palad-tools** MCP server. Call them through MCP."
       lines << ""
+
+      if has_container_tools
+        lines << tool_execution_modes_section
+        lines << ""
+      end
+
       tools.each do |tool|
-        lines << "### #{tool.name}"
-        desc = [ tool.display_name, tool.description ].compact.join(" — ")
+        mode = tool.respond_to?(:execution_mode) ? tool.execution_mode.to_s : "app"
+        marker = mode == "container" ? "⏳ container" : "⚡ app"
+        lines << "### #{tool.name} #{marker}"
+        desc = [tool.display_name, tool.description].compact.join(" — ")
         lines << desc if desc.present?
+        lines << (mode == "container" ? "Returns: execution ID → use read_tool_result to get results" : "Returns: direct result")
         if tool.input_schema.present? && tool.input_schema["properties"].present?
           params = tool.input_schema["properties"].map { |k, v| "#{k} (#{v['type']})" }.join(", ")
           lines << "Parameters: #{params}" if params.present?
@@ -369,6 +401,35 @@ class SessionContextService
         lines << ""
       end
       lines.join("\n")
+    end
+
+    def tool_execution_modes_section
+      <<~MD.strip
+        ### Tool Execution Modes
+
+        Tools on this platform work in two modes:
+
+        **Instant tools (⚡ app)** return results directly in the MCP response. Use them normally.
+
+        **Container tools (⏳ container)** run in Docker containers and may take seconds to minutes. They work asynchronously:
+
+        1. **Call the tool** — you receive an execution ID (e.g. `tr-a1b2c3d4e5f6`)
+        2. **Check status** — call `read_tool_result(tool_result_id: "tr-...")`.
+           If `state` is `processing`, wait and try again.
+           If `state` is `completed` or `failed`, proceed to step 3.
+        3. **Download results** — the response contains presigned URLs (`stdout_url`, `result_data_url`, etc.).
+           Download them to local files:
+           ```
+           curl -sS -o /workspace/result.json "<result_data_url>"
+           ```
+        4. **Process locally** — read and analyze the downloaded files as needed.
+
+        Important:
+        - NEVER expect container tool output directly in the MCP response — you only get an ID.
+        - Presigned URLs expire in 1 hour. Call `read_tool_result` again for fresh URLs if needed.
+        - `result_data_url` contains parsed JSON (if the tool output was valid JSON). Prefer it over `stdout_url`.
+        - `output_url` is a tar.gz archive of additional files collected from the tool container (if any).
+      MD
     end
 
     def build_skills_section(session)
@@ -565,12 +626,14 @@ class SessionContextService
       lines << ""
       lines << "The following code repositories have been cloned into this session:"
       lines << ""
-      lines << "| Repository | Path | Branch | Purpose |"
-      lines << "|---|---|---|---|"
+      lines << "| ID | Repository | Path | Branch | Purpose |"
+      lines << "|---|---|---|---|---|"
       cloned.each do |repo|
         purpose = repo.purpose.presence || "—"
-        lines << "| #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{purpose} |"
+        lines << "| #{repo.id} | #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{purpose} |"
       end
+      lines << ""
+      lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
       lines.join("\n")
     end
 

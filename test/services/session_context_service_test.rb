@@ -1189,7 +1189,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     result = SessionContextService.send(:build_repositories_section, session)
 
     assert_includes result, "## Available Repositories"
-    assert_includes result, "| acme/my-app | /workspace/repo/my-app | main | Our main Rails application |"
+    assert_includes result, "| #{repo.id} | acme/my-app | /workspace/repo/my-app | main | Our main Rails application |"
+    assert_includes result, "Use the repository **ID**"
   end
 
   test "build_repositories_section excludes failed repos" do
@@ -1224,7 +1225,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     result = SessionContextService.send(:build_repositories_section, session)
 
-    assert_includes result, "| acme/no-purpose | /workspace/repo/no-purpose | develop | — |"
+    assert_includes result, "| #{repo.id} | acme/no-purpose | /workspace/repo/no-purpose | develop | — |"
   end
 
   # ====================================================================
@@ -1247,6 +1248,54 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "terminal_session repository_ids returns empty array when no repos" do
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
     assert_equal [], session.repository_ids
+  end
+
+  # ====================================================================
+  # Story 19.12: Tool Execution Modes in context
+  # ====================================================================
+
+  test "build_tool_descriptions includes execution mode markers" do
+    app_tool = create(:tool, :internal, name: "ctx_list",
+      display_name: "List Things", execution_mode: :app)
+    container_tool = create(:tool, :internal, name: "ctx_analyze",
+      display_name: "Analyze Stuff", execution_mode: :container)
+
+    session = create(:terminal_session, user: @user, agent_type: "claude_code")
+    session.stubs(:available_tools).returns([app_tool, container_tool])
+
+    result = SessionContextService.send(:build_tool_descriptions, session)
+
+    assert result.include?("ctx_list ⚡ app")
+    assert result.include?("ctx_analyze ⏳ container")
+    assert result.include?("Returns: direct result")
+    assert result.include?("Returns: execution ID")
+  end
+
+  test "build_tool_descriptions includes Tool Execution Modes section when container tools present" do
+    container_tool = create(:tool, :internal, name: "ctx_container",
+      display_name: "Container Tool", execution_mode: :container)
+
+    session = create(:terminal_session, user: @user, agent_type: "claude_code")
+    session.stubs(:available_tools).returns([container_tool])
+
+    result = SessionContextService.send(:build_tool_descriptions, session)
+
+    assert result.include?("Tool Execution Modes")
+    assert result.include?("curl -sS -o")
+    assert result.include?("read_tool_result")
+  end
+
+  test "build_tool_descriptions omits execution modes section when only app tools" do
+    app_tool = create(:tool, :internal, name: "ctx_app_only",
+      display_name: "App Only Tool", execution_mode: :app)
+
+    session = create(:terminal_session, user: @user, agent_type: "claude_code")
+    session.stubs(:available_tools).returns([app_tool])
+
+    result = SessionContextService.send(:build_tool_descriptions, session)
+
+    assert_not result.include?("Tool Execution Modes")
+    assert result.include?("ctx_app_only ⚡ app")
   end
 
   private

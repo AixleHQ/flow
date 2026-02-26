@@ -5,7 +5,8 @@ class StepSerializer < ApplicationSerializer
              :instructions, :allow_non_interactive, :skip_policy, :on_failure,
              :max_retries, :input_asset_specs, :output_asset_specs,
              :tool_ids, :mcp_server_ids, :skill_ids,
-             :mount_repositories, :created_at, :updated_at
+             :mount_repositories, :depends_on_step_ids,
+             :created_at, :updated_at
 
   has_many :sub_steps, serializer: SubStepSerializer
 end

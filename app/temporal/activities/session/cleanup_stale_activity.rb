@@ -17,11 +17,14 @@ module Activities
       RUNNING_STALE_THRESHOLD = 30.minutes
       READY_STALE_THRESHOLD = 25.hours
 
+      MCP_SESSION_TTL = 7.days
+
       def run(_input = nil)
         cleaned_running = cleanup_stale(:running, RUNNING_STALE_THRESHOLD)
         cleaned_ready = cleanup_stale(:ready, READY_STALE_THRESHOLD)
+        cleaned_mcp = cleanup_stale_mcp_sessions
 
-        { cleaned_running: cleaned_running, cleaned_ready: cleaned_ready }
+        { cleaned_running: cleaned_running, cleaned_ready: cleaned_ready, cleaned_mcp: cleaned_mcp }
       end
 
       private
@@ -81,6 +84,21 @@ module Activities
         session.cancel!
       rescue StandardError => e
         log(:warn, "Failed to cancel workflow for session #{session.id}: #{e.message}")
+      end
+
+      def cleanup_stale_mcp_sessions
+        count = 0
+
+        ActionMCP::Session
+          .where("created_at < ?", MCP_SESSION_TTL.ago)
+          .find_each do |session|
+            session.destroy
+            count += 1
+          rescue StandardError => e
+            log(:warn, "Failed to clean MCP session #{session.id}: #{e.message}")
+          end
+
+        count
       end
 
       def runtime

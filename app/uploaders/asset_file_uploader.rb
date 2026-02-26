@@ -16,6 +16,8 @@ class AssetFileUploader < Shrine
     return super unless record.is_a?(AssetVersion)
 
     asset = record.asset
+    return super unless asset
+
     scope_type = asset.scope_type.downcase
     scope_id = asset.scope_id
     version = record.version || "draft"

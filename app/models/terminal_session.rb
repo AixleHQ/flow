@@ -96,7 +96,7 @@ class TerminalSession < ApplicationRecord
   def request_finish!
     raise InvalidStateError, "Cannot finish session in state: #{state}" unless may_finish?
 
-    signal_workflow(:container_finished) if temporal_workflow_id.present?
+    signal_workflow(:container_finished, step_run&.id) if temporal_workflow_id.present?
   end
 
   def cancel!
@@ -113,27 +113,57 @@ class TerminalSession < ApplicationRecord
       ContainerStrategies::AgentSessionStrategy.new(**strategy_params.merge(
         credential: user.agent_credentials.find_by(agent_type: agent_type)
       ))
+    when "workflow_step"
+      ContainerStrategies::WorkflowStepStrategy.new(**strategy_params.merge(
+        credential: user.agent_credentials.find_by(agent_type: agent_type)
+      ))
     else
       raise ArgumentError, "Cannot build strategy for session_type=#{session_type}"
     end
   end
 
   def available_tools
-    if tools.any?
-      tools.enabled
-    elsif project.present?
-      Tool.for_project(project).custom_tools.enabled
-    else
-      Tool.none
+    result = []
+
+    # Workflow tools auto-injected for workflow step sessions only
+    if session_type == "workflow_step"
+      result += Tool.workflow_tools.enabled.to_a
     end
+
+    # Explicitly attached tools (system + custom via session_tools join)
+    result += tools.enabled.to_a
+
+    if result.select(&:custom?).empty? && project.present?
+      result += Tool.for_project(project).custom_tools.enabled.to_a
+    end
+
+    # Internal tools auto-injected when any container tool is present
+    has_container_tools = result.any? { |t| t.execution_mode.container? }
+    if has_container_tools
+      result += Tool.internal_tools.enabled.to_a
+    end
+
+    result.uniq
   end
 
   private
 
   # == Temporal ==
 
-  def signal_workflow(signal_name)
-    TemporalService.send_signal(workflow_id, signal_name)
+  def signal_workflow(signal_name, payload = nil)
+    TemporalService.send_signal(workflow_id, signal_name, payload)
+  end
+
+  def signal_workflow_execution_finished
+    return unless session_type == "workflow_step"
+
+    sr = step_run
+    return unless sr&.workflow_run_id
+
+    execution_workflow_id = "workflow-execution-#{sr.workflow_run_id}"
+    TemporalService.send_signal(execution_workflow_id, :container_finished, sr.id)
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to signal workflow execution for #{id}: #{e.message}")
   end
 
   def cancel_workflow
@@ -157,11 +187,13 @@ class TerminalSession < ApplicationRecord
   def on_finished
     sync_usage
     update!(finished_at: Time.current, container_id: nil)
+    signal_workflow_execution_finished
   end
 
   def on_failed
     sync_usage
     update!(finished_at: Time.current, container_id: nil)
+    signal_workflow_execution_finished
   end
 
   def sync_usage

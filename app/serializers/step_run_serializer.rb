@@ -7,8 +7,7 @@ class StepRunSerializer < ApplicationSerializer
 
   attribute :step_name
   attribute :step_position
-
-  has_many :sub_step_runs, serializer: SubStepRunSerializer, if: :include_associations
+  attribute :sub_step_runs
 
   def step_name
     object.step.name
@@ -16,5 +15,13 @@ class StepRunSerializer < ApplicationSerializer
 
   def step_position
     object.step.position
+  end
+
+  def sub_step_runs
+    return [] unless include_associations
+
+    object.sub_step_runs.includes(:sub_step).sort_by { |ssr| ssr.sub_step&.position || 0 }.map do |ssr|
+      SubStepRunSerializer.new(ssr).serializable_hash
+    end
   end
 end

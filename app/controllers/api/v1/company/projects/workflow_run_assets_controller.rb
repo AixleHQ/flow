@@ -24,11 +24,21 @@ module Api
 
             result = service.export!(
               folder: export_params[:folder],
-              tags: export_params[:tags],
               public: export_params[:public] == true
             )
 
             respond_with result[:asset], serializer: AssetSerializer, status: :created
+          end
+
+          def download
+            workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])
+            asset = workflow_run.workflow_run_assets.find(params[:id])
+
+            unless asset.file
+              return render json: { error: "File not available" }, status: :not_found
+            end
+
+            redirect_to asset.file.url, allow_other_host: true
           end
 
           def export_all
@@ -46,7 +56,7 @@ module Api
           private
 
           def export_params
-            params.permit(:folder, :public, tags: [])
+            params.permit(:folder, :public)
           end
 
           def current_project

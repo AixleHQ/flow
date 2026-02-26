@@ -45,10 +45,11 @@ const axiosBaseQuery =
   > =>
   async ({ url, method, data, params, headers, isDecamelize = true, isCamelizeResponse = true }) => {
     try {
+      const isFormData = data instanceof FormData;
       const result = await axiosInstance({
         url: baseUrl + url,
         method,
-        data: isDecamelize ? decamelizeKeys(data) : data,
+        data: isFormData ? data : isDecamelize ? decamelizeKeys(data) : data,
         params: isDecamelize ? decamelizeKeys(params) : params,
         headers,
       });

@@ -1,11 +1,7 @@
-import { baseApi, QueryTag } from 'shared/api';
+import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
 import type { Step, CreateStepRequest, UpdateStepRequest } from '../lib/types';
-
-interface StepsResponse {
-  items: Step[];
-}
 
 export const stepsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
@@ -14,9 +10,7 @@ export const stepsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowStepsPath(projectId, workflowId),
         method: 'GET',
       }),
-      transformResponse: (response: Step[] | StepsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: (response: ApiCollectionResponse<Step>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -25,9 +19,7 @@ export const stepsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectWorkflowStepPath(projectId, workflowId, id),
         method: 'GET',
       }),
-      transformResponse: (response: { data: Step } | Step) => {
-        return 'data' in response ? response.data : response;
-      },
+      transformResponse: (response: ApiResponse<Step>) => response.data,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -37,6 +29,7 @@ export const stepsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { step: data },
       }),
+      transformResponse: (response: ApiResponse<Step>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
 
@@ -73,9 +66,7 @@ export const stepsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyWorkflowStepsPath(workflowId),
         method: 'GET',
       }),
-      transformResponse: (response: Step[] | StepsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: (response: ApiCollectionResponse<Step>) => response.items,
       providesTags: [QueryTag.Workflow],
     }),
 
@@ -85,6 +76,7 @@ export const stepsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { step: data },
       }),
+      transformResponse: (response: ApiResponse<Step>) => response.data,
       invalidatesTags: [QueryTag.Workflow],
     }),
 

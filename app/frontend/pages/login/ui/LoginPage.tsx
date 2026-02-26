@@ -1,12 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Box, Button, Stack, SxProps, TextField, Typography } from '@mui/material';
-import { useSearch } from '@tanstack/react-router';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
 import { useEffect, useRef } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 
+import { useGetCurrentUserQuery } from 'entities/user';
 import { setErrorsToForm } from 'shared/api';
-import { Logo } from 'shared/ui';
+import { Routes } from 'shared/routes';
+import { Loader, Logo } from 'shared/ui';
 
 import { useLoginMutation } from '../api/loginApi';
 import { LoginFormData, loginSchema } from '../lib/schema';
@@ -151,6 +153,9 @@ const styles = {
 } satisfies Record<string, SxProps>;
 
 const LoginPage = () => {
+  const { data: currentUser, isLoading: isUserLoading } = useGetCurrentUserQuery();
+  const navigate = useNavigate();
+
   const methods = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -164,7 +169,17 @@ const LoginPage = () => {
   const searchParams = useSearch({ from: '/login' }) as { error?: string };
   const errorShownRef = useRef(false);
 
-  // Show error messages from OAuth redirect or auth layout redirect (only once)
+  useEffect(() => {
+    if (isUserLoading || !currentUser) return;
+
+    const target =
+      currentUser.onboardingState === 'completed'
+        ? Routes.frontend.companyProjectsPath
+        : Routes.frontend.onboardingPath;
+
+    navigate({ to: target });
+  }, [currentUser, isUserLoading, navigate]);
+
   useEffect(() => {
     if (searchParams.error && !errorShownRef.current) {
       const errorMessages: Record<string, string> = {
@@ -179,6 +194,10 @@ const LoginPage = () => {
       errorShownRef.current = true;
     }
   }, [searchParams.error, enqueueSnackbar]);
+
+  if (isUserLoading) {
+    return <Loader />;
+  }
 
   const onSubmit = async (data: LoginFormData) => {
     try {

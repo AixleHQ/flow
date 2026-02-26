@@ -2,6 +2,7 @@ export type ProjectTab =
   | 'assets'
   | 'repositories'
   | 'workflows'
+  | 'runs'
   | 'tasks'
   | 'sessions'
   | 'config'

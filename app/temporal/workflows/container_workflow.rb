@@ -138,6 +138,7 @@ module Workflows
       result = {}
       result[:session_id] = input.session_id if input.respond_to?(:session_id) && input.session_id
       result[:tool_id] = input.tool_id if input.respond_to?(:tool_id) && input.tool_id
+      result[:tool_result_id] = input.tool_result_id if input.respond_to?(:tool_result_id) && input.tool_result_id
       result[:parameters] = input.parameters if input.respond_to?(:parameters) && input.parameters
       result[:project_id] = input.project_id if input.respond_to?(:project_id) && input.project_id
       result[:timeout] = input.timeout if input.respond_to?(:timeout) && input.timeout

@@ -12,18 +12,10 @@ module ContainerStrategies
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
-    POLL_INTERVAL = 5
-    POLL_TIMEOUT = 82_800 # 23 hours
-
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
-      when :exec
-        if non_interactive?
-          { timeout: 85_800 }
-        else
-          { timeout: 300, await_signal: :container_finished, signal_timeout: 82_800 }
-        end
+      when :exec        then { timeout: 300, await_signal: :container_finished, signal_timeout: 82_800 }
       when :cleanup     then { timeout: 120, always: true, retry: { max_attempts: 2, interval: 5 } }
       else                   { timeout: 300 }
       end
@@ -66,23 +58,12 @@ module ContainerStrategies
       {}
     end
 
-    # == exec(container_id:, **) → { websocket_url:, ..., agent_completed:?, exit_code:? } ==
+    # == exec(container_id:, **) → { websocket_url:, ... } ==
 
     def exec(container_id:, **)
       result = super(container_id: container_id)
       result.delete(:watcher_url)
-
-      session = TerminalSession.find(input[:session_id])
-      return result if session.mode == "interactive"
-
-      container = resolve_container(container_id)
-      exit_code = poll_for_completion(container)
-
-      meta = (session.metadata || {}).merge("exit_code" => exit_code)
-      session.update!(metadata: meta)
-      session.update!(error_message: "Agent exited with code #{exit_code}") unless exit_code.zero?
-
-      result.merge(exit_code: exit_code, agent_completed: true)
+      result
     end
 
     # == before_cleanup(container_id:, **) → { logs_count:, outputs_count: } ==
@@ -114,36 +95,10 @@ module ContainerStrategies
     end
 
     def services_ports
-      non_interactive? ? [ 7681 ] : [ 7681, 8443 ]
+      [ 7681, 8443 ]
     end
 
     private
-
-    def non_interactive?
-      session = TerminalSession.find(input[:session_id])
-      session.mode == "non_interactive" && session.initial_prompt.present?
-    end
-
-    def poll_for_completion(container)
-      deadline = Time.current + POLL_TIMEOUT
-
-      loop do
-        result = runtime.exec(
-          container,
-          [ "/bin/sh", "-c", "cat /tmp/.agent_done 2>/dev/null" ],
-          stdout: true, stderr: true
-        )
-
-        return result[0].join.strip.to_i if result[2]&.zero?
-
-        if Time.current > deadline
-          Rails.logger.warn("[AgentSession] Polling timed out for session #{input[:session_id]}")
-          return 124
-        end
-
-        sleep POLL_INTERVAL
-      end
-    end
 
     def collect_terminal_output(container, session)
       runtime.exec(container, [

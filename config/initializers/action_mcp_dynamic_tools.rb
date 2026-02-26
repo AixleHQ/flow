@@ -27,14 +27,13 @@ Rails.application.config.after_initialize do
       return super if session.nil?
 
       tools = session.available_tools.map do |tool|
+        schema = tool.input_schema.presence || { "type" => "object", "properties" => {}, "required" => [] }
+        schema = schema.deep_stringify_keys if schema.respond_to?(:deep_stringify_keys)
+
         {
-          name: tool.name,
-          description: tool.description || tool.display_name,
-          inputSchema: tool.input_schema.presence || {
-            type: "object",
-            properties: {},
-            required: []
-          }
+          "name" => tool.name,
+          "description" => tool.description || tool.display_name,
+          "inputSchema" => schema
         }
       end
 
@@ -46,7 +45,7 @@ Rails.application.config.after_initialize do
       session = ActionMCP::Current.terminal_session
       return super if session.nil?
 
-      tool = session.available_tools.find_by(name: tool_name)
+      tool = session.available_tools.detect { |t| t.name == tool_name }
 
       unless tool
         send_jsonrpc_error(request_id, :method_not_found, "Tool '#{tool_name}' not available")
@@ -54,7 +53,7 @@ Rails.application.config.after_initialize do
       end
 
       begin
-        result = execute_tool_via_temporal(tool, arguments, session)
+        result = execute_tool(tool, arguments, session)
         content = build_response_content(result)
         send_jsonrpc_response(request_id, result: { content: content })
       rescue StandardError => e
@@ -65,11 +64,51 @@ Rails.application.config.after_initialize do
 
     private
 
-    def execute_tool_via_temporal(tool, arguments, session)
-      tool.execute(
-        parameters: arguments || {},
-        project: session.project,
-        timeout: 300
+    def execute_tool(tool, arguments, session)
+      params = resolve_repository_params(arguments || {}, session)
+
+      if tool.execution_mode.app?
+        tool.execute(
+          parameters: params,
+          project: session.project,
+          session: session
+        )
+      else
+        tool_result = ToolResult.create!(
+          tool: tool,
+          terminal_session: session,
+          step_run: session.step_run,
+          execution_id: ToolResult.generate_id,
+          state: "processing"
+        )
+
+        tool.execute(
+          parameters: params,
+          project: session.project,
+          session: session,
+          timeout: 300,
+          tool_result_id: tool_result.id
+        )
+
+        { exit_code: 0, stdout: tool_result.execution_id }
+      end
+    end
+
+    # When arguments contain repository_id, validate ownership and resolve
+    # REPO (full_name) + GITHUB_TOKEN from the integration automatically.
+    def resolve_repository_params(arguments, session)
+      repo_id = arguments["repository_id"] || arguments[:repository_id]
+      return arguments unless repo_id.present?
+
+      repo = session.repositories.find_by(id: repo_id)
+      raise "Repository #{repo_id} is not attached to this session" unless repo
+
+      token = Github::TokenService.new(repo.integration).generate_installation_token
+
+      arguments.except("repository_id", :repository_id).merge(
+        "REPO" => repo.full_name,
+        "GITHUB_TOKEN" => token,
+        "BRANCH" => arguments["BRANCH"].presence || repo.source_branch
       )
     end
 

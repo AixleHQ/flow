@@ -21,20 +21,26 @@ FactoryBot.define do
       association :scope, factory: :project
     end
 
-    # Alias for backward compatibility
     trait :project do
-      # Expects scope: to be passed explicitly
-      # This trait is just a semantic marker for project-scoped tools
     end
-
-    # Note: For most tests, pass scope: explicitly:
-    #   create(:tool, scope: company)
-    #   create(:tool, scope: project)
 
     # == Kind Traits ==
 
+    trait :system do
+      kind { :system }
+      scope { nil }
+    end
+
     trait :internal do
       kind { :internal }
+      execution_mode { :app }
+      scope { nil }
+      docker_image { nil }
+    end
+
+    trait :workflow do
+      kind { :workflow }
+      execution_mode { :app }
       scope { nil }
       docker_image { nil }
     end

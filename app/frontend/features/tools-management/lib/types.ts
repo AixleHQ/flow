@@ -1,11 +1,21 @@
-export type ToolKind = 'internal' | 'custom';
+export type ToolKind = 'custom' | 'system' | 'internal' | 'workflow';
 export type ScopeType = 'Company' | 'Project';
-export type ScopeIndicator = 'internal' | 'company' | 'project' | 'overrides_company';
+export type ScopeIndicator = 'system' | 'company' | 'project' | 'overrides_company';
 
 export interface ToolFile {
   id?: number;
   path: string;
   content: string;
+  binary: boolean;
+  fileName: string | null;
+  fileUrl: string | null;
+  _destroy?: boolean;
+}
+
+export interface ToolFileInput {
+  id?: number;
+  path: string;
+  content?: string;
   _destroy?: boolean;
 }
 
@@ -23,7 +33,7 @@ export interface Tool {
   inputSchema: Record<string, unknown>;
   enabled: boolean;
   scopeIndicator: ScopeIndicator;
-  internal: boolean;
+  platformTool: boolean;
   toolFiles: ToolFile[];
   createdAt: string;
   updatedAt: string;
@@ -42,7 +52,7 @@ export interface CreateToolRequest {
   command?: string;
   requiredConfigItems?: string[];
   inputSchema?: Record<string, unknown>;
-  toolFilesAttributes?: ToolFile[];
+  toolFilesAttributes?: ToolFileInput[];
 }
 
 export interface UpdateToolRequest {
@@ -55,5 +65,5 @@ export interface UpdateToolRequest {
   requiredConfigItems?: string[];
   inputSchema?: Record<string, unknown>;
   enabled?: boolean;
-  toolFilesAttributes?: ToolFile[];
+  toolFilesAttributes?: ToolFileInput[];
 }
