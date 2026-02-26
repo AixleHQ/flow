@@ -1,0 +1,9 @@
+# AWS Configuration
+# AWS credentials should be provided via environment variables:
+#   AWS_ACCESS_KEY_ID
+#   AWS_SECRET_ACCESS_KEY
+#
+# Optional: AWS_REGION can also be set via environment variable
+
+aws_region          = "us-east-1"
+tfstate_bucket_name = "palad-tfstate-prod"
