@@ -15,11 +15,14 @@
 	// Mount host kube config for Orbstack K8s access
 	"mounts": [
 		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached",
-		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+		"source=${localEnv:HOME}/.aws,target=/root/.aws,type=bind,consistency=cached"
 	],
 
 	"containerEnv": {
-		"KUBECONFIG": "/root/.kube/config"
+		"KUBECONFIG": "/root/.kube/config",
+		"AWS_VAULT_BACKEND": "file",
+		"AWS_VAULT_FILE_DIR": "/root/.awsvault"
 	},
 
 	// Ensure Orbstack hostnames resolve inside the container
