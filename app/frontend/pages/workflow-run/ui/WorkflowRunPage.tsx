@@ -10,6 +10,8 @@ import {
   DialogTitle,
   IconButton,
   Link,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -33,6 +35,8 @@ import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
+/* ────────────────────────────── styles ────────────────────────────── */
+
 const styles = {
   root: {
     height: '100vh',
@@ -41,7 +45,7 @@ const styles = {
     backgroundColor: 'background.default',
   },
   header: {
-    padding: '12px 24px',
+    padding: '8px 24px',
     borderBottom: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
@@ -52,11 +56,11 @@ const styles = {
   },
   headerLeft: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
+    alignItems: 'center',
+    gap: '12px',
   },
   breadcrumbs: {
-    '& .MuiBreadcrumbs-separator': { marginX: '8px' },
+    '& .MuiBreadcrumbs-separator': { marginX: '6px' },
   },
   breadcrumbLink: {
     color: 'text.secondary',
@@ -66,7 +70,7 @@ const styles = {
     '&:hover': { color: 'text.primary' },
   },
   title: {
-    fontSize: '18px',
+    fontSize: '16px',
     fontWeight: 600,
     color: 'text.primary',
   },
@@ -76,7 +80,7 @@ const styles = {
     gap: '8px',
   },
   actionButton: {
-    padding: '8px',
+    padding: '6px',
     color: 'text.secondary',
     border: '1px solid',
     borderColor: 'divider',
@@ -88,65 +92,70 @@ const styles = {
     borderColor: 'error.main',
     '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.1)' },
   },
-  stepsContainer: {
+
+  tabBar: {
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    backgroundColor: 'background.paper',
+    flexShrink: 0,
+    minHeight: 36,
+    '& .MuiTabs-indicator': { height: 2 },
+  },
+  tab: {
+    minHeight: 36,
+    textTransform: 'none',
+    fontSize: '13px',
+    fontWeight: 500,
+    px: 2,
+  },
+
+  /* Steps tab — DAG timeline */
+  dagContainer: {
     backgroundColor: 'background.paper',
     borderBottom: '1px solid',
     borderColor: 'divider',
-    padding: '16px 24px',
+    padding: '8px 16px',
     flexShrink: 0,
   },
-  stepsHeader: {
+  dagScroll: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '12px',
-  },
-  stepsTitle: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: 'text.secondary',
-    textTransform: 'uppercase',
-  },
-  stepsList: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
+    alignItems: 'flex-start',
+    gap: 0,
     overflowX: 'auto',
     overflowY: 'hidden',
-    flexWrap: 'nowrap',
-    paddingBottom: '8px',
+    pb: 0.5,
     scrollBehavior: 'smooth',
-    '&::-webkit-scrollbar': { height: '6px' },
-    '&::-webkit-scrollbar-track': { backgroundColor: 'background.elevated', borderRadius: '3px' },
+    '&::-webkit-scrollbar': { height: '4px' },
+    '&::-webkit-scrollbar-track': { backgroundColor: 'background.elevated', borderRadius: '2px' },
     '&::-webkit-scrollbar-thumb': {
       backgroundColor: 'divider',
-      borderRadius: '3px',
+      borderRadius: '2px',
       '&:hover': { backgroundColor: 'text.disabled' },
     },
   },
-  stepItem: {
+  stepChip: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
+    gap: '6px',
+    padding: '4px 10px',
     backgroundColor: 'background.elevated',
     borderRadius: '6px',
     cursor: 'pointer',
     flexShrink: 0,
     border: '1px solid transparent',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.15s ease',
     '&:hover': { borderColor: 'border.strong' },
   },
-  stepItemActive: { borderColor: 'primary.main', backgroundColor: 'action.selected' },
+  stepChipActive: { borderColor: 'primary.main', backgroundColor: 'action.selected' },
   stepIndicator: {
-    width: '24px',
-    height: '24px',
+    width: 20,
+    height: 20,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '12px',
-    fontWeight: 600,
+    fontSize: '10px',
+    fontWeight: 700,
     flexShrink: 0,
   },
   stepIndicatorCompleted: { backgroundColor: 'success.main', color: 'white' },
@@ -170,62 +179,29 @@ const styles = {
     animation: 'pulse 2s infinite',
     '@keyframes pulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.6 } },
   },
-  stepInfo: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  stepName: { fontSize: '13px', fontWeight: 500, color: 'text.primary', whiteSpace: 'nowrap' },
-  stepMeta: {
-    fontSize: '11px',
-    color: 'text.secondary',
-    fontFamily: '"JetBrains Mono", monospace',
+  stepChipName: { fontSize: '12px', fontWeight: 500, color: 'text.primary', whiteSpace: 'nowrap' },
+  stepChipMeta: { fontSize: '10px', color: 'text.secondary', fontFamily: '"JetBrains Mono", monospace' },
+  waveConnector: {
+    width: 20,
     display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  stepConnector: { width: '24px', height: '2px', backgroundColor: 'divider', flexShrink: 0 },
-  stepConnectorCompleted: { backgroundColor: 'success.main' },
-  main: { flex: 1, display: 'flex', overflow: 'hidden' },
-  contentArea: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  splitContainer: { flex: 1, display: 'flex', flexDirection: 'row', overflow: 'hidden' },
-  terminalPanel: {
-    flex: 1,
-    minWidth: '300px',
-    backgroundColor: '#0D0D0D',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  panelHeader: {
-    padding: '8px 16px',
-    borderBottom: '1px solid',
-    borderColor: 'divider',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexShrink: 0,
-    backgroundColor: 'background.elevated',
-  },
-  panelTitle: {
-    fontSize: '12px',
-    fontWeight: 500,
-    color: 'text.secondary',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  panelContent: { flex: 1, overflow: 'auto' },
-  placeholder: {
-    display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
-    gap: '8px',
+    alignSelf: 'center',
+    flexShrink: 0,
   },
-  placeholderText: { fontSize: '13px', color: 'text.secondary' },
-  placeholderSubtext: { fontSize: '11px', color: 'text.disabled' },
-  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' },
-  subStepsPanel: {
-    width: 280,
-    minWidth: 240,
+
+  /* Main content under Steps tab */
+  stepsBody: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+
+  /* Right panel: sub-steps + actions */
+  rightPanel: {
+    width: 260,
+    minWidth: 220,
     borderLeft: '1px solid',
     borderColor: 'divider',
     backgroundColor: 'background.paper',
@@ -234,90 +210,123 @@ const styles = {
     overflow: 'hidden',
     flexShrink: 0,
   },
+  rightPanelHeader: {
+    padding: '8px 12px',
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexShrink: 0,
+  },
+  rightPanelTitle: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: 'text.secondary',
+    textTransform: 'uppercase',
+  },
   subStepsList: {
     flex: 1,
     overflow: 'auto',
-    padding: '8px 0',
+    padding: '4px 0',
   },
   subStepItem: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '10px',
-    padding: '8px 16px',
+    gap: '8px',
+    padding: '6px 12px',
     '&:not(:last-child)': { borderBottom: '1px solid', borderColor: 'divider' },
   },
   subStepCheck: {
-    width: 20,
-    height: 20,
+    width: 18,
+    height: 18,
     borderRadius: '4px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 700,
     flexShrink: 0,
-    marginTop: '2px',
+    marginTop: '1px',
   },
   subStepCheckPending: { border: '2px solid', borderColor: 'divider', color: 'text.disabled' },
   subStepCheckInProgress: { backgroundColor: 'primary.main', color: 'white', animation: 'pulse 2s infinite' },
   subStepCheckCompleted: { backgroundColor: 'success.main', color: 'white' },
   subStepCheckSkipped: { backgroundColor: 'text.disabled', color: 'white' },
   subStepContent: { flex: 1, minWidth: 0 },
-  subStepName: { fontSize: '12px', fontWeight: 500, color: 'text.primary', lineHeight: 1.4 },
-  subStepNote: { fontSize: '11px', color: 'text.secondary', mt: '2px', fontStyle: 'italic' },
-  stepActionBar: {
-    padding: '12px 24px',
+  subStepName: { fontSize: '11px', fontWeight: 500, color: 'text.primary', lineHeight: 1.4 },
+  subStepNote: { fontSize: '10px', color: 'text.secondary', mt: '2px', fontStyle: 'italic' },
+  stepActionSection: {
     borderTop: '1px solid',
     borderColor: 'divider',
-    backgroundColor: 'background.paper',
+    padding: '8px 12px',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: '6px',
     flexShrink: 0,
   },
-  stepActionBarLeft: {
+
+  /* Terminal panel */
+  terminalPanel: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: '#0D0D0D',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  terminalHeader: {
+    padding: '6px 12px',
+    borderBottom: '1px solid',
+    borderColor: 'divider',
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    flexShrink: 0,
+    backgroundColor: '#1A1A1A',
   },
-  stepActionBarRight: {
+  terminalContent: { flex: 1, overflow: 'auto', position: 'relative' },
+  placeholder: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px',
+    justifyContent: 'center',
+    height: '100%',
+    gap: '6px',
   },
+  placeholderText: { fontSize: '13px', color: 'text.secondary' },
+  placeholderSubtext: { fontSize: '11px', color: 'text.disabled' },
+
+  /* Artifacts tab */
+  artifactsPanel: {
+    flex: 1,
+    overflow: 'auto',
+  },
+
+  loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' },
 } satisfies Record<string, SxProps<Theme>>;
 
-function getStepIndicatorStyle(state: string): SxProps<Theme> {
+/* ────────────────────────────── helpers ───────────────────────────── */
+
+function getIndicatorStyle(state: string): SxProps<Theme> {
   switch (state) {
-    case 'completed':
-      return styles.stepIndicatorCompleted;
-    case 'running':
-      return styles.stepIndicatorRunning;
-    case 'waiting_input':
-      return styles.stepIndicatorWaiting;
-    case 'failed':
-      return styles.stepIndicatorFailed;
-    case 'skipped':
-      return styles.stepIndicatorSkipped;
-    default:
-      return styles.stepIndicatorPending;
+    case 'completed': return styles.stepIndicatorCompleted;
+    case 'running': return styles.stepIndicatorRunning;
+    case 'waiting_input': return styles.stepIndicatorWaiting;
+    case 'failed': return styles.stepIndicatorFailed;
+    case 'skipped': return styles.stepIndicatorSkipped;
+    default: return styles.stepIndicatorPending;
   }
 }
 
 function getStepIcon(state: string, index: number): string {
   switch (state) {
-    case 'completed':
-      return '\u2713';
-    case 'running':
-      return '\u25CF';
-    case 'waiting_input':
-      return '\u270B';
-    case 'failed':
-      return '\u2717';
-    case 'skipped':
-      return '\u2192';
-    default:
-      return String(index + 1);
+    case 'completed': return '\u2713';
+    case 'running': return '\u25CF';
+    case 'waiting_input': return '\u270B';
+    case 'failed': return '\u2717';
+    case 'skipped': return '\u2192';
+    default: return String(index + 1);
   }
 }
 
@@ -335,12 +344,15 @@ function isRunActive(run: WorkflowRun): boolean {
   return ['pending', 'running', 'paused'].includes(run.state);
 }
 
+/* ────────────────────────────── component ─────────────────────────── */
+
 const WorkflowRunPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { projectId?: string; runId?: string };
   const projectId = Number(params.projectId);
   const runId = Number(params.runId);
 
+  const [activeTab, setActiveTab] = useState(0);
   const [activeStepRunId, setActiveStepRunId] = useState<number | null>(null);
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
   const [skipReason, setSkipReason] = useState('');
@@ -354,10 +366,7 @@ const WorkflowRunPage = () => {
     { skip: !projectId || !runId },
   );
 
-  const { workflowRun: liveRun } = useWorkflowRunChannel({
-    runId: runId || null,
-  });
-
+  const { workflowRun: liveRun } = useWorkflowRunChannel({ runId: runId || null });
   const workflowRun = liveRun ?? initialRun;
 
   const { data: workflowSteps = [] } = useGetStepsQuery(
@@ -371,6 +380,8 @@ const WorkflowRunPage = () => {
   const [cancelRun, { isLoading: cancelling }] = useCancelWorkflowRunMutation();
 
   const stepRuns: StepRunInfo[] = workflowRun?.stepRuns ?? [];
+
+  /* ── timeline computation ──────────────────────────────────────── */
 
   interface TimelineStep {
     stepId: number;
@@ -439,6 +450,8 @@ const WorkflowRunPage = () => {
       .map(([wave, steps]) => ({ wave, steps }));
   }, [timelineSteps]);
 
+  /* ── selection logic ──────────────────────────────────────────── */
+
   const currentStepRun = stepRuns.find((s) => s.state === 'running' || s.state === 'waiting_input');
   const selectedTimelineStep = activeStepRunId
     ? timelineSteps.find((t) => t.stepRun?.id === activeStepRunId)
@@ -452,6 +465,8 @@ const WorkflowRunPage = () => {
       setActiveStepRunId(currentStepRun.id);
     }
   }, [currentStepRun]);
+
+  /* ── handlers ──────────────────────────────────────────────────── */
 
   const handleApprove = useCallback(() => {
     approveStep({ projectId, runId });
@@ -471,12 +486,12 @@ const WorkflowRunPage = () => {
     cancelRun({ projectId, runId });
   }, [cancelRun, projectId, runId]);
 
+  /* ── derived ───────────────────────────────────────────────────── */
+
   if (isLoading) {
     return (
       <Box sx={styles.root}>
-        <Box sx={styles.loading}>
-          <CircularProgress />
-        </Box>
+        <Box sx={styles.loading}><CircularProgress /></Box>
       </Box>
     );
   }
@@ -485,18 +500,18 @@ const WorkflowRunPage = () => {
     return (
       <Box sx={styles.root}>
         <Box sx={styles.loading}>
-          <Alert severity="error" sx={{ maxWidth: 400 }}>
-            Workflow run not found
-          </Alert>
+          <Alert severity="error" sx={{ maxWidth: 400 }}>Workflow run not found</Alert>
         </Box>
       </Box>
     );
   }
 
   const completedCount = timelineSteps.filter((t) => t.state === 'completed').length;
-  const progressIndex = completedCount + (currentStepRun ? 1 : 0);
   const canAct = selectedStepRun?.state === 'waiting_input' && isRunActive(workflowRun);
-  const sessionStatus = isRunActive(workflowRun)
+  const canRetryFailed = selectedStepRun?.state === 'failed' && isRunActive(workflowRun);
+  const hasSubSteps = (selectedStepRun?.subStepRuns ?? []).length > 0;
+  const isWorkflowRunning = isRunActive(workflowRun);
+  const sessionStatus = isWorkflowRunning
     ? 'running'
     : workflowRun.state === 'completed'
       ? 'completed'
@@ -504,168 +519,141 @@ const WorkflowRunPage = () => {
 
   return (
     <Box sx={styles.root}>
-      {/* Header */}
+      {/* ── Header ──────────────────────────────────────────────── */}
       <Box sx={styles.header}>
         <Box sx={styles.headerLeft}>
           <Breadcrumbs sx={styles.breadcrumbs}>
-            <Link
-              sx={styles.breadcrumbLink}
-              onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}
-            >
+            <Link sx={styles.breadcrumbLink} onClick={() => navigate({ to: Routes.frontend.companyProjectsPath })}>
               Projects
             </Link>
             <Link
               sx={styles.breadcrumbLink}
-              onClick={() =>
-                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflows') })
-              }
+              onClick={() => navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflows') })}
             >
               Project
             </Link>
             <Link
               sx={styles.breadcrumbLink}
-              onClick={() =>
-                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })
-              }
+              onClick={() => navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })}
             >
               Runs
             </Link>
-            <Typography color="text.primary" sx={{ fontSize: '13px' }}>
-              {workflowRun.workflowName ?? `Run #${workflowRun.id}`}
-            </Typography>
           </Breadcrumbs>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Typography sx={styles.title}>
-              {workflowRun.workflowName ?? 'Workflow Run'}
-            </Typography>
-            <Typography
-              sx={{
-                fontSize: '12px',
-                fontWeight: 500,
-                textTransform: 'uppercase',
-                color:
-                  workflowRun.state === 'running'
-                    ? 'primary.main'
-                    : workflowRun.state === 'completed'
-                      ? 'success.main'
-                      : workflowRun.state === 'failed'
-                        ? 'error.main'
-                        : 'text.secondary',
-              }}
-            >
-              {workflowRun.state}
-            </Typography>
-          </Box>
+          <Typography sx={styles.title}>
+            {workflowRun.workflowName ?? 'Workflow Run'}
+          </Typography>
+          <Typography
+            sx={{
+              fontSize: '11px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              color:
+                workflowRun.state === 'running' ? 'primary.main'
+                  : workflowRun.state === 'completed' ? 'success.main'
+                    : workflowRun.state === 'failed' ? 'error.main'
+                      : 'text.secondary',
+            }}
+          >
+            {workflowRun.state}
+          </Typography>
+          <Typography sx={{ fontSize: '11px', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
+            {formatDuration(workflowRun.startedAt, workflowRun.completedAt)}
+          </Typography>
         </Box>
         <Box sx={styles.headerRight}>
-          {isRunActive(workflowRun) && (
+          <Typography sx={{ fontSize: '11px', color: 'text.secondary' }}>
+            {completedCount}/{timelineSteps.length} steps
+          </Typography>
+          {isWorkflowRunning && (
             <Tooltip title="Cancel Workflow">
               <IconButton
                 sx={{ ...styles.actionButton, ...styles.dangerButton }}
                 onClick={handleCancel}
                 disabled={cancelling}
+                size="small"
               >
-                <span style={{ fontSize: '14px' }}>{'\u25A0'}</span>
+                <span style={{ fontSize: '12px' }}>{'\u25A0'}</span>
               </IconButton>
             </Tooltip>
           )}
         </Box>
       </Box>
 
-      {/* Step Timeline — GitHub CI style */}
-      <Box sx={styles.stepsContainer}>
-        <Box sx={styles.stepsHeader}>
-          <Typography sx={styles.stepsTitle}>Workflow Steps</Typography>
-          <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-            {completedCount}/{timelineSteps.length} completed
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0, overflowX: 'auto', pb: 1 }}>
-          {timelineWaves.map((wave, waveIdx) => {
-            const allCompleted = wave.steps.every((t) => t.state === 'completed');
-            return (
-              <Box key={wave.wave} sx={{ display: 'flex', alignItems: 'center' }}>
-                {/* Wave column */}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    minWidth: 160,
-                  }}
-                >
-                  {wave.steps.map((ts, stepIdx) => (
-                    <Box
-                      key={ts.stepId}
-                      sx={{
-                        ...styles.stepItem,
-                        ...(selectedTimelineStep?.stepId === ts.stepId ? styles.stepItemActive : {}),
-                      }}
-                      onClick={() => ts.stepRun && setActiveStepRunId(ts.stepRun.id)}
-                    >
-                      <Box sx={{ ...styles.stepIndicator, ...getStepIndicatorStyle(ts.state) }}>
-                        {getStepIcon(ts.state, stepIdx)}
-                      </Box>
-                      <Box sx={styles.stepInfo}>
-                        <Typography sx={styles.stepName}>{ts.stepName}</Typography>
-                        <Box sx={styles.stepMeta}>
-                          <Typography component="span">{ts.state}</Typography>
-                          {ts.stepRun?.startedAt && (
-                            <Typography component="span">
-                              {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt)}
-                            </Typography>
-                          )}
+      {/* ── Tab bar ─────────────────────────────────────────────── */}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => setActiveTab(v)}
+        sx={styles.tabBar}
+      >
+        <Tab label="Steps" sx={styles.tab} />
+        <Tab
+          label={`Artifacts`}
+          sx={styles.tab}
+          disabled={isWorkflowRunning}
+        />
+      </Tabs>
+
+      {/* ── Steps Tab ───────────────────────────────────────────── */}
+      {activeTab === 0 && (
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Compact DAG */}
+          <Box sx={styles.dagContainer}>
+            <Box sx={styles.dagScroll}>
+              {timelineWaves.map((wave, waveIdx) => {
+                const allCompleted = wave.steps.every((t) => t.state === 'completed');
+                return (
+                  <Box key={wave.wave} sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {wave.steps.map((ts, stepIdx) => (
+                        <Box
+                          key={ts.stepId}
+                          sx={{
+                            ...styles.stepChip,
+                            ...(selectedTimelineStep?.stepId === ts.stepId ? styles.stepChipActive : {}),
+                          }}
+                          onClick={() => ts.stepRun && setActiveStepRunId(ts.stepRun.id)}
+                        >
+                          <Box sx={{ ...styles.stepIndicator, ...getIndicatorStyle(ts.state) }}>
+                            {getStepIcon(ts.state, stepIdx)}
+                          </Box>
+                          <Box>
+                            <Typography sx={styles.stepChipName}>{ts.stepName}</Typography>
+                            {ts.stepRun?.startedAt && (
+                              <Typography sx={styles.stepChipMeta}>
+                                {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt)}
+                              </Typography>
+                            )}
+                          </Box>
                         </Box>
-                      </Box>
+                      ))}
                     </Box>
-                  ))}
-                </Box>
-                {/* Connector between waves */}
-                {waveIdx < timelineWaves.length - 1 && (
-                  <Box
-                    sx={{
-                      width: 32,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      alignSelf: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        width: 24,
-                        height: 2,
-                        backgroundColor: allCompleted ? 'success.main' : 'divider',
-                      }}
-                    />
+                    {waveIdx < timelineWaves.length - 1 && (
+                      <Box sx={styles.waveConnector}>
+                        <Box sx={{ width: 16, height: 2, backgroundColor: allCompleted ? 'success.main' : 'divider' }} />
+                      </Box>
+                    )}
                   </Box>
+                );
+              })}
+            </Box>
+          </Box>
+
+          {/* Body: terminal + right panel */}
+          <Box sx={styles.stepsBody}>
+            {/* Terminal */}
+            <Box sx={styles.terminalPanel}>
+              <Box sx={styles.terminalHeader}>
+                <span style={{ fontSize: '12px' }}>{'\u2B1B'}</span>
+                <Typography sx={{ fontSize: '12px', color: 'text.primary', fontWeight: 500 }}>
+                  Terminal
+                </Typography>
+                {selectedTimelineStep && (
+                  <Typography sx={{ fontSize: '10px', color: 'text.disabled' }}>
+                    {'\u2014'} {selectedTimelineStep.stepName}
+                  </Typography>
                 )}
               </Box>
-            );
-          })}
-        </Box>
-      </Box>
-
-      {/* Main Content */}
-      <Box sx={styles.main}>
-        <Box sx={styles.contentArea}>
-          <Box sx={styles.splitContainer}>
-            <Box sx={styles.terminalPanel}>
-              <Box sx={{ ...styles.panelHeader, backgroundColor: '#1A1A1A' }}>
-                <Box sx={styles.panelTitle}>
-                  <span style={{ fontSize: '14px' }}>{'\u2B1B'}</span>
-                  <Typography component="span" sx={{ color: 'text.primary' }}>
-                    Terminal
-                  </Typography>
-                  {selectedTimelineStep && (
-                    <Typography component="span" sx={{ color: 'text.disabled', fontSize: '11px' }}>
-                      {'\u2014'} {selectedTimelineStep.stepName}
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-              <Box sx={{ ...styles.panelContent, position: 'relative' }}>
+              <Box sx={styles.terminalContent}>
                 {selectedStepRun?.terminalSessionId ? (
                   <TerminalSessionWidget
                     sessionId={selectedStepRun.terminalSessionId}
@@ -688,171 +676,127 @@ const WorkflowRunPage = () => {
               </Box>
             </Box>
 
-            {/* Sub-steps sidebar */}
-            {selectedStepRun && (selectedStepRun.subStepRuns ?? []).length > 0 && (
-              <Box sx={styles.subStepsPanel}>
-                <Box sx={styles.panelHeader}>
-                  <Box sx={styles.panelTitle}>
-                    <Typography component="span" sx={{ color: 'text.primary' }}>
-                      Sub-steps
-                    </Typography>
-                    <Typography component="span" sx={{ color: 'text.disabled', fontSize: '11px' }}>
-                      {(selectedStepRun.subStepRuns ?? []).filter((s) => s.state === 'completed').length}/
-                      {(selectedStepRun.subStepRuns ?? []).length}
+            {/* Right panel: sub-steps + actions */}
+            <Box sx={styles.rightPanel}>
+              {hasSubSteps ? (
+                <>
+                  <Box sx={styles.rightPanelHeader}>
+                    <Typography sx={styles.rightPanelTitle}>Sub-steps</Typography>
+                    <Typography sx={{ fontSize: '10px', color: 'text.disabled' }}>
+                      {(selectedStepRun!.subStepRuns ?? []).filter((s) => s.state === 'completed').length}/
+                      {(selectedStepRun!.subStepRuns ?? []).length}
                     </Typography>
                   </Box>
-                </Box>
-                <Box sx={styles.subStepsList}>
-                  {(selectedStepRun.subStepRuns ?? []).map((ssr) => (
-                    <Box key={ssr.id} sx={styles.subStepItem}>
-                      <Box
-                        sx={{
-                          ...styles.subStepCheck,
-                          ...(ssr.state === 'completed'
-                            ? styles.subStepCheckCompleted
-                            : ssr.state === 'in_progress'
-                              ? styles.subStepCheckInProgress
-                              : ssr.state === 'skipped'
-                                ? styles.subStepCheckSkipped
-                                : styles.subStepCheckPending),
-                        }}
-                      >
-                        {ssr.state === 'completed'
-                          ? '\u2713'
-                          : ssr.state === 'in_progress'
-                            ? '\u25CF'
-                            : ssr.state === 'skipped'
-                              ? '\u2192'
-                              : ''}
+                  <Box sx={styles.subStepsList}>
+                    {(selectedStepRun!.subStepRuns ?? []).map((ssr) => (
+                      <Box key={ssr.id} sx={styles.subStepItem}>
+                        <Box
+                          sx={{
+                            ...styles.subStepCheck,
+                            ...(ssr.state === 'completed'
+                              ? styles.subStepCheckCompleted
+                              : ssr.state === 'in_progress'
+                                ? styles.subStepCheckInProgress
+                                : ssr.state === 'skipped'
+                                  ? styles.subStepCheckSkipped
+                                  : styles.subStepCheckPending),
+                          }}
+                        >
+                          {ssr.state === 'completed' ? '\u2713'
+                            : ssr.state === 'in_progress' ? '\u25CF'
+                              : ssr.state === 'skipped' ? '\u2192'
+                                : ''}
+                        </Box>
+                        <Box sx={styles.subStepContent}>
+                          <Typography sx={styles.subStepName}>{ssr.subStepName}</Typography>
+                          {ssr.note && <Typography sx={styles.subStepNote}>{ssr.note}</Typography>}
+                        </Box>
                       </Box>
-                      <Box sx={styles.subStepContent}>
-                        <Typography sx={styles.subStepName}>{ssr.subStepName}</Typography>
-                        {ssr.note && (
-                          <Typography sx={styles.subStepNote}>{ssr.note}</Typography>
-                        )}
-                      </Box>
+                    ))}
+                  </Box>
+                  {selectedStepRun!.stepNote && (
+                    <Box sx={{ borderTop: '1px solid', borderColor: 'divider', padding: '6px 12px' }}>
+                      <Typography sx={{ fontSize: '10px', fontWeight: 600, color: 'text.secondary', mb: '2px' }}>
+                        Step Note
+                      </Typography>
+                      <Typography sx={{ fontSize: '11px', color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                        {selectedStepRun!.stepNote}
+                      </Typography>
                     </Box>
-                  ))}
-                </Box>
-                {selectedStepRun.stepNote && (
-                  <Box
-                    sx={{
-                      borderTop: '1px solid',
-                      borderColor: 'divider',
-                      padding: '8px 16px',
-                    }}
-                  >
-                    <Typography sx={{ fontSize: '11px', fontWeight: 600, color: 'text.secondary', mb: '4px' }}>
-                      Step Note
-                    </Typography>
-                    <Typography
-                      sx={{ fontSize: '12px', color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}
-                    >
-                      {selectedStepRun.stepNote}
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            )}
-          </Box>
-
-          {/* Step Action Bar */}
-          {canAct && selectedStepRun && (
-            <Box sx={styles.stepActionBar}>
-              <Box sx={styles.stepActionBarLeft}>
-                <Typography sx={{ fontSize: '13px', fontWeight: 500, color: 'text.primary' }}>
-                  {selectedStepRun.stepName}
-                </Typography>
-                <Typography sx={{ fontSize: '12px', color: 'warning.main' }}>
-                  Waiting for your decision
-                </Typography>
-              </Box>
-              <Box sx={styles.stepActionBarRight}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="inherit"
-                  onClick={() => setSkipDialogOpen(true)}
-                  disabled={skipping}
-                >
-                  Skip
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="warning"
-                  onClick={handleRetry}
-                  disabled={retrying}
-                >
-                  Retry
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  color="primary"
-                  onClick={handleApprove}
-                  disabled={approving}
-                >
-                  Approve & Continue
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {/* Failed step action bar */}
-          {selectedStepRun?.state === 'failed' && isRunActive(workflowRun) && (
-            <Box sx={styles.stepActionBar}>
-              <Box sx={styles.stepActionBarLeft}>
-                <Typography sx={{ fontSize: '13px', fontWeight: 500, color: 'error.main' }}>
-                  {selectedStepRun.stepName} — Failed
-                </Typography>
-                {selectedStepRun.errorMessage && (
-                  <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-                    {selectedStepRun.errorMessage}
+                  )}
+                </>
+              ) : (
+                <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
+                  <Typography sx={{ fontSize: '11px', color: 'text.disabled', textAlign: 'center' }}>
+                    {selectedTimelineStep
+                      ? 'No sub-steps for this step'
+                      : 'Select a step above'}
                   </Typography>
-                )}
-              </Box>
-              <Box sx={styles.stepActionBarRight}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="inherit"
-                  onClick={() => setSkipDialogOpen(true)}
-                  disabled={skipping}
-                >
-                  Skip
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  color="warning"
-                  onClick={handleRetry}
-                  disabled={retrying}
-                >
-                  Retry
-                </Button>
-              </Box>
-            </Box>
-          )}
-
-          {(workflowRun.state === 'completed' || workflowRun.state === 'failed') && (
-            <WorkflowAssetsReview
-              projectId={projectId}
-              runId={runId}
-              stepNameMap={Object.fromEntries(
-                stepRuns.map((sr) => [sr.id, sr.stepName])
+                </Box>
               )}
-            />
-          )}
 
-          <StatusBar
-            status={sessionStatus}
-            duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt)}
+              {/* Action buttons */}
+              {canAct && selectedStepRun && (
+                <Box sx={styles.stepActionSection}>
+                  <Typography sx={{ fontSize: '11px', color: 'warning.main', fontWeight: 500 }}>
+                    Waiting for decision
+                  </Typography>
+                  <Button variant="contained" size="small" color="primary" onClick={handleApprove} disabled={approving} fullWidth>
+                    Approve & Continue
+                  </Button>
+                  <Box sx={{ display: 'flex', gap: '6px' }}>
+                    <Button variant="outlined" size="small" color="inherit" onClick={() => setSkipDialogOpen(true)} disabled={skipping} fullWidth>
+                      Skip
+                    </Button>
+                    <Button variant="outlined" size="small" color="warning" onClick={handleRetry} disabled={retrying} fullWidth>
+                      Retry
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+              {canRetryFailed && selectedStepRun && (
+                <Box sx={styles.stepActionSection}>
+                  <Typography sx={{ fontSize: '11px', color: 'error.main', fontWeight: 500 }}>
+                    Step failed
+                  </Typography>
+                  {selectedStepRun.errorMessage && (
+                    <Typography sx={{ fontSize: '10px', color: 'text.secondary' }}>
+                      {selectedStepRun.errorMessage}
+                    </Typography>
+                  )}
+                  <Box sx={{ display: 'flex', gap: '6px' }}>
+                    <Button variant="outlined" size="small" color="inherit" onClick={() => setSkipDialogOpen(true)} disabled={skipping} fullWidth>
+                      Skip
+                    </Button>
+                    <Button variant="contained" size="small" color="warning" onClick={handleRetry} disabled={retrying} fullWidth>
+                      Retry
+                    </Button>
+                  </Box>
+                </Box>
+              )}
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {/* ── Artifacts Tab ───────────────────────────────────────── */}
+      {activeTab === 1 && (
+        <Box sx={styles.artifactsPanel}>
+          <WorkflowAssetsReview
+            projectId={projectId}
+            runId={runId}
+            stepNameMap={Object.fromEntries(stepRuns.map((sr) => [sr.id, sr.stepName]))}
           />
         </Box>
-      </Box>
+      )}
 
-      {/* Skip Reason Dialog */}
+      {/* ── Status Bar ──────────────────────────────────────────── */}
+      <StatusBar
+        status={sessionStatus}
+        duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt)}
+      />
+
+      {/* ── Skip Dialog ─────────────────────────────────────────── */}
       <Dialog open={skipDialogOpen} onClose={() => setSkipDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Skip Step</DialogTitle>
         <DialogContent>
@@ -869,9 +813,7 @@ const WorkflowRunPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSkipDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSkip} variant="contained" disabled={skipping}>
-            Skip Step
-          </Button>
+          <Button onClick={handleSkip} variant="contained" disabled={skipping}>Skip Step</Button>
         </DialogActions>
       </Dialog>
     </Box>
