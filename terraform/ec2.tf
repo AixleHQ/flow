@@ -1,3 +1,41 @@
+# IAM role for EC2 instance to use Systems Manager
+resource "aws_iam_role" "k3s_instance_role" {
+  name = "palad-k3s-instance-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "palad-k3s-instance-role"
+  }
+}
+
+# Attach AWS managed policy for Systems Manager
+resource "aws_iam_role_policy_attachment" "k3s_ssm_policy" {
+  role       = aws_iam_role.k3s_instance_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+# Create instance profile
+resource "aws_iam_instance_profile" "k3s_instance_profile" {
+  name = "palad-k3s-instance-profile"
+  role = aws_iam_role.k3s_instance_role.name
+
+  tags = {
+    Name = "palad-k3s-instance-profile"
+  }
+}
+
 # Security Group for k3s instance
 resource "aws_security_group" "k3s_sg" {
   name        = "palad-k3s-sg"
@@ -133,6 +171,9 @@ locals {
 #!/bin/bash
 set -e
 
+# Get public IP
+PUBLIC_IP=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+
 # Update system
 apt-get update
 apt-get install -y \
@@ -144,8 +185,15 @@ apt-get install -y \
   vim \
   unzip
 
-# Install k3s
-curl -sfL https://get.k3s.io | sh -
+# Install AWS SSM Agent (if not already installed)
+if ! command -v amazon-ssm-agent &> /dev/null; then
+  snap install amazon-ssm-agent --classic
+  systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+  systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
+fi
+
+# Install k3s with TLS SAN for public IP
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--tls-san $PUBLIC_IP" sh -
 
 # Wait for k3s to be ready
 sleep 10
@@ -160,6 +208,7 @@ kubectl create namespace palad || true
 # Output kubeconfig for reference
 echo "=== k3s installed successfully ==="
 echo "Kubeconfig location: /etc/rancher/k3s/k3s.yaml"
+echo "Public IP: $PUBLIC_IP"
 EOF
 }
 
@@ -169,6 +218,7 @@ resource "aws_instance" "k3s" {
   instance_type          = var.k3s_instance_type
   subnet_id              = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.k3s_sg.id]
+  iam_instance_profile   = aws_iam_instance_profile.k3s_instance_profile.name
   
   # Use instance store or EBS
   root_block_device {
