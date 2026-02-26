@@ -8,25 +8,3 @@ spec:
     address: http://web:4000/api/v1/internal/ws_auth
     trustForwardHeader: true
     authResponseHeadersRegex: ^X-
----
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: terminal-cors
-  namespace: palad
-spec:
-  headers:
-    accessControlAllowOriginList:
-      - https://traefik.palad.k8s.orb.local
-    accessControlAllowMethods:
-      - GET
-      - POST
-      - PUT
-      - DELETE
-      - OPTIONS
-    accessControlAllowHeaders:
-      - Content-Type
-      - Authorization
-      - X-Requested-With
-      - Cookie
-    accessControlAllowCredentials: true
