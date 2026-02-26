@@ -14,7 +14,7 @@ esac
 OS=linux
 
 # docker cli
-apk add --no-cache docker docker-cli-compose
+apk add --no-cache docker docker-cli-compose unzip
 
 # kubectl
 KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
@@ -32,6 +32,13 @@ tar -xzf /tmp/helm.tgz -C /tmp
 mv "/tmp/${OS}-${ARCH}/helm" /usr/local/bin/helm
 chmod +x /usr/local/bin/helm
 rm -rf /tmp/helm.tgz "/tmp/${OS}-${ARCH}"
+
+# terraform
+TERRAFORM_VERSION="1.10.5"
+curl -L -o /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${OS}_${ARCH}.zip"
+unzip -o /tmp/terraform.zip -d /usr/local/bin
+chmod +x /usr/local/bin/terraform
+rm -f /tmp/terraform.zip
 
 # minikube
 curl -L -o /usr/local/bin/minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-${OS}-${ARCH}"
@@ -52,6 +59,7 @@ chmod +x /usr/local/bin/aws-vault
 
 echo "Installed kubectl $(kubectl version --client -o yaml | head -5)"
 echo "Installed helm $(helm version --template '{{.Version}}')"
+echo "Installed terraform $(terraform version)"
 echo "Installed minikube $(minikube version --short)"
 echo "Installed docker $(docker --version)"
 echo "Installed docker-compose $(docker-compose --version)"
