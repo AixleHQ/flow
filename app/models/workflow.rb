@@ -14,14 +14,11 @@ class Workflow < ApplicationRecord
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
-  def self.merged_for_project(project)
+  scope :visible_for_project, ->(project) {
     active.where(scope_type: "Project", scope_id: project.id)
           .or(active.where(scope_type: "Company", scope_id: project.company_id))
-  end
-
-  def self.merged_for_company(company)
-    active.for_company(company)
-  end
+  }
+  scope :visible_for_company, ->(company) { active.for_company(company) }
 
   def soft_delete!
     update!(deleted_at: Time.current)

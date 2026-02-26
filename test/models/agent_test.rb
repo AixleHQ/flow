@@ -80,56 +80,44 @@ class AgentTest < ActiveSupport::TestCase
     refute_includes result, company_agent
   end
 
-  # == merged_for_project ==
+  # == visible_for_project ==
 
-  test "merged_for_project returns company and project agents" do
-    company_agent = Agent.create!(name: "company_only", title: "CO", persona: "P", scope: @company)
-    project_agent = Agent.create!(name: "project_only", title: "PO", persona: "P", scope: @project)
+  test "visible_for_project returns company and project agents" do
+    Agent.create!(name: "company_only", title: "CO", persona: "P", scope: @company)
+    Agent.create!(name: "project_only", title: "PO", persona: "P", scope: @project)
 
-    result = Agent.merged_for_project(@project)
+    result = Agent.visible_for_project(@project)
+    names = result.pluck(:name)
 
-    assert_equal 2, result.size
-    assert result.any? { |a| a.name == "company_only" }
-    assert result.any? { |a| a.name == "project_only" }
+    assert_includes names, "company_only"
+    assert_includes names, "project_only"
   end
 
-  test "merged_for_project marks overriding agents" do
+  test "visible_for_project includes both company and project when same name" do
     Agent.create!(name: "shared", title: "Company", persona: "P", scope: @company)
     Agent.create!(name: "shared", title: "Project", persona: "P", scope: @project)
 
-    result = Agent.merged_for_project(@project)
+    result = Agent.visible_for_project(@project)
+    shared = result.where(name: "shared")
 
-    shared = result.find { |a| a.name == "shared" }
-    assert_equal "overrides_company", shared.scope_indicator
-    assert_equal "Project", shared.title  # Project version should be returned
+    assert_equal 2, shared.count
   end
 
-  test "merged_for_project marks company agents" do
-    Agent.create!(name: "company_only", title: "CO", persona: "P", scope: @company)
-
-    result = Agent.merged_for_project(@project)
-
-    company = result.find { |a| a.name == "company_only" }
-    assert_equal "company", company.scope_indicator
+  test "visible_for_project returns ActiveRecord::Relation" do
+    result = Agent.visible_for_project(@project)
+    assert result.is_a?(ActiveRecord::Relation)
   end
 
-  test "merged_for_project marks project-only agents" do
-    Agent.create!(name: "project_only", title: "PO", persona: "P", scope: @project)
+  # == scope_indicator ==
 
-    result = Agent.merged_for_project(@project)
-
-    project = result.find { |a| a.name == "project_only" }
-    assert_equal "project", project.scope_indicator
+  test "#scope_indicator returns 'company' for company agent" do
+    agent = Agent.new(scope_type: "Company")
+    assert_equal "company", agent.scope_indicator
   end
 
-  test "merged_for_project returns sorted by name" do
-    Agent.create!(name: "zebra", title: "Z", persona: "P", scope: @company)
-    Agent.create!(name: "alpha", title: "A", persona: "P", scope: @project)
-
-    result = Agent.merged_for_project(@project)
-
-    assert_equal "alpha", result.first.name
-    assert_equal "zebra", result.last.name
+  test "#scope_indicator returns 'project' for project agent" do
+    agent = Agent.new(scope_type: "Project")
+    assert_equal "project", agent.scope_indicator
   end
 
   # == to_system_prompt ==

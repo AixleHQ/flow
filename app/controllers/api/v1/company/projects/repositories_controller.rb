@@ -6,8 +6,8 @@ module Api
       module Projects
         class RepositoriesController < ApplicationController
           def index
-            repositories = Repository.merged_for_project(current_project)
-            respond_with repositories, each_serializer: RepositorySerializer
+            repositories = Repository.visible_for_project(current_project)
+            respond_with repositories, each_serializer: RepositorySerializer, project: current_project
           end
 
           def create

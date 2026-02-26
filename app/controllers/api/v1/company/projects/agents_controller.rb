@@ -6,8 +6,8 @@ module Api
       module Projects
         class AgentsController < ApplicationController
           def index
-            agents = Agent.merged_for_project(current_project)
-            respond_with agents, each_serializer: AgentSerializer
+            agents = Agent.visible_for_project(current_project)
+            respond_with agents, each_serializer: AgentSerializer, project: current_project
           end
 
           def create

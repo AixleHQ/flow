@@ -94,6 +94,7 @@ services:
       <<: *web-environment
       TEMPORAL_ENABLED: 'true'
       TEMPORAL_DEBUG: 'true'
+      RAILS_MAX_THREADS: '20'
     command: bin/temporal_worker
     depends_on:
       - temporal

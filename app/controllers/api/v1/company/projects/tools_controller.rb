@@ -6,8 +6,8 @@ module Api
       module Projects
         class ToolsController < ApplicationController
           def index
-            tools = Tool.merged_for_project(current_project)
-            respond_with tools, each_serializer: ToolSerializer
+            tools = Tool.visible_for_project(current_project)
+            respond_with tools, each_serializer: ToolSerializer, project: current_project
           end
 
           def create

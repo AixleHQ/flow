@@ -7,7 +7,7 @@ module Api
         class SkillsController < ApplicationController
           def index
             skills = Skill.visible_for_project(current_project).ransack(params[:q]).result
-            respond_with skills, each_serializer: SkillSerializer
+            respond_with skills, each_serializer: SkillSerializer, project: current_project
           end
 
           def create

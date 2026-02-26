@@ -21,5 +21,10 @@
 | 17 | Container Architecture Simplification | 10 | — | done |
 | 18 | Internal Tools | 11 | — | backlog |
 | 19 | Tool Execution Framework | 12 | — | backlog |
+| 20 | Board & Column Foundation | 13 | BT:FR1-5 | backlog |
+| 21 | Tasks, Comments & Assets | 13 | BT:FR12-27 | backlog |
+| 22 | Board UI & Real-time | 13 | BT:FR28-31 | backlog |
+| 23 | Workflow Triggers & Board MCP Tools | 14 | BT:FR6-11,FR32-45 | backlog |
+| 24 | Activity Feed & Filtered Views | 15 (post-MVP) | BT:FR46-51 | backlog |
 
 ---

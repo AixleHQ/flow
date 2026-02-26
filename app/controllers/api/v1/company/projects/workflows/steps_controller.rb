@@ -49,7 +49,7 @@ module Api
             private
 
             def current_workflow
-              @current_workflow ||= Workflow.merged_for_project(current_project).find(params[:workflow_id])
+              @current_workflow ||= Workflow.visible_for_project(current_project).find(params[:workflow_id])
             end
 
             def step_params

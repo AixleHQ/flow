@@ -1,21 +1,13 @@
 # frozen_string_literal: true
 
 class AssetSerializer < ApplicationSerializer
+  include ScopeIndicatorSerialization
+
   attributes :id, :name, :folder, :tags, :public,
-             :scope_type, :scope_id, :scope_indicator,
+             :scope_type, :scope_id,
              :created_by_id, :step_run_id,
              :latest_version, :versions_count,
              :deleted_at, :created_at, :updated_at
-
-  def scope_indicator
-    if object.respond_to?(:scope_indicator)
-      object.scope_indicator
-    elsif object.scope_type == "Company"
-      "company"
-    else
-      "project"
-    end
-  end
 
   def latest_version
     version = object.latest_version

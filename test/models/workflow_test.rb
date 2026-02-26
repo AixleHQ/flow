@@ -56,18 +56,18 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_equal 1, Workflow.for_project(@project).count
   end
 
-  test "merged_for_project returns company and project workflows" do
+  test "visible_for_project returns company and project workflows" do
     company_wf = create(:workflow, name: "ci", scope: @company)
     project_wf = create(:workflow, name: "deploy", scope: @project)
-    merged = Workflow.merged_for_project(@project)
+    merged = Workflow.visible_for_project(@project)
     assert_includes merged, company_wf
     assert_includes merged, project_wf
   end
 
-  test "merged_for_project excludes deleted workflows" do
+  test "visible_for_project excludes deleted workflows" do
     wf = create(:workflow, scope: @company)
     wf.soft_delete!
-    assert_empty Workflow.merged_for_project(@project)
+    assert_empty Workflow.visible_for_project(@project)
   end
 
   test "active scope excludes deleted" do

@@ -1,4 +1,4 @@
-# generated: 2026-02-02 (reorganized by phases)
+# generated: 2026-02-27 (updated: added Board & Tasks epics 20-24)
 # project: app
 # project_key: app
 # tracking_system: file-system
@@ -25,13 +25,17 @@
 # Phase 10: Container Architecture Simplification (Epic 17)
 # Phase 11: Internal Tools (Epic 18)
 # Phase 12: Tool Execution Framework (Epic 19)
+# Phase 13: Board & Column Foundation + Tasks (Epic 20, 21)
+# Phase 13+: Board UI & Real-time (Epic 22)
+# Phase 14: Workflow Triggers & Board MCP Tools (Epic 23)
+# Phase 15: Activity Feed & Filtered Views — Post-MVP (Epic 24)
 
 # STATUS DEFINITIONS:
 # ==================
 # Epic Status: backlog | in-progress | done
 # Story Status: backlog | ready-for-dev | in-progress | review | done | refused
 
-generated: 2026-02-02
+generated: 2026-02-27
 project: app
 project_key: app
 tracking_system: file-system
@@ -178,7 +182,7 @@ development_status:
   # PHASE 5-6: WORKFLOWS
   # ============================================
 
-  epic-12: in-progress  # Workflows (Phase 5-6)
+  epic-12: done  # Workflows (Phase 5-6)
   12-1-create-new-workflow: done
   12-2-define-workflow-steps: done
   12-3-edit-existing-workflow: done
@@ -266,7 +270,7 @@ development_status:
   # PHASE 10: CONTAINER ARCHITECTURE SIMPLIFICATION
   # ============================================
 
-  epic-17: in-progress  # Container Architecture Simplification (Phase 10) — Docker optimization, workflow split, thin activities
+  epic-17: done  # Container Architecture Simplification (Phase 10) — Docker optimization, workflow split, thin activities
 
   # --- Part A: Docker Build Optimization ---
   17-1-two-tier-base-image: done  # Dockerfile.core + restructured agent Dockerfiles, parallel builds, layer caching
@@ -317,3 +321,67 @@ development_status:
   19-12-agent-context-instructions: done  # SessionContextService: tool execution modes section, app/container markers
   19-13-delete-legacy-code: done  # Remove ToolExecutionStrategy, CodeClimateStrategy, InternalTools::CodeClimate
   epic-19-retrospective: optional
+
+  # ============================================
+  # PHASE 13: BOARD & COLUMN FOUNDATION
+  # ============================================
+
+  epic-20: backlog  # Board & Column Foundation (Phase 13) — Board model, columns, presets, purpose field
+  20-1-board-model-and-project-association: backlog
+  20-2-column-model-with-purpose-field: backlog
+  20-3-board-presets: backlog
+  20-4-preset-detachment-on-modification: backlog
+  epic-20-retrospective: optional
+
+  # ============================================
+  # PHASE 13: TASKS, COMMENTS & ASSETS
+  # ============================================
+
+  epic-21: backlog  # Tasks, Comments & Assets (Phase 13) — Task CRUD, hierarchy, comments with tags, task assets
+  21-1-task-model-and-crud: backlog
+  21-2-epic-story-hierarchy: backlog
+  21-3-task-assignment: backlog
+  21-4-move-task-between-columns: backlog
+  21-5-task-comment-model: backlog
+  21-6-task-assets: backlog
+  epic-21-retrospective: optional
+
+  # ============================================
+  # PHASE 13+: BOARD UI & REAL-TIME
+  # ============================================
+
+  epic-22: backlog  # Board UI & Real-time (Phase 13+) — Kanban board, drag-and-drop, sidebar, ActionCable
+  22-1-board-page-and-column-layout: backlog
+  22-2-drag-and-drop-task-movement: backlog
+  22-3-task-detail-sidebar: backlog
+  22-4-workflow-in-progress-indicator: backlog
+  22-5-actioncable-real-time-board-updates: backlog
+  epic-22-retrospective: optional
+
+  # ============================================
+  # PHASE 14: WORKFLOW TRIGGERS & BOARD MCP TOOLS
+  # ============================================
+
+  epic-23: backlog  # Workflow Triggers & Board MCP Tools (Phase 14) — Column-workflow bindings, auto/manual triggers, 13 MCP tools
+  23-1-column-workflow-binding-model: backlog
+  23-2-workflow-deletion-protection: backlog
+  23-3-auto-trigger-on-task-column-entry: backlog
+  23-4-manual-trigger-button: backlog
+  23-5-column-transition-history: backlog
+  23-6-board-mcp-read-tools: backlog  # 5 tools: list_tasks, get_task, get_comments, get_task_assets, get_board_info
+  23-7-board-mcp-write-tools: backlog  # 6 tools: create_task, update_task, move_task, add_comment, attach_asset, manage_tags
+  23-8-agent-self-diagnostic-tools: backlog  # 2 tools: fail_session, request_human_help
+  23-9-board-context-auto-resolution: backlog  # Auto-resolve board_id from session context
+  23-10-board-mcp-tools-seed-and-registration: backlog
+  epic-23-retrospective: optional
+
+  # ============================================
+  # PHASE 15: ACTIVITY FEED & FILTERED VIEWS (POST-MVP)
+  # ============================================
+
+  epic-24: backlog  # Activity Feed & Filtered Views (Post-MVP) — Activity events, feed UI, Ransack filters, saved presets
+  24-1-activity-event-model: backlog
+  24-2-board-activity-feed-api-and-ui: backlog
+  24-3-filtered-board-views: backlog
+  24-4-saved-filter-presets: backlog
+  epic-24-retrospective: optional

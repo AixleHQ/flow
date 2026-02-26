@@ -38,11 +38,11 @@ const scopeStyles: Record<ScopeIndicator, { bg: string; color: string; border: s
 };
 
 const ToolScopeBadge: FC<ToolScopeBadgeProps> = ({ indicator }) => {
-  const style = scopeStyles[indicator];
+  const style = scopeStyles[indicator] ?? scopeStyles.company;
 
   return (
     <Chip
-      label={scopeLabels[indicator]}
+      label={scopeLabels[indicator] ?? indicator}
       size="small"
       sx={{
         fontSize: 11,

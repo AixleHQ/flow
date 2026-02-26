@@ -23,7 +23,9 @@ module Api
             return respond_with run if run.errors.any?
 
             if run.save
-              run.step_runs.create!(step: workflow.steps.order(:position).first) if workflow.steps.any?
+              workflow.steps.order(:position).each do |step|
+                run.step_runs.find_or_create_by!(step: step)
+              end
               start_temporal_workflow(run)
               respond_with run, serializer: WorkflowRunSerializer, status: :created
             else
@@ -79,7 +81,7 @@ module Api
           end
 
           def accessible_workflows
-            Workflow.merged_for_project(current_project)
+            Workflow.visible_for_project(current_project)
           end
 
           def validate_mode!(run, workflow)

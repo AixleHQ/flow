@@ -49,53 +49,19 @@ class Tool < ApplicationRecord
 
   # Tools visible in UI management (system + custom, not internal/workflow)
   scope :ui_visible, -> { where(kind: %w[custom system]) }
+  scope :visible_for_project, ->(project) {
+    enabled.where(kind: %w[system internal workflow])
+           .or(enabled.where(scope_type: "Company", scope_id: project.company_id))
+           .or(enabled.where(scope_type: "Project", scope_id: project.id))
+  }
+  scope :visible_for_company, ->(company) {
+    enabled.where(kind: %w[system internal workflow])
+           .or(enabled.where(scope_type: "Company", scope_id: company.id))
+  }
 
-  # Get merged list of tools for a project (system + company + project)
-  def self.merged_for_project(project)
-    all_system = system_tools.enabled.to_a
-    company_tools = for_company(project.company).enabled.to_a
-    project_tools = for_project(project).enabled.to_a
-    project_names = project_tools.map(&:name)
-
-    result = []
-
-    all_system.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "system" }
-      result << tool
-    end
-
-    project_tools.each do |tool|
-      overrides = company_tools.any? { |ct| ct.name == tool.name }
-      tool.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
-      result << tool
-    end
-
-    company_tools.reject { |ct| project_names.include?(ct.name) }.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "company" }
-      result << tool
-    end
-
-    result.sort_by(&:name)
-  end
-
-  # Get merged list for company level (system + company)
-  def self.merged_for_company(company)
-    all_system = system_tools.enabled.to_a
-    company_tools = for_company(company).enabled.to_a
-
-    result = []
-
-    all_system.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "system" }
-      result << tool
-    end
-
-    company_tools.each do |tool|
-      tool.define_singleton_method(:scope_indicator) { "company" }
-      result << tool
-    end
-
-    result.sort_by(&:name)
+  def scope_indicator
+    return "system" if platform_tool?
+    scope_type == "Company" ? "company" : "project"
   end
 
   WORKFLOW_TIMEOUT = 3600 # 1 hour

@@ -6,8 +6,8 @@ module Api
       module Projects
         class ConfigItemsController < ApplicationController
           def index
-            items = ConfigItem.merged_for_project(current_project)
-            respond_with items, each_serializer: ConfigItemSerializer
+            items = ConfigItem.visible_for_project(current_project)
+            respond_with items, each_serializer: ConfigItemSerializer, project: current_project
           end
 
           def create

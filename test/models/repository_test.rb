@@ -102,36 +102,43 @@ class RepositoryTest < ActiveSupport::TestCase
     assert_equal "org/a", results.first.full_name
   end
 
-  # ====== merged_for_project ======
+  # ====== visible_for_project ======
 
-  test "merged_for_project returns company + project repos" do
+  test "visible_for_project returns company + project repos" do
     create(:repository, full_name: "org/shared", scope: @company, integration: @integration)
     create(:repository, full_name: "org/app", scope: @project, integration: @integration)
 
-    merged = Repository.merged_for_project(@project)
-    assert_equal 2, merged.length
-    names = merged.map(&:full_name)
-    assert { names.include?("org/shared") }
-    assert { names.include?("org/app") }
+    result = Repository.visible_for_project(@project)
+    names = result.pluck(:full_name)
+
+    assert_includes names, "org/shared"
+    assert_includes names, "org/app"
   end
 
-  test "merged_for_project adds scope_indicator" do
+  test "visible_for_project scope_indicator via instance method" do
     create(:repository, full_name: "org/shared", scope: @company, integration: @integration)
     create(:repository, full_name: "org/app", scope: @project, integration: @integration)
 
-    merged = Repository.merged_for_project(@project)
-    indicators = merged.map { |r| [ r.full_name, r.scope_indicator ] }.to_h
-    assert_equal "company", indicators["org/shared"]
-    assert_equal "project", indicators["org/app"]
+    result = Repository.visible_for_project(@project)
+
+    company_repo = result.find_by(full_name: "org/shared")
+    project_repo = result.find_by(full_name: "org/app")
+
+    assert_equal "company", company_repo.scope_indicator
+    assert_equal "project", project_repo.scope_indicator
   end
 
-  test "merged_for_project deduplicates by full_name favoring project" do
+  test "visible_for_project includes both company and project with same name" do
     create(:repository, full_name: "org/app", scope: @company, integration: @integration)
     create(:repository, full_name: "org/app", scope: @project, integration: @integration)
 
-    merged = Repository.merged_for_project(@project)
-    assert_equal 1, merged.length
-    assert_equal "project", merged.first.scope_indicator
+    result = Repository.visible_for_project(@project)
+    assert_equal 2, result.where(full_name: "org/app").count
+  end
+
+  test "visible_for_project returns ActiveRecord::Relation" do
+    result = Repository.visible_for_project(@project)
+    assert result.is_a?(ActiveRecord::Relation)
   end
 
   # ====== Methods ======
