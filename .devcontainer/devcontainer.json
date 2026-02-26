@@ -3,7 +3,7 @@
 	"name": "Palad Devcontainer",
 
 	"build": {
-		"dockerfile": "../web/Dockerfile",
+		"dockerfile": "../Dockerfile",
 		"context": ".."
 	},
 

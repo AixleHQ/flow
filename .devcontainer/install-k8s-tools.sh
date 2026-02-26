@@ -37,8 +37,23 @@ rm -rf /tmp/helm.tgz "/tmp/${OS}-${ARCH}"
 curl -L -o /usr/local/bin/minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-${OS}-${ARCH}"
 chmod +x /usr/local/bin/minikube
 
+# aws cli
+apk add --no-cache python3 py3-pip groff
+pip3 install --no-cache-dir --break-system-packages awscli
+
+# aws-vault
+AWS_VAULT_VERSION=$(curl -sL -H "Accept: application/vnd.github+json" https://api.github.com/repos/99designs/aws-vault/releases/latest | sed -n 's/.*"tag_name": "\(v[^\"]*\)".*/\1/p')
+if [[ -z "$AWS_VAULT_VERSION" ]]; then
+  echo "Warning: Failed to resolve aws-vault version from GitHub API, using fallback" >&2
+  AWS_VAULT_VERSION="v7.2.0"
+fi
+curl -L -o /usr/local/bin/aws-vault "https://github.com/99designs/aws-vault/releases/download/${AWS_VAULT_VERSION}/aws-vault-${OS}-${ARCH}"
+chmod +x /usr/local/bin/aws-vault
+
 echo "Installed kubectl $(kubectl version --client -o yaml | head -5)"
 echo "Installed helm $(helm version --template '{{.Version}}')"
 echo "Installed minikube $(minikube version --short)"
 echo "Installed docker $(docker --version)"
 echo "Installed docker-compose $(docker-compose --version)"
+echo "Installed aws-cli $(aws --version)"
+echo "Installed aws-vault $(aws-vault --version)"
