@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: (Host(`palad.ai`) || Host(`www.palad.ai`) || Host(`cert.palad.ai`)) && PathPrefix(`/`)
+    - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
@@ -18,4 +18,5 @@ spec:
       - main: palad.ai
         sans:
           - www.palad.ai
-          - cert.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai

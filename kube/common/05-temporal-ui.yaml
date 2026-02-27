@@ -63,3 +63,9 @@ spec:
 
   tls:
     certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai

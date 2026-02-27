@@ -188,8 +188,14 @@ spec:
         - name: api@internal
           kind: TraefikService
 
-  tls: 
+  tls:
     certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai
 
 ---
 apiVersion: traefik.io/v1alpha1
