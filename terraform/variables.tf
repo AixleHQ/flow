@@ -149,3 +149,33 @@ variable "eks_ingress_service_name" {
   type        = string
   default     = "traefik"
 }
+
+variable "create_eks_admin_dns_record" {
+  description = "Whether to create a dedicated Route53 record for traefik.palad.ai pointing to restricted admin NLB"
+  type        = bool
+  default     = true
+}
+
+variable "eks_admin_ingress_namespace" {
+  description = "Namespace of the restricted admin Kubernetes Service exposed via NLB"
+  type        = string
+  default     = "palad"
+}
+
+variable "eks_admin_ingress_service_name" {
+  description = "Name of the restricted admin Kubernetes Service exposed via NLB"
+  type        = string
+  default     = "traefik-admin"
+}
+
+variable "eks_admin_dns_name" {
+  description = "DNS hostname for restricted admin ingress"
+  type        = string
+  default     = "traefik.palad.ai"
+}
+
+variable "eks_admin_temporal_dns_name" {
+  description = "DNS hostname for restricted temporal UI ingress"
+  type        = string
+  default     = "temporal.palad.ai"
+}

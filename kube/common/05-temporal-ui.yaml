@@ -44,7 +44,7 @@ metadata:
   namespace: palad
 spec:
   entryPoints:
-    - websecure
+    - adminwebsecure
   routes:
     - match: Host(`temporal.palad.ai`)
       kind: Rule

@@ -27,6 +27,13 @@ create_eks_dns_records = true
 eks_ingress_namespace  = "palad"
 eks_ingress_service_name = "traefik"
 
+# Dedicated admin DNS record (overrides wildcard for traefik.palad.ai)
+create_eks_admin_dns_record   = true
+eks_admin_ingress_namespace   = "palad"
+eks_admin_ingress_service_name = "traefik-admin"
+eks_admin_dns_name            = "traefik.palad.ai"
+eks_admin_temporal_dns_name   = "temporal.palad.ai"
+
 # Managed node group (x86, on-demand)
 eks_node_group_name     = "palad-on-demand"
 eks_node_instance_types = ["t3.large"]

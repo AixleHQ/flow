@@ -29,6 +29,11 @@ output "eks_ingress_nlb_dns_name" {
   value       = try(data.aws_lb.eks_ingress_nlb[0].dns_name, null)
 }
 
+output "eks_admin_ingress_nlb_dns_name" {
+  description = "DNS name of the restricted EKS admin ingress NLB"
+  value       = try(data.aws_lb.eks_admin_ingress_nlb[0].dns_name, null)
+}
+
 output "palad_ai_dns_record" {
   description = "Route53 A record for palad.ai pointing to EKS ingress NLB"
   value       = try(aws_route53_record.palad_ai_root[0].fqdn, null)
@@ -37,6 +42,16 @@ output "palad_ai_dns_record" {
 output "palad_ai_wildcard_dns_record" {
   description = "Route53 wildcard A record for *.palad.ai pointing to EKS ingress NLB"
   value       = try(aws_route53_record.palad_ai_wildcard[0].fqdn, null)
+}
+
+output "palad_ai_traefik_admin_dns_record" {
+  description = "Route53 A record for traefik.palad.ai pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.palad_ai_traefik_admin[0].fqdn, null)
+}
+
+output "palad_ai_temporal_admin_dns_record" {
+  description = "Route53 A record for temporal.palad.ai pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.palad_ai_temporal_admin[0].fqdn, null)
 }
 
 # EKS outputs
