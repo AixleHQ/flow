@@ -46,7 +46,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: HostRegexp(`temporal.*`)
+    - match: Host(`temporal.palad.ai`)
       kind: Rule
       services:
         - name: temporal-ui

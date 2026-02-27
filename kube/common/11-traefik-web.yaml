@@ -7,7 +7,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: PathPrefix(`/`)
+    - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
