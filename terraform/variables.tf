@@ -131,3 +131,21 @@ variable "eks_cluster_log_retention_days" {
   type        = number
   default     = 14
 }
+
+variable "create_eks_dns_records" {
+  description = "Whether to create Route53 records for palad.ai to point at the EKS ingress NLB"
+  type        = bool
+  default     = true
+}
+
+variable "eks_ingress_namespace" {
+  description = "Namespace of the Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "palad"
+}
+
+variable "eks_ingress_service_name" {
+  description = "Name of the Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "traefik"
+}

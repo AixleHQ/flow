@@ -24,6 +24,21 @@ output "route53_zone_nameservers" {
   value       = aws_route53_zone.palad_ai.name_servers
 }
 
+output "eks_ingress_nlb_dns_name" {
+  description = "DNS name of the EKS ingress NLB discovered from kubernetes.io/service-name tag"
+  value       = try(data.aws_lb.eks_ingress_nlb[0].dns_name, null)
+}
+
+output "palad_ai_dns_record" {
+  description = "Route53 A record for palad.ai pointing to EKS ingress NLB"
+  value       = try(aws_route53_record.palad_ai_root[0].fqdn, null)
+}
+
+output "palad_ai_wildcard_dns_record" {
+  description = "Route53 wildcard A record for *.palad.ai pointing to EKS ingress NLB"
+  value       = try(aws_route53_record.palad_ai_wildcard[0].fqdn, null)
+}
+
 # EKS outputs
 output "eks_cluster_name" {
   description = "Name of the EKS cluster"
