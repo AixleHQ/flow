@@ -4,7 +4,8 @@
 # Build context: docker/ (parent dir, for access to base/ scripts)
 # Build command: docker build -f cursor-cli/Dockerfile -t palad/cursor-cli:latest .
 # =============================================================================
-FROM palad/agent-base-core:latest
+ARG BASE_IMAGE=palad/agent-base-core:latest
+FROM ${BASE_IMAGE}
 
 # =============================================================================
 # Agent-specific layers (CACHED when only shared scripts change)

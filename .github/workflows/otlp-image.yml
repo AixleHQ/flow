@@ -1,4 +1,4 @@
-name: Build And Publish Web Image
+name: Build And Publish OTLP Ingest Image
 
 on:
   push:
@@ -17,7 +17,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-web
+  IMAGE_NAME: ${{ github.repository }}-otlp-ingest
 
 jobs:
   build-and-push:
@@ -49,17 +49,13 @@ jobs:
             type=ref,event=tag
             type=sha,prefix=sha-
 
-      - name: Build And Push Web Image
+      - name: Build And Push OTLP Ingest Image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./Dockerfile
+          context: ./docker/otlp-ingest
+          file: ./docker/otlp-ingest/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            APP_VERSION=${{ github.sha }}
-            AUTHOR_NAME=${{ github.actor }}
-            AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
-          cache-from: type=gha,scope=web-image
-          cache-to: type=gha,mode=max,scope=web-image
+          cache-from: type=gha,scope=otlp-ingest-image
+          cache-to: type=gha,mode=max,scope=otlp-ingest-image
