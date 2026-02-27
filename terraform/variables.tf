@@ -179,3 +179,15 @@ variable "eks_admin_temporal_dns_name" {
   type        = string
   default     = "temporal.palad.ai"
 }
+
+variable "eks_traefik_namespace" {
+  description = "Namespace of the Traefik service account used for IRSA"
+  type        = string
+  default     = "palad"
+}
+
+variable "eks_traefik_service_account_name" {
+  description = "Name of the Traefik service account used for IRSA"
+  type        = string
+  default     = "traefik"
+}

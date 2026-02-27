@@ -308,3 +308,94 @@ resource "aws_iam_openid_connect_provider" "eks" {
     Name = "${var.eks_cluster_name}-oidc"
   })
 }
+
+data "aws_iam_policy_document" "eks_traefik_irsa_assume_role" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    principals {
+      type = "Federated"
+      identifiers = [
+        aws_iam_openid_connect_provider.eks[0].arn
+      ]
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "sts.amazonaws.com"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:aud"
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "system:serviceaccount:${var.eks_traefik_namespace}:${var.eks_traefik_service_account_name}"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:sub"
+    }
+  }
+}
+
+resource "aws_iam_role" "eks_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-traefik-dns-role"
+  assume_role_policy = data.aws_iam_policy_document.eks_traefik_irsa_assume_role[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-traefik-dns-role"
+  })
+}
+
+data "aws_iam_policy_document" "eks_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    sid    = "AllowChangeAcmeRecordsInPaladZone"
+    effect = "Allow"
+    actions = [
+      "route53:ChangeResourceRecordSets",
+      "route53:ListResourceRecordSets"
+    ]
+    resources = [
+      aws_route53_zone.palad_ai.arn
+    ]
+  }
+
+  statement {
+    sid    = "AllowRoute53LookupAndChangeStatus"
+    effect = "Allow"
+    actions = [
+      "route53:ListHostedZonesByName",
+      "route53:GetChange"
+    ]
+    resources = [
+      "*"
+    ]
+  }
+}
+
+resource "aws_iam_policy" "eks_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name   = "${var.eks_cluster_name}-traefik-dns-policy"
+  policy = data.aws_iam_policy_document.eks_traefik_dns[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-traefik-dns-policy"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  role       = aws_iam_role.eks_traefik_dns[0].name
+  policy_arn = aws_iam_policy.eks_traefik_dns[0].arn
+}

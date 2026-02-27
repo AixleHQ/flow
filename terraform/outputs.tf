@@ -85,6 +85,11 @@ output "eks_oidc_provider_arn" {
   value       = try(aws_iam_openid_connect_provider.eks[0].arn, null)
 }
 
+output "eks_traefik_dns_irsa_role_arn" {
+  description = "IAM role ARN for Traefik IRSA Route53 DNS challenge access"
+  value       = try(aws_iam_role.eks_traefik_dns[0].arn, null)
+}
+
 output "eks_node_group_name" {
   description = "Managed node group name"
   value       = try(aws_eks_node_group.main[0].node_group_name, null)

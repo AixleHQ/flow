@@ -3,9 +3,8 @@ kind: ServiceAccount
 metadata:
   name: traefik
   namespace: palad
-  # Add an IRSA role annotation when Traefik needs AWS API access.
-  # annotations:
-  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-traefik-irsa-role
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::541894707537:role/palad-eks-traefik-dns-role
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -69,8 +68,15 @@ spec:
             - "--entrypoints.adminwebsecure.address=:8443"
             - "--certificatesresolvers.letsencrypt.acme.email=admin@palad.ai"
             - "--certificatesresolvers.letsencrypt.acme.storage=/tmp/acme.json"
-            - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+            - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+            - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=route53"
             - "--log.level=DEBUG"
+          env:
+            # Keep region aligned with terraform/aws_region for Route53 DNS challenge.
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
           ports:
             - name: web
               containerPort: 80
