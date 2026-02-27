@@ -57,6 +57,13 @@ spec:
       containers:
         - name: traefik
           image: traefik:v3.3
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1Gi"
           args:
             - "--api.dashboard=true"
             - "--api.insecure=true"

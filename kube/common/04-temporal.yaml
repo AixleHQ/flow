@@ -16,6 +16,13 @@ spec:
       containers:
         - name: temporal
           image: temporalio/auto-setup:1.29.0
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "3Gi"
           env:
             - name: DB
               value: postgres12

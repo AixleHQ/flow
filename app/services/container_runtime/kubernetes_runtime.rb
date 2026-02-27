@@ -229,7 +229,8 @@ module ContainerRuntime
         env: env_vars,
         command: spec[:cmd],
         workingDir: spec[:working_dir],
-        volumeMounts: volume_mounts
+        volumeMounts: volume_mounts,
+        resources: runtime_container_resources
       }
 
       ports = handle.service_ports
@@ -690,6 +691,19 @@ module ContainerRuntime
 
     def image_pull_policy
       kube_setting(:image_pull_policy, "IfNotPresent")
+    end
+
+    def runtime_container_resources
+      {
+        requests: {
+          cpu: kube_setting(:runtime_requests_cpu, "500m").to_s,
+          memory: kube_setting(:runtime_requests_memory, "1Gi").to_s
+        },
+        limits: {
+          cpu: kube_setting(:runtime_limits_cpu, "3000m").to_s,
+          memory: kube_setting(:runtime_limits_memory, "4Gi").to_s
+        }
+      }
     end
 
     def agents_image_pull_secrets

@@ -16,6 +16,13 @@ spec:
       containers:
         - name: temporal-ui
           image: temporalio/ui:2.43.3
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
           env:
             - name: TEMPORAL_ADDRESS
               value: temporal:7233

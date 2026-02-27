@@ -16,6 +16,13 @@ spec:
       containers:
         - name: postgres
           image: postgres:15.3-alpine
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "3Gi"
           env:
             - name: POSTGRES_DB
               value: palad_development

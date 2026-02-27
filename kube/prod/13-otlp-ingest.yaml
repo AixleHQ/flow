@@ -18,6 +18,13 @@ spec:
         - name: otlp-ingest
           image: ghcr.io/palad-ai/palad-app-otlp-ingest:latest
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "150m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
           envFrom:
             - configMapRef:
                 name: palad-app-config

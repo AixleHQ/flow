@@ -24,6 +24,13 @@ spec:
         - name: web
           image: web
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
           envFrom:
             - configMapRef:
                 name: palad-app-config
@@ -92,6 +99,13 @@ spec:
         - name: mcp
           image: web
           imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "384Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
           envFrom:
             - configMapRef:
                 name: palad-app-config
