@@ -10,6 +10,8 @@ data:
   ACTION_CABLE_URL: /cable
   DB_HOST: db
   DB_PORT: "5432"
+  DOMAIN: palad.ai
+  ASSET_HOST: palad.ai
   DB_USERNAME: postgres
   DB_NAME: palad_production
   REDIS_URL: redis://redis:6379/1
