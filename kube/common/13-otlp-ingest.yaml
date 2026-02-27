@@ -13,7 +13,7 @@ spec:
       labels:
         app: otlp-ingest
     spec:
-      serviceAccountName: palad-runtime
+      serviceAccountName: palad-otlp
       containers:
         - name: otlp-ingest
           image: otlp-ingest

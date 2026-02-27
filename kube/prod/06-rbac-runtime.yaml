@@ -1,8 +1,33 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: palad-runtime
+  name: palad-web
   namespace: palad
+  # Add an IRSA role annotation when this workload needs AWS API access.
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-web-irsa-role
+imagePullSecrets:
+  - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: palad-worker
+  namespace: palad
+  # Add an IRSA role annotation when this workload needs AWS API access.
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-worker-irsa-role
+imagePullSecrets:
+  - name: ghcr-pull-secret
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: palad-otlp
+  namespace: palad
+  # Add an IRSA role annotation when this workload needs AWS API access.
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-otlp-irsa-role
 imagePullSecrets:
   - name: ghcr-pull-secret
 ---
@@ -26,7 +51,13 @@ metadata:
   namespace: palad
 subjects:
   - kind: ServiceAccount
-    name: palad-runtime
+    name: palad-web
+    namespace: palad
+  - kind: ServiceAccount
+    name: palad-worker
+    namespace: palad
+  - kind: ServiceAccount
+    name: palad-otlp
     namespace: palad
 roleRef:
   kind: Role

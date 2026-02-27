@@ -8,6 +8,11 @@ data:
     This file exists to keep all kube resources under version control.
     It is safe to delete if not needed.
 
+    App secret setup:
+    1) Edit kube/prod/07-app-secrets.yaml and replace all "replace_me" values.
+    2) Apply production manifests:
+       make kube-apply-prod
+
     Production image pull setup (GHCR):
     1) Create a GitHub token with package read access.
     2) Run:

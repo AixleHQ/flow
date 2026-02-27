@@ -24,49 +24,58 @@ output "route53_zone_nameservers" {
   value       = aws_route53_zone.palad_ai.name_servers
 }
 
-# EC2 outputs
-output "k3s_instance_id" {
-  description = "EC2 instance ID for k3s cluster"
-  value       = try(aws_instance.k3s[0].id, null)
+# EKS outputs
+output "eks_cluster_name" {
+  description = "Name of the EKS cluster"
+  value       = try(aws_eks_cluster.main[0].name, null)
 }
 
-output "k3s_instance_public_ip" {
-  description = "Public Elastic IP of the k3s instance"
-  value       = try(aws_eip.k3s[0].public_ip, null)
+output "eks_cluster_arn" {
+  description = "ARN of the EKS cluster"
+  value       = try(aws_eks_cluster.main[0].arn, null)
 }
 
-output "k3s_instance_private_ip" {
-  description = "Private IP of the k3s instance"
-  value       = try(aws_instance.k3s[0].private_ip, null)
+output "eks_cluster_endpoint" {
+  description = "Kubernetes API endpoint for EKS cluster"
+  value       = try(aws_eks_cluster.main[0].endpoint, null)
 }
 
-output "k3s_instance_type" {
-  description = "Instance type of the k3s cluster"
-  value       = try(aws_instance.k3s[0].instance_type, null)
+output "eks_cluster_version" {
+  description = "Kubernetes version of the EKS cluster"
+  value       = try(aws_eks_cluster.main[0].version, null)
 }
 
-output "k3s_security_group_id" {
-  description = "Security group ID for k3s instance"
-  value       = aws_security_group.k3s_sg.id
+output "eks_cluster_oidc_issuer" {
+  description = "OIDC issuer URL for IRSA"
+  value       = try(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, null)
 }
 
-output "k3s_ssh_command" {
-  description = "SSH command to connect to k3s instance"
-  value       = try("ssh -i <your-key-pair> ubuntu@${aws_eip.k3s[0].public_ip}", null)
+output "eks_oidc_provider_arn" {
+  description = "IAM OIDC provider ARN for IRSA"
+  value       = try(aws_iam_openid_connect_provider.eks[0].arn, null)
 }
 
-# DNS outputs
-output "palad_ai_dns_record" {
-  description = "A record for palad.ai pointing to k3s instance"
-  value       = try(aws_route53_record.palad_ai_root[0].fqdn, null)
+output "eks_node_group_name" {
+  description = "Managed node group name"
+  value       = try(aws_eks_node_group.main[0].node_group_name, null)
 }
 
-output "palad_ai_wildcard_dns_record" {
-  description = "Wildcard A record for *.palad.ai pointing to k3s instance"
-  value       = try(aws_route53_record.palad_ai_wildcard[0].fqdn, null)
+output "eks_vpc_id" {
+  description = "VPC ID for EKS cluster"
+  value       = try(aws_vpc.eks[0].id, null)
 }
 
-output "palad_ai_instance_ip" {
-  description = "IP address that palad.ai resolves to"
-  value       = try(aws_eip.k3s[0].public_ip, null)
+output "eks_private_subnet_ids" {
+  description = "Private subnet IDs used by EKS nodes"
+  value       = aws_subnet.eks_private[*].id
+}
+
+output "eks_public_subnet_ids" {
+  description = "Public subnet IDs used by EKS load balancers/NAT"
+  value       = aws_subnet.eks_public[*].id
+}
+
+output "eks_kubeconfig_command" {
+  description = "Command to update local kubeconfig for this EKS cluster"
+  value       = try("aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main[0].name}", null)
 }

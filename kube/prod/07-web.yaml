@@ -13,7 +13,7 @@ spec:
       labels:
         app: web
     spec:
-      serviceAccountName: palad-runtime
+      serviceAccountName: palad-web
       containers:
         - name: web
           image: ghcr.io/palad-ai/palad-app-web:latest
@@ -21,6 +21,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: palad-app-config
+            - secretRef:
+                name: palad-app-secrets
           ports:
             - containerPort: 4000
 ---
@@ -52,7 +54,7 @@ spec:
       labels:
         app: mcp
     spec:
-      serviceAccountName: palad-runtime
+      serviceAccountName: palad-web
       containers:
         - name: mcp
           image: ghcr.io/palad-ai/palad-app-web:latest
@@ -60,6 +62,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: palad-app-config
+            - secretRef:
+                name: palad-app-secrets
           env:
             - name: MCP_PORT
               value: "4002"

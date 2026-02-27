@@ -7,3 +7,8 @@ data:
   README: |
     This file exists to keep all kube resources under version control.
     It is safe to delete if not needed.
+
+    App secret setup:
+    1) Edit kube/dev/07-app-secrets.yaml for local dev values when needed.
+    2) Apply dev manifests:
+       make kube-apply

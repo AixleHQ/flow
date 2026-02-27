@@ -3,6 +3,9 @@ kind: ServiceAccount
 metadata:
   name: traefik
   namespace: palad
+  # Add an IRSA role annotation when Traefik needs AWS API access.
+  # annotations:
+  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-traefik-irsa-role
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -80,6 +83,10 @@ kind: Service
 metadata:
   name: traefik
   namespace: palad
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
 spec:
   type: LoadBalancer
   selector:

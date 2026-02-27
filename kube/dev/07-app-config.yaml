@@ -7,12 +7,10 @@ data:
   RAILS_ENV: development
   RAILS_PORT: "4000"
   RAILS_LOG_TO_STDOUT: "true"
-  RAILS_SECRET_KEY_BASE: secret
   ACTION_CABLE_URL: /cable
   DB_HOST: db
   DB_PORT: "5432"
   DB_USERNAME: postgres
-  DB_PASSWORD: postgres
   DB_NAME: palad_development
   REDIS_URL: redis://redis:6379/1
   TEMPORAL_ENABLED: "true"
@@ -30,10 +28,7 @@ data:
   K8S_IMAGE_PULL_POLICY: IfNotPresent
   MCP_SERVER_URL: http://mcp:4002/action_mcp
   MCP_PORT: "4002"
-  GITHUB_PRIVATE_PEM: "Get value from 1password. DO NOT REMOVE single quotes"
   GITHUB_CLIENT_ID: "get_from_1password"
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
-  BITBUCKET_OAUTH_SECRET: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
-  GITLAB_APP_SECRET: "get_from_1password"
