@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-mount-dev kube-rm kube-rm-prod
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod
 
 KUBE_COMMON_DIR = ./kube/common
 KUBE_DEV_DIR = ./kube/dev
@@ -23,6 +23,7 @@ kube-help:
 	@echo "  make kube-apply-prod        - Apply common + prod manifests (secrets are not touched)"
 	@echo "  make kube-secrets-apply     - Apply secret manifests from kube/secrets explicitly"
 	@echo "  make kube-secret-set        - Open an existing secret in vim and save back (SECRET_NAME=... [SECRET_NAMESPACE=...])"
+	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-rm                - Delete dev + common manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod + common manifests (secrets are not touched)"
 
@@ -91,6 +92,10 @@ kube-apply-prod:
 # Apply secret manifests only when explicitly requested
 kube-secrets-apply:
 	$(KUBECTL) apply -f $(KUBE_SECRETS_DIR)
+
+# Restart web-related deployments to pick up new config/secrets
+kube-web-rollout:
+	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_NAMESPACE)
 
 # Edit an existing secret interactively and save changes back to the cluster
 kube-secret-set:
