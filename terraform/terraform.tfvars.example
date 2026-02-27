@@ -11,7 +11,7 @@ tfstate_bucket_name = "palad-tfstate-prod"
 # EKS Cluster Configuration
 create_eks_cluster = true
 eks_cluster_name   = "palad-eks"
-eks_cluster_version = "1.30"
+eks_cluster_version = "1.35"
 
 # Networking: 2 AZ deployment, single NAT gateway, dedicated VPC for EKS
 eks_az_count = 2
@@ -41,7 +41,7 @@ eks_traefik_service_account_name = "traefik"
 # Managed node group (x86, on-demand)
 eks_node_group_name     = "palad-on-demand"
 eks_node_instance_types = ["t3.large"]
-eks_node_ami_type       = "AL2_x86_64"
+eks_node_ami_type       = "AL2023_x86_64_STANDARD"
 eks_node_capacity_type  = "ON_DEMAND"
 eks_node_min_size       = 2
 eks_node_desired_size   = 2

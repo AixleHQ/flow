@@ -25,7 +25,7 @@ variable "eks_cluster_name" {
 variable "eks_cluster_version" {
   description = "Kubernetes version for the EKS control plane"
   type        = string
-  default     = "1.30"
+  default     = "1.35"
 }
 
 variable "eks_az_count" {
@@ -88,7 +88,7 @@ variable "eks_node_instance_types" {
 variable "eks_node_ami_type" {
   description = "AMI type for EKS managed nodes"
   type        = string
-  default     = "AL2_x86_64"
+  default     = "AL2023_x86_64_STANDARD"
 }
 
 variable "eks_node_capacity_type" {

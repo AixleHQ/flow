@@ -72,6 +72,7 @@ kube-setup:
 # Production Kubernetes setup: CRDs + secrets + production manifests
 kube-setup-prod:
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_COMMON_DIR)/00-namespace.yaml
 	$(KUBECTL) apply -f $(KUBE_SECRETS_DIR)
 	@make kube-apply-prod
 
