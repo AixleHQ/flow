@@ -1,5 +1,5 @@
 # AI Engine Docker Management
-.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-prod-ghcr-secret kube-rm kube-rm-prod terraform-help k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts help
+.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-rm kube-rm-prod terraform-help k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts help
 
 TODAY = $$(date +"%d.%m.%Y")
 

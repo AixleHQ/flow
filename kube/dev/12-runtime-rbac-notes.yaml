@@ -9,6 +9,7 @@ data:
     It is safe to delete if not needed.
 
     App secret setup:
-    1) Edit kube/dev/07-app-secrets.yaml for local dev values when needed.
+    1) Edit app secret in cluster:
+       make kube-secret-set SECRET_NAME=palad-app-secrets
     2) Apply dev manifests:
        make kube-apply

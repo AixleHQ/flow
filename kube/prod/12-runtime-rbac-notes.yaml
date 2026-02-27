@@ -9,13 +9,14 @@ data:
     It is safe to delete if not needed.
 
     App secret setup:
-    1) Edit kube/prod/07-app-secrets.yaml and replace all "replace_me" values.
+    1) Edit app secret in cluster:
+       make kube-secret-set SECRET_NAME=palad-app-secrets
     2) Apply production manifests:
        make kube-apply-prod
 
     Production image pull setup (GHCR):
     1) Create a GitHub token with package read access.
-    2) Run:
-       make kube-prod-ghcr-secret GHCR_USERNAME=<github-user> GHCR_TOKEN=<github-token>
+    2) Edit pull secret in cluster:
+       make kube-secret-set SECRET_NAME=ghcr-pull-secret
     3) Re-apply prod manifests:
        make kube-apply-prod
