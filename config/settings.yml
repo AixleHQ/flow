@@ -113,7 +113,7 @@ kubernetes:
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
-  runtime_requests_cpu: <%= ENV['K8S_RUNTIME_REQUESTS_CPU'] || '500m' %>
+  runtime_requests_cpu: <%= ENV['K8S_RUNTIME_REQUESTS_CPU'] || '100m' %>
   runtime_requests_memory: <%= ENV['K8S_RUNTIME_REQUESTS_MEMORY'] || '512Mi' %>
   runtime_limits_cpu: <%= ENV['K8S_RUNTIME_LIMITS_CPU'] || '1000m' %>
   runtime_limits_memory: <%= ENV['K8S_RUNTIME_LIMITS_MEMORY'] || '1Gi' %>
