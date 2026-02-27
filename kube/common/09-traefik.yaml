@@ -142,6 +142,7 @@ spec:
     - match: Host(`traefik.palad.ai`)
       kind: Rule
       middlewares:
+        - name: admin-basic-auth
         - name: traefik-dashboard-redirect
       services:
         - name: api@internal

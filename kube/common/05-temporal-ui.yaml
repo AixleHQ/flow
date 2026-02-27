@@ -48,6 +48,8 @@ spec:
   routes:
     - match: Host(`temporal.palad.ai`)
       kind: Rule
+      middlewares:
+        - name: admin-basic-auth
       services:
         - name: temporal-ui
           port: 8080
