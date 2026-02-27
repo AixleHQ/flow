@@ -236,6 +236,16 @@ module ContainerRuntime
       container[:ports] = ports.map { |port| { containerPort: port } } if ports.any?
 
       labels = { "app" => "palad-runtime", "palad-container" => handle.pod_name }
+      pod_spec = {
+        restartPolicy: "Never",
+        containers: [ container ],
+        volumes: volumes
+      }
+
+      configured_pull_secrets = agents_image_pull_secrets
+      if configured_pull_secrets.any?
+        pod_spec[:imagePullSecrets] = configured_pull_secrets.map { |name| { name: name } }
+      end
 
       Kubeclient::Resource.new(
         apiVersion: "v1",
@@ -245,11 +255,7 @@ module ContainerRuntime
           namespace: handle.namespace,
           labels: labels
         },
-        spec: {
-          restartPolicy: "Never",
-          containers: [ container ],
-          volumes: volumes
-        }
+        spec: pod_spec
       )
     end
 
@@ -674,6 +680,21 @@ module ContainerRuntime
 
     def image_pull_policy
       kube_setting(:image_pull_policy, "IfNotPresent")
+    end
+
+    def agents_image_pull_secrets
+      raw = kube_setting(:agents_image_pull_secrets, [])
+
+      values = case raw
+      when String
+        raw.split(",")
+      when Array
+        raw
+      else
+        Array(raw)
+      end
+
+      values.map(&:to_s).map(&:strip).reject(&:blank?).uniq
     end
 
     def service_account_token_path

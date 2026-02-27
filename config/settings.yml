@@ -114,6 +114,7 @@ kubernetes:
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
+  agents_image_pull_secrets: <%= (ENV['K8S_AGENTS_IMAGE_PULL_SECRETS'] || '').split(',').map(&:strip).reject(&:empty?) %>
   kubeconfig_path: <%= ENV['KUBECONFIG'] || File.join(ENV.fetch('HOME', '/root'), '.kube', 'config') %>
   service_account_token_path: <%= ENV['K8S_SA_TOKEN_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/token' %>
   service_account_ca_path: <%= ENV['K8S_SA_CA_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' %>
