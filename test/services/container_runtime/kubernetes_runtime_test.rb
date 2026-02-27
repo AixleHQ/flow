@@ -123,5 +123,23 @@ module ContainerRuntime
 
       assert_equal handle, result
     end
+
+    test "build_route includes host matcher from settings domain" do
+      Settings.stubs(:domain).returns("palad.ai")
+      handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
+
+      route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
+
+      assert_equal "Host(`palad.ai`) && PathPrefix(`/t/abc123/tty`)", route[:match]
+    end
+
+    test "build_route falls back to path matcher when settings domain blank" do
+      Settings.stubs(:domain).returns("")
+      handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
+
+      route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
+
+      assert_equal "PathPrefix(`/t/abc123/tty`)", route[:match]
+    end
   end
 end

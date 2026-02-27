@@ -646,7 +646,7 @@ module ContainerRuntime
 
     def build_route(handle, suffix, port, middlewares)
       {
-        match: "PathPrefix(`/t/#{handle.route_token}/#{suffix}`)",
+        match: build_route_match(handle, suffix),
         kind: "Rule",
         middlewares: middlewares.map { |name| { name: name } },
         services: [
@@ -656,6 +656,20 @@ module ContainerRuntime
           }
         ]
       }
+    end
+
+    def build_route_match(handle, suffix)
+      path_match = "PathPrefix(`/t/#{handle.route_token}/#{suffix}`)"
+      host = route_domain_host
+      return path_match if host.blank?
+
+      "Host(`#{host}`) && #{path_match}"
+    end
+
+    def route_domain_host
+      return nil unless defined?(Settings) && Settings.respond_to?(:domain)
+
+      Settings.domain.to_s.strip.presence
     end
 
     def traefik_entrypoint
