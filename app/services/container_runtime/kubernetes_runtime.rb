@@ -311,7 +311,7 @@ module ContainerRuntime
           tls: {},
           routes: [
             build_route(handle, "tty", 7681, [ traefik_auth_middleware, "#{handle.pod_name}-tty-strip" ]),
-            build_route(handle, "fs", 4040, [ traefik_cors_middleware, traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ])
+            build_route(handle, "fs", 4040, [ traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ])
           ]
         }
       )
@@ -664,10 +664,6 @@ module ContainerRuntime
 
     def traefik_auth_middleware
       kube_setting(:traefik_auth_middleware, "terminal-auth")
-    end
-
-    def traefik_cors_middleware
-      kube_setting(:traefik_cors_middleware, "terminal-cors")
     end
 
     def runtime_namespace
