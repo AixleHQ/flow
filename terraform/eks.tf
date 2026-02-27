@@ -309,6 +309,72 @@ resource "aws_iam_openid_connect_provider" "eks" {
   })
 }
 
+data "aws_iam_policy_document" "eks_ebs_csi_irsa_assume_role" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    principals {
+      type = "Federated"
+      identifiers = [
+        aws_iam_openid_connect_provider.eks[0].arn
+      ]
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "sts.amazonaws.com"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:aud"
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:sub"
+    }
+  }
+}
+
+resource "aws_iam_role" "eks_ebs_csi" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-ebs-csi-role"
+  assume_role_policy = data.aws_iam_policy_document.eks_ebs_csi_irsa_assume_role[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-ebs-csi-role"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_ebs_csi_driver" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  role       = aws_iam_role.eks_ebs_csi[0].name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+}
+
+resource "aws_eks_addon" "eks_ebs_csi" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "aws-ebs-csi-driver"
+  service_account_role_arn    = aws_iam_role.eks_ebs_csi[0].arn
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_ebs_csi_driver
+  ]
+}
+
 data "aws_iam_policy_document" "eks_traefik_irsa_assume_role" {
   count = var.create_eks_cluster ? 1 : 0
 

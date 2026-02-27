@@ -7,10 +7,15 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
+    - match: (Host(`palad.ai`) || Host(`www.palad.ai`) || Host(`cert.palad.ai`)) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
           port: 4000
   tls:
     certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - cert.palad.ai
