@@ -94,6 +94,13 @@ traefik:
 
 container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
 
+agents:
+  images:
+    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'palad/claude-code:latest' %>
+    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'palad/cursor-cli:latest' %>
+    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'palad/codex:latest' %>
+    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'palad/gemini-cli:latest' %>
+
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
 
@@ -134,4 +141,3 @@ container_execution:
       cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
       pids_limit: 100      # Max processes
       max_timeout: 1800    # Absolute max timeout (30 min)
-

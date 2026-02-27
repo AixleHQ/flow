@@ -11,7 +11,7 @@ module ContainerStrategies
   class AgentBaseStrategy < BaseStrategy
     VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli].freeze
 
-    AGENT_IMAGES = {
+    DEFAULT_AGENT_IMAGES = {
       "claude_code" => "palad/claude-code:latest",
       "cursor_cli" => "palad/cursor-cli:latest",
       "codex" => "palad/codex:latest",
@@ -77,7 +77,8 @@ module ContainerStrategies
     # == Template methods ==
 
     def resolve_image
-      AGENT_IMAGES.fetch(input[:agent_type])
+      configured_images = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)
+      configured_images.fetch(input[:agent_type], DEFAULT_AGENT_IMAGES.fetch(input[:agent_type]))
     end
 
     def session_type
