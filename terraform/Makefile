@@ -1,15 +1,26 @@
 # Terraform/K3S helper targets
-.PHONY: terraform-help k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts
+.PHONY: terraform-help terraform-plan terraform-apply k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts
 
 KUBECONFIG_LOCAL = ~/.kube/config-palad-k3s
 KUBECONFIG_TEMP = /tmp/kubeconfig-palad-k3s
+TF_ARGS ?=
 
 terraform-help:
 	@echo "Terraform/K3S commands:"
+	@echo "  make terraform-plan         - Run terraform plan (use TF_ARGS='...')"
+	@echo "  make terraform-apply        - Run terraform apply (use TF_ARGS='...')"
 	@echo "  make k3s-init-kubeconfig    - Fetch kubeconfig from k3s instance and save locally"
+	@echo "  make k3s-kubeconfig-merge   - Merge k3s kubeconfig with default kubeconfig"
 	@echo "  make k3s-kubeconfig-path    - Show kubeconfig location and usage"
 	@echo "  make k3s-test               - Test kubectl connection to k3s cluster"
 	@echo "  make k3s-contexts           - Show kubectl contexts for k3s kubeconfig"
+	@echo "  make vault-bash             - Open a bash shell with AWS Vault credentials for Terraform operations"
+
+terraform-plan:
+	cd terraform && terraform plan $(TF_ARGS)
+
+terraform-apply:
+	cd terraform && terraform apply $(TF_ARGS)
 
 # Initialize kubeconfig from k3s instance
 k3s-init-kubeconfig:
@@ -67,17 +78,14 @@ k3s-init-kubeconfig:
 	echo "Or merge it with your default kubeconfig:"; \
 	echo "  KUBECONFIG=$(KUBECONFIG_LOCAL):~/.kube/config kubectl config view --flatten > ~/.kube/config.merged && mv ~/.kube/config.merged ~/.kube/config"
 
-# Show kubeconfig path for current session
-k3s-kubeconfig-path:
-	@echo "Kubeconfig location: $(KUBECONFIG_LOCAL)"
-	@if [ -f $(KUBECONFIG_LOCAL) ]; then \
-		echo "✓ Kubeconfig exists"; \
-		echo ""; \
-		echo "To use it, run:"; \
-		echo "  export KUBECONFIG=$(KUBECONFIG_LOCAL)"; \
-	else \
-		echo "✗ Kubeconfig not found. Run 'make k3s-init-kubeconfig' first"; \
+k3s-kubeconfig-merge:
+	@if [ ! -f $(KUBECONFIG_LOCAL) ]; then \
+		echo "Error: Kubeconfig not found at $(KUBECONFIG_LOCAL). Run 'make k3s-init-kubeconfig' first"; \
+		exit 1; \
 	fi
+	KUBECONFIG=$(KUBECONFIG_LOCAL):~/.kube/config kubectl config view --flatten > ~/.kube/config.merged && mv ~/.kube/config.merged ~/.kube/config
+	echo "✓ Kubeconfig merged with default config. You can now use kubectl with the k3s cluster."
+
 
 # Test kubectl connection to k3s cluster
 k3s-test:
@@ -97,3 +105,7 @@ k3s-contexts:
 		exit 1; \
 	fi
 	@KUBECONFIG=$${KUBECONFIG:=$(KUBECONFIG_LOCAL)} kubectl config get-contexts
+
+# Open a bash shell with AWS Vault credentials for Terraform operations
+vault-bash:
+	aws-vault exec terraform@palad -- bash

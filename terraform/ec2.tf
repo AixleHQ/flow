@@ -124,8 +124,8 @@ resource "aws_route_table" "main" {
   vpc_id = aws_vpc.main.id
 
   route {
-    cidr_block      = "0.0.0.0/0"
-    gateway_id      = aws_internet_gateway.main.id
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
   }
 
   tags = {
@@ -214,12 +214,13 @@ EOF
 
 # EC2 Instance for k3s
 resource "aws_instance" "k3s" {
+  count                  = var.create_k3s_instance ? 1 : 0
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = var.k3s_instance_type
   subnet_id              = aws_subnet.main.id
   vpc_security_group_ids = [aws_security_group.k3s_sg.id]
   iam_instance_profile   = aws_iam_instance_profile.k3s_instance_profile.name
-  
+
   # Use instance store or EBS
   root_block_device {
     volume_type           = "gp3"
@@ -241,7 +242,8 @@ resource "aws_instance" "k3s" {
 
 # Elastic IP for stable public IP
 resource "aws_eip" "k3s" {
-  instance = aws_instance.k3s.id
+  count    = var.create_k3s_instance ? 1 : 0
+  instance = aws_instance.k3s[0].id
   domain   = "vpc"
 
   tags = {
