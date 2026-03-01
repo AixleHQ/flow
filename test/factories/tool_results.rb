@@ -4,7 +4,7 @@ FactoryBot.define do
   factory :tool_result do
     execution_id { ToolResult.generate_id }
     state { "processing" }
-    association :tool, factory: [:tool, :internal], name: "test_tool", display_name: "Test Tool"
+    association :tool, factory: [ :tool, :internal ], name: "test_tool", display_name: "Test Tool"
 
     trait :completed do
       state { "completed" }

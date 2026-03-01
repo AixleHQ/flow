@@ -60,7 +60,7 @@ module ContainerStrategies
     private
 
     def exec_timeout
-      [input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT].min
+      [ input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT ].min
     end
 
     def persist_result(exit_code:, stdout:, stderr:, duration_ms:, error_msg: nil)

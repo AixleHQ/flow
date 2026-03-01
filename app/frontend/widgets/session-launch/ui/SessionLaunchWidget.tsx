@@ -151,7 +151,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const companySkills = useGetCompanySkillsQuery(undefined, { skip: !!projectId });
   const skills: Skill[] = (projectId ? projectSkills.data : companySkills.data) ?? [];
 
-  const projectMcp = useGetProjectMcpServersQuery(String(projectId), { skip: !projectId });
+  const projectMcp = useGetProjectMcpServersQuery(projectId!, { skip: !projectId });
   const companyMcp = useGetMcpServersQuery(undefined, { skip: !!projectId });
   const mcpServers: McpServer[] = (projectId ? projectMcp.data : companyMcp.data) ?? [];
 

@@ -85,7 +85,7 @@ export const RunWorkflowDialog: FC<RunWorkflowDialogProps> = ({
                     Mixed
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    Steps marked "auto-run" advance automatically, others pause for approval
+                    Steps marked &quot;auto-run&quot; advance automatically, others pause for approval
                   </Typography>
                 </>
               }

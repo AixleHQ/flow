@@ -23,6 +23,7 @@ class Project < ApplicationRecord
   has_many :repositories, as: :scope, dependent: :destroy
   has_many :workflows, as: :scope, dependent: :destroy
   has_many :workflow_runs, dependent: :destroy
+  has_one :board, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

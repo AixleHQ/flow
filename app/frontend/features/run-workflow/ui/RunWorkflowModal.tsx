@@ -20,19 +20,43 @@ import { useSnackbar } from 'notistack';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useGetCurrentUserQuery, AVAILABLE_AGENTS, type AgentType } from 'entities/user';
-import { useGetProjectAssetsQuery } from 'features/assets-management';
-import type { Asset } from 'features/assets-management/lib/types';
 import { useGetProjectRepositoriesQuery } from 'features/repositories-management/api/repositoriesApi';
 import type { Repository } from 'features/repositories-management/lib/types';
-import { useCreateWorkflowRunMutation } from 'features/workflow-execution/api/workflowRunsApi';
-import { useGetStepsQuery } from 'features/workflow-steps/api/stepsApi';
-import type { Step } from 'features/workflow-steps/lib/types';
 import { Routes } from 'shared/routes';
+
+interface AssetOption {
+  id: number;
+  name: string;
+  folder: string | null;
+  deletedAt: string | null;
+}
+
+interface StepOption {
+  id: number;
+  name: string;
+  position: number;
+  allowNonInteractive?: boolean;
+  dependsOnStepIds?: number[];
+}
+
+export interface CreateRunParams {
+  projectId: number;
+  workflowId: number;
+  mode: 'interactive' | 'non_interactive' | 'mixed';
+  stepOverrides: Record<string, { autoRun: boolean }>;
+  repositoryIds: number[];
+  inputAssetIds: number[];
+  agentRuntime: string;
+}
 
 interface RunWorkflowModalProps {
   open: boolean;
   workflow: { id: number; name: string; description?: string } | null;
   projectId: number;
+  projectAssets?: AssetOption[];
+  steps?: StepOption[];
+  onCreateRun: (params: CreateRunParams) => Promise<{ id: number }>;
+  isCreating?: boolean;
   onClose: () => void;
 }
 
@@ -87,7 +111,16 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowModalProps) => {
+const RunWorkflowModal = ({
+  open,
+  workflow,
+  projectId,
+  projectAssets = [],
+  steps = [],
+  onCreateRun,
+  isCreating = false,
+  onClose,
+}: RunWorkflowModalProps) => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -99,9 +132,6 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
 
   const { data: currentUser } = useGetCurrentUserQuery();
   const { data: repositories = [] } = useGetProjectRepositoriesQuery(projectId);
-  const { data: projectAssets = [] } = useGetProjectAssetsQuery(projectId);
-  const { data: steps = [] } = useGetStepsQuery({ projectId, workflowId: workflow?.id ?? 0 }, { skip: !workflow });
-  const [createRun, { isLoading }] = useCreateWorkflowRunMutation();
 
   useEffect(() => {
     if (steps.length > 0) {
@@ -115,7 +145,7 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
 
   interface Wave {
     index: number;
-    steps: Step[];
+    steps: StepOption[];
     deps: string;
   }
 
@@ -138,7 +168,7 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
       }
     });
 
-    const grouped = new Map<number, Step[]>();
+    const grouped = new Map<number, StepOption[]>();
     sorted.forEach((s) => {
       const w = waveMap.get(s.id) ?? 0;
       grouped.set(w, [...(grouped.get(w) ?? []), s]);
@@ -159,11 +189,10 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
       });
   }, [steps]);
 
-  const configuredAgents = currentUser?.configuredAgents ?? [];
-  const agentOptions = useMemo(
-    () => AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)),
-    [configuredAgents],
-  );
+  const agentOptions = useMemo(() => {
+    const configured = currentUser?.configuredAgents ?? [];
+    return AVAILABLE_AGENTS.filter((a) => configured.includes(a.type));
+  }, [currentUser?.configuredAgents]);
 
   const effectiveRuntime = agentRuntime || agentOptions[0]?.type || '';
 
@@ -172,15 +201,20 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
     [repositories, selectedRepoIds],
   );
 
-  const activeAssets = useMemo(
-    () => projectAssets.filter((a: Asset) => !a.deletedAt),
-    [projectAssets],
-  );
+  const activeAssets = useMemo(() => projectAssets.filter((a) => !a.deletedAt), [projectAssets]);
 
   const selectedAssets = useMemo(
-    () => activeAssets.filter((a: Asset) => selectedAssetIds.includes(a.id)),
+    () => activeAssets.filter((a) => selectedAssetIds.includes(a.id)),
     [activeAssets, selectedAssetIds],
   );
+
+  const handleClose = useCallback(() => {
+    setUiMode('interactive');
+    setSelectedRepoIds([]);
+    setSelectedAssetIds([]);
+    setAgentRuntime('');
+    onClose();
+  }, [onClose]);
 
   const handleRun = useCallback(async () => {
     if (!workflow || !effectiveRuntime) return;
@@ -190,7 +224,7 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
       uiMode === 'custom' ? Object.fromEntries(Object.entries(stepAutoRun).map(([id, v]) => [id, { autoRun: v }])) : {};
 
     try {
-      const result = await createRun({
+      const result = await onCreateRun({
         projectId,
         workflowId: workflow.id,
         mode: backendMode,
@@ -198,7 +232,7 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
         repositoryIds: selectedRepoIds,
         inputAssetIds: selectedAssetIds,
         agentRuntime: effectiveRuntime,
-      }).unwrap();
+      });
       enqueueSnackbar('Workflow run started', { variant: 'success' });
       handleClose();
       navigate({
@@ -219,18 +253,11 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
     selectedRepoIds,
     selectedAssetIds,
     effectiveRuntime,
-    createRun,
+    onCreateRun,
     enqueueSnackbar,
     navigate,
+    handleClose,
   ]);
-
-  const handleClose = useCallback(() => {
-    setUiMode('interactive');
-    setSelectedRepoIds([]);
-    setSelectedAssetIds([]);
-    setAgentRuntime('');
-    onClose();
-  }, [onClose]);
 
   if (!workflow) {
     return (
@@ -428,25 +455,19 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
             multiple
             size="small"
             options={activeAssets}
-            getOptionLabel={(a: Asset) => {
+            getOptionLabel={(a: AssetOption) => {
               const folder = a.folder ? `${a.folder}/` : '';
               return `${folder}${a.name}`;
             }}
             value={selectedAssets}
-            onChange={(_, newValue) => setSelectedAssetIds(newValue.map((a: Asset) => a.id))}
+            onChange={(_, newValue) => setSelectedAssetIds(newValue.map((a: AssetOption) => a.id))}
             renderInput={(params) => <TextField {...params} placeholder="Select assets to include..." />}
             renderTags={(value, getTagProps) =>
               value.map((asset, index) => (
-                <Chip
-                  {...getTagProps({ index })}
-                  key={asset.id}
-                  label={asset.name}
-                  size="small"
-                  variant="outlined"
-                />
+                <Chip {...getTagProps({ index })} key={asset.id} label={asset.name} size="small" variant="outlined" />
               ))
             }
-            groupBy={(a: Asset) => a.folder || 'Root'}
+            groupBy={(a: AssetOption) => a.folder || 'Root'}
             isOptionEqualToValue={(opt, val) => opt.id === val.id}
           />
           <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
@@ -460,10 +481,10 @@ const RunWorkflowModal = ({ open, workflow, projectId, onClose }: RunWorkflowMod
         <Button
           variant="contained"
           onClick={handleRun}
-          disabled={isLoading || !effectiveRuntime}
+          disabled={isCreating || !effectiveRuntime}
           sx={{ minWidth: 120 }}
         >
-          {isLoading ? 'Starting...' : 'Run Workflow'}
+          {isCreating ? 'Starting...' : 'Run Workflow'}
         </Button>
       </DialogActions>
     </Dialog>

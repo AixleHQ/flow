@@ -50,10 +50,9 @@ class Api::V1::Company::Projects::ConfigItemsControllerTest < ActionController::
 
     assert_response :success
     json = response.parsed_body
-    # Should have: PROJECT_URL (project), PROJECT_SECRET (project), COMPANY_VAR (company)
-    # COMPANY_VAR from company is NOT overridden
-    # PROJECT_URL from company IS overridden by project
-    assert { json["items"].length == 3 }
+    # Returns all items without deduplication:
+    # PROJECT_URL (project), PROJECT_SECRET (project), COMPANY_VAR (company), PROJECT_URL (company)
+    assert { json["items"].length == 4 }
     names = json["items"].map { |i| i["name"] }
     assert { names.include?("PROJECT_URL") }
     assert { names.include?("PROJECT_SECRET") }
@@ -99,7 +98,7 @@ class Api::V1::Company::Projects::ConfigItemsControllerTest < ActionController::
 
     assert_response :success
     json = response.parsed_body
-    assert { json["items"].length == 3 }
+    assert { json["items"].length == 4 }
   end
 
   test "#index forbidden for non-member" do

@@ -46,7 +46,7 @@ class InternalToolExecutorTest < ActiveSupport::TestCase
       display_name: "Validated", input_schema: {
         "type" => "object",
         "properties" => { "id" => { "type" => "integer" } },
-        "required" => ["id"]
+        "required" => [ "id" ]
       })
 
     result = InternalToolExecutor.execute(tool, {}, @session)

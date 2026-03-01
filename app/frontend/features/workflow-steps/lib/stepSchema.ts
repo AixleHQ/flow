@@ -12,8 +12,8 @@ export const subStepSchema = z.object({
 
 export const stepSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
-  description: z.string().max(2000).optional(),
-  instructions: z.string().optional(),
+  description: z.string().max(2000).default(''),
+  instructions: z.string().default(''),
   agentId: z.number().nullable().optional(),
   allowNonInteractive: z.boolean().default(false),
   skipPolicy: z.enum(['never', 'if_outputs_exist', 'manual']).default('never'),
@@ -22,5 +22,5 @@ export const stepSchema = z.object({
   subStepsAttributes: z.array(subStepSchema).optional(),
 });
 
-export type StepFormData = z.infer<typeof stepSchema>;
+export type StepFormData = z.output<typeof stepSchema>;
 export type SubStepFormData = z.infer<typeof subStepSchema>;

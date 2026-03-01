@@ -26,10 +26,11 @@ import {
   useGetWorkflowRunQuery,
   useRetryStepMutation,
   useSkipStepMutation,
+  WorkflowAssetsReview,
+  type StepRunInfo,
+  type WorkflowRun,
 } from 'features/workflow-execution';
-import type { StepRunInfo, WorkflowRun } from 'features/workflow-execution';
-import { WorkflowAssetsReview } from 'features/workflow-execution/ui/WorkflowAssetsReview';
-import { useGetStepsQuery } from 'features/workflow-steps/api/stepsApi';
+import { useGetStepsQuery } from 'features/workflow-steps';
 import { useWorkflowRunChannel } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
@@ -375,7 +376,7 @@ const WorkflowRunPage = () => {
     isError,
   } = useGetWorkflowRunQuery({ projectId, runId }, { skip: !projectId || !runId });
 
-  const { workflowRun: liveRun } = useWorkflowRunChannel({ runId: runId || null });
+  const { workflowRun: liveRun } = useWorkflowRunChannel<WorkflowRun>({ runId: runId || null });
   const workflowRun = liveRun ?? initialRun;
 
   const { data: workflowSteps = [] } = useGetStepsQuery(
@@ -388,7 +389,7 @@ const WorkflowRunPage = () => {
   const [skipStep, { isLoading: skipping }] = useSkipStepMutation();
   const [cancelRun, { isLoading: cancelling }] = useCancelWorkflowRunMutation();
 
-  const stepRuns: StepRunInfo[] = workflowRun?.stepRuns ?? [];
+  const stepRuns: StepRunInfo[] = useMemo(() => workflowRun?.stepRuns ?? [], [workflowRun?.stepRuns]);
 
   /* ── timeline computation ──────────────────────────────────────── */
 

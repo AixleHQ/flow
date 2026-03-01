@@ -40,14 +40,15 @@ class ToolResultCleanupJobTest < ActiveSupport::TestCase
     assert_equal "completed", tr.state
   end
 
-  test "preserves processing results even if old" do
+  test "fails stuck processing results older than threshold" do
     tr = create(:tool_result, tool: @tool, state: "processing")
     tr.update_column(:created_at, 40.days.ago)
 
     ToolResultCleanupJob.new.perform
 
     tr.reload
-    assert_equal "processing", tr.state
+    assert_equal "failed", tr.state
+    assert_equal "Timed out: stuck in processing", tr.error
   end
 
   test "preserves audit columns after expiry" do

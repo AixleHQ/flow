@@ -5,6 +5,9 @@ class Workflow < ApplicationRecord
 
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
+  has_many :column_workflow_bindings
+
+  before_destroy :check_column_bindings
 
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
@@ -21,6 +24,11 @@ class Workflow < ApplicationRecord
   scope :visible_for_company, ->(company) { active.for_company(company) }
 
   def soft_delete!
+    if column_workflow_bindings.any?
+      bound = column_workflow_bindings.includes(board_column: { board: :project })
+      descs = bound.map { |b| "'#{b.board_column.name}' in project '#{b.board_column.board.project.name}'" }
+      raise ActiveRecord::RecordNotDestroyed, "Cannot delete — bound to column #{descs.join(', ')}"
+    end
     update!(deleted_at: Time.current)
   end
 
@@ -42,5 +50,16 @@ class Workflow < ApplicationRecord
 
   def self.ransackable_associations(_auth_object = nil)
     %w[scope]
+  end
+
+  private
+
+  def check_column_bindings
+    return if column_workflow_bindings.empty?
+
+    bound = column_workflow_bindings.includes(board_column: { board: :project })
+    descs = bound.map { |b| "'#{b.board_column.name}' in project '#{b.board_column.board.project.name}'" }
+    errors.add(:base, "Cannot delete — bound to column #{descs.join(', ')}")
+    throw(:abort)
   end
 end

@@ -231,7 +231,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
   end
 
   test "strategy raises ArgumentError for unsupported session_type" do
-    session = build(:terminal_session, user: @user, session_type: "workflow_step", agent_type: nil)
+    session = build(:terminal_session, user: @user, session_type: "tool_setup", agent_type: nil)
 
     assert_raises(ArgumentError) { session.strategy }
   end

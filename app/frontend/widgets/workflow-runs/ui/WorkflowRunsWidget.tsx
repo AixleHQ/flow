@@ -27,8 +27,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { useMemo, useState, type FC } from 'react';
 
-import { useGetWorkflowRunsQuery } from 'features/workflow-execution/api/workflowRunsApi';
-import type { WorkflowRun } from 'features/workflow-execution/lib/types';
+import { useGetWorkflowRunsQuery, type WorkflowRun } from 'features/workflow-execution';
 import { Routes } from 'shared/routes';
 
 export interface WorkflowRunsWidgetProps {

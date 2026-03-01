@@ -1,6 +1,7 @@
 import { createRootRoute, createRoute, lazyRouteComponent, redirect } from '@tanstack/react-router';
 
 import { Routes } from 'shared/routes';
+import { getSelectedProjectId } from 'widgets/AppHeader';
 
 import { AuthLayout, RootLayout } from './layouts';
 
@@ -58,11 +59,15 @@ export const onboardingRoute = createRoute({
   component: OnboardingPage,
 });
 
-// Homepage route - redirects to company projects
+// Homepage route - redirects to last selected project or projects list
 export const indexRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.rootPath,
   beforeLoad: () => {
+    const lastProjectId = getSelectedProjectId();
+    if (lastProjectId) {
+      throw redirect({ to: Routes.frontend.companyProjectPath(lastProjectId) });
+    }
     throw redirect({ to: Routes.frontend.companyProjectsPath });
   },
   component: ProjectsPage,

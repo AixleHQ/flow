@@ -13,9 +13,9 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
       cpu_quota 25_000
       working_dir "/app"
 
-      cmd { |input| ["run", "--format", input[:format] || "json"] }
+      cmd { |input| [ "run", "--format", input[:format] || "json" ] }
       env { |input| { "REPO_PATH" => input[:repo_path] || "/tmp" } }
-      binds { |input| ["#{input[:repo_path] || '/tmp'}:/app:ro"] }
+      binds { |input| [ "#{input[:repo_path] || '/tmp'}:/app:ro" ] }
 
       prepare { |input|
         input.merge(repo_path: "/repos/test")
@@ -25,7 +25,7 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
     ContainerStrategies::InternalToolStrategy.define :docker_tool do
       image "docker-tool:1.0"
       docker_socket!
-      output_files ["/output/report.json"]
+      output_files [ "/output/report.json" ]
     end
   end
 
@@ -64,7 +64,7 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
   test "build_cmd with callable block" do
     strategy = build_test_strategy(format: "csv")
     cmd = strategy.build_cmd
-    assert_equal ["run", "--format", "csv"], cmd
+    assert_equal [ "run", "--format", "csv" ], cmd
   end
 
   test "build_env_vars from callable block" do
@@ -104,7 +104,7 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
 
   test "definition output_files accessible" do
     defn = ContainerStrategies::InternalToolStrategy.registry["docker_tool"]
-    assert_equal ["/output/report.json"], defn.opts[:output_files]
+    assert_equal [ "/output/report.json" ], defn.opts[:output_files]
   end
 
   private

@@ -5,7 +5,6 @@ module ContainerStrategies
   # Each tool is registered via `define :name { ... }` with declarative configuration.
   # New tools can be added in ~15 lines instead of ~200.
   class InternalToolStrategy < ToolStrategy
-
     # --- DSL Definition ---
 
     class Definition

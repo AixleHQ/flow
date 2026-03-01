@@ -1,9 +1,10 @@
 export type ProjectTab =
+  | 'overview'
+  | 'board'
   | 'assets'
   | 'repositories'
   | 'workflows'
   | 'runs'
-  | 'tasks'
   | 'sessions'
   | 'config'
   | 'agents'
@@ -11,7 +12,8 @@ export type ProjectTab =
   | 'mcp-servers'
   | 'skills'
   | 'members'
-  | 'settings';
+  | 'settings'
+  | 'analytics';
 
 export interface IWorkflowParameter {
   name: string;

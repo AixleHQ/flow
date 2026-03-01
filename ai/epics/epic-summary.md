@@ -26,5 +26,12 @@
 | 22 | Board UI & Real-time | 13 | BT:FR28-31 | backlog |
 | 23 | Workflow Triggers & Board MCP Tools | 14 | BT:FR6-11,FR32-45 | backlog |
 | 24 | Activity Feed & Filtered Views | 15 (post-MVP) | BT:FR46-51 | backlog |
+| 25 | Unified Context Constructor & XML Renderer | 16 | FR-SCC1,2,3,6,8 | backlog |
+| 26 | Workflow Context in Agent Sessions | 16 | FR-SCC4,7 | backlog |
+| 27 | Board Task Context in Agent Sessions | 16 | FR-SCC5 | backlog |
+| 28 | Context Optimization & Legacy Cleanup | 16 | FR-SCC9 | backlog |
+| 29 | Session Config Resolver | 17 | FR-CC1,2,3,5,6 | backlog |
+| 30 | Default Agent Credential & Profile UI | 17 | FR-CC4,7 | backlog |
+| 31 | Workflow Base Resources & Builder UI | 17 | FR-CC8,9 | backlog |
 
 ---

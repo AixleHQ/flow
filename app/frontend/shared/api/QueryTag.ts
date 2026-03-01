@@ -16,4 +16,8 @@ export enum QueryTag {
   Assets = 'Assets',
   Integrations = 'Integrations',
   Repositories = 'Repositories',
+  Activity = 'Activity',
+  ViewPreset = 'ViewPreset',
+  Comment = 'Comment',
+  TaskAsset = 'TaskAsset',
 }

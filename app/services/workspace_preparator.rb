@@ -43,7 +43,7 @@ class WorkspacePreparator
     previous_assets.find_each do |asset|
       next unless asset.file
 
-      tempfile = Tempfile.new(["wf_input_", File.extname(asset.name)])
+      tempfile = Tempfile.new([ "wf_input_", File.extname(asset.name) ])
       begin
         asset.file.download { |tf| FileUtils.cp(tf.path, tempfile.path) }
         target_path = "#{INPUT_DIR}/#{asset.name}"
@@ -65,7 +65,7 @@ class WorkspacePreparator
       version = asset.current_version
       next unless version&.file
 
-      tempfile = Tempfile.new(["proj_input_", File.extname(asset.name)])
+      tempfile = Tempfile.new([ "proj_input_", File.extname(asset.name) ])
       begin
         version.file.download { |tf| FileUtils.cp(tf.path, tempfile.path) }
         target_path = "#{INPUT_DIR}/#{asset.name}"
@@ -80,7 +80,7 @@ class WorkspacePreparator
 
   def generate_index(container_id)
     content = build_index_content
-    tempfile = Tempfile.new(["_index_", ".md"])
+    tempfile = Tempfile.new([ "_index_", ".md" ])
     begin
       tempfile.write(content)
       tempfile.flush
@@ -92,7 +92,7 @@ class WorkspacePreparator
   end
 
   def build_index_content
-    lines = ["# Workspace Input Index\n"]
+    lines = [ "# Workspace Input Index\n" ]
 
     project_assets = build_project_assets_section
     unless project_assets.empty?

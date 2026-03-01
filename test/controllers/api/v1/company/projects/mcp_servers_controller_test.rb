@@ -44,7 +44,7 @@ module Api
                 mcp_server: {
                   name: "project-server",
                   display_name: "Project Server",
-                  url: "http://localhost:3001",
+                  url: "https://mcp.example.com/v1",
                   transport: "sse"
                 }
               }

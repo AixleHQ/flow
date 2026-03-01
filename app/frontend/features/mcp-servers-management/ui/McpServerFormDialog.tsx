@@ -169,7 +169,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
       if (isEdit && editServer) {
         if (isProjectContext) {
           await updateProject({
-            projectId: String(projectId),
+            projectId: projectId!,
             id: editServer.id,
             body: data,
           }).unwrap();
@@ -182,7 +182,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
       } else {
         if (isProjectContext) {
           await createProject({
-            projectId: String(projectId),
+            projectId: projectId!,
             body: data,
           }).unwrap();
         } else {

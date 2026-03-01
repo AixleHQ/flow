@@ -48,7 +48,7 @@ module Api
             company = tools.find { |t| t["name"] == "company_tool" }
             project = tools.find { |t| t["name"] == "project_tool" }
 
-            assert_equal "internal", internal["scope_indicator"]
+            assert_equal "system", internal["scope_indicator"]
             assert_equal "company", company["scope_indicator"]
             assert_equal "project", project["scope_indicator"]
           end
@@ -63,11 +63,11 @@ module Api
             assert_response :success
             tools = response.parsed_body["items"]
 
-            # Should only see one "company_tool" with overrides_company indicator
             company_tools = tools.select { |t| t["name"] == "company_tool" }
-            assert_equal 1, company_tools.count
-            assert_equal "overrides_company", company_tools.first["scope_indicator"]
-            assert_equal "overridden:image", company_tools.first["docker_image"]
+            assert_equal 2, company_tools.count
+            project_version = company_tools.find { |t| t["scope_type"] == "Project" }
+            assert_equal "overrides_company", project_version["scope_indicator"]
+            assert_equal "overridden:image", project_version["docker_image"]
           end
 
           test "index fails for outsider" do

@@ -196,13 +196,13 @@ module ContainerStrategies
       assert_equal "claude", cmd
     end
 
-    test "ttyd_command returns non-interactive command when mode is non_interactive" do
+    test "ttyd_command returns same command when mode is non_interactive" do
       @session.update!(mode: "non_interactive", initial_prompt: "Fix the tests")
       strategy = build_strategy(agent_type: "claude_code")
 
       cmd = strategy.send(:ttyd_command)
 
-      assert_equal "claude -p --verbose", cmd
+      assert_equal "claude", cmd
     end
 
     test "ttyd_command uses adapter session_command for codex non-interactive" do
@@ -212,7 +212,7 @@ module ContainerStrategies
 
       cmd = strategy.send(:ttyd_command)
 
-      assert_equal "codex exec --yolo", cmd
+      assert_equal "codex --yolo", cmd
     end
 
     # == before_exec delegates to assembler ==

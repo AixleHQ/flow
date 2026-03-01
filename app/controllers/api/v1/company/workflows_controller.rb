@@ -42,7 +42,7 @@ module Api
           project_ids = current_company.projects.pluck(:id)
           Workflow.active.where(
             "(scope_type = 'Company' AND scope_id = :company_id) OR (scope_type = 'Project' AND scope_id IN (:project_ids))",
-            company_id: current_company.id, project_ids: project_ids.presence || [0]
+            company_id: current_company.id, project_ids: project_ids.presence || [ 0 ]
           )
         end
 

@@ -63,5 +63,4 @@ class AssetExportService
 
     @wra.file.download
   end
-
 end

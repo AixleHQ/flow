@@ -89,9 +89,7 @@ export const WorkflowAssetsReview = ({ projectId, runId, stepNameMap = {} }: Pro
   if (!assets || assets.length === 0) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
-        <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>
-          No artifacts produced
-        </Typography>
+        <Typography sx={{ color: 'text.secondary', fontSize: '13px' }}>No artifacts produced</Typography>
       </Box>
     );
   }
@@ -112,9 +110,7 @@ export const WorkflowAssetsReview = ({ projectId, runId, stepNameMap = {} }: Pro
   return (
     <Box sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-        <Typography sx={{ fontSize: '14px', fontWeight: 600 }}>
-          Workflow Artifacts ({assets.length})
-        </Typography>
+        <Typography sx={{ fontSize: '14px', fontWeight: 600 }}>Workflow Artifacts ({assets.length})</Typography>
         <Button
           size="small"
           variant="outlined"
@@ -210,8 +206,8 @@ export const WorkflowAssetsReview = ({ projectId, runId, stepNameMap = {} }: Pro
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            This will create project-level assets from workflow artifacts. You can optionally specify
-            a folder to organize them.
+            This will create project-level assets from workflow artifacts. You can optionally specify a folder to
+            organize them.
           </Typography>
           <TextField
             fullWidth

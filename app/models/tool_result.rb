@@ -66,7 +66,7 @@ class ToolResult < ApplicationRecord
   end
 
   def read_file_from_container(container, path, runtime)
-    result = runtime.exec(container, ["cat", path])
+    result = runtime.exec(container, [ "cat", path ])
     return nil unless result[2].zero?
     result[0].join
   rescue StandardError

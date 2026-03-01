@@ -1,15 +1,22 @@
 import { Dialog, DialogContent } from '@mui/material';
-import { useMemo, type FC } from 'react';
-
-import { AssetPreview, type AssetPreviewData } from 'features/asset-preview';
+import { useMemo, type FC, type ReactNode } from 'react';
 
 import type { Asset } from '../lib/types';
+
+export interface AssetPreviewData {
+  name: string;
+  contentType: string | null;
+  fileSize: number | null;
+  downloadUrl: string;
+  createdAt: string;
+}
 
 interface AssetPreviewDialogProps {
   open: boolean;
   onClose: () => void;
   asset: Asset | null;
   projectId?: number;
+  renderPreview: (data: AssetPreviewData, onClose: () => void) => ReactNode;
 }
 
 function toSameOriginPath(url: string): string {
@@ -20,7 +27,7 @@ function toSameOriginPath(url: string): string {
   }
 }
 
-export const AssetPreviewDialog: FC<AssetPreviewDialogProps> = ({ open, onClose, asset }) => {
+export const AssetPreviewDialog: FC<AssetPreviewDialogProps> = ({ open, onClose, asset, renderPreview }) => {
   const previewData = useMemo<AssetPreviewData | null>(() => {
     if (!asset?.latestVersion?.fileUrl) return null;
 
@@ -38,7 +45,7 @@ export const AssetPreviewDialog: FC<AssetPreviewDialogProps> = ({ open, onClose,
   return (
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth PaperProps={{ sx: { height: '80vh' } }}>
       <DialogContent sx={{ p: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <AssetPreview asset={previewData} onClose={onClose} />
+        {renderPreview(previewData, onClose)}
       </DialogContent>
     </Dialog>
   );

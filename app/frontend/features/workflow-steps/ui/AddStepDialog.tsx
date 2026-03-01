@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { type FC, useEffect } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, type Resolver, useForm } from 'react-hook-form';
 
 import { setErrorsToForm } from 'shared/api';
 
@@ -45,7 +45,7 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
     control,
     formState: { errors },
   } = useForm<StepFormData>({
-    resolver: zodResolver(stepSchema),
+    resolver: zodResolver(stepSchema) as Resolver<StepFormData>,
     defaultValues: {
       name: '',
       description: '',

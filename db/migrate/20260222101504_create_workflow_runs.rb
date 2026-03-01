@@ -15,6 +15,6 @@ class CreateWorkflowRuns < ActiveRecord::Migration[8.1]
     end
 
     add_index :workflow_runs, :state
-    add_index :workflow_runs, [:workflow_id, :state]
+    add_index :workflow_runs, [ :workflow_id, :state ]
   end
 end

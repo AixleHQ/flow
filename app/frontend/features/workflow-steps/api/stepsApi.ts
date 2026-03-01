@@ -50,16 +50,14 @@ export const stepsApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Workflow],
     }),
 
-    reorderSteps: builder.mutation<void, { projectId: number; workflowId: number; positions: Record<number, number> }>(
-      {
-        query: ({ projectId, workflowId, positions }) => ({
-          url: Routes.backend.reorderApiV1CompanyProjectWorkflowStepsPath(projectId, workflowId),
-          method: 'PATCH',
-          data: { positions },
-        }),
-        invalidatesTags: [QueryTag.Workflow],
-      },
-    ),
+    reorderSteps: builder.mutation<void, { projectId: number; workflowId: number; positions: Record<number, number> }>({
+      query: ({ projectId, workflowId, positions }) => ({
+        url: Routes.backend.reorderApiV1CompanyProjectWorkflowStepsPath(projectId, workflowId),
+        method: 'PATCH',
+        data: { positions },
+      }),
+      invalidatesTags: [QueryTag.Workflow],
+    }),
 
     getCompanySteps: builder.query<Step[], { workflowId: number }>({
       query: ({ workflowId }) => ({
