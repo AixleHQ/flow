@@ -40,7 +40,7 @@ class WorkflowOutputCollector
     container_id = @step_run.terminal_session.container_id
     relative_path = container_path.sub("#{OUTPUTS_DIR}/", "")
 
-    tempfile = Tempfile.new(["wf_output_", File.extname(relative_path)])
+    tempfile = Tempfile.new([ "wf_output_", File.extname(relative_path) ])
     begin
       DockerClient.copy_from(container_id, container_path, tempfile.path)
       file_size = File.size(tempfile.path)

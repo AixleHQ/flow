@@ -31,6 +31,15 @@ class Workflows::Base < Temporalio::Workflow::Definition
 
   private
 
+  def activities
+    @activities ||= WorkflowService.send(name).activities
+  end
+
+  def extract_error_message(activity_error)
+    cause = activity_error.cause
+    cause ? cause.message : activity_error.message
+  end
+
   def default_retry_policy
     Temporalio::RetryPolicy.new(
       max_attempts: 5,

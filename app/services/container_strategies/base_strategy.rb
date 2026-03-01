@@ -16,6 +16,7 @@ module ContainerStrategies
   #   before_cleanup(container_id:, **_) → { ... }
   #   cleanup(container_id:, **_) → { status: }
   #   after_cleanup(session_id: nil, error: nil, **_) → {}
+  #   on_failure(error: nil, **_) → {}  (called by workflow when execution fails)
   #
   class BaseStrategy
     def self.docker_network
@@ -120,6 +121,11 @@ module ContainerStrategies
       {}
     rescue StandardError => e
       Rails.logger.error("[#{strategy_name}] Failed to finalize session: #{e.message}")
+      {}
+    end
+
+    # Called when workflow fails (after cleanup). Override in subclass to handle failure.
+    def on_failure(error: nil, **)
       {}
     end
 

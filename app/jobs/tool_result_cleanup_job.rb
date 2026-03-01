@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 class ToolResultCleanupJob
-  STUCK_THRESHOLD = 24.hours
+  STUCK_THRESHOLD = 60.minutes
 
   def perform
     retention = (Settings.tool_results&.retention_days || 30).days
 
     expire_stale_results(retention)
-    warn_stuck_processing
+    fail_stuck_processing
   end
 
   private
@@ -29,12 +29,14 @@ class ToolResultCleanupJob
     end
   end
 
-  def warn_stuck_processing
+  def fail_stuck_processing
     stuck = ToolResult.where(state: "processing")
                       .where("created_at < ?", STUCK_THRESHOLD.ago)
     return if stuck.empty?
 
     ids = stuck.pluck(:execution_id)
-    Rails.logger.warn("[ToolResultCleanup] #{ids.size} stuck processing results: #{ids.join(', ')}")
+    Rails.logger.warn("[ToolResultCleanup] Failing #{ids.size} stuck results: #{ids.join(', ')}")
+
+    stuck.update_all(state: "failed", error: "Timed out: stuck in processing", updated_at: Time.current)
   end
 end

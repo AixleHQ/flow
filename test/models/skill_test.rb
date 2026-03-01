@@ -255,66 +255,21 @@ class SkillTest < ActiveSupport::TestCase
     assert { result.is_a?(ActiveRecord::Relation) }
   end
 
-  # ====== merged_for_project ======
+  # ====== scope_indicator ======
 
-  test ".merged_for_project includes internal, company, and project skills" do
-    create(:skill, :internal, name: "a-internal")
-    create(:skill, name: "b-company", scope: @company)
-    create(:skill, name: "c-project", scope: @project)
-
-    result = Skill.merged_for_project(@project)
-    names = result.map(&:name)
-
-    assert { names.include?("a-internal") }
-    assert { names.include?("b-company") }
-    assert { names.include?("c-project") }
+  test "#scope_indicator returns 'internal' for internal skill" do
+    skill = build(:skill, :internal, name: "i-skill")
+    assert_equal "internal", skill.scope_indicator
   end
 
-  test ".merged_for_project sets correct scope_indicators" do
-    create(:skill, :internal, name: "a-internal")
-    create(:skill, name: "b-company", scope: @company)
-    create(:skill, name: "c-project", scope: @project)
-
-    result = Skill.merged_for_project(@project)
-
-    internal = result.find { |s| s.name == "a-internal" }
-    company = result.find { |s| s.name == "b-company" }
-    project = result.find { |s| s.name == "c-project" }
-
-    assert { internal.scope_indicator == "internal" }
-    assert { company.scope_indicator == "company" }
-    assert { project.scope_indicator == "project" }
+  test "#scope_indicator returns 'company' for company skill" do
+    skill = build(:skill, name: "c-skill", scope: @company)
+    assert_equal "company", skill.scope_indicator
   end
 
-  test ".merged_for_project project overrides company with same name" do
-    create(:skill, name: "shared-skill", scope: @company)
-    create(:skill, name: "shared-skill", scope: @project)
-
-    result = Skill.merged_for_project(@project)
-    shared = result.select { |s| s.name == "shared-skill" }
-
-    assert { shared.count == 1 }
-    assert { shared.first.scope_indicator == "overrides_company" }
-    assert { shared.first.scope_type == "Project" }
-  end
-
-  test ".merged_for_project excludes other company skills" do
-    other_company = create(:company, email_domain: "other-skills.com")
-    create(:skill, name: "other-company-skill", scope: other_company)
-
-    result = Skill.merged_for_project(@project)
-    names = result.map(&:name)
-
-    assert { !names.include?("other-company-skill") }
-  end
-
-  test ".merged_for_project returns sorted by name" do
-    create(:skill, name: "z-skill", scope: @company)
-    create(:skill, :internal, name: "a-skill")
-    create(:skill, name: "m-skill", scope: @project)
-
-    result = Skill.merged_for_project(@project)
-    assert { result.map(&:name) == result.map(&:name).sort }
+  test "#scope_indicator returns 'project' for project skill" do
+    skill = build(:skill, name: "p-skill", scope: @project)
+    assert_equal "project", skill.scope_indicator
   end
 
   # ====== Associations ======

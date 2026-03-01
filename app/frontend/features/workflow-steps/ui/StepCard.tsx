@@ -1,3 +1,6 @@
+import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   Box,
   Card,
@@ -11,9 +14,6 @@ import {
   Stack,
   Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ExpandLessIcon from '@mui/icons-material/ExpandLess';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { type FC, useState } from 'react';
 
 import type { Step } from '../lib/types';
@@ -32,7 +32,13 @@ const StepCard: FC<StepCardProps> = ({ step, allSteps = [], onDelete, onEdit }) 
     <Card variant="outlined" sx={{ mb: 1 }}>
       <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ cursor: 'pointer', flex: 1 }} onClick={() => onEdit(step)}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={1}
+            sx={{ cursor: 'pointer', flex: 1 }}
+            onClick={() => onEdit(step)}
+          >
             <Typography variant="body2" color="text.secondary" sx={{ minWidth: 24 }}>
               {step.position}.
             </Typography>

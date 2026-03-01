@@ -6,8 +6,8 @@ module Api
       module Projects
         class MCPServersController < ApplicationController
           def index
-            servers = MCPServer.merged_for_project(project)
-            respond_with servers, each_serializer: MCPServerSerializer
+            servers = MCPServer.visible_for_project(project)
+            respond_with servers, each_serializer: MCPServerSerializer, project: project
           end
 
           def create

@@ -38,27 +38,9 @@ class Skill < ApplicationRecord
   scope :visible_for_company, ->(company) { internal_skills.or(for_company(company)) }
   scope :visible_for_project, ->(project) { internal_skills.or(for_company(project.company)).or(for_project(project)) }
 
-  # Get merged list of skills for a project (internal + company + project)
-  # Returns array with scope_indicator method on each skill
-  def self.merged_for_project(project)
-    internals = internal_skills.to_a
-    company_items = for_company(project.company).to_a
-    project_items = for_project(project).to_a
-    project_names = project_items.map(&:name).to_set
-
-    internals.each { |i| i.define_singleton_method(:scope_indicator) { "internal" } }
-
-    company_items.each do |item|
-      item.define_singleton_method(:scope_indicator) { "company" }
-    end
-
-    project_items.each do |item|
-      indicator = company_items.any? { |c| c.name == item.name } ? "overrides_company" : "project"
-      item.define_singleton_method(:scope_indicator) { indicator }
-    end
-
-    merged = internals + project_items + company_items.reject { |c| project_names.include?(c.name) }
-    merged.sort_by(&:name)
+  def scope_indicator
+    return "internal" if internal?
+    scope_type == "Company" ? "company" : "project"
   end
 
   # Ransack

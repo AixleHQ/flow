@@ -15,6 +15,9 @@ class TemporalService
         task_queue: Settings.temporal.task_queue,
         activities: activities,
         workflows: workflows,
+        tuner: Temporalio::Worker::Tuner.create_fixed(
+          activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
+        ),
       )
     end
 

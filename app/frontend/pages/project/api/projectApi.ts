@@ -50,6 +50,18 @@ export const projectApi = baseApi.injectEndpoints({
           ? [{ type: QueryTag.Task, id: 'LIST' }, ...result.items.map(({ id }) => ({ type: QueryTag.Task, id }))]
           : [{ type: QueryTag.Task, id: 'LIST' }],
     }),
+
+    updateProject: builder.mutation<
+      ApiResponse<IProject>,
+      { projectId: string; project: { name?: string; description?: string } }
+    >({
+      query: ({ projectId, project }) => ({
+        url: Routes.backend.apiV1CompanyProjectPath(projectId),
+        method: 'PATCH',
+        data: { project },
+      }),
+      invalidatesTags: (_result, _error, { projectId }) => [{ type: QueryTag.Project, id: projectId }],
+    }),
   }),
 });
 
@@ -59,4 +71,5 @@ export const {
   useProjectWorkflowRunsQuery,
   useProjectAssetsQuery,
   useProjectTasksQuery,
+  useUpdateProjectMutation,
 } = projectApi;

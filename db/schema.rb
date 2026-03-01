@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
+ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -172,6 +172,101 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
     t.index ["status"], name: "index_assets_on_status"
     t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
     t.index ["terminal_session_id"], name: "index_assets_on_terminal_session_id"
+  end
+
+  create_table "board_activities", force: :cascade do |t|
+    t.bigint "actor_id", null: false
+    t.string "actor_type", null: false
+    t.bigint "board_id", null: false
+    t.bigint "board_task_id"
+    t.datetime "created_at", null: false
+    t.string "event_type", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.index ["actor_id"], name: "index_board_activities_on_actor_id"
+    t.index ["board_id", "created_at"], name: "index_board_activities_on_board_id_and_created_at"
+    t.index ["board_id"], name: "index_board_activities_on_board_id"
+    t.index ["board_task_id", "created_at"], name: "index_board_activities_on_board_task_id_and_created_at"
+    t.index ["board_task_id"], name: "index_board_activities_on_board_task_id"
+    t.index ["event_type"], name: "index_board_activities_on_event_type"
+  end
+
+  create_table "board_columns", force: :cascade do |t|
+    t.bigint "board_id", null: false
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.integer "position", null: false
+    t.text "purpose"
+    t.datetime "updated_at", null: false
+    t.index ["board_id", "position"], name: "index_board_columns_on_board_id_and_position", unique: true
+    t.index ["board_id"], name: "index_board_columns_on_board_id"
+  end
+
+  create_table "board_tasks", force: :cascade do |t|
+    t.bigint "assignee_id"
+    t.bigint "board_column_id", null: false
+    t.bigint "board_id", null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.bigint "parent_task_id"
+    t.integer "position", null: false
+    t.string "priority"
+    t.string "tags", default: [], array: true
+    t.string "task_type", default: "not_specified", null: false
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.index ["assignee_id"], name: "index_board_tasks_on_assignee_id"
+    t.index ["board_column_id"], name: "index_board_tasks_on_board_column_id"
+    t.index ["board_id"], name: "index_board_tasks_on_board_id"
+    t.index ["parent_task_id"], name: "index_board_tasks_on_parent_task_id"
+  end
+
+  create_table "board_view_presets", force: :cascade do |t|
+    t.bigint "board_id", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "filters", default: {}, null: false
+    t.string "name", null: false
+    t.boolean "shared", default: false, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["board_id", "shared"], name: "index_board_view_presets_on_board_id_and_shared"
+    t.index ["board_id", "user_id", "name"], name: "index_board_view_presets_on_board_id_and_user_id_and_name", unique: true
+    t.index ["board_id"], name: "index_board_view_presets_on_board_id"
+    t.index ["user_id"], name: "index_board_view_presets_on_user_id"
+  end
+
+  create_table "boards", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.string "preset_origin"
+    t.bigint "project_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["project_id"], name: "index_boards_on_project_id", unique: true
+  end
+
+  create_table "column_transitions", force: :cascade do |t|
+    t.bigint "actor_id", null: false
+    t.string "actor_type", null: false
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "from_column_id"
+    t.bigint "to_column_id", null: false
+    t.bigint "workflow_run_id"
+    t.index ["actor_id"], name: "index_column_transitions_on_actor_id"
+    t.index ["board_task_id"], name: "index_column_transitions_on_board_task_id"
+    t.index ["from_column_id"], name: "index_column_transitions_on_from_column_id"
+    t.index ["to_column_id"], name: "index_column_transitions_on_to_column_id"
+    t.index ["workflow_run_id"], name: "index_column_transitions_on_workflow_run_id"
+  end
+
+  create_table "column_workflow_bindings", force: :cascade do |t|
+    t.bigint "board_column_id", null: false
+    t.integer "cooldown_seconds", default: 5, null: false
+    t.datetime "created_at", null: false
+    t.string "trigger_mode", default: "manual", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_id", null: false
+    t.index ["board_column_id"], name: "index_column_workflow_bindings_on_board_column_id", unique: true
+    t.index ["workflow_id"], name: "index_column_workflow_bindings_on_workflow_id"
   end
 
   create_table "companies", force: :cascade do |t|
@@ -412,6 +507,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
     t.index ["step_id"], name: "index_sub_steps_on_step_id"
   end
 
+  create_table "task_assets", force: :cascade do |t|
+    t.bigint "author_id", null: false
+    t.string "author_type", default: "human", null: false
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.text "file_data"
+    t.string "name", null: false
+    t.string "tags", default: [], array: true
+    t.datetime "updated_at", null: false
+    t.index ["author_id"], name: "index_task_assets_on_author_id"
+    t.index ["board_task_id"], name: "index_task_assets_on_board_task_id"
+  end
+
+  create_table "task_comments", force: :cascade do |t|
+    t.bigint "author_id", null: false
+    t.string "author_type", default: "human", null: false
+    t.bigint "board_task_id", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.string "tags", default: [], array: true
+    t.index ["author_id"], name: "index_task_comments_on_author_id"
+    t.index ["board_task_id"], name: "index_task_comments_on_board_task_id"
+  end
+
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
@@ -574,6 +693,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
 
   create_table "workflow_runs", force: :cascade do |t|
     t.string "agent_runtime"
+    t.bigint "board_task_id"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
     t.jsonb "input_asset_ids", default: []
@@ -587,6 +707,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.bigint "workflow_id", null: false
+    t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
@@ -618,6 +739,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id"
+  add_foreign_key "board_activities", "board_tasks"
+  add_foreign_key "board_activities", "boards"
+  add_foreign_key "board_activities", "users", column: "actor_id"
+  add_foreign_key "board_columns", "boards"
+  add_foreign_key "board_tasks", "board_columns"
+  add_foreign_key "board_tasks", "board_tasks", column: "parent_task_id"
+  add_foreign_key "board_tasks", "boards"
+  add_foreign_key "board_tasks", "users", column: "assignee_id"
+  add_foreign_key "board_view_presets", "boards"
+  add_foreign_key "board_view_presets", "users"
+  add_foreign_key "boards", "projects"
+  add_foreign_key "column_transitions", "board_columns", column: "from_column_id"
+  add_foreign_key "column_transitions", "board_columns", column: "to_column_id"
+  add_foreign_key "column_transitions", "board_tasks"
+  add_foreign_key "column_transitions", "users", column: "actor_id"
+  add_foreign_key "column_transitions", "workflow_runs"
+  add_foreign_key "column_workflow_bindings", "board_columns"
+  add_foreign_key "column_workflow_bindings", "workflows"
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "users", column: "connected_by_id"
   add_foreign_key "project_collaborators", "projects"
@@ -644,6 +783,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
   add_foreign_key "sub_step_runs", "step_runs"
   add_foreign_key "sub_step_runs", "sub_steps"
   add_foreign_key "sub_steps", "steps"
+  add_foreign_key "task_assets", "board_tasks"
+  add_foreign_key "task_assets", "users", column: "author_id"
+  add_foreign_key "task_comments", "board_tasks"
+  add_foreign_key "task_comments", "users", column: "author_id"
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
@@ -656,6 +799,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_25_134956) do
   add_foreign_key "users", "users", column: "invited_by_id"
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id"
   add_foreign_key "workflow_run_assets", "workflow_runs"
+  add_foreign_key "workflow_runs", "board_tasks"
   add_foreign_key "workflow_runs", "projects"
   add_foreign_key "workflow_runs", "users"
   add_foreign_key "workflow_runs", "workflows"

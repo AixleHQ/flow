@@ -35,11 +35,7 @@ export const SessionSummaryCard: React.FC<{ session: ITerminalSession }> = ({ se
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.5, flexWrap: 'wrap' }}>
         <Chip size="small" label={AGENT_LABELS[session.agentType] ?? session.agentType} />
         {session.mode && (
-          <Chip
-            size="small"
-            label={session.mode === 'interactive' ? 'Interactive' : session.mode === 'mixed' ? 'Mixed' : 'Automatic'}
-            variant="outlined"
-          />
+          <Chip size="small" label={session.mode === 'interactive' ? 'Interactive' : 'Automatic'} variant="outlined" />
         )}
         {session.projectName && (
           <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>

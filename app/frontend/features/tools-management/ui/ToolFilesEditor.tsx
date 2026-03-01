@@ -151,13 +151,10 @@ const FileEditor: FC<FileEditorProps> = ({ index }) => {
     return [EditorView.lineWrapping, ...(Array.isArray(langExt) ? langExt : [langExt])];
   }, [ext]);
 
-  const handleModeChange = useCallback(
-    (_: unknown, newMode: FileMode | null) => {
-      if (!newMode) return;
-      setMode(newMode);
-    },
-    [],
-  );
+  const handleModeChange = useCallback((_: unknown, newMode: FileMode | null) => {
+    if (!newMode) return;
+    setMode(newMode);
+  }, []);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -1261,7 +1261,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       display_name: "Analyze Stuff", execution_mode: :container)
 
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([app_tool, container_tool])
+    session.stubs(:available_tools).returns([ app_tool, container_tool ])
 
     result = SessionContextService.send(:build_tool_descriptions, session)
 
@@ -1276,7 +1276,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       display_name: "Container Tool", execution_mode: :container)
 
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([container_tool])
+    session.stubs(:available_tools).returns([ container_tool ])
 
     result = SessionContextService.send(:build_tool_descriptions, session)
 
@@ -1290,7 +1290,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       display_name: "App Only Tool", execution_mode: :app)
 
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([app_tool])
+    session.stubs(:available_tools).returns([ app_tool ])
 
     result = SessionContextService.send(:build_tool_descriptions, session)
 

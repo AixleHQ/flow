@@ -32,29 +32,13 @@ class Agent < ApplicationRecord
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
-  # Get merged list of company + project agents (for display)
-  # Returns array with scope_indicator method on each agent
-  def self.merged_for_project(project)
-    company_agents = for_company(project.company).to_a
-    project_agents = for_project(project).to_a
-    project_names = project_agents.map(&:name)
+  scope :visible_for_project, ->(project) {
+    where(scope_type: "Company", scope_id: project.company_id)
+      .or(where(scope_type: "Project", scope_id: project.id))
+  }
 
-    result = []
-
-    # Add project agents first (they take precedence)
-    project_agents.each do |agent|
-      overrides = company_agents.any? { |ca| ca.name == agent.name }
-      agent.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
-      result << agent
-    end
-
-    # Add company agents that are NOT overridden
-    company_agents.reject { |ca| project_names.include?(ca.name) }.each do |agent|
-      agent.define_singleton_method(:scope_indicator) { "company" }
-      result << agent
-    end
-
-    result.sort_by(&:name)
+  def scope_indicator
+    scope_type == "Company" ? "company" : "project"
   end
 
   # Ransack

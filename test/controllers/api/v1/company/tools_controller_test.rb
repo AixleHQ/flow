@@ -40,7 +40,7 @@ module Api
           internal = tools.find { |t| t["name"] == "internal_tool" }
           company = tools.find { |t| t["name"] == "company_tool" }
 
-          assert_equal "internal", internal["scope_indicator"]
+          assert_equal "system", internal["scope_indicator"]
           assert_equal "company", company["scope_indicator"]
         end
 

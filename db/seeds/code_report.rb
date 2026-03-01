@@ -83,7 +83,7 @@ module Seeds
 
       step1 = seed_step_generate!(workflow, agent)
       step2 = seed_step_semgrep!(workflow)
-      step3 = seed_step_format!(workflow, depends_on: [step1.id, step2.id])
+      step3 = seed_step_format!(workflow, depends_on: [ step1.id, step2.id ])
 
       puts "Workflow '#{workflow.name}' seeded: #{workflow.steps.count} steps"
 
@@ -160,7 +160,7 @@ module Seeds
         on_failure: :skip,
         max_retries: 1,
         mount_repositories: true,
-        tool_ids: [semgrep_tool&.id].compact,
+        tool_ids: [ semgrep_tool&.id ].compact,
         input_asset_specs: [],
         output_asset_specs: [
           { name: "semgrep_report.json", assetType: "document", required: false }
@@ -463,7 +463,7 @@ module Seeds
     end
     # rubocop:enable Metrics/MethodLength
 
-    def self.format_sub_steps(step)
+    def self.format_sub_steps(step) # rubocop:disable Metrics/MethodLength
       sub_steps = [
         {
           name: "Read Inputs", position: 1, required: true,

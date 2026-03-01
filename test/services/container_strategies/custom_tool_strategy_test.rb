@@ -24,15 +24,14 @@ class ContainerStrategies::CustomToolStrategyTest < ActiveSupport::TestCase
     @tool.update!(command: "echo {{message}}")
     strategy = build_strategy(parameters: { message: "hello" })
     cmd = strategy.build_cmd
-    assert_equal ["/bin/sh", "-c", "echo hello"], cmd
+    assert_equal [ "/bin/sh", "-c", "echo hello" ], cmd
   end
 
-  test "build_cmd includes tool_files setup" do
+  test "build_cmd uses tool command regardless of tool_files" do
     @tool.tool_files.create!(path: "/workspace/script.py", content: "print('hi')")
     strategy = build_strategy
     cmd = strategy.build_cmd
-    assert cmd[2].include?("mkdir -p")
-    assert cmd[2].include?("base64")
+    assert_equal [ "/bin/sh", "-c", @tool.command ], cmd
   end
 
   test "build_env_vars includes parameters as uppercase env" do

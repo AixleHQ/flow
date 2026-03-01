@@ -5,7 +5,7 @@ module Api
     module Company
       class ToolsController < ApplicationController
         def index
-          tools = Tool.merged_for_company(current_company)
+          tools = Tool.visible_for_company(current_company)
           respond_with tools, each_serializer: ToolSerializer
         end
 

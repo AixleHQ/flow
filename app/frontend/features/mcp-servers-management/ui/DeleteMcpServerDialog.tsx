@@ -23,7 +23,7 @@ export const DeleteMcpServerDialog: FC<DeleteMcpServerDialogProps> = ({ open, on
 
     try {
       if (isProjectContext) {
-        await deleteProject({ projectId: String(projectId), id: server.id }).unwrap();
+        await deleteProject({ projectId: projectId!, id: server.id }).unwrap();
       } else {
         await deleteCompany(server.id).unwrap();
       }

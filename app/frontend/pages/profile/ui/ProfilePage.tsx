@@ -1,9 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import LockIcon from '@mui/icons-material/Lock';
 import {
-  Box, Button, Card, CardContent, Chip, CircularProgress,
-  FormControl, FormHelperText, InputLabel, MenuItem, Select,
-  TextField, Tooltip, Typography,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  FormControl,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Tooltip,
+  Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
@@ -11,8 +22,11 @@ import { useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import {
-  LANGUAGE_OPTIONS, useGetCurrentUserQuery, useUpdateCurrentUserMutation,
-  type AgentLanguage, type UserRole,
+  LANGUAGE_OPTIONS,
+  useGetCurrentUserQuery,
+  useUpdateCurrentUserMutation,
+  type AgentLanguage,
+  type UserRole,
 } from 'entities/user';
 import { AgentCredentialsSection } from 'features/agent-credentials';
 
@@ -204,11 +218,7 @@ const ProfilePage: React.FC = () => {
                   render={({ field }) => (
                     <FormControl fullWidth error={!!errors.preferredAgentLanguage}>
                       <InputLabel>Agent Language</InputLabel>
-                      <Select
-                        {...field}
-                        label="Agent Language"
-                        disabled={isUpdating}
-                      >
+                      <Select {...field} label="Agent Language" disabled={isUpdating}>
                         {LANGUAGE_OPTIONS.map((option) => (
                           <MenuItem key={option.value} value={option.value}>
                             {option.label}
@@ -216,7 +226,8 @@ const ProfilePage: React.FC = () => {
                         ))}
                       </Select>
                       <FormHelperText>
-                        {errors.preferredAgentLanguage?.message ?? 'Language AI agents will use to communicate with you'}
+                        {errors.preferredAgentLanguage?.message ??
+                          'Language AI agents will use to communicate with you'}
                       </FormHelperText>
                     </FormControl>
                   )}

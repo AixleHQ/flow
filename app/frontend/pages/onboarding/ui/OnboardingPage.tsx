@@ -50,7 +50,6 @@ const POSITION_OPTIONS = [
   { value: 'cto', label: 'CTO' },
 ];
 
-
 const styles = {
   root: {
     display: 'flex',
@@ -658,7 +657,8 @@ const OnboardingPage = () => {
   const allAgentsAuthenticated = selectedAgents.every((agent) => configuredAgents.includes(agent));
 
   // Validation flags (check that values are not empty strings)
-  const isProfileComplete = Boolean(position) && position.length > 0 && Boolean(preferredLanguage) && preferredLanguage.length > 0;
+  const isProfileComplete =
+    Boolean(position) && position.length > 0 && Boolean(preferredLanguage) && preferredLanguage.length > 0;
   const isAgentsSelected = selectedAgents.length >= 1;
   const isAgentsAuthenticated = authenticatedCount >= 1;
 

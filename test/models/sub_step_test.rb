@@ -25,10 +25,10 @@ class SubStepTest < ActiveSupport::TestCase
     assert_not sub_step.valid?
   end
 
-  test "unique position per step" do
+  test "allows duplicate position per step" do
     create(:sub_step, step: @step, position: 1)
     duplicate = build(:sub_step, step: @step, position: 1)
-    assert_not duplicate.valid?
+    assert duplicate.valid?
   end
 
   test "ordered by position by default" do

@@ -22,7 +22,7 @@ module ContainerStrategies
     def build_cmd
       parameters = input[:parameters] || {}
       command = interpolate_command(input[:tool].command.presence || "/bin/sh", parameters)
-      ["/bin/sh", "-c", command]
+      [ "/bin/sh", "-c", command ]
     end
 
     def start_container(container_id:, **)

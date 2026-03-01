@@ -85,7 +85,7 @@ module ContainerStrategies
 
       result = runtime.exec(
         container,
-        ["/bin/sh", "-c", "find #{output_dir} -type f 2>/dev/null || true"],
+        [ "/bin/sh", "-c", "find #{output_dir} -type f 2>/dev/null || true" ],
         stdout: true, stderr: true
       )
       Rails.logger.info("[WorkflowStepStrategy] find exit=#{result[2]}, stdout=#{result[0].join.strip[0..200]}")
@@ -100,7 +100,7 @@ module ContainerStrategies
         content = read_file_from_container(container, file_path)
         next if content.blank?
 
-        tmpfile = Tempfile.new(["wf_output_", File.extname(relative)])
+        tmpfile = Tempfile.new([ "wf_output_", File.extname(relative) ])
         tmpfile.binmode
         tmpfile.write(content)
         tmpfile.rewind
@@ -137,7 +137,7 @@ module ContainerStrategies
       step = step_run.step
       container = resolve_container(container_id)
 
-      runtime.exec(container, ["mkdir", "-p", "/workspace/assets"])
+      runtime.exec(container, [ "mkdir", "-p", "/workspace/assets" ])
 
       injected_names = []
 
@@ -179,7 +179,7 @@ module ContainerStrategies
 
     def download_to_container(container, url, target_path)
       rewritten = rewrite_url_for_container(url)
-      runtime.exec(container, ["sh", "-c", "curl -sSL -o '#{target_path}' '#{rewritten}'"])
+      runtime.exec(container, [ "sh", "-c", "curl -sSL -o '#{target_path}' '#{rewritten}'" ])
       Rails.logger.info("[WorkflowStepStrategy] Downloaded → #{target_path}")
     end
 

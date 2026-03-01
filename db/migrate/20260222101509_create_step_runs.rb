@@ -14,6 +14,6 @@ class CreateStepRuns < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :step_runs, [:workflow_run_id, :state]
+    add_index :step_runs, [ :workflow_run_id, :state ]
   end
 end

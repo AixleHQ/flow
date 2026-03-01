@@ -21,10 +21,9 @@ import {
 } from '@mui/material';
 import { useNavigate } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
-import { useCallback, useMemo, useState, type FC } from 'react';
+import { useCallback, useMemo, useState, type FC, type ReactNode } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
-import { RunWorkflowModal } from 'features/run-workflow';
 import { Routes } from 'shared/routes';
 
 import {
@@ -38,8 +37,16 @@ import { CreateWorkflowDialog } from './CreateWorkflowDialog';
 import { DeleteWorkflowDialog } from './DeleteWorkflowDialog';
 import { EditWorkflowDialog } from './EditWorkflowDialog';
 
+export interface RunWorkflowModalSlot {
+  open: boolean;
+  workflow: { id: number; name: string; description?: string } | null;
+  projectId: number;
+  onClose: () => void;
+}
+
 interface WorkflowsPanelProps {
   projectId?: number;
+  renderRunModal?: (props: RunWorkflowModalSlot) => ReactNode;
 }
 
 const styles = {
@@ -97,7 +104,7 @@ const styles = {
   },
 } satisfies Record<string, SxProps>;
 
-export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
+export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId, renderRunModal }) => {
   const isProjectContext = !!projectId;
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
@@ -330,14 +337,15 @@ export const WorkflowsPanel: FC<WorkflowsPanelProps> = ({ projectId }) => {
         />
       )}
 
-      {isProjectContext && (
-        <RunWorkflowModal
-          open={!!runWorkflow}
-          workflow={runWorkflow}
-          projectId={projectId!}
-          onClose={() => setRunWorkflow(null)}
-        />
-      )}
+      {isProjectContext &&
+        renderRunModal?.({
+          open: !!runWorkflow,
+          workflow: runWorkflow
+            ? { id: runWorkflow.id, name: runWorkflow.name, description: runWorkflow.description ?? undefined }
+            : null,
+          projectId: projectId!,
+          onClose: () => setRunWorkflow(null),
+        })}
     </Box>
   );
 };

@@ -115,61 +115,56 @@ class AssetTest < ActiveSupport::TestCase
     assert { result.first.name == "project-asset.md" }
   end
 
-  # ====== merged_for_project ======
+  # ====== visible_for_project ======
 
-  test ".merged_for_project includes company and project assets" do
+  test ".visible_for_project includes company and project assets" do
     create(:asset, name: "a-company.md", scope: @company, created_by: @owner)
     create(:asset, name: "b-project.md", scope: @project, created_by: @owner)
 
-    result = Asset.merged_for_project(@project)
-    names = result.map(&:name)
+    result = Asset.visible_for_project(@project)
+    names = result.pluck(:name)
 
     assert { names.include?("a-company.md") }
     assert { names.include?("b-project.md") }
   end
 
-  test ".merged_for_project sets correct scope_indicators" do
+  test ".visible_for_project scope_indicator via instance method" do
     create(:asset, name: "a-company.md", scope: @company, created_by: @owner)
     create(:asset, name: "b-project.md", scope: @project, created_by: @owner)
 
-    result = Asset.merged_for_project(@project)
+    result = Asset.visible_for_project(@project)
 
-    company_asset = result.find { |a| a.name == "a-company.md" }
-    project_asset = result.find { |a| a.name == "b-project.md" }
+    company_asset = result.find_by(name: "a-company.md")
+    project_asset = result.find_by(name: "b-project.md")
 
-    assert { company_asset.scope_indicator == "company" }
-    assert { project_asset.scope_indicator == "project" }
+    assert_equal "company", company_asset.scope_indicator
+    assert_equal "project", project_asset.scope_indicator
   end
 
-  test ".merged_for_project project overrides company with same name" do
+  test ".visible_for_project includes both company and project with same name" do
     create(:asset, name: "shared.md", scope: @company, created_by: @owner)
     create(:asset, name: "shared.md", scope: @project, created_by: @owner)
 
-    result = Asset.merged_for_project(@project)
-    shared = result.select { |a| a.name == "shared.md" }
+    result = Asset.visible_for_project(@project)
+    shared = result.where(name: "shared.md")
 
-    assert { shared.count == 1 }
-    assert { shared.first.scope_indicator == "overrides_company" }
-    assert { shared.first.scope_type == "Project" }
+    assert_equal 2, shared.count
   end
 
-  test ".merged_for_project excludes other company assets" do
+  test ".visible_for_project excludes other company assets" do
     other_company = create(:company, email_domain: "other-assets.com")
     other_owner = create(:user, :employee, company: other_company)
     create(:asset, name: "other.md", scope: other_company, created_by: other_owner)
 
-    result = Asset.merged_for_project(@project)
-    names = result.map(&:name)
+    result = Asset.visible_for_project(@project)
+    names = result.pluck(:name)
 
     assert { !names.include?("other.md") }
   end
 
-  test ".merged_for_project returns sorted by name" do
-    create(:asset, name: "z-asset.md", scope: @company, created_by: @owner)
-    create(:asset, name: "a-asset.md", scope: @project, created_by: @owner)
-
-    result = Asset.merged_for_project(@project)
-    assert { result.map(&:name) == result.map(&:name).sort }
+  test ".visible_for_project returns ActiveRecord::Relation" do
+    result = Asset.visible_for_project(@project)
+    assert { result.is_a?(ActiveRecord::Relation) }
   end
 
   # ====== Soft Delete ======
@@ -233,13 +228,13 @@ class AssetTest < ActiveSupport::TestCase
     assert { result.first.name == "active.md" }
   end
 
-  test ".merged_for_project excludes deleted assets" do
+  test ".visible_for_project excludes deleted assets" do
     create(:asset, name: "active.md", scope: @project, created_by: @owner)
     deleted = create(:asset, name: "deleted.md", scope: @company, created_by: @owner)
     deleted.soft_delete!
 
-    result = Asset.merged_for_project(@project)
-    names = result.map(&:name)
+    result = Asset.visible_for_project(@project)
+    names = result.pluck(:name)
     assert { names.include?("active.md") }
     assert { !names.include?("deleted.md") }
   end

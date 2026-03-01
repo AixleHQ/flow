@@ -15,16 +15,13 @@ class Repository < ApplicationRecord
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
   scope :for_integration, ->(integration) { where(integration: integration) }
 
-  def self.merged_for_project(project)
-    company_items = for_company(project.company).to_a
-    project_items = for_project(project).to_a
-    project_names = project_items.map(&:full_name).to_set
+  scope :visible_for_project, ->(project) {
+    where(scope_type: "Company", scope_id: project.company_id)
+      .or(where(scope_type: "Project", scope_id: project.id))
+  }
 
-    company_items.each { |item| item.define_singleton_method(:scope_indicator) { "company" } }
-    project_items.each { |item| item.define_singleton_method(:scope_indicator) { "project" } }
-
-    merged = project_items + company_items.reject { |c| project_names.include?(c.full_name) }
-    merged.sort_by(&:full_name)
+  def scope_indicator
+    scope_type == "Company" ? "company" : "project"
   end
 
   def repo_name

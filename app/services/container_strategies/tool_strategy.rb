@@ -60,7 +60,7 @@ module ContainerStrategies
     private
 
     def exec_timeout
-      [input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT].min
+      [ input[:timeout] || DEFAULT_TIMEOUT, MAX_TIMEOUT ].min
     end
 
     def persist_result(exit_code:, stdout:, stderr:, duration_ms:, error_msg: nil)
@@ -69,6 +69,19 @@ module ContainerStrategies
       tr = ToolResult.find(input[:tool_result_id])
       tr.complete!(exit_code: exit_code, stdout: stdout, stderr: stderr,
                    duration_ms: duration_ms, error: error_msg)
+    end
+
+    def on_failure(error: nil, **)
+      return {} if input[:tool_result_id].blank? || error.blank?
+
+      tr = ToolResult.find(input[:tool_result_id])
+      return {} unless tr.state == "processing"
+
+      tr.update!(state: "failed", error: error.to_s.truncate(1000))
+      {}
+    rescue StandardError => e
+      Rails.logger.error("[ToolStrategy] Failed to mark tool_result failed: #{e.message}")
+      {}
     end
 
     def handle_timeout(container, start_time)

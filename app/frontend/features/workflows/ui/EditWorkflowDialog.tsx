@@ -7,8 +7,8 @@ import { useForm } from 'react-hook-form';
 import { setErrorsToForm } from 'shared/api';
 
 import { useUpdateCompanyWorkflowMutation, useUpdateProjectWorkflowMutation } from '../api/workflowsApi';
-import { workflowSchema, type WorkflowFormData } from '../lib/workflowSchema';
 import type { Workflow } from '../lib/types';
+import { workflowSchema, type WorkflowFormData } from '../lib/workflowSchema';
 
 interface EditWorkflowDialogProps {
   open: boolean;
@@ -67,9 +67,7 @@ const EditWorkflowDialog: FC<EditWorkflowDialogProps> = ({ open, onClose, workfl
         <DialogContent>
           <Stack spacing={3}>
             {workflow.hasActiveRuns && (
-              <Alert severity="warning">
-                Workflow has active runs. Changes will not affect them.
-              </Alert>
+              <Alert severity="warning">Workflow has active runs. Changes will not affect them.</Alert>
             )}
 
             <TextField

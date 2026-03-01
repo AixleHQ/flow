@@ -33,10 +33,42 @@ function resolvePreviewType(name: string, contentType: string | null): PreviewTy
     return 'markdown';
   }
 
-  const codeExts = ['ts', 'tsx', 'js', 'jsx', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'css', 'scss',
-    'html', 'json', 'yaml', 'yml', 'xml', 'toml', 'sh', 'bash', 'sql', 'graphql', 'proto', 'dockerfile'];
-  if (codeExts.includes(ext) || mime.includes('javascript') || mime.includes('typescript') || mime.includes('json')
-    || mime.includes('xml') || mime.includes('yaml')) {
+  const codeExts = [
+    'ts',
+    'tsx',
+    'js',
+    'jsx',
+    'py',
+    'rb',
+    'go',
+    'rs',
+    'java',
+    'c',
+    'cpp',
+    'h',
+    'css',
+    'scss',
+    'html',
+    'json',
+    'yaml',
+    'yml',
+    'xml',
+    'toml',
+    'sh',
+    'bash',
+    'sql',
+    'graphql',
+    'proto',
+    'dockerfile',
+  ];
+  if (
+    codeExts.includes(ext) ||
+    mime.includes('javascript') ||
+    mime.includes('typescript') ||
+    mime.includes('json') ||
+    mime.includes('xml') ||
+    mime.includes('yaml')
+  ) {
     return 'code';
   }
 
@@ -108,22 +140,42 @@ const styles = {
     '& h3': { fontSize: '16px', fontWeight: 600, mb: '8px', mt: '16px', color: 'text.primary' },
     '& p': { fontSize: '14px', lineHeight: 1.6, color: 'text.primary', mb: '12px' },
     '& code': {
-      backgroundColor: 'background.elevated', padding: '2px 6px', borderRadius: '4px',
-      fontSize: '13px', fontFamily: '"JetBrains Mono", monospace', color: 'primary.main',
+      backgroundColor: 'background.elevated',
+      padding: '2px 6px',
+      borderRadius: '4px',
+      fontSize: '13px',
+      fontFamily: '"JetBrains Mono", monospace',
+      color: 'primary.main',
     },
     '& pre': {
-      backgroundColor: 'background.elevated', padding: '16px', borderRadius: '8px',
-      overflow: 'auto', fontSize: '13px', fontFamily: '"JetBrains Mono", monospace', lineHeight: 1.6,
+      backgroundColor: 'background.elevated',
+      padding: '16px',
+      borderRadius: '8px',
+      overflow: 'auto',
+      fontSize: '13px',
+      fontFamily: '"JetBrains Mono", monospace',
+      lineHeight: 1.6,
     },
     '& pre code': { backgroundColor: 'transparent', padding: 0 },
     '& ul, & ol': { marginLeft: '24px', mb: '12px' },
     '& li': { fontSize: '14px', lineHeight: 1.6, color: 'text.primary', mb: '4px' },
     '& blockquote': {
-      borderLeft: '4px solid', borderColor: 'primary.main',
-      paddingLeft: '16px', ml: 0, mb: '12px', fontStyle: 'italic', color: 'text.secondary',
+      borderLeft: '4px solid',
+      borderColor: 'primary.main',
+      paddingLeft: '16px',
+      ml: 0,
+      mb: '12px',
+      fontStyle: 'italic',
+      color: 'text.secondary',
     },
     '& table': { width: '100%', borderCollapse: 'collapse', mb: '16px' },
-    '& th, & td': { border: '1px solid', borderColor: 'divider', padding: '8px 12px', textAlign: 'left', fontSize: '13px' },
+    '& th, & td': {
+      border: '1px solid',
+      borderColor: 'divider',
+      padding: '8px 12px',
+      textAlign: 'left',
+      fontSize: '13px',
+    },
     '& th': { backgroundColor: 'background.elevated', fontWeight: 600, color: 'text.primary' },
   },
   imageContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '300px' },
@@ -152,11 +204,19 @@ const AssetPreview = ({ asset, onClose }: AssetPreviewProps) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();
       })
-      .then((text) => { if (!cancelled) setContent(text); })
-      .catch((err) => { if (!cancelled) setError(err.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .then((text) => {
+        if (!cancelled) setContent(text);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [asset.downloadUrl, isTextual]);
 
   const renderContent = () => {
@@ -180,7 +240,11 @@ const AssetPreview = ({ asset, onClose }: AssetPreviewProps) => {
     switch (previewType) {
       case 'markdown':
         if (viewMode === 'raw') {
-          return <Box sx={styles.codeBlock} component="pre">{content}</Box>;
+          return (
+            <Box sx={styles.codeBlock} component="pre">
+              {content}
+            </Box>
+          );
         }
         return (
           <Box sx={styles.markdownContent}>
@@ -190,7 +254,11 @@ const AssetPreview = ({ asset, onClose }: AssetPreviewProps) => {
 
       case 'code':
       case 'text':
-        return <Box sx={styles.codeBlock} component="pre">{content}</Box>;
+        return (
+          <Box sx={styles.codeBlock} component="pre">
+            {content}
+          </Box>
+        );
 
       case 'image':
         return (

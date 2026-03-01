@@ -40,7 +40,7 @@ module Api
               mcp_server: {
                 name: "custom-server",
                 display_name: "Custom Server",
-                url: "http://localhost:3000",
+                url: "https://mcp.example.com/v1",
                 transport: "sse",
                 description: "Test server",
                 enabled: true
@@ -60,7 +60,7 @@ module Api
             mcp_server: {
               name: "server-with-headers",
               display_name: "Server With Headers",
-              url: "http://localhost:3000",
+              url: "https://mcp.example.com/v1",
               transport: "sse",
               headers: { "Authorization" => "Bearer token" }
             }

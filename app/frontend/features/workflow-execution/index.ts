@@ -11,10 +11,5 @@ export {
   useExportAllAssetsMutation,
 } from './api/workflowRunsApi';
 export { RunWorkflowDialog } from './ui/RunWorkflowDialog';
-export type {
-  WorkflowRun,
-  StepRunInfo,
-  SubStepRunInfo,
-  WorkflowRunAsset,
-  CreateWorkflowRunRequest,
-} from './lib/types';
+export { WorkflowAssetsReview } from './ui/WorkflowAssetsReview';
+export type { WorkflowRun, StepRunInfo, SubStepRunInfo, WorkflowRunAsset, CreateWorkflowRunRequest } from './lib/types';

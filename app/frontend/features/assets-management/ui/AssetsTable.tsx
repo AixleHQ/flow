@@ -90,7 +90,15 @@ function formatDate(dateStr: string): string {
   });
 }
 
-const AssetsTable: FC<AssetsTableProps> = ({ assets, isProjectContext, projectId, onPreview, onEdit, onDelete, onHistory }) => {
+const AssetsTable: FC<AssetsTableProps> = ({
+  assets,
+  isProjectContext,
+  projectId,
+  onPreview,
+  onEdit,
+  onDelete,
+  onHistory,
+}) => {
   const canEdit = (asset: Asset): boolean => {
     if (isProjectContext) return asset.scopeType === 'Project';
     return true;

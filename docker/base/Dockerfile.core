@@ -32,6 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tree \
     cloc \
     ca-certificates \
+    # Archive extraction (tar/gzip already in base image)
+    unzip \
+    p7zip-full \
+    xz-utils \
+    bzip2 \
+    zstd \
     # Process management
     tini \
     # Build tools (for native npm modules)

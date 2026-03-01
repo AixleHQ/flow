@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 module InternalTools
-  class WorkflowContextError < StandardError; end
-
   class Base
     attr_reader :params, :session
 

@@ -45,7 +45,7 @@ module StubSupport
     c.define_singleton_method(:archive_in) { |*| true }
     c.define_singleton_method(:archive_out) { |*| "" }
     c.define_singleton_method(:logs) { |*, **| "" }
-    c.define_singleton_method(:wait) { { "StatusCode" => 0 } }
+    c.define_singleton_method(:wait) { |*| { "StatusCode" => 0 } }
     c.define_singleton_method(:kill) { |*| true }
 
     c.define_singleton_method(:exec) do |cmd, *_opts|

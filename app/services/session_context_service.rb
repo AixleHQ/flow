@@ -377,7 +377,7 @@ class SessionContextService
 
       has_container_tools = tools.any? { |t| t.respond_to?(:execution_mode) && t.execution_mode.to_s == "container" }
 
-      lines = ["## Available Tools"]
+      lines = [ "## Available Tools" ]
       lines << ""
       lines << "These tools are provided via the **palad-tools** MCP server. Call them through MCP."
       lines << ""
@@ -391,7 +391,7 @@ class SessionContextService
         mode = tool.respond_to?(:execution_mode) ? tool.execution_mode.to_s : "app"
         marker = mode == "container" ? "⏳ container" : "⚡ app"
         lines << "### #{tool.name} #{marker}"
-        desc = [tool.display_name, tool.description].compact.join(" — ")
+        desc = [ tool.display_name, tool.description ].compact.join(" — ")
         lines << desc if desc.present?
         lines << (mode == "container" ? "Returns: execution ID → use read_tool_result to get results" : "Returns: direct result")
         if tool.input_schema.present? && tool.input_schema["properties"].present?

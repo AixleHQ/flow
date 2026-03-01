@@ -6,7 +6,7 @@ FactoryBot.define do
     sequence(:display_name) { |n| "MCP Server #{n}" }
     kind { :custom }
     transport { :sse }
-    url { "http://localhost:3001/mcp" }
+    url { "https://mcp.example.com/v1" }
     description { "Test MCP server" }
     enabled { true }
 

@@ -13,13 +13,13 @@ import {
   Typography,
   type SxProps,
 } from '@mui/material';
-import { useState, useMemo, type FC } from 'react';
+import { useState, useMemo, type FC, type ReactNode } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { useGetCompanyAssetsQuery, useGetProjectAssetsQuery } from '../api/assetsApi';
 import type { Asset, AssetsFilters } from '../lib/types';
 
-import { AssetPreviewDialog } from './AssetPreviewDialog';
+import { AssetPreviewDialog, type AssetPreviewData } from './AssetPreviewDialog';
 import { AssetsTable } from './AssetsTable';
 import { DeleteAssetDialog } from './DeleteAssetDialog';
 import { EditAssetDialog } from './EditAssetDialog';
@@ -28,6 +28,7 @@ import { VersionHistoryDialog } from './VersionHistoryDialog';
 
 interface AssetsPanelProps {
   projectId?: number;
+  renderPreview?: (data: AssetPreviewData, onClose: () => void) => ReactNode;
 }
 
 const styles = {
@@ -83,7 +84,7 @@ const styles = {
   },
 } satisfies Record<string, SxProps>;
 
-export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId }) => {
+export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId, renderPreview }) => {
   const isProjectContext = !!projectId;
 
   const [filters, setFilters] = useState<AssetsFilters>({});
@@ -212,12 +213,15 @@ export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId }) => {
         />
       )}
 
-      <AssetPreviewDialog
-        open={!!previewAsset}
-        onClose={() => setPreviewAsset(null)}
-        asset={previewAsset}
-        projectId={projectId}
-      />
+      {renderPreview && (
+        <AssetPreviewDialog
+          open={!!previewAsset}
+          onClose={() => setPreviewAsset(null)}
+          asset={previewAsset}
+          projectId={projectId}
+          renderPreview={renderPreview}
+        />
+      )}
 
       <UploadAssetDialog open={isUploadOpen} onClose={() => setUploadOpen(false)} projectId={projectId} />
 

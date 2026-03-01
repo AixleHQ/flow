@@ -151,7 +151,7 @@ class MCPServerTest < ActiveSupport::TestCase
     assert_not_includes MCPServer.for_project(@project), company_server
   end
 
-  test "merged_for_project returns company and project servers" do
+  test "visible_for_project returns company and project servers" do
     company_server = MCPServer.create!(
       name: "company-server",
       display_name: "Company Server",
@@ -168,13 +168,13 @@ class MCPServerTest < ActiveSupport::TestCase
       scope: @project
     )
 
-    merged = MCPServer.merged_for_project(@project)
+    result = MCPServer.visible_for_project(@project)
 
-    assert_includes merged, company_server
-    assert_includes merged, project_server
+    assert_includes result, company_server
+    assert_includes result, project_server
   end
 
-  test "merged_for_project shows project server overriding company server" do
+  test "visible_for_project includes both company and project with same name" do
     MCPServer.create!(
       name: "shared-name",
       display_name: "Company Version",
@@ -183,7 +183,7 @@ class MCPServerTest < ActiveSupport::TestCase
       scope: @company
     )
 
-    project_server = MCPServer.create!(
+    MCPServer.create!(
       name: "shared-name",
       display_name: "Project Version",
       url: "https://project.example.com",
@@ -191,13 +191,15 @@ class MCPServerTest < ActiveSupport::TestCase
       scope: @project
     )
 
-    merged = MCPServer.merged_for_project(@project)
+    result = MCPServer.visible_for_project(@project)
+    shared = result.where(name: "shared-name")
 
-    # Should include project server with override indicator
-    matching = merged.find { |s| s.name == "shared-name" }
-    assert_not_nil matching
-    assert_equal "overrides_company", matching.scope_indicator
-    assert_equal project_server.id, matching.id
+    assert_equal 2, shared.count
+  end
+
+  test "visible_for_project returns ActiveRecord::Relation" do
+    result = MCPServer.visible_for_project(@project)
+    assert result.is_a?(ActiveRecord::Relation)
   end
 
   # ====================================================================

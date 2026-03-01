@@ -49,7 +49,7 @@ module Api
             private
 
             def current_workflow
-              @current_workflow ||= Workflow.merged_for_project(current_project).find(params[:workflow_id])
+              @current_workflow ||= Workflow.visible_for_project(current_project).find(params[:workflow_id])
             end
 
             def step_params
@@ -57,8 +57,8 @@ module Api
                 :name, :description, :instructions, :position, :agent_id,
                 :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
                 :mount_repositories,
-                input_asset_specs: [:name, :asset_type, :required],
-                output_asset_specs: [:name, :asset_type, :required, :name_pattern],
+                input_asset_specs: [ :name, :asset_type, :required ],
+                output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
                 tool_ids: [],
                 mcp_server_ids: [],
                 skill_ids: [],

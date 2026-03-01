@@ -37,12 +37,12 @@ import { useDebouncedCallback } from 'use-debounce';
 
 import { useGetMcpServersQuery } from 'entities/mcp-server';
 import type { McpServer } from 'entities/mcp-server';
-import { useGetCompanyAgentsQuery } from 'features/agents-management/api/agentsApi';
-import type { Agent } from 'features/agents-management/lib/types';
-import { useGetCompanySkillsQuery } from 'features/skills-management/api/skillsApi';
-import type { Skill } from 'features/skills-management/lib/types';
-import { useGetCompanyToolsQuery } from 'features/tools-management/api/toolsApi';
-import type { Tool } from 'features/tools-management/lib/types';
+import { useGetCompanyAgentsQuery, type Agent } from 'features/agents-management';
+import { useGetProjectAssetsQuery } from 'features/assets-management';
+import { RunWorkflowModal } from 'features/run-workflow';
+import { useGetCompanySkillsQuery, type Skill } from 'features/skills-management';
+import { useGetCompanyToolsQuery, type Tool } from 'features/tools-management';
+import { useCreateWorkflowRunMutation } from 'features/workflow-execution';
 import {
   useGetCompanyStepsQuery,
   useGetStepsQuery,
@@ -54,15 +54,17 @@ import {
   useDeleteStepMutation,
   useReorderCompanyStepsMutation,
   useReorderStepsMutation,
-} from 'features/workflow-steps/api/stepsApi';
-import type { Step, SubStepAttribute, AssetSpec, UpdateStepRequest } from 'features/workflow-steps/lib/types';
-import { RunWorkflowModal } from 'features/run-workflow';
+  type Step,
+  type SubStepAttribute,
+  type AssetSpec,
+  type UpdateStepRequest,
+} from 'features/workflow-steps';
 import {
   useGetCompanyWorkflowQuery,
   useUpdateCompanyWorkflowMutation,
   useUpdateProjectWorkflowMutation,
   useDuplicateWorkflowToProjectMutation,
-} from 'features/workflows/api/workflowsApi';
+} from 'features/workflows';
 import { Routes } from 'shared/routes';
 
 const SKIP_POLICY_OPTIONS = [
@@ -219,6 +221,10 @@ const WorkflowBuilderPage = () => {
 
   const isCompanyScope = workflow?.scopeType === 'Company';
   const projectId = !isCompanyScope ? workflow?.scopeId : undefined;
+  const { data: builderProjectAssets = [] } = useGetProjectAssetsQuery(Number(projectId || routeProjectId), {
+    skip: !projectId && !routeProjectId,
+  });
+  const [createRun, { isLoading: isCreatingRun }] = useCreateWorkflowRunMutation();
 
   // Initialize local name/description from fetched data
   useEffect(() => {
@@ -764,8 +770,14 @@ const WorkflowBuilderPage = () => {
       {(projectId || routeProjectId) && (
         <RunWorkflowModal
           open={runModalOpen}
-          workflow={workflow ? { id: workflow.id, name: workflow.name, description: workflow.description } : null}
+          workflow={
+            workflow ? { id: workflow.id, name: workflow.name, description: workflow.description ?? undefined } : null
+          }
           projectId={Number(projectId || routeProjectId)}
+          projectAssets={builderProjectAssets}
+          steps={steps}
+          onCreateRun={(params) => createRun(params).unwrap()}
+          isCreating={isCreatingRun}
           onClose={() => setRunModalOpen(false)}
         />
       )}
@@ -1087,9 +1099,7 @@ function StepDetailPanel({
               true,
             )
           }
-          renderInput={(params) => (
-            <TextField {...params} placeholder="Select steps this step depends on..." />
-          )}
+          renderInput={(params) => <TextField {...params} placeholder="Select steps this step depends on..." />}
           isOptionEqualToValue={(opt, val) => opt.id === val.id}
           disabled={readOnly}
         />

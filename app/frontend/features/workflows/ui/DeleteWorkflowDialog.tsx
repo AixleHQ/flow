@@ -45,8 +45,8 @@ const DeleteWorkflowDialog: FC<DeleteWorkflowDialogProps> = ({ open, onClose, wo
         ) : (
           <>
             <Typography>
-              Delete workflow <strong>&#34;{workflow.name}&#34;</strong>? This will remove all steps.
-              Historical runs will be preserved.
+              Delete workflow <strong>&#34;{workflow.name}&#34;</strong>? This will remove all steps. Historical runs
+              will be preserved.
             </Typography>
           </>
         )}
@@ -55,12 +55,7 @@ const DeleteWorkflowDialog: FC<DeleteWorkflowDialogProps> = ({ open, onClose, wo
         <Button onClick={onClose} disabled={isLoading}>
           Cancel
         </Button>
-        <Button
-          onClick={handleDelete}
-          variant="contained"
-          color="error"
-          disabled={isLoading || workflow.hasActiveRuns}
-        >
+        <Button onClick={handleDelete} variant="contained" color="error" disabled={isLoading || workflow.hasActiveRuns}>
           {isLoading ? 'Deleting...' : 'Delete'}
         </Button>
       </DialogActions>

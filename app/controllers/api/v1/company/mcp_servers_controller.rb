@@ -5,7 +5,7 @@ module Api
     module Company
       class MCPServersController < ApplicationController
         def index
-          servers = MCPServer.merged_for_company(current_company)
+          servers = MCPServer.visible_for_company(current_company)
           respond_with servers, each_serializer: MCPServerSerializer
         end
 

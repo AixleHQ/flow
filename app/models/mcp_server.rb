@@ -39,56 +39,19 @@ class MCPServer < ApplicationRecord
   scope :for_project, ->(project) { custom_servers.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Get merged list of MCP servers for a project (internal + company + project)
-  # Returns array with scope_indicator method on each server
-  def self.merged_for_project(project)
-    all_internal = internal_servers.enabled.to_a
-    company_servers = for_company(project.company).enabled.to_a
-    project_servers = for_project(project).enabled.to_a
-    project_names = project_servers.map(&:name)
+  scope :visible_for_project, ->(project) {
+    enabled.internal_servers
+           .or(enabled.where(scope_type: "Company", scope_id: project.company_id))
+           .or(enabled.where(scope_type: "Project", scope_id: project.id))
+  }
+  scope :visible_for_company, ->(company) {
+    enabled.internal_servers
+           .or(enabled.where(scope_type: "Company", scope_id: company.id))
+  }
 
-    result = []
-
-    # Add internal servers (always included)
-    all_internal.each do |server|
-      server.define_singleton_method(:scope_indicator) { "internal" }
-      result << server
-    end
-
-    # Add project servers (they override company servers)
-    project_servers.each do |server|
-      overrides = company_servers.any? { |cs| cs.name == server.name }
-      server.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
-      result << server
-    end
-
-    # Add company servers that are NOT overridden by project
-    company_servers.reject { |cs| project_names.include?(cs.name) }.each do |server|
-      server.define_singleton_method(:scope_indicator) { "company" }
-      result << server
-    end
-
-    result.sort_by(&:name)
-  end
-
-  # Get merged list for company level (internal + company)
-  def self.merged_for_company(company)
-    all_internal = internal_servers.enabled.to_a
-    company_servers = for_company(company).enabled.to_a
-
-    result = []
-
-    all_internal.each do |server|
-      server.define_singleton_method(:scope_indicator) { "internal" }
-      result << server
-    end
-
-    company_servers.each do |server|
-      server.define_singleton_method(:scope_indicator) { "company" }
-      result << server
-    end
-
-    result.sort_by(&:name)
+  def scope_indicator
+    return "internal" if internal?
+    scope_type == "Company" ? "company" : "project"
   end
 
   # Ransack

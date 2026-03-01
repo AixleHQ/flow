@@ -84,7 +84,7 @@ Rails.application.routes.draw do
             end
           end
         end
-        resources :projects, only: %i[index show create] do
+        resources :projects, only: %i[index show create update] do
           scope module: :projects do
             resources :collaborators, only: %i[index create destroy]
             resources :config_items, only: %i[index create update destroy]
@@ -115,6 +115,30 @@ Rails.application.routes.draw do
                 get :download
                 get :versions
                 post :restore
+              end
+            end
+            resource :board, only: %i[show create update destroy] do
+              collection do
+                get :presets
+              end
+              resources :columns, controller: "board/columns" do
+                collection do
+                  patch :reorder
+                end
+                resource :workflow_binding, controller: "board/columns/workflow_binding", only: %i[show create update destroy]
+              end
+              resources :activities, controller: "board/activities", only: %i[index]
+              resources :view_presets, controller: "board/view_presets", only: %i[index create destroy]
+              resources :tasks, controller: "board/tasks" do
+                member do
+                  patch :move
+                  post :trigger_workflow
+                  get :workflow_runs
+                end
+                resources :comments, controller: "board/task/comments", only: %i[index create]
+                resources :assets, controller: "board/task/assets", only: %i[index create destroy]
+                resources :transitions, controller: "board/task/transitions", only: %i[index]
+                resources :activities, controller: "board/task/activities", only: %i[index]
               end
             end
             resources :terminal_sessions, only: %i[index show]

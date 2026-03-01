@@ -42,22 +42,13 @@ class Asset < ApplicationRecord
       .or(where(scope_type: "Company", scope_id: project.company_id))
   }
 
-  def self.merged_for_project(project)
-    company_items = for_company(project.company).includes(:versions).to_a
-    project_items = for_project(project).includes(:versions).to_a
-    project_names = project_items.map(&:name).to_set
+  scope :visible_for_project, ->(project) {
+    active.where(scope_type: "Project", scope_id: project.id)
+          .or(active.where(scope_type: "Company", scope_id: project.company_id))
+  }
 
-    company_items.each do |item|
-      item.define_singleton_method(:scope_indicator) { "company" }
-    end
-
-    project_items.each do |item|
-      indicator = company_items.any? { |c| c.name == item.name } ? "overrides_company" : "project"
-      item.define_singleton_method(:scope_indicator) { indicator }
-    end
-
-    merged = project_items + company_items.reject { |c| project_names.include?(c.name) }
-    merged.sort_by(&:name)
+  def scope_indicator
+    scope_type == "Company" ? "company" : "project"
   end
 
   def latest_version

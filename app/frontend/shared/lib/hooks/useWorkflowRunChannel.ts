@@ -1,7 +1,6 @@
 import { createConsumer, type Consumer, type Subscription } from '@rails/actioncable';
 import { useEffect, useRef, useCallback, useState } from 'react';
 
-import type { WorkflowRun } from 'features/workflow-execution/lib/types';
 import { keysToCamelCase } from 'shared/lib/caseConverter';
 
 interface RunUpdateMessage {
@@ -9,16 +8,16 @@ interface RunUpdateMessage {
   data: Record<string, unknown>;
 }
 
-interface UseWorkflowRunChannelOptions {
+interface UseWorkflowRunChannelOptions<T = unknown> {
   runId: number | null;
-  onUpdate?: (run: WorkflowRun) => void;
+  onUpdate?: (run: T) => void;
 }
 
-export function useWorkflowRunChannel({ runId, onUpdate }: UseWorkflowRunChannelOptions) {
+export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkflowRunChannelOptions<T>) {
   const consumerRef = useRef<Consumer | null>(null);
   const subscriptionRef = useRef<Subscription | null>(null);
   const onUpdateRef = useRef(onUpdate);
-  const [workflowRun, setWorkflowRun] = useState<WorkflowRun | null>(null);
+  const [workflowRun, setWorkflowRun] = useState<T | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export function useWorkflowRunChannel({ runId, onUpdate }: UseWorkflowRunChannel
         },
         received(message: RunUpdateMessage) {
           if (message.type === 'run_update' && message.data) {
-            const run = keysToCamelCase(message.data) as unknown as WorkflowRun;
+            const run = keysToCamelCase(message.data) as unknown as T;
             setWorkflowRun(run);
             onUpdateRef.current?.(run);
           }

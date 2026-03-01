@@ -167,7 +167,8 @@ module Agents
                 "sum" => {
                   "dataPoints" => [ {
                     "attributes" => [
-                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } }
+                      { "key" => "terminal_session_token", "value" => { "stringValue" => @session.route_token } },
+                      { "key" => "model", "value" => { "stringValue" => "gemini-2.5-pro" } }
                     ],
                     "asDouble" => 0.123456
                   } ]

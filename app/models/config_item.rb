@@ -32,29 +32,13 @@ class ConfigItem < ApplicationRecord
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
-  # Get merged list of company + project items (for display)
-  # Returns array with scope_indicator method on each item
-  def self.merged_for_project(project)
-    company_items = for_company(project.company)
-    project_items = for_project(project)
-    project_names = project_items.pluck(:name)
+  scope :visible_for_project, ->(project) {
+    where(scope_type: "Company", scope_id: project.company_id)
+      .or(where(scope_type: "Project", scope_id: project.id))
+  }
 
-    result = []
-
-    # Add project items first (they take precedence)
-    project_items.each do |item|
-      overrides = company_items.exists?(name: item.name)
-      item.define_singleton_method(:scope_indicator) { overrides ? "overrides_company" : "project" }
-      result << item
-    end
-
-    # Add company items that are NOT overridden
-    company_items.where.not(name: project_names).each do |item|
-      item.define_singleton_method(:scope_indicator) { "company" }
-      result << item
-    end
-
-    result
+  def scope_indicator
+    scope_type == "Company" ? "company" : "project"
   end
 
   # Get effective config items for container injection (resolved overrides)

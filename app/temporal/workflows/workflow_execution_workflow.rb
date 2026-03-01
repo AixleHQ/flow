@@ -21,11 +21,8 @@ module Workflows
 
     workflow_signal
     def container_finished(step_run_id = nil)
-      if step_run_id
-        @step_decisions[step_run_id] = :completed
-      elsif @current_interactive_step_run_id
-        @step_decisions[@current_interactive_step_run_id] = :completed
-      end
+      target = step_run_id || @current_interactive_step_run_id
+      @step_decisions[target] = :completed if target
     end
 
     workflow_signal
@@ -34,136 +31,125 @@ module Workflows
     end
 
     def run(input)
-      @step_decisions = {}
-      @cancelled = false
-      workflow_run_id = input.workflow_run_id
+      init_state(input.workflow_run_id)
+      update_status(:running)
 
-      update_status(workflow_run_id, :running)
-
-      all_steps = fetch_ordered_steps(workflow_run_id)
-      mode = fetch_mode(workflow_run_id)
-
-      completed_step_ids = []
-      failed = false
-
-      until failed || @cancelled
-        ready = all_steps.select do |s|
-          sid = s["step_id"]
-          next false if completed_step_ids.include?(sid)
-
-          deps = s["depends_on_step_ids"] || []
-          deps.all? { |dep_id| completed_step_ids.include?(dep_id) }
-        end
-
-        break if ready.empty?
-
-        auto_steps, interactive_steps = ready.partition { |s| auto_advance?(s, mode) }
-
-        if auto_steps.any?
-          results = execute_steps_parallel(workflow_run_id, auto_steps, mode)
-          results.each do |step_id, result|
-            if result == :failed || result == :cancelled
-              failed = true
-              break
-            end
-            completed_step_ids << step_id
-          end
-          next unless failed
-        end
-
-        break if failed || @cancelled
-
-        interactive_steps.each do |step_data|
-          break if @cancelled
-
-          result = execute_step(workflow_run_id, step_data, mode)
-          if result == :failed || result == :cancelled
-            failed = true
-            break
-          end
-          completed_step_ids << step_data["step_id"]
-        end
-      end
-
-      final_status = @cancelled ? :cancelled : (failed ? :failed : :completed)
-      update_status(workflow_run_id, final_status)
-    rescue StandardError => e
-      Temporalio::Workflow.logger.error("[WorkflowExecutionWorkflow] Failed: #{e.message}")
-      update_status(workflow_run_id, :failed)
+      process_steps
+      update_status(final_status)
+    rescue Temporalio::Error::ActivityError => e
+      Temporalio::Workflow.logger.error("[WorkflowExecution] Failed: #{extract_error_message(e)}")
+      update_status(:failed)
       raise
     end
 
     private
 
-    def fetch_ordered_steps(workflow_run_id)
-      execute_activity(
-        prepare_step_list_activity_ref,
-        { workflow_run_id: workflow_run_id },
-        start_to_close_timeout: 30
-      )
+    # --- Initialization ---
+
+    def init_state(workflow_run_id)
+      @workflow_run_id = workflow_run_id
+      @step_decisions = {}
+      @cancelled = false
+      @failed = false
+      @completed_step_ids = []
+      @all_steps = fetch_ordered_steps
+      @mode = fetch_mode
     end
 
-    def fetch_mode(workflow_run_id)
-      result = execute_activity(
-        fetch_mode_activity_ref,
-        { workflow_run_id: workflow_run_id },
-        start_to_close_timeout: 10
-      )
-      result["mode"]
+    def final_status
+      return :cancelled if @cancelled
+      @failed ? :failed : :completed
     end
 
-    def execute_step(workflow_run_id, step_data, mode)
-      skip_result = check_skip_policy(workflow_run_id, step_data)
-      return :skipped if skip_result && skip_result["should_skip"]
+    # --- Main loop ---
 
-      step_run_id = step_data["step_run_id"] || create_step_run(workflow_run_id, step_data)
+    def process_steps
+      until @failed || @cancelled
+        ready = ready_steps
+        break if ready.empty?
 
-      prepare_result = execute_activity(
-        prepare_step_activity_ref,
-        { step_run_id: step_run_id },
-        start_to_close_timeout: 300
-      )
+        auto_steps, interactive_steps = ready.partition { |s| auto_advance?(s) }
 
-      return :failed if prepare_result["failed"]
+        process_auto_steps(auto_steps) if auto_steps.any?
+        break if @failed || @cancelled
 
-      launch_step_session(step_run_id)
-
-      if auto_advance?(step_data, mode)
-        wait_for_container_completion(step_run_id)
-        complete_step(step_run_id)
-      else
-        wait_for_interactive_decision(workflow_run_id, step_data, step_run_id, mode)
+        process_interactive_steps(interactive_steps)
       end
     end
 
-    def auto_advance?(step_data, mode)
-      return true if mode == "non_interactive"
-      return true if mode == "mixed" && step_data["auto_run"]
+    def ready_steps
+      @all_steps.select do |s|
+        sid = s["step_id"]
+        next false if @completed_step_ids.include?(sid)
 
-      false
+        deps = s["depends_on_step_ids"] || []
+        deps.all? { |dep_id| @completed_step_ids.include?(dep_id) }
+      end
     end
 
-    def execute_steps_parallel(workflow_run_id, steps_data, mode)
+    def auto_advance?(step_data)
+      @mode == "non_interactive" || (@mode == "mixed" && step_data["auto_run"])
+    end
+
+    # --- Step processing ---
+
+    def process_auto_steps(steps)
+      results = execute_steps_parallel(steps)
+      results.each do |step_id, result|
+        if result == :failed || result == :cancelled
+          @failed = true
+          break
+        end
+        @completed_step_ids << step_id
+      end
+    end
+
+    def process_interactive_steps(steps)
+      steps.each do |step_data|
+        break if @cancelled
+
+        result = execute_step(step_data)
+        if result == :failed || result == :cancelled
+          @failed = true
+          break
+        end
+        @completed_step_ids << step_data["step_id"]
+      end
+    end
+
+    # --- Single step execution ---
+
+    def execute_step(step_data)
+      return :skipped if should_skip?(step_data)
+
+      step_run_id = step_data["step_run_id"] || create_step_run(step_data)
+      return :failed if prepare_step(step_run_id) == :failed
+
+      launch_step_session(step_run_id)
+
+      if auto_advance?(step_data)
+        wait_for_signal(step_run_id)
+        complete_step(step_run_id)
+      else
+        wait_for_interactive_decision(step_data, step_run_id)
+      end
+    end
+
+    # --- Parallel execution ---
+
+    def execute_steps_parallel(steps)
       results = {}
       step_run_ids = {}
 
-      steps_data.each do |step_data|
+      steps.each do |step_data|
         step_id = step_data["step_id"]
-        skip_result = check_skip_policy(workflow_run_id, step_data)
-        if skip_result && skip_result["should_skip"]
+        if should_skip?(step_data)
           results[step_id] = :skipped
           next
         end
 
-        sr_id = step_data["step_run_id"] || create_step_run(workflow_run_id, step_data)
-
-        prepare_result = execute_activity(
-          prepare_step_activity_ref,
-          { step_run_id: sr_id },
-          start_to_close_timeout: 300
-        )
-
-        if prepare_result["failed"]
+        sr_id = step_data["step_run_id"] || create_step_run(step_data)
+        if prepare_step(sr_id) == :failed
           results[step_id] = :failed
           next
         end
@@ -173,36 +159,33 @@ module Workflows
         @step_decisions[sr_id] = nil
       end
 
-      pending_ids = step_run_ids.dup
-      until pending_ids.empty? || @cancelled
+      wait_for_all_parallel(step_run_ids, results)
+    end
+
+    def wait_for_all_parallel(pending, results)
+      until pending.empty? || @cancelled
         Temporalio::Workflow.timeout(INTERACTIVE_TIMEOUT) do
           Temporalio::Workflow.wait_condition do
-            @cancelled || pending_ids.values.any? { |sr_id| @step_decisions[sr_id] }
+            @cancelled || pending.values.any? { |sr_id| @step_decisions[sr_id] }
           end
         end
 
         break if @cancelled
 
-        pending_ids.each do |step_id, sr_id|
+        pending.each do |step_id, sr_id|
           next unless @step_decisions[sr_id]
-
           results[step_id] = complete_step(sr_id)
         end
 
-        pending_ids.reject! { |step_id, _| results.key?(step_id) }
+        pending.reject! { |step_id, _| results.key?(step_id) }
       end
 
       results
     end
 
-    def wait_for_container_completion(step_run_id)
-      @step_decisions[step_run_id] = nil
-      Temporalio::Workflow.timeout(INTERACTIVE_TIMEOUT) do
-        Temporalio::Workflow.wait_condition { @step_decisions[step_run_id] || @cancelled }
-      end
-    end
+    # --- Interactive flow ---
 
-    def wait_for_interactive_decision(workflow_run_id, step_data, step_run_id, mode)
+    def wait_for_interactive_decision(step_data, step_run_id)
       @current_interactive_step_run_id = step_run_id
       @step_decisions[step_run_id] = nil
 
@@ -214,114 +197,82 @@ module Workflows
       return :cancelled if @cancelled
 
       case @step_decisions[step_run_id]
-      when :completed
-        complete_step(step_run_id)
-      when :skipped
-        :skipped
-      when :retried
-        handle_retry(workflow_run_id, step_data, step_run_id, mode)
-      else
-        handle_failure(workflow_run_id, step_data, step_run_id, mode, 0)
+      when :completed then complete_step(step_run_id)
+      when :skipped   then :skipped
+      when :retried   then execute_step(step_data)
+      else                 resolve_step_failure(step_data)
       end
     end
 
-    def complete_step(step_run_id)
-      result = execute_activity(
-        complete_step_activity_ref,
-        { step_run_id: step_run_id },
-        start_to_close_timeout: 300
-      )
-      result["failed"] ? :failed : :completed
-    end
-
-    def handle_retry(workflow_run_id, step_data, _step_run_id, mode)
-      max_retries = step_data["max_retries"] || 0
-      execute_step(workflow_run_id, step_data, mode)
-    end
-
-    def handle_failure(workflow_run_id, step_data, step_run_id, mode, retry_count)
-      on_failure = step_data["on_failure"] || "fail"
-      max_retries = step_data["max_retries"] || 0
-
-      case on_failure
+    def resolve_step_failure(step_data)
+      case step_data["on_failure"]
       when "retry"
-        if retry_count < max_retries
-          execute_step(workflow_run_id, step_data, mode)
-        else
-          :failed
-        end
-      when "skip"
-        :skipped
-      else
-        :failed
+        max = step_data["max_retries"] || 0
+        max > 0 ? execute_step(step_data) : :failed
+      when "skip" then :skipped
+      else :failed
       end
     end
 
-    def launch_step_session(step_run_id)
-      execute_activity(
-        launch_step_session_activity_ref,
-        { step_run_id: step_run_id },
-        start_to_close_timeout: 600
-      )
+    # --- Activity calls ---
+
+    def fetch_ordered_steps
+      execute_activity(activities.workflow_prepare_step_list_activity,
+        { workflow_run_id: @workflow_run_id }, start_to_close_timeout: 30)
     end
 
-    def check_skip_policy(workflow_run_id, step_data)
-      execute_activity(
-        check_skip_activity_ref,
-        { workflow_run_id: workflow_run_id, step_id: step_data["step_id"] },
-        start_to_close_timeout: 30
-      )
-    rescue StandardError
-      nil
+    def fetch_mode
+      result = execute_activity(activities.workflow_fetch_mode_activity,
+        { workflow_run_id: @workflow_run_id }, start_to_close_timeout: 10)
+      result["mode"]
     end
 
-    def create_step_run(workflow_run_id, step_data)
-      result = execute_activity(
-        create_step_run_activity_ref,
-        { workflow_run_id: workflow_run_id, step_id: step_data["step_id"] },
-        start_to_close_timeout: 30
-      )
+    def create_step_run(step_data)
+      result = execute_activity(activities.workflow_create_step_run_activity,
+        { workflow_run_id: @workflow_run_id, step_id: step_data["step_id"] },
+        start_to_close_timeout: 30)
       result["step_run_id"]
     end
 
-    def update_status(workflow_run_id, status)
-      execute_activity(
-        update_status_activity_ref,
-        { workflow_run_id: workflow_run_id, status: status.to_s },
-        start_to_close_timeout: 30
-      )
+    def prepare_step(step_run_id)
+      result = execute_activity(activities.workflow_prepare_step_activity,
+        { step_run_id: step_run_id }, start_to_close_timeout: 300)
+      result["failed"] ? :failed : :ok
     end
 
-    def prepare_step_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_prepare_step_activity
+    def launch_step_session(step_run_id)
+      execute_activity(activities.workflow_launch_step_session_activity,
+        { step_run_id: step_run_id }, start_to_close_timeout: 600)
     end
 
-    def complete_step_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_complete_step_activity
+    def complete_step(step_run_id)
+      result = execute_activity(activities.workflow_complete_step_activity,
+        { step_run_id: step_run_id }, start_to_close_timeout: 300)
+      result["failed"] ? :failed : :completed
     end
 
-    def update_status_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_update_workflow_run_status_activity
+    def update_status(status)
+      execute_activity(activities.workflow_update_workflow_run_status_activity,
+        { workflow_run_id: @workflow_run_id, status: status.to_s },
+        start_to_close_timeout: 30)
     end
 
-    def prepare_step_list_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_prepare_step_list_activity
+    def should_skip?(step_data)
+      result = execute_activity(activities.workflow_check_skip_activity,
+        { workflow_run_id: @workflow_run_id, step_id: step_data["step_id"] },
+        start_to_close_timeout: 30)
+      result && result["should_skip"]
+    rescue Temporalio::Error::ActivityError
+      false
     end
 
-    def create_step_run_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_create_step_run_activity
-    end
+    # --- Signal helpers ---
 
-    def fetch_mode_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_fetch_mode_activity
-    end
-
-    def check_skip_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_check_skip_activity
-    end
-
-    def launch_step_session_activity_ref
-      WorkflowService.workflow_execution_workflow.activities.workflow_launch_step_session_activity
+    def wait_for_signal(step_run_id)
+      @step_decisions[step_run_id] = nil
+      Temporalio::Workflow.timeout(INTERACTIVE_TIMEOUT) do
+        Temporalio::Workflow.wait_condition { @step_decisions[step_run_id] || @cancelled }
+      end
     end
   end
 end

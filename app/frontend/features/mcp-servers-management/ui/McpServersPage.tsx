@@ -95,7 +95,7 @@ export const McpServersPanel: FC<McpServersPanelProps> = ({ projectId }) => {
     skip: isProjectContext,
   });
 
-  const { data: projectServers, isLoading: isLoadingProject } = useGetProjectMcpServersQuery(String(projectId), {
+  const { data: projectServers, isLoading: isLoadingProject } = useGetProjectMcpServersQuery(projectId!, {
     skip: !isProjectContext,
   });
 

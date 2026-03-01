@@ -26,10 +26,11 @@ import {
   useGetWorkflowRunQuery,
   useRetryStepMutation,
   useSkipStepMutation,
+  WorkflowAssetsReview,
+  type StepRunInfo,
+  type WorkflowRun,
 } from 'features/workflow-execution';
-import { WorkflowAssetsReview } from 'features/workflow-execution/ui/WorkflowAssetsReview';
-import type { StepRunInfo, WorkflowRun } from 'features/workflow-execution';
-import { useGetStepsQuery } from 'features/workflow-steps/api/stepsApi';
+import { useGetStepsQuery } from 'features/workflow-steps';
 import { useWorkflowRunChannel } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
@@ -310,23 +311,35 @@ const styles = {
 
 function getIndicatorStyle(state: string): SxProps<Theme> {
   switch (state) {
-    case 'completed': return styles.stepIndicatorCompleted;
-    case 'running': return styles.stepIndicatorRunning;
-    case 'waiting_input': return styles.stepIndicatorWaiting;
-    case 'failed': return styles.stepIndicatorFailed;
-    case 'skipped': return styles.stepIndicatorSkipped;
-    default: return styles.stepIndicatorPending;
+    case 'completed':
+      return styles.stepIndicatorCompleted;
+    case 'running':
+      return styles.stepIndicatorRunning;
+    case 'waiting_input':
+      return styles.stepIndicatorWaiting;
+    case 'failed':
+      return styles.stepIndicatorFailed;
+    case 'skipped':
+      return styles.stepIndicatorSkipped;
+    default:
+      return styles.stepIndicatorPending;
   }
 }
 
 function getStepIcon(state: string, index: number): string {
   switch (state) {
-    case 'completed': return '\u2713';
-    case 'running': return '\u25CF';
-    case 'waiting_input': return '\u270B';
-    case 'failed': return '\u2717';
-    case 'skipped': return '\u2192';
-    default: return String(index + 1);
+    case 'completed':
+      return '\u2713';
+    case 'running':
+      return '\u25CF';
+    case 'waiting_input':
+      return '\u270B';
+    case 'failed':
+      return '\u2717';
+    case 'skipped':
+      return '\u2192';
+    default:
+      return String(index + 1);
   }
 }
 
@@ -361,12 +374,9 @@ const WorkflowRunPage = () => {
     data: initialRun,
     isLoading,
     isError,
-  } = useGetWorkflowRunQuery(
-    { projectId, runId },
-    { skip: !projectId || !runId },
-  );
+  } = useGetWorkflowRunQuery({ projectId, runId }, { skip: !projectId || !runId });
 
-  const { workflowRun: liveRun } = useWorkflowRunChannel({ runId: runId || null });
+  const { workflowRun: liveRun } = useWorkflowRunChannel<WorkflowRun>({ runId: runId || null });
   const workflowRun = liveRun ?? initialRun;
 
   const { data: workflowSteps = [] } = useGetStepsQuery(
@@ -379,7 +389,7 @@ const WorkflowRunPage = () => {
   const [skipStep, { isLoading: skipping }] = useSkipStepMutation();
   const [cancelRun, { isLoading: cancelling }] = useCancelWorkflowRunMutation();
 
-  const stepRuns: StepRunInfo[] = workflowRun?.stepRuns ?? [];
+  const stepRuns: StepRunInfo[] = useMemo(() => workflowRun?.stepRuns ?? [], [workflowRun?.stepRuns]);
 
   /* ── timeline computation ──────────────────────────────────────── */
 
@@ -394,17 +404,7 @@ const WorkflowRunPage = () => {
   }
 
   const timelineSteps: TimelineStep[] = useMemo(() => {
-    if (workflowSteps.length === 0) {
-      return stepRuns.map((sr, i) => ({
-        stepId: sr.stepId,
-        stepName: sr.stepName,
-        position: i + 1,
-        wave: i,
-        stepRun: sr,
-        state: sr.state,
-        isParallel: false,
-      }));
-    }
+    if (workflowSteps.length === 0) return [];
 
     const sorted = workflowSteps.slice().sort((a, b) => a.position - b.position);
     const waveMap = new Map<number, number>();
@@ -455,7 +455,7 @@ const WorkflowRunPage = () => {
   const currentStepRun = stepRuns.find((s) => s.state === 'running' || s.state === 'waiting_input');
   const selectedTimelineStep = activeStepRunId
     ? timelineSteps.find((t) => t.stepRun?.id === activeStepRunId)
-    : timelineSteps.find((t) => t.stepRun?.id === currentStepRun?.id) ?? timelineSteps[0] ?? null;
+    : (timelineSteps.find((t) => t.stepRun?.id === currentStepRun?.id) ?? timelineSteps[0] ?? null);
   const selectedStepRun = selectedTimelineStep?.stepRun ?? null;
 
   const prevCurrentIdRef = useRef<number | undefined>(undefined);
@@ -491,7 +491,9 @@ const WorkflowRunPage = () => {
   if (isLoading) {
     return (
       <Box sx={styles.root}>
-        <Box sx={styles.loading}><CircularProgress /></Box>
+        <Box sx={styles.loading}>
+          <CircularProgress />
+        </Box>
       </Box>
     );
   }
@@ -500,7 +502,9 @@ const WorkflowRunPage = () => {
     return (
       <Box sx={styles.root}>
         <Box sx={styles.loading}>
-          <Alert severity="error" sx={{ maxWidth: 400 }}>Workflow run not found</Alert>
+          <Alert severity="error" sx={{ maxWidth: 400 }}>
+            Workflow run not found
+          </Alert>
         </Box>
       </Box>
     );
@@ -511,11 +515,7 @@ const WorkflowRunPage = () => {
   const canRetryFailed = selectedStepRun?.state === 'failed' && isRunActive(workflowRun);
   const hasSubSteps = (selectedStepRun?.subStepRuns ?? []).length > 0;
   const isWorkflowRunning = isRunActive(workflowRun);
-  const sessionStatus = isWorkflowRunning
-    ? 'running'
-    : workflowRun.state === 'completed'
-      ? 'completed'
-      : 'error';
+  const sessionStatus = isWorkflowRunning ? 'running' : workflowRun.state === 'completed' ? 'completed' : 'error';
 
   return (
     <Box sx={styles.root}>
@@ -528,29 +528,34 @@ const WorkflowRunPage = () => {
             </Link>
             <Link
               sx={styles.breadcrumbLink}
-              onClick={() => navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflows') })}
+              onClick={() =>
+                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflows') })
+              }
             >
               Project
             </Link>
             <Link
               sx={styles.breadcrumbLink}
-              onClick={() => navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })}
+              onClick={() =>
+                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })
+              }
             >
               Runs
             </Link>
           </Breadcrumbs>
-          <Typography sx={styles.title}>
-            {workflowRun.workflowName ?? 'Workflow Run'}
-          </Typography>
+          <Typography sx={styles.title}>{workflowRun.workflowName ?? 'Workflow Run'}</Typography>
           <Typography
             sx={{
               fontSize: '11px',
               fontWeight: 600,
               textTransform: 'uppercase',
               color:
-                workflowRun.state === 'running' ? 'primary.main'
-                  : workflowRun.state === 'completed' ? 'success.main'
-                    : workflowRun.state === 'failed' ? 'error.main'
+                workflowRun.state === 'running'
+                  ? 'primary.main'
+                  : workflowRun.state === 'completed'
+                    ? 'success.main'
+                    : workflowRun.state === 'failed'
+                      ? 'error.main'
                       : 'text.secondary',
             }}
           >
@@ -580,17 +585,9 @@ const WorkflowRunPage = () => {
       </Box>
 
       {/* ── Tab bar ─────────────────────────────────────────────── */}
-      <Tabs
-        value={activeTab}
-        onChange={(_, v) => setActiveTab(v)}
-        sx={styles.tabBar}
-      >
+      <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={styles.tabBar}>
         <Tab label="Steps" sx={styles.tab} />
-        <Tab
-          label={`Artifacts`}
-          sx={styles.tab}
-          disabled={isWorkflowRunning}
-        />
+        <Tab label={`Workflow Assets`} sx={styles.tab} disabled={isWorkflowRunning} />
       </Tabs>
 
       {/* ── Steps Tab ───────────────────────────────────────────── */}
@@ -629,7 +626,9 @@ const WorkflowRunPage = () => {
                     </Box>
                     {waveIdx < timelineWaves.length - 1 && (
                       <Box sx={styles.waveConnector}>
-                        <Box sx={{ width: 16, height: 2, backgroundColor: allCompleted ? 'success.main' : 'divider' }} />
+                        <Box
+                          sx={{ width: 16, height: 2, backgroundColor: allCompleted ? 'success.main' : 'divider' }}
+                        />
                       </Box>
                     )}
                   </Box>
@@ -644,9 +643,7 @@ const WorkflowRunPage = () => {
             <Box sx={styles.terminalPanel}>
               <Box sx={styles.terminalHeader}>
                 <span style={{ fontSize: '12px' }}>{'\u2B1B'}</span>
-                <Typography sx={{ fontSize: '12px', color: 'text.primary', fontWeight: 500 }}>
-                  Terminal
-                </Typography>
+                <Typography sx={{ fontSize: '12px', color: 'text.primary', fontWeight: 500 }}>Terminal</Typography>
                 {selectedTimelineStep && (
                   <Typography sx={{ fontSize: '10px', color: 'text.disabled' }}>
                     {'\u2014'} {selectedTimelineStep.stepName}
@@ -655,10 +652,7 @@ const WorkflowRunPage = () => {
               </Box>
               <Box sx={styles.terminalContent}>
                 {selectedStepRun?.terminalSessionId ? (
-                  <TerminalSessionWidget
-                    sessionId={selectedStepRun.terminalSessionId}
-                    showEditor={false}
-                  />
+                  <TerminalSessionWidget sessionId={selectedStepRun.terminalSessionId} showEditor={false} />
                 ) : (
                   <Box sx={styles.placeholder}>
                     <Typography sx={styles.placeholderText}>
@@ -702,9 +696,12 @@ const WorkflowRunPage = () => {
                                   : styles.subStepCheckPending),
                           }}
                         >
-                          {ssr.state === 'completed' ? '\u2713'
-                            : ssr.state === 'in_progress' ? '\u25CF'
-                              : ssr.state === 'skipped' ? '\u2192'
+                          {ssr.state === 'completed'
+                            ? '\u2713'
+                            : ssr.state === 'in_progress'
+                              ? '\u25CF'
+                              : ssr.state === 'skipped'
+                                ? '\u2192'
                                 : ''}
                         </Box>
                         <Box sx={styles.subStepContent}>
@@ -719,7 +716,9 @@ const WorkflowRunPage = () => {
                       <Typography sx={{ fontSize: '10px', fontWeight: 600, color: 'text.secondary', mb: '2px' }}>
                         Step Note
                       </Typography>
-                      <Typography sx={{ fontSize: '11px', color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>
+                      <Typography
+                        sx={{ fontSize: '11px', color: 'text.primary', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}
+                      >
                         {selectedStepRun!.stepNote}
                       </Typography>
                     </Box>
@@ -728,9 +727,7 @@ const WorkflowRunPage = () => {
               ) : (
                 <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2 }}>
                   <Typography sx={{ fontSize: '11px', color: 'text.disabled', textAlign: 'center' }}>
-                    {selectedTimelineStep
-                      ? 'No sub-steps for this step'
-                      : 'Select a step above'}
+                    {selectedTimelineStep ? 'No sub-steps for this step' : 'Select a step above'}
                   </Typography>
                 </Box>
               )}
@@ -741,14 +738,35 @@ const WorkflowRunPage = () => {
                   <Typography sx={{ fontSize: '11px', color: 'warning.main', fontWeight: 500 }}>
                     Waiting for decision
                   </Typography>
-                  <Button variant="contained" size="small" color="primary" onClick={handleApprove} disabled={approving} fullWidth>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="primary"
+                    onClick={handleApprove}
+                    disabled={approving}
+                    fullWidth
+                  >
                     Approve & Continue
                   </Button>
                   <Box sx={{ display: 'flex', gap: '6px' }}>
-                    <Button variant="outlined" size="small" color="inherit" onClick={() => setSkipDialogOpen(true)} disabled={skipping} fullWidth>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="inherit"
+                      onClick={() => setSkipDialogOpen(true)}
+                      disabled={skipping}
+                      fullWidth
+                    >
                       Skip
                     </Button>
-                    <Button variant="outlined" size="small" color="warning" onClick={handleRetry} disabled={retrying} fullWidth>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="warning"
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      fullWidth
+                    >
                       Retry
                     </Button>
                   </Box>
@@ -756,19 +774,31 @@ const WorkflowRunPage = () => {
               )}
               {canRetryFailed && selectedStepRun && (
                 <Box sx={styles.stepActionSection}>
-                  <Typography sx={{ fontSize: '11px', color: 'error.main', fontWeight: 500 }}>
-                    Step failed
-                  </Typography>
+                  <Typography sx={{ fontSize: '11px', color: 'error.main', fontWeight: 500 }}>Step failed</Typography>
                   {selectedStepRun.errorMessage && (
                     <Typography sx={{ fontSize: '10px', color: 'text.secondary' }}>
                       {selectedStepRun.errorMessage}
                     </Typography>
                   )}
                   <Box sx={{ display: 'flex', gap: '6px' }}>
-                    <Button variant="outlined" size="small" color="inherit" onClick={() => setSkipDialogOpen(true)} disabled={skipping} fullWidth>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      color="inherit"
+                      onClick={() => setSkipDialogOpen(true)}
+                      disabled={skipping}
+                      fullWidth
+                    >
                       Skip
                     </Button>
-                    <Button variant="contained" size="small" color="warning" onClick={handleRetry} disabled={retrying} fullWidth>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      color="warning"
+                      onClick={handleRetry}
+                      disabled={retrying}
+                      fullWidth
+                    >
                       Retry
                     </Button>
                   </Box>
@@ -791,10 +821,7 @@ const WorkflowRunPage = () => {
       )}
 
       {/* ── Status Bar ──────────────────────────────────────────── */}
-      <StatusBar
-        status={sessionStatus}
-        duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt)}
-      />
+      <StatusBar status={sessionStatus} duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt)} />
 
       {/* ── Skip Dialog ─────────────────────────────────────────── */}
       <Dialog open={skipDialogOpen} onClose={() => setSkipDialogOpen(false)} maxWidth="sm" fullWidth>
@@ -813,7 +840,9 @@ const WorkflowRunPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setSkipDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleSkip} variant="contained" disabled={skipping}>Skip Step</Button>
+          <Button onClick={handleSkip} variant="contained" disabled={skipping}>
+            Skip Step
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

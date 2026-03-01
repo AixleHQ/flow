@@ -6,12 +6,12 @@ module Api
       module Projects
         class WorkflowsController < ApplicationController
           def index
-            workflows = Workflow.merged_for_project(current_project).ransack(params[:q]).result
+            workflows = Workflow.visible_for_project(current_project).ransack(params[:q]).result
             respond_with paginate(workflows), each_serializer: WorkflowSerializer
           end
 
           def show
-            workflow = Workflow.merged_for_project(current_project).find(params[:id])
+            workflow = Workflow.visible_for_project(current_project).find(params[:id])
             respond_with workflow, serializer: WorkflowSerializer
           end
 

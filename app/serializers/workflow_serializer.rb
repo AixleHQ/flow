@@ -1,17 +1,15 @@
 # frozen_string_literal: true
 
 class WorkflowSerializer < ApplicationSerializer
+  include ScopeIndicatorSerialization
+
   attributes :id, :name, :description, :config, :scope_type, :scope_id,
-             :scope_indicator, :steps_count, :last_run_at, :last_run_status,
+             :steps_count, :last_run_at, :last_run_status,
              :has_active_runs, :description_excerpt,
              :created_at, :updated_at
 
   def config
     object.config
-  end
-
-  def scope_indicator
-    object.scope_indicator
   end
 
   def steps_count

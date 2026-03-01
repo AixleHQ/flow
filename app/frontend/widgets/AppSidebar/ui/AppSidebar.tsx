@@ -1,79 +1,60 @@
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined';
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined';
-import SourceOutlined from '@mui/icons-material/SourceOutlined';
 import BuildOutlined from '@mui/icons-material/BuildOutlined';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
+import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
 import DnsOutlined from '@mui/icons-material/DnsOutlined';
-import ExtensionOutlined from '@mui/icons-material/ExtensionOutlined';
-import FolderOutlined from '@mui/icons-material/FolderOutlined';
 import GroupOutlined from '@mui/icons-material/GroupOutlined';
 import InsertDriveFileOutlined from '@mui/icons-material/InsertDriveFileOutlined';
+import PlaylistPlayOutlined from '@mui/icons-material/PlaylistPlayOutlined';
+import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined';
+import SourceOutlined from '@mui/icons-material/SourceOutlined';
 import TerminalOutlined from '@mui/icons-material/TerminalOutlined';
+import TrendingUpOutlined from '@mui/icons-material/TrendingUpOutlined';
+import ViewKanbanOutlined from '@mui/icons-material/ViewKanbanOutlined';
 import VpnKeyOutlined from '@mui/icons-material/VpnKeyOutlined';
 import { Box, Divider, IconButton, List, ListItemButton, ListItemIcon, ListItemText, Tooltip } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { Link, useRouterState } from '@tanstack/react-router';
+import { Link, useParams, useRouterState } from '@tanstack/react-router';
 import { Fragment, useCallback, useState } from 'react';
 
-import { useGetCurrentUserQuery } from 'entities/user';
 import { Routes } from 'shared/routes';
 
-const SIDEBAR_WIDTH = 240;
-const SIDEBAR_COLLAPSED_WIDTH = 64;
+const SIDEBAR_WIDTH = 220;
+const SIDEBAR_COLLAPSED_WIDTH = 56;
 const STORAGE_KEY = 'sidebar-collapsed';
 
 interface NavItem {
-  path: string;
+  tab: string;
   label: string;
   icon: React.ReactElement;
-  adminOnly?: boolean;
 }
 
 const navGroups: NavItem[][] = [
   [
-    { path: Routes.frontend.companyProjectsPath, label: 'Projects', icon: <FolderOutlined /> },
-    { path: Routes.frontend.companySessionsPath, label: 'Sessions', icon: <TerminalOutlined /> },
+    { tab: 'overview', label: 'Overview', icon: <DashboardOutlined /> },
+    { tab: 'board', label: 'Tasks', icon: <ViewKanbanOutlined /> },
+    { tab: 'sessions', label: 'Sessions', icon: <TerminalOutlined /> },
+    { tab: 'workflows', label: 'Workflows', icon: <AccountTreeOutlined /> },
+    { tab: 'runs', label: 'Runs', icon: <PlaylistPlayOutlined /> },
+    { tab: 'assets', label: 'Assets', icon: <InsertDriveFileOutlined /> },
+    { tab: 'analytics', label: 'Analytics', icon: <TrendingUpOutlined /> },
   ],
   [
-    { path: Routes.frontend.companyAgentsPath, label: 'Agents', icon: <SmartToyOutlined />, adminOnly: true },
-    { path: Routes.frontend.companyToolsPath, label: 'Tools', icon: <BuildOutlined />, adminOnly: true },
-    { path: Routes.frontend.companyMcpServersPath, label: 'MCP Servers', icon: <DnsOutlined />, adminOnly: true },
-    { path: Routes.frontend.companySkillsPath, label: 'Skills', icon: <AutoAwesomeOutlined />, adminOnly: true },
-    { path: Routes.frontend.companyWorkflowsPath, label: 'Workflows', icon: <AccountTreeOutlined /> },
+    { tab: 'repositories', label: 'Repositories', icon: <SourceOutlined /> },
+    { tab: 'agents', label: 'Agents', icon: <SmartToyOutlined /> },
+    { tab: 'tools', label: 'Tools', icon: <BuildOutlined /> },
+    { tab: 'mcp-servers', label: 'MCP Servers', icon: <DnsOutlined /> },
+    { tab: 'skills', label: 'Skills', icon: <AutoAwesomeOutlined /> },
   ],
   [
-    { path: Routes.frontend.companyMembersPath, label: 'Members', icon: <GroupOutlined />, adminOnly: true },
-    {
-      path: Routes.frontend.companyIntegrationsPath,
-      label: 'Integrations',
-      icon: <ExtensionOutlined />,
-      adminOnly: true,
-    },
-    {
-      path: Routes.frontend.companyRepositoriesPath,
-      label: 'Repositories',
-      icon: <SourceOutlined />,
-      adminOnly: true,
-    },
-    {
-      path: Routes.frontend.companyConfigItemsPath,
-      label: 'Secrets & Variables',
-      icon: <VpnKeyOutlined />,
-      adminOnly: true,
-    },
-    {
-      path: Routes.frontend.companyAssetsPath,
-      label: 'Assets',
-      icon: <InsertDriveFileOutlined />,
-      adminOnly: true,
-    },
+    { tab: 'config', label: 'Secrets & Variables', icon: <VpnKeyOutlined /> },
+    { tab: 'members', label: 'Members', icon: <GroupOutlined /> },
+    { tab: 'settings', label: 'Settings', icon: <SettingsOutlined /> },
   ],
 ];
-
-const isActive = (itemPath: string, currentPath: string) =>
-  currentPath === itemPath || currentPath.startsWith(itemPath + '/');
 
 const styles = {
   root: {
@@ -92,18 +73,18 @@ const styles = {
     pt: 1,
   },
   divider: {
-    my: 1,
+    my: 0.5,
     mx: 1.5,
   },
   toggleContainer: {
-    p: 1.5,
+    p: 1,
   },
   toggleButton: {
     border: '1px solid',
     borderColor: 'divider',
     borderRadius: 1,
-    width: 32,
-    height: 32,
+    width: 28,
+    height: 28,
     '&:hover': {
       backgroundColor: 'action.hover',
       borderColor: 'text.secondary',
@@ -112,10 +93,10 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const getItemStyles = (active: boolean, collapsed: boolean): SxProps<Theme> => ({
-  minHeight: 44,
-  px: 2,
-  borderLeft: '3px solid',
-  borderColor: active ? 'primary.main' : 'transparent',
+  minHeight: 38,
+  px: collapsed ? 1 : 1.5,
+  mx: collapsed ? 0.5 : 1,
+  borderRadius: 1,
   backgroundColor: active ? 'action.selected' : 'transparent',
   '&:hover': {
     backgroundColor: active ? 'action.selected' : 'action.hover',
@@ -124,18 +105,23 @@ const getItemStyles = (active: boolean, collapsed: boolean): SxProps<Theme> => (
 });
 
 const getIconStyles = (active: boolean, collapsed: boolean): SxProps<Theme> => ({
-  minWidth: collapsed ? 0 : 36,
+  minWidth: collapsed ? 0 : 32,
   color: active ? 'primary.main' : 'text.secondary',
   justifyContent: 'center',
+  '& .MuiSvgIcon-root': {
+    fontSize: 20,
+  },
 });
 
 export const AppSidebar: React.FC = () => {
   const routerState = useRouterState();
-  const { data: currentUser } = useGetCurrentUserQuery();
+  const params = useParams({ strict: false }) as { projectId?: string; tab?: string };
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
 
+  const projectId = params.projectId;
+  const currentTab = params.tab || 'overview';
   const currentPath = routerState.location.pathname;
-  const isAdmin = currentUser?.role === 'admin';
+  const isProjectRoute = currentPath.startsWith('/company/projects/') && projectId;
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
 
   const toggleCollapsed = useCallback(() => {
@@ -146,30 +132,29 @@ export const AppSidebar: React.FC = () => {
     });
   }, []);
 
-  const visibleGroups = navGroups
-    .map((group) => group.filter((item) => !item.adminOnly || isAdmin))
-    .filter((group) => group.length > 0);
+  if (!isProjectRoute) return null;
 
   return (
     <Box component="nav" sx={{ ...styles.root, width, minWidth: width }}>
       <Box sx={styles.listContainer}>
-        {visibleGroups.map((group, groupIdx) => (
+        {navGroups.map((group, groupIdx) => (
           <Fragment key={groupIdx}>
             {groupIdx > 0 && <Divider sx={styles.divider} />}
             <List disablePadding>
               {group.map((item) => {
-                const itemActive = isActive(item.path, currentPath);
+                const isActive = currentTab === item.tab;
+                const to = Routes.frontend.companyProjectTabPath(projectId!, item.tab);
                 return (
-                  <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right" arrow>
-                    <ListItemButton component={Link} to={item.path} sx={getItemStyles(itemActive, collapsed)}>
-                      <ListItemIcon sx={getIconStyles(itemActive, collapsed)}>{item.icon}</ListItemIcon>
+                  <Tooltip key={item.tab} title={collapsed ? item.label : ''} placement="right" arrow>
+                    <ListItemButton component={Link} to={to} sx={getItemStyles(isActive, collapsed)}>
+                      <ListItemIcon sx={getIconStyles(isActive, collapsed)}>{item.icon}</ListItemIcon>
                       {!collapsed && (
                         <ListItemText
                           primary={item.label}
                           primaryTypographyProps={{
-                            fontSize: 14,
-                            fontWeight: itemActive ? 600 : 500,
-                            color: itemActive ? 'text.primary' : 'text.secondary',
+                            fontSize: 13,
+                            fontWeight: isActive ? 600 : 400,
+                            color: isActive ? 'text.primary' : 'text.secondary',
                             noWrap: true,
                           }}
                         />
@@ -185,7 +170,7 @@ export const AppSidebar: React.FC = () => {
 
       <Divider />
       <Box sx={{ ...styles.toggleContainer, display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
-        <Tooltip title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} placement="right" arrow>
+        <Tooltip title={collapsed ? 'Expand' : 'Collapse'} placement="right" arrow>
           <IconButton
             onClick={toggleCollapsed}
             size="small"

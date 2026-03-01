@@ -18,6 +18,12 @@ module Api
           respond_with project
         end
 
+        def update
+          project = current_company.projects.find(params[:id])
+          project.update(project_params)
+          respond_with project
+        end
+
         private
 
         def project_params

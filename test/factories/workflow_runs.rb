@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :workflow_run do
-    association :workflow, factory: [:workflow, :with_company_scope]
+    association :workflow, factory: [ :workflow, :with_company_scope ]
     association :project
     association :user
     state { "pending" }

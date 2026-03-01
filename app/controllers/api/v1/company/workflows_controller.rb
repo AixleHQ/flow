@@ -5,7 +5,7 @@ module Api
     module Company
       class WorkflowsController < ApplicationController
         def index
-          workflows = Workflow.merged_for_company(current_company).ransack(params[:q]).result
+          workflows = Workflow.visible_for_company(current_company).ransack(params[:q]).result
           respond_with paginate(workflows), each_serializer: WorkflowSerializer
         end
 
@@ -42,7 +42,7 @@ module Api
           project_ids = current_company.projects.pluck(:id)
           Workflow.active.where(
             "(scope_type = 'Company' AND scope_id = :company_id) OR (scope_type = 'Project' AND scope_id IN (:project_ids))",
-            company_id: current_company.id, project_ids: project_ids.presence || [0]
+            company_id: current_company.id, project_ids: project_ids.presence || [ 0 ]
           )
         end
 
