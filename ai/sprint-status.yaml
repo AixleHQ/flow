@@ -328,122 +328,122 @@ development_status:
   # PHASE 13: BOARD & COLUMN FOUNDATION
   # ============================================
 
-  epic-20: in-progress  # Board & Column Foundation (Phase 13) — Board model, columns, presets, purpose field
-  20-1-board-model-and-project-association: review
-  20-2-column-model-with-purpose-field: review
-  20-3-board-presets: review
-  20-4-preset-detachment-on-modification: review
+  epic-20: done  # Board & Column Foundation (Phase 13) — Board model, columns, presets, purpose field
+  20-1-board-model-and-project-association: done
+  20-2-column-model-with-purpose-field: done
+  20-3-board-presets: done
+  20-4-preset-detachment-on-modification: done
   epic-20-retrospective: optional
 
   # ============================================
   # PHASE 13: TASKS, COMMENTS & ASSETS
   # ============================================
 
-  epic-21: in-progress  # Tasks, Comments & Assets (Phase 13) — Task CRUD, hierarchy, comments with tags, task assets
-  21-1-task-model-and-crud: review
-  21-2-epic-story-hierarchy: review
-  21-3-task-assignment: review
-  21-4-move-task-between-columns: review
-  21-5-task-comment-model: review
-  21-6-task-assets: review
+  epic-21: done  # Tasks, Comments & Assets (Phase 13) — Task CRUD, hierarchy, comments with tags, task assets
+  21-1-task-model-and-crud: done
+  21-2-epic-story-hierarchy: done
+  21-3-task-assignment: done
+  21-4-move-task-between-columns: done
+  21-5-task-comment-model: done
+  21-6-task-assets: done
   epic-21-retrospective: optional
 
   # ============================================
   # PHASE 13+: BOARD UI & REAL-TIME
   # ============================================
 
-  epic-22: in-progress  # Board UI & Real-time (Phase 13+) — Kanban board, drag-and-drop, sidebar, ActionCable
-  22-1-board-page-and-column-layout: review
-  22-2-drag-and-drop-task-movement: review
-  22-3-task-detail-sidebar: review
-  22-4-workflow-in-progress-indicator: review
-  22-5-actioncable-real-time-board-updates: review
+  epic-22: done  # Board UI & Real-time (Phase 13+) — Kanban board, drag-and-drop, sidebar, ActionCable
+  22-1-board-page-and-column-layout: done
+  22-2-drag-and-drop-task-movement: done
+  22-3-task-detail-sidebar: done
+  22-4-workflow-in-progress-indicator: done
+  22-5-actioncable-real-time-board-updates: done
   epic-22-retrospective: optional
 
   # ============================================
   # PHASE 14: WORKFLOW TRIGGERS & BOARD MCP TOOLS
   # ============================================
 
-  epic-23: in-progress  # Workflow Triggers & Board MCP Tools (Phase 14) — Column-workflow bindings, auto/manual triggers, 13 MCP tools
-  23-1-column-workflow-binding-model: review
-  23-2-workflow-deletion-protection: review
-  23-3-auto-trigger-on-task-column-entry: review
-  23-4-manual-trigger-button: review
-  23-5-column-transition-history: review
-  23-6-board-mcp-read-tools: review  # 5 tools: list_tasks, get_task, get_comments, get_task_assets, get_board_info
-  23-7-board-mcp-write-tools: review  # 6 tools: create_task, update_task, move_task, add_comment, attach_asset, manage_tags
-  23-8-agent-self-diagnostic-tools: review  # 2 tools: fail_session, request_human_help
-  23-9-board-context-auto-resolution: review  # Auto-resolve board_id from session context
-  23-10-board-mcp-tools-seed-and-registration: review
+  epic-23: done  # Workflow Triggers & Board MCP Tools (Phase 14) — Column-workflow bindings, auto/manual triggers, 13 MCP tools
+  23-1-column-workflow-binding-model: done
+  23-2-workflow-deletion-protection: done
+  23-3-auto-trigger-on-task-column-entry: done
+  23-4-manual-trigger-button: done
+  23-5-column-transition-history: done
+  23-6-board-mcp-read-tools: done  # 5 tools: list_tasks, get_task, get_comments, get_task_assets, get_board_info
+  23-7-board-mcp-write-tools: done  # 6 tools: create_task, update_task, move_task, add_comment, attach_asset, manage_tags
+  23-8-agent-self-diagnostic-tools: done  # 2 tools: fail_session, request_human_help
+  23-9-board-context-auto-resolution: done  # Auto-resolve board_id from session context
+  23-10-board-mcp-tools-seed-and-registration: done
   epic-23-retrospective: optional
 
   # ============================================
   # PHASE 15: ACTIVITY FEED & FILTERED VIEWS (POST-MVP)
   # ============================================
 
-  epic-24: in-progress  # Activity Feed & Filtered Views (Post-MVP) — Activity events, feed UI, Ransack filters, saved presets
-  24-1-activity-event-model: review
-  24-2-board-activity-feed-api-and-ui: review
-  24-3-filtered-board-views: review
-  24-4-saved-filter-presets: review
+  epic-24: done  # Activity Feed & Filtered Views (Post-MVP) — Activity events, feed UI, Ransack filters, saved presets
+  24-1-activity-event-model: done
+  24-2-board-activity-feed-api-and-ui: done
+  24-3-filtered-board-views: done
+  24-4-saved-filter-presets: done
   epic-24-retrospective: optional
 
   # ============================================
   # PHASE 16: SESSION CONTEXT CONSTRUCTOR
   # ============================================
 
-  epic-25: backlog  # Unified Context Constructor & XML Renderer (Phase 16) — Composable builders, XML-tagged sections, sandwich pattern, JSON traceability
-  25-1-contextsection-value-object-and-contextrenderer: backlog
-  25-2-base-builder-interface-and-criticalrules-builder: backlog
-  25-3-core-builders-agentrole-sessioninfo-workspace-tools-resources: backlog
-  25-4-outputrules-builder-and-sandwich-pattern: backlog
-  25-5-sessioncontextconstructor-orchestrator-and-contextresult: backlog
-  25-6-context-traceability-storage-and-api: backlog
-  25-7-integrate-constructor-into-sessioncontextservice: backlog
+  epic-25: done  # Unified Context Constructor & XML Renderer (Phase 16) — Composable builders, XML-tagged sections, sandwich pattern, JSON traceability
+  25-1-contextsection-value-object-and-contextrenderer: done
+  25-2-base-builder-interface-and-criticalrules-builder: done
+  25-3-core-builders-agentrole-sessioninfo-workspace-tools-resources: done
+  25-4-outputrules-builder-and-sandwich-pattern: done
+  25-5-sessioncontextconstructor-orchestrator-and-contextresult: done
+  25-6-context-traceability-storage-and-api: done
+  25-7-integrate-constructor-into-sessioncontextservice: done
   epic-25-retrospective: optional
 
-  epic-26: backlog  # Workflow Context in Agent Sessions (Phase 16) — Workflow builder, sub-steps, previous steps, AGENT_PROMPT cleanup
-  26-1-workflowcontext-builder: backlog
-  26-2-sub-steps-checklist-section: backlog
-  26-3-previous-steps-summary-section: backlog
-  26-4-workflow-tools-section: backlog
-  26-5-simplify-agent-prompt-and-clean-up-workflowstepstrategy: backlog
+  epic-26: done  # Workflow Context in Agent Sessions (Phase 16) — Workflow builder, sub-steps, previous steps, AGENT_PROMPT cleanup
+  26-1-workflowcontext-builder: done
+  26-2-sub-steps-checklist-section: done
+  26-3-previous-steps-summary-section: done
+  26-4-workflow-tools-section: done
+  26-5-simplify-agent-prompt-and-clean-up-workflowstepstrategy: done
   epic-26-retrospective: optional
 
-  epic-27: backlog  # Board Task Context in Agent Sessions (Phase 16) — Board context builder, recent comments
-  27-1-boardcontext-builder: backlog
-  27-2-recent-comments-in-board-context: backlog
+  epic-27: done  # Board Task Context in Agent Sessions (Phase 16) — Board context builder, recent comments
+  27-1-boardcontext-builder: done
+  27-2-recent-comments-in-board-context: done
   epic-27-retrospective: optional
 
-  epic-28: backlog  # Context Optimization & Legacy Cleanup (Phase 16) — Token compression, orphaned code deletion
-  28-1-token-budget-compression: backlog
-  28-2-delete-workflowcontextassembler: backlog
-  28-3-clean-up-workflowstepstrategy-residual-methods: backlog
+  epic-28: done  # Context Optimization & Legacy Cleanup (Phase 16) — Token compression, orphaned code deletion
+  28-1-token-budget-compression: done
+  28-2-delete-workflowcontextassembler: done
+  28-3-clean-up-workflowstepstrategy-residual-methods: done
   epic-28-retrospective: optional
 
   # ============================================
   # PHASE 17: SESSION CONFIG CASCADE
   # ============================================
 
-  epic-29: backlog  # Session Config Resolver (Phase 17) — Additive resource merging, session-centric API, step required_agent_runtime
-  29-1-sessionconfigresolver-core-with-session-type-detection: backlog
-  29-2-additive-resource-resolution-tools-skills-mcp: backlog
-  29-3-workflow-inherit-all-project-resources-flag: backlog
-  29-4-input-assets-resolution-with-board-task-assets: backlog
-  29-5-step-required-agent-runtime-field: backlog
-  29-6-integrate-resolver-into-launch-step-session-activity: backlog
-  29-7-config-resolution-in-contextresult-traceability: backlog
+  epic-29: done  # Session Config Resolver (Phase 17) — Additive resource merging, session-centric API, step required_agent_runtime
+  29-1-sessionconfigresolver-core-with-session-type-detection: done
+  29-2-additive-resource-resolution-tools-skills-mcp: done
+  29-3-workflow-inherit-all-project-resources-flag: done
+  29-4-input-assets-resolution-with-board-task-assets: done
+  29-5-step-required-agent-runtime-field: done
+  29-6-integrate-resolver-into-launch-step-session-activity: done
+  29-7-config-resolution-in-contextresult-traceability: done
   epic-29-retrospective: optional
 
-  epic-30: backlog  # Default Agent Credential & Profile UI (Phase 17) — User default credential, auto-set, Profile selector, session prefill
-  30-1-user-default-agent-credential-id-field-and-auto-set: backlog
-  30-2-profile-page-default-agent-selector: backlog
-  30-3-standalone-session-launch-prefill-default-runtime: backlog
+  epic-30: done  # Default Agent Credential & Profile UI (Phase 17) — User default credential, auto-set, Profile selector, session prefill
+  30-1-user-default-agent-credential-id-field-and-auto-set: done
+  30-2-profile-page-default-agent-selector: done
+  30-3-standalone-session-launch-prefill-default-runtime: done
   epic-30-retrospective: optional
 
-  epic-31: backlog  # Workflow Base Resources & Builder UI (Phase 17) — Base resources API, Builder section, Inherit All toggle, step required runtime selector
-  31-1-workflow-base-resources-api: backlog
-  31-2-workflow-builder-base-resources-section-ui: backlog
-  31-3-workflow-builder-inherit-all-project-resources-toggle: backlog
-  31-4-step-required-agent-runtime-selector: backlog
+  epic-31: done  # Workflow Base Resources & Builder UI (Phase 17) — Base resources API, Builder section, Inherit All toggle, step required runtime selector
+  31-1-workflow-base-resources-api: done
+  31-2-workflow-builder-base-resources-section-ui: done
+  31-3-workflow-builder-inherit-all-project-resources-toggle: done
+  31-4-step-required-agent-runtime-selector: done
   epic-31-retrospective: optional

@@ -10,7 +10,7 @@ module Api
           end
 
           def create?
-            project_accessible?
+            project_admin?
           end
 
           def update?

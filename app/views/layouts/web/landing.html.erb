@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Palad — AI Agent Orchestration Platform</title>
+<title>Palad — Agentic SDLC Platform</title>
 <%= csrf_meta_tags %>
 <%= csp_meta_tag %>
 <link rel="icon" sizes="32x32" href="/favicon.ico">
@@ -85,7 +85,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:16px 0;background:rg
 nav.scrolled{padding:10px 0;background:rgba(9,9,11,.92)}
 .nav-inner{display:flex;align-items:center;justify-content:space-between;max-width:1200px;margin:0 auto;padding:0 24px}
 .nav-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:20px;color:var(--text-primary);letter-spacing:-.5px}
-.nav-logo svg{height:24px;width:auto;fill:currentColor}
+.nav-logo svg{height:48px;width:auto;fill:currentColor}
 .nav-links{display:flex;align-items:center;gap:32px;list-style:none}
 .nav-links a{color:var(--text-secondary);font-size:14px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;transition:color var(--dur-fast) ease;position:relative}
 .nav-links a::after{content:'';position:absolute;bottom:-4px;left:0;width:0;height:2px;background:var(--accent-blue);transition:width .3s var(--ease-out)}
@@ -142,6 +142,11 @@ nav.scrolled{padding:10px 0;background:rgba(9,9,11,.92)}
 .terminal-info{color:var(--accent-blue)}
 .cursor-blink{display:inline-block;width:8px;height:16px;background:var(--accent-green);margin-left:2px;vertical-align:middle;animation:blink 1s step-end infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* SDLC Diagram nodes */
+.sdlc-node-full{cursor:pointer;transition:opacity var(--dur-fast) ease}
+.sdlc-node-full circle:first-child{transition:stroke-width var(--dur-fast) ease,filter var(--dur-fast) ease}
+.sdlc-node-full:hover circle:first-child{stroke-width:3.5}
 
 /* T1-12: Carousel */
 .carousel-section{padding:40px 0;border-top:1px solid rgba(63,63,70,.3);border-bottom:1px solid rgba(63,63,70,.3);overflow:hidden;position:relative;z-index:1}
@@ -352,6 +357,25 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
   .feature-num{display:none}
   #cycleDiagram{width:320px;height:320px}
 }
+/* Contact modal */
+.contact-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s ease}
+.contact-overlay.open{opacity:1;pointer-events:auto}
+.contact-modal{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:40px;max-width:440px;width:90%;position:relative;transform:translateY(20px) scale(.97);transition:transform .25s ease}
+.contact-overlay.open .contact-modal{transform:translateY(0) scale(1)}
+.contact-modal h3{font-size:22px;font-weight:700;color:var(--text-primary);margin-bottom:6px}
+.contact-modal .modal-sub{font-size:14px;color:var(--text-secondary);margin-bottom:24px}
+.contact-modal .close-btn{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--text-muted);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:4px;transition:color .15s}
+.contact-modal .close-btn:hover{color:var(--text-primary)}
+.contact-form label{display:block;font-size:13px;color:var(--text-secondary);margin-bottom:4px;font-weight:500}
+.contact-form input{display:block;width:100%;padding:10px 14px;font-size:14px;background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-sm);color:var(--text-primary);margin-bottom:16px;outline:none;transition:border-color .15s}
+.contact-form input:focus{border-color:var(--accent-blue)}
+.contact-form input::placeholder{color:var(--text-muted)}
+.contact-form .submit-btn{width:100%;padding:12px;font-size:15px;font-weight:600;border:none;border-radius:var(--radius-sm);background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));color:#fff;cursor:pointer;transition:opacity .15s}
+.contact-form .submit-btn:hover{opacity:.9}
+.contact-form .submit-btn:disabled{opacity:.5;cursor:not-allowed}
+.contact-form .form-msg{text-align:center;font-size:13px;margin-top:12px;min-height:20px}
+.contact-form .form-msg.success{color:#22C55E}
+.contact-form .form-msg.error{color:#EF4444}
 </style>
 </head>
 <body>
@@ -372,7 +396,7 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 <nav id="nav">
   <div class="nav-inner">
     <a href="#" class="nav-logo">
-      <svg viewBox="0 0 1280 960" height="36" fill="currentColor"><use href="#palad-logo-paths"/></svg>
+      <svg viewBox="0 0 1280 960" height="48" fill="currentColor"><use href="#palad-logo-paths"/></svg>
     </a>
     <ul class="nav-links">
       <li><a href="#features">Product</a></li>
@@ -382,7 +406,7 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
     </ul>
     <div class="nav-actions">
       <a href="/login" class="btn btn-secondary" style="padding:8px 20px;font-size:14px">Log In</a>
-      <a href="/login" class="btn btn-primary" style="padding:8px 20px;font-size:14px">Get Started</a>
+      <button class="btn btn-primary" style="padding:8px 20px;font-size:14px" onclick="openContactModal()">Contact Us</button>
     </div>
   </div>
 </nav>
@@ -425,13 +449,13 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
      HERO — Large SVG Logo + Effects
      ========================================== -->
 <section class="hero">
-  <div class="floating-badge fb-1">$ palad workflow run api-feature</div>
-  <div class="floating-badge fb-2">&check; artifact: pr-142.diff saved</div>
-  <div class="floating-badge fb-3">tokens: 8.4k &middot; cost: $0.42</div>
+  <div class="floating-badge fb-1">Signals: 3 new bugs detected</div>
+  <div class="floating-badge fb-2">&check; Build: PR-142 created by Agent</div>
+  <div class="floating-badge fb-3">Audit: full trace logged</div>
   <div class="container" style="display:flex;flex-direction:column;align-items:center">
     <div class="hero-badge" style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.2s forwards">
       <div class="pulse-dot"></div>
-      Now in Beta
+      Agentic SDLC
     </div>
 
     <!-- T-NEW: Large SVG logo with animated gradient glow -->
@@ -593,38 +617,16 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
       </svg>
     </div>
 
-    <h1 style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.4s forwards"><span class="gradient-text">Orchestrate AI Agents</span><br>at Scale</h1>
-    <p style="font-size:18px;color:var(--text-secondary);max-width:560px;margin:0 auto 32px;line-height:1.7;opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.6s forwards">
-      Run Claude Code, Cursor CLI, Codex, and Gemini CLI in isolated containers. 
-      One platform for sessions, workflows, tools, and cost transparency.
+    <h1 style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.4s forwards"><span class="gradient-text">Your Entire SDLC,</span><br>Powered by AI Agents</h1>
+    <p style="font-size:18px;color:var(--text-secondary);max-width:620px;margin:0 auto 32px;line-height:1.7;opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.6s forwards">
+      AI agents handle every stage — from signals to deploy.
+      Humans stay in control. Every action is audited.
     </p>
     <div class="hero-actions" style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.8s forwards">
-      <a href="/login" class="btn btn-primary" id="ctaBtn">Start Free Trial →</a>
-      <a href="/login" class="btn btn-secondary">View Demo</a>
+      <button class="btn btn-primary" id="ctaBtn" onclick="openContactModal()">Contact Us →</button>
     </div>
 
-    <div class="hero-terminal" style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 3s forwards;position:relative">
-      <div class="terminal-scan"></div>
-      <div class="terminal-header">
-        <div class="terminal-dot red"></div>
-        <div class="terminal-dot yellow"></div>
-        <div class="terminal-dot green"></div>
-        <div class="terminal-title">palad — agent session</div>
-      </div>
-      <div class="terminal-body" id="hero-terminal">
-        <div class="terminal-line" data-delay="400"><span class="terminal-prompt">❯</span><span class="terminal-command" data-typewriter="palad session start --agent claude-code --project acme-api"></span></div>
-        <div class="terminal-line" data-delay="2200"><span class="terminal-status terminal-info">⟳ Pulling image claude-code:latest...</span></div>
-        <div class="terminal-line" data-delay="3200"><span class="terminal-status terminal-success">✓ Image ready</span></div>
-        <div class="terminal-line" data-delay="3800"><span class="terminal-status terminal-info">⟳ Creating container...</span></div>
-        <div class="terminal-line" data-delay="4600"><span class="terminal-status terminal-success">✓ Container created</span></div>
-        <div class="terminal-line" data-delay="5200"><span class="terminal-status terminal-info">⟳ Injecting credentials &amp; context...</span></div>
-        <div class="terminal-line" data-delay="6000"><span class="terminal-status terminal-success">✓ 3 MCPs, 2 skills, 1 repo mounted</span></div>
-        <div class="terminal-line" data-delay="6600"><span class="terminal-status terminal-info">⟳ Starting agent...</span></div>
-        <div class="terminal-line" data-delay="7400"><span class="terminal-status terminal-success">✓ Claude Code ready — session #1847</span></div>
-        <div class="terminal-line" data-delay="8200"><span class="terminal-output">Session live at <span style="color:var(--accent-blue)">https://palad.app/s/1847</span></span></div>
-        <div class="terminal-line" data-delay="9000"><span class="terminal-prompt">❯</span><span class="cursor-blink"></span></div>
-      </div>
-    </div>
+    <!-- Hero SDLC visual removed — full diagram in #cycle section below -->
   </div>
 </section>
 
@@ -655,9 +657,9 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 <!-- Features sticky showcase -->
 <section class="features" id="features">
   <div class="container">
-    <div class="section-eyebrow reveal"><div class="pulse-dot"></div> Platform</div>
-    <h2 class="section-title reveal d1">Everything your AI team needs</h2>
-    <p class="section-subtitle reveal d2">From interactive sessions to automated workflows — one platform to orchestrate all your AI coding agents.</p>
+    <div class="section-eyebrow reveal"><div class="pulse-dot"></div> Capabilities</div>
+    <h2 class="section-title reveal d1">Everything your agentic SDLC needs</h2>
+    <p class="section-subtitle reveal d2">From interactive sessions to automated workflows — the building blocks that power every stage of the lifecycle.</p>
     <div class="features-grid">
       <div class="features-nav reveal-left d3">
         <div class="feature-nav-item active" data-feature="sessions" onclick="switchFeature('sessions')"><span class="feature-num">01</span><div><h3>Agent Sessions</h3><p>Interactive and non-interactive sessions with any AI agent in isolated containers</p></div></div>
@@ -852,115 +854,313 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
   </div>
 </section>
 
-<!-- Continuous Improvement Cycle -->
+<!-- Agentic SDLC Lifecycle -->
 <section style="padding:120px 0" id="cycle">
   <div class="container">
     <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-amber)"></div> Methodology</div>
-      <h2 class="section-title reveal d1">Continuous improvement.<br><span class="gradient-text">Built into every cycle.</span></h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Palad automates the entire software development loop — from analysis to deployment, and back again.</p>
+      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-amber)"></div> Agentic SDLC</div>
+      <h2 class="section-title reveal d1">The complete agentic<br><span class="gradient-text">software lifecycle.</span></h2>
+      <p class="section-subtitle reveal d2" style="margin:0 auto">Three layers working in concert — humans set direction, AI agents execute each stage, and every action flows to an immutable audit core.</p>
     </div>
     <div class="reveal-scale d3" style="margin-top:60px;display:flex;justify-content:center">
-      <!--
-        5 nodes on a perfect circle: center=(300,300), R=190, nodeR=42
-        Angles: -90, -18, 54, 126, 198 degrees (starting top, clockwise)
-        Node 0 (Analyze):  300+190*cos(-90°)=300,   300+190*sin(-90°)=110
-        Node 1 (Plan):     300+190*cos(-18°)=480.7,  300+190*sin(-18°)=241.3
-        Node 2 (Review):   300+190*cos(54°)=411.7,   300+190*sin(54°)=453.7
-        Node 3 (Deploy):   300+190*cos(126°)=188.3,  300+190*sin(126°)=453.7
-        Node 4 (Code):     300+190*cos(198°)=119.3,  300+190*sin(198°)=241.3
-      -->
-      <svg id="cycleDiagram" viewBox="0 0 600 600" width="520" height="520" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg id="sdlcFullDiagram" viewBox="-30 -20 860 740" width="900" height="900" style="max-width:100%;height:auto" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <filter id="cycleGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="fDotGlow" x="-200%" y="-200%" width="500%" height="500%">
+            <feGaussianBlur stdDeviation="5" result="b1"/>
+            <feGaussianBlur stdDeviation="2" result="b2"/>
+            <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
           <marker id="arrowGray" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="10" markerHeight="7" orient="auto"><path d="M0 0 L10 3.5 L0 7 Z" fill="#52525B"/></marker>
+
+          <!-- Orbital paths for dots (must be <path> for animateMotion) -->
+          <path id="fOrbitOuter" d="M350 40 A310 310 0 0 1 660 350 A310 310 0 0 1 350 660 A310 310 0 0 1 40 350 A310 310 0 0 1 350 40 Z" fill="none" stroke="none"/>
+          <path id="fOrbitWorkflow" d="M350 110 A240 240 0 0 1 590 350 A240 240 0 0 1 350 590 A240 240 0 0 1 110 350 A240 240 0 0 1 350 110 Z" fill="none" stroke="none"/>
+          <path id="fOrbitAgents" d="M350 190 A160 160 0 0 1 510 350 A160 160 0 0 1 350 510 A160 160 0 0 1 190 350 A160 160 0 0 1 350 190 Z" fill="none" stroke="none"/>
+          <!-- Reverse (counter-clockwise) orbital paths -->
+          <path id="fOrbitOuterR" d="M350 40 A310 310 0 0 0 40 350 A310 310 0 0 0 350 660 A310 310 0 0 0 660 350 A310 310 0 0 0 350 40 Z" fill="none" stroke="none"/>
+          <path id="fOrbitWorkflowR" d="M350 110 A240 240 0 0 0 110 350 A240 240 0 0 0 350 590 A240 240 0 0 0 590 350 A240 240 0 0 0 350 110 Z" fill="none" stroke="none"/>
+          <path id="fOrbitAgentsR" d="M350 190 A160 160 0 0 0 190 350 A160 160 0 0 0 350 510 A160 160 0 0 0 510 350 A160 160 0 0 0 350 190 Z" fill="none" stroke="none"/>
+
+          <!-- Radial paths inward (8 stages) -->
+          <path id="fRad0" d="M350 40 L350 110 L350 190 L350 270" fill="none" stroke="none"/>
+          <path id="fRad1" d="M569 131 L524 176 L478 222 L406 294" fill="none" stroke="none"/>
+          <path id="fRad2" d="M660 350 L590 350 L510 350 L430 350" fill="none" stroke="none"/>
+          <path id="fRad3" d="M569 569 L524 524 L478 478 L406 406" fill="none" stroke="none"/>
+          <path id="fRad4" d="M350 660 L350 590 L350 510 L350 430" fill="none" stroke="none"/>
+          <path id="fRad5" d="M131 569 L176 524 L222 478 L294 406" fill="none" stroke="none"/>
+          <path id="fRad6" d="M40 350 L110 350 L190 350 L270 350" fill="none" stroke="none"/>
+          <path id="fRad7" d="M131 131 L176 176 L222 222 L294 294" fill="none" stroke="none"/>
+
+          <!-- Reverse radial (center outward) -->
+          <path id="fRadOut0" d="M350 270 L350 190 L350 110 L350 40" fill="none" stroke="none"/>
+          <path id="fRadOut4" d="M350 430 L350 510 L350 590 L350 660" fill="none" stroke="none"/>
+          <path id="fRadOut2" d="M430 350 L510 350 L590 350 L660 350" fill="none" stroke="none"/>
         </defs>
 
-        <!-- Center label -->
-        <text x="300" y="290" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="28" font-weight="700" opacity=".7">&#x221E;</text>
-        <text x="300" y="316" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="500">Continuous</text>
-        <text x="300" y="332" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="500">Improvement</text>
+        <!-- Three concentric rings -->
+        <circle cx="350" cy="350" r="310" stroke="#71717A" stroke-width="1.2" stroke-dasharray="6 4" fill="none" opacity=".5"/>
+        <circle cx="350" cy="350" r="240" stroke="#A1A1AA" stroke-width="1.5" fill="none" opacity=".4"/>
+        <circle cx="350" cy="350" r="160" stroke="#06B6D4" stroke-width="1.2" stroke-dasharray="4 3" fill="none" opacity=".5"/>
 
-        <!-- Dashed circle (guide) -->
-        <circle cx="300" cy="300" r="190" stroke="#3F3F46" stroke-width="1.5" stroke-dasharray="8 6" fill="none" opacity=".35"/>
+        <!-- Radial spokes: human → stage → agent → audit (8 lines, full radius) -->
+        <line x1="350" y1="40" x2="350" y2="270" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="569" y1="131" x2="406" y2="294" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="660" y1="350" x2="430" y2="350" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="569" y1="569" x2="406" y2="406" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="350" y1="660" x2="350" y2="430" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="131" y1="569" x2="294" y2="406" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="40" y1="350" x2="270" y2="350" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
+        <line x1="131" y1="131" x2="294" y2="294" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
 
-        <!-- Arrows between nodes — arcs along circle, dashed -->
-        <!-- Analyze(300,110) → Plan(481,241) -->
-        <path d="M340 118 A190 190 0 0 1 474 202" stroke="#52525B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrowGray)"/>
-        <!-- Plan(481,241) → Review(412,454) -->
-        <path d="M492 282 A190 190 0 0 1 444 422" stroke="#52525B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrowGray)"/>
-        <!-- Review(412,454) → Deploy(188,454) -->
-        <path d="M378 478 A190 190 0 0 1 222 478" stroke="#52525B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrowGray)"/>
-        <!-- Deploy(188,454) → Code(119,241) -->
-        <path d="M158 422 A190 190 0 0 1 110 282" stroke="#52525B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrowGray)"/>
-        <!-- Code(119,241) → Analyze(300,110) -->
-        <path d="M128 202 A190 190 0 0 1 260 118" stroke="#52525B" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#arrowGray)"/>
+        <!-- Layer labels (horizontal) -->
+        <text x="200" y="30" text-anchor="start" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600" letter-spacing="3" opacity=".7">HUMANS</text>
+        <text x="350" y="478" text-anchor="middle" fill="#06B6D4" font-family="Inter,sans-serif" font-size="11" font-weight="600" letter-spacing="2.5" opacity=".6">AGENTS</text>
 
-        <!-- Node 0: Analyze — top — #3B82F6 blue -->
-        <g class="cycle-node">
-          <circle cx="300" cy="110" r="42" fill="none" stroke="#3B82F6" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <!-- bar chart icon -->
-          <rect x="282" y="100" width="6" height="18" rx="1" fill="#3B82F6"/>
-          <rect x="292" y="94" width="6" height="24" rx="1" fill="#3B82F6"/>
-          <rect x="302" y="104" width="6" height="14" rx="1" fill="#3B82F6"/>
-          <rect x="312" y="97" width="6" height="21" rx="1" fill="#3B82F6"/>
-          <text x="300" y="65" text-anchor="middle" fill="#3B82F6" font-family="Inter,sans-serif" font-size="12" font-weight="600">Analyze</text>
+        <!-- Center: Immutable Audit -->
+        <circle cx="350" cy="350" r="80" fill="rgba(245,158,11,.03)" stroke="#F59E0B" stroke-width="1.5" opacity=".5" stroke-dasharray="4 3"/>
+        <circle cx="350" cy="350" r="66" fill="rgba(245,158,11,.06)"/>
+        <text x="350" y="330" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="17" font-weight="700" opacity=".9">Immutable</text>
+        <text x="350" y="351" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="17" font-weight="700" opacity=".9">Audit</text>
+        <text x="350" y="370" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Logs · Governance</text>
+        <text x="350" y="383" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Compliance · Traceability</text>
+        <text x="350" y="396" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Explainability</text>
+
+        <!-- Arrows between stages on workflow ring -->
+        <path d="M408 116 A240 240 0 0 1 556 172" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+        <path d="M596 296 A240 240 0 0 1 596 404" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+        <path d="M556 528 A240 240 0 0 1 408 584" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+        <path d="M292 584 A240 240 0 0 1 144 528" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+        <path d="M104 404 A240 240 0 0 1 104 296" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+        <path d="M144 172 A240 240 0 0 1 292 116" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
+
+        <!-- 8 Workflow Nodes on middle ring (R=240, center=350) -->
+        <!-- 0: Signals (top, -90deg) = (350, 110) -->
+        <g class="sdlc-node-full" data-stage="signals">
+          <circle cx="350" cy="110" r="38" fill="#09090B" stroke="#3B82F6" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <path d="M344 106 A8 8 0 0 1 356 106" stroke="#3B82F6" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M339 101 A16 16 0 0 1 361 101" stroke="#3B82F6" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".5"/>
+          <circle cx="350" cy="112" r="3" fill="#3B82F6"/>
+          <text x="350" y="62" text-anchor="middle" fill="#3B82F6" font-family="Inter,sans-serif" font-size="15" font-weight="600">Signals</text>
+          <text x="350" y="166" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Features | Bugs | Security</text>
         </g>
 
-        <!-- Node 1: Plan — top-right — #F59E0B amber -->
-        <g class="cycle-node">
-          <circle cx="481" cy="241" r="42" fill="none" stroke="#F59E0B" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <!-- trending up icon -->
-          <polyline points="463,254 475,238 487,246 499,228" stroke="#F59E0B" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="492,228 499,228 499,235" stroke="#F59E0B" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="536" y="246" text-anchor="start" fill="#F59E0B" font-family="Inter,sans-serif" font-size="12" font-weight="600">Plan</text>
+        <!-- 1: Triage (-45deg) = (520, 180) -->
+        <g class="sdlc-node-full" data-stage="triage">
+          <circle cx="520" cy="180" r="38" fill="#09090B" stroke="#22C55E" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <polygon points="510,172 530,172 524,183 516,183" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-linejoin="round"/>
+          <line x1="518" y1="183" x2="518" y2="192" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="522" y1="183" x2="522" y2="190" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
+          <text x="475" y="132" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="15" font-weight="600">Triage</text>
+          <text x="565" y="236" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Evaluate | Value | Scope</text>
         </g>
 
-        <!-- Node 2: Review — bottom-right — #A855F7 purple -->
-        <g class="cycle-node">
-          <circle cx="412" cy="454" r="42" fill="none" stroke="#A855F7" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <!-- clipboard check icon -->
-          <rect x="398" y="438" width="20" height="26" rx="3" fill="none" stroke="#A855F7" stroke-width="2"/>
-          <rect x="403" y="435" width="10" height="5" rx="1.5" fill="#A855F7"/>
-          <polyline points="403,454 407,458 416,449" stroke="#A855F7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="466" y="472" text-anchor="start" fill="#A855F7" font-family="Inter,sans-serif" font-size="12" font-weight="600">Review</text>
+        <!-- 2: Plan (0deg, right) = (590, 350) -->
+        <g class="sdlc-node-full" data-stage="plan">
+          <circle cx="590" cy="350" r="38" fill="#09090B" stroke="#F59E0B" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <polyline points="577,358 585,346 593,352 601,340" stroke="#F59E0B" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="596,340 601,340 601,345" stroke="#F59E0B" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="590" y="302" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="15" font-weight="600">Plan</text>
+          <text x="590" y="406" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Prioritize | Decompose</text>
         </g>
 
-        <!-- Node 3: Deploy — bottom-left — #F97316 orange -->
-        <g class="cycle-node">
-          <circle cx="188" cy="454" r="42" fill="none" stroke="#F97316" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <!-- monitor icon -->
-          <rect x="172" y="440" width="24" height="16" rx="2" fill="none" stroke="#F97316" stroke-width="2"/>
-          <line x1="184" y1="456" x2="184" y2="462" stroke="#F97316" stroke-width="2"/>
-          <line x1="177" y1="462" x2="191" y2="462" stroke="#F97316" stroke-width="2" stroke-linecap="round"/>
-          <!-- inner glow line -->
-          <line x1="176" y1="453" x2="192" y2="453" stroke="#F97316" stroke-width="1" opacity=".4"/>
-          <text x="188" y="510" text-anchor="middle" fill="#F97316" font-family="Inter,sans-serif" font-size="12" font-weight="600">Deploy</text>
+        <!-- 3: Build (45deg) = (520, 520) -->
+        <g class="sdlc-node-full" data-stage="build">
+          <circle cx="520" cy="520" r="38" fill="#09090B" stroke="#A855F7" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <polyline points="512,512 505,520 512,528" stroke="#A855F7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="528,512 535,520 528,528" stroke="#A855F7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <line x1="523" y1="510" x2="517" y2="530" stroke="#A855F7" stroke-width="1.5" stroke-linecap="round"/>
+          <text x="565" y="472" text-anchor="middle" fill="#A855F7" font-family="Inter,sans-serif" font-size="15" font-weight="600">Build</text>
+          <text x="475" y="576" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Design | Code</text>
         </g>
 
-        <!-- Node 4: Code — top-left — #06B6D4 cyan -->
-        <g class="cycle-node">
-          <circle cx="119" cy="241" r="42" fill="none" stroke="#06B6D4" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <!-- code brackets icon -->
-          <polyline points="107,231 97,241 107,251" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="131,231 141,241 131,251" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="123" y1="229" x2="115" y2="253" stroke="#06B6D4" stroke-width="2" stroke-linecap="round"/>
-          <text x="64" y="246" text-anchor="end" fill="#06B6D4" font-family="Inter,sans-serif" font-size="12" font-weight="600">Code</text>
+        <!-- 4: Test (90deg, bottom) = (350, 590) -->
+        <g class="sdlc-node-full" data-stage="test">
+          <circle cx="350" cy="590" r="38" fill="#09090B" stroke="#06B6D4" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <rect x="338" y="580" width="24" height="20" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.5"/>
+          <polyline points="343,590 348,596 358,585" stroke="#06B6D4" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="350" y="542" text-anchor="middle" fill="#06B6D4" font-family="Inter,sans-serif" font-size="15" font-weight="600">Test</text>
+          <text x="350" y="646" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Automated | Manual QA</text>
         </g>
 
-        <!-- Traveling energy dots along the perfect circle -->
-        <circle r="4.5" fill="#3B82F6" filter="url(#cycleGlow)" opacity=".85">
-          <animateMotion dur="10s" repeatCount="indefinite" rotate="auto">
-            <mpath href="#cycleOrbitPath"/>
-          </animateMotion>
+        <!-- 5: Review (135deg) = (180, 520) -->
+        <g class="sdlc-node-full" data-stage="review">
+          <circle cx="180" cy="520" r="38" fill="#09090B" stroke="#EF4444" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <rect x="169" y="510" width="18" height="24" rx="2.5" fill="none" stroke="#EF4444" stroke-width="1.5"/>
+          <rect x="173" y="508" width="8" height="4" rx="1.5" fill="#EF4444"/>
+          <polyline points="173,523 176,527 185,519" stroke="#EF4444" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="135" y="472" text-anchor="middle" fill="#EF4444" font-family="Inter,sans-serif" font-size="15" font-weight="600">Review</text>
+          <text x="225" y="576" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Merge Requests | UAT</text>
+        </g>
+
+        <!-- 6: Deploy (180deg, left) = (110, 350) -->
+        <g class="sdlc-node-full" data-stage="deploy">
+          <circle cx="110" cy="350" r="38" fill="#09090B" stroke="#F97316" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <path d="M110 340 L110 362 M103 354 L110 362 L117 354" stroke="#F97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="110" cy="344" r="3.5" fill="none" stroke="#F97316" stroke-width="1.3"/>
+          <text x="110" y="302" text-anchor="middle" fill="#F97316" font-family="Inter,sans-serif" font-size="15" font-weight="600">Deploy</text>
+          <text x="110" y="406" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">CI/CD | Smoke Test</text>
+        </g>
+
+        <!-- 7: Monitor (225deg) = (180, 180) -->
+        <g class="sdlc-node-full" data-stage="monitor">
+          <circle cx="180" cy="180" r="38" fill="#09090B" stroke="#EC4899" stroke-width="2.5" filter="url(#cycleGlow)"/>
+          <path d="M166 180 Q180 166 194 180 Q180 194 166 180Z" stroke="#EC4899" stroke-width="1.8" fill="none"/>
+          <circle cx="180" cy="180" r="5" fill="#EC4899" opacity=".5"/>
+          <text x="225" y="132" text-anchor="middle" fill="#EC4899" font-family="Inter,sans-serif" font-size="15" font-weight="600">Monitor</text>
+          <text x="135" y="236" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Canary | Health | Logs</text>
+        </g>
+
+        <!-- Human icons on outer ring R=310, SAME angles as stages -->
+        <!-- 0°: top -->
+        <g transform="translate(350,40)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 45° -->
+        <g transform="translate(569,131)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 90° -->
+        <g transform="translate(660,350)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 135° -->
+        <g transform="translate(569,569)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 180° -->
+        <g transform="translate(350,660)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 225° -->
+        <g transform="translate(131,569)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 270° -->
+        <g transform="translate(40,350)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+        <!-- 315° -->
+        <g transform="translate(131,131)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
+
+        <!-- Agent (robot head) icons on inner ring R=160, SAME angles as stages -->
+        <!-- 0°: top -->
+        <g transform="translate(350,190)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 45° -->
+        <g transform="translate(463,237)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 90° -->
+        <g transform="translate(510,350)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 135° -->
+        <g transform="translate(463,463)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 180° -->
+        <g transform="translate(350,510)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 225° -->
+        <g transform="translate(237,463)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 270° -->
+        <g transform="translate(190,350)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+        <!-- 315° -->
+        <g transform="translate(237,237)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
+
+        <!-- Animated dots: Orbital -->
+        <circle r="4.5" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".85">
+          <animateMotion dur="20s" repeatCount="indefinite"><mpath href="#fOrbitWorkflow"/></animateMotion>
         </circle>
-        <circle r="3" fill="#F59E0B" filter="url(#cycleGlow)" opacity=".65">
-          <animateMotion dur="10s" repeatCount="indefinite" begin="-4s" rotate="auto">
-            <mpath href="#cycleOrbitPath"/>
-          </animateMotion>
+        <circle r="3.5" fill="#A855F7" filter="url(#fDotGlow)" opacity=".7">
+          <animateMotion dur="20s" repeatCount="indefinite" begin="-7s"><mpath href="#fOrbitWorkflow"/></animateMotion>
         </circle>
-        <!-- Hidden circular path for animateMotion -->
-        <path id="cycleOrbitPath" d="M300 110 A190 190 0 0 1 481 241 A190 190 0 0 1 412 454 A190 190 0 0 1 188 454 A190 190 0 0 1 119 241 A190 190 0 0 1 300 110 Z" fill="none" stroke="none"/>
+        <circle r="4" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".75">
+          <animateMotion dur="20s" repeatCount="indefinite" begin="-14s"><mpath href="#fOrbitWorkflow"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".6">
+          <animateMotion dur="24s" repeatCount="indefinite" begin="-4s"><mpath href="#fOrbitWorkflow"/></animateMotion>
+        </circle>
+        <!-- Outer ring (Humans) -->
+        <circle r="4" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".45">
+          <animateMotion dur="30s" repeatCount="indefinite"><mpath href="#fOrbitOuter"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#A855F7" filter="url(#fDotGlow)" opacity=".35">
+          <animateMotion dur="30s" repeatCount="indefinite" begin="-15s"><mpath href="#fOrbitOuter"/></animateMotion>
+        </circle>
+        <circle r="3.5" fill="#EC4899" filter="url(#fDotGlow)" opacity=".4">
+          <animateMotion dur="34s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitOuter"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#F97316" filter="url(#fDotGlow)" opacity=".35">
+          <animateMotion dur="28s" repeatCount="indefinite" begin="-20s"><mpath href="#fOrbitOuter"/></animateMotion>
+        </circle>
+        <!-- Inner ring (Agents) -->
+        <circle r="3.5" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".7">
+          <animateMotion dur="14s" repeatCount="indefinite"><mpath href="#fOrbitAgents"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#A855F7" filter="url(#fDotGlow)" opacity=".55">
+          <animateMotion dur="14s" repeatCount="indefinite" begin="-5s"><mpath href="#fOrbitAgents"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".5">
+          <animateMotion dur="11s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitAgents"/></animateMotion>
+        </circle>
+        <circle r="2" fill="#22C55E" filter="url(#fDotGlow)" opacity=".45">
+          <animateMotion dur="16s" repeatCount="indefinite" begin="-3s"><mpath href="#fOrbitAgents"/></animateMotion>
+        </circle>
+        <!-- Extra workflow ring dots -->
+        <circle r="2.5" fill="#EF4444" filter="url(#fDotGlow)" opacity=".5">
+          <animateMotion dur="22s" repeatCount="indefinite" begin="-11s"><mpath href="#fOrbitWorkflow"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#22C55E" filter="url(#fDotGlow)" opacity=".55">
+          <animateMotion dur="26s" repeatCount="indefinite" begin="-18s"><mpath href="#fOrbitWorkflow"/></animateMotion>
+        </circle>
+
+        <!-- Counter-clockwise dots — Outer ring -->
+        <circle r="3" fill="#6366F1" filter="url(#fDotGlow)" opacity=".4">
+          <animateMotion dur="32s" repeatCount="indefinite"><mpath href="#fOrbitOuterR"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#14B8A6" filter="url(#fDotGlow)" opacity=".35">
+          <animateMotion dur="28s" repeatCount="indefinite" begin="-10s"><mpath href="#fOrbitOuterR"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#F43F5E" filter="url(#fDotGlow)" opacity=".35">
+          <animateMotion dur="35s" repeatCount="indefinite" begin="-22s"><mpath href="#fOrbitOuterR"/></animateMotion>
+        </circle>
+        <!-- Counter-clockwise dots — Workflow ring -->
+        <circle r="3.5" fill="#8B5CF6" filter="url(#fDotGlow)" opacity=".6">
+          <animateMotion dur="22s" repeatCount="indefinite" begin="-3s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".5">
+          <animateMotion dur="18s" repeatCount="indefinite" begin="-12s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#10B981" filter="url(#fDotGlow)" opacity=".45">
+          <animateMotion dur="25s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
+        </circle>
+        <!-- Counter-clockwise dots — Agents ring -->
+        <circle r="3" fill="#EC4899" filter="url(#fDotGlow)" opacity=".6">
+          <animateMotion dur="16s" repeatCount="indefinite" begin="-2s"><mpath href="#fOrbitAgentsR"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#F97316" filter="url(#fDotGlow)" opacity=".5">
+          <animateMotion dur="12s" repeatCount="indefinite" begin="-7s"><mpath href="#fOrbitAgentsR"/></animateMotion>
+        </circle>
+        <circle r="2" fill="#6366F1" filter="url(#fDotGlow)" opacity=".45">
+          <animateMotion dur="18s" repeatCount="indefinite" begin="-11s"><mpath href="#fOrbitAgentsR"/></animateMotion>
+        </circle>
+
+        <!-- Radial inward dots (data flowing to Audit) -->
+        <circle r="3" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".8">
+          <animateMotion dur="5s" repeatCount="indefinite"><mpath href="#fRad0"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".7">
+          <animateMotion dur="6s" repeatCount="indefinite" begin="-1s"><mpath href="#fRad1"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".75">
+          <animateMotion dur="5.5s" repeatCount="indefinite" begin="-2.5s"><mpath href="#fRad2"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#fDotGlow)" opacity=".7">
+          <animateMotion dur="6.5s" repeatCount="indefinite" begin="-0.5s"><mpath href="#fRad3"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".8">
+          <animateMotion dur="5s" repeatCount="indefinite" begin="-3.5s"><mpath href="#fRad4"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#EF4444" filter="url(#fDotGlow)" opacity=".7">
+          <animateMotion dur="6s" repeatCount="indefinite" begin="-2s"><mpath href="#fRad5"/></animateMotion>
+        </circle>
+        <circle r="3" fill="#F97316" filter="url(#fDotGlow)" opacity=".75">
+          <animateMotion dur="5.5s" repeatCount="indefinite" begin="-1.5s"><mpath href="#fRad6"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#EC4899" filter="url(#fDotGlow)" opacity=".65">
+          <animateMotion dur="6s" repeatCount="indefinite" begin="-4s"><mpath href="#fRad7"/></animateMotion>
+        </circle>
+
+        <!-- Radial outward dots (results returning from Audit) -->
+        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".6">
+          <animateMotion dur="7s" repeatCount="indefinite"><mpath href="#fRadOut0"/></animateMotion>
+        </circle>
+        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".55">
+          <animateMotion dur="8s" repeatCount="indefinite" begin="-3s"><mpath href="#fRadOut4"/></animateMotion>
+        </circle>
+        <circle r="2" fill="#22C55E" filter="url(#fDotGlow)" opacity=".5">
+          <animateMotion dur="7.5s" repeatCount="indefinite" begin="-5s"><mpath href="#fRadOut2"/></animateMotion>
+        </circle>
       </svg>
     </div>
   </div>
@@ -1028,6 +1228,42 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
           <a href="#" class="integration-link">Read the docs →</a>
         </div>
       </div>
+      <div class="integration-divider"></div>
+      <div class="integration-item reveal" style="transition-delay:.7s">
+        <div class="integration-number">07</div>
+        <div class="integration-body">
+          <h3 class="integration-title">AI model providers</h3>
+          <p class="integration-desc">Anthropic Claude, OpenAI Codex, Google Gemini, and any OpenAI-compatible endpoint. Assign the right model to each SDLC stage — use Claude for planning, Codex for code generation, Gemini for review.</p>
+          <a href="#" class="integration-link">Read the docs →</a>
+        </div>
+      </div>
+      <div class="integration-divider"></div>
+      <div class="integration-item reveal" style="transition-delay:.8s">
+        <div class="integration-number">08</div>
+        <div class="integration-body">
+          <h3 class="integration-title">Container runtimes & orchestration</h3>
+          <p class="integration-desc">Docker, Kubernetes, or your custom runtime. Every agent session runs in complete isolation. Scale horizontally with your existing infrastructure.</p>
+          <a href="#" class="integration-link">Read the docs →</a>
+        </div>
+      </div>
+      <div class="integration-divider"></div>
+      <div class="integration-item reveal" style="transition-delay:.9s">
+        <div class="integration-number">09</div>
+        <div class="integration-body">
+          <h3 class="integration-title">Monitoring & observability</h3>
+          <p class="integration-desc">Export metrics to Datadog, Grafana, or Prometheus. Track agent performance, workflow durations, error rates, and cost efficiency across all SDLC stages.</p>
+          <a href="#" class="integration-link">Read the docs →</a>
+        </div>
+      </div>
+      <div class="integration-divider"></div>
+      <div class="integration-item reveal" style="transition-delay:1s">
+        <div class="integration-number">10</div>
+        <div class="integration-body">
+          <h3 class="integration-title">Security scanning & compliance</h3>
+          <p class="integration-desc">Integrate Snyk, SonarQube, or Semgrep as workflow steps. Agents automatically run security scans, flag vulnerabilities, and enforce coding standards before merge.</p>
+          <a href="#" class="integration-link">Read the docs →</a>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -1037,66 +1273,79 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
   <div class="container">
     <div style="text-align:center">
       <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-purple)"></div> Why Palad</div>
-      <h2 class="section-title reveal d1">Built for teams, not individuals</h2>
+      <h2 class="section-title reveal d1">Built for teams, auditable by design</h2>
+      <p class="section-subtitle reveal d2" style="margin:0 auto">Palad brings the missing layer between humans and AI agents — governance, traceability, and control at every stage of your SDLC.</p>
     </div>
     <div class="bento-grid">
-      <!-- Large card: Isolated Containers -->
       <div class="bento-card bento-wide reveal d1">
-        <div class="bento-card-visual" style="color:var(--accent-blue)">
-          <svg width="120" height="80" viewBox="0 0 120 80" fill="none">
-            <rect x="5" y="15" width="40" height="32" rx="4" stroke="currentColor" stroke-width="1.5" opacity=".5"/>
-            <rect x="15" y="5" width="40" height="32" rx="4" stroke="currentColor" stroke-width="1.5" opacity=".7"/>
-            <rect x="25" y="0" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2" fill="rgba(59,130,246,.08)"/>
-            <line x1="32" y1="10" x2="58" y2="10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>
-            <line x1="32" y1="16" x2="52" y2="16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity=".3"/>
-            <!-- Lock icon -->
-            <rect x="85" y="28" width="20" height="16" rx="3" stroke="currentColor" stroke-width="2"/>
-            <path d="M89 28V22a6 6 0 0 1 12 0v6" stroke="currentColor" stroke-width="2" fill="none"/>
-            <circle cx="95" cy="36" r="2" fill="currentColor"/>
+        <div class="bento-card-visual" style="color:var(--accent-amber)">
+          <svg width="120" height="70" viewBox="0 0 120 70" fill="none">
+            <circle cx="60" cy="35" r="28" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" opacity=".4"/>
+            <circle cx="60" cy="35" r="18" stroke="currentColor" stroke-width="1.5" fill="rgba(245,158,11,.08)"/>
+            <text x="60" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="9" font-weight="700">AUDIT</text>
+            <line x1="20" y1="15" x2="38" y2="24" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
+            <line x1="100" y1="15" x2="82" y2="24" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
+            <line x1="60" y1="63" x2="60" y2="55" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
           </svg>
         </div>
-        <h3>Isolated Containers</h3>
-        <p>Every session runs in its own Docker or Kubernetes container. No shared state, no credential leaks, no cross-contamination between agents.</p>
+        <h3>Immutable Audit Core</h3>
+        <p>Every agent action, every workflow step, every artifact — logged with full provenance. Governance, compliance, and explainability built into the platform from day one.</p>
       </div>
-      <!-- Large card: Full Provenance -->
       <div class="bento-card bento-wide reveal d2">
-        <div class="bento-card-visual" style="color:var(--accent-green)">
-          <svg width="140" height="60" viewBox="0 0 140 60" fill="none">
-            <rect x="0" y="18" width="26" height="24" rx="5" stroke="currentColor" stroke-width="1.8"/>
-            <text x="13" y="34" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">WF</text>
-            <line x1="26" y1="30" x2="42" y2="30" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
-            <rect x="42" y="18" width="26" height="24" rx="5" stroke="currentColor" stroke-width="1.8"/>
-            <text x="55" y="34" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">S3</text>
-            <line x1="68" y1="30" x2="84" y2="30" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
-            <rect x="84" y="18" width="26" height="24" rx="5" stroke="currentColor" stroke-width="1.8"/>
-            <text x="97" y="34" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">AI</text>
-            <line x1="110" y1="30" x2="120" y2="30" stroke="currentColor" stroke-width="1.5" stroke-dasharray="3 2"/>
-            <text x="130" y="34" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="10">→ 📄</text>
+        <div class="bento-card-visual" style="color:var(--accent-blue)">
+          <svg width="130" height="70" viewBox="0 0 130 70" fill="none">
+            <circle cx="30" cy="35" r="12" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
+            <text x="30" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">H</text>
+            <line x1="42" y1="35" x2="53" y2="35" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/>
+            <circle cx="65" cy="35" r="12" stroke="currentColor" stroke-width="2" fill="rgba(59,130,246,.08)"/>
+            <text x="65" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">WF</text>
+            <line x1="77" y1="35" x2="88" y2="35" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/>
+            <circle cx="100" cy="35" r="12" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
+            <text x="100" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">AI</text>
           </svg>
         </div>
-        <h3>Full Provenance</h3>
-        <p>Every artifact knows its origin — which workflow, step, agent, and session created it. Complete lineage from ticket to code.</p>
+        <h3>Three-Layer Architecture</h3>
+        <p>Humans set direction, workflows orchestrate the stages, AI agents execute in isolated containers. Clear separation of control, logic, and execution.</p>
       </div>
-      <!-- Small cards row -->
       <div class="bento-card reveal d3">
         <div class="bento-card-accent" style="background:var(--accent-purple)"></div>
-        <h3>Multi-Agent</h3>
-        <p>Claude for planning, Codex for generation, Gemini for review — in a single workflow.</p>
+        <h3>Multi-Agent Orchestration</h3>
+        <p>Claude for planning, Codex for generation, Gemini for review — chain different agents across SDLC stages in a single workflow.</p>
       </div>
       <div class="bento-card reveal d4">
         <div class="bento-card-accent" style="background:var(--accent-cyan)"></div>
-        <h3>Custom Tools</h3>
-        <p>Package any script as a Docker tool. Fetch data, run linters, deploy — anything containerized.</p>
+        <h3>8 SDLC Stages Covered</h3>
+        <p>Signals, Triage, Plan, Build, Test, Review, Deploy, Monitor — agents participate at every stage, not just code generation.</p>
       </div>
       <div class="bento-card reveal d5">
-        <div class="bento-card-accent" style="background:var(--accent-blue)"></div>
-        <h3>Cost Transparency</h3>
-        <p>Token usage and costs tracked per session, user, and project. No surprise bills.</p>
+        <div class="bento-card-accent" style="background:var(--accent-green)"></div>
+        <h3>Human-in-the-Loop</h3>
+        <p>Humans approve at key gates — triage decisions, code reviews, deploy sign-offs. AI proposes, humans dispose.</p>
       </div>
       <div class="bento-card reveal d6">
-        <div class="bento-card-accent" style="background:var(--accent-green)"></div>
-        <h3>Team Workflows</h3>
-        <p>Multi-step workflows with human review gates. Everyone sees real-time progress.</p>
+        <div class="bento-card-accent" style="background:var(--accent-blue)"></div>
+        <h3>Cost & Token Transparency</h3>
+        <p>Per-session, per-agent, per-stage cost tracking. Know exactly what each SDLC stage costs and optimize accordingly.</p>
+      </div>
+      <div class="bento-card reveal d3">
+        <div class="bento-card-accent" style="background:var(--accent-red)"></div>
+        <h3>Isolated Execution</h3>
+        <p>Every agent session runs in its own Docker or K8s container. No shared state, no credential leaks, no cross-contamination.</p>
+      </div>
+      <div class="bento-card reveal d4">
+        <div class="bento-card-accent" style="background:var(--accent-amber)"></div>
+        <h3>Full Traceability</h3>
+        <p>Every artifact carries its lineage — which signal triggered it, which agent built it, who approved it. From ticket to production.</p>
+      </div>
+      <div class="bento-card reveal d1">
+        <div class="bento-card-accent" style="background:var(--accent-cyan)"></div>
+        <h3>Workflow Templates</h3>
+        <p>Pre-built and customizable workflow templates for common SDLC patterns. Start in minutes, tailor to your team's process over time.</p>
+      </div>
+      <div class="bento-card reveal d2">
+        <div class="bento-card-accent" style="background:var(--accent-purple)"></div>
+        <h3>Extensible Integrations</h3>
+        <p>Connect to your existing stack — Git, CI/CD, monitoring, ticketing systems. Agents work with your tools, not instead of them.</p>
       </div>
     </div>
   </div>
@@ -1142,45 +1391,15 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
   </div>
 </section>
 
-<!-- Testimonial — immersive design -->
-<section class="testimonials-section" style="position:relative;overflow:hidden">
-  <div class="container" style="position:relative;z-index:1">
-    <div class="reveal-scale" style="max-width:800px;margin:0 auto;position:relative">
-      <!-- Large decorative quote marks -->
-      <div style="position:absolute;top:-20px;left:-10px;font-size:120px;font-weight:900;line-height:1;color:var(--accent-blue);opacity:.07;user-select:none;font-family:Georgia,serif">"</div>
-      <div style="position:absolute;bottom:-60px;right:-10px;font-size:120px;font-weight:900;line-height:1;color:var(--accent-purple);opacity:.07;user-select:none;font-family:Georgia,serif;transform:rotate(180deg)">"</div>
-      <!-- Glowing border card -->
-      <div style="position:relative;padding:56px 48px;background:linear-gradient(135deg,rgba(24,24,27,.9),rgba(24,24,27,.7));border:1px solid rgba(59,130,246,.15);border-radius:var(--radius-xl);backdrop-filter:blur(10px);box-shadow:0 0 60px rgba(59,130,246,.04),0 20px 40px rgba(0,0,0,.3)">
-        <!-- Top accent line -->
-        <div style="position:absolute;top:0;left:48px;right:48px;height:2px;background:linear-gradient(90deg,transparent,var(--accent-blue),var(--accent-purple),transparent);border-radius:1px"></div>
-        <p style="font-size:22px;line-height:1.8;color:var(--text-primary);font-weight:400;margin-bottom:36px;letter-spacing:-.2px">Palad turned our chaotic mix of local AI tools into a <span style="color:var(--accent-blue);font-weight:500">controlled, measurable process</span>. We finally know what our AI usage costs and every artifact has a <span style="color:var(--accent-purple);font-weight:500">clear provenance</span>.</p>
-        <div style="display:flex;align-items:center;gap:16px">
-          <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:18px;flex-shrink:0">AP</div>
-          <div>
-            <div style="font-weight:600;font-size:16px">Artem Petrov</div>
-            <div style="font-size:14px;color:var(--text-muted)">Creator & Lead Developer, Palad</div>
-          </div>
-          <div style="margin-left:auto;display:flex;gap:4px">
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#3B82F6"><polygon points="9,1 11.5,6.5 17.5,7 13,11 14.5,17 9,14 3.5,17 5,11 0.5,7 6.5,6.5"/></svg>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#3B82F6"><polygon points="9,1 11.5,6.5 17.5,7 13,11 14.5,17 9,14 3.5,17 5,11 0.5,7 6.5,6.5"/></svg>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#3B82F6"><polygon points="9,1 11.5,6.5 17.5,7 13,11 14.5,17 9,14 3.5,17 5,11 0.5,7 6.5,6.5"/></svg>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#3B82F6"><polygon points="9,1 11.5,6.5 17.5,7 13,11 14.5,17 9,14 3.5,17 5,11 0.5,7 6.5,6.5"/></svg>
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#3B82F6"><polygon points="9,1 11.5,6.5 17.5,7 13,11 14.5,17 9,14 3.5,17 5,11 0.5,7 6.5,6.5"/></svg>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
+
 
 <!-- CTA -->
 <section class="cta-section">
   <div class="container">
-    <h2 class="reveal glitch-hover">Ready to orchestrate<br>your AI agents?</h2>
-    <p class="reveal d1">Start building with AI agents today. No credit card required.</p>
+    <h2 class="reveal glitch-hover">Ready to automate<br>your SDLC?</h2>
+    <p class="reveal d1">Let AI agents handle every stage — with full traceability.</p>
     <div class="cta-actions reveal d2">
-      <a href="/login" class="btn btn-primary" id="ctaBtn2">Get Started Free →</a>
-      <a href="/login" class="btn btn-secondary">Schedule Demo</a>
+      <button class="btn btn-primary" id="ctaBtn2" onclick="openContactModal()">Contact Us →</button>
     </div>
   </div>
 </section>
@@ -1189,7 +1408,7 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 <footer>
   <div class="container">
     <div class="footer-grid">
-      <div class="footer-brand"><a href="#" class="nav-logo"><svg viewBox="0 0 1280 960" height="32" fill="currentColor"><use href="#palad-logo-paths"/></svg></a><p>AI Agent Orchestration Platform. Run, manage, and track AI coding agents in isolated containers.</p></div>
+      <div class="footer-brand"><a href="#" class="nav-logo"><svg viewBox="0 0 1280 960" height="44" fill="currentColor"><use href="#palad-logo-paths"/></svg></a><p>Agentic SDLC Platform. AI agents execute every stage of your software lifecycle — with immutable audit and full traceability.</p></div>
       <div class="footer-col"><h4>Product</h4><ul><li><a href="#">Agent Sessions</a></li><li><a href="#">Workflows</a></li><li><a href="#">Custom Tools</a></li><li><a href="#">Analytics</a></li></ul></div>
       <div class="footer-col"><h4>Resources</h4><ul><li><a href="#">Documentation</a></li><li><a href="#">API Reference</a></li><li><a href="#">Changelog</a></li><li><a href="#">Status</a></li></ul></div>
       <div class="footer-col"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li><li><a href="#">Contact</a></li></ul></div>
@@ -1197,6 +1416,43 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
     <div class="footer-bottom"><span>© 2026 Palad. All rights reserved.</span><div style="display:flex;gap:20px"><a href="#" style="color:var(--text-muted)">Privacy</a><a href="#" style="color:var(--text-muted)">Terms</a><a href="#" style="color:var(--text-muted)">Security</a></div></div>
   </div>
 </footer>
+
+<!-- Contact Us Modal -->
+<div class="contact-overlay" id="contactOverlay">
+  <div class="contact-modal">
+    <button class="close-btn" onclick="closeContactModal()">&times;</button>
+    <h3>Contact Us</h3>
+    <p class="modal-sub">Leave your details and we'll get back to you shortly.</p>
+    <form class="contact-form" id="contactForm" onsubmit="return submitContact(event)">
+      <label for="cf-first">First Name</label>
+      <input type="text" id="cf-first" name="first_name" placeholder="John" required>
+      <label for="cf-last">Last Name</label>
+      <input type="text" id="cf-last" name="last_name" placeholder="Doe" required>
+      <label for="cf-email">Work Email</label>
+      <input type="email" id="cf-email" name="email" placeholder="john@company.com" required>
+      <button type="submit" class="submit-btn" id="contactSubmitBtn">Send Request</button>
+      <div class="form-msg" id="contactMsg"></div>
+    </form>
+  </div>
+</div>
+
+<script>
+function openContactModal(){document.getElementById('contactOverlay').classList.add('open')}
+function closeContactModal(){document.getElementById('contactOverlay').classList.remove('open');document.getElementById('contactMsg').textContent='';document.getElementById('contactMsg').className='form-msg'}
+document.getElementById('contactOverlay').addEventListener('click',function(e){if(e.target===this)closeContactModal()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeContactModal()});
+async function submitContact(e){
+  e.preventDefault();
+  var btn=document.getElementById('contactSubmitBtn'),msg=document.getElementById('contactMsg');
+  btn.disabled=true;btn.textContent='Sending…';msg.textContent='';msg.className='form-msg';
+  try{
+    var res=await fetch('/api/v1/contact_requests',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contact_request:{first_name:document.getElementById('cf-first').value,last_name:document.getElementById('cf-last').value,email:document.getElementById('cf-email').value}})});
+    if(res.ok){msg.textContent='Thank you! We\'ll be in touch soon.';msg.className='form-msg success';document.getElementById('contactForm').reset()}
+    else{var d=await res.json();msg.textContent=d.error||'Something went wrong. Please try again.';msg.className='form-msg error'}
+  }catch(err){msg.textContent='Network error. Please try again.';msg.className='form-msg error'}
+  btn.disabled=false;btn.textContent='Send Request';
+}
+</script>
 
 <script>
 // T4-03: Particles

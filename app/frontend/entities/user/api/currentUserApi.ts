@@ -9,11 +9,9 @@ interface IUpdateCurrentUserRequest {
     passwordConfirmation?: string;
     position?: UserPosition;
     preferredAgentLanguage?: string;
-    // Agents selected in Step 2 (before auth)
     selectedAgents?: AgentType[];
-    // Trigger onboarding state transition: go_next, go_previous, complete
     onboardingStateEvent?: OnboardingEvent;
-    // Note: configuredAgents is read-only, derived from AgentCredentials
+    defaultAgentCredentialId?: number | null;
   };
 }
 

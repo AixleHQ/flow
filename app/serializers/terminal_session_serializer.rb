@@ -37,6 +37,8 @@ class TerminalSessionSerializer < ApplicationSerializer
               :cache_write_tokens,
               :cost_cents,
               :models,
+              # Context traceability
+              :context_metadata,
               # Artifact review
               :artifacts_reviewed,
               :pending_artifacts_count,

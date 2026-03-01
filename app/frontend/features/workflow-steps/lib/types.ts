@@ -29,6 +29,7 @@ export interface Step {
   skillIds: number[];
   mountRepositories: boolean;
   dependsOnStepIds: number[];
+  requiredAgentRuntime: string | null;
   subSteps: SubStep[];
   createdAt: string;
   updatedAt: string;
@@ -71,6 +72,7 @@ export interface UpdateStepRequest {
   skillIds?: number[];
   mountRepositories?: boolean;
   dependsOnStepIds?: number[];
+  requiredAgentRuntime?: string | null;
   subStepsAttributes?: SubStepAttribute[];
 }
 

@@ -52,15 +52,12 @@ export interface CurrentUserResponse {
   state: UserState;
   position: UserPosition | null;
   preferredAgentLanguage: string;
-  // Agents selected in Step 2 (before auth)
   selectedAgents: AgentType[];
-  // Derived from agentCredentials - list of agent types with saved credentials
   configuredAgents: AgentType[];
-  // Full credential info
   agentCredentials: IAgentCredential[];
-  // Onboarding state: step1, step2, step3, step4, completed
   onboardingState: OnboardingState;
-  // Timestamp when onboarding was completed
   onboardingCompletedAt: string | null;
+  defaultAgentCredentialId: number | null;
+  defaultAgentRuntime: AgentType | null;
   company: ICompany | null;
 }

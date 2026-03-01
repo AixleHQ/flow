@@ -20,6 +20,7 @@ Rails.application.routes.draw do
 
       resource :sessions, only: %i[create destroy]
       resource :current_user, only: %i[show update], controller: "current_user"
+      resources :contact_requests, only: %i[create]
 
       resources :assets, only: [], controller: "assets" do
         collection do
@@ -183,6 +184,7 @@ Rails.application.routes.draw do
     resources :assets, only: %i[index show]
     resources :asset_versions, only: %i[index show]
     resources :tool_results, only: %i[index show]
+    resources :contact_requests, only: %i[index show destroy]
   end
 
   scope module: :web, defaults: { format: :html } do

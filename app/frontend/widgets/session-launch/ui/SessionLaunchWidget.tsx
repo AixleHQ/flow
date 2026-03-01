@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { McpServer } from 'entities/mcp-server';
 import { useGetMcpServersQuery, useGetProjectMcpServersQuery } from 'entities/mcp-server';
 import type { AgentType, ITerminalSession, SessionMode } from 'entities/terminal-session';
-import { useGetCurrentUserQuery } from 'entities/user';
+import { AGENT_COLORS, AVAILABLE_AGENTS, useGetCurrentUserQuery } from 'entities/user';
 import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
 import type { Asset } from 'features/assets-management';
@@ -51,12 +51,11 @@ export interface SessionLaunchWidgetProps {
   renderTerminal?: (props: TerminalRenderProps) => React.ReactNode;
 }
 
-const AGENT_TYPES: { type: AgentType; label: string; color: string }[] = [
-  { type: 'claude_code', label: 'Claude Code', color: '#D97706' },
-  { type: 'cursor_cli', label: 'Cursor CLI', color: '#7C3AED' },
-  { type: 'codex', label: 'Codex', color: '#059669' },
-  { type: 'gemini_cli', label: 'Gemini CLI', color: '#2563EB' },
-];
+const AGENT_TYPES = AVAILABLE_AGENTS.map((a) => ({
+  type: a.type,
+  label: a.name,
+  color: AGENT_COLORS[a.type],
+}));
 
 export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   projectId,
@@ -66,6 +65,8 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
 }) => {
   const { data: currentUser } = useGetCurrentUserQuery();
   const configuredAgents = currentUser?.configuredAgents ?? [];
+
+  const defaultRuntime: AgentType | null = currentUser?.defaultAgentRuntime ?? configuredAgents[0] ?? null;
 
   // Form state
   const [selectedAgent, setSelectedAgent] = useState<AgentType | null>(null);
@@ -77,6 +78,13 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [selectedRepos, setSelectedRepos] = useState<Repository[]>([]);
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
+
+  // Prefill agent from user default when form first loads
+  useEffect(() => {
+    if (!selectedAgent && !activeSessionId && defaultRuntime && configuredAgents.includes(defaultRuntime)) {
+      setSelectedAgent(defaultRuntime);
+    }
+  }, [defaultRuntime, configuredAgents]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Session state — when set, show TerminalSessionWidget instead of form
   const [activeSessionId, setActiveSessionId] = useState<number | null>(initialSessionId ?? null);

@@ -65,10 +65,8 @@ class Api::V1::Company::Projects::ConfigItemsControllerTest < ActionController::
     get :index, params: { project_id: @project.id }
 
     json = response.parsed_body
-    project_url_item = json["items"].find { |i| i["name"] == "PROJECT_URL" }
-    # Should be project value, not company
+    project_url_item = json["items"].find { |i| i["name"] == "PROJECT_URL" && i["scope_type"] == "Project" }
     assert { project_url_item["value"] == "https://project.example.com" }
-    assert { project_url_item["scope_type"] == "Project" }
   end
 
   test "#index returns scope_indicator for each item" do

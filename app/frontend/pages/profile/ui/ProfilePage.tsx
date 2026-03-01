@@ -32,6 +32,8 @@ import { AgentCredentialsSection } from 'features/agent-credentials';
 
 import { profileSchema, type IProfileFormData } from '../lib/profileSchema';
 
+import { DefaultAgentSelector } from './DefaultAgentSelector';
+
 const styles = {
   root: {
     minHeight: '100vh',
@@ -275,6 +277,7 @@ const ProfilePage: React.FC = () => {
           </CardContent>
         </Card>
 
+        <DefaultAgentSelector />
         <AgentCredentialsSection />
       </Box>
     </Box>

@@ -9,9 +9,15 @@ class Workflow < ApplicationRecord
 
   before_destroy :check_column_bindings
 
+  ALLOWED_CONFIG_KEYS = %w[
+    base_tool_ids base_skill_ids base_mcp_server_ids
+    base_asset_ids inherit_all_project_resources
+  ].freeze
+
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
                                  message: "already exists in this scope" }
+  validate :config_keys_whitelist
 
   scope :active, -> { where(deleted_at: nil) }
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
@@ -44,6 +50,31 @@ class Workflow < ApplicationRecord
     scope_type == "Company" ? "company" : "project"
   end
 
+  def base_tool_ids
+    config&.dig("base_tool_ids") || []
+  end
+
+  def base_skill_ids
+    config&.dig("base_skill_ids") || []
+  end
+
+  def base_mcp_server_ids
+    config&.dig("base_mcp_server_ids") || []
+  end
+
+  def base_asset_ids
+    config&.dig("base_asset_ids") || []
+  end
+
+  def inherit_all_project_resources
+    config&.dig("inherit_all_project_resources") || false
+  end
+
+  def merge_config!(updates)
+    self.config = (config || {}).merge(updates.stringify_keys)
+    save!
+  end
+
   def self.ransackable_attributes(_auth_object = nil)
     %w[name description scope_type created_at updated_at]
   end
@@ -53,6 +84,13 @@ class Workflow < ApplicationRecord
   end
 
   private
+
+  def config_keys_whitelist
+    return if config.blank?
+
+    unknown = config.keys - ALLOWED_CONFIG_KEYS
+    errors.add(:config, "contains unknown keys: #{unknown.join(', ')}") if unknown.any?
+  end
 
   def check_column_bindings
     return if column_workflow_bindings.empty?

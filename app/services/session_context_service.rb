@@ -126,16 +126,14 @@ class SessionContextService
       end
     end
 
-    # == Story 9.7: Context File Injection ==
+    # == Story 9.7 → 25.7: Context File Injection (via Constructor) ==
 
-    # Generate and inject CLI-specific context file with agent persona,
-    # MCP server descriptions, tool descriptions, and optionally skills.
-    #
-    # When adapter#includes_skills_in_context? is true, the content is a complete
-    # standalone file (e.g. AGENTS.md) — written fresh.
-    # Otherwise appends to existing content (for adapters where skills are separate files).
+    # Delegates context generation to SessionContextConstructor.
+    # Produces XML-tagged markdown with priority-sorted sections.
+    # Stores JSON metadata on session for traceability.
     def inject_context_file(container_id, session)
-      content = build_context_content(session)
+      result = SessionContextConstructor.build_result(session)
+      content = result.render
       return if content.blank?
 
       adapter = adapter_for(session)
@@ -143,11 +141,11 @@ class SessionContextService
       return if path.blank?
 
       expanded = expand_path(path, adapter.home_dir)
-
-      # Write fresh — context file is always generated as a complete document
       write_file(container_id, expanded, content, adapter.tmpfs_uid)
 
-      Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes)")
+      session.update_column(:context_metadata, result.to_json_hash)
+
+      Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes, #{result.applied_builders.size} builders)")
     end
 
     # == Story 9.4: MCP Config Injection ==
@@ -237,278 +235,8 @@ class SessionContextService
       end
     end
 
-    # == Context Content Builders (Story 9.7) ==
-
-    def build_context_content(session)
-      adapter = adapter_for(session)
-      sections = []
-
-      sections << "# Agent Instructions"
-
-      # Section 1: Role / Persona
-      persona = build_agent_persona(session)
-      sections << persona if persona.present?
-
-      # Section 2: Session context
-      sections << build_session_context(session)
-
-      # Section 3: Workspace layout
-      sections << build_workspace_layout(session)
-
-      # Section 4: Available shell tools
-      sections << build_shell_tools_section
-
-      # Section 5: Available MCP servers
-      mcp = build_mcp_descriptions(session)
-      sections << mcp if mcp.present?
-
-      # Section 6: Available tools
-      tools = build_tool_descriptions(session)
-      sections << tools if tools.present?
-
-      # Section 7: Skills (when adapter embeds them into context file)
-      if adapter.includes_skills_in_context?
-        skills_section = build_skills_section(session)
-        sections << skills_section if skills_section.present?
-      end
-
-      # Section 8: Repositories
-      repos_section = build_repositories_section(session)
-      sections << repos_section if repos_section.present?
-
-      # Section 9: General instructions
-      sections << build_general_instructions(session)
-
-      # Workflow instructions (placeholder for future use)
-      # When workflow steps are implemented, they will be injected here:
-      # sections << build_workflow_instructions(session)
-
-      sections.join("\n\n")
-    end
-
-    def build_agent_persona(session)
-      agent_id = session.configured_agent_id
-      return nil if agent_id.blank?
-
-      agent = Agent.find_by(id: agent_id)
-      return nil unless agent
-
-      lines = [ "## Your Role" ]
-      lines << agent.to_system_prompt
-      lines.join("\n\n")
-    end
-
-    def build_session_context(session)
-      lines = [ "## Session Context" ]
-      lines << ""
-      lines << "You are running in a standalone #{session.mode} agent session on the Palad platform."
-      lines << ""
-      lines << "- **Session ID:** #{session.id}"
-      lines << "- **Agent Runtime:** #{session.agent_type}"
-      lines << "- **Mode:** #{session.mode}"
-      lines << "- **Project:** #{session.project.name}" if session.project.present?
-
-      lang = session.user&.preferred_agent_language
-      if lang.present?
-        lines << "- **Preferred language:** #{lang} — communicate with the user in this language"
-      end
-
-      lines.join("\n")
-    end
-
-    def build_workspace_layout(session)
-      has_assets = session.input_asset_ids.present?
-      has_repos  = session.repository_ids.present?
-
-      lines = [ "## Workspace Layout" ]
-      lines << ""
-      lines << "Your working directory is `/workspace`."
-      lines << ""
-      lines << "- **`/workspace/outputs/`** — Put all results, artifacts, and deliverables here. Contents will be collected after the session."
-
-      if has_assets
-        lines << "- **`/workspace/assets/`** — Read-only reference documents provided for this task. " \
-                 "Do NOT modify these files. If you need to extend an asset, copy it to `/workspace/outputs/` with the full content and edit the copy."
-      end
-
-      if has_repos
-        lines << "- **`/workspace/repo/`** — Code repositories to work with. See the \"Available Repositories\" section for details."
-      end
-
-      lines.join("\n")
-    end
-
-    def build_shell_tools_section
-      <<~MD.strip
-        ## Available Shell Tools
-
-        The following command-line tools are pre-installed and available:
-
-        | Tool | Description | Example |
-        |------|-------------|---------|
-        | `tree` | Display directory structure | `tree -d -L 2` (dirs only), `tree -L 3 /workspace/repo/` |
-        | `cloc` | Count lines of code by language | `cloc .`, `cloc --by-file /workspace/repo/` |
-        | `rg` | ripgrep — fast code search | `rg 'TODO' --type ruby`, `rg -l 'class.*Service'` |
-        | `fd` | Fast file finder | `fd -e rb`, `fd -e tsx -x wc -l {}` |
-        | `jq` | JSON processor | `jq '.dependencies' package.json` |
-        | `git` | Version control | `git log --oneline -20`, `git diff` |
-        | `curl` | HTTP requests | `curl -s https://api.example.com` |
-      MD
-    end
-
-    def build_mcp_descriptions(session)
-      servers = resolve_mcp_servers_for_descriptions(session)
-      return nil if servers.empty?
-
-      lines = [ "## Available MCP Servers" ]
-      lines << ""
-      servers.each do |server|
-        lines << "### #{server[:name]}"
-        lines << server[:display_name] if server[:display_name].present?
-        lines << server[:description] if server[:description].present?
-        lines << ""
-      end
-      lines.join("\n")
-    end
-
-    def build_tool_descriptions(session)
-      tools = session.available_tools.to_a
-      return nil if tools.empty?
-
-      has_container_tools = tools.any? { |t| t.respond_to?(:execution_mode) && t.execution_mode.to_s == "container" }
-
-      lines = [ "## Available Tools" ]
-      lines << ""
-      lines << "These tools are provided via the **palad-tools** MCP server. Call them through MCP."
-      lines << ""
-
-      if has_container_tools
-        lines << tool_execution_modes_section
-        lines << ""
-      end
-
-      tools.each do |tool|
-        mode = tool.respond_to?(:execution_mode) ? tool.execution_mode.to_s : "app"
-        marker = mode == "container" ? "⏳ container" : "⚡ app"
-        lines << "### #{tool.name} #{marker}"
-        desc = [ tool.display_name, tool.description ].compact.join(" — ")
-        lines << desc if desc.present?
-        lines << (mode == "container" ? "Returns: execution ID → use read_tool_result to get results" : "Returns: direct result")
-        if tool.input_schema.present? && tool.input_schema["properties"].present?
-          params = tool.input_schema["properties"].map { |k, v| "#{k} (#{v['type']})" }.join(", ")
-          lines << "Parameters: #{params}" if params.present?
-        end
-        lines << ""
-      end
-      lines.join("\n")
-    end
-
-    def tool_execution_modes_section
-      <<~MD.strip
-        ### Tool Execution Modes
-
-        Tools on this platform work in two modes:
-
-        **Instant tools (⚡ app)** return results directly in the MCP response. Use them normally.
-
-        **Container tools (⏳ container)** run in Docker containers and may take seconds to minutes. They work asynchronously:
-
-        1. **Call the tool** — you receive an execution ID (e.g. `tr-a1b2c3d4e5f6`)
-        2. **Check status** — call `read_tool_result(tool_result_id: "tr-...")`.
-           If `state` is `processing`, wait and try again.
-           If `state` is `completed` or `failed`, proceed to step 3.
-        3. **Download results** — the response contains presigned URLs (`stdout_url`, `result_data_url`, etc.).
-           Download them to local files:
-           ```
-           curl -sS -o /workspace/result.json "<result_data_url>"
-           ```
-        4. **Process locally** — read and analyze the downloaded files as needed.
-
-        Important:
-        - NEVER expect container tool output directly in the MCP response — you only get an ID.
-        - Presigned URLs expire in 1 hour. Call `read_tool_result` again for fresh URLs if needed.
-        - `result_data_url` contains parsed JSON (if the tool output was valid JSON). Prefer it over `stdout_url`.
-        - `output_url` is a tar.gz archive of additional files collected from the tool container (if any).
-      MD
-    end
-
-    def build_skills_section(session)
-      skills = resolve_skills(session)
-      return nil if skills.empty?
-
-      lines = [ "## Skills" ]
-      lines << ""
-      skills.each do |skill|
-        next if skill.content.blank?
-
-        lines << "### #{skill.title.presence || skill.name}"
-        lines << ""
-        lines << skill.content
-        lines << ""
-      end
-      lines.join("\n")
-    end
-
-    def build_general_instructions(session)
-      lines = [ "## General Instructions" ]
-      lines << ""
-      lines << "Act to achieve the maximum result for the user."
-      lines << "Use all available MCP servers and tools. Call `tools/list` on MCP servers to discover available capabilities."
-      lines << "Write clean, production-quality code. Follow project conventions when present."
-
-      if session.mode == "non_interactive"
-        lines << ""
-        lines << "## CRITICAL: Non-Interactive Mode"
-        lines << ""
-        lines << "This session runs **non-interactively** — there is NO human to respond."
-        lines << "The user's prompt is the ONLY input you will receive. No follow-up is possible."
-        lines << ""
-        lines << "**Strict rules:**"
-        lines << "- NEVER ask questions, request clarifications, or wait for input"
-        lines << "- NEVER present options and ask the user to choose"
-        lines << "- NEVER stop mid-task saying you need more information"
-        lines << "- Make reasonable assumptions when details are missing and document them"
-        lines << "- If a task is ambiguous, choose the most sensible interpretation and proceed"
-        lines << ""
-        lines << "**How to operate:**"
-        lines << "1. Analyze the prompt and all available context (MCP tools, project files, skills)"
-        lines << "2. Break the task into concrete steps"
-        lines << "3. Execute each step fully — write files, create artifacts, run commands"
-        lines << "4. Save all results to `/workspace/outputs/` so they persist after the session"
-        lines << "5. At the end, write a summary of what was done and any assumptions made"
-        lines << ""
-        lines << "Your output MUST be actionable artifacts (documents, code, configs), not a conversation."
-      end
-
-      lines.join("\n")
-    end
-
-    # Resolve MCP server descriptions: palad-tools (always) + external MCPServer records
-    def resolve_mcp_servers_for_descriptions(session)
-      result = []
-
-      # Always include palad-tools
-      result << {
-        name: "palad-tools",
-        display_name: nil,
-        description: "Internal tools server. Provides project-specific tools configured for this session.\n" \
-                     "Call tools via MCP — use `tools/list` to see available tools."
-      }
-
-      # Resolve external MCP servers from session config
-      ids = session.mcp_server_ids
-      if ids.present?
-        MCPServer.where(id: ids, enabled: true).find_each do |server|
-          result << {
-            name: server.name,
-            display_name: server.display_name,
-            description: server.description
-          }
-        end
-      end
-
-      result
-    end
+    # Legacy context builders removed in Story 25.7.
+    # Context generation now handled by SessionContextConstructor and ContextBuilders::*.
 
     # == Skill Resolution ==
 
@@ -610,32 +338,6 @@ class SessionContextService
       meta["failed_repos"] ||= []
       meta["failed_repos"] << { "id" => repo.id, "full_name" => repo.full_name, "error" => error.to_s.truncate(500) }
       session.update_column(:metadata, meta)
-    end
-
-    def build_repositories_section(session)
-      ids = session.repository_ids
-      return nil if ids.blank?
-
-      repos = Repository.where(id: ids).to_a
-      return nil if repos.empty?
-
-      failed = (session.metadata || {}).fetch("failed_repos", []).map { |f| f["id"] }
-      cloned = repos.reject { |r| failed.include?(r.id) }
-      return nil if cloned.empty?
-
-      lines = [ "## Available Repositories" ]
-      lines << ""
-      lines << "The following code repositories have been cloned into this session:"
-      lines << ""
-      lines << "| ID | Repository | Path | Branch | Purpose |"
-      lines << "|---|---|---|---|---|"
-      cloned.each do |repo|
-        purpose = repo.purpose.presence || "—"
-        lines << "| #{repo.id} | #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{purpose} |"
-      end
-      lines << ""
-      lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
-      lines.join("\n")
     end
 
     # == Container File Operations ==
@@ -785,7 +487,7 @@ class SessionContextService
     end
 
     def runtime
-      @runtime ||= ContainerRuntime.build
+      Thread.current[:session_context_runtime] ||= ContainerRuntime.build
     end
   end
 end

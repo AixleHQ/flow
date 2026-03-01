@@ -2,15 +2,21 @@
 
 # AgentCredential - Stores encrypted authentication artifacts for agents
 class AgentCredential < ApplicationRecord
+  include Encryptable
+
   belongs_to :user
 
   # Validations
   validates :agent_type, presence: true, inclusion: {
-    in: %w[claude_code cursor_cli codex gemini_cli],
+    in: User::AVAILABLE_AGENTS,
     message: "%{value} is not a valid agent type"
   }
   validates :agent_type, uniqueness: { scope: :user_id }
   validates :encrypted_config_data, presence: true
+
+  # Callbacks
+  after_create :set_as_user_default
+  before_destroy :reassign_user_default
 
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
@@ -70,12 +76,18 @@ class AgentCredential < ApplicationRecord
 
   private
 
-  def encryptor
-    @encryptor ||= ActiveSupport::MessageEncryptor.new(encryption_key)
+  def set_as_user_default
+    user.update!(default_agent_credential: self)
   end
 
-  def encryption_key
-    # Key must be exactly 32 bytes for AES-256
-    Settings.encryption.credentials_key.to_s.ljust(32, "0")[0..31]
+  def reassign_user_default
+    return unless user.default_agent_credential_id == id
+
+    fallback = user.agent_credentials.where.not(id: id).order(created_at: :desc).first
+    user.update!(default_agent_credential: fallback)
+  end
+
+  def encryption_key_setting
+    Settings.encryption.credentials_key
   end
 end

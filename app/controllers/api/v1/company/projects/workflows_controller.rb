@@ -6,7 +6,9 @@ module Api
       module Projects
         class WorkflowsController < ApplicationController
           def index
-            workflows = Workflow.visible_for_project(current_project).ransack(params[:q]).result
+            workflows = Workflow.visible_for_project(current_project)
+                                .includes(:steps, :runs)
+                                .ransack(params[:q]).result
             respond_with paginate(workflows), each_serializer: WorkflowSerializer
           end
 
@@ -30,7 +32,11 @@ module Api
 
           def update
             workflow = current_project.workflows.active.find(params[:id])
-            workflow.update(workflow_params)
+            merged = workflow_params.to_h
+            if merged[:config].present?
+              merged[:config] = (workflow.config || {}).merge(merged[:config].stringify_keys)
+            end
+            workflow.update(merged)
             respond_with workflow, serializer: WorkflowSerializer
           end
 

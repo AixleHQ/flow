@@ -12,8 +12,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Rails.logger.stubs(:warn)
     Rails.logger.stubs(:debug)
 
-    # Reset cached runtime between tests
-    SessionContextService.instance_variable_set(:@runtime, nil)
+    # Reset cached runtime between tests (runtime now uses Thread.current)
+    Thread.current[:session_context_runtime] = nil
+
+    @default_runtime_mock = mock("default_runtime")
+    @default_runtime_mock.stubs(:copy_to).returns(true)
+    @default_runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+    @default_runtime_mock.stubs(:copy_from).returns(nil)
+    ContainerRuntime.stubs(:build).returns(@default_runtime_mock)
+  end
+
+  teardown do
+    Thread.current[:session_context_runtime] = nil
   end
 
   # ====================================================================
@@ -29,7 +39,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     })
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # For settings.json: copy_to + chown
     runtime_mock.expects(:copy_to).with("abc123", "/home/claude/.claude/settings.json", '{"permissions":{}}').returns(true)
@@ -46,7 +57,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, agent_type: "claude_code", session_config: {})
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:copy_to).never
 
     SessionContextService.inject_config_files("abc123", session)
@@ -58,7 +70,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     })
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:copy_to).never
 
     SessionContextService.inject_config_files("abc123", session)
@@ -284,7 +297,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
@@ -302,7 +316,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file uses exec cat — returns existing settings
     existing_settings = { "security" => { "auth" => { "selectedType" => "oauth-personal" } } }
@@ -329,7 +344,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.mcp_servers << server
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file uses exec cat — returns existing config.toml
     existing_toml = "approval_policy = \"never\"\n"
@@ -349,7 +365,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
@@ -370,7 +387,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/deploy-guide.md", skill.content).returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/deploy-guide.md" ])
@@ -384,7 +402,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -404,7 +423,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file uses exec cat — file doesn't exist (exit code 1)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [], [], 1 ])
@@ -426,7 +446,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # read_file uses exec cat — returns existing content
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [ "# Project Context\nExisting content" ], [], 0 ])
@@ -448,7 +469,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -467,7 +489,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << [ skill1, skill2 ]
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with("ctr1", "/home/claude/.claude/skills/skill-a.md", "Content A").returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/skill-a.md" ])
@@ -616,254 +639,94 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
-  # Story 9.7: build_context_content (private builders via send)
+  # Story 25.7: Context is now generated via SessionContextConstructor
+  # Legacy build_* private methods removed — tested in context_builders/
   # ====================================================================
 
-  test "build_agent_persona returns agent system prompt" do
-    agent = Agent.create!(
-      name: "coder", title: "Expert Coder", persona: "You are an expert coder.",
-      scope_type: "Company", scope_id: @company.id
-    )
+  # ====================================================================
+  # Story 25.7: inject_context_file (via SessionContextConstructor)
+  # ====================================================================
+
+  test "inject_context_file writes XML-tagged context to Claude CLAUDE.md" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
-                     configured_agent: agent)
-
-    result = SessionContextService.send(:build_agent_persona, session)
-
-    assert_includes result, "# Expert Coder"
-    assert_includes result, "You are an expert coder."
-  end
-
-  test "build_agent_persona returns nil when no configured agent" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-
-    result = SessionContextService.send(:build_agent_persona, session)
-
-    assert_nil result
-  end
-
-  test "build_mcp_descriptions always includes palad-tools" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-
-    result = SessionContextService.send(:build_mcp_descriptions, session)
-
-    assert_includes result, "## Available MCP Servers"
-    assert_includes result, "### palad-tools"
-    assert_includes result, "Internal tools server"
-  end
-
-  test "build_mcp_descriptions includes external MCP servers" do
-    server = create(:mcp_server, :custom, name: "tavily", display_name: "Tavily Search",
-                    description: "Web search API", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.mcp_servers << server
-
-    result = SessionContextService.send(:build_mcp_descriptions, session)
-
-    assert_includes result, "### palad-tools"
-    assert_includes result, "### tavily"
-    assert_includes result, "Tavily Search"
-    assert_includes result, "Web search API"
-  end
-
-  test "build_mcp_descriptions skips disabled MCP servers" do
-    enabled = create(:mcp_server, :custom, name: "enabled-srv", display_name: "Enabled",
-                     url: "https://a.com/mcp", scope: @company, enabled: true)
-    disabled = create(:mcp_server, :custom, name: "disabled-srv", display_name: "Disabled",
-                      url: "https://b.com/mcp", scope: @company, enabled: false)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.mcp_servers << [ enabled, disabled ]
-
-    result = SessionContextService.send(:build_mcp_descriptions, session)
-
-    assert_includes result, "### enabled-srv"
-    assert_not_includes result, "### disabled-srv"
-  end
-
-  test "build_tool_descriptions formats tool info with input schema" do
-    tool = create(:tool, name: "web_search", display_name: "Web Search",
-                  description: "Search the web", scope: @company,
-                  input_schema: { "properties" => { "query" => { "type" => "string" }, "max_results" => { "type" => "integer" } } })
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.tools << tool
-
-    result = SessionContextService.send(:build_tool_descriptions, session)
-
-    assert_includes result, "## Available Tools"
-    assert_includes result, "### web_search"
-    assert_includes result, "Web Search"
-    assert_includes result, "Search the web"
-    assert_includes result, "Parameters: query (string), max_results (integer)"
-  end
-
-  test "build_tool_descriptions returns nil when no tools" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-
-    result = SessionContextService.send(:build_tool_descriptions, session)
-
-    assert_nil result
-  end
-
-  test "build_context_content combines persona, MCP, and tools" do
-    agent = Agent.create!(
-      name: "dev", title: "Developer", persona: "You are a developer.",
-      scope_type: "Company", scope_id: @company.id
-    )
-    server = create(:mcp_server, :custom, name: "context7", display_name: "Context7",
-                    description: "Docs search", url: "https://ctx7.com/mcp", scope: @company)
-    tool = create(:tool, name: "gh_pr", display_name: "GitHub PR",
-                  description: "Create PRs", scope: @company, input_schema: {})
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
-                     configured_agent: agent)
-    session.mcp_servers << server
-    session.tools << tool
-
-    result = SessionContextService.send(:build_context_content, session)
-
-    assert_includes result, "# Developer"
-    assert_includes result, "## Available MCP Servers"
-    assert_includes result, "### context7"
-    assert_includes result, "## Available Tools"
-    assert_includes result, "### gh_pr"
-  end
-
-  test "build_context_content returns empty when nothing to add" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-
-    result = SessionContextService.send(:build_context_content, session)
-
-    assert_includes result, "## Available MCP Servers"
-    assert_includes result, "### palad-tools"
-  end
-
-  # ====================================================================
-  # Story 9.7: inject_context_file (container interaction)
-  # ====================================================================
-
-  test "inject_context_file writes Claude context file to container" do
-    server = create(:mcp_server, :custom, name: "tavily", display_name: "Tavily",
-                    description: "Search API", url: "https://tavily.com/mcp", scope: @company)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.mcp_servers << server
+                     mode: "interactive")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "ctr1" &&
         path == "/home/claude/.claude/CLAUDE.md" &&
-        content.include?("## Available MCP Servers") &&
-        content.include?("### palad-tools") &&
-        content.include?("### tavily")
+        content.include?("<session-context") &&
+        content.include?("<workspace") &&
+        content.include?("<shell-tools") &&
+        content.include?("<output-rules")
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
   end
 
-  test "inject_context_file writes fresh context (always complete document)" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-
-    runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:copy_to).with do |ctr, path, content|
-      ctr == "ctr1" &&
-        path == "/home/claude/.claude/CLAUDE.md" &&
-        content.include?("## Available MCP Servers")
-    end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
-
-    SessionContextService.inject_context_file("ctr1", session)
-  end
-
-  test "inject_context_file writes Gemini context to GEMINI.md" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli")
-
-    runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:copy_to).with do |ctr, path, content|
-      ctr == "ctr1" &&
-        path == "/home/gemini/.gemini/GEMINI.md" &&
-        content.include?("## Available MCP Servers") &&
-        content.include?("### palad-tools")
-    end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
-
-    SessionContextService.inject_context_file("ctr1", session)
-  end
-
-  test "inject_context_file writes Codex context to AGENTS.md" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
-
-    runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:copy_to).with do |ctr, path, content|
-      ctr == "ctr1" &&
-        path == "/workspace/AGENTS.md" &&
-        content.include?("## Available MCP Servers")
-    end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/AGENTS.md" ])
-
-    SessionContextService.inject_context_file("ctr1", session)
-  end
-
-  test "inject_context_file writes Cursor context to AGENTS.md" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli")
-
-    runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:copy_to).with do |ctr, path, content|
-      ctr == "ctr1" &&
-        path == "/workspace/AGENTS.md" &&
-        content.include?("## Available MCP Servers")
-    end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/AGENTS.md" ])
-
-    SessionContextService.inject_context_file("ctr1", session)
-  end
-
-  test "inject_context_file includes agent persona when configured" do
-    agent = Agent.create!(
-      name: "reviewer", title: "Code Reviewer", persona: "You review code carefully.",
-      scope_type: "Company", scope_id: @company.id
-    )
+  test "inject_context_file stores context_metadata on session" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
-                     configured_agent: agent)
+                     mode: "interactive")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
-      content.include?("# Code Reviewer") &&
-        content.include?("You review code carefully.") &&
-        content.include?("## Available MCP Servers")
-    end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec)
 
     SessionContextService.inject_context_file("ctr1", session)
+    session.reload
+
+    assert_not_nil session.context_metadata
+    assert_equal session.id, session.context_metadata["session_id"]
+    assert session.context_metadata["applied_builders"].is_a?(Array)
+    assert session.context_metadata["sections"].is_a?(Array)
+    assert session.context_metadata["build_time_ms"].is_a?(Numeric)
   end
 
-  test "inject_context_file includes tool descriptions when tools configured" do
-    tool = create(:tool, name: "deploy_tool", display_name: "Deploy",
-                  description: "Deploy to production", scope: @company,
-                  input_schema: { "properties" => { "env" => { "type" => "string" } } })
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.tools << tool
+  test "inject_context_file writes to correct path per agent type" do
+    {
+      "claude_code" => "/home/claude/.claude/CLAUDE.md",
+      "codex" => "/workspace/AGENTS.md",
+      "gemini_cli" => "/home/gemini/.gemini/GEMINI.md",
+      "cursor_cli" => "/workspace/AGENTS.md"
+    }.each do |agent_type, expected_path|
+      session = create(:terminal_session, user: @user, project: @project,
+                       agent_type: agent_type, mode: "interactive")
+
+      runtime_mock = mock("runtime_#{agent_type}")
+      Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+      runtime_mock.expects(:copy_to).with do |_ctr, path, _content|
+        path == expected_path
+      end.returns(true)
+      runtime_mock.expects(:exec)
+
+      SessionContextService.inject_context_file("ctr1", session)
+    end
+  end
+
+  test "inject_context_file includes agent persona in XML output" do
+    agent = Agent.create!(name: "reviewer", title: "Code Reviewer",
+      persona: "You review code carefully.", scope: @company)
+    session = create(:terminal_session, user: @user, project: @project,
+      agent_type: "claude_code", mode: "interactive", configured_agent: agent)
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     runtime_mock.expects(:copy_to).with do |_ctr, _path, content|
-      content.include?("## Available Tools") &&
-        content.include?("### deploy_tool") &&
-        content.include?("Deploy — Deploy to production") &&
-        content.include?("Parameters: env (string)")
+      content.include?("<agent-role") &&
+        content.include?("Code Reviewer") &&
+        content.include?("You review code carefully.")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+    runtime_mock.expects(:exec)
 
     SessionContextService.inject_context_file("ctr1", session)
   end
@@ -877,15 +740,15 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "claude", adapter.session_command(mode: "interactive")
   end
 
-  test "Claude adapter session_command returns claude -p --verbose for non_interactive mode" do
+  test "Claude adapter session_command returns claude for non_interactive mode" do
     adapter = Agents::ClaudeCodeAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Fix the bug")
-    assert_equal "claude -p --verbose", result
+    assert_equal "claude", result
   end
 
-  test "Claude adapter session_command returns claude -p --verbose when non_interactive but no prompt" do
+  test "Claude adapter session_command returns claude when non_interactive but no prompt" do
     adapter = Agents::ClaudeCodeAdapter.new
-    assert_equal "claude -p --verbose", adapter.session_command(mode: "non_interactive", prompt: nil)
+    assert_equal "claude", adapter.session_command(mode: "non_interactive", prompt: nil)
   end
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
@@ -893,10 +756,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Codex adapter session_command returns codex exec --yolo for non_interactive mode" do
+  test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex exec --yolo", result
+    assert_equal "codex --yolo", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
@@ -904,10 +767,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "gemini --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Gemini adapter session_command returns gemini -p for non_interactive mode" do
+  test "Gemini adapter session_command returns gemini --yolo for non_interactive mode" do
     adapter = Agents::GeminiCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
-    assert_equal "gemini -p", result
+    assert_equal "gemini --yolo", result
   end
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
@@ -915,10 +778,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "agent --force", adapter.session_command(mode: "interactive")
   end
 
-  test "Cursor adapter session_command returns agent --force -p for non_interactive mode" do
+  test "Cursor adapter session_command returns agent --force for non_interactive mode" do
     adapter = Agents::CursorCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Refactor auth")
-    assert_equal "agent --force -p", result
+    assert_equal "agent --force", result
   end
 
   test "Base adapter session_command raises NotImplementedError" do
@@ -931,7 +794,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "session_command returns same command regardless of prompt content" do
     adapter = Agents::ClaudeCodeAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: 'Fix the "bug" && deploy')
-    assert_equal "claude -p --verbose", result
+    assert_equal "claude", result
   end
 
   # ====================================================================
@@ -939,10 +802,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   # ====================================================================
 
   test "assemble_session_context orchestrates all steps in order" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     mode: "interactive")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     credential_mock = mock("credential")
 
@@ -963,7 +828,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     # Step 4: Skills — no skills, skipped internally
 
-    # Step 5: Context file — writes fresh (no copy_from)
+    # Step 5: Context file — writes XML-tagged content via Constructor
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true).in_sequence(call_order)
@@ -973,10 +838,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   test "assemble_session_context skips credentials when nil" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     mode: "interactive")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # MCP config (palad-tools)
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
@@ -984,7 +851,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
-    # Context file — writes fresh (no copy_from)
+    # Context file — writes XML-tagged content via Constructor
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true)
@@ -994,10 +861,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   test "assemble_session_context logs timing for each step" do
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     mode: "interactive")
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     # Allow all runtime calls
     runtime_mock.stubs(:copy_to).returns(true)
@@ -1064,7 +933,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << repo
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     token_service_mock = mock("token_service")
     token_service_mock.expects(:generate_installation_token).returns("ghs_test_token")
@@ -1095,7 +965,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << [ repo1, repo2 ]
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     token_service_mock = mock("token_service")
     token_service_mock.expects(:generate_installation_token).once.returns("ghs_shared")
@@ -1122,7 +993,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << [ repo_fail, repo_ok ]
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     token_service_mock = mock("token_service")
     token_service_mock.expects(:generate_installation_token).returns("ghs_token")
@@ -1158,7 +1030,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.repositories << repo
 
     runtime_mock = mock("runtime")
-    SessionContextService.instance_variable_set(:@runtime, runtime_mock)
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
     runtime_mock.expects(:exec).never
 
     SessionContextService.send(:inject_repositories, "ctr1", session)
@@ -1174,59 +1047,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_nil result
   end
 
-  # ====================================================================
-  # Story 14.3: build_repositories_section
-  # ====================================================================
-
-  test "build_repositories_section returns markdown table with cloned repos" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo = create(:repository, full_name: "acme/my-app", source_branch: "main",
-                  purpose: "Our main Rails application",
-                  integration: integration, scope: @company)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << repo
-
-    result = SessionContextService.send(:build_repositories_section, session)
-
-    assert_includes result, "## Available Repositories"
-    assert_includes result, "| #{repo.id} | acme/my-app | /workspace/repo/my-app | main | Our main Rails application |"
-    assert_includes result, "Use the repository **ID**"
-  end
-
-  test "build_repositories_section excludes failed repos" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
-                     integration: integration, scope: @company)
-    repo_fail = create(:repository, full_name: "acme/bad", source_branch: "main",
-                       integration: integration, scope: @company)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
-                     metadata: { "failed_repos" => [ { "id" => repo_fail.id, "full_name" => "acme/bad" } ] })
-    session.repositories << [ repo_ok, repo_fail ]
-
-    result = SessionContextService.send(:build_repositories_section, session)
-
-    assert_includes result, "acme/good"
-    assert_not_includes result, "acme/bad"
-  end
-
-  test "build_repositories_section returns nil when no repos" do
-    session = create(:terminal_session, user: @user, agent_type: "claude_code")
-
-    result = SessionContextService.send(:build_repositories_section, session)
-    assert_nil result
-  end
-
-  test "build_repositories_section uses dash for missing purpose" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo = create(:repository, full_name: "acme/no-purpose", source_branch: "develop",
-                  purpose: nil, integration: integration, scope: @company)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << repo
-
-    result = SessionContextService.send(:build_repositories_section, session)
-
-    assert_includes result, "| #{repo.id} | acme/no-purpose | /workspace/repo/no-purpose | develop | — |"
-  end
+  # Story 14.3: build_repositories_section — removed, now in ContextBuilders::Resources
 
   # ====================================================================
   # HABTM repository association
@@ -1250,53 +1071,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal [], session.repository_ids
   end
 
-  # ====================================================================
-  # Story 19.12: Tool Execution Modes in context
-  # ====================================================================
-
-  test "build_tool_descriptions includes execution mode markers" do
-    app_tool = create(:tool, :internal, name: "ctx_list",
-      display_name: "List Things", execution_mode: :app)
-    container_tool = create(:tool, :internal, name: "ctx_analyze",
-      display_name: "Analyze Stuff", execution_mode: :container)
-
-    session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([ app_tool, container_tool ])
-
-    result = SessionContextService.send(:build_tool_descriptions, session)
-
-    assert result.include?("ctx_list ⚡ app")
-    assert result.include?("ctx_analyze ⏳ container")
-    assert result.include?("Returns: direct result")
-    assert result.include?("Returns: execution ID")
-  end
-
-  test "build_tool_descriptions includes Tool Execution Modes section when container tools present" do
-    container_tool = create(:tool, :internal, name: "ctx_container",
-      display_name: "Container Tool", execution_mode: :container)
-
-    session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([ container_tool ])
-
-    result = SessionContextService.send(:build_tool_descriptions, session)
-
-    assert result.include?("Tool Execution Modes")
-    assert result.include?("curl -sS -o")
-    assert result.include?("read_tool_result")
-  end
-
-  test "build_tool_descriptions omits execution modes section when only app tools" do
-    app_tool = create(:tool, :internal, name: "ctx_app_only",
-      display_name: "App Only Tool", execution_mode: :app)
-
-    session = create(:terminal_session, user: @user, agent_type: "claude_code")
-    session.stubs(:available_tools).returns([ app_tool ])
-
-    result = SessionContextService.send(:build_tool_descriptions, session)
-
-    assert_not result.include?("Tool Execution Modes")
-    assert result.include?("ctx_app_only ⚡ app")
-  end
+  # Story 19.12: Tool Execution Modes — tested in ContextBuilders::Tools
 
   private
 

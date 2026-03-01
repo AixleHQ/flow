@@ -15,7 +15,7 @@ class BoardPresetsTest < ActiveSupport::TestCase
   test ".find returns preset by key" do
     preset = BoardPresets.find(:dev_team)
     assert_equal "Dev Team", preset[:display_name]
-    assert_equal 5, preset[:columns].size
+    assert_equal 7, preset[:columns].size
   end
 
   test ".find returns nil for unknown key" do
@@ -51,13 +51,13 @@ class BoardPresetsTest < ActiveSupport::TestCase
     assert_equal 3, preset[:columns].size
   end
 
-  test "dev_team has 5 columns" do
+  test "dev_team has 7 columns" do
     preset = BoardPresets.find(:dev_team)
-    assert_equal 5, preset[:columns].size
+    assert_equal 7, preset[:columns].size
   end
 
-  test "full_sdlc has 7 columns" do
+  test "full_sdlc has 19 columns" do
     preset = BoardPresets.find(:full_sdlc)
-    assert_equal 7, preset[:columns].size
+    assert_equal 19, preset[:columns].size
   end
 end

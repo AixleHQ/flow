@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Integration < ApplicationRecord
+  include Encryptable
   extend Enumerize
 
   enumerize :provider, in: %i[github linear], predicates: true
@@ -44,11 +45,7 @@ class Integration < ApplicationRecord
 
   private
 
-  def encryptor
-    @encryptor ||= ActiveSupport::MessageEncryptor.new(encryption_key)
-  end
-
-  def encryption_key
-    Settings.encryption.integrations_key.to_s.ljust(32, "0")[0..31]
+  def encryption_key_setting
+    Settings.encryption.integrations_key
   end
 end

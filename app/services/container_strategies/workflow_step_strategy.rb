@@ -197,80 +197,10 @@ module ContainerStrategies
       url
     end
 
-    def build_workflow_prompt(step, step_run)
-      parts = []
-      parts << build_session_context_section(step_run)
-      parts << step.instructions if step&.instructions.present?
-
-      sub_steps = step&.sub_steps&.order(:position)
-      if sub_steps.present? && sub_steps.any?
-        parts << build_sub_steps_section(sub_steps, step_run)
-        parts << build_workflow_tools_section
-      end
-
-      parts.compact_blank.join("\n\n")
-    end
-
-    def build_sub_steps_section(sub_steps, step_run)
-      lines = [ "## Sub-steps for this step", "" ]
-      sub_step_runs = step_run&.sub_step_runs&.includes(:sub_step)&.index_by(&:sub_step_id) || {}
-
-      sub_steps.each do |ss|
-        ssr = sub_step_runs[ss.id]
-        status = ssr ? ssr.state : "pending"
-        id_hint = ssr ? " (id: #{ssr.id})" : ""
-        line = "#{ss.position}. **#{ss.name}**#{id_hint} [#{status}]"
-        line += " — #{ss.description}" if ss.description.present?
-        lines << line
-      end
-
-      lines << ""
-      lines << "Track your progress: call `mark_sub_step` with the sub-step `id` shown above."
-      lines << "Mark as `in_progress` when you start, `completed` when done."
-      lines << ""
-      lines << "**IMPORTANT:** Do NOT mark the last sub-step as `completed` until ALL work is fully done — including writing output files to `/workspace/outputs/`. Marking the last sub-step completed triggers session termination."
-      lines.join("\n")
-    end
-
-    def build_workflow_tools_section
-      <<~TOOLS
-        ## Workflow tools available via MCP
-
-        You have special tools to track progress within this step:
-
-        - **list_sub_steps** — List all sub-steps with their current statuses. Call this first to see what needs to be done.
-        - **mark_sub_step** — Update a sub-step status. Parameters: `id` (sub-step run ID), `status` (`in_progress`/`completed`/`skipped`), optional `note` and `data`.
-        - **write_step_note** — Save a note visible to subsequent steps and workflow operators. Parameter: `note` (text).
-
-        Always mark sub-steps as you work through them so the workflow dashboard stays up to date.
-      TOOLS
-    end
-
-    def build_session_context_section(step_run)
-      session = TerminalSession.find(input[:session_id])
-      lines = []
-
-      repos = session.repositories.to_a
-      if repos.any?
-        lines << "## Available Repositories"
-        lines << ""
-        repos.each do |repo|
-          lines << "- **#{repo.full_name}** (repository_id: #{repo.id}) — mounted at /workspace/repo/"
-        end
-        lines << ""
-      end
-
-      workflow_run = step_run&.workflow_run
-      if workflow_run&.input_asset_ids&.any?
-        lines << "## Input Assets (pre-loaded in /workspace/assets/)"
-        lines << ""
-        Asset.where(id: workflow_run.input_asset_ids).each do |asset|
-          lines << "- **#{asset.name}** (id: #{asset.id}) → `/workspace/assets/#{asset.name}`"
-        end
-        lines << ""
-      end
-
-      lines.any? ? lines.join("\n") : nil
+    # Context from step_run (board task, run params) is injected by SessionContextConstructor,
+    # not here. This method only returns static step instructions.
+    def build_workflow_prompt(step, _step_run)
+      step&.instructions
     end
   end
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_01_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -303,6 +303,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
+  create_table "contact_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email", null: false
+    t.string "first_name", null: false
+    t.string "last_name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_contact_requests_on_created_at"
+    t.index ["email"], name: "index_contact_requests_on_email"
+  end
+
   create_table "integrations", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.bigint "connected_by_id", null: false
@@ -470,6 +480,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
     t.string "on_failure", default: "fail", null: false
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
+    t.string "required_agent_runtime"
     t.jsonb "skill_ids", default: [], null: false
     t.string "skip_policy", default: "never", null: false
     t.jsonb "tool_ids", default: [], null: false
@@ -540,6 +551,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
     t.datetime "collected_at"
     t.bigint "configured_agent_id"
     t.string "container_id"
+    t.jsonb "context_metadata"
     t.integer "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
     t.text "error_message"
@@ -650,6 +662,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
     t.string "avatar_url"
     t.bigint "company_id"
     t.datetime "created_at", null: false
+    t.bigint "default_agent_credential_id"
     t.citext "email", null: false
     t.string "google_refresh_token"
     t.string "google_token"
@@ -669,6 +682,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
     t.datetime "updated_at", null: false
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
+    t.index ["default_agent_credential_id"], name: "index_users_on_default_agent_credential_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
@@ -795,6 +809,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_02_28_200002) do
   add_foreign_key "tool_results", "terminal_sessions"
   add_foreign_key "tool_results", "tools"
   add_foreign_key "usage_statistics", "terminal_sessions"
+  add_foreign_key "users", "agent_credentials", column: "default_agent_credential_id"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id"

@@ -131,7 +131,7 @@ class Api::V1::Company::Projects::BoardsControllerTest < ActionController::TestC
     json = response.parsed_body
     assert_equal "Dev Team", json["data"]["name"]
     assert_equal "dev_team", json["data"]["preset_origin"]
-    assert_equal 5, json["data"]["board_columns"].size
+    assert_equal 7, json["data"]["board_columns"].size
   end
 
   test "#create with preset and custom name" do

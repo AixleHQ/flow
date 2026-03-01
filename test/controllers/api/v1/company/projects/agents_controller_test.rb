@@ -75,7 +75,7 @@ class Api::V1::Company::Projects::AgentsControllerTest < ActionController::TestC
     assert_response :success
     json = response.parsed_body
 
-    analyst = json["items"].find { |i| i["name"] == "analyst" }
+    analyst = json["items"].find { |i| i["name"] == "analyst" && i["scope_type"] == "Project" }
     assert { analyst["scope_indicator"] == "overrides_company" }
     assert { analyst["title"] == "Project Analyst" } # Project version
   end

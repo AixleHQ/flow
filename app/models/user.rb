@@ -29,6 +29,7 @@ class User < ApplicationRecord
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
   has_many :agent_credentials, dependent: :destroy
+  belongs_to :default_agent_credential, class_name: "AgentCredential", optional: true
 
   # Validations
   validates :email, presence: true,
@@ -42,6 +43,7 @@ class User < ApplicationRecord
   validate :selected_agents_valid
   validate :email_domain_matches_company, on: :create
   validate :cannot_demote_last_admin, on: :update
+  validate :default_agent_credential_belongs_to_user
 
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
@@ -66,6 +68,10 @@ class User < ApplicationRecord
   # List of configured agent types (derived from credentials)
   def configured_agents
     agent_credentials.pluck(:agent_type)
+  end
+
+  def default_agent_runtime
+    default_agent_credential&.agent_type
   end
 
   # All projects user has access to (owned + collaborated)
@@ -124,7 +130,13 @@ class User < ApplicationRecord
     end
   end
 
-  # Validation: cannot demote the last admin in a company
+  def default_agent_credential_belongs_to_user
+    return if default_agent_credential_id.blank?
+    return if agent_credentials.exists?(id: default_agent_credential_id)
+
+    errors.add(:default_agent_credential_id, "must belong to this user")
+  end
+
   def cannot_demote_last_admin
     return unless company.present?
     return unless role_changed?

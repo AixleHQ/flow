@@ -70,7 +70,7 @@ class BoardTest < ActiveSupport::TestCase
     assert board.persisted?
     assert_equal "Dev Team", board.name
     assert_equal "dev_team", board.preset_origin
-    assert_equal 5, board.board_columns.count
+    assert_equal 7, board.board_columns.count
     assert_equal "Backlog", board.board_columns.first.name
   end
 

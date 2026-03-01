@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class ConfigItem < ApplicationRecord
+  include Encryptable
   extend Enumerize
 
   # Enumerize for type (adds scopes: with_item_type(:secret), with_scope_type(:company))
@@ -121,11 +122,7 @@ class ConfigItem < ApplicationRecord
     nil
   end
 
-  def encryptor
-    @encryptor ||= ActiveSupport::MessageEncryptor.new(encryption_key)
-  end
-
-  def encryption_key
-    Settings.encryption.config_items_key.to_s.ljust(32, "0")[0..31]
+  def encryption_key_setting
+    Settings.encryption.config_items_key
   end
 end

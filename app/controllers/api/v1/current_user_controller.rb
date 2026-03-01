@@ -30,7 +30,7 @@ class Api::V1::CurrentUserController < Api::V1::ApplicationController
     params.require(:current_user).permit(
       :password, :password_confirmation, :name,
       :position, :preferred_agent_language,
-      :onboarding_state_event,
+      :onboarding_state_event, :default_agent_credential_id,
       selected_agents: []
     )
   end

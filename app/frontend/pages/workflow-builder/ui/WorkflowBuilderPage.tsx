@@ -37,6 +37,7 @@ import { useDebouncedCallback } from 'use-debounce';
 
 import { useGetMcpServersQuery } from 'entities/mcp-server';
 import type { McpServer } from 'entities/mcp-server';
+import { AVAILABLE_AGENTS, getAgentInfo, type AgentType } from 'entities/user';
 import { useGetCompanyAgentsQuery, type Agent } from 'features/agents-management';
 import { useGetProjectAssetsQuery } from 'features/assets-management';
 import { RunWorkflowModal } from 'features/run-workflow';
@@ -66,6 +67,8 @@ import {
   useDuplicateWorkflowToProjectMutation,
 } from 'features/workflows';
 import { Routes } from 'shared/routes';
+
+import { BaseResourcesSection } from './BaseResourcesSection';
 
 const SKIP_POLICY_OPTIONS = [
   { value: 'never', label: 'Never' },
@@ -284,7 +287,7 @@ const WorkflowBuilderPage = () => {
 
   // Scope-aware helpers
   const updateWorkflow = useCallback(
-    async (data: { name?: string; description?: string }) => {
+    async (data: { name?: string; description?: string; config?: Record<string, unknown> }) => {
       if (!workflow) return;
       try {
         if (isCompanyScope) {
@@ -585,6 +588,14 @@ const WorkflowBuilderPage = () => {
                     {agent?.title || 'No agent'}
                   </Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                    {step.requiredAgentRuntime && (
+                      <Chip
+                        label={`Requires: ${getAgentInfo(step.requiredAgentRuntime as AgentType).name}`}
+                        size="small"
+                        color="warning"
+                        sx={{ height: 18, fontSize: '10px' }}
+                      />
+                    )}
                     {step.allowNonInteractive && (
                       <Chip label="Auto-run" size="small" sx={{ height: 18, fontSize: '10px' }} />
                     )}
@@ -711,6 +722,18 @@ const WorkflowBuilderPage = () => {
 
         {/* Content */}
         <Box sx={styles.content}>
+          <Box sx={{ mb: 3 }}>
+            <BaseResourcesSection
+              workflow={workflow}
+              tools={tools}
+              skills={skills}
+              mcpServers={mcpServers}
+              assets={builderProjectAssets}
+              onConfigChange={(cfg) => updateWorkflow({ config: cfg })}
+              readOnly={readOnly}
+            />
+          </Box>
+
           {selectedStep ? (
             <StepDetailPanel
               step={selectedStep}
@@ -929,6 +952,26 @@ function StepDetailPanel({
             {agents.map((a: Agent) => (
               <MenuItem key={a.id} value={a.id}>
                 {a.title || a.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
+
+        <Box sx={styles.formField}>
+          <Typography sx={styles.label}>Required Agent Runtime</Typography>
+          <Select
+            fullWidth
+            size="small"
+            displayEmpty
+            value={step.requiredAgentRuntime ?? ''}
+            onChange={(e) => onFieldChange('requiredAgentRuntime', e.target.value === '' ? null : e.target.value, true)}
+          >
+            <MenuItem value="">
+              <em>None (use default)</em>
+            </MenuItem>
+            {AVAILABLE_AGENTS.map((a) => (
+              <MenuItem key={a.type} value={a.type}>
+                {a.name}
               </MenuItem>
             ))}
           </Select>
