@@ -30,22 +30,72 @@ spec:
               valueFrom:
                 configMapKeyRef:
                   name: palad-app-config
-                  key: DB_PORT
+                  key: TEMPORAL_DB_PORT
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
                   name: palad-app-config
-                  key: DB_USERNAME
+                  key: TEMPORAL_DB_USERNAME
             - name: POSTGRES_PWD
               valueFrom:
                 secretKeyRef:
                   name: palad-app-secrets
-                  key: DB_PASSWORD
+                  key: TEMPORAL_DB_PASSWORD
             - name: POSTGRES_SEEDS
               valueFrom:
                 configMapKeyRef:
                   name: palad-app-config
-                  key: DB_HOST
+                  key: TEMPORAL_DB_HOST
+            - name: DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_NAME
+            - name: VISIBILITY_DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_VISIBILITY_DB_NAME
+            - name: POSTGRES_TLS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_ENABLED
+            - name: POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+            - name: POSTGRES_TLS_SERVER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_HOST
+            - name: SQL_TLS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_ENABLED
+            - name: SQL_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_SQL_TLS
+            - name: SQL_TLS_DISABLE_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+            - name: SQL_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_SQL_HOST_VERIFICATION
+            - name: SQL_HOST_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_HOST
             - name: LOG_LEVEL
               value: error
             - name: BIND_ON_IP

@@ -50,7 +50,7 @@ eks_node_max_size       = 4
 # Managed data services (production)
 create_managed_data_services = true
 
-# RDS PostgreSQL for Rails + Temporal metadata
+# RDS PostgreSQL for Rails app
 rds_instance_identifier      = "palad-app-prod"
 rds_engine_version           = "18.2"
 rds_instance_class           = "db.t4g.medium"
@@ -67,6 +67,25 @@ rds_deletion_protection      = true
 rds_skip_final_snapshot      = true
 rds_final_snapshot_identifier = null
 rds_apply_immediately        = false
+
+# Dedicated RDS PostgreSQL for Temporal
+create_temporal_rds_instance       = true
+temporal_rds_instance_identifier   = "palad-temporal-prod"
+temporal_rds_engine_version        = "18.2"
+temporal_rds_instance_class        = "db.t4g.medium"
+temporal_rds_allocated_storage     = 20
+temporal_rds_max_allocated_storage = 100
+temporal_rds_port                  = 5432
+temporal_rds_db_name               = "temporal"
+temporal_rds_master_username       = "postgres"
+temporal_rds_master_password       = "replace_with_secure_password_min_16_chars"
+temporal_rds_backup_retention_period = 7
+temporal_rds_backup_window         = "04:00-05:00"
+temporal_rds_maintenance_window    = "Mon:05:00-Mon:06:00"
+temporal_rds_deletion_protection   = true
+temporal_rds_skip_final_snapshot   = true
+temporal_rds_final_snapshot_identifier = null
+temporal_rds_apply_immediately     = false
 
 # ElastiCache Redis for Rails cache/cable/jobs
 redis_replication_group_id       = "palad-redis-prod"

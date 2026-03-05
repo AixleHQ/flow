@@ -24,6 +24,16 @@ data:
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
   TEMPORAL_UI_URL: https://temporal.palad.ai
+  # Set from Terraform output: temporal_rds_endpoint
+  TEMPORAL_DB_HOST: "palad-temporal-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"
+  TEMPORAL_DB_PORT: "5432"
+  TEMPORAL_DB_USERNAME: "postgres"
+  TEMPORAL_DB_NAME: temporal
+  TEMPORAL_VISIBILITY_DB_NAME: temporal_visibility
+  TEMPORAL_POSTGRES_TLS_ENABLED: "true"
+  TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION: "true"
+  TEMPORAL_SQL_TLS: "true"
+  TEMPORAL_SQL_HOST_VERIFICATION: "false"
   TRAEFIK_WS_BASE: wss://palad.ai
   TRAEFIK_HTTP_BASE: https://palad.ai
   TRAEFIK_DASHBOARD_URL: https://traefik.palad.ai
@@ -37,3 +47,4 @@ data:
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
+  K8S_RUNTIME_LIMITS_MEMORY: 2Gi

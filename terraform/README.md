@@ -8,7 +8,8 @@ The current configuration sets up:
 - **S3 Bucket for State Storage**: An AWS S3 bucket (`palad-tfstate`) to store Terraform state files
 - **Route53 Hosted Zone and DNS Records** for `palad.ai`
 - **EKS Cluster + Networking** for production workloads
-- **RDS PostgreSQL** for production application database
+- **RDS PostgreSQL (Rails app)** for production application database
+- **RDS PostgreSQL (Temporal)** for Temporal persistence
 - **ElastiCache Redis** for production cache/cable/jobs
 
 ## Prerequisites
@@ -75,6 +76,7 @@ terraform output  # Display output values
 - **main.tf** - S3 tfstate resources
 - **eks.tf** - EKS cluster and VPC resources
 - **rds.tf** - Managed RDS PostgreSQL resources
+- **rds_temporal.tf** - Dedicated managed RDS PostgreSQL resources for Temporal
 - **redis.tf** - Managed ElastiCache Redis resources
 - **variables.tf** - Input variables and their defaults
 - **outputs.tf** - Output values from Terraform
@@ -85,14 +87,18 @@ terraform output  # Display output values
 
 ⚠️ **Security**: Never commit `terraform.tfvars` with actual credentials. Use the `.example` template and populate locally.
 
-⚠️ **Production DB Password**: `rds_master_password` is required when managed data services are enabled.
+⚠️ **Production DB Passwords**:
+- `rds_master_password` is required for Rails RDS.
+- `temporal_rds_master_password` is required for Temporal RDS when enabled.
 
 ⚠️ **Kubernetes Sync**: After `terraform apply`, update production Kubernetes values:
 - `kube/prod/07-app-config.yaml`:
   - `DB_HOST` from `terraform output rds_endpoint`
+  - `TEMPORAL_DB_HOST` from `terraform output temporal_rds_endpoint`
   - `REDIS_URL` from `terraform output redis_url_database_1`
 - `kube/secrets/07-app-secrets.yaml`:
   - `DB_PASSWORD` must match `rds_master_password`
+  - `TEMPORAL_DB_PASSWORD` must match `temporal_rds_master_password`
 
 ## Useful Commands
 

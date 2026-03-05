@@ -140,6 +140,31 @@ output "rds_master_username" {
   value       = var.rds_master_username
 }
 
+output "temporal_rds_endpoint" {
+  description = "Temporal RDS PostgreSQL endpoint hostname"
+  value       = try(aws_db_instance.temporal[0].address, null)
+}
+
+output "temporal_rds_endpoint_with_port" {
+  description = "Temporal RDS PostgreSQL endpoint with port"
+  value       = try(aws_db_instance.temporal[0].endpoint, null)
+}
+
+output "temporal_rds_port" {
+  description = "Temporal RDS PostgreSQL port"
+  value       = var.temporal_rds_port
+}
+
+output "temporal_rds_db_name" {
+  description = "Initial Temporal RDS database name"
+  value       = var.temporal_rds_db_name
+}
+
+output "temporal_rds_master_username" {
+  description = "Master username for Temporal RDS"
+  value       = var.temporal_rds_master_username
+}
+
 output "redis_primary_endpoint" {
   description = "Primary endpoint hostname for ElastiCache Redis"
   value       = try(aws_elasticache_replication_group.redis[0].primary_endpoint_address, null)

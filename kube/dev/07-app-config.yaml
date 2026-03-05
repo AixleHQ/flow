@@ -20,6 +20,15 @@ data:
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
   TEMPORAL_UI_URL: https://temporal.k8s.orb.local
+  TEMPORAL_DB_HOST: db
+  TEMPORAL_DB_PORT: "5432"
+  TEMPORAL_DB_USERNAME: postgres
+  TEMPORAL_DB_NAME: temporal
+  TEMPORAL_VISIBILITY_DB_NAME: temporal_visibility
+  TEMPORAL_POSTGRES_TLS_ENABLED: "false"
+  TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION: "false"
+  TEMPORAL_SQL_TLS: "false"
+  TEMPORAL_SQL_HOST_VERIFICATION: "false"
   TRAEFIK_WS_BASE: wss://k8s.orb.local
   TRAEFIK_HTTP_BASE: https://k8s.orb.local
   TRAEFIK_DASHBOARD_URL: https://traefik.k8s.orb.local

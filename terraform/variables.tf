@@ -295,6 +295,109 @@ variable "rds_apply_immediately" {
   default     = false
 }
 
+variable "create_temporal_rds_instance" {
+  description = "Whether to create a dedicated RDS PostgreSQL instance for Temporal"
+  type        = bool
+  default     = true
+}
+
+variable "temporal_rds_instance_identifier" {
+  description = "Temporal RDS instance identifier"
+  type        = string
+  default     = "palad-temporal-prod"
+}
+
+variable "temporal_rds_engine_version" {
+  description = "PostgreSQL engine version for Temporal RDS"
+  type        = string
+  default     = "18.2"
+}
+
+variable "temporal_rds_instance_class" {
+  description = "Temporal RDS instance class"
+  type        = string
+  default     = "db.t4g.medium"
+}
+
+variable "temporal_rds_allocated_storage" {
+  description = "Initial storage size for Temporal RDS (GiB)"
+  type        = number
+  default     = 20
+}
+
+variable "temporal_rds_max_allocated_storage" {
+  description = "Maximum autoscaled storage for Temporal RDS (GiB)"
+  type        = number
+  default     = 100
+}
+
+variable "temporal_rds_port" {
+  description = "Temporal RDS PostgreSQL port"
+  type        = number
+  default     = 5432
+}
+
+variable "temporal_rds_db_name" {
+  description = "Initial database name created on Temporal RDS"
+  type        = string
+  default     = "temporal"
+}
+
+variable "temporal_rds_master_username" {
+  description = "Master username for Temporal RDS PostgreSQL"
+  type        = string
+  default     = "postgres"
+}
+
+variable "temporal_rds_master_password" {
+  description = "Master password for Temporal RDS PostgreSQL (set via tfvars or TF_VAR_temporal_rds_master_password)"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "temporal_rds_backup_retention_period" {
+  description = "Number of days to retain automatic Temporal RDS backups"
+  type        = number
+  default     = 7
+}
+
+variable "temporal_rds_backup_window" {
+  description = "Preferred backup window for Temporal RDS in UTC, e.g. 04:00-05:00"
+  type        = string
+  default     = "04:00-05:00"
+}
+
+variable "temporal_rds_maintenance_window" {
+  description = "Preferred maintenance window for Temporal RDS in UTC, e.g. Mon:05:00-Mon:06:00"
+  type        = string
+  default     = "Mon:05:00-Mon:06:00"
+}
+
+variable "temporal_rds_deletion_protection" {
+  description = "Enable deletion protection for Temporal RDS instance"
+  type        = bool
+  default     = true
+}
+
+variable "temporal_rds_skip_final_snapshot" {
+  description = "Whether to skip final snapshot when destroying Temporal RDS"
+  type        = bool
+  default     = true
+}
+
+variable "temporal_rds_final_snapshot_identifier" {
+  description = "Final snapshot identifier used only when temporal_rds_skip_final_snapshot is false"
+  type        = string
+  default     = null
+}
+
+variable "temporal_rds_apply_immediately" {
+  description = "Apply Temporal RDS modifications immediately instead of waiting for the maintenance window"
+  type        = bool
+  default     = false
+}
+
 variable "redis_replication_group_id" {
   description = "ElastiCache replication group identifier"
   type        = string
