@@ -116,10 +116,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
-  const {
-    session,
-    channelError: error,
-  } = useTerminalSession({
+  const { session, channelError: error } = useTerminalSession({
     sessionId,
     onUpdate: onSessionUpdate,
     onAuthComplete,
@@ -140,14 +137,14 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
 
   const handleTerminalIframeLoad = useCallback(() => {
     setTerminalLoaded(true);
-    terminalIframeRef.current?.focus();
   }, []);
+
 
   const handleEditorIframeLoad = useCallback(() => {
     setEditorLoaded(true);
   }, []);
 
-  // Reset state when session changes
+
   const prevSessionIdRef = useRef(sessionId);
   useEffect(() => {
     if (sessionId !== prevSessionIdRef.current) {

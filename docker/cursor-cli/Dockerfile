@@ -26,14 +26,7 @@ RUN ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
 # =============================================================================
-RUN printf '%s\n' \
-    'set -g history-limit 50000' \
-    'set -g remain-on-exit on' \
-    'set -g status off' \
-    'set -g set-clipboard on' \
-    'set -g allow-passthrough on' \
-    > /etc/tmux.conf
-
+COPY base/tmux.conf /etc/tmux.conf
 COPY base/inputrc /etc/inputrc
 COPY base/vscode-settings.json /opt/openvscode-server/default-settings.json
 

@@ -105,13 +105,7 @@ COPY inputrc /etc/inputrc
 # tmux config: session persistence for web terminal
 # Keeps command alive across browser reconnects, provides scrollback history
 # -----------------------------------------------------------------------------
-RUN printf '%s\n' \
-    'set -g history-limit 50000' \
-    'set -g remain-on-exit on' \
-    'set -g status off' \
-    'set -g set-clipboard on' \
-    'set -g allow-passthrough on' \
-    > /etc/tmux.conf
+COPY tmux.conf /etc/tmux.conf
 
 # -----------------------------------------------------------------------------
 # UTF-8 locale (required for tmux + Russian/CJK text)
