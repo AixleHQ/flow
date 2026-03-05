@@ -27,6 +27,7 @@
     "globals": "^16.0.0",
     "postcss": "^8.5.3",
     "prettier": "^3.7.4",
+    "prettier-plugin-packagejson": "^3.0.0",
     "sass-embedded": "^1.85.1",
     "steiger": "^0.5.11",
     "tailwindcss": "^4.0.14",

@@ -118,10 +118,32 @@ export const boardApi = baseApi.injectEndpoints({
         const patchResult = dispatch(
           boardApi.util.updateQueryData('getBoard', projectId, (draft) => {
             const task = draft.tasks.find((t) => t.id === taskId);
-            if (task) {
-              task.boardColumnId = columnId;
-              if (position !== undefined) task.position = position;
+            if (!task) return;
+
+            const oldColumnId = task.boardColumnId;
+            const oldPosition = task.position;
+            const sameColumn = oldColumnId === columnId;
+
+            if (position !== undefined) {
+              if (sameColumn) {
+                for (const t of draft.tasks) {
+                  if (t.id === taskId || t.boardColumnId !== columnId) continue;
+                  if (oldPosition < position) {
+                    if (t.position > oldPosition && t.position <= position) t.position -= 1;
+                  } else if (oldPosition > position) {
+                    if (t.position >= position && t.position < oldPosition) t.position += 1;
+                  }
+                }
+              } else {
+                for (const t of draft.tasks) {
+                  if (t.id === taskId) continue;
+                  if (t.boardColumnId === columnId && t.position >= position) t.position += 1;
+                }
+              }
             }
+
+            task.boardColumnId = columnId;
+            if (position !== undefined) task.position = position;
           }),
         );
         try {

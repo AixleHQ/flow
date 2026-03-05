@@ -25,7 +25,7 @@ class InternalToolExecutor
     private
 
     def resolve_handler(tool)
-      class_name = "InternalTools::#{tool.name.classify}"
+      class_name = "InternalTools::#{tool.name.camelize}"
       class_name.constantize
     rescue NameError
       raise ArgumentError, "No handler found for internal tool '#{tool.name}' (expected #{class_name})"

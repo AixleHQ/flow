@@ -6,7 +6,7 @@
 # - custom:   user-created, scoped to Company or Project
 # - system:   platform-provided "big" tools, visible in UI, attached explicitly
 # - internal: invisible helpers, auto-injected when session has container tools (read_tool_result)
-# - workflow: invisible, auto-injected only in workflow_step sessions (list_sub_steps, mark_sub_step, write_step_note)
+# - workflow: invisible, auto-injected only in workflow_step sessions (list_sub_steps, mark_sub_step)
 #
 # execution_mode: app | container
 # - app:       executes in Rails process (InternalToolExecutor), synchronous
@@ -42,6 +42,7 @@ class Tool < ApplicationRecord
   scope :system_tools, -> { where(kind: "system") }
   scope :internal_tools, -> { where(kind: "internal") }
   scope :workflow_tools, -> { where(kind: "workflow") }
+  scope :session_lifecycle_tools, -> { where(name: %w[finish_session fail_session]).enabled }
 
   scope :for_company, ->(company) { custom_tools.where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { custom_tools.where(scope_type: "Project", scope_id: project.id) }

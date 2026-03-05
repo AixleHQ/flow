@@ -1,4 +1,5 @@
 export * from './useParams';
 export * from './useAiEngineEvents';
-export * from './useTerminalSessionChannel';
+export * from './useTerminalSession';
+export * from './useTick';
 export * from './useWorkflowRunChannel';

@@ -1,8 +1,9 @@
 const path = require('node:path');
+
+const { aggregateFileContents } = require('./aggregate.js');
+const { isBinaryFile } = require('./binary.js');
 const discovery = require('./discovery.js');
 const ignoreRules = require('./ignoreRules.js');
-const { isBinaryFile } = require('./binary.js');
-const { aggregateFileContents } = require('./aggregate.js');
 
 // Backward-compatible signature; delegate to central loader
 async function parseGitignore(gitignorePath) {

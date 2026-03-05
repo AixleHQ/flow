@@ -13,7 +13,7 @@ export interface BoardTask {
   childrenCount: number;
   commentsCount: number;
   assetsCount: number;
-  activeWorkflowRun: { id: number; status: string } | null;
+  recentWorkflowRuns: Array<{ id: number; state: string }>;
   createdAt: string;
   updatedAt: string;
 }

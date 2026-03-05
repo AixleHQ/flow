@@ -21,12 +21,12 @@ module Api
             def create
               task = current_board.board_tasks.build(task_params)
               if task.save
-                broadcast(:task_created, BoardTaskSerializer.new(task).as_json)
                 ActivityRecorder.record(
                   board: current_board, event_type: :task_created, actor: current_user,
                   actor_type: :human, task: task,
                   metadata: { title: task.title, task_type: task.task_type }
                 )
+                WorkflowAutoTriggerService.check!(task: task, actor: current_user)
               end
               respond_with task, serializer: BoardTaskSerializer
             end
@@ -36,7 +36,6 @@ module Api
               task.assign_attributes(task_params)
               changes = task.changes
               if task.save
-                broadcast(:task_updated, BoardTaskSerializer.new(task).as_json)
                 ActivityRecorder.record(
                   board: current_board, event_type: :task_updated, actor: current_user,
                   actor_type: :human, task: task,
@@ -50,7 +49,6 @@ module Api
               task = current_board.board_tasks.find(params[:id])
               title = task.title
               if task.destroy
-                broadcast(:task_deleted, { task_id: task.id })
                 ActivityRecorder.record(
                   board: current_board, event_type: :task_deleted, actor: current_user,
                   actor_type: :human, metadata: { title: title }
@@ -102,23 +100,10 @@ module Api
 
               WorkflowService.start_workflow_execution(run)
 
-              broadcast(:workflow_started, { task_id: task.id, run_id: run.id })
-              ActivityRecorder.record(
-                board: current_board, event_type: :workflow_started, actor: current_user,
-                actor_type: :human, task: task,
-                metadata: { workflow_name: binding.workflow.name, workflow_run_id: run.id }
-              )
-
               respond_with run
             end
 
             private
-
-            def broadcast(event_type, data)
-              BoardChannel.broadcast_event(current_board, event_type.to_s, data, actor_id: current_user.id)
-            rescue StandardError => e
-              Rails.logger.warn("[BoardTasksBroadcast] #{e.message}")
-            end
 
             def current_board
               @current_board ||= current_project.board || raise(ActiveRecord::RecordNotFound)

@@ -12,8 +12,10 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
       display_name: "List Sub-Steps")
     @workflow_tool2 = create(:tool, :workflow, name: "mark_sub_step",
       display_name: "Mark Sub-Step")
-    @workflow_tool3 = create(:tool, :workflow, name: "write_step_note",
-      display_name: "Write Step Note")
+    @workflow_tool3 = create(:tool, :workflow, name: "finish_step",
+      display_name: "Finish Step")
+    @workflow_tool4 = create(:tool, :workflow, name: "fail_step",
+      display_name: "Fail Step")
     @system_tool = create(:tool, :system, name: "static_analyzer",
       display_name: "Static Analyzer", docker_image: "analyzer:latest",
       execution_mode: :container)
@@ -31,7 +33,8 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     assert_includes names, "list_sub_steps"
     assert_includes names, "mark_sub_step"
-    assert_includes names, "write_step_note"
+    assert_includes names, "finish_step"
+    assert_includes names, "fail_step"
   end
 
   test "workflow tools are NOT included for agent_session" do
@@ -41,7 +44,8 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     refute_includes names, "list_sub_steps"
     refute_includes names, "mark_sub_step"
-    refute_includes names, "write_step_note"
+    refute_includes names, "finish_step"
+    refute_includes names, "fail_step"
   end
 
   test "workflow tools are NOT included for auth_setup" do

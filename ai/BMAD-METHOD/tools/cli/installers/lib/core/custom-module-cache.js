@@ -4,9 +4,10 @@
  * and can be checked into source control
  */
 
-const fs = require('fs-extra');
-const path = require('node:path');
 const crypto = require('node:crypto');
+const path = require('node:path');
+
+const fs = require('fs-extra');
 
 class CustomModuleCache {
   constructor(bmadDir) {

@@ -135,7 +135,7 @@ class SessionConfigResolver
     if workflow_session?
       return [] unless step&.mount_repositories
 
-      workflow_run&.repository_ids.presence || project_repository_ids
+      workflow_run&.repository_ids.presence || []
     else
       session.repository_ids.presence || []
     end
@@ -231,14 +231,11 @@ class SessionConfigResolver
 
     return { resolved: [] } unless step&.mount_repositories
 
-    from_run = workflow_run&.repository_ids.presence
-    from_project_fallback = from_run ? [] : project_repository_ids
-    resolved = from_run || from_project_fallback
+    from_run = workflow_run&.repository_ids || []
 
     {
-      from_run: from_run || [],
-      from_project_fallback: from_project_fallback,
-      resolved: resolved
+      from_run: from_run,
+      resolved: from_run
     }
   end
 

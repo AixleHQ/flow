@@ -1,11 +1,13 @@
+const crypto = require('node:crypto');
 const path = require('node:path');
+
 const fs = require('fs-extra');
 const yaml = require('yaml');
-const crypto = require('node:crypto');
+
+const packageJson = require('../../../../../package.json');
 const { getSourcePath, getModulePath } = require('../../../lib/project-root');
 
 // Load package.json for version info
-const packageJson = require('../../../../../package.json');
 
 /**
  * Generates manifest files for installed workflows, agents, and tasks

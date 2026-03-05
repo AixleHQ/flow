@@ -1,6 +1,7 @@
-const { program } = require('commander');
-const path = require('node:path');
 const fs = require('node:fs');
+const path = require('node:path');
+
+const { program } = require('commander');
 
 // Fix for stdin issues when running through npm on Windows
 // Ensures keyboard interaction works properly with CLI prompts

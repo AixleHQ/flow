@@ -108,8 +108,6 @@ module ContextBuilders
       lines << ""
       lines << "Track progress: call `mark_sub_step` with the sub-step `id` shown above."
       lines << "Mark `in_progress` when starting, `completed` when done."
-      lines << ""
-      lines << "**IMPORTANT:** Do NOT mark the last sub-step `completed` until ALL work is done — including writing output files. Marking the last sub-step completed triggers session termination."
       lines.join("\n")
     end
 
@@ -147,17 +145,17 @@ module ContextBuilders
     end
 
     def build_workflow_tools
-      <<~MD.strip
-        ## Workflow Tools (MCP)
+      lines = []
+      lines << "## Workflow Tools (MCP)"
+      lines << ""
+      lines << "You have special tools to track progress within this step:"
+      lines << ""
+      lines << "- **list_sub_steps** — List all sub-steps with their current statuses. Call this first to see what needs to be done."
+      lines << "- **mark_sub_step** — Update a sub-step status. Parameters: `id` (sub-step run ID), `status` (`in_progress`/`completed`/`skipped`), optional `note` and `data`."
+      lines << ""
+      lines << "Always mark sub-steps as you work through them so the workflow dashboard stays up to date."
 
-        You have special tools to track progress within this step:
-
-        - **list_sub_steps** — List all sub-steps with their current statuses. Call this first to see what needs to be done.
-        - **mark_sub_step** — Update a sub-step status. Parameters: `id` (sub-step run ID), `status` (`in_progress`/`completed`/`skipped`), optional `note` and `data`.
-        - **write_step_note** — Save a note visible to subsequent steps and workflow operators. Parameter: `note` (text).
-
-        Always mark sub-steps as you work through them so the workflow dashboard stays up to date.
-      MD
+      lines.join("\n")
     end
 
     def sub_steps
@@ -171,6 +169,10 @@ module ContextBuilders
         .joins(:step)
         .order("steps.position ASC")
         .includes(step: :sub_steps, sub_step_runs: :sub_step)
+    end
+
+    def non_interactive?
+      session.mode == "non_interactive"
     end
 
     def status_icon(status)

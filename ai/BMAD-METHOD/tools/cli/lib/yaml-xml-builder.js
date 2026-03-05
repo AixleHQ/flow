@@ -1,10 +1,13 @@
-const yaml = require('yaml');
-const fs = require('fs-extra');
-const path = require('node:path');
 const crypto = require('node:crypto');
-const { AgentAnalyzer } = require('./agent-analyzer');
-const { ActivationBuilder } = require('./activation-builder');
+const path = require('node:path');
+
+const fs = require('fs-extra');
+const yaml = require('yaml');
+
 const { escapeXml } = require('../../lib/xml-utils');
+
+const { ActivationBuilder } = require('./activation-builder');
+const { AgentAnalyzer } = require('./agent-analyzer');
 
 /**
  * Converts agent YAML files to XML format with smart activation injection

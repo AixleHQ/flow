@@ -71,7 +71,8 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
 
   const task = data?.tasks.find((t) => t.id === activeTaskId);
   const column = data?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
-  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !task?.activeWorkflowRun;
+  const hasActiveRun = task?.recentWorkflowRuns.some((r) => ['pending', 'running', 'paused'].includes(r.state));
+  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !hasActiveRun;
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');

@@ -1,6 +1,8 @@
 const path = require('node:path');
+
 const fs = require('fs-extra');
 const yaml = require('yaml');
+
 const { Manifest } = require('./manifest');
 
 class Detector {

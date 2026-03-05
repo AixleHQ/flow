@@ -266,7 +266,7 @@ class Api::V1::Company::Projects::Board::TasksControllerTest < ActionController:
     assert_equal 5, @task.position
   end
 
-  test "#move compacts source column positions" do
+  test "#move keeps source column positions unchanged" do
     task2 = BoardTask.create!(title: "T2", board: @board, board_column: @col1)
     task3 = BoardTask.create!(title: "T3", board: @board, board_column: @col1)
     sign_in @owner
@@ -276,8 +276,8 @@ class Api::V1::Company::Projects::Board::TasksControllerTest < ActionController:
     assert_response :success
     task2.reload
     task3.reload
-    assert_equal 1, task2.position
-    assert_equal 2, task3.position
+    assert_equal 2, task2.position
+    assert_equal 3, task3.position
   end
 
   test "#move to invalid column returns 404" do

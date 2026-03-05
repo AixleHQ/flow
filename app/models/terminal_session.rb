@@ -125,22 +125,23 @@ class TerminalSession < ApplicationRecord
   def available_tools
     result = []
 
-    # Workflow tools auto-injected for workflow step sessions only
     if session_type == "workflow_step"
       result += Tool.workflow_tools.enabled.to_a
     end
 
-    # Explicitly attached tools (system + custom via session_tools join)
     result += tools.enabled.to_a
 
     if result.select(&:custom?).empty? && project.present?
       result += Tool.for_project(project).custom_tools.enabled.to_a
     end
 
-    # Internal tools auto-injected when any container tool is present
     has_container_tools = result.any? { |t| t.execution_mode.container? }
     if has_container_tools
       result += Tool.internal_tools.enabled.to_a
+    end
+
+    if mode == "non_interactive"
+      result += Tool.session_lifecycle_tools.to_a
     end
 
     result.uniq

@@ -1,8 +1,10 @@
 const path = require('node:path');
-const fs = require('fs-extra');
+
 const chalk = require('chalk');
-const { XmlHandler } = require('../../../lib/xml-handler');
+const fs = require('fs-extra');
+
 const { getSourcePath } = require('../../../lib/project-root');
+const { XmlHandler } = require('../../../lib/xml-handler');
 
 /**
  * Base class for IDE-specific setup

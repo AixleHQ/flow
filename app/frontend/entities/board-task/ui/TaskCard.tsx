@@ -1,16 +1,7 @@
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
-import {
-  Avatar,
-  Box,
-  Card,
-  CardActionArea,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Tooltip,
-  Typography,
-} from '@mui/material';
+import { Avatar, Box, Card, CardActionArea, CardContent, Chip, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { keyframes } from '@mui/system';
 
 import type { BoardTask } from '../model/types';
 import { PRIORITY_COLORS, TASK_TYPE_COLORS } from '../model/types';
@@ -83,11 +74,32 @@ const styles = {
     color: 'text.secondary',
     fontSize: '11px',
   },
-  workflowIndicator: {
+  workflowDots: {
     display: 'flex',
     alignItems: 'center',
+    gap: '3px',
+    flexShrink: 0,
+    ml: 0.5,
   },
 } satisfies Record<string, SxProps<Theme>>;
+
+const pulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+`;
+
+const ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
+
+function workflowDotColor(state: string): string {
+  if (ACTIVE_STATES.has(state)) return '#1976d2';
+  if (state === 'failed') return '#d32f2f';
+  if (state === 'cancelled') return '#9e9e9e';
+  return '#2e7d32';
+}
+
+function workflowDotLabel(state: string): string {
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
 
 export const TaskCard = ({ task, onClick, isDragging }: TaskCardProps) => {
   const visibleTags = task.tags.slice(0, 3);
@@ -104,10 +116,23 @@ export const TaskCard = ({ task, onClick, isDragging }: TaskCardProps) => {
               </Tooltip>
             )}
             <Typography sx={styles.title}>{task.title}</Typography>
-            {task.activeWorkflowRun && (
-              <Tooltip title={`Workflow ${task.activeWorkflowRun.status}`}>
-                <Box sx={styles.workflowIndicator}>
-                  <CircularProgress size={14} />
+            {task.recentWorkflowRuns.length > 0 && (
+              <Tooltip title={task.recentWorkflowRuns.map((r) => `#${r.id} ${workflowDotLabel(r.state)}`).join(', ')}>
+                <Box sx={styles.workflowDots}>
+                  {[...task.recentWorkflowRuns].reverse().map((run) => (
+                    <Box
+                      key={run.id}
+                      sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: workflowDotColor(run.state),
+                        ...(ACTIVE_STATES.has(run.state) && {
+                          animation: `${pulse} 1.5s ease-in-out infinite`,
+                        }),
+                      }}
+                    />
+                  ))}
                 </Box>
               </Tooltip>
             )}

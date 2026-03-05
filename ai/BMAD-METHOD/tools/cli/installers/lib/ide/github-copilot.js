@@ -1,8 +1,11 @@
 const path = require('node:path');
-const { BaseIdeSetup } = require('./_base-ide');
+
 const chalk = require('chalk');
-const { AgentCommandGenerator } = require('./shared/agent-command-generator');
+
 const prompts = require('../../../lib/prompts');
+
+const { BaseIdeSetup } = require('./_base-ide');
+const { AgentCommandGenerator } = require('./shared/agent-command-generator');
 
 /**
  * GitHub Copilot setup handler

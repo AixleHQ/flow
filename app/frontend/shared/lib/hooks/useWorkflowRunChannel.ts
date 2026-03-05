@@ -1,6 +1,7 @@
-import { createConsumer, type Consumer, type Subscription } from '@rails/actioncable';
+import { type Subscription } from '@rails/actioncable';
 import { useEffect, useRef, useCallback, useState } from 'react';
 
+import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { keysToCamelCase } from 'shared/lib/caseConverter';
 
 interface RunUpdateMessage {
@@ -14,7 +15,6 @@ interface UseWorkflowRunChannelOptions<T = unknown> {
 }
 
 export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkflowRunChannelOptions<T>) {
-  const consumerRef = useRef<Consumer | null>(null);
   const subscriptionRef = useRef<Subscription | null>(null);
   const onUpdateRef = useRef(onUpdate);
   const [workflowRun, setWorkflowRun] = useState<T | null>(null);
@@ -31,11 +31,8 @@ export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkf
       return;
     }
 
-    if (!consumerRef.current) {
-      consumerRef.current = createConsumer();
-    }
-
-    const subscription = consumerRef.current.subscriptions.create(
+    const consumer = getConsumer();
+    const subscription = consumer.subscriptions.create(
       { channel: 'WorkflowRunChannel', run_id: runId },
       {
         connected() {

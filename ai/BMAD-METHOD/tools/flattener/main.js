@@ -1,14 +1,15 @@
-const { Command } = require('commander');
-const fs = require('fs-extra');
 const path = require('node:path');
 const process = require('node:process');
 
+const { Command } = require('commander');
+const fs = require('fs-extra');
+
 // Modularized components
+const { discoverFiles, filterFiles, aggregateFileContents } = require('./files.js');
 const { findProjectRoot } = require('./projectRoot.js');
 const { promptYesNo, promptPath } = require('./prompts.js');
-const { discoverFiles, filterFiles, aggregateFileContents } = require('./files.js');
-const { generateXMLOutput } = require('./xml.js');
 const { calculateStatistics } = require('./stats.js');
+const { generateXMLOutput } = require('./xml.js');
 
 /**
  * Recursively discover all files in a directory

@@ -12,6 +12,11 @@ module Activities
           return { "step_run_id" => step_run.id, "valid" => false, "failed" => true }
         end
 
+        if step_run.error_message.present?
+          step_run.mark_failed!(step_run.error_message)
+          return { "step_run_id" => step_run.id, "valid" => false, "failed" => true }
+        end
+
         assets = collected_assets(step_run)
         validation = validate_outputs(step_run, assets)
 

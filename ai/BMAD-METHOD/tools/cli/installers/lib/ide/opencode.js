@@ -1,12 +1,14 @@
-const path = require('node:path');
-const fs = require('fs-extra');
 const os = require('node:os');
+const path = require('node:path');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
 const yaml = require('yaml');
+
 const { BaseIdeSetup } = require('./_base-ide');
-const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
-const { TaskToolCommandGenerator } = require('./shared/task-tool-command-generator');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
+const { TaskToolCommandGenerator } = require('./shared/task-tool-command-generator');
+const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 
 /**
  * OpenCode IDE setup handler

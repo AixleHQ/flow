@@ -1,22 +1,26 @@
 const path = require('node:path');
-const fs = require('fs-extra');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
 const ora = require('ora');
+
+const { CLIUtils } = require('../../../lib/cli-utils');
+const { Config } = require('../../../lib/config');
+const { FileOps } = require('../../../lib/file-ops');
+const { getProjectRoot, getSourcePath, getModulePath } = require('../../../lib/project-root');
+const prompts = require('../../../lib/prompts');
+const { XmlHandler } = require('../../../lib/xml-handler');
+const { CustomHandler } = require('../custom/handler');
+const { IdeManager } = require('../ide/manager');
+const { ModuleManager } = require('../modules/manager');
+
+const { DependencyResolver } = require('./dependency-resolver');
 const { Detector } = require('./detector');
 const { Manifest } = require('./manifest');
-const { ModuleManager } = require('../modules/manager');
-const { IdeManager } = require('../ide/manager');
-const { FileOps } = require('../../../lib/file-ops');
-const { Config } = require('../../../lib/config');
-const { XmlHandler } = require('../../../lib/xml-handler');
-const { DependencyResolver } = require('./dependency-resolver');
+
 const { ConfigCollector } = require('./config-collector');
-const { getProjectRoot, getSourcePath, getModulePath } = require('../../../lib/project-root');
-const { CLIUtils } = require('../../../lib/cli-utils');
 const { ManifestGenerator } = require('./manifest-generator');
 const { IdeConfigManager } = require('./ide-config-manager');
-const { CustomHandler } = require('../custom/handler');
-const prompts = require('../../../lib/prompts');
 
 // BMAD installation folder name - this is constant and should never change
 const BMAD_FOLDER_NAME = '_bmad';

@@ -11,10 +11,12 @@
  *   project_root - Directory to scan (defaults to BMAD repo root)
  */
 
-const { glob } = require('glob');
-const yaml = require('yaml');
 const fs = require('node:fs');
 const path = require('node:path');
+
+const { glob } = require('glob');
+const yaml = require('yaml');
+
 const { validateAgentFile } = require('./schema/agent.js');
 
 /**

@@ -31,14 +31,12 @@ import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
 import { useGetCompanyToolsQuery, useGetProjectToolsQuery } from 'features/tools-management';
-import { useCreateTerminalSessionMutation, useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
-import { useTerminalSessionChannel } from 'shared/lib';
+import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
 /** Props passed to the terminal renderer */
 export interface TerminalRenderProps {
   sessionId: number;
-  session: ITerminalSession | null;
 }
 
 export interface SessionLaunchWidgetProps {
@@ -88,31 +86,9 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
 
   // Session state — when set, show TerminalSessionWidget instead of form
   const [activeSessionId, setActiveSessionId] = useState<number | null>(initialSessionId ?? null);
-  const [activeSession, setActiveSession] = useState<ITerminalSession | null>(null);
 
-  // Fetch session data — only for initial load from URL
-  const {
-    data: fetchedSession,
-    isLoading: isLoadingExisting,
-    isError: isSessionError,
-  } = useGetTerminalSessionQuery(activeSessionId!, {
-    skip: !activeSessionId || activeSession !== null,
-  });
-
-  // Sync fetched session data into local state (initial load only)
-  useEffect(() => {
-    if (fetchedSession?.data && !activeSession) {
-      setActiveSession(fetchedSession.data);
-      if (!selectedAgent) {
-        setSelectedAgent(fetchedSession.data.agentType);
-      }
-    }
-  }, [fetchedSession, activeSession, selectedAgent]);
-
-  // ActionCable subscription for real-time session updates
-  const handleChannelUpdate = useCallback(
+  const handleSessionUpdate = useCallback(
     (updated: ITerminalSession) => {
-      setActiveSession(updated);
       if (!selectedAgent && updated.agentType) {
         setSelectedAgent(updated.agentType);
       }
@@ -141,10 +117,24 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     [selectedAgent, projectId],
   );
 
-  useTerminalSessionChannel({
+  const {
+    session: activeSession,
+    isLoading: isLoadingExisting,
+    isError: isSessionError,
+    createSession: createSessionAction,
+    isCreating,
+    finishSession: finishSessionAction,
+  } = useTerminalSession({
     sessionId: activeSessionId,
-    onUpdate: handleChannelUpdate,
+    onUpdate: handleSessionUpdate,
   });
+
+  // Sync agent type from loaded session
+  useEffect(() => {
+    if (activeSession && !selectedAgent && activeSession.agentType) {
+      setSelectedAgent(activeSession.agentType);
+    }
+  }, [activeSession, selectedAgent]);
 
   // Resource queries — use skip to avoid conditional hooks
   const projectAgents = useGetProjectAgentsQuery(projectId!, { skip: !projectId });
@@ -171,8 +161,6 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const companyRepos = useGetCompanyRepositoriesQuery(undefined, { skip: !!projectId });
   const repositories: Repository[] = (projectId ? projectRepos.data : companyRepos.data) ?? [];
 
-  const [createSession, { isLoading: isCreating }] = useCreateTerminalSessionMutation();
-  const [finishSession] = useFinishSessionMutation();
   const [isStopping, setIsStopping] = useState(false);
 
   const canSubmit = selectedAgent !== null && (mode === 'interactive' || initialPrompt.trim().length > 0);
@@ -196,7 +184,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     if (!selectedAgent) return;
 
     try {
-      const result = await createSession({
+      const result = await createSessionAction({
         terminalSession: {
           sessionType: 'agent_session',
           agentType: selectedAgent,
@@ -210,13 +198,12 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           mode: mode,
           ...(mode === 'non_interactive' ? { initialPrompt } : {}),
         },
-      }).unwrap();
+      });
 
       const agentLabel = AGENT_TYPES.find((a) => a.type === selectedAgent)?.label ?? selectedAgent;
       enqueueSnackbar(`${agentLabel} session started`, { variant: 'success' });
 
       setActiveSessionId(result.data.id);
-      setActiveSession(result.data);
       onSessionChange?.(result.data.id);
     } catch (error) {
       const message = (error as { data?: { error?: string } })?.data?.error || 'Failed to start session';
@@ -229,7 +216,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
     if (!activeSessionId) return;
     setIsStopping(true);
     try {
-      await finishSession({ sessionId: activeSessionId }).unwrap();
+      await finishSessionAction(activeSessionId);
       enqueueSnackbar('Session finishing...', { variant: 'info' });
     } catch {
       enqueueSnackbar('Failed to finish session', { variant: 'error' });
@@ -239,7 +226,6 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
 
   const handleNewSession = () => {
     setActiveSessionId(null);
-    setActiveSession(null);
     setIsStopping(false);
     onSessionChange?.(null);
   };
@@ -388,7 +374,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           </Box>
         ) : (
           <Box sx={{ flex: 1, overflow: 'hidden' }}>
-            {renderTerminal ? renderTerminal({ sessionId: activeSessionId, session: activeSession }) : null}
+            {renderTerminal ? renderTerminal({ sessionId: activeSessionId }) : null}
           </Box>
         )}
       </Box>

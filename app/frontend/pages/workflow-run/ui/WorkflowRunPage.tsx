@@ -8,12 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Link,
   Tab,
   Tabs,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -31,7 +29,7 @@ import {
   type WorkflowRun,
 } from 'features/workflow-execution';
 import { useGetStepsQuery } from 'features/workflow-steps';
-import { useWorkflowRunChannel } from 'shared/lib/hooks';
+import { useTick, useWorkflowRunChannel } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
@@ -80,20 +78,6 @@ const styles = {
     alignItems: 'center',
     gap: '8px',
   },
-  actionButton: {
-    padding: '6px',
-    color: 'text.secondary',
-    border: '1px solid',
-    borderColor: 'divider',
-    borderRadius: '6px',
-    '&:hover': { backgroundColor: 'action.hover', borderColor: 'border.strong' },
-  },
-  dangerButton: {
-    color: 'error.main',
-    borderColor: 'error.main',
-    '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.1)' },
-  },
-
   tabBar: {
     borderBottom: '1px solid',
     borderColor: 'divider',
@@ -173,6 +157,7 @@ const styles = {
     color: 'text.disabled',
   },
   stepIndicatorFailed: { backgroundColor: 'error.main', color: 'white' },
+  stepIndicatorCancelled: { backgroundColor: 'grey.500', color: 'white' },
   stepIndicatorSkipped: { backgroundColor: 'text.disabled', color: 'white' },
   stepIndicatorWaiting: {
     backgroundColor: 'warning.main',
@@ -319,6 +304,8 @@ function getIndicatorStyle(state: string): SxProps<Theme> {
       return styles.stepIndicatorWaiting;
     case 'failed':
       return styles.stepIndicatorFailed;
+    case 'cancelled':
+      return styles.stepIndicatorCancelled;
     case 'skipped':
       return styles.stepIndicatorSkipped;
     default:
@@ -336,6 +323,8 @@ function getStepIcon(state: string, index: number): string {
       return '\u270B';
     case 'failed':
       return '\u2717';
+    case 'cancelled':
+      return '\u2715';
     case 'skipped':
       return '\u2192';
     default:
@@ -343,10 +332,10 @@ function getStepIcon(state: string, index: number): string {
   }
 }
 
-function formatDuration(startedAt: string | null, completedAt?: string | null): string {
+function formatDuration(startedAt: string | null, completedAt?: string | null, now?: number): string {
   if (!startedAt) return '--';
   const start = new Date(startedAt);
-  const end = completedAt ? new Date(completedAt) : new Date();
+  const end = completedAt ? new Date(completedAt) : new Date(now ?? Date.now());
   const diffMs = end.getTime() - start.getTime();
   const diffMins = Math.floor(diffMs / 60000);
   const diffSecs = Math.floor((diffMs % 60000) / 1000);
@@ -376,8 +365,13 @@ const WorkflowRunPage = () => {
     isError,
   } = useGetWorkflowRunQuery({ projectId, runId }, { skip: !projectId || !runId });
 
-  const { workflowRun: liveRun } = useWorkflowRunChannel<WorkflowRun>({ runId: runId || null });
+  const { workflowRun: liveRun, refresh: refreshChannel } = useWorkflowRunChannel<WorkflowRun>({
+    runId: runId || null,
+  });
   const workflowRun = liveRun ?? initialRun;
+
+  const isActive = workflowRun ? isRunActive(workflowRun) : false;
+  const tick = useTick(isActive);
 
   const { data: workflowSteps = [] } = useGetStepsQuery(
     { projectId, workflowId: workflowRun?.workflowId ?? 0 },
@@ -482,9 +476,10 @@ const WorkflowRunPage = () => {
     setSkipReason('');
   }, [skipStep, projectId, runId, skipReason]);
 
-  const handleCancel = useCallback(() => {
-    cancelRun({ projectId, runId });
-  }, [cancelRun, projectId, runId]);
+  const handleCancel = useCallback(async () => {
+    await cancelRun({ projectId, runId });
+    refreshChannel();
+  }, [cancelRun, projectId, runId, refreshChannel]);
 
   /* ── derived ───────────────────────────────────────────────────── */
 
@@ -562,7 +557,7 @@ const WorkflowRunPage = () => {
             {workflowRun.state}
           </Typography>
           <Typography sx={{ fontSize: '11px', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
-            {formatDuration(workflowRun.startedAt, workflowRun.completedAt)}
+            {formatDuration(workflowRun.startedAt, workflowRun.completedAt, tick)}
           </Typography>
         </Box>
         <Box sx={styles.headerRight}>
@@ -570,16 +565,24 @@ const WorkflowRunPage = () => {
             {completedCount}/{timelineSteps.length} steps
           </Typography>
           {isWorkflowRunning && (
-            <Tooltip title="Cancel Workflow">
-              <IconButton
-                sx={{ ...styles.actionButton, ...styles.dangerButton }}
-                onClick={handleCancel}
-                disabled={cancelling}
-                size="small"
-              >
-                <span style={{ fontSize: '12px' }}>{'\u25A0'}</span>
-              </IconButton>
-            </Tooltip>
+            <Button
+              variant="outlined"
+              size="small"
+              color="error"
+              onClick={handleCancel}
+              disabled={cancelling}
+              sx={{
+                textTransform: 'none',
+                fontSize: '12px',
+                fontWeight: 500,
+                lineHeight: 1.5,
+                py: '3px',
+                px: '10px',
+                borderRadius: '6px',
+              }}
+            >
+              Cancel Workflow
+            </Button>
           )}
         </Box>
       </Box>
@@ -617,7 +620,7 @@ const WorkflowRunPage = () => {
                             <Typography sx={styles.stepChipName}>{ts.stepName}</Typography>
                             {ts.stepRun?.startedAt && (
                               <Typography sx={styles.stepChipMeta}>
-                                {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt)}
+                                {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt, tick)}
                               </Typography>
                             )}
                           </Box>
@@ -821,7 +824,10 @@ const WorkflowRunPage = () => {
       )}
 
       {/* ── Status Bar ──────────────────────────────────────────── */}
-      <StatusBar status={sessionStatus} duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt)} />
+      <StatusBar
+        status={sessionStatus}
+        duration={formatDuration(workflowRun.startedAt, workflowRun.completedAt, tick)}
+      />
 
       {/* ── Skip Dialog ─────────────────────────────────────────── */}
       <Dialog open={skipDialogOpen} onClose={() => setSkipDialogOpen(false)} maxWidth="sm" fullWidth>

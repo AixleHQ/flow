@@ -1,12 +1,15 @@
-const path = require('node:path');
-const fs = require('fs-extra');
 const os = require('node:os');
+const path = require('node:path');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+
+const prompts = require('../../../lib/prompts');
+
 const { BaseIdeSetup } = require('./_base-ide');
-const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
 const { getTasksFromBmad } = require('./shared/bmad-artifacts');
-const prompts = require('../../../lib/prompts');
+const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 
 /**
  * Codex setup handler (CLI mode)

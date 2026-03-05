@@ -33,13 +33,7 @@ const CompanySessionNewPage = () => {
   );
 
   const renderTerminal = useCallback(
-    ({
-      sessionId: sid,
-      session,
-    }: {
-      sessionId: number;
-      session: import('entities/terminal-session').ITerminalSession | null;
-    }) => <TerminalSessionWidget sessionId={sid} session={session} showEditor showTerminal />,
+    ({ sessionId: sid }: { sessionId: number }) => <TerminalSessionWidget sessionId={sid} showEditor showTerminal />,
     [],
   );
 

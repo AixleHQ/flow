@@ -3,10 +3,11 @@
  * This should be run once to update existing installations
  */
 
-const fs = require('fs-extra');
 const path = require('node:path');
-const yaml = require('yaml');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+const yaml = require('yaml');
 
 /**
  * Find BMAD directory in project

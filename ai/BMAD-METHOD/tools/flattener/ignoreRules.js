@@ -1,5 +1,6 @@
-const fs = require('fs-extra');
 const path = require('node:path');
+
+const fs = require('fs-extra');
 const ignore = require('ignore');
 
 // Central default ignore patterns for discovery and filtering.

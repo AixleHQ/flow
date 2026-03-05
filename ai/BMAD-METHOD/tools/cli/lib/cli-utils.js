@@ -1,9 +1,10 @@
-const chalk = require('chalk');
-const boxen = require('boxen');
-const wrapAnsi = require('wrap-ansi');
-const figlet = require('figlet');
-const path = require('node:path');
 const os = require('node:os');
+const path = require('node:path');
+
+const boxen = require('boxen');
+const chalk = require('chalk');
+const figlet = require('figlet');
+const wrapAnsi = require('wrap-ansi');
 
 const CLIUtils = {
   /**

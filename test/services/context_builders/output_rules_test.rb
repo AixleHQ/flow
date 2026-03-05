@@ -35,24 +35,21 @@ class ContextBuilders::OutputRulesTest < ActiveSupport::TestCase
     assert_includes content, "clean, production-quality"
   end
 
-  test "includes workflow termination warning for workflow step session" do
+  test "includes session lifecycle instructions for non-interactive session" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
-      mode: "interactive")
-
-    mock_step_run = Object.new
-    session.stubs(:step_run).returns(mock_step_run)
+      mode: "non_interactive", initial_prompt: "do work")
 
     sections = ContextBuilders::OutputRules.new(session).build
-    assert_includes sections.first.content, "Marking the last sub-step"
-    assert_includes sections.first.content, "session termination"
+    assert_includes sections.first.content, "finish_session"
+    assert_includes sections.first.content, "fail_session"
   end
 
-  test "excludes workflow termination warning for standalone session" do
+  test "excludes session lifecycle instructions for interactive session" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive")
 
     sections = ContextBuilders::OutputRules.new(session).build
-    assert_not_includes sections.first.content, "session termination"
+    assert_not_includes sections.first.content, "finish_session"
   end
 
   test "sandwich pattern: CriticalRules at top and OutputRules at bottom" do

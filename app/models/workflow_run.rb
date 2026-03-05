@@ -7,7 +7,7 @@ class WorkflowRun < ApplicationRecord
   belongs_to :workflow
   belongs_to :project
   belongs_to :user
-  belongs_to :board_task, optional: true
+  belongs_to :board_task, optional: true, touch: true
 
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy

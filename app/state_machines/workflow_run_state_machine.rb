@@ -19,11 +19,11 @@ module WorkflowRunStateMachine
       end
 
       event :pause do
-        transitions from: :running, to: :paused
+        transitions from: :running, to: :paused, after: :broadcast_run_update!
       end
 
       event :resume do
-        transitions from: :paused, to: :running
+        transitions from: :paused, to: :running, after: :broadcast_run_update!
       end
 
       event :complete do
@@ -35,7 +35,7 @@ module WorkflowRunStateMachine
       end
 
       event :cancel do
-        transitions from: %i[pending running paused], to: :cancelled, after: :on_completed
+        transitions from: %i[pending running paused], to: :cancelled, after: :on_cancelled
       end
     end
   end
@@ -52,6 +52,30 @@ module WorkflowRunStateMachine
     broadcast_run_update!
   end
 
+  def on_cancelled
+    update_column(:completed_at, Time.current)
+    cancel_active_step_runs!
+    broadcast_run_update!
+  end
+
+  def cancel_active_step_runs!
+    step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
+      cancel_session(sr.terminal_session)
+      sr.mark_cancelled!
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowRunStateMachine] Failed to cancel step_run ##{sr.id}: #{e.message}")
+    end
+  end
+
+  def cancel_session(session)
+    return unless session
+
+    session.cancel! if session.temporal_workflow_id.present?
+    session.fail! if session.may_fail?
+  rescue StandardError => e
+    Rails.logger.warn("[WorkflowRunStateMachine] Failed to cancel session ##{session.id}: #{e.message}")
+  end
+
   def broadcast_run_update!
     WorkflowRunChannel.broadcast_update(id)
     broadcast_board_event!
@@ -62,30 +86,22 @@ module WorkflowRunStateMachine
   def broadcast_board_event!
     return unless board_task_id.present?
 
-    board = board_task&.board
-    return unless board
-
-    event_type = state.in?(%w[running pending paused]) ? "workflow_started" : "workflow_completed"
-    BoardChannel.broadcast_event(board, event_type, {
-      task_id: board_task_id,
-      run_id: id,
-      status: state
-    })
-
-    record_workflow_activity!(board, event_type)
+    record_workflow_activity!
   rescue StandardError => e
     Rails.logger.warn("[WorkflowRunStateMachine#broadcast_board] #{e.message}")
   end
 
-  def record_workflow_activity!(board, _event_type)
+  def record_workflow_activity!
     activity_type = case state
+    when "running" then :workflow_started
     when "failed" then :workflow_failed
     when "completed" then :workflow_completed
+    when "cancelled" then :workflow_cancelled
     else return
     end
 
     ActivityRecorder.record(
-      board: board, event_type: activity_type, actor: user,
+      board: board_task.board, event_type: activity_type, actor: user,
       actor_type: :system, task: board_task,
       metadata: { workflow_name: workflow.name, workflow_run_id: id }
     )

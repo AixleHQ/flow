@@ -1,9 +1,11 @@
 const path = require('node:path');
-const { BaseIdeSetup } = require('./_base-ide');
+
 const chalk = require('chalk');
+
+const { BaseIdeSetup } = require('./_base-ide');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
-const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 const { TaskToolCommandGenerator } = require('./shared/task-tool-command-generator');
+const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 
 /**
  * Cursor IDE setup handler

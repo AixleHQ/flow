@@ -1,7 +1,9 @@
-const path = require('node:path');
 const { execFile } = require('node:child_process');
+const path = require('node:path');
 const { promisify } = require('node:util');
+
 const { glob } = require('glob');
+
 const { loadIgnore } = require('./ignoreRules.js');
 
 const pExecFile = promisify(execFile);

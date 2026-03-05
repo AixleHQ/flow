@@ -1,7 +1,8 @@
-const fs = require('fs-extra');
 const path = require('node:path');
-const yaml = require('yaml');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+const yaml = require('yaml');
 
 /**
  * Load and display installer messages from messages.yaml

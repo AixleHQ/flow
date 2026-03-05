@@ -105,13 +105,14 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# Start ttyd Web Terminal (with tmux session persistence)
+# Start tmux session + ttyd Web Terminal
 #
-# All commands run inside tmux:
-#   - Command survives browser disconnects / tab refreshes
-#   - Scrollback history (50k lines) preserved across reconnections
-#   - Multiple tabs share the same live session
-#   - tmux new -A: creates session on first connect, re-attaches on subsequent
+# tmux session "agent" is created immediately at startup.
+# ttyd connects every WebSocket client to the same session via `tmux attach`.
+# This ensures:
+#   - Agent starts working right away (no waiting for browser)
+#   - All browser tabs share one live session
+#   - Disconnects/reconnects are seamless
 # -----------------------------------------------------------------------------
 TTYD_CMD="${TTYD_CMD:-bash}"
 
@@ -127,22 +128,21 @@ else
     TMUX_CMD="$TTYD_CMD"
 fi
 
-ttyd -W -p "$TTYD_PORT" tmux -u new -A -s agent $TMUX_CMD &
+tmux -u new -d -s agent $TMUX_CMD
+tmux pipe-pane -t agent "cat >> /proc/1/fd/1"
+echo -e "${GREEN}✅ ${AGENT_NAME} session started${NC}"
+
+ttyd -W -p "$TTYD_PORT" tmux -u attach -t agent &
 TTYD_PID=$!
 
 sleep 1
 if kill -0 $TTYD_PID 2>/dev/null; then
-    echo -e "${GREEN}✅ ${AGENT_NAME} terminal ready${NC}"
+    echo -e "${GREEN}✅ Web terminal ready${NC}"
 else
-    echo -e "${YELLOW}⚠️  Terminal failed to start${NC}"
+    echo -e "${YELLOW}⚠️  Web terminal failed to start${NC}"
 fi
 
 echo -e "${GREEN}Container ready.${NC}"
-
-# Pipe tmux pane output to container stdout (docker logs)
-# Wait for session to be created by first ttyd client, then attach pipe
-(while ! tmux has-session -t agent 2>/dev/null; do sleep 1; done
- tmux pipe-pane -t agent "cat >> /proc/1/fd/1") &
 
 # -----------------------------------------------------------------------------
 # Handle shutdown

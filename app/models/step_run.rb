@@ -11,7 +11,7 @@ class StepRun < ApplicationRecord
   has_many :produced_workflow_run_assets, class_name: "WorkflowRunAsset", foreign_key: :produced_by_step_run_id,
                                          dependent: :nullify, inverse_of: :produced_by_step_run
 
-  enumerize :state, in: %i[pending running waiting_input completed failed skipped], default: :pending,
+  enumerize :state, in: %i[pending running waiting_input completed failed skipped cancelled], default: :pending,
                     predicates: true, scope: true
 
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
@@ -38,6 +38,11 @@ class StepRun < ApplicationRecord
 
   def mark_skipped!(reason = nil)
     update!(state: :skipped, completed_at: Time.current, skip_reason: reason)
+    broadcast_update!
+  end
+
+  def mark_cancelled!
+    update!(state: :cancelled, completed_at: Time.current)
     broadcast_update!
   end
 

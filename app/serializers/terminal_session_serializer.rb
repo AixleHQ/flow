@@ -66,8 +66,10 @@ class TerminalSessionSerializer < ApplicationSerializer
     return nil if object.mode == "non_interactive"
 
     base_url = "#{Settings.traefik.http_base}/t/#{object.route_token}/ide/"
+    params = { folder: "/workspace" }
     token = object.metadata&.dig("vscode_token")
-    token.present? ? "#{base_url}?tkn=#{token}" : base_url
+    params[:tkn] = token if token.present?
+    "#{base_url}?#{params.to_query}"
   end
 
   def session_config

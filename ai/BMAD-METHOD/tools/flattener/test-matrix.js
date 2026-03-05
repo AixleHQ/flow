@@ -5,12 +5,14 @@
  No external options or flags required. Safe to run multiple times.
 */
 
+const { execFile } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
-const fs = require('fs-extra');
-const { promisify } = require('node:util');
-const { execFile } = require('node:child_process');
 const process = require('node:process');
+const { promisify } = require('node:util');
+
+const fs = require('fs-extra');
+
 const execFileAsync = promisify(execFile);
 
 const { findProjectRoot } = require('./projectRoot.js');

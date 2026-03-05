@@ -22,11 +22,12 @@
  *   - GET /auth - Check authentication status (for auth_setup sessions)
  */
 
-const http = require('http');
 const fs = require('fs');
+const http = require('http');
 const path = require('path');
-const { WebSocketServer } = require('ws');
+
 const chokidar = require('chokidar');
+const { WebSocketServer } = require('ws');
 
 // Configuration
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
@@ -41,7 +42,7 @@ const AGENT_TYPE = process.env.AGENT_TYPE || 'unknown';
 // e.g. "oauthAccount,primaryApiKey" - auth is complete if ANY of these exist
 const AUTH_REQUIRED_KEYS = (process.env.AUTH_REQUIRED_KEYS || '')
   .split(',')
-  .map(k => k.trim())
+  .map((k) => k.trim())
   .filter(Boolean);
 
 /**
@@ -77,40 +78,40 @@ function getFileType(ext) {
 function getMimeType(ext) {
   const mimeTypes = {
     // Images
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'svg': 'image/svg+xml',
-    'ico': 'image/x-icon',
-    'bmp': 'image/bmp',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    ico: 'image/x-icon',
+    bmp: 'image/bmp',
     // Documents
-    'pdf': 'application/pdf',
+    pdf: 'application/pdf',
     // Video
-    'mp4': 'video/mp4',
-    'webm': 'video/webm',
-    'avi': 'video/x-msvideo',
-    'mov': 'video/quicktime',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    avi: 'video/x-msvideo',
+    mov: 'video/quicktime',
     // Audio
-    'mp3': 'audio/mpeg',
-    'wav': 'audio/wav',
-    'ogg': 'audio/ogg',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
     // Archives
-    'zip': 'application/zip',
-    'tar': 'application/x-tar',
-    'gz': 'application/gzip',
+    zip: 'application/zip',
+    tar: 'application/x-tar',
+    gz: 'application/gzip',
     // Text/Code
-    'txt': 'text/plain',
-    'html': 'text/html',
-    'css': 'text/css',
-    'js': 'text/javascript',
-    'ts': 'text/typescript',
-    'json': 'application/json',
-    'xml': 'application/xml',
-    'md': 'text/markdown',
-    'yaml': 'text/yaml',
-    'yml': 'text/yaml',
+    txt: 'text/plain',
+    html: 'text/html',
+    css: 'text/css',
+    js: 'text/javascript',
+    ts: 'text/typescript',
+    json: 'application/json',
+    xml: 'application/xml',
+    md: 'text/markdown',
+    yaml: 'text/yaml',
+    yml: 'text/yaml',
   };
   return mimeTypes[ext] || 'application/octet-stream';
 }
@@ -146,7 +147,7 @@ function buildTree(dir, depth = 0) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
 
     return entries
-      .filter(entry => {
+      .filter((entry) => {
         // Skip hidden files and ignored patterns
         if (entry.name.startsWith('.')) return false;
         if (entry.name === 'node_modules') return false;
@@ -161,7 +162,7 @@ function buildTree(dir, depth = 0) {
         if (!a.isDirectory() && b.isDirectory()) return 1;
         return a.name.localeCompare(b.name);
       })
-      .map(entry => {
+      .map((entry) => {
         const fullPath = path.join(dir, entry.name);
         const relativePath = path.relative(WATCH_DIR, fullPath);
 
@@ -247,12 +248,14 @@ function handleRequest(req, res) {
       if (stats.size > MAX_FILE_SIZE) {
         res.setHeader('Content-Type', 'application/json');
         res.writeHead(413);
-        res.end(JSON.stringify({
-          error: 'File too large to display',
-          message: `File size is ${formatFileSize(stats.size)}, maximum allowed is ${formatFileSize(MAX_FILE_SIZE)}`,
-          size: stats.size,
-          maxSize: MAX_FILE_SIZE
-        }));
+        res.end(
+          JSON.stringify({
+            error: 'File too large to display',
+            message: `File size is ${formatFileSize(stats.size)}, maximum allowed is ${formatFileSize(MAX_FILE_SIZE)}`,
+            size: stats.size,
+            maxSize: MAX_FILE_SIZE,
+          }),
+        );
         return;
       }
 
@@ -275,17 +278,19 @@ function handleRequest(req, res) {
 
       res.setHeader('Content-Type', 'application/json');
       res.writeHead(200);
-      res.end(JSON.stringify({
-        path: filePath,
-        name: path.basename(fullPath),
-        extension: ext,
-        size: stats.size,
-        content: content,
-        encoding: encoding,
-        fileType: fileType,
-        mimeType: mimeType,
-        mtime: stats.mtime.toISOString(),
-      }));
+      res.end(
+        JSON.stringify({
+          path: filePath,
+          name: path.basename(fullPath),
+          extension: ext,
+          size: stats.size,
+          content: content,
+          encoding: encoding,
+          fileType: fileType,
+          mimeType: mimeType,
+          mtime: stats.mtime.toISOString(),
+        }),
+      );
     } catch (err) {
       res.setHeader('Content-Type', 'application/json');
       if (err.code === 'ENOENT') {
@@ -303,11 +308,13 @@ function handleRequest(req, res) {
     case '/tree':
       res.setHeader('Content-Type', 'application/json');
       res.writeHead(200);
-      res.end(JSON.stringify({
-        root: WATCH_DIR,
-        tree: buildTree(WATCH_DIR),
-        timestamp: Date.now(),
-      }));
+      res.end(
+        JSON.stringify({
+          root: WATCH_DIR,
+          tree: buildTree(WATCH_DIR),
+          timestamp: Date.now(),
+        }),
+      );
       break;
 
     case '/health':
@@ -357,7 +364,7 @@ function checkAuthComplete(configContent) {
     const config = JSON.parse(configContent);
 
     // Check if ANY of the required keys exist and have a truthy value
-    const foundKey = AUTH_REQUIRED_KEYS.find(key => {
+    const foundKey = AUTH_REQUIRED_KEYS.find((key) => {
       // Support nested keys like "oauthAccount.accountUuid"
       const value = key.split('.').reduce((obj, k) => obj?.[k], config);
       return value !== undefined && value !== null && value !== '';
@@ -389,7 +396,8 @@ function startServer() {
   function broadcast(message) {
     const data = JSON.stringify(message);
     for (const client of clients) {
-      if (client.readyState === 1) { // WebSocket.OPEN
+      if (client.readyState === 1) {
+        // WebSocket.OPEN
         client.send(data);
       }
     }
@@ -409,7 +417,7 @@ function startServer() {
 
   // File system event handlers
   const events = ['add', 'change', 'unlink', 'addDir', 'unlinkDir'];
-  events.forEach(event => {
+  events.forEach((event) => {
     watcher.on(event, (filePath) => {
       const relativePath = path.relative(WATCH_DIR, filePath);
       log.info(`${event}: ${relativePath}`);
@@ -451,11 +459,13 @@ function startServer() {
     clients.add(ws);
 
     // Send initial tree
-    ws.send(JSON.stringify({
-      type: 'tree',
-      data: buildTree(WATCH_DIR),
-      timestamp: Date.now(),
-    }));
+    ws.send(
+      JSON.stringify({
+        type: 'tree',
+        data: buildTree(WATCH_DIR),
+        timestamp: Date.now(),
+      }),
+    );
 
     ws.send(JSON.stringify({ type: 'ready' }));
 
@@ -466,11 +476,13 @@ function startServer() {
 
         // Handle tree request
         if (message.type === 'getTree') {
-          ws.send(JSON.stringify({
-            type: 'tree',
-            data: buildTree(WATCH_DIR),
-            timestamp: Date.now(),
-          }));
+          ws.send(
+            JSON.stringify({
+              type: 'tree',
+              data: buildTree(WATCH_DIR),
+              timestamp: Date.now(),
+            }),
+          );
         }
       } catch (e) {
         // Ignore invalid messages

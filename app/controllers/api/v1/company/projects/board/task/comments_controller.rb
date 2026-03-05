@@ -19,12 +19,6 @@ module Api
                 comment.author = current_user
                 comment.author_type = :human
                 if comment.save
-                  BoardChannel.broadcast_event(
-                    current_board,
-                    "comment_added",
-                    { task_id: current_task.id, comment: TaskCommentSerializer.new(comment).as_json },
-                    actor_id: current_user.id
-                  )
                   ActivityRecorder.record(
                     board: current_board, event_type: :comment_added, actor: current_user,
                     actor_type: :human, task: current_task,

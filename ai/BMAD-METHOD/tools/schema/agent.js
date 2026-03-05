@@ -1,5 +1,6 @@
 // Zod schema definition for *.agent.yaml files
 const assert = require('node:assert');
+
 const { z } = require('zod');
 
 const COMMAND_TARGET_KEYS = ['workflow', 'validate-workflow', 'exec', 'action', 'tmpl', 'data'];

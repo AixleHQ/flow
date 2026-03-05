@@ -1,7 +1,7 @@
 const os = require('node:os');
 const path = require('node:path');
-const readline = require('node:readline');
 const process = require('node:process');
+const readline = require('node:readline');
 
 function expandHome(p) {
   if (!p) return p;

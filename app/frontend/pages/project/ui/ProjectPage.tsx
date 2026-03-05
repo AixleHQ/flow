@@ -1,4 +1,5 @@
-import { Box, CircularProgress, Typography } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
@@ -164,12 +165,23 @@ const ProjectPage = () => {
           />
         )}
         {activeTab === 'sessions' && (
-          <SessionHistoryWidget
-            projectId={Number(projectId)}
-            onSessionSelect={(id) =>
-              navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(id)) as string })
-            }
-          />
+          <>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate({ to: Routes.frontend.companyProjectSessionNewPath(projectId) as string })}
+              >
+                New Session
+              </Button>
+            </Box>
+            <SessionHistoryWidget
+              projectId={Number(projectId)}
+              onSessionSelect={(id) =>
+                navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(id)) as string })
+              }
+            />
+          </>
         )}
         {activeTab === 'members' && <MembersTab projectId={Number(projectId)} ownerId={project?.ownerId ?? 0} />}
         {activeTab === 'config' && <ConfigItemsPanel projectId={Number(projectId)} />}

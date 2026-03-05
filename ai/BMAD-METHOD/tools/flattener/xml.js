@@ -1,4 +1,5 @@
 const fs = require('fs-extra');
+
 const { escapeXml } = require('../lib/xml-utils');
 
 function indentFileContent(content) {

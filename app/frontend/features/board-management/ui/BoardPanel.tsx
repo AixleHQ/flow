@@ -174,25 +174,31 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
       if (!task) return;
 
       let targetColumnId: number;
-      if (over.data.current?.columnId) {
+      let targetPosition: number | undefined;
+
+      if (over.data.current?.task) {
+        const overTask = over.data.current.task as BoardTask;
+        targetColumnId = overTask.boardColumnId;
+        targetPosition = overTask.position;
+      } else if (over.data.current?.columnId) {
         targetColumnId = over.data.current.columnId as number;
-      } else if (over.data.current?.task) {
-        targetColumnId = (over.data.current.task as BoardTask).boardColumnId;
       } else {
         return;
       }
 
-      if (targetColumnId === task.boardColumnId) return;
+      const sameColumn = targetColumnId === task.boardColumnId;
+      if (sameColumn && targetPosition === undefined) return;
+      if (sameColumn && targetPosition === task.position) return;
 
       const now = Date.now();
       const lastMove = lastMoveRef.current[task.id];
       if (lastMove && now - lastMove < MOVE_DEBOUNCE_MS) return;
       lastMoveRef.current[task.id] = now;
 
-      const targetTasks = tasksByColumn[targetColumnId] || [];
-      const newPosition = targetTasks.length > 0 ? Math.max(...targetTasks.map((t) => t.position)) + 1 : 1;
+      const position =
+        targetPosition ?? (tasksByColumn[targetColumnId] || []).reduce((max, t) => Math.max(max, t.position), 0) + 1;
 
-      moveTask({ projectId, taskId: task.id, columnId: targetColumnId, position: newPosition });
+      moveTask({ projectId, taskId: task.id, columnId: targetColumnId, position });
     },
     [data, moveTask, projectId, tasksByColumn],
   );

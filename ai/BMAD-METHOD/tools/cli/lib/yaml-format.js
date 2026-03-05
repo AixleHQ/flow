@@ -1,7 +1,8 @@
+const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+
 const yaml = require('yaml');
-const { execSync } = require('node:child_process');
 
 // Dynamic import for ES module
 let chalk;

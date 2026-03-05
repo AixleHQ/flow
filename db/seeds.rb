@@ -164,6 +164,9 @@ puts "Creating config items for MCP server authentication..."
 # ===========================================================================
 puts "Creating platform tools..."
 
+# Cleanup deprecated tools
+Tool.where(name: "write_step_note", kind: :workflow).destroy_all
+
 # -- Workflow tools: auto-injected into workflow_step sessions --
 
 Tool.find_or_initialize_by(name: "list_sub_steps", kind: :workflow).update!(
@@ -189,20 +192,39 @@ Tool.find_or_initialize_by(name: "mark_sub_step", kind: :workflow).update!(
   execution_mode: :app
 )
 
-Tool.find_or_initialize_by(name: "write_step_note", kind: :workflow).update!(
-  display_name: "Write Step Note",
-  description: "Save a note for this step. Visible to agents in subsequent steps via workflow context.",
+# Cleanup renamed tools
+Tool.where(name: %w[finish_step fail_step]).destroy_all
+
+# -- Internal tools: invisible, auto-injected --
+
+Tool.find_or_initialize_by(name: "finish_session", kind: :internal).update!(
+  display_name: "Finish Session",
+  description: "Signal successful completion of a non-interactive session. " \
+               "This terminates the session. Call only after ALL work is done and output files are saved.",
   input_schema: {
     type: "object",
     properties: {
-      note: { type: "string", description: "Note text to append" }
+      note: { type: "string", description: "Optional final note (saved to step if in workflow context)" }
     },
-    required: %w[note]
+    required: []
   },
   execution_mode: :app
 )
 
-# -- Internal tools: invisible, auto-injected when container tools present --
+Tool.find_or_initialize_by(name: "fail_session", kind: :internal).update!(
+  display_name: "Fail Session",
+  description: "Signal that a non-interactive session has failed. " \
+               "This terminates the session with an error. Use when the task cannot be completed.",
+  input_schema: {
+    type: "object",
+    properties: {
+      reason: { type: "string", description: "Why the session failed" },
+      note: { type: "string", description: "Optional note with details (saved to step if in workflow context)" }
+    },
+    required: %w[reason]
+  },
+  execution_mode: :app
+)
 
 Tool.find_or_initialize_by(name: "read_tool_result", kind: :internal).update!(
   display_name: "Read Tool Result",

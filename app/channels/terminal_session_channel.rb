@@ -20,7 +20,7 @@ class TerminalSessionChannel < ApplicationCable::Channel
     stream_for @terminal_session
     Rails.logger.info("[TerminalSessionChannel] Subscribed: user=#{current_user&.id}, session=#{@terminal_session.id}")
 
-    # Send current state immediately
+    @terminal_session.reload
     transmit_session_data(@terminal_session)
   end
 
@@ -44,7 +44,10 @@ class TerminalSessionChannel < ApplicationCable::Channel
 
   def can_access?(session)
     return false unless current_user
-    session.user_id == current_user.id
+    return true if session.user_id == current_user.id
+    return true if session.project&.accessible_by?(current_user)
+
+    false
   end
 
   def transmit_session_data(session)

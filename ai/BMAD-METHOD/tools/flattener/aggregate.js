@@ -1,6 +1,8 @@
-const fs = require('fs-extra');
-const path = require('node:path');
 const os = require('node:os');
+const path = require('node:path');
+
+const fs = require('fs-extra');
+
 const { isBinaryFile } = require('./binary.js');
 
 /**

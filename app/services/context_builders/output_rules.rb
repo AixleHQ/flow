@@ -21,8 +21,9 @@ module ContextBuilders
       lines << "- Use all available MCP servers and tools"
       lines << "- Write clean, production-quality code following project conventions"
 
-      if step_run.present?
-        lines << "- Marking the last sub-step `completed` triggers session termination — ensure all files are saved first"
+      if session.mode == "non_interactive"
+        lines << "- When done, you MUST call `finish_session` (success) or `fail_session` (failure) to end the session"
+        lines << "- **If you could not fully accomplish the objective, call `fail_session` — do NOT call `finish_session` for partial or failed work**"
       end
 
       lines.join("\n")

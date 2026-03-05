@@ -6,8 +6,8 @@
  */
 
 const { execSync } = require('node:child_process');
-const path = require('node:path');
 const fs = require('node:fs');
+const path = require('node:path');
 
 // Check if we're running in an npx temporary directory
 const isNpxExecution = __dirname.includes('_npx') || __dirname.includes('.npm');

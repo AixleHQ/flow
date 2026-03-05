@@ -1,5 +1,7 @@
-const chalk = require('chalk');
 const path = require('node:path');
+
+const chalk = require('chalk');
+
 const { Installer } = require('../installers/lib/core/installer');
 const { UI } = require('../lib/ui');
 

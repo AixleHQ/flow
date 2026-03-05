@@ -88,6 +88,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     builder = ContextBuilders::WorkflowContext.new(session)
     sections = builder.build
     assert_equal 2, sections.length
+    assert_equal %w[workflow-context current-step], sections.map(&:tag)
   end
 
   # -- Story 26.2: Sub-Steps Checklist --
@@ -147,7 +148,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_includes content, '"files"'
   end
 
-  test "sub-steps section includes mark_sub_step instructions and warning" do
+  test "sub-steps section includes mark_sub_step instructions" do
     create(:sub_step, step: @step2, name: "Test step", position: 1)
     create(:sub_step_run, step_run: @step_run, sub_step: @step2.sub_steps.first)
 
@@ -156,8 +157,8 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     content = builder.build.find { |s| s.tag == "sub-steps" }.content
 
     assert_includes content, "mark_sub_step"
-    assert_includes content, "Do NOT mark the last sub-step"
-    assert_includes content, "session termination"
+    assert_includes content, "in_progress"
+    assert_includes content, "completed"
   end
 
   test "no sub-steps section when step has no sub-steps" do
@@ -256,7 +257,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_equal :important, tools_section.priority
   end
 
-  test "workflow-tools content includes all 3 tool names" do
+  test "workflow-tools content includes tool names" do
     create(:sub_step, step: @step2, name: "Task A", position: 1)
     create(:sub_step_run, step_run: @step_run, sub_step: @step2.sub_steps.first)
 
@@ -266,7 +267,6 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 
     assert_includes content, "list_sub_steps"
     assert_includes content, "mark_sub_step"
-    assert_includes content, "write_step_note"
   end
 
   test "workflow-tools content includes key parameters" do

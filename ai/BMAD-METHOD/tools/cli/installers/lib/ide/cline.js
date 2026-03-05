@@ -1,10 +1,12 @@
 const path = require('node:path');
-const fs = require('fs-extra');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+
 const { BaseIdeSetup } = require('./_base-ide');
-const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
 const { getAgentsFromBmad, getTasksFromBmad } = require('./shared/bmad-artifacts');
+const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 
 /**
  * Cline IDE setup handler

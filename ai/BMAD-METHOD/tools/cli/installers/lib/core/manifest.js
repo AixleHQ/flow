@@ -1,6 +1,7 @@
-const path = require('node:path');
-const fs = require('fs-extra');
 const crypto = require('node:crypto');
+const path = require('node:path');
+
+const fs = require('fs-extra');
 
 class Manifest {
   /**

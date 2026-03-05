@@ -1,11 +1,10 @@
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { Box, Button, Chip, CircularProgress, Typography } from '@mui/material';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { type ITerminalSession, SessionSummaryCard } from 'entities/terminal-session';
-import { useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
-import { useTerminalSessionChannel } from 'shared/lib';
+import { SessionSummaryCard } from 'entities/terminal-session';
+import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
@@ -22,25 +21,10 @@ const CompanySessionViewPage = () => {
   const id = Number(params.sessionId);
   const routeProjectId = params.projectId;
 
-  const [session, setSession] = useState<ITerminalSession | null>(null);
   const [isStopping, setIsStopping] = useState(false);
 
-  const { data, isLoading, isError } = useGetTerminalSessionQuery(id, {
-    skip: !id || isNaN(id) || !!session,
-  });
-  const [finishSession] = useFinishSessionMutation();
-
-  // Sync fetched data into local state (via effect, not during render)
-  useEffect(() => {
-    if (data?.data && !session) {
-      setSession(data.data);
-    }
-  }, [data, session]);
-
-  // ActionCable subscription
-  useTerminalSessionChannel({
-    sessionId: id,
-    onUpdate: useCallback((updated: ITerminalSession) => setSession(updated), []),
+  const { session, isLoading, isError, finishSession } = useTerminalSession({
+    sessionId: id && !isNaN(id) ? id : null,
   });
 
   const isTerminal = ['finished', 'failed'].includes(session?.state ?? '');
@@ -52,7 +36,7 @@ const CompanySessionViewPage = () => {
   const handleFinish = async () => {
     setIsStopping(true);
     try {
-      await finishSession({ sessionId: id }).unwrap();
+      await finishSession(id);
     } catch {
       setIsStopping(false);
     }
@@ -215,7 +199,7 @@ const CompanySessionViewPage = () => {
         </Box>
       ) : (
         <Box sx={{ flex: 1, overflow: 'hidden' }}>
-          <TerminalSessionWidget sessionId={id} session={session} showEditor showTerminal />
+          <TerminalSessionWidget sessionId={id} showEditor showTerminal />
         </Box>
       )}
     </Box>

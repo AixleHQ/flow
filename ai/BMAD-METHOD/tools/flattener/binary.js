@@ -1,6 +1,6 @@
+const { Buffer } = require('node:buffer');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
-const { Buffer } = require('node:buffer');
 
 /**
  * Efficiently determine if a file is binary without reading the whole file.

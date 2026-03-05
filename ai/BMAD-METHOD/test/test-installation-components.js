@@ -12,9 +12,11 @@
  */
 
 const path = require('node:path');
+
 const fs = require('fs-extra');
-const { YamlXmlBuilder } = require('../tools/cli/lib/yaml-xml-builder');
+
 const { ManifestGenerator } = require('../tools/cli/installers/lib/core/manifest-generator');
+const { YamlXmlBuilder } = require('../tools/cli/lib/yaml-xml-builder');
 
 // ANSI colors
 const colors = {

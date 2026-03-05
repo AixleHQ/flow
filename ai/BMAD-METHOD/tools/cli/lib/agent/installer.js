@@ -5,8 +5,10 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const yaml = require('yaml');
 const readline = require('node:readline');
+
+const yaml = require('yaml');
+
 const { compileAgent, compileAgentFile } = require('./compiler');
 const { extractInstallConfig, getDefaultValues } = require('./template-engine');
 

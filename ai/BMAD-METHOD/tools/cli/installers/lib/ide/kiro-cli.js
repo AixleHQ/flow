@@ -1,8 +1,10 @@
 const path = require('node:path');
-const { BaseIdeSetup } = require('./_base-ide');
+
 const chalk = require('chalk');
 const fs = require('fs-extra');
 const yaml = require('yaml');
+
+const { BaseIdeSetup } = require('./_base-ide');
 
 /**
  * Kiro CLI setup handler for BMad Method

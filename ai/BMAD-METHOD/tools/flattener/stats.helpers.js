@@ -1,11 +1,11 @@
 'use strict';
 
+const { Buffer } = require('node:buffer');
+const cp = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const zlib = require('node:zlib');
-const { Buffer } = require('node:buffer');
-const crypto = require('node:crypto');
-const cp = require('node:child_process');
 
 const KB = 1024;
 const MB = 1024 * KB;

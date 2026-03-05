@@ -1,6 +1,8 @@
-const fs = require('fs-extra');
 const path = require('node:path');
+
+const fs = require('fs-extra');
 const yaml = require('yaml');
+
 const { getProjectRoot } = require('./project-root');
 
 /**

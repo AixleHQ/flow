@@ -4,13 +4,16 @@
  * Uses the existing BMAD builder infrastructure for proper formatting
  */
 
-const yaml = require('yaml');
 const fs = require('node:fs');
 const path = require('node:path');
-const { processAgentYaml, extractInstallConfig, stripInstallConfig, getDefaultValues } = require('./template-engine');
+
+const yaml = require('yaml');
+
 const { escapeXml } = require('../../../lib/xml-utils');
 const { ActivationBuilder } = require('../activation-builder');
 const { AgentAnalyzer } = require('../agent-analyzer');
+
+const { processAgentYaml, extractInstallConfig, stripInstallConfig, getDefaultValues } = require('./template-engine');
 
 /**
  * Build frontmatter for agent

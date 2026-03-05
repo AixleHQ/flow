@@ -54,7 +54,7 @@ class TaskAssetTest < ActiveSupport::TestCase
     TaskAsset.create!(name: "a.pdf", board_task: @task, author: @owner)
 
     assert_difference("TaskAsset.count", -1) do
-      @task.destroy
+      @task.reload.destroy
     end
   end
 
@@ -62,7 +62,7 @@ class TaskAssetTest < ActiveSupport::TestCase
     TaskAsset.create!(name: "a.pdf", board_task: @task, author: @owner)
     TaskAsset.create!(name: "b.pdf", board_task: @task, author: @owner)
 
-    serializer = BoardTaskSerializer.new(@task)
+    serializer = BoardTaskSerializer.new(@task.reload)
     assert_equal 2, serializer.assets_count
   end
 end

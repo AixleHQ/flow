@@ -1,6 +1,7 @@
-const fs = require('fs-extra');
 const path = require('node:path');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
 
 /**
  * IDE Manager - handles IDE-specific setup

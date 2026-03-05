@@ -30,6 +30,11 @@ module Workflows
       handle_failure(execution_error, cleanup_error)
 
       @state
+    rescue Temporalio::Error => e
+      raise unless Temporalio::Error.canceled?(e)
+
+      run_cleanup_detached("Workflow cancelled")
+      raise
     end
 
     private
@@ -55,6 +60,19 @@ module Workflows
       nil
     rescue Temporalio::Error::ActivityError => e
       extract_error_message(e)
+    end
+
+    def run_cleanup_detached(error_message)
+      config = phase_config("cleanup")
+      execute_activity(
+        activities.container_phase_activity,
+        { phase: "cleanup", state: @state, error: error_message, **passthrough_fields },
+        start_to_close_timeout: config_timeout(config, 120),
+        retry_policy: Temporalio::RetryPolicy.new(max_attempts: 2, initial_interval: 5),
+        cancellation: Temporalio::Cancellation.new
+      )
+    rescue StandardError => e
+      Temporalio::Workflow.logger.error("[ContainerWorkflow] Cleanup on cancel failed: #{e.message}")
     end
 
     def handle_failure(execution_error, cleanup_error)

@@ -1,5 +1,7 @@
-import { createConsumer, Consumer, Subscription } from '@rails/actioncable';
+import { type Subscription } from '@rails/actioncable';
 import { useEffect, useCallback, useRef } from 'react';
+
+import { getConsumer } from 'shared/lib/actionCableConsumer';
 
 export type IAiEngineEvent = {
   id: number;
@@ -18,7 +20,6 @@ export interface IUseAiEngineEventsOptions {
 export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
   const { workspaceId, specificationId, onEvent, logEvents = false } = options;
 
-  const consumerRef = useRef<Consumer | null>(null);
   const workspaceSubscriptionRef = useRef<Subscription | null>(null);
   const specificationSubscriptionRef = useRef<Subscription | null>(null);
 
@@ -34,11 +35,11 @@ export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
   );
 
   useEffect(() => {
-    if (!consumerRef.current) consumerRef.current = createConsumer();
+    const consumer = getConsumer();
 
     // Subscribe to workspace channel
     if (workspaceId) {
-      workspaceSubscriptionRef.current = consumerRef.current.subscriptions.create(
+      workspaceSubscriptionRef.current = consumer.subscriptions.create(
         { channel: 'WorkspaceChannel', workspace_id: workspaceId },
         { received: handleEvent },
       );
@@ -47,7 +48,7 @@ export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
 
     // Subscribe to specification version channel
     if (specificationId) {
-      specificationSubscriptionRef.current = consumerRef.current.subscriptions.create(
+      specificationSubscriptionRef.current = consumer.subscriptions.create(
         { channel: 'SpecificationChannel', specification_id: specificationId },
         { received: handleEvent },
       );
@@ -64,9 +65,6 @@ export function useAiEngineEvents(options: IUseAiEngineEventsOptions = {}) {
         specificationSubscriptionRef.current.unsubscribe();
         specificationSubscriptionRef.current = null;
         log('🔌 Unsubscribed from specification channel');
-      }
-      if (consumerRef.current) {
-        consumerRef.current.disconnect();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

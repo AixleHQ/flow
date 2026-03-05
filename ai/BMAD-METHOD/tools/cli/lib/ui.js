@@ -1,9 +1,12 @@
-const chalk = require('chalk');
-const path = require('node:path');
 const os = require('node:os');
+const path = require('node:path');
+
+const chalk = require('chalk');
 const fs = require('fs-extra');
-const { CLIUtils } = require('./cli-utils');
+
 const { CustomHandler } = require('../installers/lib/custom/handler');
+
+const { CLIUtils } = require('./cli-utils');
 const prompts = require('./prompts');
 
 // Separator class for visual grouping in select/multiselect prompts

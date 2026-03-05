@@ -1,9 +1,11 @@
 const path = require('node:path');
+
+const chalk = require('chalk');
 const fs = require('fs-extra');
 const yaml = require('yaml');
-const chalk = require('chalk');
-const { getProjectRoot, getModulePath } = require('../../../lib/project-root');
+
 const { CLIUtils } = require('../../../lib/cli-utils');
+const { getProjectRoot, getModulePath } = require('../../../lib/project-root');
 const prompts = require('../../../lib/prompts');
 
 class ConfigCollector {

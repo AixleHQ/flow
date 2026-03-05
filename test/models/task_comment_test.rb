@@ -76,7 +76,7 @@ class TaskCommentTest < ActiveSupport::TestCase
     TaskComment.create!(body: "A", board_task: @task, author: @owner)
 
     assert_difference("TaskComment.count", -1) do
-      @task.destroy
+      @task.reload.destroy
     end
   end
 
@@ -84,7 +84,7 @@ class TaskCommentTest < ActiveSupport::TestCase
     TaskComment.create!(body: "A", board_task: @task, author: @owner)
     TaskComment.create!(body: "B", board_task: @task, author: @owner)
 
-    serializer = BoardTaskSerializer.new(@task)
+    serializer = BoardTaskSerializer.new(@task.reload)
     assert_equal 2, serializer.comments_count
   end
 end

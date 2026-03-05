@@ -1,10 +1,11 @@
-const fs = require('fs-extra');
+const { execFile } = require('node:child_process');
 const path = require('node:path');
 
 // Deno/Node compatibility: explicitly import process
 const process = require('node:process');
-const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+
+const fs = require('fs-extra');
 const execFileAsync = promisify(execFile);
 
 // Simple memoization across calls (keyed by realpath of startDir)

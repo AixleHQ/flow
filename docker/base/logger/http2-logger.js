@@ -14,8 +14,8 @@
  */
 'use strict';
 
-const http2 = require('http2');
 const fs = require('fs');
+const http2 = require('http2');
 const path = require('path');
 
 const LOG_PATH = process.env.MITM_LOG_PATH || '/var/log/mitm/http.log';
@@ -41,7 +41,11 @@ http2.connect = function patchedConnect(authority, options) {
   const authorityStr = typeof authority === 'string' ? authority : authority.toString();
 
   let host;
-  try { host = new URL(authorityStr).hostname; } catch { host = authorityStr; }
+  try {
+    host = new URL(authorityStr).hostname;
+  } catch {
+    host = authorityStr;
+  }
 
   const originalRequest = session.request.bind(session);
 

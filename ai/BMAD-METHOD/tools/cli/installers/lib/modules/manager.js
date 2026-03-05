@@ -1,10 +1,12 @@
 const path = require('node:path');
+
+const chalk = require('chalk');
 const fs = require('fs-extra');
 const yaml = require('yaml');
-const chalk = require('chalk');
-const { XmlHandler } = require('../../../lib/xml-handler');
-const { getProjectRoot, getSourcePath, getModulePath } = require('../../../lib/project-root');
+
 const { filterCustomizationData } = require('../../../lib/agent/compiler');
+const { getProjectRoot, getSourcePath, getModulePath } = require('../../../lib/project-root');
+const { XmlHandler } = require('../../../lib/xml-handler');
 
 /**
  * Manages the installation, updating, and removal of BMAD modules.

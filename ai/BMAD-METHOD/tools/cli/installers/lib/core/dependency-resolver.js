@@ -1,7 +1,8 @@
-const fs = require('fs-extra');
 const path = require('node:path');
-const glob = require('glob');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+const glob = require('glob');
 const yaml = require('yaml');
 
 /**

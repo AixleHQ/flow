@@ -10,9 +10,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const yaml = require('yaml');
-const { validateAgentFile } = require('../tools/schema/agent.js');
+
 const { glob } = require('glob');
+const yaml = require('yaml');
+
+const { validateAgentFile } = require('../tools/schema/agent.js');
 
 // ANSI color codes
 const colors = {

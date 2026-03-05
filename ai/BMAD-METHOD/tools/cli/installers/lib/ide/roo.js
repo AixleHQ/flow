@@ -1,6 +1,8 @@
 const path = require('node:path');
-const { BaseIdeSetup } = require('./_base-ide');
+
 const chalk = require('chalk');
+
+const { BaseIdeSetup } = require('./_base-ide');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
 
 /**

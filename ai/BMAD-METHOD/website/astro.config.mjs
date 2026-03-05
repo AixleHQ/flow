@@ -1,9 +1,10 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
-import starlight from '@astrojs/starlight';
 import sitemap from '@astrojs/sitemap';
-import rehypeMarkdownLinks from './src/rehype-markdown-links.js';
+import starlight from '@astrojs/starlight';
+import { defineConfig } from 'astro/config';
+
 import { getSiteUrl } from './src/lib/site-url.js';
+import rehypeMarkdownLinks from './src/rehype-markdown-links.js';
 
 const siteUrl = getSiteUrl();
 const urlParts = new URL(siteUrl);

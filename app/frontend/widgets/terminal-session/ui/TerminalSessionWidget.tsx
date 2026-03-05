@@ -5,11 +5,10 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { Panel, Group, Separator } from 'react-resizable-panels';
 
 import { type ITerminalSession, SessionSummaryCard } from 'entities/terminal-session';
-import { useTerminalSessionChannel } from 'shared/lib/hooks';
+import { useTerminalSession } from 'shared/lib/hooks';
 
 export interface TerminalSessionWidgetProps {
   sessionId: number | null;
-  session?: ITerminalSession | null;
   showEditor?: boolean;
   showTerminal?: boolean;
   editorWidth?: number;
@@ -105,7 +104,6 @@ const FINISHED_STATES = ['finished', 'failed'];
 
 export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   sessionId,
-  session: externalSession,
   showEditor = true,
   showTerminal = true,
   editorWidth = 66,
@@ -113,22 +111,21 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
   onAuthComplete,
 }) => {
   const terminalIframeRef = useRef<HTMLIFrameElement>(null);
+  const editorIframeRef = useRef<HTMLIFrameElement>(null);
   const [terminalLoaded, setTerminalLoaded] = useState(false);
   const [editorLoaded, setEditorLoaded] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
-  const useInternalChannel = externalSession === undefined;
   const {
-    session: channelSession,
-    connecting,
-    error,
-  } = useTerminalSessionChannel({
-    sessionId: useInternalChannel ? sessionId : null,
+    session,
+    channelError: error,
+  } = useTerminalSession({
+    sessionId,
     onUpdate: onSessionUpdate,
     onAuthComplete,
   });
 
-  const session = externalSession !== undefined ? externalSession : channelSession;
+  const isSessionReady = session?.state === 'ready';
 
   const ttydUrl = useMemo(() => {
     if (!session?.websocketUrl) return null;
@@ -137,17 +134,17 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
 
   const ideUrl = session?.ideUrl ?? null;
 
-  const handleTerminalLoad = useCallback(() => {
+  const toggleEditorCollapse = useCallback(() => {
+    setEditorCollapsed((prev) => !prev);
+  }, []);
+
+  const handleTerminalIframeLoad = useCallback(() => {
     setTerminalLoaded(true);
     terminalIframeRef.current?.focus();
   }, []);
 
-  const handleEditorLoad = useCallback(() => {
+  const handleEditorIframeLoad = useCallback(() => {
     setEditorLoaded(true);
-  }, []);
-
-  const toggleEditorCollapse = useCallback(() => {
-    setEditorCollapsed((prev) => !prev);
   }, []);
 
   // Reset state when session changes
@@ -161,7 +158,6 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     }
   }, [sessionId]);
 
-  const isSessionReady = session?.state === 'ready';
   const canShowEditor = showEditor && !editorCollapsed && isSessionReady && !!ideUrl;
   const canShowTerminal = showTerminal && isSessionReady && !!ttydUrl;
 
@@ -175,16 +171,7 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     );
   }
 
-  if (connecting) {
-    return (
-      <Box sx={styles.centeredBox}>
-        <CircularProgress size={24} sx={{ color: '#4ec9b0' }} />
-        <Typography sx={styles.loadingText}>Connecting to session...</Typography>
-      </Box>
-    );
-  }
-
-  if (error) {
+  if (error && !session) {
     return (
       <Box sx={styles.centeredBox}>
         <Typography sx={styles.errorText}>{error}</Typography>
@@ -244,7 +231,14 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
           <Typography sx={styles.loadingText}>Loading editor...</Typography>
         </Box>
       )}
-      <iframe src={ideUrl!} style={styles.iframe} title="VS Code Editor" onLoad={handleEditorLoad} />
+      <iframe
+        ref={editorIframeRef}
+        src={ideUrl!}
+        style={styles.iframe}
+        title="VS Code Editor"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+        onLoad={handleEditorIframeLoad}
+      />
     </Box>
   );
 
@@ -261,7 +255,8 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
         src={ttydUrl!}
         style={styles.terminalIframe}
         title="Terminal"
-        onLoad={handleTerminalLoad}
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
+        onLoad={handleTerminalIframeLoad}
       />
     </Box>
   );

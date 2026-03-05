@@ -1,7 +1,9 @@
 const path = require('node:path');
+
 const fs = require('fs-extra');
-const yaml = require('yaml');
 const { glob } = require('glob');
+const yaml = require('yaml');
+
 const { getSourcePath } = require('../../../../lib/project-root');
 
 async function loadModuleInjectionConfig(handler, moduleName) {

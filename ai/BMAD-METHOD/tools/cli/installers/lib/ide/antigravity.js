@@ -1,19 +1,22 @@
 const path = require('node:path');
-const fs = require('fs-extra');
-const { BaseIdeSetup } = require('./_base-ide');
+
 const chalk = require('chalk');
+const fs = require('fs-extra');
+
 const { getProjectRoot, getSourcePath, getModulePath } = require('../../../lib/project-root');
-const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
-const { TaskToolCommandGenerator } = require('./shared/task-tool-command-generator');
+const prompts = require('../../../lib/prompts');
+
+const { BaseIdeSetup } = require('./_base-ide');
 const { AgentCommandGenerator } = require('./shared/agent-command-generator');
+const { getAgentsFromBmad, getAgentsFromDir } = require('./shared/bmad-artifacts');
 const {
   loadModuleInjectionConfig,
   shouldApplyInjection,
   filterAgentInstructions,
   resolveSubagentFiles,
 } = require('./shared/module-injections');
-const { getAgentsFromBmad, getAgentsFromDir } = require('./shared/bmad-artifacts');
-const prompts = require('../../../lib/prompts');
+const { TaskToolCommandGenerator } = require('./shared/task-tool-command-generator');
+const { WorkflowCommandGenerator } = require('./shared/workflow-command-generator');
 
 /**
  * Google Antigravity IDE setup handler

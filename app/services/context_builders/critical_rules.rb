@@ -41,6 +41,20 @@ module ContextBuilders
         5. At the end, write a summary of what was done and any assumptions made
 
         Your output MUST be actionable artifacts (documents, code, configs), not a conversation.
+
+        ### Session Completion (MANDATORY)
+
+        You MUST call one of these tools when finished:
+        - **finish_session** — when the task is **fully completed** successfully. Optional `note` parameter.
+        - **fail_session** — when the task **cannot be completed**. Required `reason`, optional `note`.
+
+        Call `finish_session` ONLY when ALL deliverables are produced.
+        Call `fail_session` if ANY of these are true:
+        - A required resource is missing (repository, file, API, tool)
+        - You cannot produce the expected deliverables
+        - A critical error prevents completing the task
+
+        **You MUST call one of these tools to end the session — it will not end on its own.**
       RULES
     end
 
