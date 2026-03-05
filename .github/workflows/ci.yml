@@ -1,6 +1,7 @@
 name: Palad CI/CD Pipeline
 
-on: [push]
+on:
+  workflow_dispatch:
 
 env:
   # ECS helper working based on these variables
