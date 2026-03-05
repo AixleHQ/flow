@@ -27,13 +27,25 @@ spec:
             - name: DB
               value: postgres12
             - name: DB_PORT
-              value: "5432"
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: DB_PORT
             - name: POSTGRES_USER
-              value: postgres
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: DB_USERNAME
             - name: POSTGRES_PWD
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: palad-app-secrets
+                  key: DB_PASSWORD
             - name: POSTGRES_SEEDS
-              value: db
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: DB_HOST
             - name: LOG_LEVEL
               value: error
             - name: BIND_ON_IP

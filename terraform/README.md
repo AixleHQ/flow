@@ -1,13 +1,15 @@
 # Terraform Configuration for palad-app
 
-This directory contains the Terraform configuration for managing infrastructure and state storage for the palad-app project.
+This directory contains the Terraform configuration for managing AWS infrastructure for the palad-app project.
 
 ## Overview
 
 The current configuration sets up:
 - **S3 Bucket for State Storage**: An AWS S3 bucket (`palad-tfstate`) to store Terraform state files
-- **Versioning Configuration**: Manages bucket versioning for state file safety
-- **Private ACL**: Ensures the state bucket is private for security
+- **Route53 Hosted Zone and DNS Records** for `palad.ai`
+- **EKS Cluster + Networking** for production workloads
+- **RDS PostgreSQL** for production application database
+- **ElastiCache Redis** for production cache/cable/jobs
 
 ## Prerequisites
 
@@ -50,7 +52,7 @@ terraform init
 ```
 
 This will:
-- Download the MinIO provider
+- Download the Terraform providers
 - Initialize the local workspace
 - Create a `.terraform` directory
 
@@ -69,8 +71,11 @@ terraform output  # Display output values
 
 ## File Structure
 
-- **providers.tf** - MinIO provider configuration
-- **main.tf** - Resource definitions (S3 bucket, versioning)
+- **providers.tf** - Terraform providers (AWS, TLS)
+- **main.tf** - S3 tfstate resources
+- **eks.tf** - EKS cluster and VPC resources
+- **rds.tf** - Managed RDS PostgreSQL resources
+- **redis.tf** - Managed ElastiCache Redis resources
 - **variables.tf** - Input variables and their defaults
 - **outputs.tf** - Output values from Terraform
 - **terraform.tfvars.example** - Example configuration (copy to terraform.tfvars)
@@ -80,7 +85,14 @@ terraform output  # Display output values
 
 ⚠️ **Security**: Never commit `terraform.tfvars` with actual credentials. Use the `.example` template and populate locally.
 
-⚠️ **State Management**: The state file will initially be stored locally. Consider setting up remote state once the S3 bucket is created.
+⚠️ **Production DB Password**: `rds_master_password` is required when managed data services are enabled.
+
+⚠️ **Kubernetes Sync**: After `terraform apply`, update production Kubernetes values:
+- `kube/prod/07-app-config.yaml`:
+  - `DB_HOST` from `terraform output rds_endpoint`
+  - `REDIS_URL` from `terraform output redis_url_database_1`
+- `kube/secrets/07-app-secrets.yaml`:
+  - `DB_PASSWORD` must match `rds_master_password`
 
 ## Useful Commands
 

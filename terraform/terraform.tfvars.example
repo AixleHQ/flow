@@ -20,7 +20,7 @@ eks_private_subnet_cidrs = ["10.10.1.0/24", "10.10.2.0/24", "10.10.3.0/24"]
 eks_public_subnet_cidrs  = ["10.10.101.0/24", "10.10.102.0/24", "10.10.103.0/24"]
 
 # Public + private endpoint, public endpoint restricted to your CIDR(s)
-eks_public_access_cidrs = ["212.58.121.200/32", "35.204.251.191/32"]
+eks_public_access_cidrs = ["34.1.250.211/32"]
 
 # Route53 alias records to EKS ingress NLB (service tag lookup: namespace/name)
 create_eks_dns_records = true
@@ -46,3 +46,37 @@ eks_node_capacity_type  = "ON_DEMAND"
 eks_node_min_size       = 2
 eks_node_desired_size   = 2
 eks_node_max_size       = 4
+
+# Managed data services (production)
+create_managed_data_services = true
+
+# RDS PostgreSQL for Rails + Temporal metadata
+rds_instance_identifier      = "palad-app-prod"
+rds_engine_version           = "18.2"
+rds_instance_class           = "db.t4g.medium"
+rds_allocated_storage        = 20
+rds_max_allocated_storage    = 100
+rds_port                     = 5432
+rds_db_name                  = "palad_production"
+rds_master_username          = "postgres"
+rds_master_password          = "replace_with_secure_password_min_16_chars"
+rds_backup_retention_period  = 7
+rds_backup_window            = "03:00-04:00"
+rds_maintenance_window       = "Mon:04:00-Mon:05:00"
+rds_deletion_protection      = true
+rds_skip_final_snapshot      = true
+rds_final_snapshot_identifier = null
+rds_apply_immediately        = false
+
+# ElastiCache Redis for Rails cache/cable/jobs
+redis_replication_group_id       = "palad-redis-prod"
+redis_engine_version             = "7.1"
+redis_node_type                  = "cache.t3.small"
+redis_port                       = 6379
+redis_parameter_group_name       = "default.redis7"
+redis_num_cache_clusters         = 1
+redis_transit_encryption_enabled = false
+redis_auth_token                 = null
+redis_snapshot_retention_limit   = 1
+redis_maintenance_window         = "mon:05:00-mon:06:00"
+redis_apply_immediately          = false

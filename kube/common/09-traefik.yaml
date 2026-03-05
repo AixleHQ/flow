@@ -162,8 +162,7 @@ spec:
   selector:
     app: traefik
   loadBalancerSourceRanges:
-    - 212.58.121.200/32
-    - 35.204.251.191/32
+    - 34.1.250.211/32
   ports:
     - name: adminwebsecure
       port: 443

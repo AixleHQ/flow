@@ -8,13 +8,15 @@ data:
   RAILS_PORT: "4000"
   RAILS_LOG_TO_STDOUT: "true"
   ACTION_CABLE_URL: /cable
-  DB_HOST: db
+  # Set from Terraform output: rds_endpoint
+  DB_HOST: "palad-app-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"
   DB_PORT: "5432"
   DOMAIN: palad.ai
   ASSET_HOST: palad.ai
   DB_USERNAME: postgres
   DB_NAME: palad_production
-  REDIS_URL: redis://redis:6379/1
+  # Set from Terraform output: redis_url_database_1
+  REDIS_URL: "redis://palad-redis-prod.piqxda.ng.0001.use1.cache.amazonaws.com:6379/1"
   TEMPORAL_ENABLED: "true"
   TEMPORAL_DEBUG: "true"
   TEMPORAL_HOST: temporal

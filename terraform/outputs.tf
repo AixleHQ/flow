@@ -114,3 +114,48 @@ output "eks_kubeconfig_command" {
   description = "Command to update local kubeconfig for this EKS cluster"
   value       = try("aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main[0].name}", null)
 }
+
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint hostname"
+  value       = try(aws_db_instance.app[0].address, null)
+}
+
+output "rds_endpoint_with_port" {
+  description = "RDS PostgreSQL endpoint with port"
+  value       = try(aws_db_instance.app[0].endpoint, null)
+}
+
+output "rds_port" {
+  description = "RDS PostgreSQL port"
+  value       = var.rds_port
+}
+
+output "rds_db_name" {
+  description = "Application database name configured for RDS"
+  value       = var.rds_db_name
+}
+
+output "rds_master_username" {
+  description = "Master username for RDS"
+  value       = var.rds_master_username
+}
+
+output "redis_primary_endpoint" {
+  description = "Primary endpoint hostname for ElastiCache Redis"
+  value       = try(aws_elasticache_replication_group.redis[0].primary_endpoint_address, null)
+}
+
+output "redis_reader_endpoint" {
+  description = "Reader endpoint hostname for ElastiCache Redis"
+  value       = try(aws_elasticache_replication_group.redis[0].reader_endpoint_address, null)
+}
+
+output "redis_port" {
+  description = "Redis port"
+  value       = var.redis_port
+}
+
+output "redis_url_database_1" {
+  description = "Redis URL for app config (DB 1)"
+  value       = try("redis://${aws_elasticache_replication_group.redis[0].primary_endpoint_address}:${var.redis_port}/1", null)
+}
