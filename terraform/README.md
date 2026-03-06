@@ -6,6 +6,7 @@ This directory contains the Terraform configuration for managing AWS infrastruct
 
 The current configuration sets up:
 - **S3 Bucket for State Storage**: An AWS S3 bucket (`palad-tfstate`) to store Terraform state files
+- **S3 Bucket for Application Assets** with CORS, encryption, lifecycle, and TLS-only policy
 - **Route53 Hosted Zone and DNS Records** for `palad.ai`
 - **EKS Cluster + Networking** for production workloads
 - **RDS PostgreSQL (Rails app)** for production application database
@@ -74,6 +75,7 @@ terraform output  # Display output values
 
 - **providers.tf** - Terraform providers (AWS, TLS)
 - **main.tf** - S3 tfstate resources
+- **s3_assets.tf** - S3 assets bucket and EKS IRSA role/policy for app uploads
 - **eks.tf** - EKS cluster and VPC resources
 - **rds.tf** - Managed RDS PostgreSQL resources
 - **rds_temporal.tf** - Dedicated managed RDS PostgreSQL resources for Temporal
@@ -96,6 +98,10 @@ terraform output  # Display output values
   - `DB_HOST` from `terraform output rds_endpoint`
   - `TEMPORAL_DB_HOST` from `terraform output temporal_rds_endpoint`
   - `REDIS_URL` from `terraform output redis_url_database_1`
+  - `AWS_S3_BUCKET` from `terraform output assets_bucket_name`
+  - `AWS_DEFAULT_REGION` / `AWS_REGION` from `terraform output assets_bucket_region`
+- `kube/prod/06-rbac-runtime.yaml`:
+  - `eks.amazonaws.com/role-arn` for `palad-web` and `palad-worker` from `terraform output eks_assets_irsa_role_arn`
 - `kube/secrets/07-app-secrets.yaml`:
   - `DB_PASSWORD` must match `rds_master_password`
   - `TEMPORAL_DB_PASSWORD` must match `temporal_rds_master_password`

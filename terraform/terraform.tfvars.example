@@ -50,6 +50,18 @@ eks_node_max_size       = 4
 # Managed data services (production)
 create_managed_data_services = true
 
+# S3 assets bucket for Shrine uploads
+create_assets_bucket               = true
+assets_bucket_name                 = "palad-assets-prod"
+assets_bucket_force_destroy        = false
+assets_bucket_versioning_enabled   = true
+assets_bucket_cors_allowed_origins = ["https://palad.ai"]
+
+# IRSA role for workloads that upload/read assets from S3
+create_assets_irsa               = true
+assets_irsa_namespace            = "palad"
+assets_irsa_service_account_names = ["palad-web", "palad-worker"]
+
 # RDS PostgreSQL for Rails app
 rds_instance_identifier      = "palad-app-prod"
 rds_engine_version           = "18.2"

@@ -13,6 +13,26 @@ output "tfstate_bucket_region" {
   value       = aws_s3_bucket.tfstate.region
 }
 
+output "assets_bucket_name" {
+  description = "Name of the S3 bucket used by application asset uploads"
+  value       = var.assets_bucket_name
+}
+
+output "assets_bucket_arn" {
+  description = "ARN of the S3 bucket used by application asset uploads"
+  value       = local.assets_bucket_arn
+}
+
+output "assets_bucket_region" {
+  description = "Region of the S3 bucket used by application asset uploads"
+  value       = var.aws_region
+}
+
+output "eks_assets_irsa_role_arn" {
+  description = "IAM role ARN for IRSA access to the assets S3 bucket from app workloads"
+  value       = try(aws_iam_role.eks_assets[0].arn, null)
+}
+
 # Route53 outputs
 output "route53_zone_id" {
   description = "Route53 hosted zone ID for palad.ai"

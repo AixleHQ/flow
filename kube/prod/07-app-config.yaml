@@ -13,6 +13,10 @@ data:
   DB_PORT: "5432"
   DOMAIN: palad.ai
   ASSET_HOST: palad.ai
+  # Set from Terraform output: assets_bucket_name
+  AWS_S3_BUCKET: "palad-assets-prod"
+  AWS_DEFAULT_REGION: "us-east-1"
+  AWS_REGION: "us-east-1"
   DB_USERNAME: postgres
   DB_NAME: palad_production
   # Set from Terraform output: redis_url_database_1

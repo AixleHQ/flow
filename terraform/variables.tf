@@ -198,6 +198,59 @@ variable "create_managed_data_services" {
   default     = true
 }
 
+variable "create_assets_bucket" {
+  description = "Whether to create the S3 bucket used for uploaded assets"
+  type        = bool
+  default     = true
+}
+
+variable "assets_bucket_name" {
+  description = "Name of the S3 bucket used for uploaded assets"
+  type        = string
+  default     = "palad-assets-prod"
+}
+
+variable "assets_bucket_force_destroy" {
+  description = "Whether to allow destroying the assets bucket even when objects still exist"
+  type        = bool
+  default     = false
+}
+
+variable "assets_bucket_versioning_enabled" {
+  description = "Whether to enable object versioning for the assets S3 bucket"
+  type        = bool
+  default     = true
+}
+
+variable "assets_bucket_cors_allowed_origins" {
+  description = "Allowed CORS origins for direct browser uploads to the assets S3 bucket"
+  type        = list(string)
+  default     = ["https://palad.ai"]
+}
+
+variable "create_assets_irsa" {
+  description = "Whether to create an IRSA role for Kubernetes workloads that access the assets bucket"
+  type        = bool
+  default     = true
+}
+
+variable "assets_irsa_namespace" {
+  description = "Kubernetes namespace containing service accounts allowed to assume the assets IRSA role"
+  type        = string
+  default     = "palad"
+}
+
+variable "assets_irsa_service_account_names" {
+  description = "Kubernetes service account names allowed to assume the assets IRSA role"
+  type        = list(string)
+  default     = ["palad-web", "palad-worker"]
+
+  validation {
+    condition     = length(var.assets_irsa_service_account_names) > 0
+    error_message = "assets_irsa_service_account_names must contain at least one service account name."
+  }
+}
+
 variable "rds_instance_identifier" {
   description = "RDS instance identifier"
   type        = string

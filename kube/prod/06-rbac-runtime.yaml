@@ -3,9 +3,9 @@ kind: ServiceAccount
 metadata:
   name: palad-web
   namespace: palad
-  # Add an IRSA role annotation when this workload needs AWS API access.
-  # annotations:
-  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-web-irsa-role
+  annotations:
+    # Set from Terraform output: eks_assets_irsa_role_arn
+    eks.amazonaws.com/role-arn: "arn:aws:iam::541894707537:role/palad-eks-assets-role"
 imagePullSecrets:
   - name: ghcr-pull-secret
 ---
@@ -14,9 +14,9 @@ kind: ServiceAccount
 metadata:
   name: palad-worker
   namespace: palad
-  # Add an IRSA role annotation when this workload needs AWS API access.
-  # annotations:
-  #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-worker-irsa-role
+  annotations:
+    # Set from Terraform output: eks_assets_irsa_role_arn
+    eks.amazonaws.com/role-arn: "arn:aws:iam::541894707537:role/palad-eks-assets-role"
 imagePullSecrets:
   - name: ghcr-pull-secret
 ---

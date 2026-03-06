@@ -20,3 +20,12 @@ data:
        make kube-secret-set SECRET_NAME=ghcr-pull-secret
     3) Re-apply prod manifests:
        make kube-apply-prod
+
+    S3 asset upload setup (IRSA):
+    1) Read Terraform output:
+       terraform -chdir=terraform output eks_assets_irsa_role_arn
+    2) Set that ARN in kube/prod/06-rbac-runtime.yaml for:
+       - palad-web service account annotation eks.amazonaws.com/role-arn
+       - palad-worker service account annotation eks.amazonaws.com/role-arn
+    3) Re-apply prod manifests:
+       make kube-apply-prod
