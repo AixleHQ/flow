@@ -426,7 +426,7 @@ class SessionContextService
     # Combine internal Palad MCP + resolved external servers
     def build_all_servers(session)
       effective_items = resolve_effective_config_items(session)
-      external = resolve_mcp_servers(session).map { |s| resolve_server_headers(s, effective_items) }
+      external = resolve_mcp_servers(session).map { |s| resolve_server_secrets(s, effective_items) }
 
       [ build_internal_mcp(session) ] + external
     end
@@ -441,6 +441,7 @@ class SessionContextService
       )
     end
 
+
     def resolve_mcp_servers(session)
       ids = session.mcp_server_ids
       return [] if ids.blank?
@@ -453,17 +454,29 @@ class SessionContextService
       servers
     end
 
-    def resolve_server_headers(server, effective_items)
+    def resolve_server_secrets(server, effective_items)
       resolved_headers = (server.headers || {}).transform_values do |value|
         resolve_embedded_references(value, effective_items)
       end
 
-      OpenStruct.new(
+      resolved_env = (server.env || {}).transform_values do |value|
+        resolve_embedded_references(value, effective_items)
+      end
+
+      attrs = {
         name: server.name,
         url: server.url,
         transport: server.transport.to_s,
-        headers: resolved_headers
-      )
+        headers: resolved_headers,
+        env: resolved_env
+      }
+
+      if server.transport_stdio?
+        attrs[:command] = server.command_executable
+        attrs[:args] = server.command_args
+      end
+
+      OpenStruct.new(attrs)
     end
 
     # Write MCP config file respecting merge strategy

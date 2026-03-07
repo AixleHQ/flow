@@ -113,7 +113,6 @@ module ContainerStrategies
 
       env_vars.merge!(agent_service.adapter.default_env_vars(session))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
-
       env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
 
@@ -221,7 +220,7 @@ module ContainerStrategies
     end
 
     def traefik_labels(route_token, router_name)
-      {
+      labels = {
         "traefik.enable" => "true",
         "traefik.http.routers.#{router_name}-tty.rule" => "PathPrefix(`/t/#{route_token}/tty`)",
         "traefik.http.routers.#{router_name}-tty.middlewares" => "terminal-auth,#{router_name}-tty-strip",
@@ -238,6 +237,8 @@ module ContainerStrategies
         "traefik.http.routers.#{router_name}-ide.service" => "#{router_name}-ide",
         "traefik.http.services.#{router_name}-ide.loadbalancer.server.port" => "8443"
       }
+
+      labels
     end
 
     def build_tmpfs_mounts(paths, uid = 1001)

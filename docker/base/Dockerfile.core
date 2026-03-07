@@ -75,6 +75,24 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod -R 755 /opt/openvscode-server
 
 # -----------------------------------------------------------------------------
+# Playwright MCP + Chromium (headless browser for agent automation)
+#
+# Installs @playwright/mcp globally so `npx @playwright/mcp` resolves instantly.
+# Chromium binary + system deps are installed via `npx playwright install`.
+# Browsers stored in /opt/playwright-browsers (shared, readable by all users).
+# -----------------------------------------------------------------------------
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
+RUN npm install -g @playwright/mcp \
+    && npx playwright install --with-deps chromium \
+    && CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chrome-linux/*" | head -1) \
+    && mkdir -p /opt/google/chrome \
+    && ln -s "$CHROMIUM_BIN" /opt/google/chrome/chrome \
+    && rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links \
+    && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
+    && npm cache clean --force \
+    && rm -rf /tmp/*
+
+# -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
 RUN mkdir -p /workspace/repo /workspace/outputs /opt/watcher /opt/auth-check /opt/mitm /app

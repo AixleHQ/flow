@@ -31,7 +31,7 @@ module Api
         def server_params
           params.require(:mcp_server).permit(
             :name, :display_name, :url, :transport, :description, :enabled,
-            headers: {}
+            :command, headers: {}, env: {}
           ).merge(kind: :custom)
         end
       end

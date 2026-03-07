@@ -5,7 +5,7 @@ class MCPServerSerializer < ApplicationSerializer
 
   attributes :id, :name, :display_name, :url, :transport, :headers, :description,
              :kind, :scope_type, :scope_id, :enabled, :internal,
-             :created_at, :updated_at
+             :command, :env, :created_at, :updated_at
 
   def internal
     object.internal?

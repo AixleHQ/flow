@@ -11,7 +11,7 @@ class MCPServer < ApplicationRecord
   extend Enumerize
 
   enumerize :kind, in: %i[internal custom], default: :custom, predicates: true
-  enumerize :transport, in: %i[http sse], default: :http
+  enumerize :transport, in: %i[http sse stdio], default: :http
 
   # Polymorphic scope (Company or Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
@@ -27,7 +27,8 @@ class MCPServer < ApplicationRecord
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :display_name, presence: true
   validates :kind, presence: true
-  validates :url, presence: true, if: :custom?
+  validates :url, presence: true, if: -> { custom? && !transport_stdio? }
+  validates :command, presence: true, if: :transport_stdio?
   validates :scope, presence: true, if: :custom?
   validate :url_scheme_allowed, if: -> { custom? && url.present? }
   validate :url_not_private_network, if: -> { custom? && url.present? }
@@ -48,6 +49,23 @@ class MCPServer < ApplicationRecord
     enabled.internal_servers
            .or(enabled.where(scope_type: "Company", scope_id: company.id))
   }
+
+  def transport_stdio?
+    transport.to_s == "stdio"
+  end
+
+  # Split "npx @playwright/mcp --headless" → ["npx", "@playwright/mcp", "--headless"]
+  def parsed_command
+    Shellwords.split(command.to_s)
+  end
+
+  def command_executable
+    parsed_command.first
+  end
+
+  def command_args
+    parsed_command.drop(1)
+  end
 
   def scope_indicator
     return "internal" if internal?

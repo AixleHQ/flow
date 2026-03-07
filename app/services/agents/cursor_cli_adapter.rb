@@ -97,8 +97,14 @@ module Agents
 
       servers.each do |s|
         entry = {}
-        entry["url"] = s.url if s.url.present?
-        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        if s.transport.to_s == "stdio"
+          entry["command"] = s.command if s.respond_to?(:command)
+          entry["args"] = s.args if s.respond_to?(:args)
+          entry["env"] = s.env if s.respond_to?(:env) && s.env.present?
+        else
+          entry["url"] = s.url if s.url.present?
+          entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        end
         mcp_servers[s.name] = entry
         approvals << "#{s.name}-#{mcp_approval_hash(entry, workspace)}"
       end

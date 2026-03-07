@@ -1,6 +1,6 @@
 # Story 23.6: Board MCP Read Tools (5 tools)
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -23,14 +23,14 @@ so that I can understand task context and board structure.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `BoardContextResolver` service
-- [ ] Task 2: Create `InternalTools::BoardListTasks`
-- [ ] Task 3: Create `InternalTools::BoardGetTask`
-- [ ] Task 4: Create `InternalTools::BoardGetComments`
-- [ ] Task 5: Create `InternalTools::BoardGetTaskAssets`
-- [ ] Task 6: Create `InternalTools::BoardGetBoardInfo`
-- [ ] Task 7: Write unit tests for all 5 tools
-- [ ] Task 8: Write unit tests for `BoardContextResolver`
+- [x] Task 1: Create `BoardContextResolver` service
+- [x] Task 2: Create `InternalTools::BoardListTasks`
+- [x] Task 3: Create `InternalTools::BoardGetTask`
+- [x] Task 4: Create `InternalTools::BoardGetComments`
+- [x] Task 5: Create `InternalTools::BoardGetTaskAssets`
+- [x] Task 6: Create `InternalTools::BoardGetBoardInfo`
+- [x] Task 7: Write unit tests for all 5 tools
+- [x] Task 8: Write unit tests for `BoardContextResolver`
 
 ## Dev Notes
 
@@ -148,3 +148,12 @@ Critical tool — agent reads `purpose` to understand workflow context:
 ### Completion Notes List
 
 ### File List
+
+- `app/services/board_context_resolver.rb` (new)
+- `app/services/internal_tools/board_list_tasks.rb` (new)
+- `app/services/internal_tools/board_get_task.rb` (new)
+- `app/services/internal_tools/board_get_comments.rb` (new)
+- `app/services/internal_tools/board_get_task_assets.rb` (new)
+- `app/services/internal_tools/board_get_board_info.rb` (new)
+- `test/services/board_context_resolver_test.rb` (new)
+- `test/services/internal_tools/board_read_tools_test.rb` (new)

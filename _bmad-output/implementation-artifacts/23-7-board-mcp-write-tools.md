@@ -1,6 +1,6 @@
 # Story 23.7: Board MCP Write Tools (6 tools)
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -22,14 +22,14 @@ so that I can create tasks, add comments, attach files, and move tasks.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Create `InternalTools::BoardCreateTask`
-- [ ] Task 2: Create `InternalTools::BoardUpdateTask`
-- [ ] Task 3: Create `InternalTools::BoardMoveTask`
-- [ ] Task 4: Create `InternalTools::BoardAddComment`
-- [ ] Task 5: Create `InternalTools::BoardAttachAsset`
-- [ ] Task 6: Create `InternalTools::BoardManageTags`
-- [ ] Task 7: Write unit tests for all 6 tools
-- [ ] Task 8: Verify ActionCable broadcasts from write tools
+- [x] Task 1: Create `InternalTools::BoardCreateTask`
+- [x] Task 2: Create `InternalTools::BoardUpdateTask`
+- [x] Task 3: Create `InternalTools::BoardMoveTask`
+- [x] Task 4: Create `InternalTools::BoardAddComment`
+- [x] Task 5: Create `InternalTools::BoardAttachAsset`
+- [x] Task 6: Create `InternalTools::BoardManageTags`
+- [x] Task 7: Write unit tests for all 6 tools
+- [x] Task 8: Verify ActionCable broadcasts from write tools
 
 ## Dev Notes
 
@@ -140,3 +140,11 @@ end
 ### Completion Notes List
 
 ### File List
+
+- `app/services/internal_tools/board_create_task.rb` (new)
+- `app/services/internal_tools/board_update_task.rb` (new)
+- `app/services/internal_tools/board_move_task.rb` (new)
+- `app/services/internal_tools/board_add_comment.rb` (new)
+- `app/services/internal_tools/board_attach_asset.rb` (new)
+- `app/services/internal_tools/board_manage_tags.rb` (new)
+- `test/services/internal_tools/board_write_tools_test.rb` (new)

@@ -13,7 +13,7 @@ const NUMERIC_DASH_KEY_PATTERN = /^\d+(-\d+)+$/;
  * NOT stop deep recursion into the value.  We solve this by replacing values
  * with `null` before conversion and restoring originals after.
  */
-const PRESERVED_VALUE_KEYS = new Set(['headers']);
+const PRESERVED_VALUE_KEYS = new Set(['headers', 'env']);
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

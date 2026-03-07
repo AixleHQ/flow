@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class WorkflowAutoTriggerService
+  MAX_CONCURRENT_RUNS = 2
+
   def self.check!(task:, column: nil, actor:, actor_type: :human)
     new(task: task, column: column || task.board_column, actor: actor, actor_type: actor_type).check!
   end
@@ -15,8 +17,6 @@ class WorkflowAutoTriggerService
   def check!
     binding = @column.column_workflow_binding
     return unless binding&.trigger_mode&.to_sym == :auto
-
-    cancel_active_runs!
 
     run = WorkflowRun.create!(
       workflow: binding.workflow,
@@ -33,8 +33,15 @@ class WorkflowAutoTriggerService
 
   private
 
-  def cancel_active_runs!
-    @task.workflow_runs.where(state: %w[pending running paused]).find_each do |run|
+  def cancel_excess_runs!
+    active_runs = @task.workflow_runs
+      .where(state: %w[pending running paused])
+      .order(created_at: :asc)
+
+    runs_to_cancel = active_runs.count - MAX_CONCURRENT_RUNS + 1
+    return if runs_to_cancel <= 0
+
+    active_runs.limit(runs_to_cancel).each do |run|
       temporal_workflow_id = "workflow-execution-#{run.id}"
       TemporalService.send_signal(temporal_workflow_id, "workflow_cancelled")
       TemporalService.cancel_workflow(temporal_workflow_id)

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_01_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_07_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -329,10 +329,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_01_160000) do
   end
 
   create_table "mcp_servers", force: :cascade do |t|
+    t.jsonb "args", default: []
+    t.string "command"
     t.datetime "created_at", null: false
     t.text "description"
     t.string "display_name", null: false
     t.boolean "enabled", default: true, null: false
+    t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
     t.string "kind", default: "custom", null: false
     t.string "name", null: false

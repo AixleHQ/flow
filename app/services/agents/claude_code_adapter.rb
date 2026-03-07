@@ -118,8 +118,14 @@ module Agents
       mcp_servers = {}
       servers.each do |s|
         entry = { "type" => mcp_transport_type(s.transport) }
-        entry["url"] = s.url if s.url.present?
-        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        if s.transport.to_s == "stdio"
+          entry["command"] = s.command if s.respond_to?(:command)
+          entry["args"] = s.args if s.respond_to?(:args)
+          entry["env"] = s.env if s.respond_to?(:env) && s.env.present?
+        else
+          entry["url"] = s.url if s.url.present?
+          entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        end
         mcp_servers[s.name] = entry
       end
       { "/workspace/.mcp.json" => { "mcpServers" => mcp_servers }.to_json }

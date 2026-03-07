@@ -95,10 +95,22 @@ module Agents
       sections = servers.map do |s|
         lines = []
         lines << "[mcp_servers.\"#{s.name}\"]"
-        lines << "url = \"#{s.url}\"" if s.url.present?
-        if s.headers.present? && s.headers.any?
-          header_pairs = s.headers.map { |k, v| "\"#{k}\" = \"#{v}\"" }.join(", ")
-          lines << "http_headers = { #{header_pairs} }"
+        if s.transport.to_s == "stdio"
+          lines << "command = \"#{s.command}\"" if s.respond_to?(:command)
+          if s.respond_to?(:args) && s.args.present?
+            args_toml = s.args.map { |a| "\"#{a}\"" }.join(", ")
+            lines << "args = [#{args_toml}]"
+          end
+          if s.respond_to?(:env) && s.env.present?
+            env_pairs = s.env.map { |k, v| "\"#{k}\" = \"#{v}\"" }.join(", ")
+            lines << "env = { #{env_pairs} }"
+          end
+        else
+          lines << "url = \"#{s.url}\"" if s.url.present?
+          if s.headers.present? && s.headers.any?
+            header_pairs = s.headers.map { |k, v| "\"#{k}\" = \"#{v}\"" }.join(", ")
+            lines << "http_headers = { #{header_pairs} }"
+          end
         end
         lines.join("\n")
       end

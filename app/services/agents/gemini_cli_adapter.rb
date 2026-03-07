@@ -91,8 +91,14 @@ module Agents
       mcp_servers = {}
       servers.each do |s|
         entry = { "trust" => true }
-        entry["httpUrl"] = s.url if s.url.present?
-        entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        if s.transport.to_s == "stdio"
+          entry["command"] = s.command if s.respond_to?(:command)
+          entry["args"] = s.args if s.respond_to?(:args) && s.args.present?
+          entry["env"] = s.env if s.respond_to?(:env) && s.env.present?
+        else
+          entry["httpUrl"] = s.url if s.url.present?
+          entry["headers"] = s.headers if s.headers.present? && s.headers.any?
+        end
         mcp_servers[s.name] = entry
       end
       { "#{home_dir}/.gemini/settings.json" => { "mcpServers" => mcp_servers }.to_json }
