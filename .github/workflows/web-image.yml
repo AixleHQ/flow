@@ -61,5 +61,6 @@ jobs:
             APP_VERSION=${{ github.sha }}
             AUTHOR_NAME=${{ github.actor }}
             AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
+            ASSET_HOST=https://static.palad.ai
           cache-from: type=gha,scope=web-image
           cache-to: type=gha,mode=max,scope=web-image

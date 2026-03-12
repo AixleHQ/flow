@@ -31,6 +31,14 @@ ENV AUTHOR_NAME=${AUTHOR_NAME}
 ARG AUTHOR_EMAIL
 ENV AUTHOR_EMAIL=${AUTHOR_EMAIL}
 
-RUN RAILS_SECRET_KEY_BASE=secret RAILS_ENV=production rails assets:precompile
+ARG ASSET_HOST
+ENV ASSET_HOST=${ASSET_HOST}
+ENV VITE_RUBY_ASSET_HOST=${ASSET_HOST}
+
+RUN RAILS_SECRET_KEY_BASE=secret \
+    RAILS_ENV=production \
+    ASSET_HOST="${ASSET_HOST}" \
+    VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
+    rails assets:precompile
 
 CMD bash -c "bundle exec puma -C config/puma.rb"

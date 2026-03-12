@@ -33,7 +33,10 @@ data:
     CloudFront static asset host setup:
     1) Read Terraform output:
        terraform -chdir=terraform output cloudfront_static_assets_url
-    2) Set kube/prod/07-app-config.yaml:
+    2) Build web image with that value passed as Docker build arg:
+       - ASSET_HOST=https://static.palad.ai
+       (assets are precompiled at image build time)
+    3) Set kube/prod/07-app-config.yaml:
        - ASSET_HOST to that HTTPS URL
-    3) Re-apply prod manifests:
+    4) Re-apply prod manifests:
        make kube-apply-prod
