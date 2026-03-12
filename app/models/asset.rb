@@ -46,6 +46,7 @@ class Asset < ApplicationRecord
     active.where(scope_type: "Project", scope_id: project.id)
           .or(active.where(scope_type: "Company", scope_id: project.company_id))
   }
+  scope :visible_for_company, ->(company) { for_company(company) }
 
   def scope_indicator
     scope_type == "Company" ? "company" : "project"

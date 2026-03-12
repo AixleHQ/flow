@@ -9,9 +9,9 @@ module Activities
 
         case status
         when :running   then workflow_run.start!   if workflow_run.may_start?
-        when :completed then workflow_run.complete! if workflow_run.may_complete?
-        when :failed    then workflow_run.fail!     if workflow_run.may_fail?
-        when :cancelled then workflow_run.cancel!   if workflow_run.may_cancel?
+        when :completed then WorkflowService.complete(run: workflow_run)
+        when :failed    then WorkflowService.fail(run: workflow_run)
+        when :cancelled then WorkflowService.cancel(run: workflow_run)
         when :paused    then workflow_run.pause!    if workflow_run.may_pause?
         end
 

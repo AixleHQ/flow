@@ -42,34 +42,25 @@ class WorkflowRunChannel < ApplicationCable::Channel
   end
 
   class << self
-    def broadcast_update(workflow_run)
-      run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
-      broadcast_to(
-        run,
-        { "type" => "run_update", "data" => WorkflowRunSerializer.new(run).serializable_hash }
-      )
+    def broadcast_update(workflow_run_or_id)
+      run = workflow_run_or_id.is_a?(Integer) ? WorkflowRun.find(workflow_run_or_id) : workflow_run_or_id
+      broadcast_to(run, { "type" => "workflow_run.updated", "data" => { id: run.id } })
     end
 
     def broadcast_step_update(workflow_run, step_run)
       run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
-      broadcast_to(
-        run,
-        {
-          "type" => "step_run_update",
-          "data" => StepRunSerializer.new(step_run).serializable_hash
-        }
-      )
+      broadcast_to(run, {
+        "type" => "step_run.updated",
+        "data" => { id: step_run.id, workflow_run_id: run.id }
+      })
     end
 
     def broadcast_sub_step_update(workflow_run, sub_step_run)
       run = workflow_run.is_a?(Integer) ? WorkflowRun.find(workflow_run) : workflow_run
-      broadcast_to(
-        run,
-        {
-          "type" => "sub_step_run_update",
-          "data" => SubStepRunSerializer.new(sub_step_run).serializable_hash
-        }
-      )
+      broadcast_to(run, {
+        "type" => "sub_step_run.updated",
+        "data" => { id: sub_step_run.id, step_run_id: sub_step_run.step_run_id, workflow_run_id: run.id }
+      })
     end
   end
 end

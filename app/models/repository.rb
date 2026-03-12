@@ -19,6 +19,7 @@ class Repository < ApplicationRecord
     where(scope_type: "Company", scope_id: project.company_id)
       .or(where(scope_type: "Project", scope_id: project.id))
   }
+  scope :visible_for_company, ->(company) { for_company(company) }
 
   def scope_indicator
     scope_type == "Company" ? "company" : "project"

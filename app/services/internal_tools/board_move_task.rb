@@ -14,12 +14,12 @@ module InternalTools
       return error("Column '#{params[:column_name]}' not found") unless target_column
 
       actor = resolve_actor(task)
-      TaskMoveService.new(
+      TaskService.move(
         task: task,
-        target_column: target_column,
+        to_column: target_column,
         actor: actor,
         actor_type: :agent
-      ).execute
+      )
 
       success({
         id: task.id,

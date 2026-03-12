@@ -23,14 +23,19 @@ module Api
       end
 
       # POST /api/v1/terminal_sessions
-      # Create and start new terminal session (auth_setup type)
+      # Create and start new terminal session
       def create
-        @session = current_user.terminal_sessions.build(session_params)
+        project = session_params[:project_id] ? current_user.company.projects.find(session_params[:project_id]) : nil
+        agent = session_params[:configured_agent_id] ? find_accessible_agent(session_params[:configured_agent_id], project) : nil
 
-        if @session.save
-          # Trigger AASM start event (will start Temporal workflow)
-          @session.start! if @session.may_start?
-        end
+        @session = SessionService.create_and_start(
+          user: current_user,
+          project: project,
+          session_type: session_params[:session_type],
+          agent_type: session_params[:agent_type],
+          configured_agent: agent,
+          params: session_params.except(:project_id, :session_type, :agent_type, :configured_agent_id)
+        )
 
         respond_with @session, serializer: TerminalSessionSerializer
       end
@@ -44,9 +49,8 @@ module Api
 
       # POST /api/v1/terminal_sessions/:id/finish
       # Gracefully finish session — stop, collect artifacts, collect usage.
-      # Works for any session type (auth_setup, agent_session, etc.)
       def finish
-        @session.request_finish!
+        SessionService.finish(session: @session)
 
         render json: {
           data: TerminalSessionSerializer.new(@session).attributes,
@@ -108,6 +112,14 @@ module Api
 
       def update_params
         params.require(:terminal_session).permit(metadata: {})
+      end
+
+      def find_accessible_agent(agent_id, project)
+        if project
+          Agent.visible_for_project(project).find(agent_id)
+        else
+          Agent.for_company(current_user.company).find(agent_id)
+        end
       end
     end
   end

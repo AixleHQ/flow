@@ -31,6 +31,7 @@
 # Phase 15: Activity Feed & Filtered Views — Post-MVP (Epic 24)
 # Phase 16: Session Context Constructor (Epic 25, 26, 27, 28)
 # Phase 17: Session Config Cascade (Epic 29, 30, 31)
+# Phase 18: Service Layer Pyramid (Epic 32)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -447,3 +448,17 @@ development_status:
   31-3-workflow-builder-inherit-all-project-resources-toggle: done
   31-4-step-required-agent-runtime-selector: done
   epic-31-retrospective: optional
+
+  # ============================================
+  # PHASE 18: SERVICE LAYER PYRAMID
+  # ============================================
+
+  epic-32: in-progress  # Service Layer Pyramid (Phase 18) — TaskService, WorkflowService, SessionService; clean models, thin controllers
+  32-1-session-service: review  # SessionService: create_and_start, finish, cancel, create_for_workflow_step; remove Temporal from TerminalSession model
+  32-2-workflow-service: review  # WorkflowService: start, cancel, approve_step, retry_step, skip_step; simplify WorkflowRunsController
+  32-3-task-service: review  # TaskService: create, update, destroy, move, trigger_workflow; absorb TaskMoveService + WorkflowAutoTriggerService
+  32-4-broadcast-simplification: review  # Minimal broadcast format { event, id } without payload; frontend refetch
+  32-5-state-machine-cleanup: review  # Remove orchestration side effects from state machine callbacks
+  32-6-temporal-activities-update: review  # Thin activities delegating to services
+  32-7-cleanup-and-removal: review  # Delete TaskMoveService, WorkflowAutoTriggerService, dead model methods
+  epic-32-retrospective: optional

@@ -61,16 +61,12 @@ class TerminalSessionChannel < ApplicationCable::Channel
     TerminalSessionSerializer.new(session).serializable_hash
   end
 
-  # Class method to broadcast updates from model callbacks
   class << self
     def broadcast_update(terminal_session)
-      broadcast_to(
-        terminal_session,
-        {
-          "type" => "session_update",
-          "data" => TerminalSessionSerializer.new(terminal_session).serializable_hash
-        }
-      )
+      broadcast_to(terminal_session, {
+        "type" => "terminal_session.updated",
+        "data" => { id: terminal_session.id }
+      })
     end
   end
 end

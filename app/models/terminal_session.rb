@@ -71,36 +71,8 @@ class TerminalSession < ApplicationRecord
     session_config["env_vars"] || {}
   end
 
-  # == Workflow ==
-
   def workflow_id
     "agent-session-#{id}"
-  end
-
-  def start_workflow!
-    result = TemporalService.start_workflow(
-      TemporalWorkflowRegistry.container_workflow,
-      { session_id: id, manifest: strategy.build_manifest },
-      id: workflow_id,
-      execution_timeout: WORKFLOW_TIMEOUT
-    )
-    raise result[:error] unless result[:ok]
-
-    update!(
-      temporal_workflow_id: result[:workflow_id],
-      temporal_run_id: result[:run_id],
-      started_at: Time.current
-    )
-  end
-
-  def request_finish!
-    raise InvalidStateError, "Cannot finish session in state: #{state}" unless may_finish?
-
-    signal_workflow(:container_finished, step_run&.id) if temporal_workflow_id.present?
-  end
-
-  def cancel!
-    cancel_workflow if temporal_workflow_id.present?
   end
 
   # == Strategy ==
@@ -149,36 +121,10 @@ class TerminalSession < ApplicationRecord
 
   private
 
-  # == Temporal ==
-
-  def signal_workflow(signal_name, payload = nil)
-    TemporalService.send_signal(workflow_id, signal_name, payload)
-  end
-
-  def signal_workflow_execution_finished
-    return unless session_type == "workflow_step"
-
-    sr = step_run
-    return unless sr&.workflow_run_id
-
-    execution_workflow_id = "workflow-execution-#{sr.workflow_run_id}"
-    TemporalService.send_signal(execution_workflow_id, :container_finished, sr.id)
-  rescue StandardError => e
-    Rails.logger.error("[TerminalSession] Failed to signal workflow execution for #{id}: #{e.message}")
-  end
-
-  def cancel_workflow
-    TemporalService.cancel_workflow(workflow_id)
-  end
-
   # == State machine callbacks ==
 
   def on_started
-    start_workflow!
-  rescue StandardError => e
-    Rails.logger.error("[TerminalSession] Failed to start workflow for #{id}: #{e.message}")
-    update!(error_message: "Failed to start workflow: #{e.message}")
-    fail!
+    update!(started_at: Time.current)
   end
 
   def on_ready
@@ -188,13 +134,11 @@ class TerminalSession < ApplicationRecord
   def on_finished
     sync_usage
     update!(finished_at: Time.current, container_id: nil)
-    signal_workflow_execution_finished
   end
 
   def on_failed
     sync_usage
     update!(finished_at: Time.current, container_id: nil)
-    signal_workflow_execution_finished
   end
 
   def sync_usage

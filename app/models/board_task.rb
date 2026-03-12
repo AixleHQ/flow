@@ -34,12 +34,7 @@ class BoardTask < ApplicationRecord
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
 
   def broadcast_change(action)
-    data = if action == "destroyed"
-             { action: action, id: id }
-    else
-             { action: action, task: BoardTaskSerializer.new(self).serializable_hash }
-    end
-    BoardChannel.broadcast_event(board, "task_changed", data)
+    BoardChannel.broadcast_event(board, "board_task.#{action}", { id: id })
   rescue StandardError => e
     Rails.logger.warn("[BoardTask#broadcast_change] #{action}: #{e.message}")
   end

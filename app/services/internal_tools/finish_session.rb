@@ -15,7 +15,7 @@ module InternalTools
         append_step_note(params[:note])
       end
 
-      session.request_finish!
+      SessionService.finish(session: session)
       success("Session finished successfully.")
     end
 

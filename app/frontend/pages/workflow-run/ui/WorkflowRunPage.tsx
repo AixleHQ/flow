@@ -360,15 +360,16 @@ const WorkflowRunPage = () => {
   const [skipReason, setSkipReason] = useState('');
 
   const {
-    data: initialRun,
+    data: workflowRun,
     isLoading,
     isError,
+    refetch: refetchRun,
   } = useGetWorkflowRunQuery({ projectId, runId }, { skip: !projectId || !runId });
 
-  const { workflowRun: liveRun, refresh: refreshChannel } = useWorkflowRunChannel<WorkflowRun>({
+  const { refresh: refreshChannel } = useWorkflowRunChannel({
     runId: runId || null,
+    onUpdate: refetchRun,
   });
-  const workflowRun = liveRun ?? initialRun;
 
   const isActive = workflowRun ? isRunActive(workflowRun) : false;
   const tick = useTick(isActive);

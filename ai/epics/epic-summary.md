@@ -13,25 +13,26 @@
 | 9 | Session Context | 4+ | FR53-56 | done |
 | 10 | Agent Sessions Core | 4++ | FR1-9 | done |
 | 11 | Artifacts | 6 | FR19-25 | done |
-| 12 | Workflows | 5-6 | FR10-18 | backlog |
+| 12 | Workflows | 5-6 | FR10-18 | done |
 | 13 | Billing & Analytics | 7 | FR57-61 | backlog |
 | 14 | External Integrations | 7 | FR66-72 | in-progress |
 | 15 | Monaco + VS Code Server | 8 | — | done |
 | 16 | Session Outputs, Logs & Config Normalization | 9 | — | done |
 | 17 | Container Architecture Simplification | 10 | — | done |
-| 18 | Internal Tools | 11 | — | backlog |
-| 19 | Tool Execution Framework | 12 | — | backlog |
-| 20 | Board & Column Foundation | 13 | BT:FR1-5 | backlog |
-| 21 | Tasks, Comments & Assets | 13 | BT:FR12-27 | backlog |
-| 22 | Board UI & Real-time | 13 | BT:FR28-31 | backlog |
-| 23 | Workflow Triggers & Board MCP Tools | 14 | BT:FR6-11,FR32-45 | backlog |
-| 24 | Activity Feed & Filtered Views | 15 (post-MVP) | BT:FR46-51 | backlog |
-| 25 | Unified Context Constructor & XML Renderer | 16 | FR-SCC1,2,3,6,8 | backlog |
-| 26 | Workflow Context in Agent Sessions | 16 | FR-SCC4,7 | backlog |
-| 27 | Board Task Context in Agent Sessions | 16 | FR-SCC5 | backlog |
-| 28 | Context Optimization & Legacy Cleanup | 16 | FR-SCC9 | backlog |
-| 29 | Session Config Resolver | 17 | FR-CC1,2,3,5,6 | backlog |
-| 30 | Default Agent Credential & Profile UI | 17 | FR-CC4,7 | backlog |
-| 31 | Workflow Base Resources & Builder UI | 17 | FR-CC8,9 | backlog |
+| 18 | Internal Tools | 11 | — | done |
+| 19 | Tool Execution Framework | 12 | — | done |
+| 20 | Board & Column Foundation | 13 | BT:FR1-5 | done |
+| 21 | Tasks, Comments & Assets | 13 | BT:FR12-27 | done |
+| 22 | Board UI & Real-time | 13+ | BT:FR28-31 | done |
+| 23 | Workflow Triggers & Board MCP Tools | 14 | BT:FR6-11,FR32-45 | done |
+| 24 | Activity Feed & Filtered Views | 15 (post-MVP) | BT:FR46-51 | done |
+| 25 | Unified Context Constructor & XML Renderer | 16 | FR-SCC1,2,3,6,8 | done |
+| 26 | Workflow Context in Agent Sessions | 16 | FR-SCC4,7 | done |
+| 27 | Board Task Context in Agent Sessions | 16 | FR-SCC5 | done |
+| 28 | Context Optimization & Legacy Cleanup | 16 | FR-SCC9 | done |
+| 29 | Session Config Resolver | 17 | FR-CC1,2,3,5,6 | done |
+| 30 | Default Agent Credential & Profile UI | 17 | FR-CC4,7 | done |
+| 31 | Workflow Base Resources & Builder UI | 17 | FR-CC8,9 | done |
+| 32 | Service Layer Pyramid (Task/Workflow/Session) | 18 | — | done |
 
 ---

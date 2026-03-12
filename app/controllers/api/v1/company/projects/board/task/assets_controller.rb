@@ -8,22 +8,17 @@ module Api
           module Task
             class AssetsController < Api::V1::Company::Projects::ApplicationController
               def index
-                assets = current_task.task_assets.order(created_at: :desc)
+                assets = current_task.task_assets.ransack(params[:q]).result.order(created_at: :desc)
                 assets = assets.with_tag(params[:tag]) if params[:tag].present?
                 respond_with assets, each_serializer: TaskAssetSerializer
               end
 
               def create
-                asset = current_task.task_assets.build(asset_params)
-                asset.author = current_user
-                asset.author_type = :human
-                if asset.save
-                  ActivityRecorder.record(
-                    board: current_board, event_type: :asset_attached, actor: current_user,
-                    actor_type: :human, task: current_task,
-                    metadata: { name: asset.name, content_type: asset.file&.metadata&.dig("mime_type") }
-                  )
-                end
+                asset = TaskService.add_asset(
+                  task: current_task,
+                  params: asset_params,
+                  actor: current_user
+                )
                 respond_with asset, serializer: TaskAssetSerializer
               end
 
@@ -33,7 +28,7 @@ module Api
                   return head :forbidden
                 end
 
-                asset.destroy
+                TaskService.destroy_asset(task: current_task, asset: asset, actor: current_user)
                 head :no_content
               end
 

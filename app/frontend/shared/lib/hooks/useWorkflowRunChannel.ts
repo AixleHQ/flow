@@ -2,22 +2,20 @@ import { type Subscription } from '@rails/actioncable';
 import { useEffect, useRef, useCallback, useState } from 'react';
 
 import { getConsumer } from 'shared/lib/actionCableConsumer';
-import { keysToCamelCase } from 'shared/lib/caseConverter';
 
 interface RunUpdateMessage {
-  type: 'run_update' | 'step_run_update' | 'sub_step_run_update';
-  data: Record<string, unknown>;
+  type: 'workflow_run.updated' | 'step_run.updated' | 'sub_step_run.updated' | 'run_update';
+  data: { id?: number; workflow_run_id?: number; step_run_id?: number };
 }
 
-interface UseWorkflowRunChannelOptions<T = unknown> {
+interface UseWorkflowRunChannelOptions {
   runId: number | null;
-  onUpdate?: (run: T) => void;
+  onUpdate?: () => void;
 }
 
-export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkflowRunChannelOptions<T>) {
+export function useWorkflowRunChannel({ runId, onUpdate }: UseWorkflowRunChannelOptions) {
   const subscriptionRef = useRef<Subscription | null>(null);
   const onUpdateRef = useRef(onUpdate);
-  const [workflowRun, setWorkflowRun] = useState<T | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
@@ -26,7 +24,6 @@ export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkf
 
   useEffect(() => {
     if (!runId) {
-      setWorkflowRun(null);
       setConnected(false);
       return;
     }
@@ -45,10 +42,13 @@ export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkf
           setConnected(false);
         },
         received(message: RunUpdateMessage) {
-          if (message.type === 'run_update' && message.data) {
-            const run = keysToCamelCase(message.data) as unknown as T;
-            setWorkflowRun(run);
-            onUpdateRef.current?.(run);
+          if (
+            message.type === 'workflow_run.updated' ||
+            message.type === 'step_run.updated' ||
+            message.type === 'sub_step_run.updated' ||
+            message.type === 'run_update'
+          ) {
+            onUpdateRef.current?.();
           }
         },
       },
@@ -67,5 +67,5 @@ export function useWorkflowRunChannel<T = unknown>({ runId, onUpdate }: UseWorkf
     subscriptionRef.current.perform('refresh');
   }, [connected]);
 
-  return { workflowRun, connected, refresh };
+  return { connected, refresh };
 }

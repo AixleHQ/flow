@@ -1,27 +1,18 @@
 import { type Subscription } from '@rails/actioncable';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useDispatch } from 'react-redux';
 
 import type { ICreateTerminalSessionRequest, ITerminalSession } from 'entities/terminal-session';
-import type { AppDispatch } from 'shared/api';
-import {
-  terminalSessionApi,
-  useCreateTerminalSessionMutation,
-  useFinishSessionMutation,
-  useGetTerminalSessionQuery,
-} from 'shared/api';
+import { useCreateTerminalSessionMutation, useFinishSessionMutation, useGetTerminalSessionQuery } from 'shared/api';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
-import { keysToCamelCase } from 'shared/lib/caseConverter';
 
 interface SessionUpdateMessage {
-  type: 'session_update' | 'auth_complete';
-  data: Record<string, unknown>;
+  type: 'terminal_session.updated' | 'session_update' | 'auth_complete';
+  data: { id?: number };
 }
 
 interface UseTerminalSessionOptions {
   sessionId: number | null;
   skip?: boolean;
-  onUpdate?: (session: ITerminalSession) => void;
   onAuthComplete?: () => void;
 }
 
@@ -29,12 +20,10 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2000;
 const POLL_INTERVAL_MS = 3000;
 
-export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthComplete }: UseTerminalSessionOptions) {
-  const dispatch = useDispatch<AppDispatch>();
+export function useTerminalSession({ sessionId, skip = false, onAuthComplete }: UseTerminalSessionOptions) {
   const subscriptionRef = useRef<Subscription | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef(0);
-  const onUpdateRef = useRef(onUpdate);
   const onAuthCompleteRef = useRef(onAuthComplete);
 
   const [connected, setConnected] = useState(false);
@@ -42,9 +31,6 @@ export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthCo
   const [channelError, setChannelError] = useState<string | null>(null);
   const [authComplete, setAuthComplete] = useState(false);
 
-  useEffect(() => {
-    onUpdateRef.current = onUpdate;
-  }, [onUpdate]);
   useEffect(() => {
     onAuthCompleteRef.current = onAuthComplete;
   }, [onAuthComplete]);
@@ -60,18 +46,6 @@ export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthCo
   } = useGetTerminalSessionQuery(sessionId!, { skip: !shouldFetch });
 
   const session: ITerminalSession | null = shouldFetch ? (queryData?.data ?? null) : null;
-
-  const patchSessionCache = useCallback(
-    (updated: ITerminalSession) => {
-      if (!sessionId) return;
-      dispatch(
-        terminalSessionApi.util.updateQueryData('getTerminalSession', sessionId, (draft) => {
-          Object.assign(draft.data, updated);
-        }),
-      );
-    },
-    [dispatch, sessionId],
-  );
 
   useEffect(() => {
     if (!sessionId || skip) {
@@ -122,10 +96,8 @@ export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthCo
             }
           },
           received(message: SessionUpdateMessage) {
-            if (message.type === 'session_update' && message.data) {
-              const updated = keysToCamelCase(message.data) as unknown as ITerminalSession;
-              patchSessionCache(updated);
-              onUpdateRef.current?.(updated);
+            if (message.type === 'terminal_session.updated' || message.type === 'session_update') {
+              refetch();
             } else if (message.type === 'auth_complete') {
               setAuthComplete(true);
               onAuthCompleteRef.current?.();
@@ -145,7 +117,7 @@ export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthCo
       subscriptionRef.current?.unsubscribe();
       subscriptionRef.current = null;
     };
-  }, [sessionId, skip, patchSessionCache]);
+  }, [sessionId, skip, refetch]);
 
   const refresh = useCallback(() => {
     if (connected) {

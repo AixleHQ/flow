@@ -18,7 +18,7 @@ module InternalTools
       end
 
       step_run&.update!(error_message: reason)
-      session.request_finish!
+      SessionService.finish(session: session)
       success("Session marked as failed: #{reason}")
     end
 

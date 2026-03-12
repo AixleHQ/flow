@@ -63,9 +63,7 @@ class StepRun < ApplicationRecord
   end
 
   def broadcast_update!
-    wr = workflow_run
-    wr.touch
-    WorkflowRunChannel.broadcast_update(wr.reload)
+    WorkflowRunChannel.broadcast_step_update(workflow_run, self)
   rescue StandardError => e
     Rails.logger.warn("[StepRun#broadcast_update!] #{e.message}")
   end
