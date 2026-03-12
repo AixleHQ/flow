@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
 
 KUBE_COMMON_DIR = ./kube/common
 KUBE_DEV_DIR = ./kube/dev
@@ -12,6 +12,11 @@ SECRET_NAMESPACE ?= $(KUBE_NAMESPACE)
 SECRET_NAME ?=
 KUBE_EDITOR ?= vim
 KUBECTL = kubectl $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
+ARC_CONTROLLER_INSTALLATION_NAME ?= arc
+ARC_CONTROLLER_NAMESPACE ?= arc-system
+ARC_RUNNER_INSTALLATION_NAME ?= palad-deploy-runner
+ARC_RUNNER_NAMESPACE ?= arc-runners
+ARC_RUNNER_VALUES_FILE ?= ./kube/arc/values-runner-scale-set.yaml
 
 kube-help:
 	@echo "Kubernetes commands:"
@@ -24,6 +29,10 @@ kube-help:
 	@echo "  make kube-secrets-apply     - Apply secret manifests from kube/secrets explicitly"
 	@echo "  make kube-secret-set        - Open an existing secret in vim and save back (SECRET_NAME=... [SECRET_NAMESPACE=...])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
+	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
+	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
+	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
+	@echo "  make kube-arc-install            - Install ARC controller + deploy RBAC + runner scale set"
 	@echo "  make kube-rm                - Delete dev + common manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod + common manifests (secrets are not touched)"
 
@@ -63,6 +72,7 @@ kube-setup:
 	@make build-agents
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
 	$(KUBECTL) apply -f $(KUBE_COMMON_DIR)
+	@make kube-arc-install
 	$(KUBECTL) apply -f $(KUBE_SECRETS_DIR)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)
 	$(KUBECTL) wait --for=condition=ready pod -l app=db -n palad --timeout=120s
@@ -96,6 +106,30 @@ kube-secrets-apply:
 # Restart web-related deployments to pick up new config/secrets
 kube-web-rollout:
 	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_NAMESPACE)
+
+# Install/upgrade Actions Runner Controller (ARC) controller chart.
+kube-arc-install-controller:
+	helm upgrade --install "$(ARC_CONTROLLER_INSTALLATION_NAME)" \
+		oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller \
+		--namespace "$(ARC_CONTROLLER_NAMESPACE)" \
+		--create-namespace
+
+# Apply runner service account in arc-runners and rollout RBAC in palad namespace.
+kube-arc-apply-deploy-rbac:
+	$(KUBECTL) apply -f ./kube/arc/01-deploy-runner-rbac.yaml
+
+# Install/upgrade ARC runner scale set for deploy jobs.
+kube-arc-install-runner-set:
+	helm upgrade --install "$(ARC_RUNNER_INSTALLATION_NAME)" \
+		oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set \
+		--namespace "$(ARC_RUNNER_NAMESPACE)" \
+		--create-namespace \
+		--set "controllerServiceAccount.namespace=$(ARC_CONTROLLER_NAMESPACE)" \
+		--set "controllerServiceAccount.name=$(ARC_CONTROLLER_INSTALLATION_NAME)-gha-rs-controller" \
+		-f "$(ARC_RUNNER_VALUES_FILE)"
+
+# One-shot ARC setup for deploy runner scale set.
+kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set
 
 # Edit an existing secret interactively and save changes back to the cluster
 kube-secret-set:

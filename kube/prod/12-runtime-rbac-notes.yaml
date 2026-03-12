@@ -40,3 +40,13 @@ data:
        - ASSET_HOST to that HTTPS URL
     4) Re-apply prod manifests:
        make kube-apply-prod
+
+    GitHub deploy runner (ARC) setup:
+    1) Create ARC auth secret from template:
+       cp kube/arc/00-github-auth-secret.example.yaml /tmp/arc-github-auth.yaml
+       # edit /tmp/arc-github-auth.yaml with GitHub App credentials
+       kubectl apply -f /tmp/arc-github-auth.yaml
+    2) Install ARC and deploy runner scale set:
+       make kube-arc-install
+    3) Verify runner is online in GitHub:
+       Repository Settings -> Actions -> Runners
