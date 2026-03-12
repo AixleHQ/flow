@@ -234,7 +234,19 @@ jobs:
       - build-web
       - build-otlp
       - build-agent-images
+    env:
+      KUBE_NAMESPACE: palad
 
     steps:
-      - name: Run deploy
-        run: echo "RUN DEPLOY HERE"
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Restart deployments
+        run: |
+          kubectl -n "$KUBE_NAMESPACE" rollout restart deployment/web deployment/worker-ruby deployment/mcp
+
+      - name: Wait for rollout
+        run: |
+          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/web --timeout=10m
+          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/worker-ruby --timeout=10m
+          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/mcp --timeout=10m
