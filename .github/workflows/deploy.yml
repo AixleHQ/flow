@@ -111,10 +111,71 @@ jobs:
           cache-from: type=gha,scope=otlp-ingest-image
           cache-to: type=gha,mode=max,scope=otlp-ingest-image
 
-  build-agents:
-    name: Build And Push Agent Images
+  build-agent-base:
+    name: Build And Push Agent Base Core Image
     runs-on: ubuntu-latest
     needs: tests
+    env:
+      BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login To GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Base Docker Metadata
+        id: meta_base
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=
+
+      - name: Build And Push Agent Base Core Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/base
+          file: ./docker/base/Dockerfile.core
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_base.outputs.tags }}
+          labels: ${{ steps.meta_base.outputs.labels }}
+          cache-from: type=gha,scope=agent-base-core-image
+          cache-to: type=gha,mode=max,scope=agent-base-core-image
+
+  build-agent-images:
+    name: Build And Push ${{ matrix.image_name }} Image
+    runs-on: ubuntu-latest
+    needs: build-agent-base
+    strategy:
+      matrix:
+        include:
+          - image_name: Claude Code
+            image_suffix: claude-code
+            dockerfile: ./docker/claude-code/Dockerfile
+            cache_scope: claude-code-image
+          - image_name: Cursor CLI
+            image_suffix: cursor-cli
+            dockerfile: ./docker/cursor-cli/Dockerfile
+            cache_scope: cursor-cli-image
+          - image_name: Codex
+            image_suffix: codex
+            dockerfile: ./docker/codex/Dockerfile
+            cache_scope: codex-image
+          - image_name: Gemini CLI
+            image_suffix: gemini-cli
+            dockerfile: ./docker/gemini-cli/Dockerfile
+            cache_scope: gemini-cli-image
     env:
       BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
 
@@ -137,113 +198,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract Base Docker Metadata
-        id: meta_base
+      - name: Extract Docker Metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image_suffix }}
           tags: |
             type=raw,value=latest
-            type=raw,value=${{ steps.vars.outputs.short_sha }}
+            type=sha,format=short,prefix=
 
-      - name: Build And Push Agent Base Core Image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker/base
-          file: ./docker/base/Dockerfile.core
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_base.outputs.tags }}
-          labels: ${{ steps.meta_base.outputs.labels }}
-          cache-from: type=gha,scope=agent-base-core-image
-          cache-to: type=gha,mode=max,scope=agent-base-core-image
-
-      - name: Extract Claude Code Docker Metadata
-        id: meta_claude
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-claude-code
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.vars.outputs.short_sha }}
-
-      - name: Build And Push Claude Code Image
+      - name: Build And Push Image
         uses: docker/build-push-action@v6
         with:
           context: ./docker
-          file: ./docker/claude-code/Dockerfile
+          file: ${{ matrix.dockerfile }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_claude.outputs.tags }}
-          labels: ${{ steps.meta_claude.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=claude-code-image
-          cache-to: type=gha,mode=max,scope=claude-code-image
-
-      - name: Extract Cursor CLI Docker Metadata
-        id: meta_cursor
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-cursor-cli
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.vars.outputs.short_sha }}
-
-      - name: Build And Push Cursor CLI Image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker
-          file: ./docker/cursor-cli/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_cursor.outputs.tags }}
-          labels: ${{ steps.meta_cursor.outputs.labels }}
-          build-args: |
-            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=cursor-cli-image
-          cache-to: type=gha,mode=max,scope=cursor-cli-image
-
-      - name: Extract Codex Docker Metadata
-        id: meta_codex
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-codex
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.vars.outputs.short_sha }}
-
-      - name: Build And Push Codex Image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker
-          file: ./docker/codex/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_codex.outputs.tags }}
-          labels: ${{ steps.meta_codex.outputs.labels }}
-          build-args: |
-            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=codex-image
-          cache-to: type=gha,mode=max,scope=codex-image
-
-      - name: Extract Gemini CLI Docker Metadata
-        id: meta_gemini
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-gemini-cli
-          tags: |
-            type=raw,value=latest
-            type=raw,value=${{ steps.vars.outputs.short_sha }}
-
-      - name: Build And Push Gemini CLI Image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./docker
-          file: ./docker/gemini-cli/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta_gemini.outputs.tags }}
-          labels: ${{ steps.meta_gemini.outputs.labels }}
-          build-args: |
-            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=gemini-cli-image
-          cache-to: type=gha,mode=max,scope=gemini-cli-image
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
   deploy:
     name: Deploy
@@ -251,7 +226,7 @@ jobs:
     needs:
       - build-web
       - build-otlp
-      - build-agents
+      - build-agent-images
 
     steps:
       - name: Run deploy
