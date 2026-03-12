@@ -15,6 +15,15 @@ metadata:
   name: gha-deploy-rollout
   namespace: palad
 rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
     resourceNames: ["web", "worker-ruby", "mcp"]

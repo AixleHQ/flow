@@ -220,6 +220,68 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
+  db-migrate:
+    name: DB Migrate
+    runs-on: palad-deploy-runner
+    environment: production
+    needs:
+      - build-web
+      - build-otlp
+      - build-agent-images
+    env:
+      KUBE_NAMESPACE: palad
+
+    steps:
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Create migration job
+        id: migrate_job
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          JOB_NAME="db-migrate-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}"
+
+          cat <<EOF | kubectl -n "$KUBE_NAMESPACE" apply -f -
+          apiVersion: batch/v1
+          kind: Job
+          metadata:
+            name: ${JOB_NAME}
+          spec:
+            ttlSecondsAfterFinished: 3600
+            backoffLimit: 0
+            template:
+              spec:
+                serviceAccountName: palad-web
+                restartPolicy: Never
+                containers:
+                  - name: migrate
+                    image: ${WEB_IMAGE}
+                    imagePullPolicy: Always
+                    command: ["bundle", "exec", "rails", "db:migrate"]
+                    envFrom:
+                      - configMapRef:
+                          name: palad-app-config
+                      - secretRef:
+                          name: palad-app-secrets
+          EOF
+
+          echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for migration completion
+        run: |
+          kubectl -n "$KUBE_NAMESPACE" wait --for=condition=complete --timeout=20m "job/${{ steps.migrate_job.outputs.job_name }}"
+
+      - name: Migration logs
+        if: always()
+        run: |
+          kubectl -n "$KUBE_NAMESPACE" logs "job/${{ steps.migrate_job.outputs.job_name }}" --all-containers=true --tail=-1 || true
+
+      - name: Cleanup migration job
+        if: always()
+        run: |
+          kubectl -n "$KUBE_NAMESPACE" delete "job/${{ steps.migrate_job.outputs.job_name }}" --ignore-not-found=true
+
   deploy:
     name: Deploy
     runs-on: palad-deploy-runner
@@ -231,9 +293,7 @@ jobs:
       contents: read
       id-token: write
     needs:
-      - build-web
-      - build-otlp
-      - build-agent-images
+      - db-migrate
     env:
       KUBE_NAMESPACE: palad
 
