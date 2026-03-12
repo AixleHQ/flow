@@ -13,6 +13,7 @@ interface SessionUpdateMessage {
 interface UseTerminalSessionOptions {
   sessionId: number | null;
   skip?: boolean;
+  onUpdate?: (session: ITerminalSession) => void;
   onAuthComplete?: () => void;
 }
 
@@ -20,11 +21,12 @@ const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2000;
 const POLL_INTERVAL_MS = 3000;
 
-export function useTerminalSession({ sessionId, skip = false, onAuthComplete }: UseTerminalSessionOptions) {
+export function useTerminalSession({ sessionId, skip = false, onUpdate, onAuthComplete }: UseTerminalSessionOptions) {
   const subscriptionRef = useRef<Subscription | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef(0);
   const onAuthCompleteRef = useRef(onAuthComplete);
+  const onUpdateRef = useRef(onUpdate);
 
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -34,6 +36,10 @@ export function useTerminalSession({ sessionId, skip = false, onAuthComplete }: 
   useEffect(() => {
     onAuthCompleteRef.current = onAuthComplete;
   }, [onAuthComplete]);
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   const shouldFetch = !!sessionId && !skip;
 
@@ -46,6 +52,10 @@ export function useTerminalSession({ sessionId, skip = false, onAuthComplete }: 
   } = useGetTerminalSessionQuery(sessionId!, { skip: !shouldFetch });
 
   const session: ITerminalSession | null = shouldFetch ? (queryData?.data ?? null) : null;
+
+  useEffect(() => {
+    if (session) onUpdateRef.current?.(session);
+  }, [session]);
 
   useEffect(() => {
     if (!sessionId || skip) {

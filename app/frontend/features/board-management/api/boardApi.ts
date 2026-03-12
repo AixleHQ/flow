@@ -161,7 +161,10 @@ export const boardApi = baseApi.injectEndpoints({
       query: ({ projectId, taskId, tag, authorType }) => ({
         url: `${tasksBasePath(projectId)}/${taskId}/comments`,
         method: 'GET',
-        params: { ...(tag && { tag }), ...(authorType && { author_type: authorType }) },
+        params: {
+          ...(tag && { 'q[with_tag]': tag }),
+          ...(authorType && { 'q[by_author_type]': authorType }),
+        },
         isDecamelize: false,
       }),
       transformResponse: (response: { items: TaskComment[] }) => response.items || [],

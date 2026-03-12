@@ -14,7 +14,12 @@ interface ConfigItemValueFieldProps {
   label?: string;
 }
 
-export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({ value, onChange, placeholder, label = 'Value' }) => {
+export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
+  value,
+  onChange,
+  placeholder,
+  label = 'Value',
+}) => {
   const isRef = value.startsWith(CONFIG_ITEM_PREFIX);
   const [useConfigItem, setUseConfigItem] = useState(isRef);
 

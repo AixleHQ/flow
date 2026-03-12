@@ -14,9 +14,9 @@ class TerminalSessionSerializerTest < ActiveSupport::TestCase
     serializer = TerminalSessionSerializer.new(session)
     data = serializer.serializable_hash
 
-    expected = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/"
+    expected = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/?folder=%2Fworkspace"
     assert_equal expected, data[:ide_url]
-    refute data[:ide_url].include?("?tkn=")
+    refute data[:ide_url].include?("tkn=")
   end
 
   test "ide_url includes tkn param when metadata has vscode_token" do
@@ -26,7 +26,7 @@ class TerminalSessionSerializerTest < ActiveSupport::TestCase
     serializer = TerminalSessionSerializer.new(session)
     data = serializer.serializable_hash
 
-    expected = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/?tkn=#{token}"
+    expected = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/?folder=%2Fworkspace&tkn=#{token}"
     assert_equal expected, data[:ide_url]
   end
 

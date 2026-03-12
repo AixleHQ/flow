@@ -37,7 +37,7 @@ class Api::V1::Company::Projects::Board::Task::CommentsControllerTest < ActionCo
     TaskComment.create!(body: "Feature note", board_task: @task, author: @owner, tags: %w[feature])
     sign_in @owner
 
-    get :index, params: { project_id: @project.id, task_id: @task.id, tag: "bug" }
+    get :index, params: { project_id: @project.id, task_id: @task.id, q: { with_tag: "bug" } }
 
     assert_response :success
     json = response.parsed_body
@@ -50,7 +50,7 @@ class Api::V1::Company::Projects::Board::Task::CommentsControllerTest < ActionCo
     TaskComment.create!(body: "Agent", board_task: @task, author: @owner, author_type: :agent)
     sign_in @owner
 
-    get :index, params: { project_id: @project.id, task_id: @task.id, author_type: "agent" }
+    get :index, params: { project_id: @project.id, task_id: @task.id, q: { by_author_type: "agent" } }
 
     assert_response :success
     json = response.parsed_body

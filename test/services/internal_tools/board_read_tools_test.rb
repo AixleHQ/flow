@@ -10,7 +10,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     @board = create(:board, project: @project)
     @col1 = create(:board_column, board: @board, name: "Backlog", position: 1, purpose: "New tasks")
     @col2 = create(:board_column, board: @board, name: "In Dev", position: 2, purpose: "Active dev")
-    @task = create(:board_task, board: @board, board_column: @col1, title: "Test task", description: "Do something", tags: ["frontend"])
+    @task = create(:board_task, board: @board, board_column: @col1, title: "Test task", description: "Do something", tags: [ "frontend" ])
 
     workflow = create(:workflow, scope: @company)
     step = create(:step, workflow: workflow)
@@ -44,7 +44,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   end
 
   test "board_list_tasks filters by tag" do
-    create(:board_task, board: @board, board_column: @col1, title: "Other task", tags: ["backend"])
+    create(:board_task, board: @board, board_column: @col1, title: "Other task", tags: [ "backend" ])
 
     result = InternalTools::BoardListTasks.new(params: { tag: "frontend" }, session: @session).execute
     data = JSON.parse(result[:stdout])
@@ -83,7 +83,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   # === board_get_comments ===
 
   test "board_get_comments returns comments for task" do
-    create(:task_comment, board_task: @task, author: @user, body: "Looks good", tags: ["review"])
+    create(:task_comment, board_task: @task, author: @user, body: "Looks good", tags: [ "review" ])
     create(:task_comment, board_task: @task, author: @user, body: "Agent note", author_type: :agent)
 
     result = InternalTools::BoardGetComments.new(params: { task_id: @task.id }, session: @session).execute
@@ -95,7 +95,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   end
 
   test "board_get_comments filters by tag" do
-    create(:task_comment, board_task: @task, author: @user, body: "Tagged", tags: ["tech_design"])
+    create(:task_comment, board_task: @task, author: @user, body: "Tagged", tags: [ "tech_design" ])
     create(:task_comment, board_task: @task, author: @user, body: "Not tagged")
 
     result = InternalTools::BoardGetComments.new(params: { task_id: @task.id, tag: "tech_design" }, session: @session).execute
@@ -117,7 +117,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   # === board_get_task_assets ===
 
   test "board_get_task_assets returns assets via serializer" do
-    create(:task_asset, board_task: @task, author: @user, name: "report.md", tags: ["qa"])
+    create(:task_asset, board_task: @task, author: @user, name: "report.md", tags: [ "qa" ])
 
     result = InternalTools::BoardGetTaskAssets.new(params: { task_id: @task.id }, session: @session).execute
     assert_equal 0, result[:exit_code]
@@ -128,8 +128,8 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   end
 
   test "board_get_task_assets filters by tag" do
-    create(:task_asset, board_task: @task, author: @user, name: "qa.md", tags: ["qa"])
-    create(:task_asset, board_task: @task, author: @user, name: "other.md", tags: ["design"])
+    create(:task_asset, board_task: @task, author: @user, name: "qa.md", tags: [ "qa" ])
+    create(:task_asset, board_task: @task, author: @user, name: "other.md", tags: [ "design" ])
 
     result = InternalTools::BoardGetTaskAssets.new(params: { task_id: @task.id, tag: "qa" }, session: @session).execute
     data = JSON.parse(result[:stdout])

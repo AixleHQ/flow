@@ -62,7 +62,7 @@ module Api
               result = TaskService.trigger_workflow(task: task, binding: binding, actor: current_user)
 
               if result.is_a?(Hash) && result[:error]
-                render json: { errors: [result[:error]] }, status: :unprocessable_entity
+                render json: { errors: [ result[:error] ] }, status: :unprocessable_entity
               else
                 respond_with result
               end

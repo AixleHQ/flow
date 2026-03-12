@@ -17,9 +17,9 @@ module InternalTools
 
       current_tags = entity.tags || []
       new_tags = if params[:action] == "add"
-                   (current_tags + [params[:tag]]).uniq
+                   (current_tags + [ params[:tag] ]).uniq
       else
-                   current_tags - [params[:tag]]
+                   current_tags - [ params[:tag] ]
       end
 
       entity.update!(tags: new_tags)

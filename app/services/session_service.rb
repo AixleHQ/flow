@@ -116,9 +116,9 @@ class SessionService
     def scoped_resources(klass, ids, session)
       base = if session.project
                klass.visible_for_project(session.project)
-             else
+      else
                klass.visible_for_company(session.user.company)
-             end
+      end
       base.where(id: ids)
     end
   end

@@ -139,11 +139,9 @@ export const TerminalSessionWidget: React.FC<TerminalSessionWidgetProps> = ({
     setTerminalLoaded(true);
   }, []);
 
-
   const handleEditorIframeLoad = useCallback(() => {
     setEditorLoaded(true);
   }, []);
-
 
   const prevSessionIdRef = useRef(sessionId);
   useEffect(() => {

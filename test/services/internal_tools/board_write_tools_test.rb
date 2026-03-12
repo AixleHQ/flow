@@ -124,7 +124,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
 
   test "board_add_comment creates comment on task" do
     result = InternalTools::BoardAddComment.new(
-      params: { task_id: @task.id, body: "Implementation complete", tags: ["change_log"] },
+      params: { task_id: @task.id, body: "Implementation complete", tags: [ "change_log" ] },
       session: @session
     ).execute
 
@@ -155,7 +155,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     content = Base64.encode64("# QA Report\n\nAll tests passed.")
 
     result = InternalTools::BoardAttachAsset.new(
-      params: { task_id: @task.id, file_content: content, name: "qa-report.md", tags: ["qa"] },
+      params: { task_id: @task.id, file_content: content, name: "qa-report.md", tags: [ "qa" ] },
       session: @session
     ).execute
 
@@ -173,7 +173,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     ContainerRuntime.stubs(:build).returns(runtime)
 
     result = InternalTools::BoardAttachAsset.new(
-      params: { task_id: @task.id, file_path: "/workspace/outputs/screenshot.png", name: "qa-desktop.png", tags: ["qa", "desktop"] },
+      params: { task_id: @task.id, file_path: "/workspace/outputs/screenshot.png", name: "qa-desktop.png", tags: [ "qa", "desktop" ] },
       session: @session
     ).execute
 
@@ -234,7 +234,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
   end
 
   test "board_manage_tags removes tag from task" do
-    @task.update!(tags: ["frontend", "urgent"])
+    @task.update!(tags: [ "frontend", "urgent" ])
 
     result = InternalTools::BoardManageTags.new(
       params: { action: "remove", entity_type: "task", entity_id: @task.id, tag: "urgent" },

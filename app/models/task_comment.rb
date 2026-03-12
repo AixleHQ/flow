@@ -25,5 +25,9 @@ class TaskComment < ApplicationRecord
     def ransackable_associations(_auth_object = nil)
       %w[board_task author]
     end
+
+    def ransackable_scopes(_auth_object = nil)
+      %w[with_tag by_author_type]
+    end
   end
 end

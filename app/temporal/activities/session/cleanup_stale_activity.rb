@@ -81,7 +81,9 @@ module Activities
       end
 
       def try_cancel_workflow(session)
-        session.cancel!
+        return unless session.temporal_workflow_id.present?
+
+        TemporalService.cancel_workflow(session.workflow_id)
       rescue StandardError => e
         log(:warn, "Failed to cancel workflow for session #{session.id}: #{e.message}")
       end
