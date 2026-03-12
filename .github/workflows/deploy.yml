@@ -1,0 +1,258 @@
+name: Deploy palad.ai
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run tests
+        run: echo "RUN TESTS HERE"
+
+  build-web:
+    name: Build And Push Web Image
+    runs-on: ubuntu-latest
+    needs: tests
+    env:
+      IMAGE_NAME: ${{ github.repository }}-web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login To GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=
+
+      - name: Build And Push Web Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+            AUTHOR_NAME=${{ github.actor }}
+            AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
+            ASSET_HOST=https://static.palad.ai
+          cache-from: type=gha,scope=web-image
+          cache-to: type=gha,mode=max,scope=web-image
+
+  build-otlp:
+    name: Build And Push OTLP Ingest Image
+    runs-on: ubuntu-latest
+    needs: tests
+    env:
+      IMAGE_NAME: ${{ github.repository }}-otlp-ingest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login To GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short,prefix=
+
+      - name: Build And Push OTLP Ingest Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/otlp-ingest
+          file: ./docker/otlp-ingest/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=otlp-ingest-image
+          cache-to: type=gha,mode=max,scope=otlp-ingest-image
+
+  build-agents:
+    name: Build And Push Agent Images
+    runs-on: ubuntu-latest
+    needs: tests
+    env:
+      BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login To GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Base Docker Metadata
+        id: meta_base
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+
+      - name: Build And Push Agent Base Core Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker/base
+          file: ./docker/base/Dockerfile.core
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_base.outputs.tags }}
+          labels: ${{ steps.meta_base.outputs.labels }}
+          cache-from: type=gha,scope=agent-base-core-image
+          cache-to: type=gha,mode=max,scope=agent-base-core-image
+
+      - name: Extract Claude Code Docker Metadata
+        id: meta_claude
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-claude-code
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+
+      - name: Build And Push Claude Code Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/claude-code/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_claude.outputs.tags }}
+          labels: ${{ steps.meta_claude.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha,scope=claude-code-image
+          cache-to: type=gha,mode=max,scope=claude-code-image
+
+      - name: Extract Cursor CLI Docker Metadata
+        id: meta_cursor
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-cursor-cli
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+
+      - name: Build And Push Cursor CLI Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/cursor-cli/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_cursor.outputs.tags }}
+          labels: ${{ steps.meta_cursor.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha,scope=cursor-cli-image
+          cache-to: type=gha,mode=max,scope=cursor-cli-image
+
+      - name: Extract Codex Docker Metadata
+        id: meta_codex
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-codex
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+
+      - name: Build And Push Codex Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/codex/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_codex.outputs.tags }}
+          labels: ${{ steps.meta_codex.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha,scope=codex-image
+          cache-to: type=gha,mode=max,scope=codex-image
+
+      - name: Extract Gemini CLI Docker Metadata
+        id: meta_gemini
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-gemini-cli
+          tags: |
+            type=raw,value=latest
+            type=raw,value=${{ steps.vars.outputs.short_sha }}
+
+      - name: Build And Push Gemini CLI Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./docker
+          file: ./docker/gemini-cli/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta_gemini.outputs.tags }}
+          labels: ${{ steps.meta_gemini.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha,scope=gemini-cli-image
+          cache-to: type=gha,mode=max,scope=gemini-cli-image
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs:
+      - build-web
+      - build-otlp
+      - build-agents
+
+    steps:
+      - name: Run deploy
+        run: echo "RUN DEPLOY HERE"
