@@ -7,6 +7,7 @@ This directory contains the Terraform configuration for managing AWS infrastruct
 The current configuration sets up:
 - **S3 Bucket for State Storage**: An AWS S3 bucket (`palad-tfstate`) to store Terraform state files
 - **S3 Bucket for Application Assets** with CORS, encryption, lifecycle, and TLS-only policy
+- **CloudFront CDN for Static Rails/Vite Assets** on `static.palad.ai`
 - **Route53 Hosted Zone and DNS Records** for `palad.ai`
 - **EKS Cluster + Networking** for production workloads
 - **RDS PostgreSQL (Rails app)** for production application database
@@ -76,6 +77,7 @@ terraform output  # Display output values
 - **providers.tf** - Terraform providers (AWS, TLS)
 - **main.tf** - S3 tfstate resources
 - **s3_assets.tf** - S3 assets bucket and EKS IRSA role/policy for app uploads
+- **cloudfront_static_assets.tf** - CloudFront, ACM, and Route53 alias for static asset delivery
 - **eks.tf** - EKS cluster and VPC resources
 - **rds.tf** - Managed RDS PostgreSQL resources
 - **rds_temporal.tf** - Dedicated managed RDS PostgreSQL resources for Temporal
@@ -100,6 +102,7 @@ terraform output  # Display output values
   - `REDIS_URL` from `terraform output redis_url_database_1`
   - `AWS_S3_BUCKET` from `terraform output assets_bucket_name`
   - `AWS_DEFAULT_REGION` / `AWS_REGION` from `terraform output assets_bucket_region`
+  - `ASSET_HOST` from `terraform output cloudfront_static_assets_url` (for example `https://static.palad.ai`)
 - `kube/prod/06-rbac-runtime.yaml`:
   - `eks.amazonaws.com/role-arn` for `palad-web` and `palad-worker` from `terraform output eks_assets_irsa_role_arn`
 - `kube/secrets/07-app-secrets.yaml`:

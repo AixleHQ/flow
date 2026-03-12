@@ -18,3 +18,9 @@ provider "aws" {
 
   # Credentials are provided via AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY env vars
 }
+
+# CloudFront ACM certificates must be created in us-east-1.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}

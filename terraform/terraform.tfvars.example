@@ -62,6 +62,12 @@ create_assets_irsa               = true
 assets_irsa_namespace            = "palad"
 assets_irsa_service_account_names = ["palad-web", "palad-worker"]
 
+# CloudFront distribution for static Rails/Vite assets
+create_assets_cloudfront_distribution = true
+assets_cloudfront_domain_name         = "static.palad.ai"
+assets_cloudfront_origin_domain_name  = "palad.ai"
+assets_cloudfront_price_class         = "PriceClass_100"
+
 # RDS PostgreSQL for Rails app
 rds_instance_identifier      = "palad-app-prod"
 rds_engine_version           = "18.2"

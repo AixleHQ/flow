@@ -12,7 +12,8 @@ data:
   DB_HOST: "palad-app-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"
   DB_PORT: "5432"
   DOMAIN: palad.ai
-  ASSET_HOST: palad.ai
+  # Set from Terraform output: cloudfront_static_assets_url
+  ASSET_HOST: "https://static.palad.ai"
   # Set from Terraform output: assets_bucket_name
   AWS_S3_BUCKET: "palad-assets-prod"
   AWS_DEFAULT_REGION: "us-east-1"

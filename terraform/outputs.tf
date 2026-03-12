@@ -28,6 +28,26 @@ output "assets_bucket_region" {
   value       = var.aws_region
 }
 
+output "cloudfront_static_assets_distribution_id" {
+  description = "CloudFront distribution ID for static Rails/Vite assets"
+  value       = try(aws_cloudfront_distribution.static_assets[0].id, null)
+}
+
+output "cloudfront_static_assets_domain_name" {
+  description = "CloudFront domain name for static Rails/Vite assets"
+  value       = try(aws_cloudfront_distribution.static_assets[0].domain_name, null)
+}
+
+output "cloudfront_static_assets_alias_domain_name" {
+  description = "Custom DNS hostname for static Rails/Vite assets"
+  value       = try(aws_route53_record.palad_ai_static_assets[0].fqdn, null)
+}
+
+output "cloudfront_static_assets_url" {
+  description = "HTTPS URL base for static Rails/Vite assets"
+  value       = try("https://${trim(aws_route53_record.palad_ai_static_assets[0].fqdn, ".")}", null)
+}
+
 output "eks_assets_irsa_role_arn" {
   description = "IAM role ARN for IRSA access to the assets S3 bucket from app workloads"
   value       = try(aws_iam_role.eks_assets[0].arn, null)

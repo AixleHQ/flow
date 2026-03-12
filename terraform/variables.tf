@@ -251,6 +251,39 @@ variable "assets_irsa_service_account_names" {
   }
 }
 
+variable "create_assets_cloudfront_distribution" {
+  description = "Whether to create a CloudFront distribution for static Rails/Vite assets"
+  type        = bool
+  default     = true
+}
+
+variable "assets_cloudfront_domain_name" {
+  description = "DNS hostname for CloudFront-served static assets"
+  type        = string
+  default     = "static.palad.ai"
+}
+
+variable "assets_cloudfront_origin_domain_name" {
+  description = "Origin hostname CloudFront uses to fetch static assets from the app ingress"
+  type        = string
+  default     = "palad.ai"
+}
+
+variable "assets_cloudfront_price_class" {
+  description = "CloudFront price class for static asset delivery"
+  type        = string
+  default     = "PriceClass_100"
+
+  validation {
+    condition = contains([
+      "PriceClass_All",
+      "PriceClass_200",
+      "PriceClass_100"
+    ], var.assets_cloudfront_price_class)
+    error_message = "assets_cloudfront_price_class must be one of PriceClass_All, PriceClass_200, PriceClass_100."
+  }
+}
+
 variable "rds_instance_identifier" {
   description = "RDS instance identifier"
   type        = string

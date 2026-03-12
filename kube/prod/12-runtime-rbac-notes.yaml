@@ -29,3 +29,11 @@ data:
        - palad-worker service account annotation eks.amazonaws.com/role-arn
     3) Re-apply prod manifests:
        make kube-apply-prod
+
+    CloudFront static asset host setup:
+    1) Read Terraform output:
+       terraform -chdir=terraform output cloudfront_static_assets_url
+    2) Set kube/prod/07-app-config.yaml:
+       - ASSET_HOST to that HTTPS URL
+    3) Re-apply prod manifests:
+       make kube-apply-prod
