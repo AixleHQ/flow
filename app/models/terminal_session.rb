@@ -79,7 +79,7 @@ class TerminalSession < ApplicationRecord
 
   def start_workflow!
     result = TemporalService.start_workflow(
-      WorkflowService.container_workflow,
+      TemporalWorkflowRegistry.container_workflow,
       { session_id: id, manifest: strategy.build_manifest },
       id: workflow_id,
       execution_timeout: WORKFLOW_TIMEOUT

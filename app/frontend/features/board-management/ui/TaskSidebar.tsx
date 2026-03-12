@@ -1,12 +1,34 @@
 import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import { Box, Button, Chip, Drawer, IconButton, Tab, Tabs, TextField, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Drawer,
+  IconButton,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
 
 import { TASK_TYPE_COLORS } from 'entities/board-task';
 
-import { useGetBoardQuery, useUpdateTaskMutation, useTriggerWorkflowMutation } from '../api/boardApi';
+import {
+  useDeleteTaskMutation,
+  useGetBoardQuery,
+  useUpdateTaskMutation,
+  useTriggerWorkflowMutation,
+} from '../api/boardApi';
 import { useBoardSidebarStore } from '../model/useBoardSidebarStore';
 
 import { ActivityTab } from './ActivityTab';
@@ -68,6 +90,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const { data } = useGetBoardQuery(projectId);
   const [triggerWorkflow, { isLoading: isTriggering }] = useTriggerWorkflowMutation();
   const [updateTask] = useUpdateTaskMutation();
+  const [deleteTask] = useDeleteTaskMutation();
 
   const task = data?.tasks.find((t) => t.id === activeTaskId);
   const column = data?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
@@ -76,6 +99,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (task) setTitleValue(task.title);
@@ -87,6 +111,13 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
       updateTask({ projectId, taskId: task.id, boardTask: { title: titleValue.trim() } });
     }
   }, [titleValue, task, projectId, updateTask]);
+
+  const handleDelete = useCallback(() => {
+    if (!task) return;
+    deleteTask({ projectId, taskId: task.id });
+    setDeleteDialogOpen(false);
+    close();
+  }, [task, projectId, deleteTask, close]);
 
   if (!isOpen || !task) return null;
 
@@ -136,6 +167,11 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
               Start Workflow
             </Button>
           )}
+          <Tooltip title="Delete task">
+            <IconButton onClick={() => setDeleteDialogOpen(true)} size="small" color="error">
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <IconButton onClick={close} size="small">
             <CloseIcon />
           </IconButton>
@@ -155,6 +191,21 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
         {activeTab === 'assets' && <AssetsTab taskId={task.id} projectId={projectId} />}
         {activeTab === 'activity' && <ActivityTab taskId={task.id} projectId={projectId} />}
       </Box>
+
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
+        <DialogTitle>Delete Task</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete &quot;{task.title}&quot;? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Drawer>
   );
 };

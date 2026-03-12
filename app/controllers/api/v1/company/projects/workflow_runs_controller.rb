@@ -100,7 +100,7 @@ module Api
           end
 
           def start_temporal_workflow(run)
-            WorkflowService.start_workflow_execution(run)
+            TemporalWorkflowRegistry.start_workflow_execution(run)
           rescue StandardError => e
             Rails.logger.error("Failed to start Temporal workflow for WorkflowRun##{run.id}: #{e.message}")
           end

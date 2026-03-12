@@ -26,7 +26,7 @@ class WorkflowAutoTriggerService
       mode: :non_interactive
     )
 
-    WorkflowService.start_workflow_execution(run)
+    TemporalWorkflowRegistry.start_workflow_execution(run)
   rescue StandardError => e
     Rails.logger.error("[WorkflowAutoTriggerService] #{e.message}")
   end

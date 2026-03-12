@@ -120,16 +120,43 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     assert_includes content, "backend, auth, urgent"
   end
 
-  test "content includes board MCP tools instruction" do
+  test "content includes all board tool names" do
     task = create(:board_task, board: @board, board_column: @column, title: "Any task")
     workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
     step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, "board_get_task"
-    assert_includes content, "board_add_comment"
-    assert_includes content, "board_move_task"
+    %w[board_get_board_info board_list_tasks board_get_task board_get_comments
+       board_get_task_assets board_add_comment board_update_task board_create_task
+       board_move_task board_attach_asset board_manage_tags].each do |tool|
+      assert_includes content, tool, "Expected content to include #{tool}"
+    end
+  end
+
+  test "content includes board columns with current marker" do
+    other_column = create(:board_column, name: "Done", board: @board, position: 2)
+    task = create(:board_task, board: @board, board_column: @column, title: "Columns task")
+    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
+    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
+
+    content = ContextBuilders::BoardContext.new(session).build.first.content
+    assert_includes content, "Board Columns"
+    assert_includes content, "In Progress"
+    assert_includes content, "← current"
+    assert_includes content, "Done"
+  end
+
+  test "no automatic task completion rule in context" do
+    create(:board_column, name: "QA", board: @board, position: 2)
+    task = create(:board_task, board: @board, board_column: @column, title: "Move task")
+    workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
+    step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
+
+    content = ContextBuilders::BoardContext.new(session).build.first.content
+    assert_not_includes content, "Task Completion Rule"
   end
 
   # -- Story 27.2: Recent Comments in Board Context --

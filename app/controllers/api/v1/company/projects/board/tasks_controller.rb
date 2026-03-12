@@ -98,7 +98,7 @@ module Api
                 mode: :non_interactive
               )
 
-              WorkflowService.start_workflow_execution(run)
+              TemporalWorkflowRegistry.start_workflow_execution(run)
 
               respond_with run
             end

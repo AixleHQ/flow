@@ -11,8 +11,8 @@ class BoardTask < ApplicationRecord
   has_many :task_comments, dependent: :destroy
   has_many :task_assets, dependent: :destroy
   has_many :workflow_runs
-  has_many :column_transitions
-  has_many :board_activities
+  has_many :column_transitions, dependent: :delete_all
+  has_many :board_activities, dependent: :delete_all
 
   enumerize :task_type, in: %i[epic story bug not_specified], default: :not_specified, predicates: true
   enumerize :priority, in: %i[low medium high critical]

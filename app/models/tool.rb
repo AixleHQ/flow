@@ -101,7 +101,7 @@ class Tool < ApplicationRecord
     workflow_id = "tool-exec-#{id}-#{SecureRandom.hex(8)}"
 
     TemporalService.start_workflow(
-      WorkflowService.container_workflow,
+      TemporalWorkflowRegistry.container_workflow,
       { tool_id: id, tool_result_id: tool_result_id,
         parameters: parameters, project_id: project&.id,
         timeout: timeout, manifest: strategy.build_manifest },

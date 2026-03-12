@@ -23,6 +23,7 @@ module ContextBuilders
       task = board_task
       board = task.board
       column = task.board_column
+      columns = board.board_columns.order(:position)
 
       lines = []
       lines << "## Board Task Context"
@@ -36,6 +37,13 @@ module ContextBuilders
       lines << "- **Description:** #{task.description.truncate(500)}" if task.description.present?
       lines << "- **Tags:** #{task.tags.join(', ')}" if task.tags.present?
 
+      lines << ""
+      lines << "### Board Columns"
+      columns.each do |col|
+        marker = col.id == column&.id ? " ← current" : ""
+        lines << "- #{col.position}. **#{col.name}**#{marker}"
+      end
+
       comments = task.task_comments.recent.includes(:author).limit(5)
       if comments.any?
         lines << ""
@@ -47,7 +55,20 @@ module ContextBuilders
       end
 
       lines << ""
-      lines << "Use board MCP tools (`board_get_task`, `board_add_comment`, `board_move_task`) to interact with the board."
+      lines << "### Board Tools"
+      lines << ""
+      lines << "- **board_get_board_info** — get board details with all columns"
+      lines << "- **board_list_tasks** — list tasks on the board (filter by column_name, status)"
+      lines << "- **board_get_task** — get full task details by task_id"
+      lines << "- **board_get_comments** — get comments for a task"
+      lines << "- **board_get_task_assets** — get assets attached to a task"
+      lines << "- **board_add_comment** — add a comment to a task"
+      lines << "- **board_update_task** — update task fields (title, description, priority, etc)"
+      lines << "- **board_create_task** — create a new task on the board"
+      lines << "- **board_move_task** — move a task to a different column by column_name"
+      lines << "- **board_attach_asset** — attach a file to a task (use file_path for screenshots, file_content for small text)"
+      lines << "- **board_manage_tags** — add/remove tags on a task"
+
       lines.join("\n")
     end
   end

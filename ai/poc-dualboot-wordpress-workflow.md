@@ -102,11 +102,12 @@ Columns:
   2. Discovery         — Agent explores WP site, produces site overview document
   3. Tech Design       — Agent writes technical design based on task + discovery
   4. Ready for Dev     — Human reviews tech design, approves for implementation
-  5. In Dev            — Agent makes changes via WordPress MCP
-  6. QA                — Agent takes screenshots via Playwright, produces QA report
-  7. Review            — Human reviews changes + screenshots, approves or rejects
-  8. Ready for Release — Approved, waiting for deploy
-  9. Released          — Agent publishes changes to production
+  5. In Dev            — Agent makes changes via WordPress MCP (creates drafts + preview links)
+  6. QA                — Agent tests via Public Post Preview links, takes screenshots, produces QA report
+  7. UAT               — Human reviews changes + screenshots, approves or rejects
+  8. Deploy            — Agent publishes approved changes to the live site
+  9. Revert            — Agent rolls back changes (deletes drafts or restores backup)
+  10. Released         — Done. Task completed and changes live on production.
 ```
 
 ### 3.2 Column Purpose Descriptions
@@ -117,10 +118,11 @@ Columns:
 | Discovery | **AUTO workflow.** Read task description. Use WordPress MCP to explore current site state: pages, posts, themes, styles, plugins, menus. Produce a site discovery document as task asset. |
 | Tech Design | **AUTO workflow.** Read task + discovery document. Plan specific changes: which pages/templates/CSS/plugins to modify. Produce tech design document as task asset. |
 | Ready for Dev | Human reviews tech design. If approved, moves to In Dev. If rejected, adds comment and moves back. |
-| In Dev | **AUTO workflow.** Read task + tech design. Execute changes via WordPress MCP: update pages, CSS, settings, media. Produce change log as task asset. |
-| QA | **AUTO workflow.** Read task + change log. Navigate site with Playwright MCP, take before/after screenshots. Produce QA report with screenshots as task assets. |
-| Review | Human reviews: change log + screenshots + QA report. Can move to Ready for Release or back to any column with a comment. |
-| Ready for Release | **AUTO workflow.** Publish/activate changes if they were on staging. Mark task as released. Move to Released. |
+| In Dev | **AUTO workflow.** Read task + tech design. Execute changes via WordPress MCP as drafts. Generate Public Post Preview links. Post preview links in task comments. |
+| QA | **AUTO workflow.** Test ONLY via Public Post Preview links. Take screenshots at multiple viewports. Attach screenshots to task. Produce QA report. Move to UAT on PASS, back to In Dev on FAIL. |
+| UAT | Human reviews: QA report + screenshots + preview links. Can move to Deploy or back to any column with a comment. |
+| Deploy | **AUTO workflow.** Backup original content, publish changes from drafts/clones to live pages, delete clones, disable previews. Move to Released. |
+| Revert | **AUTO workflow.** If not deployed: delete drafts. If deployed: restore from backup comment. Move to Backlog. |
 | Released | Done. Task completed and changes live on production. |
 
 ### 3.3 Column Workflow Bindings
@@ -133,9 +135,10 @@ Columns:
 | Ready for Dev | — | No workflow (human gate) |
 | In Dev | **auto** | WP: Implementation |
 | QA | **auto** | WP: QA Check |
-| Review | — | No workflow (human gate) |
-| Ready for Release | **auto** | WP: Release |
-| Released | — | No workflow |
+| UAT | — | No workflow (human gate) |
+| Deploy | **auto** | WP: Deploy |
+| Revert | **auto** | WP: Revert |
+j,f| Released | — | No workflow |
 
 ---
 
@@ -150,7 +153,7 @@ scope: Project (dualbootpartners.com)
 persona: |
   You are an experienced WordPress developer specializing in theme customization,
   plugin configuration, content management, and site optimization.
-  
+
   You have deep knowledge of:
   - WordPress REST API and its capabilities
   - Theme structure (header, footer, templates, child themes)
@@ -158,15 +161,15 @@ persona: |
   - WordPress block editor (Gutenberg) and classic editor
   - Plugin ecosystem and configuration
   - WordPress best practices for performance and SEO
-  
+
   You work methodically: first understand the current state, then plan changes,
   then implement carefully with rollback awareness.
-  
+
 communication_style: |
   Professional and methodical. Always document what you're doing and why.
   When making changes, explain what existed before and what you're changing.
   Use structured formats (markdown) for reports and documents.
-  
+
 principles: |
   - Never make destructive changes without documenting the original state first
   - Always produce clear documentation of what was changed
@@ -185,7 +188,7 @@ persona: |
   You are a QA engineer specializing in web application testing.
   You verify visual and functional changes on WordPress sites
   by navigating pages, taking screenshots, and comparing with requirements.
-  
+
   You focus on:
   - Visual regression: does the change look correct?
   - Responsive design: check desktop, tablet, mobile viewports
@@ -440,9 +443,9 @@ Call `finish_session`.
 
 ---
 
-### 5.5 WP: Release
+### 5.5 WP: Deploy
 
-**Trigger:** Task enters "Ready for Release" column (auto)
+**Trigger:** Task enters "Deploy" column (auto)
 **Agent:** wp_developer
 **Mode:** non_interactive
 
@@ -451,38 +454,106 @@ Call `finish_session`.
 **Step 1: Publish Changes**
 
 Sub-steps:
-1. Read task and verify all assets present
-2. Activate/publish any draft changes
-3. Clear caches if applicable
-4. Verify live site
-5. Move task to Released
+1. Read task and all comments — find change log, preview links, clone/original IDs, QA PASS confirmation
+2. Verify QA passed — if not, fail_session
+3. **Backup original content** (Scenario B only) — save full content to task comment as "BACKUP BEFORE DEPLOY"
+4. Deploy based on scenario:
+   - **Scenario A (new page draft):** publish the draft
+   - **Scenario B (clone of existing page):** copy clone content to original, copy Elementor data if needed, delete clone
+5. Disable all public previews
+6. Verify published content
+7. Document deploy in task comment
+8. Move task to "Released"
 
 Instructions:
 ```markdown
-You are releasing approved WordPress changes to production.
-
-## Context
-This task has been reviewed and approved. Check task assets for the complete history:
-discovery → tech design → change log → QA report.
+You are deploying approved WordPress changes to the live site.
 
 ## Process
-1. **Verify readiness** — Read task and all its comments. Ensure there's an approval (no blocking comments).
-2. **Publish changes** — If changes were saved as drafts or in staging:
-   - Publish draft pages/posts
-   - Activate theme changes
-   - Enable any configuration that was staged
-3. **Cache management** — If the site uses caching plugins, clear relevant caches via WordPress MCP.
-4. **Verification** — Read back the published content to confirm changes are live.
-5. **Move task** — Use `board_move_task` to move to "Released" column.
+1. **Read task and comments** — Use board_get_task. Find:
+   - Change log, preview links, clone/original page IDs, QA PASS confirmation
 
-## Output
-Create `release-notes.md` in `/workspace/outputs/` with:
-- What was released
-- When (timestamp)
-- Verification status
+2. **Verify QA passed** — If no PASS, call fail_session.
 
-Add a final comment to the task: "Released to production ✓"
-Call `finish_session`.
+3. **Deploy based on scenario:**
+
+   **Scenario A: New page (draft)**
+   - Publish: `palad/update-post(post_id: draft_id, status: "publish")`
+
+   **Scenario B: Clone of existing page**
+   - Read original BEFORE overwriting and save as "BACKUP BEFORE DEPLOY" comment
+   - Copy clone content to original
+   - If Elementor: backup original data, then apply clone data
+   - Delete clone: `palad/delete-post(post_id: clone_id, force: true)`
+
+4. **Disable previews** — `palad/disable-public-preview` for all drafts
+5. **Verify** — Read published page, confirm content matches
+6. **Document** — Add comment with deploy summary and live URL
+
+## After Completion
+Move the task to **Released**:
+```
+board_move_task(task_id: <task_id>, column_name: "Released")
+```
+Then call finish_session.
+If deploy failed, leave a comment and do NOT move the task.
+```
+
+---
+
+### 5.6 WP: Revert
+
+**Trigger:** Task enters "Revert" column (auto)
+**Agent:** wp_developer
+**Mode:** non_interactive
+
+#### Steps:
+
+**Step 1: Revert Changes**
+
+Sub-steps:
+1. Read task and all comments — determine if changes were deployed or still in draft
+2. Determine revert scenario (A or B)
+3. Execute revert
+4. Clean up drafts, clones, previews
+5. Verify page state
+6. Document revert in task comment
+7. Move task to "Backlog"
+
+Instructions:
+```markdown
+You are reverting WordPress changes for a task.
+
+## Process
+1. **Read task and comments** — Determine:
+   - Were changes deployed or still in draft?
+   - Find draft/clone IDs, original page ID
+   - Look for "BACKUP BEFORE DEPLOY" comment
+
+2. **Determine revert scenario:**
+
+   **Scenario A: Changes are still in draft (NOT deployed yet)**
+   The original page was never touched.
+   - Delete draft/clone: `palad/delete-post(post_id: draft_id, force: true)`
+   - Disable preview: `palad/disable-public-preview(post_id: draft_id)`
+   - Done.
+
+   **Scenario B: Changes were deployed (live page was updated)**
+   - Find "BACKUP BEFORE DEPLOY" comment
+   - If backup exists: restore content from backup
+   - If NO backup: fail_session with "Cannot auto-revert — no backup found"
+
+3. **Clean up** — Delete remaining drafts/clones, disable all previews
+4. **Verify** — Read affected page, confirm correct state
+5. **Document** — Add comment with revert summary
+
+## After Completion
+Move the task to **Backlog**:
+```
+board_move_task(task_id: <task_id>, column_name: "Backlog")
+```
+Then call finish_session.
+If revert failed, leave a comment and do NOT move the task.
 ```
 
 ---
@@ -592,8 +663,8 @@ Options:
 4. Human reviews tech design, moves to In Dev
 5. Agent updates page content via WordPress MCP
 6. Auto-moves to QA → Agent screenshots About page at 3 viewports
-7. Human reviews screenshots, moves to Ready for Release
-8. Agent publishes (if draft) or confirms live
+7. Human reviews screenshots in UAT, moves to Deploy
+8. Deploy workflow: backs up original, publishes changes, moves to Released
 
 ### 8.2 Scenario 2: "Add new team member to the Team page" (Medium)
 

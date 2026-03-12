@@ -132,7 +132,7 @@ class TemporalService
     end
 
     def create_schedule(schedule_def)
-      workflow = WorkflowService.workflows[schedule_def.workflow]
+      workflow = TemporalWorkflowRegistry.workflows[schedule_def.workflow]
       id = "#{workflow.name}-#{DateTime.now.to_fs(:db)}"
 
       with_test_environment_handling do |cl|
@@ -161,7 +161,7 @@ class TemporalService
     end
 
     def delete_schedule(schedule_def)
-      workflow = WorkflowService.workflows[schedule_def.workflow]
+      workflow = TemporalWorkflowRegistry.workflows[schedule_def.workflow]
       with_test_environment_handling do |cl|
         cl.schedule_handle(workflow.name).delete
       end

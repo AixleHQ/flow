@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Workflow service to manage workflows and activities
-class WorkflowService
+# Registry for Temporal workflow and activity definitions loaded from workflows.yml
+class TemporalWorkflowRegistry
   # Activity definition
   class ActivityDef
     attr_reader :name, :task_queue

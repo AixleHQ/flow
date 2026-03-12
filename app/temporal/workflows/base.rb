@@ -32,7 +32,7 @@ class Workflows::Base < Temporalio::Workflow::Definition
   private
 
   def activities
-    @activities ||= WorkflowService.send(name).activities
+    @activities ||= TemporalWorkflowRegistry.send(name).activities
   end
 
   def extract_error_message(activity_error)

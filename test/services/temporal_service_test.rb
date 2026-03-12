@@ -273,7 +273,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     schedule_def = OpenStruct.new(workflow: "agent_container_workflow", cron: "0 * * * *", enabled: true)
     workflow = OpenStruct.new(name: "AgentContainerWorkflow", owner: "web")
 
-    WorkflowService.stubs(:workflows).returns({ "agent_container_workflow" => workflow })
+    TemporalWorkflowRegistry.stubs(:workflows).returns({ "agent_container_workflow" => workflow })
 
     mock_client = mock("client")
     mock_client.expects(:create_schedule).with("AgentContainerWorkflow", anything)
@@ -289,7 +289,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     schedule_def = OpenStruct.new(workflow: "test", cron: "0 * * * *", enabled: false)
     workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 
-    WorkflowService.stubs(:workflows).returns({ "test" => workflow })
+    TemporalWorkflowRegistry.stubs(:workflows).returns({ "test" => workflow })
 
     mock_client = mock("client")
     mock_client.expects(:create_schedule).never
@@ -326,7 +326,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     schedule_def = OpenStruct.new(workflow: "test")
     workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 
-    WorkflowService.stubs(:workflows).returns({ "test" => workflow })
+    TemporalWorkflowRegistry.stubs(:workflows).returns({ "test" => workflow })
 
     mock_handle = mock("handle")
     mock_handle.expects(:delete)
@@ -345,7 +345,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     schedule_def = OpenStruct.new(workflow: "test")
     workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 
-    WorkflowService.stubs(:workflows).returns({ "test" => workflow })
+    TemporalWorkflowRegistry.stubs(:workflows).returns({ "test" => workflow })
 
     mock_handle = mock("handle")
     mock_handle.expects(:delete)

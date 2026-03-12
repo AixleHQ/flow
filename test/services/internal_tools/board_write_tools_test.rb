@@ -164,6 +164,62 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal "qa-report.md", data["name"]
   end
 
+  test "board_attach_asset creates asset from file_path in container" do
+    @session.update!(container_id: "test-container-123")
+
+    runtime = mock("runtime")
+    runtime.expects(:read_file).with("test-container-123", "/workspace/outputs/screenshot.png")
+      .returns("fake-png-binary-content")
+    ContainerRuntime.stubs(:build).returns(runtime)
+
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, file_path: "/workspace/outputs/screenshot.png", name: "qa-desktop.png", tags: ["qa", "desktop"] },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal "qa-desktop.png", data["name"]
+  end
+
+  test "board_attach_asset returns error when file not found in container" do
+    @session.update!(container_id: "test-container-123")
+
+    runtime = mock("runtime")
+    runtime.expects(:read_file).returns(nil)
+    ContainerRuntime.stubs(:build).returns(runtime)
+
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, file_path: "/workspace/outputs/missing.png", name: "missing.png" },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/File not found/, result[:stderr])
+  end
+
+  test "board_attach_asset returns error when no container and file_path used" do
+    @session.update!(container_id: nil)
+
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, file_path: "/workspace/outputs/screenshot.png", name: "screenshot.png" },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/No container/, result[:stderr])
+  end
+
+  test "board_attach_asset returns error when neither file_path nor file_content" do
+    result = InternalTools::BoardAttachAsset.new(
+      params: { task_id: @task.id, name: "nothing.png" },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/file_path or file_content/, result[:stderr])
+  end
+
   # === board_manage_tags ===
 
   test "board_manage_tags adds tag to task" do

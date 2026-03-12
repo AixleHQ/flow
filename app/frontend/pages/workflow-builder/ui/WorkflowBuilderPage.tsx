@@ -35,7 +35,7 @@ import { useSnackbar } from 'notistack';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
-import { useGetMcpServersQuery } from 'entities/mcp-server';
+import { useGetMcpServersQuery, useGetProjectMcpServersQuery } from 'entities/mcp-server';
 import type { McpServer } from 'entities/mcp-server';
 import { AVAILABLE_AGENTS, getAgentInfo, type AgentType } from 'entities/user';
 import { useGetCompanyAgentsQuery, type Agent } from 'features/agents-management';
@@ -254,7 +254,15 @@ const WorkflowBuilderPage = () => {
   // Fetch agents, tools, mcp servers, skills
   const { data: agents = [] } = useGetCompanyAgentsQuery();
   const { data: tools = [] } = useGetCompanyToolsQuery();
-  const { data: mcpServers = [] } = useGetMcpServersQuery();
+  const { data: companyMcpServers = [] } = useGetMcpServersQuery();
+  const effectiveProjectId = projectId ?? (routeProjectId ? Number(routeProjectId) : undefined);
+  const { data: projectMcpServers = [] } = useGetProjectMcpServersQuery(effectiveProjectId!, {
+    skip: !effectiveProjectId,
+  });
+  const mcpServers = useMemo(() => {
+    if (!effectiveProjectId) return companyMcpServers;
+    return projectMcpServers;
+  }, [effectiveProjectId, companyMcpServers, projectMcpServers]);
   const { data: skills = [] } = useGetCompanySkillsQuery();
 
   // Mutations

@@ -2,11 +2,11 @@
 
 require "test_helper"
 
-class WorkflowServiceTest < ActiveSupport::TestCase
+class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
   # == ActivityDef Tests ==
 
   test "ActivityDef stores name and task_queue" do
-    activity = WorkflowService::ActivityDef.new(name: "my_activity", task_queue: "my-queue")
+    activity = TemporalWorkflowRegistry::ActivityDef.new(name: "my_activity", task_queue: "my-queue")
 
     assert_equal "my_activity", activity.name
     assert_equal "my-queue", activity.task_queue
@@ -20,14 +20,14 @@ class WorkflowServiceTest < ActiveSupport::TestCase
       { "name" => "execute_agent_container_activity", "task_queue" => "container-queue" }
     ]
 
-    collection = WorkflowService::ActivitiesCollection.new(activities_data)
+    collection = TemporalWorkflowRegistry::ActivitiesCollection.new(activities_data)
 
-    assert collection.pull_agent_image_activity.is_a?(WorkflowService::ActivityDef)
+    assert collection.pull_agent_image_activity.is_a?(TemporalWorkflowRegistry::ActivityDef)
     assert_equal "container-queue", collection.pull_agent_image_activity.task_queue
   end
 
   test "ActivitiesCollection returns nil for unknown activity" do
-    collection = WorkflowService::ActivitiesCollection.new([])
+    collection = TemporalWorkflowRegistry::ActivitiesCollection.new([])
 
     assert_raises(NoMethodError) do
       collection.nonexistent_activity
@@ -36,7 +36,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   test "ActivitiesCollection responds to defined activities" do
     activities_data = [ { "name" => "my_activity", "task_queue" => "queue" } ]
-    collection = WorkflowService::ActivitiesCollection.new(activities_data)
+    collection = TemporalWorkflowRegistry::ActivitiesCollection.new(activities_data)
 
     assert collection.respond_to?(:my_activity)
     refute collection.respond_to?(:unknown_activity)
@@ -44,7 +44,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   test "ActivitiesCollection to_h returns activities hash" do
     activities_data = [ { "name" => "my_activity", "task_queue" => "queue" } ]
-    collection = WorkflowService::ActivitiesCollection.new(activities_data)
+    collection = TemporalWorkflowRegistry::ActivitiesCollection.new(activities_data)
 
     hash = collection.to_h
 
@@ -55,7 +55,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # == WorkflowDef Tests ==
 
   test "WorkflowDef stores name, owner and activities" do
-    workflow = WorkflowService::WorkflowDef.new(
+    workflow = TemporalWorkflowRegistry::WorkflowDef.new(
       name: "AgentContainerWorkflow",
       owner: "web",
       activities: [ { "name" => "test_activity", "task_queue" => "queue" } ]
@@ -63,7 +63,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
     assert_equal "AgentContainerWorkflow", workflow.name
     assert_equal "web", workflow.owner
-    assert workflow.activities.is_a?(WorkflowService::ActivitiesCollection)
+    assert workflow.activities.is_a?(TemporalWorkflowRegistry::ActivitiesCollection)
   end
 
   # == WorkflowsCollection Tests ==
@@ -77,17 +77,17 @@ class WorkflowServiceTest < ActiveSupport::TestCase
       }
     ]
 
-    collection = WorkflowService::WorkflowsCollection.new(workflows_data)
+    collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
-    assert collection.container_workflow.is_a?(WorkflowService::WorkflowDef)
+    assert collection.container_workflow.is_a?(TemporalWorkflowRegistry::WorkflowDef)
     assert_equal "web", collection.container_workflow.owner
   end
 
   test "WorkflowsCollection bracket access works" do
     workflows_data = [ { "name" => "test_workflow", "owner" => "queue", "activities" => [] } ]
-    collection = WorkflowService::WorkflowsCollection.new(workflows_data)
+    collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
-    assert collection["test_workflow"].is_a?(WorkflowService::WorkflowDef)
+    assert collection["test_workflow"].is_a?(TemporalWorkflowRegistry::WorkflowDef)
   end
 
   test "WorkflowsCollection all returns all workflows" do
@@ -95,12 +95,12 @@ class WorkflowServiceTest < ActiveSupport::TestCase
       { "name" => "workflow_1", "owner" => "queue", "activities" => [] },
       { "name" => "workflow_2", "owner" => "queue", "activities" => [] }
     ]
-    collection = WorkflowService::WorkflowsCollection.new(workflows_data)
+    collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
     all = collection.all
 
     assert_equal 2, all.size
-    assert all.all? { |w| w.is_a?(WorkflowService::WorkflowDef) }
+    assert all.all? { |w| w.is_a?(TemporalWorkflowRegistry::WorkflowDef) }
   end
 
   test "WorkflowsCollection names returns workflow names" do
@@ -108,7 +108,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
       { "name" => "workflow_a", "owner" => "queue", "activities" => [] },
       { "name" => "workflow_b", "owner" => "queue", "activities" => [] }
     ]
-    collection = WorkflowService::WorkflowsCollection.new(workflows_data)
+    collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
     names = collection.names
 
@@ -118,7 +118,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   test "WorkflowsCollection responds to defined workflows" do
     workflows_data = [ { "name" => "my_workflow", "owner" => "queue", "activities" => [] } ]
-    collection = WorkflowService::WorkflowsCollection.new(workflows_data)
+    collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
     assert collection.respond_to?(:my_workflow)
     refute collection.respond_to?(:unknown_workflow)
@@ -127,24 +127,24 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # == Class Methods Tests ==
 
   test "workflows returns WorkflowsCollection" do
-    workflows = WorkflowService.workflows
+    workflows = TemporalWorkflowRegistry.workflows
 
-    assert workflows.is_a?(WorkflowService::WorkflowsCollection)
+    assert workflows.is_a?(TemporalWorkflowRegistry::WorkflowsCollection)
   end
 
   test "workflows_data loads from YAML" do
-    data = WorkflowService.workflows_data
+    data = TemporalWorkflowRegistry.workflows_data
 
     assert data.is_a?(Hash)
     assert data.key?("workflows")
   end
 
   test "method_missing delegates to workflows" do
-    WorkflowService.instance_variable_set(:@workflows, nil)
-    WorkflowService.instance_variable_set(:@workflows_data, nil)
+    TemporalWorkflowRegistry.instance_variable_set(:@workflows, nil)
+    TemporalWorkflowRegistry.instance_variable_set(:@workflows_data, nil)
 
-    workflow = WorkflowService.container_workflow
+    workflow = TemporalWorkflowRegistry.container_workflow
 
-    assert workflow.is_a?(WorkflowService::WorkflowDef)
+    assert workflow.is_a?(TemporalWorkflowRegistry::WorkflowDef)
   end
 end
