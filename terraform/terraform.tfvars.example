@@ -45,7 +45,7 @@ eks_node_ami_type       = "AL2023_x86_64_STANDARD"
 eks_node_capacity_type  = "ON_DEMAND"
 eks_node_min_size       = 2
 eks_node_desired_size   = 2
-eks_node_max_size       = 4
+eks_node_max_size       = 8
 
 # Managed data services (production)
 create_managed_data_services = true
