@@ -30,6 +30,17 @@ data:
     3) Re-apply prod manifests:
        make kube-apply-prod
 
+    EKS node autoscaling setup (Cluster Autoscaler):
+    1) Read Terraform output:
+       terraform -chdir=terraform output eks_cluster_autoscaler_irsa_role_arn
+    2) Set that ARN in kube/prod/14-cluster-autoscaler.yaml for:
+       - cluster-autoscaler service account annotation eks.amazonaws.com/role-arn
+    3) If your EKS cluster name is not palad-eks, update:
+       - --node-group-auto-discovery=.../k8s.io/cluster-autoscaler/<cluster-name>
+         in kube/prod/14-cluster-autoscaler.yaml
+    4) Re-apply prod manifests:
+       make kube-apply-prod
+
     CloudFront static asset host setup:
     1) Read Terraform output:
        terraform -chdir=terraform output cloudfront_static_assets_url

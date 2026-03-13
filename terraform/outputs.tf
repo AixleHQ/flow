@@ -130,6 +130,11 @@ output "eks_traefik_dns_irsa_role_arn" {
   value       = try(aws_iam_role.eks_traefik_dns[0].arn, null)
 }
 
+output "eks_cluster_autoscaler_irsa_role_arn" {
+  description = "IAM role ARN for Cluster Autoscaler IRSA access"
+  value       = try(aws_iam_role.eks_cluster_autoscaler[0].arn, null)
+}
+
 output "eks_node_group_name" {
   description = "Managed node group name"
   value       = try(aws_eks_node_group.main[0].node_group_name, null)

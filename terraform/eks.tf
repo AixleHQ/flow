@@ -273,7 +273,9 @@ resource "aws_eks_node_group" "main" {
   }
 
   tags = merge(local.eks_common_tags, {
-    Name = "${var.eks_cluster_name}-${var.eks_node_group_name}"
+    Name                                                = "${var.eks_cluster_name}-${var.eks_node_group_name}"
+    "k8s.io/cluster-autoscaler/enabled"                 = "true"
+    "k8s.io/cluster-autoscaler/${var.eks_cluster_name}" = "owned"
   })
 
   lifecycle {
@@ -307,6 +309,113 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = merge(local.eks_common_tags, {
     Name = "${var.eks_cluster_name}-oidc"
   })
+}
+
+data "aws_iam_policy_document" "eks_cluster_autoscaler_irsa_assume_role" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    principals {
+      type = "Federated"
+      identifiers = [
+        aws_iam_openid_connect_provider.eks[0].arn
+      ]
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "sts.amazonaws.com"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:aud"
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "system:serviceaccount:kube-system:cluster-autoscaler"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:sub"
+    }
+  }
+}
+
+resource "aws_iam_role" "eks_cluster_autoscaler" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-cluster-autoscaler-role"
+  assume_role_policy = data.aws_iam_policy_document.eks_cluster_autoscaler_irsa_assume_role[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-cluster-autoscaler-role"
+  })
+}
+
+data "aws_iam_policy_document" "eks_cluster_autoscaler" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    sid    = "AllowAutoscalerRead"
+    effect = "Allow"
+    actions = [
+      "autoscaling:DescribeAutoScalingGroups",
+      "autoscaling:DescribeAutoScalingInstances",
+      "autoscaling:DescribeLaunchConfigurations",
+      "autoscaling:DescribeScalingActivities",
+      "autoscaling:DescribeTags",
+      "ec2:DescribeImages",
+      "ec2:DescribeInstanceTypes",
+      "ec2:DescribeLaunchTemplateVersions",
+      "ec2:GetInstanceTypesFromInstanceRequirements",
+      "eks:DescribeNodegroup"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowAutoscalerScaleNodeGroups"
+    effect = "Allow"
+    actions = [
+      "autoscaling:SetDesiredCapacity",
+      "autoscaling:TerminateInstanceInAutoScalingGroup"
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/enabled"
+      values   = ["true"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "autoscaling:ResourceTag/k8s.io/cluster-autoscaler/${var.eks_cluster_name}"
+      values   = ["owned"]
+    }
+  }
+}
+
+resource "aws_iam_policy" "eks_cluster_autoscaler" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name   = "${var.eks_cluster_name}-cluster-autoscaler-policy"
+  policy = data.aws_iam_policy_document.eks_cluster_autoscaler[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-cluster-autoscaler-policy"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "eks_cluster_autoscaler" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  role       = aws_iam_role.eks_cluster_autoscaler[0].name
+  policy_arn = aws_iam_policy.eks_cluster_autoscaler[0].arn
 }
 
 data "aws_iam_policy_document" "eks_ebs_csi_irsa_assume_role" {
