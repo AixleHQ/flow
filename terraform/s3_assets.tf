@@ -68,7 +68,7 @@ resource "aws_s3_bucket_cors_configuration" "assets" {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "POST", "PUT", "DELETE", "HEAD"]
     allowed_origins = var.assets_bucket_cors_allowed_origins
-    expose_headers  = ["ETag"]
+    expose_headers  = ["ETag", "Location"]
     max_age_seconds = 3000
   }
 }
