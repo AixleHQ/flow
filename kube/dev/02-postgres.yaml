@@ -48,7 +48,6 @@ metadata:
   name: postgres-data
   namespace: palad-dev
 spec:
-  storageClassName: gp2
   accessModes:
     - ReadWriteOnce
   resources:

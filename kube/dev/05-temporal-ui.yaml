@@ -51,7 +51,7 @@ metadata:
   namespace: palad-dev
 spec:
   entryPoints:
-    - adminwebsecure
+    - web
   routes:
     - match: Host(`temporal.palad.ai`)
       kind: Rule
@@ -60,12 +60,3 @@ spec:
       services:
         - name: temporal-ui
           port: 8080
-
-  tls:
-    certResolver: letsencrypt
-    domains:
-      - main: palad.ai
-        sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai

@@ -157,7 +157,7 @@ restore-qa-db: dump-qa fetch-qa-dump restore-dump
 restore-prod-db: dump-prod fetch-prod-dump restore-dump
 
 build-web:
-	docker build -f web/Dockerfile -t web .
+	docker build -f Dockerfile -t web .
 
 build-otlp-ingest:
 	docker build -f docker/otlp-ingest/Dockerfile -t otlp-ingest docker/otlp-ingest

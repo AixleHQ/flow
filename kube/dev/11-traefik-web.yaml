@@ -5,18 +5,10 @@ metadata:
   namespace: palad-dev
 spec:
   entryPoints:
-    - websecure
+    - web
   routes:
     - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
           port: 4000
-  tls:
-    certResolver: letsencrypt
-    domains:
-      - main: palad.ai
-        sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai

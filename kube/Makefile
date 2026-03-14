@@ -21,6 +21,7 @@ ARC_CONTROLLER_NAMESPACE ?= arc-system
 ARC_RUNNER_INSTALLATION_NAME ?= palad-deploy-runner
 ARC_RUNNER_NAMESPACE ?= arc-runners
 ARC_RUNNER_VALUES_FILE ?= ./kube/arc/values-runner-scale-set.yaml
+KUBE_SETUP_WITH_ARC ?= false
 
 kube-help:
 	@echo "Kubernetes commands:"
@@ -77,13 +78,17 @@ kube-setup:
 	@make build-agents
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)/00-namespace.yaml
-	@make kube-arc-install
+	@if [ "$(KUBE_SETUP_WITH_ARC)" = "true" ]; then \
+		$(MAKE) kube-arc-install; \
+	else \
+		echo "Skipping ARC install for local dev (set KUBE_SETUP_WITH_ARC=true to enable)"; \
+	fi
 	$(KUBECTL) apply -f $(KUBE_DEV_SECRETS_DIR)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)
 	$(KUBECTL) wait --for=condition=ready pod -l app=db -n $(KUBE_DEV_NAMESPACE) --timeout=120s
-	$(KUBECTL) wait --for=condition=ready pod -l app=web -n $(KUBE_DEV_NAMESPACE) --timeout=120s
 	$(KUBECTL) exec -n $(KUBE_DEV_NAMESPACE) deployment/web -- make db-prepare
-	@make kube-mount-dev
+	$(KUBECTL) wait --for=condition=ready pod -l app=web -n $(KUBE_DEV_NAMESPACE) --timeout=120s
+	@$(MAKE) kube-mount-dev
 
 # Production Kubernetes setup: CRDs + secrets + production manifests
 kube-setup-prod:
