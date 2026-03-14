@@ -349,7 +349,8 @@ module ContainerRuntime
           tls: {},
           routes: [
             build_route(handle, "tty", 7681, [ traefik_auth_middleware, "#{handle.pod_name}-tty-strip" ]),
-            build_route(handle, "fs", 4040, [ traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ])
+            build_route(handle, "fs", 4040, [ traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ]),
+            build_route(handle, "ide", 8443, [ traefik_auth_middleware ])
           ]
         }
       )

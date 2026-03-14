@@ -211,6 +211,47 @@ module ContainerRuntime
       assert_equal handle, result
     end
 
+    test "create_ingressroute includes ide path with auth middleware only" do
+      handle = OpenStruct.new(
+        pod_name: "my-pod",
+        namespace: "default",
+        ingress_name: "my-pod-ingress",
+        service_name: "my-pod",
+        route_token: "abc123"
+      )
+
+      @runtime.stubs(:traefik_entrypoint).returns("websecure")
+      @runtime.stubs(:traefik_auth_middleware).returns("terminal-auth")
+
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:create_entity).with do |kind, resource_type, ingress|
+        spec = ingress.spec.respond_to?(:to_h) ? ingress.spec.to_h : ingress.spec
+        routes = spec[:routes] || spec["routes"] || []
+        ide_route = routes.find do |route|
+          route_hash = route.respond_to?(:to_h) ? route.to_h : route
+          match = route_hash[:match] || route_hash["match"]
+          match.to_s.include?("/t/abc123/ide")
+        end
+        ide_route_hash = ide_route.respond_to?(:to_h) ? ide_route.to_h : ide_route
+        middlewares = ide_route_hash && (ide_route_hash[:middlewares] || ide_route_hash["middlewares"])
+        services = ide_route_hash && (ide_route_hash[:services] || ide_route_hash["services"])
+        normalized_middlewares = Array(middlewares).map { |mw| mw.respond_to?(:to_h) ? mw.to_h : mw }
+        normalized_services = Array(services).map { |svc| svc.respond_to?(:to_h) ? svc.to_h : svc }
+
+        kind == "IngressRoute" &&
+          resource_type == "ingressroutes" &&
+          ingress.kind == "IngressRoute" &&
+          routes.size == 3 &&
+          ide_route.present? &&
+          normalized_middlewares == [ { name: "terminal-auth" } ] &&
+          normalized_services == [ { name: "my-pod", port: 8443 } ]
+      end.returns(true)
+
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      @runtime.send(:create_ingressroute, handle)
+    end
+
     test "build_route includes host matcher from settings domain" do
       Settings.stubs(:domain).returns("palad.ai")
       handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
