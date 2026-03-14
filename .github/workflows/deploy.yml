@@ -421,7 +421,8 @@ jobs:
 
       - name: Upload to Sentry
         run: |
-          npx @sentry/cli releases new "${{ github.sha }}"
-          npx @sentry/cli releases files "${{ github.sha }}" upload-sourcemaps ./sourcemaps/ --url-prefix "~/vite/"
-          npx @sentry/cli releases finalize "${{ github.sha }}"
-          npx @sentry/cli releases deploys "${{ github.sha }}" new -e production
+          VERSION="${{ github.sha }}"
+          npx @sentry/cli releases new "$VERSION"
+          npx @sentry/cli sourcemaps upload --release="$VERSION" ./sourcemaps/
+          npx @sentry/cli releases finalize "$VERSION"
+          npx @sentry/cli releases deploys "$VERSION" new -e production
