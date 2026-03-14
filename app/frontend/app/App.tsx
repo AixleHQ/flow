@@ -1,4 +1,5 @@
-import { LinearProgress } from '@mui/material';
+import { Box, LinearProgress, Typography } from '@mui/material';
+import * as Sentry from '@sentry/react';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { SnackbarProvider } from 'notistack';
 import React from 'react';
@@ -23,8 +24,27 @@ const router = createRouter({
   defaultPendingMinMs: 1000,
 });
 
-function App() {
-  return (
+const SentryFallback: Sentry.FallbackRender = ({ error, resetError }) => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100vh',
+      gap: '16px',
+    }}
+  >
+    <Typography variant="h5">Something went wrong</Typography>
+    <Typography variant="body1" color="text.secondary">
+      {error instanceof Error ? error.message : 'An unexpected error occurred'}
+    </Typography>
+    <button onClick={resetError}>Try again</button>
+  </Box>
+);
+
+const App = () => (
+  <Sentry.ErrorBoundary fallback={SentryFallback} showDialog>
     <Provider store={store}>
       <ThemeProvider>
         <SnackbarProvider maxSnack={3} anchorOrigin={{ vertical: 'top', horizontal: 'right' }} autoHideDuration={1500}>
@@ -34,7 +54,7 @@ function App() {
         </SnackbarProvider>
       </ThemeProvider>
     </Provider>
-  );
-}
+  </Sentry.ErrorBoundary>
+);
 
 export default App;

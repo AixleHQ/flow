@@ -13,7 +13,9 @@ class ApplicationController < ActionController::Base
       domain: Settings.domain,
       protocol: Settings.protocol,
       traefik_http_base: Settings.traefik.http_base,
-      github_app_slug: Settings.github.app_slug
+      github_app_slug: Settings.github.app_slug,
+      sentry_frontend_dsn: Settings.sentry.frontend_dsn,
+      app_version: Settings.app.version
     )
   end
 

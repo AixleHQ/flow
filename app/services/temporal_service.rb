@@ -15,6 +15,7 @@ class TemporalService
         task_queue: Settings.temporal.task_queue,
         activities: activities,
         workflows: workflows,
+        interceptors: interceptors,
         tuner: Temporalio::Worker::Tuner.create_fixed(
           activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
         ),
@@ -27,6 +28,10 @@ class TemporalService
 
     def namespace
       @namespace ||= Settings.temporal.namespace
+    end
+
+    def interceptors
+      @interceptors ||= [ Interceptors::SentryInterceptor.new ]
     end
 
     def activities

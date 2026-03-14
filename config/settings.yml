@@ -19,10 +19,10 @@ app:
     name: <%= ENV['AUTHOR_NAME'] || `git log -1 --pretty=format:'%an'`.strip %>
     email: <%= ENV['AUTHOR_EMAIL'] || `git log -1 --pretty=format:'%ae'`.strip %>
 
-rollbar: # move tokens to infra code
-  access_token: <%= ENV['ROLLBAR_ACCESS_TOKEN'] %>
-  js_access_token: <%= ENV['ROLLBAR_JS_ACCESS_TOKEN'] %>
-  deploy_endpoint: <%= ENV['ROLLBAR_DEPLOY_ENDPOINT'] %>
+sentry:
+  rails_dsn: <%= ENV['SENTRY_RAILS_DSN'] %>
+  frontend_dsn: <%= ENV['SENTRY_FRONTEND_DSN'] %>
+  temporal_dsn: <%= ENV['SENTRY_TEMPORAL_DSN'] %>
 
 database:
   name: <%= ENV['DB_NAME'] %>

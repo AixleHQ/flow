@@ -4,6 +4,9 @@ import ViteRuby from 'vite-plugin-ruby';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
+  build: {
+    sourcemap: 'hidden',
+  },
   plugins: [ViteRuby(), tsconfigPaths(), reactSwc()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx'],

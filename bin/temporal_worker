@@ -4,6 +4,18 @@
 
 require_relative "../config/environment"
 
+if Settings.sentry.temporal_dsn.present? && !Rails.env.development?
+  Sentry.init do |config|
+    config.dsn = Settings.sentry.temporal_dsn
+    config.release = Settings.app.version
+    config.environment = Rails.env
+    config.send_default_pii = true
+    config.enable_logs = true
+    config.traces_sample_rate = 1.0
+    config.profiles_sample_rate = 1.0
+  end
+end
+
 logger = Logger.new($stdout)
 TemporalWorkflowRegistry.workflows_data
 
@@ -23,6 +35,7 @@ rescue Interrupt
 rescue StandardError => e
   logger.error("Ruby worker - fatal error: #{e.message}")
   logger.error(e.backtrace.join("\n"))
+  Sentry.capture_exception(e, tags: { component: "temporal_worker" })
   exit 1
 end
 
