@@ -43,7 +43,7 @@ data:
   TRAEFIK_HTTP_BASE: https://palad.ai
   TRAEFIK_DASHBOARD_URL: https://traefik.palad.ai
   TRAEFIK_CORS_ORIGINS: https://palad.ai
-  CONTAINER_ASSET_HOST: "http://web.palad.svc.cluster.local:4000"
+  CONTAINER_ASSET_HOST: "https://palad-assets-prod.s3.amazonaws.com"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad
   K8S_IMAGE_PULL_POLICY: IfNotPresent
