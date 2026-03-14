@@ -53,7 +53,7 @@ jobs:
 
       - name: Prepare database
         if: ${{ inputs.needs-db }}
-        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make db-prepare
+        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web bundle exec rails db:create db:migrate
 
       - name: Run check
         run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make ${{ inputs.command }}

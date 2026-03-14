@@ -31,7 +31,7 @@ class TemporalService
     end
 
     def interceptors
-      @interceptors ||= [Interceptors::SentryInterceptor.new]
+      @interceptors ||= [ Interceptors::SentryInterceptor.new ]
     end
 
     def activities
