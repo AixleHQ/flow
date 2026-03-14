@@ -108,7 +108,7 @@ terraform output  # Display output values
 - `kube/prod/14-cluster-autoscaler.yaml`:
   - `eks.amazonaws.com/role-arn` for `cluster-autoscaler` from `terraform output eks_cluster_autoscaler_irsa_role_arn`
   - ensure `--node-group-auto-discovery` tag key includes your `eks_cluster_name`
-- `kube/secrets/07-app-secrets.yaml`:
+- `kube/prod/secrets/07-app-secrets.yaml`:
   - `DB_PASSWORD` must match `rds_master_password`
   - `TEMPORAL_DB_PASSWORD` must match `temporal_rds_master_password`
 

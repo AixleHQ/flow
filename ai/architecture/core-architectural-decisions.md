@@ -105,7 +105,7 @@
 
 **Agent containers:** Custom Docker images per agent (claude-code, cursor-cli, codex, gemini-cli) built from shared base image.
 
-**Kubernetes:** Optional runtime for agent containers (Pods + Services + Traefik IngressRoutes). Config in `kube/common/`, `kube/dev/`, and `kube/prod/`.
+**Kubernetes:** Optional runtime for agent containers (Pods + Services + Traefik IngressRoutes). Config is fully separated by environment in `kube/dev/` and `kube/prod/`.
 
 **File storage:** Shrine + AWS S3 for asset versions, session logs.
 

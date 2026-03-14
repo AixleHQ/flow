@@ -1,5 +1,5 @@
 # AI Engine Docker Management
-.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secret-set kube-web-rollout kube-rm kube-rm-prod terraform-help k3s-init-kubeconfig k3s-kubeconfig-path k3s-test k3s-contexts help
+.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secret-set kube-web-rollout kube-rm kube-rm-prod terraform-help help
 
 TODAY = $$(date +"%d.%m.%Y")
 
@@ -194,7 +194,7 @@ help:
 	@echo "  make default                - Same as 'check'"
 	@echo "  make help                   - Show this help message"
 	@echo "  make kube-help              - Show Kubernetes-related commands"
-	@echo "  make terraform-help         - Show Terraform/K3S-related commands"
+	@echo "  make terraform-help         - Show Terraform/EKS-related commands"
 	@echo "  make up                     - Run all main services"
 	@echo "  make worker                 - Run worker (in a separate terminal)"
 	@echo ""

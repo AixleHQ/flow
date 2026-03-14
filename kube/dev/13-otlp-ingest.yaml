@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: otlp-ingest
-  namespace: palad
+  namespace: palad-dev
 spec:
   replicas: 1
   selector:
@@ -36,3 +36,16 @@ spec:
           ports:
             - name: http
               containerPort: 4318
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otlp-ingest
+  namespace: palad-dev
+spec:
+  selector:
+    app: otlp-ingest
+  ports:
+    - name: http
+      port: 4318
+      targetPort: 4318

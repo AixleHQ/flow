@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: palad-web
-  namespace: palad
+  namespace: palad-dev
   # Add an IRSA role annotation when this workload needs AWS API access.
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-web-irsa-role
@@ -11,7 +11,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: palad-worker
-  namespace: palad
+  namespace: palad-dev
   # Add an IRSA role annotation when this workload needs AWS API access.
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-worker-irsa-role
@@ -20,7 +20,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: palad-otlp
-  namespace: palad
+  namespace: palad-dev
   # Add an IRSA role annotation when this workload needs AWS API access.
   # annotations:
   #   eks.amazonaws.com/role-arn: arn:aws:iam::<account-id>:role/palad-otlp-irsa-role
@@ -29,7 +29,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: palad-runtime
-  namespace: palad
+  namespace: palad-dev
 rules:
   - apiGroups: [""]
     resources: ["pods", "pods/exec", "services"]
@@ -42,17 +42,17 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: palad-runtime
-  namespace: palad
+  namespace: palad-dev
 subjects:
   - kind: ServiceAccount
     name: palad-web
-    namespace: palad
+    namespace: palad-dev
   - kind: ServiceAccount
     name: palad-worker
-    namespace: palad
+    namespace: palad-dev
   - kind: ServiceAccount
     name: palad-otlp
-    namespace: palad
+    namespace: palad-dev
 roleRef:
   kind: Role
   name: palad-runtime

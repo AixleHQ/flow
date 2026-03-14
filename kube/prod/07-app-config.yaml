@@ -44,6 +44,7 @@ data:
   TRAEFIK_DASHBOARD_URL: https://traefik.palad.ai
   TRAEFIK_CORS_ORIGINS: https://palad.ai
   CONTAINER_RUNTIME: k8s
+  K8S_NAMESPACE: palad
   K8S_IMAGE_PULL_POLICY: IfNotPresent
   K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
   MCP_SERVER_URL: http://mcp:4002/action_mcp
