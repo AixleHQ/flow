@@ -119,12 +119,31 @@ module ContainerRuntime
       core_mock = mock("core_client")
       traefik_mock = mock("traefik_client")
       networking_mock = mock("networking_client")
+      secret = Kubeclient::Resource.new(
+        metadata: { name: "ghcr-pull-secret", namespace: "palad" },
+        type: "kubernetes.io/dockerconfigjson",
+        data: { ".dockerconfigjson" => "ZXhhbXBsZQ==" }
+      )
+
+      @runtime.stubs(:agents_image_pull_secrets).returns([ "ghcr-pull-secret" ])
 
       core_mock.expects(:get_namespace).with("palad-project-77").raises(StandardError)
       core_mock.expects(:create_namespace).with do |resource|
         resource.kind == "Namespace" &&
           resource.metadata[:name] == "palad-project-77" &&
           resource.metadata[:labels]["palad.ai/scope"] == "project"
+      end.returns(true)
+      core_mock.expects(:get_secret).with("ghcr-pull-secret", "palad-project-77").raises(StandardError)
+      core_mock.expects(:get_secret).with("ghcr-pull-secret", "palad").returns(secret)
+      core_mock.expects(:create_secret).with do |resource|
+        metadata = resource.metadata.respond_to?(:to_h) ? resource.metadata.to_h : resource.metadata
+        data = resource.data.respond_to?(:to_h) ? resource.data.to_h : resource.data
+
+        resource.kind == "Secret" &&
+          (metadata[:name] || metadata["name"]) == "ghcr-pull-secret" &&
+          (metadata[:namespace] || metadata["namespace"]) == "palad-project-77" &&
+          resource.type == "kubernetes.io/dockerconfigjson" &&
+          (data[:".dockerconfigjson"] || data[".dockerconfigjson"]) == "ZXhhbXBsZQ=="
       end.returns(true)
       core_mock.expects(:create_pod).returns(true)
 

@@ -906,8 +906,34 @@ module ContainerRuntime
       return unless isolated_runtime_namespace?(handle.namespace)
 
       ensure_namespace(handle.namespace, namespace_context)
+      ensure_runtime_image_pull_secrets(handle.namespace)
       ensure_terminal_auth_middleware(handle.namespace)
       ensure_runtime_network_policies(handle.namespace)
+    end
+
+    def ensure_runtime_image_pull_secrets(namespace)
+      agents_image_pull_secrets.each do |secret_name|
+        ensure_image_pull_secret(namespace, secret_name)
+      end
+    end
+
+    def ensure_image_pull_secret(namespace, secret_name)
+      core_client.get_secret(secret_name, namespace)
+      nil
+    rescue StandardError
+      source_secret = core_client.get_secret(secret_name, runtime_namespace)
+      payload = {
+        apiVersion: "v1",
+        kind: "Secret",
+        metadata: {
+          name: secret_name,
+          namespace: namespace
+        },
+        type: source_secret.type,
+        data: source_secret.data
+      }
+
+      core_client.create_secret(Kubeclient::Resource.new(payload))
     end
 
     def ensure_namespace(namespace, context)
