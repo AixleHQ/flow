@@ -17,10 +17,43 @@ jobs:
   tests:
     name: Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: docker-compose.yml
+      RAILS_ENV: test
+      ENVIRONMENT: test
 
     steps:
-      - name: Run tests
-        run: echo "RUN TESTS HERE"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test containers
+        run: docker compose build web otlp-ingest
+
+      - name: Start test infrastructure
+        run: docker compose up -d db redis otlp-ingest
+
+      - name: Wait for database
+        run: |
+          until docker compose exec -T db pg_isready -U postgres; do
+            sleep 1
+          done
+
+      - name: Install app dependencies
+        run: docker compose run --rm -e RAILS_ENV=test -e ENVIRONMENT=test web make deps
+
+      - name: Prepare test database
+        run: docker compose run --rm -e RAILS_ENV=test -e ENVIRONMENT=test web make db-prepare
+
+      - name: Run checks
+        run: docker compose run --rm -e RAILS_ENV=test -e ENVIRONMENT=test web make check
+
+      - name: Tear down test infrastructure
+        if: always()
+        run: docker compose down --volumes --remove-orphans
 
   build-web:
     name: Build And Push Web Image
