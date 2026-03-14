@@ -286,6 +286,7 @@ resource "aws_eks_node_group" "main" {
   }
 
   depends_on = [
+    aws_eks_addon.vpc_cni,
     aws_iam_role_policy_attachment.eks_nodes_worker_policy,
     aws_iam_role_policy_attachment.eks_nodes_cni_policy,
     aws_iam_role_policy_attachment.eks_nodes_ecr_policy,
@@ -481,6 +482,26 @@ resource "aws_eks_addon" "eks_ebs_csi" {
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_ebs_csi_driver
+  ]
+}
+
+resource "aws_eks_addon" "vpc_cni" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  cluster_name                = aws_eks_cluster.main[0].name
+  addon_name                  = "vpc-cni"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+    env = {
+      NETWORK_POLICY_ENFORCING_MODE = "standard"
+    }
+  })
+
+  depends_on = [
+    aws_iam_role_policy_attachment.eks_nodes_cni_policy
   ]
 }
 
