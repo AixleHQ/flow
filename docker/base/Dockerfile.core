@@ -44,8 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+    g++
 
 # -----------------------------------------------------------------------------
 # MITM proxy for request/response logging
@@ -90,7 +89,8 @@ RUN npm install -g @playwright/mcp \
     && rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links \
     && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
     && npm cache clean --force \
-    && rm -rf /tmp/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/*
 
 # -----------------------------------------------------------------------------
 # Workspace setup
