@@ -1,59 +1,63 @@
-name: Reusable Code Check
+name: Code Check
 
 on:
   workflow_call:
     inputs:
-      check_command:
+      command:
         required: true
         type: string
-        description: "Command to run for the check (e.g. 'make test', 'make rubocop')"
-      toolbox_image:
+      needs-db:
         required: false
-        type: string
-        description: 'Toolbox container image'
-        default: 'ghcr.io/artempartos/ecs_toolbox:latest'
-      docker_compose_file:
+        type: boolean
+        default: false
+      timeout:
         required: false
-        type: string
-        description: 'Docker compose file'
-        default: 'docker-compose.ci.yml'
-      container_name:
-        required: false
-        type: string
-        description: 'Container name'
-        default: 'web'
-    secrets:
-      aws_role_arn:
-        required: true
-        description: 'AWS IAM Role ARN for assuming role'
-      aws_region:
-        required: true
-        description: 'AWS region'
+        type: number
+        default: 10
+
+env:
+  REGISTRY: ghcr.io
+  COMPOSE_FILE: docker-compose.ci.yml
+  IMAGE: ghcr.io/${{ github.repository }}-web
 
 jobs:
   check:
-    container: ${{ inputs.toolbox_image }}
-    runs-on: self-hosted
-    continue-on-error: true
+    name: Run
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout }}
     env:
-      ENVIRONMENT: test
       RAILS_ENV: test
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN_OHIO }}
-          aws-region: ${{ secrets.AWS_REGION_OHIO }}
+      - uses: actions/checkout@v4
 
-      - name: Download docker-compose config
-        uses: actions/download-artifact@v4
+      - uses: docker/login-action@v3
         with:
-          name: docker-compose-config
-          path: .
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to Amazon ECR
-        run: ecs_helper ecr_login
+      - name: Pull image
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          docker pull "${IMAGE}:${SHORT_SHA}"
+          docker tag  "${IMAGE}:${SHORT_SHA}" web
+
+      - name: Start database
+        if: ${{ inputs.needs-db }}
+        run: docker compose -f "$COMPOSE_FILE" up -d db redis
+
+      - name: Wait for database
+        if: ${{ inputs.needs-db }}
+        run: |
+          until docker compose -f "$COMPOSE_FILE" exec -T db pg_isready -U postgres; do sleep 1; done
+
+      - name: Prepare database
+        if: ${{ inputs.needs-db }}
+        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make db-prepare
 
       - name: Run check
-        run: |
-          docker compose -f ${{ inputs.docker_compose_file }} run --rm ${{ inputs.container_name }} ${{ inputs.check_command }}
+        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make ${{ inputs.command }}
+
+      - name: Tear down
+        if: ${{ always() && inputs.needs-db }}
+        run: docker compose -f "$COMPOSE_FILE" down --volumes --remove-orphans

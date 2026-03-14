@@ -44,7 +44,9 @@ gem "ransack"
 gem "rolify"
 gem "ruby-filemagic", github: "stoivo/ruby-filemagic"
 gem "virtus"
-gem "rollbar"
+
+gem "sentry-ruby"
+gem "sentry-rails"
 
 gem "rails-i18n"
 

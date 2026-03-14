@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -14,53 +15,6 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  tests:
-    name: Tests
-    runs-on: ubuntu-latest
-    needs:
-      - build-web
-    timeout-minutes: 30
-    env:
-      COMPOSE_FILE: docker-compose.ci.yml
-      RAILS_ENV: test
-      ENVIRONMENT: test
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Login To GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull built images
-        run: |
-          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
-          docker pull "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}"
-          docker tag "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}" web
-
-      - name: Start test infrastructure
-        run: docker compose -f "${COMPOSE_FILE}" up -d db redis
-
-      - name: Wait for database
-        run: |
-          until docker compose -f "${COMPOSE_FILE}" exec -T db pg_isready -U postgres; do
-            sleep 1
-          done
-
-      - name: Prepare test database
-        run: docker compose -f "${COMPOSE_FILE}" run --rm --no-deps web make db-prepare
-
-      - name: Run checks
-        run: docker compose -f "${COMPOSE_FILE}" run --rm --no-deps web make check
-
-      - name: Tear down test infrastructure
-        if: always()
-        run: docker compose -f "${COMPOSE_FILE}" down --volumes --remove-orphans
-
   build-web:
     name: Build Web
     runs-on: ubuntu-latest
@@ -107,10 +61,75 @@ jobs:
           cache-from: type=gha,scope=web-image
           cache-to: type=gha,mode=max,scope=web-image
 
+  # ---------------------------------------------------------------------------
+  # Checks (parallel, via reusable workflow)
+  # ---------------------------------------------------------------------------
+  be-test:
+    name: Backend Tests
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: rails-test
+      needs-db: true
+      timeout: 20
+    secrets: inherit
+
+  be-lint:
+    name: Backend Lint
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: rubocop
+    secrets: inherit
+
+  be-security:
+    name: Backend Security
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: brakeman
+    secrets: inherit
+
+  fe-lint:
+    name: Frontend Lint
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: eslint
+    secrets: inherit
+
+  fe-test:
+    name: Frontend Tests
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: fe-test
+    secrets: inherit
+
+  fe-typecheck:
+    name: Frontend Typecheck
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: typescript
+    secrets: inherit
+
+  fe-fsd:
+    name: Frontend FSD
+    needs: build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: fsd
+    secrets: inherit
+
+  # ---------------------------------------------------------------------------
+  # Build supporting images (after all checks pass)
+  # ---------------------------------------------------------------------------
   build-otlp:
     name: Build OTLP Ingest
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: tests
+    needs: [be-test, be-lint, be-security, fe-lint, fe-test, fe-typecheck, fe-fsd]
     env:
       IMAGE_NAME: ${{ github.repository }}-otlp-ingest
 
@@ -151,8 +170,9 @@ jobs:
 
   build-agent-base:
     name: Build Agent Base
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: tests
+    needs: [be-test, be-lint, be-security, fe-lint, fe-test, fe-typecheck, fe-fsd]
     env:
       BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
 
@@ -258,8 +278,12 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.cache_scope }}
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
+  # ---------------------------------------------------------------------------
+  # Deploy
+  # ---------------------------------------------------------------------------
   db-migrate:
     name: DB Migrate
+    if: github.event_name != 'pull_request'
     runs-on: palad-deploy-runner
     environment: production
     needs:
@@ -322,6 +346,7 @@ jobs:
 
   deploy:
     name: Deploy
+    if: github.event_name != 'pull_request'
     runs-on: palad-deploy-runner
     environment: production
     concurrency:
@@ -348,3 +373,38 @@ jobs:
           kubectl -n "$KUBE_NAMESPACE" rollout status deployment/web --timeout=10m
           kubectl -n "$KUBE_NAMESPACE" rollout status deployment/worker-ruby --timeout=10m
           kubectl -n "$KUBE_NAMESPACE" rollout status deployment/mcp --timeout=10m
+
+  # ---------------------------------------------------------------------------
+  # Post-deploy: upload source maps to Sentry
+  # ---------------------------------------------------------------------------
+  sentry-sourcemaps:
+    name: Sentry Source Maps
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref_name == 'main'
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract source maps from image
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          docker pull "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}"
+          CONTAINER_ID=$(docker create "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}")
+          mkdir -p sourcemaps
+          docker cp "$CONTAINER_ID:/app/public/vite/" ./sourcemaps/ || true
+          docker rm "$CONTAINER_ID"
+
+      - name: Upload to Sentry
+        run: |
+          npx @sentry/cli releases new "${{ github.sha }}"
+          npx @sentry/cli releases files "${{ github.sha }}" upload-sourcemaps ./sourcemaps/ --url-prefix "~/vite/"
+          npx @sentry/cli releases finalize "${{ github.sha }}"
+          npx @sentry/cli releases deploys "${{ github.sha }}" new -e production

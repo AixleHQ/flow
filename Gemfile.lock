@@ -564,7 +564,6 @@ GEM
       netrc (~> 0.8)
     rexml (3.4.1)
     rolify (6.0.1)
-    rollbar (3.6.2)
     rotp (6.3.0)
     rubocop (1.75.4)
       json (~> 2.3)
@@ -613,6 +612,13 @@ GEM
       faraday (>= 0.17.3, < 3)
     securerandom (0.4.1)
     selectize-rails (0.12.6)
+    sentry-rails (6.4.1)
+      railties (>= 5.2.0)
+      sentry-ruby (~> 6.4.1)
+    sentry-ruby (6.4.1)
+      bigdecimal
+      concurrent-ruby (~> 1.0, >= 1.0.2)
+      logger
     shrine (3.6.0)
       content_disposition (~> 1.0)
       down (~> 5.1)
@@ -801,7 +807,6 @@ DEPENDENCIES
   redis
   responders
   rolify
-  rollbar
   rotp (~> 6.3)
   rubocop
   rubocop-performance
@@ -809,6 +814,8 @@ DEPENDENCIES
   rubocop-rails-omakase
   ruby-filemagic!
   rubyzip
+  sentry-rails
+  sentry-ruby
   shrine (~> 3.6)
   simplecov
   solid_mcp
