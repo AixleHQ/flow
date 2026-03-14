@@ -64,7 +64,6 @@ jobs:
   build-web:
     name: Build And Push Web Image
     runs-on: ubuntu-latest
-    needs: tests
     env:
       IMAGE_NAME: ${{ github.repository }}-web
 
@@ -111,6 +110,7 @@ jobs:
   build-otlp:
     name: Build And Push OTLP Ingest Image
     runs-on: ubuntu-latest
+    needs: tests
     env:
       IMAGE_NAME: ${{ github.repository }}-otlp-ingest
 
