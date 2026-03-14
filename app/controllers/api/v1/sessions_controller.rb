@@ -51,7 +51,7 @@ module Api
         end
 
         sign_in(user)
-        redirect_to "/", allow_other_host: false
+        redirect_to "/onboarding", allow_other_host: false
       rescue StandardError => e
         redirect_to "/login?error=oauth_failed", allow_other_host: false
       end
