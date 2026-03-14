@@ -113,7 +113,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
       process :omniauth, method: :get, params: { provider: "google" }
     end
 
-    assert_redirected_to "/"
+    assert_redirected_to "/onboarding"
     user = User.find_by(email: "newuser@example.com")
     assert { user.present? }
     assert { user.active? }
@@ -143,7 +143,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
     assert { current_user.nil? }
   end
 
-  test "#omniauth with existing active user redirects to root" do
+  test "#omniauth with existing active user redirects to onboarding" do
     company = create(:company, email_domain: "example.com", auto_accept_users: true)
     existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_state: "completed")
     auth_hash = build_auth_hash(email: "existing@example.com")
@@ -153,11 +153,11 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
       process :omniauth, method: :get, params: { provider: "google" }
     end
 
-    assert_redirected_to "/"
+    assert_redirected_to "/onboarding"
     assert { current_user.id == existing_user.id }
   end
 
-  test "#omniauth with existing user without onboarding redirects to root" do
+  test "#omniauth with existing user without onboarding redirects to onboarding" do
     company = create(:company, email_domain: "example.com", auto_accept_users: true)
     existing_user = create(:user, email: "existing@example.com", company: company, provider: "google", uid: "12345", onboarding_state: "step1")
     auth_hash = build_auth_hash(email: "existing@example.com")
@@ -167,7 +167,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
       process :omniauth, method: :get, params: { provider: "google" }
     end
 
-    assert_redirected_to "/"
+    assert_redirected_to "/onboarding"
     assert { current_user.id == existing_user.id }
   end
 
