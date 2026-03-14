@@ -192,6 +192,9 @@ Rails.application.routes.draw do
     mount OasRails::Engine => "/docs"
     mount(LetterOpenerWeb::Engine, at: "/letter_opener") if Rails.env.development?
 
+    get "privacy-policy", to: "pages#privacy_policy", as: :privacy_policy
+    get "terms-of-service", to: "pages#terms_of_service", as: :terms_of_service
+
     get "*path", to: "home#show"
   end
 end

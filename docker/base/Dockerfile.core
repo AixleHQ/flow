@@ -81,16 +81,22 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # Browsers stored in /opt/playwright-browsers (shared, readable by all users).
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
-RUN npm install -g @playwright/mcp \
+
+RUN npm install -g @playwright/mcp
+
+RUN apt-get update \
     && npx playwright install --with-deps chromium \
-    && CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chrome-linux/*" | head -1) \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chrome-linux*" | head -1) \
+    && echo "Found chromium at: ${CHROMIUM_BIN}" \
     && mkdir -p /opt/google/chrome \
     && ln -s "$CHROMIUM_BIN" /opt/google/chrome/chrome \
     && rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links \
     && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
     && npm cache clean --force \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/*
+    && rm -rf /tmp/*
 
 # -----------------------------------------------------------------------------
 # Workspace setup
