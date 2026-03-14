@@ -129,8 +129,10 @@ module ContainerRuntime
       core_mock.expects(:create_pod).returns(true)
 
       traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
-      traefik_mock.expects(:create_entity).with("Middleware", "middlewares") do |resource|
-        resource.kind == "Middleware" &&
+      traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
+        kind == "Middleware" &&
+          resource_type == "middlewares" &&
+          resource.kind == "Middleware" &&
           resource.metadata[:namespace] == "palad-project-77"
       end.returns(true)
 
@@ -139,12 +141,16 @@ module ContainerRuntime
         runtime-allow-traefik-ingress
         runtime-allow-dns-egress
         runtime-allow-palad-service-egress
+        runtime-allow-public-internet-egress
       ].each do |name|
         networking_mock.expects(:get_entity).with("networkpolicies", name, "palad-project-77").raises(StandardError)
       end
-      4.times do
-        networking_mock.expects(:create_entity).with("NetworkPolicy", "networkpolicies") do |resource|
-          resource.is_a?(Kubeclient::Resource) && resource.kind == "NetworkPolicy"
+      5.times do
+        networking_mock.expects(:create_entity).with do |kind, resource_type, resource|
+          kind == "NetworkPolicy" &&
+            resource_type == "networkpolicies" &&
+            resource.is_a?(Kubeclient::Resource) &&
+            resource.kind == "NetworkPolicy"
         end.returns(true)
       end
 

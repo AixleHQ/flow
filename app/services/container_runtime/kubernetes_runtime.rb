@@ -1190,7 +1190,7 @@ module ContainerRuntime
     end
 
     def wait_for_traefik_route(handle)
-      traefik_url = "https://#{traefik_service_host}/t/#{handle.route_token}/tty/"
+      traefik_url = "#{traefik_probe_base_url}/t/#{handle.route_token}/tty/"
       uri = URI(traefik_url)
       expected_host = route_domain_host
       start_time = Time.current
@@ -1202,7 +1202,7 @@ module ContainerRuntime
 
         response = Net::HTTP.start(
           uri.host, uri.port,
-          use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE,
+          use_ssl: uri.scheme == "https",
           open_timeout: 2, read_timeout: 2
         ) { |http| http.request(request) }
 
@@ -1220,6 +1220,10 @@ module ContainerRuntime
         end
         sleep ready_interval
       end
+    end
+
+    def traefik_probe_base_url
+      Settings.traefik.http_base.to_s.strip.presence || "https://#{traefik_service_host}"
     end
 
     def traefik_service_host
