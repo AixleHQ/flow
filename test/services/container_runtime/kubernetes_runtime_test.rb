@@ -50,6 +50,13 @@ module ContainerRuntime
       assert_equal "main", result.container_name
     end
 
+    test "resolve_container preserves namespace from persisted identifier" do
+      result = @runtime.resolve_container("palad-user-42/terminal-abc123")
+
+      assert_equal "palad-user-42", result.namespace
+      assert_equal "terminal-abc123", result.pod_name
+    end
+
     test "container_identifier returns nil for blank" do
       assert_nil @runtime.container_identifier(nil)
       assert_nil @runtime.container_identifier("")
@@ -63,6 +70,12 @@ module ContainerRuntime
       handle = OpenStruct.new(pod_name: "my-pod-xyz")
 
       assert_equal "my-pod-xyz", @runtime.container_identifier(handle)
+    end
+
+    test "container_identifier includes namespace when handle has both namespace and pod_name" do
+      handle = OpenStruct.new(namespace: "palad-project-7", pod_name: "my-pod-xyz")
+
+      assert_equal "palad-project-7/my-pod-xyz", @runtime.container_identifier(handle)
     end
 
     test "copy_from returns empty string when path blank" do
@@ -81,6 +94,7 @@ module ContainerRuntime
 
     test "create_container creates pod via core_client" do
       core_mock = mock("core_client")
+      @runtime.stubs(:ensure_runtime_namespace_resources)
       core_mock.expects(:create_pod).with do |pod|
         pod.kind == "Pod" &&
           pod.metadata[:name].present? &&
@@ -99,6 +113,54 @@ module ContainerRuntime
 
       assert result.pod_name.present?
       assert result.namespace.present?
+    end
+
+    test "create_container bootstraps isolated project namespace resources" do
+      core_mock = mock("core_client")
+      traefik_mock = mock("traefik_client")
+      networking_mock = mock("networking_client")
+
+      core_mock.expects(:get_namespace).with("palad-project-77").raises(StandardError)
+      core_mock.expects(:create_namespace).with do |resource|
+        resource.kind == "Namespace" &&
+          resource.metadata[:name] == "palad-project-77" &&
+          resource.metadata[:labels]["palad.ai/scope"] == "project"
+      end.returns(true)
+      core_mock.expects(:create_pod).returns(true)
+
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
+      traefik_mock.expects(:create_entity).with("Middleware", "middlewares") do |resource|
+        resource.kind == "Middleware" &&
+          resource.metadata[:namespace] == "palad-project-77"
+      end.returns(true)
+
+      %w[
+        runtime-default-deny
+        runtime-allow-traefik-ingress
+        runtime-allow-dns-egress
+        runtime-allow-palad-service-egress
+      ].each do |name|
+        networking_mock.expects(:get_entity).with("networkpolicies", name, "palad-project-77").raises(StandardError)
+      end
+      4.times do
+        networking_mock.expects(:create_entity).with("NetworkPolicy", "networkpolicies") do |resource|
+          resource.is_a?(Kubeclient::Resource) && resource.kind == "NetworkPolicy"
+        end.returns(true)
+      end
+
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+      @runtime.stubs(:networking_client).returns(networking_mock)
+
+      result = @runtime.create_container(
+        image: "alpine:latest",
+        env_vars: [],
+        labels: {},
+        host_config: {},
+        namespace_context: { project_id: 77, user_id: 5 }
+      )
+
+      assert_equal "palad-project-77", result.namespace
     end
 
     test "stop_container deletes pod" do

@@ -113,6 +113,9 @@ kubernetes:
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
+  eks_vpc_cidr: <%= ENV['K8S_EKS_VPC_CIDR'] || '10.10.0.0/16' %>
+  runtime_blocked_ipv4_cidrs: <%= (ENV['K8S_RUNTIME_BLOCKED_IPV4_CIDRS'] || '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10,169.254.0.0/16').split(',').map(&:strip).reject(&:empty?) %>
+  runtime_blocked_ipv6_cidrs: <%= (ENV['K8S_RUNTIME_BLOCKED_IPV6_CIDRS'] || 'fc00::/7,fe80::/10').split(',').map(&:strip).reject(&:empty?) %>
   runtime_requests_cpu: <%= ENV['K8S_RUNTIME_REQUESTS_CPU'] || '100m' %>
   runtime_requests_memory: <%= ENV['K8S_RUNTIME_REQUESTS_MEMORY'] || '512Mi' %>
   runtime_limits_cpu: <%= ENV['K8S_RUNTIME_LIMITS_CPU'] || '1000m' %>

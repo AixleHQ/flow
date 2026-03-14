@@ -63,7 +63,8 @@ module ContainerStrategies
         cmd: cmd,
         working_dir: working_dir,
         exposed_ports: exposed_ports,
-        container_name: container_name
+        container_name: container_name,
+        namespace_context: build_namespace_context
       }
 
       container = runtime.create_container(spec)
@@ -187,12 +188,7 @@ module ContainerStrategies
     end
 
     def runtime_container_id(container)
-      if container.respond_to?(:pod_name)
-        return container.pod_name
-      end
-
-      return container.id if container.respond_to?(:id)
-      container.to_s
+      runtime.container_identifier(container)
     end
 
     def strategy_name
@@ -200,6 +196,24 @@ module ContainerStrategies
     end
 
     private
+
+    def build_namespace_context
+      context = {}
+      context[:user_id] = input[:user_id] if input[:user_id].present?
+
+      session = current_terminal_session
+      context[:session_id] = session.id if session
+      context[:project_id] = session.project_id if session&.project_id.present?
+
+      context.presence
+    end
+
+    def current_terminal_session
+      return @current_terminal_session if defined?(@current_terminal_session)
+      return @current_terminal_session = nil if input[:session_id].blank?
+
+      @current_terminal_session = TerminalSession.find_by(id: input[:session_id])
+    end
 
     def load_container_limits
       defaults = { memory_bytes: 1024 * 1024 * 1024, cpu_quota: 50_000, pids_limit: 100 }

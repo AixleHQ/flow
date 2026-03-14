@@ -62,6 +62,7 @@ module StubSupport
   def stub_kubernetes_runtime(fs)
     ContainerRuntime::KubernetesRuntime.any_instance.stubs(:core_client).returns(stub_k8s_core_client)
     ContainerRuntime::KubernetesRuntime.any_instance.stubs(:traefik_client).returns(stub_k8s_traefik_client)
+    ContainerRuntime::KubernetesRuntime.any_instance.stubs(:networking_client).returns(stub_k8s_networking_client)
     ContainerRuntime::KubernetesRuntime.any_instance.stubs(:in_cluster?).returns(false)
     ContainerRuntime::KubernetesRuntime.any_instance.stubs(:kube_endpoint).returns("https://localhost:6443")
     ContainerRuntime::KubernetesRuntime.any_instance.stubs(:kube_ssl_options).returns({})
@@ -79,6 +80,8 @@ module StubSupport
       status: { phase: "Running", conditions: [ { type: "Ready", status: "True" } ] }
     )
     core = mock("kubeclient_core")
+    core.stubs(:get_namespace).returns(true)
+    core.stubs(:create_namespace).returns(true)
     core.stubs(:create_pod).returns(true)
     core.stubs(:get_pod).returns(ready_pod)
     core.stubs(:delete_pod).returns(true)
@@ -96,6 +99,15 @@ module StubSupport
     traefik.stubs(:get_entity).returns(true)
     traefik.stubs(:delete_entity).returns(true)
     traefik
+  end
+
+  def stub_k8s_networking_client
+    networking = mock("kubeclient_networking")
+    networking.stubs(:discovered).returns(true)
+    networking.stubs(:discover).returns(true)
+    networking.stubs(:create_entity).returns(true)
+    networking.stubs(:get_entity).returns(true)
+    networking
   end
 
   # ===========================================================================
@@ -156,8 +168,6 @@ module StubSupport
     [ ContainerRuntime::DockerRuntime,          :HEALTH_CHECK_TIMEOUT ]  => 30,
     [ ContainerRuntime::DockerRuntime,          :PORT_READY_TIMEOUT ]    => 30,
     [ ContainerRuntime::KubernetesRuntime,      :READY_TIMEOUT ]         => 30,
-    [ ContainerStrategies::AgentBaseStrategy,   :TRAEFIK_ROUTE_TIMEOUT ] => 30,
-    [ ContainerStrategies::AgentBaseStrategy,   :TRAEFIK_ROUTE_INTERVAL ] => 1,
     [ ContainerStrategies::AgentSessionStrategy, :POLL_INTERVAL ]        => 5,
     [ ContainerStrategies::AgentSessionStrategy, :POLL_TIMEOUT ]         => 82_800
   }.freeze
@@ -166,8 +176,6 @@ module StubSupport
     set_const(ContainerRuntime::DockerRuntime,          :HEALTH_CHECK_TIMEOUT,  0.1)
     set_const(ContainerRuntime::DockerRuntime,          :PORT_READY_TIMEOUT,    0.1)
     set_const(ContainerRuntime::KubernetesRuntime,      :READY_TIMEOUT,         0.1)
-    set_const(ContainerStrategies::AgentBaseStrategy,   :TRAEFIK_ROUTE_TIMEOUT, 0.1)
-    set_const(ContainerStrategies::AgentBaseStrategy,   :TRAEFIK_ROUTE_INTERVAL, 0)
     set_const(ContainerStrategies::AgentSessionStrategy, :POLL_INTERVAL,        0)
     set_const(ContainerStrategies::AgentSessionStrategy, :POLL_TIMEOUT,         0.1)
   end

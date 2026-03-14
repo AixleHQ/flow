@@ -31,3 +31,63 @@ spec:
           port: 80
         - protocol: TCP
           port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-web
+  namespace: palad-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-mcp
+  namespace: palad-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4002
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-otlp-ingest
+  namespace: palad-dev
+spec:
+  podSelector:
+    matchLabels:
+      app: otlp-ingest
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4318

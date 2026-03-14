@@ -33,11 +33,17 @@ data:
   TRAEFIK_HTTP_BASE: https://k8s.orb.local
   TRAEFIK_DASHBOARD_URL: https://traefik.k8s.orb.local
   TRAEFIK_CORS_ORIGINS: https://k8s.orb.local
+  CONTAINER_ASSET_HOST: "https://k8s.orb.local"
+  ASSET_HOST: "https://k8s.orb.local"
+  DOMAIN: "k8s.orb.local"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad-dev
   K8S_IMAGE_PULL_POLICY: IfNotPresent
-  MCP_SERVER_URL: http://mcp:4002/action_mcp
+  MCP_SERVER_URL: "http://mcp.palad-dev.svc.cluster.local:4002/action_mcp"
   MCP_PORT: "4002"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad-dev.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otlp-ingest.palad-dev.svc.cluster.local:4318/v1/metrics"
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad-dev.svc.cluster.local:4318/v1/logs"
   GITHUB_CLIENT_ID: "get_from_1password"
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
   BITBUCKET_OAUTH_KEY: "get_from_1password"

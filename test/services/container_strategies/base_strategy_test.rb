@@ -37,6 +37,7 @@ module ContainerStrategies
       Rails.logger.stubs(:error)
 
       @runtime_mock = mock("runtime")
+      @runtime_mock.stubs(:container_identifier) { |container| container }
       ContainerRuntime.stubs(:build).returns(@runtime_mock)
     end
 
@@ -102,6 +103,23 @@ module ContainerStrategies
         exposed_ports: { "8080/tcp" => {} },
         container_name: "test-container"
       )
+    end
+
+    test "create_container preserves namespace-aware runtime identifier" do
+      strategy = TestStrategy.new
+      handle = OpenStruct.new(namespace: "palad-user-4", pod_name: "terminal-abc")
+
+      @runtime_mock.expects(:create_container).returns(handle)
+      @runtime_mock.expects(:container_identifier).with(handle).returns("palad-user-4/terminal-abc")
+
+      result = strategy.create_container(
+        image: "test:latest",
+        env_vars: [],
+        labels: {},
+        host_config: {}
+      )
+
+      assert_equal "palad-user-4/terminal-abc", result[:container_id]
     end
 
     test "start_container starts container and waits for readiness" do

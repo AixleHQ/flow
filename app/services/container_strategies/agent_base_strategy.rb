@@ -51,10 +51,7 @@ module ContainerStrategies
     end
 
     # == exec ==
-    # Waits for Traefik route, marks session ready, returns URLs for frontend.
-
-    TRAEFIK_ROUTE_TIMEOUT = 30
-    TRAEFIK_ROUTE_INTERVAL = 1
+    # Marks session ready and returns URLs for frontend.
 
     def exec(container_id:, **)
       container_ref = resolve_container(container_id)
@@ -62,7 +59,6 @@ module ContainerStrategies
       raise "Container not ready for exec" if cid.blank?
 
       route_token = input[:route_token]
-      wait_for_traefik_route(route_token)
       mark_session_ready(cid)
 
       {
@@ -163,34 +159,6 @@ module ContainerStrategies
     end
 
     private
-
-    def wait_for_traefik_route(route_token)
-      traefik_internal = Settings.traefik.internal_url
-      url = URI("#{traefik_internal}/t/#{route_token}/tty/")
-      deadline = Time.current + TRAEFIK_ROUTE_TIMEOUT
-
-      loop do
-        begin
-          http = Net::HTTP.new(url.host, url.port)
-          http.open_timeout = 2
-          http.read_timeout = 2
-          response = http.get(url.request_uri)
-          unless response.is_a?(Net::HTTPNotFound)
-            Rails.logger.info("[#{strategy_name}] Traefik route ready for #{route_token}")
-            return
-          end
-        rescue Errno::ECONNREFUSED, Errno::ECONNRESET, Net::OpenTimeout, Net::ReadTimeout, SocketError => e
-          Rails.logger.debug("[#{strategy_name}] Traefik not yet ready: #{e.class}")
-        end
-
-        if Time.current > deadline
-          Rails.logger.warn("[#{strategy_name}] Traefik route timeout for #{route_token}, proceeding anyway")
-          return
-        end
-
-        sleep TRAEFIK_ROUTE_INTERVAL
-      end
-    end
 
     def validate_input!
       raise ArgumentError, "user_id is required" unless input[:user_id].present?

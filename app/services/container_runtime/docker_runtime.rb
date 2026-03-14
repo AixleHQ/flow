@@ -2,6 +2,8 @@
 
 require "docker"
 require "json"
+require "net/http"
+require "uri"
 
 module ContainerRuntime
   # DockerRuntime
@@ -10,6 +12,8 @@ module ContainerRuntime
     HEALTH_CHECK_TIMEOUT = 30
     HEALTH_CHECK_INTERVAL = 1
     PORT_READY_TIMEOUT = 30
+    TRAEFIK_ROUTE_TIMEOUT = 30
+    TRAEFIK_ROUTE_INTERVAL = 1
 
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
@@ -163,6 +167,7 @@ module ContainerRuntime
       container = resolve_container(id)
       wait_for_container_health(container)
       wait_for_ports(container, ports)
+      wait_for_traffic_route(container)
       true
     end
 
@@ -187,6 +192,46 @@ module ContainerRuntime
     end
 
     private
+
+    def wait_for_traffic_route(container)
+      route_token = route_token_from_container(container)
+      return true if route_token.blank?
+
+      traffic_url = URI("#{Settings.traefik.internal_url}/t/#{route_token}/tty/")
+      deadline = Time.current + TRAEFIK_ROUTE_TIMEOUT
+
+      loop do
+        begin
+          http = Net::HTTP.new(traffic_url.host, traffic_url.port)
+          http.open_timeout = 2
+          http.read_timeout = 2
+          response = http.get(traffic_url.request_uri)
+          unless response.is_a?(Net::HTTPNotFound)
+            Rails.logger.info("[DockerRuntime] Traffic route ready for #{route_token}")
+            return true
+          end
+        rescue Errno::ECONNREFUSED, Errno::ECONNRESET, Net::OpenTimeout, Net::ReadTimeout, SocketError => e
+          Rails.logger.debug("[DockerRuntime] Traffic route not yet ready: #{e.class}")
+        end
+
+        if Time.current > deadline
+          Rails.logger.warn("[DockerRuntime] Traffic route timeout for #{route_token}, proceeding anyway")
+          return true
+        end
+
+        sleep TRAEFIK_ROUTE_INTERVAL
+      end
+    end
+
+    def route_token_from_container(container)
+      container_name = container.json["Name"].to_s.delete_prefix("/")
+      return nil unless container_name.start_with?("terminal-")
+
+      container_name.delete_prefix("terminal-")
+    rescue StandardError => e
+      Rails.logger.debug("[DockerRuntime] Failed to resolve route token: #{e.message}")
+      nil
+    end
 
     def wait_for_container_health(container, timeout: HEALTH_CHECK_TIMEOUT)
       start_time = Time.current

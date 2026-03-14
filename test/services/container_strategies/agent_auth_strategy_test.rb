@@ -262,12 +262,11 @@ module ContainerStrategies
 
     test "exec returns container URLs" do
       strategy = build_strategy
+      runtime_mock = mock("runtime")
 
       strategy.stubs(:resolve_container).returns(mock("container"))
-      strategy.stubs(:wait_for_traefik_route)
       strategy.stubs(:mark_session_ready)
 
-      runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.stubs(:container_identifier).returns("abc123def456")
 
@@ -281,12 +280,11 @@ module ContainerStrategies
 
     test "exec returns ide_url with trailing slash" do
       strategy = build_strategy
+      runtime_mock = mock("runtime")
 
       strategy.stubs(:resolve_container).returns(mock("container"))
-      strategy.stubs(:wait_for_traefik_route)
       strategy.stubs(:mark_session_ready)
 
-      runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.stubs(:container_identifier).returns("abc123")
 

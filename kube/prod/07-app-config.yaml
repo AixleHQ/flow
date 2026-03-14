@@ -43,12 +43,17 @@ data:
   TRAEFIK_HTTP_BASE: https://palad.ai
   TRAEFIK_DASHBOARD_URL: https://traefik.palad.ai
   TRAEFIK_CORS_ORIGINS: https://palad.ai
+  CONTAINER_ASSET_HOST: "http://web.palad.svc.cluster.local:4000"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad
   K8S_IMAGE_PULL_POLICY: IfNotPresent
+  K8S_EKS_VPC_CIDR: "10.10.0.0/16"
   K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
-  MCP_SERVER_URL: http://mcp:4002/action_mcp
+  MCP_SERVER_URL: "http://mcp.palad.svc.cluster.local:4002/action_mcp"
   MCP_PORT: "4002"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otlp-ingest.palad.svc.cluster.local:4318/v1/metrics"
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad.svc.cluster.local:4318/v1/logs"
   GITHUB_APP_ID: "3090688"
   GITHUB_APP_SLUG: palad-ai
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"

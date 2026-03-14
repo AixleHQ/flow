@@ -103,6 +103,7 @@ terraform output  # Display output values
   - `AWS_S3_BUCKET` from `terraform output assets_bucket_name`
   - `AWS_DEFAULT_REGION` / `AWS_REGION` from `terraform output assets_bucket_region`
   - `ASSET_HOST` from `terraform output cloudfront_static_assets_url` (for example `https://static.palad.ai`)
+  - `K8S_EKS_VPC_CIDR` should match `eks_vpc_cidr` (runtime network policy blocks private/VPC egress while allowing public internet)
 - `kube/prod/06-rbac-runtime.yaml`:
   - `eks.amazonaws.com/role-arn` for `palad-web` and `palad-worker` from `terraform output eks_assets_irsa_role_arn`
 - `kube/prod/14-cluster-autoscaler.yaml`:

@@ -5,6 +5,6 @@ metadata:
   namespace: palad-dev
 spec:
   forwardAuth:
-    address: http://web:4000/api/v1/internal/ws_auth
+    address: http://web.palad-dev.svc.cluster.local:4000/api/v1/internal/ws_auth
     trustForwardHeader: true
     authResponseHeadersRegex: ^X-

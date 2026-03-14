@@ -171,13 +171,12 @@ module ContainerStrategies
     test "exec result does not include watcher_url" do
       strategy = build_strategy
       @session.update!(mode: "interactive")
+      runtime_mock = mock("runtime")
 
       container_mock = mock("container")
       strategy.stubs(:resolve_container).returns(container_mock)
-      strategy.stubs(:wait_for_traefik_route)
       strategy.stubs(:mark_session_ready)
 
-      runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.stubs(:container_identifier).returns("abc123")
 

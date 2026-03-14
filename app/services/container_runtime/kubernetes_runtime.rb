@@ -16,6 +16,7 @@ module ContainerRuntime
     DEFAULT_SERVICE_PORTS = [ 7681, 4040 ].freeze
     DEFAULT_CONTAINER_NAME = "main"
     DEFAULT_WORKSPACE_DIR = "/workspace"
+    DEFAULT_TRAEFIK_PORTS = [ 7681, 4040, 8443 ].freeze
     READY_TIMEOUT = 30
     READY_INTERVAL = 1
 
@@ -28,6 +29,7 @@ module ContainerRuntime
 
     def create_container(spec)
       handle = build_handle(spec)
+      ensure_runtime_namespace_resources(handle, spec[:namespace_context])
       pod = build_pod(spec, handle)
 
       core_client.create_pod(pod)
@@ -139,7 +141,12 @@ module ContainerRuntime
       return nil if container.blank?
       return container if container.is_a?(String)
 
-      return container.pod_name if container.respond_to?(:pod_name)
+      if container.respond_to?(:pod_name)
+        namespace = container.respond_to?(:namespace) ? container.namespace : nil
+        pod_name = container.pod_name
+        return "#{namespace}/#{pod_name}" if namespace.present? && pod_name.present?
+        return pod_name
+      end
 
       if container.respond_to?(:id)
         id = container.id
@@ -152,44 +159,62 @@ module ContainerRuntime
     private
 
     def resolve_handle(id)
-      return id if id.respond_to?(:pod_name)
+      return id if id.respond_to?(:pod_name) && id.respond_to?(:namespace)
 
-      identifier = extract_pod_identifier(id)
-      pod_name = sanitize_name(identifier)
-      route_token = extract_route_token(pod_name)
-      service_ports = infer_service_ports(pod_name, route_token)
-
-      OpenStruct.new(
-        pod_name: pod_name,
-        namespace: runtime_namespace,
-        container_name: DEFAULT_CONTAINER_NAME,
-        service_name: pod_name,
-        ingress_name: "#{pod_name}-ingress",
-        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip" ],
-        route_token: route_token,
-        service_ports: service_ports
+      reference = extract_handle_reference(id)
+      build_runtime_handle(
+        pod_name: reference[:pod_name],
+        namespace: reference[:namespace],
+        route_token: reference[:route_token],
+        service_ports: reference[:service_ports]
       )
     end
 
-    def extract_pod_identifier(id)
+    def extract_handle_reference(id)
       if id.is_a?(Hash)
-        value = id[:pod_name] || id["pod_name"] || id[:id] || id["id"]
-        return value if value.present?
+        pod_name = id[:pod_name] || id["pod_name"] || id[:id] || id["id"]
+        namespace = id[:namespace] || id["namespace"]
+        return build_handle_reference(pod_name, namespace: namespace, service_ports: id[:service_ports] || id["service_ports"])
+      end
+
+      if id.respond_to?(:pod_name)
+        namespace = id.respond_to?(:namespace) ? id.namespace : nil
+        service_ports = id.respond_to?(:service_ports) ? id.service_ports : nil
+        return build_handle_reference(id.pod_name, namespace: namespace, service_ports: service_ports)
       end
 
       raw = id.to_s
-      raw[/pod_name=\"([^\"]+)\"/, 1] || raw
+      pod_name = raw[/pod_name=\"([^\"]+)\"/, 1] || raw
+      namespace = raw[/namespace=\"([^\"]+)\"/, 1]
+
+      if namespace.blank? && raw.match?(%r{\A[^/\s]+/[^/\s]+\z})
+        namespace, pod_name = raw.split("/", 2)
+      end
+
+      build_handle_reference(pod_name, namespace: namespace)
     end
 
-    def infer_service_ports(pod_name, route_token)
-      ports = pod_service_ports(pod_name)
+    def build_handle_reference(identifier, namespace: nil, service_ports: nil)
+      pod_name = sanitize_name(identifier)
+      route_token = extract_route_token(pod_name)
+
+      {
+        pod_name: pod_name,
+        namespace: namespace.presence || runtime_namespace,
+        route_token: route_token,
+        service_ports: Array(service_ports).presence || infer_service_ports(pod_name, namespace, route_token)
+      }
+    end
+
+    def infer_service_ports(pod_name, namespace, route_token)
+      ports = pod_service_ports(pod_name, namespace)
       return ports if ports.any?
 
       route_token.present? ? DEFAULT_SERVICE_PORTS : []
     end
 
-    def pod_service_ports(pod_name)
-      pod = core_client.get_pod(pod_name, runtime_namespace)
+    def pod_service_ports(pod_name, namespace)
+      pod = core_client.get_pod(pod_name, namespace.presence || runtime_namespace)
       containers = pod&.spec&.containers || []
       container = containers.find { |c| c.name == DEFAULT_CONTAINER_NAME } || containers.first
       return [] unless container.respond_to?(:ports)
@@ -204,10 +229,20 @@ module ContainerRuntime
       route_token = extract_route_token(container_name)
       pod_name = sanitize_name(container_name || "palad-#{SecureRandom.hex(6)}")
       service_ports = extract_ports(spec[:exposed_ports])
+      namespace = namespace_for(spec[:namespace_context])
 
+      build_runtime_handle(
+        pod_name: pod_name,
+        namespace: namespace,
+        route_token: route_token,
+        service_ports: service_ports
+      )
+    end
+
+    def build_runtime_handle(pod_name:, namespace:, route_token:, service_ports:)
       OpenStruct.new(
         pod_name: pod_name,
-        namespace: runtime_namespace,
+        namespace: namespace.presence || runtime_namespace,
         container_name: DEFAULT_CONTAINER_NAME,
         service_name: pod_name,
         ingress_name: "#{pod_name}-ingress",
@@ -238,6 +273,8 @@ module ContainerRuntime
 
       labels = { "app" => "palad-runtime", "palad-container" => handle.pod_name }
       pod_spec = {
+        automountServiceAccountToken: false,
+        enableServiceLinks: false,
         restartPolicy: "Never",
         containers: [ container ],
         volumes: volumes
@@ -645,6 +682,24 @@ module ContainerRuntime
       )
     end
 
+    def build_terminal_auth_middleware(namespace)
+      Kubeclient::Resource.new(
+        apiVersion: "traefik.io/v1alpha1",
+        kind: "Middleware",
+        metadata: {
+          name: traefik_auth_middleware,
+          namespace: namespace
+        },
+        spec: {
+          forwardAuth: {
+            address: "#{internal_service_url('web', 4000)}/api/v1/internal/ws_auth",
+            trustForwardHeader: true,
+            authResponseHeadersRegex: "^X-"
+          }
+        }
+      )
+    end
+
     def build_route(handle, suffix, port, middlewares)
       {
         match: build_route_match(handle, suffix),
@@ -668,46 +723,62 @@ module ContainerRuntime
     end
 
     def route_domain_host
-      return nil unless defined?(Settings) && Settings.respond_to?(:domain)
-
       Settings.domain.to_s.strip.presence
     end
 
     def traefik_entrypoint
-      kube_setting(:traefik_entrypoint, "websecure")
+      kube_setting(:traefik_entrypoint)
     end
 
     def traefik_auth_middleware
-      kube_setting(:traefik_auth_middleware, "terminal-auth")
+      kube_setting(:traefik_auth_middleware)
     end
 
     def runtime_namespace
-      kube_setting(:namespace, "palad")
+      kube_setting(:namespace)
+    end
+
+    def namespace_for(context)
+      context = (context || {}).with_indifferent_access
+
+      if context[:project_id].present?
+        return sanitize_name("#{runtime_namespace}-project-#{context[:project_id]}")
+      end
+
+      if context[:user_id].present?
+        return sanitize_name("#{runtime_namespace}-user-#{context[:user_id]}")
+      end
+
+      runtime_namespace
+    end
+
+    def isolated_runtime_namespace?(namespace)
+      namespace.present? && namespace != runtime_namespace
     end
 
     def workspace_dir
-      kube_setting(:workspace_dir, DEFAULT_WORKSPACE_DIR)
+      kube_setting(:workspace_dir)
     end
 
     def image_pull_policy
-      kube_setting(:image_pull_policy, "IfNotPresent")
+      kube_setting(:image_pull_policy)
     end
 
     def runtime_container_resources
       {
         requests: {
-          cpu: kube_setting(:runtime_requests_cpu, "500m").to_s,
-          memory: kube_setting(:runtime_requests_memory, "1Gi").to_s
+          cpu: kube_setting(:runtime_requests_cpu).to_s,
+          memory: kube_setting(:runtime_requests_memory).to_s
         },
         limits: {
-          cpu: kube_setting(:runtime_limits_cpu, "3000m").to_s,
-          memory: kube_setting(:runtime_limits_memory, "4Gi").to_s
+          cpu: kube_setting(:runtime_limits_cpu).to_s,
+          memory: kube_setting(:runtime_limits_memory).to_s
         }
       }
     end
 
     def agents_image_pull_secrets
-      raw = kube_setting(:agents_image_pull_secrets, [])
+      raw = kube_setting(:agents_image_pull_secrets)
 
       values = case raw
       when String
@@ -722,15 +793,15 @@ module ContainerRuntime
     end
 
     def service_account_token_path
-      kube_setting(:service_account_token_path, "/var/run/secrets/kubernetes.io/serviceaccount/token")
+      kube_setting(:service_account_token_path)
     end
 
     def service_account_ca_path
-      kube_setting(:service_account_ca_path, "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt")
+      kube_setting(:service_account_ca_path)
     end
 
     def kubeconfig_path
-      kube_setting(:kubeconfig_path, "/root/.kube/config")
+      kube_setting(:kubeconfig_path)
     end
 
     def core_client
@@ -759,6 +830,23 @@ module ContainerRuntime
       @traefik_client = client
     end
 
+    def networking_client
+      return @networking_client if defined?(@networking_client)
+
+      client = Kubeclient::Client.new(
+        "#{kube_endpoint}/apis/networking.k8s.io",
+        "v1",
+        ssl_options: kube_ssl_options,
+        auth_options: kube_auth_options
+      )
+
+      begin
+        client.discover unless client.discovered
+      end
+
+      @networking_client = client
+    end
+
     def traefik_api_endpoint
       "#{kube_endpoint}/apis/traefik.io"
     end
@@ -767,8 +855,8 @@ module ContainerRuntime
       return @kube_endpoint if defined?(@kube_endpoint)
 
       if in_cluster?
-        host = kube_setting(:service_host, "kubernetes.default.svc")
-        port = kube_setting(:service_port, "443")
+        host = kube_setting(:service_host)
+        port = kube_setting(:service_port)
         @kube_endpoint = "https://#{host}:#{port}"
       else
         config = kube_config
@@ -807,11 +895,266 @@ module ContainerRuntime
     end
 
     def ready_timeout
-      kube_setting(:ready_timeout, READY_TIMEOUT).to_i
+      kube_setting(:ready_timeout).to_i
     end
 
     def ready_interval
-      kube_setting(:ready_interval, READY_INTERVAL).to_f
+      kube_setting(:ready_interval).to_f
+    end
+
+    def ensure_runtime_namespace_resources(handle, namespace_context)
+      return unless isolated_runtime_namespace?(handle.namespace)
+
+      ensure_namespace(handle.namespace, namespace_context)
+      ensure_terminal_auth_middleware(handle.namespace)
+      ensure_runtime_network_policies(handle.namespace)
+    end
+
+    def ensure_namespace(namespace, context)
+      core_client.get_namespace(namespace)
+    rescue StandardError
+      core_client.create_namespace(build_namespace_resource(namespace, context))
+    end
+
+    def build_namespace_resource(namespace, context)
+      Kubeclient::Resource.new(
+        apiVersion: "v1",
+        kind: "Namespace",
+        metadata: {
+          name: namespace,
+          labels: namespace_labels(namespace, context)
+        }
+      )
+    end
+
+    def namespace_labels(namespace, context)
+      context = (context || {}).with_indifferent_access
+
+      labels = {
+        "palad.ai/runtime-isolated" => "true",
+        "palad.ai/runtime-origin" => runtime_namespace,
+        "palad.ai/runtime-namespace" => namespace
+      }
+
+      if context[:project_id].present?
+        labels["palad.ai/scope"] = "project"
+        labels["palad.ai/project-id"] = context[:project_id].to_s
+      elsif context[:user_id].present?
+        labels["palad.ai/scope"] = "user"
+        labels["palad.ai/user-id"] = context[:user_id].to_s
+      else
+        labels["palad.ai/scope"] = "shared"
+      end
+
+      labels
+    end
+
+    def ensure_terminal_auth_middleware(namespace)
+      traefik_client.get_entity("middlewares", traefik_auth_middleware, namespace)
+    rescue StandardError
+      traefik_client.create_entity("Middleware", "middlewares", build_terminal_auth_middleware(namespace))
+    end
+
+    def ensure_runtime_network_policies(namespace)
+      runtime_network_policies(namespace).each do |policy|
+        ensure_network_policy(namespace, policy)
+      end
+    end
+
+    def ensure_network_policy(namespace, policy)
+      networking_client.get_entity("networkpolicies", policy.metadata[:name], namespace)
+    rescue StandardError
+      networking_client.create_entity("NetworkPolicy", "networkpolicies", policy)
+    end
+
+    def runtime_network_policies(namespace)
+      [
+        build_default_deny_network_policy(namespace),
+        build_traefik_ingress_network_policy(namespace),
+        build_dns_egress_network_policy(namespace),
+        build_palad_service_egress_network_policy(namespace),
+        build_public_internet_egress_network_policy(namespace)
+      ]
+    end
+
+    def build_default_deny_network_policy(namespace)
+      Kubeclient::Resource.new(
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
+        metadata: {
+          name: "runtime-default-deny",
+          namespace: namespace
+        },
+        spec: {
+          podSelector: {},
+          policyTypes: [ "Ingress", "Egress" ]
+        }
+      )
+    end
+
+    def build_traefik_ingress_network_policy(namespace)
+      Kubeclient::Resource.new(
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
+        metadata: {
+          name: "runtime-allow-traefik-ingress",
+          namespace: namespace
+        },
+        spec: {
+          podSelector: {},
+          policyTypes: [ "Ingress" ],
+          ingress: [
+            {
+              from: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      "kubernetes.io/metadata.name" => runtime_namespace
+                    }
+                  },
+                  podSelector: {
+                    matchLabels: {
+                      "app" => "traefik"
+                    }
+                  }
+                }
+              ],
+              ports: DEFAULT_TRAEFIK_PORTS.map do |port|
+                { protocol: "TCP", port: port }
+              end
+            }
+          ]
+        }
+      )
+    end
+
+    def build_dns_egress_network_policy(namespace)
+      Kubeclient::Resource.new(
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
+        metadata: {
+          name: "runtime-allow-dns-egress",
+          namespace: namespace
+        },
+        spec: {
+          podSelector: {},
+          policyTypes: [ "Egress" ],
+          egress: [
+            {
+              to: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      "kubernetes.io/metadata.name" => "kube-system"
+                    }
+                  }
+                }
+              ],
+              ports: [
+                { protocol: "UDP", port: 53 },
+                { protocol: "TCP", port: 53 }
+              ]
+            }
+          ]
+        }
+      )
+    end
+
+    def build_palad_service_egress_network_policy(namespace)
+      services = [
+        [ "web", 4000 ],
+        [ "mcp", 4002 ],
+        [ "otlp-ingest", 4318 ]
+      ]
+
+      Kubeclient::Resource.new(
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
+        metadata: {
+          name: "runtime-allow-palad-service-egress",
+          namespace: namespace
+        },
+        spec: {
+          podSelector: {},
+          policyTypes: [ "Egress" ],
+          egress: services.map do |app, port|
+            {
+              to: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      "kubernetes.io/metadata.name" => runtime_namespace
+                    }
+                  },
+                  podSelector: {
+                    matchLabels: {
+                      "app" => app
+                    }
+                  }
+                }
+              ],
+              ports: [
+                { protocol: "TCP", port: port }
+              ]
+            }
+          end
+        }
+      )
+    end
+
+    def build_public_internet_egress_network_policy(namespace)
+      egress = [
+        {
+          to: [
+            {
+              ipBlock: build_ip_block("0.0.0.0/0", runtime_blocked_ipv4_cidrs)
+            }
+          ]
+        }
+      ]
+
+      blocked_ipv6 = runtime_blocked_ipv6_cidrs
+      if blocked_ipv6.any?
+        egress << {
+          to: [
+            {
+              ipBlock: build_ip_block("::/0", blocked_ipv6)
+            }
+          ]
+        }
+      end
+
+      Kubeclient::Resource.new(
+        apiVersion: "networking.k8s.io/v1",
+        kind: "NetworkPolicy",
+        metadata: {
+          name: "runtime-allow-public-internet-egress",
+          namespace: namespace
+        },
+        spec: {
+          podSelector: {},
+          policyTypes: [ "Egress" ],
+          egress: egress
+        }
+      )
+    end
+
+    def build_ip_block(cidr, except_cidrs)
+      block = { cidr: cidr }
+      except_values = Array(except_cidrs).map(&:to_s).map(&:strip).reject(&:blank?).uniq
+      block[:except] = except_values if except_values.any?
+      block
+    end
+
+    def runtime_blocked_ipv4_cidrs
+      blocked = kube_cidr_list_setting(:runtime_blocked_ipv4_cidrs)
+      vpc_cidr = kube_setting(:eks_vpc_cidr).to_s.strip
+
+      (blocked + [ vpc_cidr ]).map(&:to_s).map(&:strip).reject(&:blank?).uniq
+    end
+
+    def runtime_blocked_ipv6_cidrs
+      kube_cidr_list_setting(:runtime_blocked_ipv6_cidrs)
     end
 
     def verify_resources(handle, ports)
@@ -831,7 +1174,7 @@ module ContainerRuntime
     def ensure_middlewares(handle)
       return if handle.route_token.blank?
 
-      handle.middleware_names.each do |name|
+      (handle.middleware_names + [ traefik_auth_middleware ]).uniq.each do |name|
         traefik_client.get_entity("middlewares", name, handle.namespace)
       end
     rescue StandardError => e
@@ -847,16 +1190,21 @@ module ContainerRuntime
     end
 
     def wait_for_traefik_route(handle)
-      traefik_url = "https://traefik.#{handle.namespace}.svc.cluster.local/t/#{handle.route_token}/tty/"
+      traefik_url = "https://#{traefik_service_host}/t/#{handle.route_token}/tty/"
+      uri = URI(traefik_url)
+      expected_host = route_domain_host
       start_time = Time.current
       timeout = ready_timeout
 
       loop do
+        request = Net::HTTP::Head.new(uri.request_uri)
+        request["Host"] = expected_host if expected_host.present?
+
         response = Net::HTTP.start(
-          URI(traefik_url).host, 443,
+          uri.host, uri.port,
           use_ssl: true, verify_mode: OpenSSL::SSL::VERIFY_NONE,
           open_timeout: 2, read_timeout: 2
-        ) { |http| http.head(URI(traefik_url).request_uri) }
+        ) { |http| http.request(request) }
 
         if response.code.to_i != 404
           Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{response.code})")
@@ -874,11 +1222,30 @@ module ContainerRuntime
       end
     end
 
-    def kube_setting(key, default)
-      return default unless defined?(Settings) && Settings.respond_to?(:kubernetes)
+    def traefik_service_host
+      "traefik.#{runtime_namespace}.svc.cluster.local"
+    end
 
-      value = Settings.kubernetes&.public_send(key) rescue nil
-      value.present? ? value : default
+    def internal_service_url(service_name, port)
+      "http://#{service_name}.#{runtime_namespace}.svc.cluster.local:#{port}"
+    end
+
+    def kube_cidr_list_setting(key)
+      value = kube_setting(key)
+      values = case value
+      when String
+        value.split(",")
+      when Array
+        value
+      else
+        Array(value)
+      end
+
+      values.map(&:to_s).map(&:strip).reject(&:blank?).uniq
+    end
+
+    def kube_setting(key)
+      Settings.kubernetes.public_send(key)
     end
   end
 end

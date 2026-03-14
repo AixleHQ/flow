@@ -86,6 +86,7 @@ kube-setup:
 	$(KUBECTL) apply -f $(KUBE_DEV_SECRETS_DIR)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)
 	$(KUBECTL) wait --for=condition=ready pod -l app=db -n $(KUBE_DEV_NAMESPACE) --timeout=120s
+	$(KUBECTL) exec -n $(KUBE_DEV_NAMESPACE) deployment/web -- rails db:drop DISABLE_DATABASE_ENVIRONMENT_CHECK=1 || true
 	$(KUBECTL) exec -n $(KUBE_DEV_NAMESPACE) deployment/web -- make db-prepare
 	$(KUBECTL) wait --for=condition=ready pod -l app=web -n $(KUBE_DEV_NAMESPACE) --timeout=120s
 	@$(MAKE) kube-mount-dev
