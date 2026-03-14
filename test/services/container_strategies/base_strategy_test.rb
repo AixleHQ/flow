@@ -64,13 +64,15 @@ module ContainerStrategies
 
     test "create_container creates container via runtime" do
       strategy = TestStrategy.new
+      handle = OpenStruct.new(namespace: "palad", pod_name: "container-handle-123")
 
       @runtime_mock.expects(:create_container).with do |spec|
         spec[:image] == "test:latest" &&
           spec[:env_vars] == [ "A=1" ] &&
           spec[:labels] == { "x" => "y" } &&
           spec[:host_config] == { "NetworkMode" => "bridge" }
-      end.returns("container-handle-123")
+      end.returns(handle)
+      @runtime_mock.expects(:container_identifier).with(handle).returns("container-handle-123")
 
       result = strategy.create_container(
         image: "test:latest",
