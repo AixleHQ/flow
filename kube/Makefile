@@ -12,6 +12,8 @@ KUBE_PROD_NAMESPACE ?= palad
 KUBE_NAMESPACE ?= $(KUBE_DEV_NAMESPACE)
 SECRET_NAMESPACE ?= $(KUBE_NAMESPACE)
 SECRET_NAME ?=
+SECRET_KEY ?=
+SECRET_VAR ?= $(SECRET_KEY)
 KUBE_EDITOR ?= vim
 KUBECTL = kubectl $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
 ARC_CONTROLLER_INSTALLATION_NAME ?= arc
@@ -30,7 +32,7 @@ kube-help:
 	@echo "  make kube-apply-prod        - Apply prod manifests (secrets are not touched)"
 	@echo "  make kube-secrets-apply     - Apply dev secret manifests explicitly"
 	@echo "  make kube-secrets-apply-prod - Apply prod secret manifests explicitly"
-	@echo "  make kube-secret-set        - Open an existing secret in vim and save back (SECRET_NAME=... [SECRET_NAMESPACE=...])"
+	@echo "  make kube-secret-set        - Edit one decoded secret key and patch it back (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
@@ -111,7 +113,7 @@ kube-secrets-apply-prod:
 
 # Restart web-related deployments to pick up new config/secrets
 kube-web-rollout:
-	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_NAMESPACE)
+	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_PROD_NAMESPACE)
 
 # Install/upgrade Actions Runner Controller (ARC) controller chart.
 kube-arc-install-controller:
@@ -137,15 +139,36 @@ kube-arc-install-runner-set:
 # One-shot ARC setup for deploy runner scale set.
 kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set
 
-# Edit an existing secret interactively and save changes back to the cluster
+# Edit one decoded secret key interactively and patch it back to the cluster
 kube-secret-set:
-	@if [ -z "$(SECRET_NAME)" ]; then \
+	@set -eu; \
+	if [ -z "$(SECRET_NAME)" ]; then \
 		echo "SECRET_NAME is not set. Available secrets in namespace $(SECRET_NAMESPACE):"; \
 		$(KUBECTL) get secrets -n "$(SECRET_NAMESPACE)" || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
 		exit 1; \
-	fi
-	@KUBE_EDITOR="$(KUBE_EDITOR)" $(KUBECTL) edit secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)"
+	fi; \
+	secret_key="$(if $(SECRET_VAR),$(SECRET_VAR),$(SECRET_KEY))"; \
+	if [ -z "$$secret_key" ]; then \
+		echo "SECRET_KEY is not set. Available keys in $(SECRET_NAME):"; \
+		$(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r '.data | keys[]?' || true; \
+		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		exit 1; \
+	fi; \
+	tmp_file="$$(mktemp /tmp/kube-secret-set.XXXXXX)"; \
+	patch_file="$$(mktemp /tmp/kube-secret-set-patch.XXXXXX)"; \
+	cleanup() { rm -f "$$tmp_file" "$$patch_file"; }; \
+	trap cleanup EXIT INT TERM; \
+	current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \
+	if [ -n "$$current_value" ]; then \
+		printf '%s' "$$current_value" | base64 -d > "$$tmp_file"; \
+	fi; \
+	echo "Editing $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"; \
+	KUBE_SECRET_FILE="$$tmp_file" KUBE_EDITOR_CMD='$(KUBE_EDITOR)' sh -c 'exec $$KUBE_EDITOR_CMD "$$KUBE_SECRET_FILE"'; \
+	encoded_value="$$(base64 < "$$tmp_file" | tr -d '\n')"; \
+	jq -n --arg key "$$secret_key" --arg value "$$encoded_value" '{data: {($$key): $$value}}' > "$$patch_file"; \
+	$(KUBECTL) patch secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" --type merge --patch-file "$$patch_file" >/dev/null; \
+	echo "Updated $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"
 
 # Default to current directory's web folder if not provided
 WEB_HOST_PATH ?= $(shell pwd)

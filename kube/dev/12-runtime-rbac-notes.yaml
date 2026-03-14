@@ -10,6 +10,6 @@ data:
 
     App secret setup:
     1) Edit app secret in cluster:
-       make kube-secret-set SECRET_NAME=palad-app-secrets
+       make kube-secret-set SECRET_NAME=palad-app-secrets SECRET_KEY=RAILS_SECRET_KEY_BASE
     2) Apply dev manifests:
        make kube-apply

@@ -44,6 +44,9 @@ spec:
               cpu: "2000m"
               memory: "2Gi"
           command: ["bin/temporal_worker"]
+          env:
+            - name: RAILS_LOG_LEVEL
+              value: debug
           envFrom:
             - configMapRef:
                 name: palad-app-config

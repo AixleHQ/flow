@@ -49,7 +49,8 @@ data:
   K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
   MCP_SERVER_URL: http://mcp:4002/action_mcp
   MCP_PORT: "4002"
-  GITHUB_CLIENT_ID: "get_from_1password"
+  GITHUB_APP_ID: "3090688"
+  GITHUB_APP_SLUG: palad-ai
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
