@@ -1,25 +1,28 @@
 services:
   web:
-    image: ${WEB_IMAGE}
+    image: web
     depends_on:
       - db
       - redis
     environment:
-      APP_VERSION: dev
-      AUTHOR_NAME: author
-      AUTHOR_EMAIL: email
-      RAILS_LOG_TO_STDOUT: 'true'
-      PORT: 4000
+      APP_VERSION: ci
+      AUTHOR_NAME: github-actions
+      AUTHOR_EMAIL: github-actions@users.noreply.github.com
       DB_HOST: db
-      DEBUG: 'true'
-      REDIS_URL: redis://redis:6379/1
+      DB_PORT: 5432
+      DB_USERNAME: postgres
+      DB_NAME: palad_test
       ENVIRONMENT: test
+      PORT: 4000
       RAILS_ENV: test
+      RAILS_LOG_TO_STDOUT: "true"
+      RAILS_SECRET_KEY_BASE: secret
+      REDIS_URL: redis://redis:6379/1
 
   db:
-    image: quay.io/debezium/postgres:15-alpine
+    image: postgres:15.3-alpine
     environment:
-      - POSTGRES_HOST_AUTH_METHOD=trust
+      POSTGRES_HOST_AUTH_METHOD: trust
 
   redis:
-    image: ghcr.io/redisgrafana/redis-opencv:latest
+    image: redis:7.2-alpine
