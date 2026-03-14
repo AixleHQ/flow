@@ -317,7 +317,39 @@ jobs:
 
       - name: Wait for migration completion
         run: |
-          kubectl -n "$KUBE_NAMESPACE" wait --for=condition=complete --timeout=20m "job/${{ steps.migrate_job.outputs.job_name }}"
+          JOB_NAME="${{ steps.migrate_job.outputs.job_name }}"
+          TIMEOUT_SECONDS=$((5 * 60))
+
+          while true; do
+            SUCCEEDED="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)"
+            FAILED="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.failed}' 2>/dev/null || true)"
+            ACTIVE="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.active}' 2>/dev/null || true)"
+
+            SUCCEEDED="${SUCCEEDED:-0}"
+            FAILED="${FAILED:-0}"
+            ACTIVE="${ACTIVE:-0}"
+
+            echo "Migration job status: active=${ACTIVE} succeeded=${SUCCEEDED} failed=${FAILED} elapsed=${SECONDS}s"
+
+            if [ "$SUCCEEDED" -gt 0 ]; then
+              echo "Migration job completed successfully"
+              exit 0
+            fi
+
+            if [ "$FAILED" -gt 0 ]; then
+              echo "Migration job failed"
+              kubectl -n "$KUBE_NAMESPACE" describe job "$JOB_NAME" || true
+              exit 1
+            fi
+
+            if [ "$SECONDS" -ge "$TIMEOUT_SECONDS" ]; then
+              echo "Timed out waiting for migration job completion"
+              kubectl -n "$KUBE_NAMESPACE" describe job "$JOB_NAME" || true
+              exit 1
+            fi
+
+            sleep 10
+          done
 
       - name: Migration logs
         if: always()
