@@ -62,7 +62,7 @@ jobs:
         run: docker compose -f "${COMPOSE_FILE}" down --volumes --remove-orphans
 
   build-web:
-    name: Build And Push Web Image
+    name: Build Web
     runs-on: ubuntu-latest
     env:
       IMAGE_NAME: ${{ github.repository }}-web
@@ -108,7 +108,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=web-image
 
   build-otlp:
-    name: Build And Push OTLP Ingest Image
+    name: Build OTLP Ingest
     runs-on: ubuntu-latest
     needs: tests
     env:
@@ -150,7 +150,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=otlp-ingest-image
 
   build-agent-base:
-    name: Build And Push Agent Base Core Image
+    name: Build Agent Base
     runs-on: ubuntu-latest
     needs: tests
     env:
@@ -192,7 +192,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=agent-base-core-image
 
   build-agent-images:
-    name: Build And Push ${{ matrix.image_name }} Image
+    name: Build ${{ matrix.image_name }}
     runs-on: ubuntu-latest
     needs: build-agent-base
     strategy:
