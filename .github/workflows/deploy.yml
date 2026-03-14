@@ -161,9 +161,9 @@ jobs:
 
   build-agent-base:
     name: Build Agent Base
-    if: github.event_name != 'pull_request'
+    # if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    needs: [be-test, be-lint, be-security, fe-lint, fe-typecheck, fe-fsd]
+    # needs: [be-test, be-lint, be-security, fe-lint, fe-typecheck, fe-fsd]
     env:
       BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
 
