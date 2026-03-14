@@ -5,10 +5,11 @@ metadata:
   namespace: palad-dev
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
-    - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
+    - match: Host(`k8s.orb.local`) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
           port: 4000
+  tls: {}

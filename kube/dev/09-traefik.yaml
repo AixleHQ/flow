@@ -79,15 +79,12 @@ spec:
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
-            - "--entrypoints.adminwebsecure.address=:8443"
             - "--log.level=DEBUG"
           ports:
             - name: web
               containerPort: 80
             - name: websecure
               containerPort: 443
-            - name: adminwebsecure
-              containerPort: 8443
             - name: traefik
               containerPort: 8090
 ---
@@ -97,7 +94,7 @@ metadata:
   name: traefik
   namespace: palad-dev
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: traefik
   ports:
@@ -109,21 +106,6 @@ spec:
       targetPort: 443
 
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: traefik-admin
-  namespace: palad-dev
-spec:
-  type: NodePort
-  selector:
-    app: traefik
-  ports:
-    - name: adminwebsecure
-      port: 443
-      targetPort: 8443
-
----
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -131,14 +113,16 @@ metadata:
   namespace: palad-dev
 spec:
   entryPoints:
-    - adminwebsecure
+    - websecure
   routes:
-    - match: Host(`traefik.palad.ai`)
+    - match: Host(`traefik.k8s.orb.local`)
       kind: Rule
+      middlewares:
+        - name: traefik-dashboard-redirect
       services:
         - name: api@internal
           kind: TraefikService
-
+  tls: {}
 ---
 apiVersion: traefik.io/v1alpha1
 kind: Middleware
@@ -147,5 +131,5 @@ metadata:
   namespace: palad-dev
 spec:
   redirectRegex:
-    regex: "^(https?://[^/]+)/?$"
-    replacement: "${1}/dashboard/"
+    regex: "^https?://[^/]+/?$"
+    replacement: "https://traefik.k8s.orb.local/dashboard/"

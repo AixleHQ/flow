@@ -51,12 +51,11 @@ metadata:
   namespace: palad-dev
 spec:
   entryPoints:
-    - web
+    - websecure
   routes:
-    - match: Host(`temporal.palad.ai`)
+    - match: Host(`temporal.k8s.orb.local`)
       kind: Rule
-      middlewares:
-        - name: admin-basic-auth
       services:
         - name: temporal-ui
           port: 8080
+  tls: {}
