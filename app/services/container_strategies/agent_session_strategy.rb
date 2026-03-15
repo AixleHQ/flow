@@ -109,19 +109,25 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
       cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt)
 
+      tmux_cmd = cmd
       if session.mode == "non_interactive" && session.initial_prompt.present?
-        runtime.copy_to(container, "/tmp/.agent_prompt", session.initial_prompt)
-        # Wrapper reads prompt from file to avoid shell escaping issues
+        copied = runtime.copy_to(container, "/tmp/.agent_prompt", session.initial_prompt)
+        raise "Failed to write /tmp/.agent_prompt in container" unless copied
+
+        # Read prompt from file inside pane shell to avoid quoting/injection issues.
         tmux_cmd = "#{cmd} \"$(cat /tmp/.agent_prompt)\""
-      else
-        tmux_cmd = cmd
       end
 
-      safe_cmd = tmux_cmd.gsub("'", "'\\\\''")
-      runtime.exec(container, [
-        "sh", "-c",
-        "tmux respawn-pane -k -t agent '#{safe_cmd}'"
-      ])
+      _stdout, stderr, exit_code = runtime.exec(
+        container,
+        [ "tmux", "respawn-pane", "-k", "-t", "agent", tmux_cmd ],
+        tty: true
+      )
+      unless exit_code.to_i.zero?
+        err = Array(stderr).join.to_s.strip
+        raise "tmux respawn-pane failed with exit=#{exit_code}: #{err.presence || 'no stderr'}"
+      end
+
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 
