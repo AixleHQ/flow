@@ -101,9 +101,6 @@ module ContainerStrategies
 
     private
 
-    # Kill the wait script in tmux and start the agent CLI.
-    # For non-interactive: writes prompt to file, launches via wrapper script.
-    # For interactive: launches the CLI directly (TUI REPL).
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
