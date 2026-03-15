@@ -190,7 +190,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./docker/base
-          file: ./docker/base/Dockerfile.core
+          file: ./docker/base/Dockerfile
           push: true
           tags: ${{ steps.meta_base.outputs.tags }}
           labels: ${{ steps.meta_base.outputs.labels }}

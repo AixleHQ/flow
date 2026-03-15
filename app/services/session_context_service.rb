@@ -13,6 +13,56 @@ require "stringio"
 #   - Skill files per CLI format (Story 9.6)
 #   - Context file with MCP/tool descriptions and agent persona (Story 9.7)
 class SessionContextService
+  # Collects a structured log of everything injected into the container.
+  # Written to /var/log/context.log for post-mortem debugging.
+  class ContextLog
+    def initialize(session)
+      @session_id = session.id
+      @agent_type = session.agent_type
+      @mode = session.mode
+      @started_at = Time.current
+      @entries = []
+    end
+
+    def record(step, data)
+      @entries << { step: step, data: data, at: Time.current.iso8601(3) }
+    end
+
+    def record_files(step, files_hash)
+      return if files_hash.blank?
+
+      @entries << { step: step, files: files_hash, at: Time.current.iso8601(3) }
+    end
+
+    def to_s
+      lines = []
+      lines << "=== Session Context Log ==="
+      lines << "session_id: #{@session_id}"
+      lines << "agent_type: #{@agent_type}"
+      lines << "mode: #{@mode}"
+      lines << "assembled_at: #{@started_at.iso8601(3)}"
+      lines << ""
+
+      @entries.each do |entry|
+        if entry[:files]
+          lines << "[#{entry[:at]}] #{entry[:step]}:"
+          entry[:files].each do |path, content|
+            lines << "--- #{path} ---"
+            lines << content.to_s
+            lines << "--- end #{path} ---"
+            lines << ""
+          end
+        else
+          lines << "[#{entry[:at]}] #{entry[:step]}: #{entry[:data].inspect}"
+        end
+      end
+
+      lines << ""
+      lines << "=== End Context Log ==="
+      lines.join("\n")
+    end
+  end
+
   class << self
     # == Story 9.8: Unified Session Context Assembly ==
 
@@ -23,9 +73,12 @@ class SessionContextService
     # @param session [TerminalSession] Session record
     # @param credential [AgentCredential, nil] Optional credential to inject
     def assemble_session_context(container_id, session, credential: nil)
+      context_log = ContextLog.new(session)
+
       # Resolve MCP server names early — needed for pre-approving servers
       # in the credential config (e.g. Claude Code's enabledMcpjsonServers)
       mcp_server_names = build_all_servers(session).map(&:name)
+      context_log.record(:mcp_servers, mcp_server_names)
       Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
 
       # Step 1: Credentials (optional)
@@ -34,26 +87,36 @@ class SessionContextService
           workflow_config = { enabled_mcp_servers: mcp_server_names }
           Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
           credential.write_to_container(container_id, workflow_config)
+          context_log.record(:credentials, agent_type: credential.agent_type, config_keys: credential.config_data.keys, workflow_config: workflow_config)
         end
       end
 
       # Step 2: Config files
       measure_step("config_files") { inject_config_files(container_id, session) }
+      context_log.record(:config_files, session.session_config&.dig("config_files")&.map { |f| f["path"] } || [])
 
       # Step 3: MCP config
-      measure_step("mcp_config") { inject_mcp_config(container_id, session) }
+      mcp_content = measure_step("mcp_config") { inject_mcp_config(container_id, session) }
+      context_log.record_files(:mcp_config, mcp_content)
 
       # Step 4: Skills
-      measure_step("skills") { inject_skills(container_id, session) }
+      skill_content = measure_step("skills") { inject_skills(container_id, session) }
+      context_log.record_files(:skills, skill_content)
 
       # Step 5: Context file (after skills — append to same file for Gemini)
-      measure_step("context_file") { inject_context_file(container_id, session) }
+      ctx_content = measure_step("context_file") { inject_context_file(container_id, session) }
+      context_log.record_files(:context_file, ctx_content)
 
       # Step 6: Assets
       measure_step("assets") { inject_assets(container_id, session) }
+      context_log.record(:assets, session.input_asset_ids || [])
 
       # Step 7: Repositories (shallow clone from GitHub)
       measure_step("repositories") { inject_repositories(container_id, session) }
+      context_log.record(:repositories, session.repositories.pluck(:full_name))
+
+      # Step 8: Write context log to container for debugging
+      measure_step("context_log") { write_context_log(container_id, context_log) }
 
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
     end
@@ -106,11 +169,11 @@ class SessionContextService
     # Handles append strategy for Gemini (skills appended to GEMINI.md).
     def inject_skills(container_id, session)
       skills = resolve_skills(session)
-      return if skills.empty?
+      return {} if skills.empty?
 
       adapter = adapter_for(session)
       files = adapter.skill_files(skills)
-      return if files.blank?
+      return {} if files.blank?
 
       files.each do |path, content|
         expanded = expand_path(path, adapter.home_dir)
@@ -124,6 +187,8 @@ class SessionContextService
 
         Rails.logger.info("[SessionContext] Injected skill: #{path} (#{content.bytesize} bytes)")
       end
+
+      files
     end
 
     # == Story 9.7 → 25.7: Context File Injection (via Constructor) ==
@@ -134,11 +199,11 @@ class SessionContextService
     def inject_context_file(container_id, session)
       result = SessionContextConstructor.build_result(session)
       content = result.render
-      return if content.blank?
+      return {} if content.blank?
 
       adapter = adapter_for(session)
       path = adapter.context_file_path
-      return if path.blank?
+      return {} if path.blank?
 
       expanded = expand_path(path, adapter.home_dir)
       write_file(container_id, expanded, content, adapter.tmpfs_uid)
@@ -146,6 +211,7 @@ class SessionContextService
       session.update_column(:context_metadata, result.to_json_hash)
 
       Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes, #{result.applied_builders.size} builders)")
+      { path => content }
     end
 
     # == Story 9.4: MCP Config Injection ==
@@ -155,17 +221,19 @@ class SessionContextService
     # Delegates format generation to adapter, handles merge strategy.
     def inject_mcp_config(container_id, session)
       all_servers = build_all_servers(session)
-      return if all_servers.empty?
+      return {} if all_servers.empty?
 
       adapter = adapter_for(session)
       config_files = adapter.mcp_config(all_servers)
-      return if config_files.blank?
+      return {} if config_files.blank?
 
       config_files.each do |path, content|
         expanded = expand_path(path, adapter.home_dir)
         write_mcp_file(container_id, expanded, content, adapter.mcp_merge_strategy, adapter.tmpfs_uid)
         Rails.logger.info("[SessionContext] Injected MCP config: #{path} (#{adapter.mcp_merge_strategy})")
       end
+
+      config_files
     end
 
     # Generate MCP config content (without injecting).
@@ -180,13 +248,22 @@ class SessionContextService
 
     private
 
+    CONTEXT_LOG_PATH = "/var/log/context.log"
+
+    def write_context_log(container_id, context_log)
+      runtime.copy_to(container_id, CONTEXT_LOG_PATH, context_log.to_s)
+    rescue => e
+      Rails.logger.warn("[SessionContext] Failed to write context log: #{e.message}")
+    end
+
     # == Timing ==
 
     def measure_step(name)
       start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      yield
+      result = yield
       elapsed = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - start) * 1000).round(1)
       Rails.logger.info("[SessionContext] Step '#{name}' completed in #{elapsed}ms")
+      result
     end
 
     # == Shared Helpers ==

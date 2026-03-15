@@ -61,6 +61,9 @@ module ContainerStrategies
     # == exec(container_id:, **) → { websocket_url:, ... } ==
 
     def exec(container_id:, **)
+      container = resolve_container(container_id)
+      launch_agent_in_tmux(container)
+
       result = super(container_id: container_id)
       result.delete(:watcher_url)
       result
@@ -89,9 +92,7 @@ module ContainerStrategies
     def session_type = "agent_session"
 
     def ttyd_command
-      session = TerminalSession.find(input[:session_id])
-      AgentCredentialsService.for(input[:agent_type]).adapter
-        .session_command(mode: session.mode, prompt: session.initial_prompt)
+      "bash -c 'echo -e \"\\033[0;36m⏳ Preparing session... Setting up credentials, repositories, and tools.\\033[0m\"; while true; do sleep 60; done'"
     end
 
     def services_ports
@@ -99,6 +100,30 @@ module ContainerStrategies
     end
 
     private
+
+    # Kill the wait script in tmux and start the agent CLI.
+    # For non-interactive: writes prompt to file, launches via wrapper script.
+    # For interactive: launches the CLI directly (TUI REPL).
+    def launch_agent_in_tmux(container)
+      session = TerminalSession.find(input[:session_id])
+      agent_service = AgentCredentialsService.for(input[:agent_type])
+      cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt)
+
+      if session.mode == "non_interactive" && session.initial_prompt.present?
+        runtime.copy_to(container, "/tmp/.agent_prompt", session.initial_prompt)
+        # Wrapper reads prompt from file to avoid shell escaping issues
+        tmux_cmd = "#{cmd} \"$(cat /tmp/.agent_prompt)\""
+      else
+        tmux_cmd = cmd
+      end
+
+      safe_cmd = tmux_cmd.gsub("'", "'\\\\''")
+      runtime.exec(container, [
+        "sh", "-c",
+        "tmux respawn-pane -k -t agent '#{safe_cmd}'"
+      ])
+      Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
+    end
 
     def collect_terminal_output(container, session)
       runtime.exec(container, [

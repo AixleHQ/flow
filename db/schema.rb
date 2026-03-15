@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_07_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_15_134656) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -448,6 +448,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_07_170000) do
     t.index ["kind"], name: "index_skills_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
+  end
+
+  create_table "solid_mcp_messages", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "data"
+    t.datetime "delivered_at"
+    t.string "event_type", limit: 50, null: false
+    t.string "session_id", limit: 36, null: false
+    t.index ["delivered_at", "created_at"], name: "idx_solid_mcp_messages_on_delivered_and_created"
+    t.index ["session_id", "id"], name: "idx_solid_mcp_messages_on_session_and_id"
   end
 
   create_table "step_runs", force: :cascade do |t|

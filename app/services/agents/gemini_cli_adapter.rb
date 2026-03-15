@@ -116,6 +116,10 @@ module Agents
       ]
     end
 
+    def session_log_paths
+      super + %w[/var/log/mitm/http.log]
+    end
+
     # =================================================================
     # Environment Variables (from session/credential metadata)
     # =================================================================

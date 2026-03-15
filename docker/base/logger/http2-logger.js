@@ -1,25 +1,27 @@
 /**
- * HTTP/2 request logger for AgentService/Run.
+ * Node.js HTTP request logger.
  *
- * Cursor CLI uses http2.connect() directly for AgentService/Run calls,
- * bypassing HTTP_PROXY/HTTPS_PROXY. This module patches http2.connect()
- * to capture request and response timestamps for billing correlation.
+ * Patches http2.connect(), https.request(), and http.request() to log
+ * all outbound traffic to tracked domains. Works for agents that bypass
+ * HTTP_PROXY (e.g. Claude Code, Cursor CLI).
  *
- * Logs two events per RPC:
- *   1. "request"  — client sends HEADERS (request start)
- *   2. "response" — server sends response HEADERS (≈ billing_ts - 270ms)
+ * http2:  Captures AgentService/Run gRPC calls (Cursor CLI).
+ * https:  Captures REST API calls (Claude Code → api.anthropic.com).
  *
- * Does NOT modify data flow — just observes.
  * Inject via: NODE_OPTIONS="--require /opt/mitm/http2-logger.js"
  */
 'use strict';
 
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const http2 = require('http2');
 const path = require('path');
 
 const LOG_PATH = process.env.MITM_LOG_PATH || '/var/log/mitm/http.log';
-const TRACKED_PATH = '/agent.v1.AgentService/Run';
+
+const _rawDomains = (process.env.MITM_TRACKED_DOMAINS || '').trim();
+const TRACKED_DOMAINS = new Set(_rawDomains ? _rawDomains.split(',').map(d => d.trim()).filter(Boolean) : []);
 
 let dirReady = false;
 
@@ -34,6 +36,17 @@ function appendLog(entry) {
   } catch (_) {}
 }
 
+function shouldLog(host) {
+  if (!host || TRACKED_DOMAINS.size === 0) return TRACKED_DOMAINS.size === 0;
+  for (const d of TRACKED_DOMAINS) {
+    if (host === d || host.endsWith('.' + d)) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP/2 patch (Cursor CLI gRPC)
+// ---------------------------------------------------------------------------
 const originalConnect = http2.connect;
 
 http2.connect = function patchedConnect(authority, options) {
@@ -41,20 +54,14 @@ http2.connect = function patchedConnect(authority, options) {
   const authorityStr = typeof authority === 'string' ? authority : authority.toString();
 
   let host;
-  try {
-    host = new URL(authorityStr).hostname;
-  } catch {
-    host = authorityStr;
-  }
+  try { host = new URL(authorityStr).hostname; } catch { host = authorityStr; }
+  if (!shouldLog(host)) return session;
 
   const originalRequest = session.request.bind(session);
 
   session.request = function patchedRequest(headers, options) {
     const stream = originalRequest(headers, options);
     const reqPath = headers[':path'] || '';
-
-    if (reqPath !== TRACKED_PATH) return stream;
-
     const requestId = headers['x-request-id'] || '';
 
     appendLog({
@@ -82,3 +89,58 @@ http2.connect = function patchedConnect(authority, options) {
 
   return session;
 };
+
+// ---------------------------------------------------------------------------
+// HTTP/HTTPS patch (Claude Code, Codex, Gemini, etc.)
+// ---------------------------------------------------------------------------
+function patchHttpModule(mod, protocol) {
+  const originalRequest = mod.request;
+
+  mod.request = function patchedRequest(urlOrOpts, optsOrCb, cb) {
+    let host, reqPath;
+    try {
+      if (typeof urlOrOpts === 'string' || urlOrOpts instanceof URL) {
+        const parsed = typeof urlOrOpts === 'string' ? new URL(urlOrOpts) : urlOrOpts;
+        host = parsed.hostname;
+        reqPath = parsed.pathname;
+      } else if (urlOrOpts && typeof urlOrOpts === 'object') {
+        host = urlOrOpts.hostname || urlOrOpts.host || '';
+        reqPath = urlOrOpts.path || '/';
+        if (host.includes(':')) host = host.split(':')[0];
+      }
+    } catch (_) {
+      return originalRequest.apply(this, arguments);
+    }
+
+    const req = originalRequest.apply(this, arguments);
+
+    if (!shouldLog(host)) return req;
+
+    appendLog({
+      ts: new Date().toISOString(),
+      direction: 'request',
+      scheme: protocol,
+      method: (typeof urlOrOpts === 'object' ? urlOrOpts.method : 'GET') || 'GET',
+      host,
+      path: reqPath,
+      _source: 'node-http-logger',
+    });
+
+    req.on('response', (res) => {
+      appendLog({
+        ts: new Date().toISOString(),
+        direction: 'response',
+        status_code: res.statusCode,
+        host,
+        path: reqPath,
+        _source: 'node-http-logger',
+      });
+    });
+
+    return req;
+  };
+  // http.get() calls http.request() internally, so it's covered by the patch above.
+}
+
+patchHttpModule(https, 'https');
+patchHttpModule(http, 'http');

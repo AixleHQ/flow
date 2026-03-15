@@ -25,8 +25,11 @@ module Api
             asset = Asset.downloadable_from_project(current_project).find(params[:id])
             version = asset.resolve_version(params[:version])
 
+            disposition = params[:inline] ? ::ContentDisposition.inline(asset.name)
+                                          : ::ContentDisposition.attachment(asset.name)
+
             redirect_to version.file_url(
-              response_content_disposition: ::ContentDisposition.attachment(asset.name)
+              response_content_disposition: disposition
             ), allow_other_host: true
           end
 
