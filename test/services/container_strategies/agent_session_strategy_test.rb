@@ -41,13 +41,13 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
-    test "TTYD_CMD is a waiting message for agent sessions" do
+    test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
       env_vars = strategy.build_env_vars
       ttyd_cmd = env_vars.find { |v| v.start_with?("TTYD_CMD=") }
 
-      assert ttyd_cmd.include?("Preparing session"), "TTYD_CMD should show a waiting message"
+      assert_equal "TTYD_CMD=bash", ttyd_cmd
     end
 
     # == Labels Tests ==
@@ -167,47 +167,12 @@ module ContainerStrategies
       assert result.key?(:ide_url)
     end
 
-    test "launch_agent_in_tmux uses non_interactive claude command with prompt file" do
-      strategy = build_strategy
-      @session.update!(mode: "non_interactive", initial_prompt: "Do work with `code` block")
-      container_mock = mock("container")
-
-      runtime_mock = mock("runtime")
-      strategy.stubs(:runtime).returns(runtime_mock)
-
-      runtime_mock.expects(:copy_to).with(container_mock, "/tmp/.agent_prompt", @session.initial_prompt).returns(true)
-      runtime_mock.expects(:exec).with do |container, cmd, opts|
-        container == container_mock &&
-          cmd == [ "tmux", "respawn-pane", "-k", "-t", "agent", 'claude "$(cat /tmp/.agent_prompt)"' ] &&
-          opts == { tty: true }
-      end.returns([ [], [], 0 ])
-
-      strategy.send(:launch_agent_in_tmux, container_mock)
-    end
-
-    test "launch_agent_in_tmux raises when non_interactive prompt copy fails" do
-      strategy = build_strategy
-      @session.update!(mode: "non_interactive", initial_prompt: "Do work")
-      container_mock = mock("container")
-
-      runtime_mock = mock("runtime")
-      strategy.stubs(:runtime).returns(runtime_mock)
-
-      runtime_mock.expects(:copy_to).with(container_mock, "/tmp/.agent_prompt", @session.initial_prompt).returns(false)
-      runtime_mock.expects(:exec).never
-
-      error = assert_raises(RuntimeError) do
-        strategy.send(:launch_agent_in_tmux, container_mock)
-      end
-      assert_match(/Failed to write \/tmp\/.agent_prompt/, error.message)
-    end
-
-    test "ttyd_command returns waiting message" do
+    test "ttyd_command returns bash" do
       strategy = build_strategy(agent_type: "claude_code")
 
       cmd = strategy.send(:ttyd_command)
 
-      assert cmd.include?("Preparing session")
+      assert_equal "bash", cmd
     end
 
     # == before_exec delegates to assembler ==
