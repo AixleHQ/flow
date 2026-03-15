@@ -65,6 +65,14 @@ module ContextBuilders
       skills = Skill.where(id: session.skill_ids).to_a
       return nil if skills.empty?
 
+      if adapter.includes_skills_in_context?
+        build_skills_full(skills)
+      else
+        build_skills_summary(skills)
+      end
+    end
+
+    def build_skills_full(skills)
       lines = [ "## Skills" ]
       lines << ""
       skills.each do |skill|
@@ -76,6 +84,23 @@ module ContextBuilders
         lines << ""
       end
       lines.join("\n")
+    end
+
+    def build_skills_summary(skills)
+      lines = [ "## Skills" ]
+      lines << ""
+      skills.each do |skill|
+        next if skill.content.blank?
+
+        title = skill.title.presence || skill.name
+        desc = skill.description.presence
+        lines << "- **#{title}**#{desc ? ": #{desc}" : ""}"
+      end
+      lines.join("\n")
+    end
+
+    def adapter
+      @adapter ||= AgentCredentialsService.for(session.agent_type).adapter
     end
   end
 end
