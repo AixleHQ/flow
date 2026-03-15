@@ -104,7 +104,8 @@ module ContainerStrategies
         "TTYD_CMD" => ttyd_command,
         "HOME_DIR" => agent_service.home_dir,
         "AUTH_WATCH_PATH" => agent_service.auth_watch_path,
-        "AUTH_REQUIRED_KEYS" => agent_service.adapter.auth_required_keys.join(",")
+        "AUTH_REQUIRED_KEYS" => agent_service.adapter.auth_required_keys.join(","),
+        "TMUX_TMPDIR" => "/dev/shm/tmux"
       }
 
       env_vars.merge!(agent_service.adapter.default_env_vars(session))

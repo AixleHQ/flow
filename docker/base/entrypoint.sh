@@ -113,9 +113,8 @@ fi
 # TMUX_TMPDIR ensures tmux socket lives on a tmpfs/ramfs, which is required
 # on some K8s overlay filesystems that don't support Unix domain sockets.
 # -----------------------------------------------------------------------------
-TMUX_TMPDIR="/dev/shm/tmux-$(id -u)"
-mkdir -p "$TMUX_TMPDIR" && chmod 700 "$TMUX_TMPDIR"
-export TMUX_TMPDIR
+export TMUX_TMPDIR="/dev/shm/tmux"
+mkdir -p "$TMUX_TMPDIR" && chmod 777 "$TMUX_TMPDIR"
 tmux -u new -d -s agent bash
 tmux pipe-pane -t agent "cat >> /proc/1/fd/1"
 if [ -n "$TTYD_CMD" ] && [ "$TTYD_CMD" != "bash" ]; then
