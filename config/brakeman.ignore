@@ -1,38 +1,14 @@
 {
   "ignored_warnings": [
     {
-      "fingerprint": "2c5f9d954a91f75b1605adcbedba2c51eb6d969a412b8beb04d93665b3328b45",
-      "warning_type": "SSL Verification Bypass",
-      "check_name": "SSLVerify",
-      "message": "SSL certificate verification was bypassed",
-      "file": "app/services/container_runtime/kubernetes_runtime.rb",
-      "note": "In-cluster health check to Traefik service uses self-signed certificate. This is an internal pod-to-service call within the Kubernetes cluster, not an external request."
-    },
-    {
-      "fingerprint": "6fc1c2564f06481688b76d9ebded12c64524956252596f83d30d23f528a1d877",
+      "fingerprint": "1a58d3cd4d85509818d497647ee1862781987c6576a87129712926b99aeaa116",
       "warning_type": "Redirect",
       "check_name": "Redirect",
       "message": "Possible unprotected redirect",
       "file": "app/controllers/api/v1/company/projects/assets_controller.rb",
       "note": "Redirect to Shrine-generated file URL (S3 presigned URL) for asset downloads. The URL is generated server-side from a trusted source, not from user input."
-    },
-    {
-      "fingerprint": "2170d8225e9f337ded9984c1c311400e1c8c3f7d6188f92a260b6cbaab4da221",
-      "warning_type": "Mass Assignment",
-      "check_name": "MassAssignment",
-      "message": "Specify exact keys allowed for mass assignment instead of using permit!",
-      "file": "app/controllers/api/v1/company/workflows/steps_controller.rb",
-      "note": "Reorder endpoint accepts dynamic step_id => position hash. Keys are step IDs validated via find()."
-    },
-    {
-      "fingerprint": "85f36a358def887c0a9e448fae225dae7b98676bb7db54b4bed0e074e63562c0",
-      "warning_type": "Mass Assignment",
-      "check_name": "MassAssignment",
-      "message": "Specify exact keys allowed for mass assignment instead of using permit!",
-      "file": "app/controllers/api/v1/company/projects/workflows/steps_controller.rb",
-      "note": "Reorder endpoint accepts dynamic step_id => position hash. Keys are step IDs validated via find()."
     }
   ],
-  "updated": "2026-02-28",
+  "updated": "2026-03-15",
   "brakeman_version": "7.0.0"
 }

@@ -107,30 +107,15 @@ fi
 # -----------------------------------------------------------------------------
 # Start tmux session + ttyd Web Terminal
 #
-# tmux session "agent" is created immediately at startup.
-# ttyd connects every WebSocket client to the same session via `tmux attach`.
-# This ensures:
-#   - Agent starts working right away (no waiting for browser)
-#   - All browser tabs share one live session
-#   - Disconnects/reconnects are seamless
+# TTYD_CMD is set by the container strategy at creation time.
+# Start tmux with bash first, then send the command so the shell owns the TTY.
 # -----------------------------------------------------------------------------
-TTYD_CMD="${TTYD_CMD:-bash}"
-
-if [ -n "$AGENT_PROMPT" ]; then
-    printf '%s' "$AGENT_PROMPT" > /tmp/.agent_prompt
-    cat > /tmp/run_agent.sh << 'AGENTEOF'
-#!/bin/sh
-exec $TTYD_CMD "$(cat /tmp/.agent_prompt)"
-AGENTEOF
-    chmod +x /tmp/run_agent.sh
-    TMUX_CMD="/tmp/run_agent.sh"
-else
-    TMUX_CMD="$TTYD_CMD"
-fi
-
-tmux -u new -d -s agent $TMUX_CMD
+tmux -u new -d -s agent bash
 tmux pipe-pane -t agent "cat >> /proc/1/fd/1"
-echo -e "${GREEN}✅ ${AGENT_NAME} session started${NC}"
+if [ -n "$TTYD_CMD" ] && [ "$TTYD_CMD" != "bash" ]; then
+    tmux send-keys -t agent "$TTYD_CMD" Enter
+fi
+echo -e "${GREEN}✅ tmux session ready${NC}"
 
 ttyd -W -p "$TTYD_PORT" tmux -u attach -t agent &
 TTYD_PID=$!

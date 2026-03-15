@@ -504,7 +504,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
 
     result = SessionContextService.inject_skills("ctr1", session)
-    assert_nil result
+    assert_equal({}, result)
   end
 
   test "inject_skills skips skills with blank content" do
@@ -515,7 +515,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     session.skills << skill
 
     result = SessionContextService.inject_skills("ctr1", session)
-    assert_nil result
+    assert_equal({}, result)
   end
 
   # ====================================================================
@@ -810,6 +810,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
     credential_mock = mock("credential")
+    credential_mock.stubs(:agent_type).returns("claude_code")
+    credential_mock.stubs(:config_data).returns({ "oauthAccount" => {}, "primaryApiKey" => "sk-test" })
 
     call_order = sequence("assembly_order")
 
@@ -834,6 +836,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     end.returns(true).in_sequence(call_order)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ]).in_sequence(call_order)
 
+    # Step 8: Context log
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/var/log/context.log"
+    end.returns(true).in_sequence(call_order)
+
     SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
   end
 
@@ -856,6 +863,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true)
     runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
+
+    # Context log
+    runtime_mock.expects(:copy_to).with do |ctr, path, _content|
+      ctr == "ctr1" && path == "/var/log/context.log"
+    end.returns(true)
 
     SessionContextService.assemble_session_context("ctr1", session, credential: nil)
   end

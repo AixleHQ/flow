@@ -1,6 +1,8 @@
 import { Dialog, DialogContent } from '@mui/material';
 import { useMemo, type FC, type ReactNode } from 'react';
 
+import Routes from 'shared/routes';
+
 import type { Asset } from '../lib/types';
 
 export interface AssetPreviewData {
@@ -19,26 +21,24 @@ interface AssetPreviewDialogProps {
   renderPreview: (data: AssetPreviewData, onClose: () => void) => ReactNode;
 }
 
-function toSameOriginPath(url: string): string {
-  try {
-    return new URL(url).pathname;
-  } catch {
-    return url;
-  }
-}
-
-export const AssetPreviewDialog: FC<AssetPreviewDialogProps> = ({ open, onClose, asset, renderPreview }) => {
+export const AssetPreviewDialog: FC<AssetPreviewDialogProps> = ({ open, onClose, asset, projectId, renderPreview }) => {
+  const { downloadApiV1CompanyProjectAssetPath, downloadApiV1CompanyAssetPath } = Routes.backend;
   const previewData = useMemo<AssetPreviewData | null>(() => {
     if (!asset?.latestVersion?.fileUrl) return null;
+
+    const basePath = projectId
+      ? downloadApiV1CompanyProjectAssetPath(projectId, asset.id)
+      : downloadApiV1CompanyAssetPath(asset.id);
+    const downloadUrl = `${basePath}?inline=true`;
 
     return {
       name: asset.name,
       contentType: asset.latestVersion.contentType,
       fileSize: asset.latestVersion.fileSize,
-      downloadUrl: toSameOriginPath(asset.latestVersion.fileUrl),
+      downloadUrl,
       createdAt: asset.createdAt,
     };
-  }, [asset]);
+  }, [asset, projectId]);
 
   if (!previewData) return null;
 

@@ -41,34 +41,13 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
-    test "uses session command instead of auth command" do
+    test "TTYD_CMD is a waiting message for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
       env_vars = strategy.build_env_vars
+      ttyd_cmd = env_vars.find { |v| v.start_with?("TTYD_CMD=") }
 
-      # Session command for claude_code is "claude"
-      assert_includes env_vars, "TTYD_CMD=claude"
-    end
-
-    test "cursor_cli session uses agent command" do
-      @session.update!(agent_type: "cursor_cli")
-      @credential.update!(agent_type: "cursor_cli")
-      strategy = build_strategy(agent_type: "cursor_cli")
-
-      env_vars = strategy.build_env_vars
-
-      # Session command for cursor_cli is "agent --force" (yolo mode)
-      assert_includes env_vars, "TTYD_CMD=agent --force"
-    end
-
-    test "codex session uses yolo flag" do
-      @session.update!(agent_type: "codex")
-      @credential.update!(agent_type: "codex")
-      strategy = build_strategy(agent_type: "codex")
-
-      env_vars = strategy.build_env_vars
-
-      assert_includes env_vars, "TTYD_CMD=codex --yolo"
+      assert ttyd_cmd.include?("Preparing session"), "TTYD_CMD should show a waiting message"
     end
 
     # == Labels Tests ==
@@ -179,6 +158,7 @@ module ContainerStrategies
 
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.stubs(:container_identifier).returns("abc123")
+      runtime_mock.stubs(:exec)
 
       result = strategy.exec(container_id: "abc123")
 
@@ -187,31 +167,12 @@ module ContainerStrategies
       assert result.key?(:ide_url)
     end
 
-    test "ttyd_command returns session command for claude_code" do
+    test "ttyd_command returns waiting message" do
       strategy = build_strategy(agent_type: "claude_code")
 
       cmd = strategy.send(:ttyd_command)
 
-      assert_equal "claude", cmd
-    end
-
-    test "ttyd_command returns same command when mode is non_interactive" do
-      @session.update!(mode: "non_interactive", initial_prompt: "Fix the tests")
-      strategy = build_strategy(agent_type: "claude_code")
-
-      cmd = strategy.send(:ttyd_command)
-
-      assert_equal "claude", cmd
-    end
-
-    test "ttyd_command uses adapter session_command for codex non-interactive" do
-      @session.update!(agent_type: "codex", mode: "non_interactive", initial_prompt: "Run all tests")
-      @credential.update!(agent_type: "codex")
-      strategy = build_strategy(agent_type: "codex")
-
-      cmd = strategy.send(:ttyd_command)
-
-      assert_equal "codex --yolo", cmd
+      assert cmd.include?("Preparing session")
     end
 
     # == before_exec delegates to assembler ==

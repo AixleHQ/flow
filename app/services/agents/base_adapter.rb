@@ -219,7 +219,7 @@ module Agents
     # Log files inside container to collect as artifacts after session ends.
     # @return [Array<String>]
     def session_log_paths
-      []
+      %w[/var/log/context.log]
     end
 
     # Collect and verify usage data at session cleanup.

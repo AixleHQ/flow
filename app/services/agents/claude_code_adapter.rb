@@ -21,12 +21,19 @@ module Agents
       "#{home_dir}/.claude.json"
     end
 
+    def auth_file_paths
+      [
+        "#{home_dir}/.claude.json",
+        "#{home_dir}/.claude/.credentials.json"
+      ]
+    end
+
     def home_dir
       "/home/claude"
     end
 
     def session_log_paths
-      %w[/var/log/mitm/http.log]
+      super + %w[/var/log/mitm/http.log]
     end
 
     # Built-in Claude Code tools (always allowed)

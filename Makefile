@@ -164,7 +164,7 @@ build-otlp-ingest:
 
 # Build agent images (core first, then agents in parallel)
 build-agents:
-	docker build -t palad/agent-base-core:latest -f docker/base/Dockerfile.core docker/base
+	docker build -t palad/agent-base-core:latest -f docker/base/Dockerfile docker/base
 	docker build -t palad/claude-code:latest -f docker/claude-code/Dockerfile docker/ & \
 	docker build -t palad/cursor-cli:latest -f docker/cursor-cli/Dockerfile docker/ & \
 	docker build -t palad/codex:latest -f docker/codex/Dockerfile docker/ & \

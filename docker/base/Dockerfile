@@ -1,12 +1,15 @@
 # =============================================================================
-# Base Image for AI Coding Agents
+# Core Base Image for AI Coding Agents
+#
+# Heavy, rarely-changing dependencies only.
+# Lightweight scripts (entrypoint, watcher, auth-check, logger) are added
+# in each agent Dockerfile AFTER agent-specific installs, so that script
+# changes don't invalidate expensive agent CLI install layers.
 #
 # Components:
 #   - Node.js 22 (Debian slim for glibc compatibility)
 #   - ttyd (web terminal)
 #   - OpenVSCode Server (browser IDE)
-#   - File watcher service (WebSocket streaming, auth_setup only)
-#   - Auth-check service (auth_setup only)
 #   - MITM proxy for request/response logging
 #   - Common development tools
 # =============================================================================
@@ -27,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     curl \
     tree \
+    cloc \
     ca-certificates \
     # Archive extraction (tar/gzip already in base image)
     unzip \
@@ -40,8 +44,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
+    g++
+
+# -----------------------------------------------------------------------------
+# GitHub CLI (gh)
+# -----------------------------------------------------------------------------
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update && apt-get install -y --no-install-recommends gh && \
+    rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # MITM proxy for request/response logging
@@ -70,66 +83,45 @@ RUN ARCH=$(dpkg --print-architecture) && \
     mv /opt/openvscode-server-v${OPENVSCODE_VERSION}-linux-${OVS_ARCH} /opt/openvscode-server && \
     chmod -R 755 /opt/openvscode-server
 
-# Pre-seed VS Code settings (Palad dark theme with brand colors)
-COPY vscode-settings.json /opt/openvscode-server/default-settings.json
+# -----------------------------------------------------------------------------
+# Playwright MCP + Chromium (headless browser for agent automation)
+#
+# Installs @playwright/mcp globally so `npx @playwright/mcp` resolves instantly.
+# Chromium binary + system deps are installed via `npx playwright install`.
+# Browsers stored in /opt/playwright-browsers (shared, readable by all users).
+# -----------------------------------------------------------------------------
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
-# -----------------------------------------------------------------------------
-# File Watcher dependencies
-# -----------------------------------------------------------------------------
-WORKDIR /opt/watcher
-COPY watcher/package.json ./
-RUN npm install --production && npm cache clean --force
+RUN npm install -g @playwright/mcp
 
-# Copy watcher source
-COPY watcher/index.js ./
+RUN apt-get update \
+    && npx playwright install --with-deps chromium \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# -----------------------------------------------------------------------------
-# Auth Check — lightweight standalone service for auth_setup sessions
-# -----------------------------------------------------------------------------
-COPY auth-check/index.js /opt/auth-check/index.js
-
-# -----------------------------------------------------------------------------
-# MITM logger script
-# -----------------------------------------------------------------------------
-COPY logger/mitm_logger.py /opt/mitm/
-COPY logger/http2-logger.js /opt/mitm/
-COPY logger/start-mitm.sh /opt/mitm/
-RUN chmod +x /opt/mitm/start-mitm.sh
-
-# -----------------------------------------------------------------------------
-# Shell comfort: readline config for web terminal (ttyd)
-# -----------------------------------------------------------------------------
-COPY inputrc /etc/inputrc
-
-# -----------------------------------------------------------------------------
-# tmux config: session persistence for web terminal
-# Keeps command alive across browser reconnects, provides scrollback history
-# -----------------------------------------------------------------------------
-COPY tmux.conf /etc/tmux.conf
-
-# -----------------------------------------------------------------------------
-# UTF-8 locale (required for tmux + Russian/CJK text)
-# -----------------------------------------------------------------------------
-ENV LANG=C.UTF-8
-
-# -----------------------------------------------------------------------------
-# Shared entrypoint (agents customize via ENV vars)
-# -----------------------------------------------------------------------------
-COPY entrypoint.sh /app/
-RUN chmod +x /app/entrypoint.sh
+RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chrome-linux*" | head -1) \
+    && echo "Found chromium at: ${CHROMIUM_BIN}" \
+    && mkdir -p /opt/google/chrome \
+    && ln -s "$CHROMIUM_BIN" /opt/google/chrome/chrome \
+    && rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links \
+    && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
+    && npm cache clean --force \
+    && rm -rf /tmp/*
 
 # -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
-RUN mkdir -p /workspace/repo /workspace/outputs
+RUN mkdir -p /workspace/repo /workspace/outputs /opt/watcher /opt/auth-check /opt/mitm /app \
+    /var/log/mitm && chmod 777 /var/log/mitm /var/log
 
 WORKDIR /workspace
 
+# UTF-8 locale (required for tmux + Russian/CJK text)
+ENV LANG=C.UTF-8 \
+    GIT_SSL_NO_VERIFY=1
+
 # Ports:
 #   7681 - ttyd web terminal
-#   4040 - file watcher WebSocket + HTTP API
+#   4040 - file watcher WebSocket + HTTP API / auth-check
 #   8443 - OpenVSCode Server (IDE)
-#   8888 - MITM proxy (internal)
 EXPOSE 7681 4040 8443
-
-ENTRYPOINT ["/usr/bin/tini", "--", "/app/entrypoint.sh"]

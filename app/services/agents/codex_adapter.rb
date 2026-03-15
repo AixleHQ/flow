@@ -132,7 +132,7 @@ module Agents
 
     # Log files to collect from container after session ends.
     def session_log_paths
-      %w[/var/log/mitm/http.log]
+      super + %w[/var/log/mitm/http.log]
     end
 
     # Collect usage from MITM log at session cleanup.

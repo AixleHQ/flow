@@ -26,8 +26,8 @@ module Agents
       assert_equal "/home/claude/.claude/CLAUDE.md", @adapter.context_file_path
     end
 
-    test "session_log_paths returns mitm log path" do
-      assert_equal %w[/var/log/mitm/http.log], @adapter.session_log_paths
+    test "session_log_paths returns context and mitm log paths" do
+      assert_equal %w[/var/log/context.log /var/log/mitm/http.log], @adapter.session_log_paths
     end
 
     # == Auth ==
