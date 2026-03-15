@@ -12,9 +12,9 @@ module Seeds
         title, description, content = if raw.start_with?("---")
           parts = raw.split("---", 3)
           meta = parts.length >= 3 ? (YAML.safe_load(parts[1]) || {}) : {}
-          [meta["title"], meta["description"], (parts[2] || "").strip]
+          [ meta["title"], meta["description"], (parts[2] || "").strip ]
         else
-          [nil, nil, raw.strip]
+          [ nil, nil, raw.strip ]
         end
 
         skill = Skill.find_or_initialize_by(name: name, kind: :internal)

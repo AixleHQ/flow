@@ -237,11 +237,14 @@ const WorkflowBuilderPage = () => {
         : null,
     [workflow],
   );
-  const { draft: workflowDraft, updateDraft: updateWorkflowDraft, markSaveStarted: markWorkflowSaveStarted } =
-    useGuardedDraftSync({
-      serverValue: workflowDraftSource,
-      getIdentity: (value) => value.id,
-    });
+  const {
+    draft: workflowDraft,
+    updateDraft: updateWorkflowDraft,
+    markSaveStarted: markWorkflowSaveStarted,
+  } = useGuardedDraftSync({
+    serverValue: workflowDraftSource,
+    getIdentity: (value) => value.id,
+  });
 
   // Fetch steps (scope-aware)
   const { data: companySteps } = useGetCompanyStepsQuery({ workflowId }, { skip: !workflow || !isCompanyScope });
@@ -897,11 +900,14 @@ function StepDetailPanel({
     }),
     [step.id, step.name, step.description, step.instructions],
   );
-  const { draft: stepTextDraft, replaceDraft: replaceStepTextDraft, markSaveStarted: markStepTextSaveStarted } =
-    useGuardedDraftSync({
-      serverValue: stepTextDraftSource,
-      getIdentity: (value) => value.id,
-    });
+  const {
+    draft: stepTextDraft,
+    replaceDraft: replaceStepTextDraft,
+    markSaveStarted: markStepTextSaveStarted,
+  } = useGuardedDraftSync({
+    serverValue: stepTextDraftSource,
+    getIdentity: (value) => value.id,
+  });
   const debouncedCommitTextDraft = useDebouncedCallback(
     (nextDraft: { id: number; name: string; description: string; instructions: string }) => {
       markStepTextSaveStarted();
