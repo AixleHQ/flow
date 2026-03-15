@@ -178,7 +178,7 @@ module ContainerStrategies
       runtime_mock.expects(:copy_to).with(container_mock, "/tmp/.agent_prompt", @session.initial_prompt).returns(true)
       runtime_mock.expects(:exec).with do |container, cmd, opts|
         container == container_mock &&
-          cmd == [ "tmux", "respawn-pane", "-k", "-t", "agent", 'claude -p --verbose "$(cat /tmp/.agent_prompt)"' ] &&
+          cmd == [ "tmux", "respawn-pane", "-k", "-t", "agent", 'claude "$(cat /tmp/.agent_prompt)"' ] &&
           opts == { tty: true }
       end.returns([ [], [], 0 ])
 

@@ -95,15 +95,9 @@ module Agents
     end
 
     # Session command for agent terminal.
-    # Interactive: `claude` (TUI REPL, user types prompts).
-    # Non-interactive: `claude -p --verbose` (executes prompt, exits on completion).
-    #   --verbose preserves streaming turn-by-turn output in ttyd terminal.
+    # Both modes use full Claude TUI to preserve streamed terminal UX.
     def session_command(mode:, prompt: nil)
-      if mode.to_s == "non_interactive"
-        "claude -p --verbose"
-      else
-        "claude"
-      end
+      "claude"
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)
