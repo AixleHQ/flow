@@ -92,7 +92,7 @@ module ContainerStrategies
     def session_type = "agent_session"
 
     def ttyd_command
-      "bash -c 'echo -e \"\\033[0;36m⏳ Preparing session... Setting up credentials, repositories, and tools.\\033[0m\"; while true; do sleep 60; done'"
+      "bash"
     end
 
     def services_ports
@@ -101,33 +101,18 @@ module ContainerStrategies
 
     private
 
-    # Kill the wait script in tmux and start the agent CLI.
-    # For non-interactive: writes prompt to file, launches via wrapper script.
-    # For interactive: launches the CLI directly (TUI REPL).
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
       cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt)
 
-      tmux_cmd = cmd
-      if session.mode == "non_interactive" && session.initial_prompt.present?
-        copied = runtime.copy_to(container, "/tmp/.agent_prompt", session.initial_prompt)
-        raise "Failed to write /tmp/.agent_prompt in container" unless copied
-
-        # Read prompt from file inside pane shell to avoid quoting/injection issues.
-        tmux_cmd = "#{cmd} \"$(cat /tmp/.agent_prompt)\""
+      tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
+        "#{cmd} \"$AGENT_PROMPT\""
+      else
+        cmd
       end
 
-      _stdout, stderr, exit_code = runtime.exec(
-        container,
-        [ "tmux", "respawn-pane", "-k", "-t", "agent", tmux_cmd ],
-        tty: true
-      )
-      unless exit_code.to_i.zero?
-        err = Array(stderr).join.to_s.strip
-        raise "tmux respawn-pane failed with exit=#{exit_code}: #{err.presence || 'no stderr'}"
-      end
-
+      runtime.exec(container, [ "sh", "-c", "tmux send-keys -t agent '#{tmux_cmd}' Enter" ])
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 
