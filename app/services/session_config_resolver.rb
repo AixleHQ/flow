@@ -133,9 +133,7 @@ class SessionConfigResolver
 
   def resolve_repository_ids
     if workflow_session?
-      return [] unless step&.mount_repositories
-
-      workflow_run&.repository_ids.presence || []
+      workflow_session_repository_ids
     else
       session.repository_ids.presence || []
     end
@@ -229,14 +227,31 @@ class SessionConfigResolver
       return { from_session_direct: ids, resolved: ids }
     end
 
-    return { resolved: [] } unless step&.mount_repositories
+    return { resolved: [] } unless repository_mount_enabled?
 
     from_run = workflow_run&.repository_ids || []
+    from_project_fallback = board_triggered? && from_run.blank? ? project_repository_ids : []
+    resolved = from_run.presence || from_project_fallback
 
     {
       from_run: from_run,
-      resolved: from_run
+      from_project_fallback: from_project_fallback,
+      resolved: resolved
     }
+  end
+
+  def workflow_session_repository_ids
+    return [] unless repository_mount_enabled?
+
+    from_run = workflow_run&.repository_ids.presence || []
+    return from_run if from_run.any?
+    return project_repository_ids if board_triggered?
+
+    []
+  end
+
+  def repository_mount_enabled?
+    step&.mount_repositories == true
   end
 
   def board_task_asset_ids
