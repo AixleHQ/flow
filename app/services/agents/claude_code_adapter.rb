@@ -99,7 +99,11 @@ module Agents
     # Non-interactive: `claude -p --verbose` (executes prompt, exits on completion).
     #   --verbose preserves streaming turn-by-turn output in ttyd terminal.
     def session_command(mode:, prompt: nil)
-      "claude"
+      if mode.to_s == "non_interactive"
+        "claude -p --verbose"
+      else
+        "claude"
+      end
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)

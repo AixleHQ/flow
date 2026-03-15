@@ -111,8 +111,8 @@ module Agents
       assert_equal "claude", @adapter.session_command(mode: "interactive")
     end
 
-    test "session_command returns claude for non_interactive" do
-      assert_equal "claude", @adapter.session_command(mode: "non_interactive")
+    test "session_command returns claude -p --verbose for non_interactive" do
+      assert_equal "claude -p --verbose", @adapter.session_command(mode: "non_interactive")
     end
 
     # == Tools ==
