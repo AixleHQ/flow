@@ -46,7 +46,7 @@ data:
   CONTAINER_ASSET_HOST: "https://palad-assets-prod.s3.amazonaws.com"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad
-  K8S_IMAGE_PULL_POLICY: IfNotPresent
+  K8S_IMAGE_PULL_POLICY: Always
   K8S_EKS_VPC_CIDR: "10.10.0.0/16"
   K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
   MCP_SERVER_URL: "http://mcp.palad.svc.cluster.local:4002/action_mcp"
