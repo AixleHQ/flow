@@ -160,8 +160,38 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_includes result[:repository_ids], repo.id
   end
 
+  test "board_triggered session falls back to project repositories when run repositories are empty" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    repo = create(:repository, scope: @project, integration: integration)
+    session = build_board_triggered_session(mount_repositories: true, run_repository_ids: [])
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_includes result[:repository_ids], repo.id
+  end
+
+  test "non-board workflow session does not fallback to project repositories when run repositories are empty" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    create(:repository, scope: @project, integration: integration)
+    session = build_workflow_session(mount_repositories: true, run_repository_ids: [])
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [], result[:repository_ids]
+  end
+
   test "workflow session returns empty repositories when mount_repositories false" do
     session = build_workflow_session(mount_repositories: false)
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [], result[:repository_ids]
+  end
+
+  test "board_triggered session does not fallback when mount_repositories false" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    create(:repository, scope: @project, integration: integration)
+    session = build_board_triggered_session(mount_repositories: false, run_repository_ids: [])
 
     result = SessionConfigResolver.resolve(session)
 
@@ -413,6 +443,30 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [ 100 ], result[:input_assets][:from_workflow_base]
     assert_equal [ 101 ], result[:input_assets][:from_run_user]
     assert_equal [ 100, 101 ], result[:input_assets][:resolved]
+  end
+
+  test "resolve_with_breakdown returns repository project fallback for board_triggered sessions" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    repo = create(:repository, scope: @project, integration: integration)
+    session = build_board_triggered_session(mount_repositories: true, run_repository_ids: [])
+
+    result = SessionConfigResolver.resolve_with_breakdown(session)
+
+    assert_equal [], result[:repositories][:from_run]
+    assert_includes result[:repositories][:from_project_fallback], repo.id
+    assert_includes result[:repositories][:resolved], repo.id
+  end
+
+  test "resolve_with_breakdown returns empty repositories when mount_repositories false even for board_triggered" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    create(:repository, scope: @project, integration: integration)
+    session = build_board_triggered_session(mount_repositories: false, run_repository_ids: [])
+
+    result = SessionConfigResolver.resolve_with_breakdown(session)
+
+    assert_equal [], result[:repositories][:resolved]
+    refute result[:repositories].key?(:from_project_fallback)
+    refute result[:repositories].key?(:from_run)
   end
 
   test "resolve_with_breakdown returns session_direct for standalone" do
