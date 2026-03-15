@@ -166,7 +166,9 @@ class SessionConfigResolver
   end
 
   def project_repository_ids
-    project&.repositories&.pluck(:id) || []
+    return [] unless project.present?
+
+    Repository.visible_for_project(project).pluck(:id)
   end
 
   # --- Breakdown helpers for traceability ---
@@ -230,7 +232,11 @@ class SessionConfigResolver
     return { resolved: [] } unless repository_mount_enabled?
 
     from_run = workflow_run&.repository_ids || []
-    from_project_fallback = board_triggered? && from_run.blank? ? project_repository_ids : []
+    from_project_fallback = if board_triggered? && from_run.blank? && workflow_inherits_project_resources?
+      project_repository_ids
+    else
+      []
+    end
     resolved = from_run.presence || from_project_fallback
 
     {
@@ -245,13 +251,17 @@ class SessionConfigResolver
 
     from_run = workflow_run&.repository_ids.presence || []
     return from_run if from_run.any?
-    return project_repository_ids if board_triggered?
+    return project_repository_ids if board_triggered? && workflow_inherits_project_resources?
 
     []
   end
 
   def repository_mount_enabled?
     step&.mount_repositories == true
+  end
+
+  def workflow_inherits_project_resources?
+    workflow&.inherit_all_project_resources == true
   end
 
   def board_task_asset_ids
