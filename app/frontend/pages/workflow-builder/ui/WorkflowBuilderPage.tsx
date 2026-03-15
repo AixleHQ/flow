@@ -66,6 +66,7 @@ import {
   useUpdateProjectWorkflowMutation,
   useDuplicateWorkflowToProjectMutation,
 } from 'features/workflows';
+import { useGuardedDraftSync } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
 import { BaseResourcesSection } from './BaseResourcesSection';
@@ -210,9 +211,6 @@ const WorkflowBuilderPage = () => {
 
   const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
   const [deleteStepId, setDeleteStepId] = useState<number | null>(null);
-  const [workflowName, setWorkflowName] = useState('');
-  const [workflowDescription, setWorkflowDescription] = useState('');
-  const [nameInitialized, setNameInitialized] = useState(false);
   const [runModalOpen, setRunModalOpen] = useState(false);
 
   // Fetch workflow
@@ -228,15 +226,22 @@ const WorkflowBuilderPage = () => {
     skip: !projectId && !routeProjectId,
   });
   const [createRun, { isLoading: isCreatingRun }] = useCreateWorkflowRunMutation();
-
-  // Initialize local name/description from fetched data
-  useEffect(() => {
-    if (workflow && !nameInitialized) {
-      setWorkflowName(workflow.name);
-      setWorkflowDescription(workflow.description || '');
-      setNameInitialized(true);
-    }
-  }, [workflow, nameInitialized]);
+  const workflowDraftSource = useMemo(
+    () =>
+      workflow
+        ? {
+            id: workflow.id,
+            name: workflow.name,
+            description: workflow.description || '',
+          }
+        : null,
+    [workflow],
+  );
+  const { draft: workflowDraft, updateDraft: updateWorkflowDraft, markSaveStarted: markWorkflowSaveStarted } =
+    useGuardedDraftSync({
+      serverValue: workflowDraftSource,
+      getIdentity: (value) => value.id,
+    });
 
   // Fetch steps (scope-aware)
   const { data: companySteps } = useGetCompanyStepsQuery({ workflowId }, { skip: !workflow || !isCompanyScope });
@@ -333,6 +338,7 @@ const WorkflowBuilderPage = () => {
 
   // Debounced saves
   const debouncedUpdateWorkflow = useDebouncedCallback((data: { name?: string; description?: string }) => {
+    markWorkflowSaveStarted();
     updateWorkflow(data);
   }, 500);
 
@@ -340,16 +346,30 @@ const WorkflowBuilderPage = () => {
     updateStep(stepId, data);
   }, 500);
 
+  useEffect(() => {
+    return () => {
+      debouncedUpdateWorkflow.cancel();
+      debouncedUpdateStep.cancel();
+    };
+  }, [debouncedUpdateWorkflow, debouncedUpdateStep]);
+
   // Handlers
   const handleNameChange = (value: string) => {
-    setWorkflowName(value);
+    updateWorkflowDraft((current) => ({ ...current, name: value }));
     debouncedUpdateWorkflow({ name: value });
   };
 
   const handleDescriptionChange = (value: string) => {
-    setWorkflowDescription(value);
+    updateWorkflowDraft((current) => ({ ...current, description: value }));
     debouncedUpdateWorkflow({ description: value });
   };
+
+  const handleStepTextDraftSave = useCallback(
+    (stepId: number, data: Pick<UpdateStepRequest, 'name' | 'description' | 'instructions'>) => {
+      updateStep(stepId, data);
+    },
+    [updateStep],
+  );
 
   const handleAddStep = async () => {
     if (!workflow) return;
@@ -691,7 +711,7 @@ const WorkflowBuilderPage = () => {
         <Box sx={styles.header}>
           <Box sx={styles.headerLeft}>
             <TextField
-              value={workflowName}
+              value={workflowDraft?.name ?? ''}
               onChange={(e) => handleNameChange(e.target.value)}
               variant="standard"
               disabled={readOnly}
@@ -699,7 +719,7 @@ const WorkflowBuilderPage = () => {
               fullWidth
             />
             <TextField
-              value={workflowDescription}
+              value={workflowDraft?.description ?? ''}
               onChange={(e) => handleDescriptionChange(e.target.value)}
               variant="standard"
               disabled={readOnly}
@@ -744,12 +764,14 @@ const WorkflowBuilderPage = () => {
 
           {selectedStep ? (
             <StepDetailPanel
+              key={selectedStep.id}
               step={selectedStep}
               allSteps={steps}
               agents={agents}
               tools={tools}
               mcpServers={mcpServers}
               skills={skills}
+              onTextDraftSave={handleStepTextDraftSave}
               onFieldChange={handleStepFieldChange}
               onDelete={() => setDeleteStepId(selectedStep.id)}
               onAddSubStep={handleAddSubStep}
@@ -825,6 +847,7 @@ interface StepDetailPanelProps {
   tools: Tool[];
   mcpServers: McpServer[];
   skills: Skill[];
+  onTextDraftSave: (stepId: number, data: Pick<UpdateStepRequest, 'name' | 'description' | 'instructions'>) => void;
   onFieldChange: (
     field: keyof Omit<UpdateStepRequest, 'id'>,
     value: UpdateStepRequest[keyof UpdateStepRequest],
@@ -853,6 +876,7 @@ function StepDetailPanel({
   tools,
   mcpServers,
   skills,
+  onTextDraftSave,
   onFieldChange,
   onDelete,
   onAddSubStep,
@@ -864,15 +888,45 @@ function StepDetailPanel({
   onUpdateAssetSpec,
   readOnly = false,
 }: StepDetailPanelProps) {
-  const [localName, setLocalName] = useState(step.name);
-  const [localDesc, setLocalDesc] = useState(step.description || '');
-  const [localInstructions, setLocalInstructions] = useState(step.instructions || '');
+  const stepTextDraftSource = useMemo(
+    () => ({
+      id: step.id,
+      name: step.name,
+      description: step.description || '',
+      instructions: step.instructions || '',
+    }),
+    [step.id, step.name, step.description, step.instructions],
+  );
+  const { draft: stepTextDraft, replaceDraft: replaceStepTextDraft, markSaveStarted: markStepTextSaveStarted } =
+    useGuardedDraftSync({
+      serverValue: stepTextDraftSource,
+      getIdentity: (value) => value.id,
+    });
+  const debouncedCommitTextDraft = useDebouncedCallback(
+    (nextDraft: { id: number; name: string; description: string; instructions: string }) => {
+      markStepTextSaveStarted();
+      onTextDraftSave(nextDraft.id, {
+        name: nextDraft.name,
+        description: nextDraft.description,
+        instructions: nextDraft.instructions,
+      });
+    },
+    500,
+  );
 
   useEffect(() => {
-    setLocalName(step.name);
-    setLocalDesc(step.description || '');
-    setLocalInstructions(step.instructions || '');
-  }, [step.id, step.name, step.description, step.instructions]);
+    return () => {
+      debouncedCommitTextDraft.flush();
+    };
+  }, [debouncedCommitTextDraft]);
+
+  const handleTextDraftChange = (field: 'name' | 'description' | 'instructions', value: string) => {
+    if (!stepTextDraft) return;
+
+    const nextDraft = { ...stepTextDraft, [field]: value };
+    replaceStepTextDraft(nextDraft);
+    debouncedCommitTextDraft(nextDraft);
+  };
 
   const selectedTools = useMemo(() => tools.filter((t: Tool) => step.toolIds?.includes(t.id)), [tools, step.toolIds]);
   const selectedMcpServers = useMemo(
@@ -906,10 +960,9 @@ function StepDetailPanel({
           <TextField
             fullWidth
             size="small"
-            value={localName}
+            value={stepTextDraft?.name ?? ''}
             onChange={(e) => {
-              setLocalName(e.target.value);
-              onFieldChange('name', e.target.value);
+              handleTextDraftChange('name', e.target.value);
             }}
           />
         </Box>
@@ -921,10 +974,9 @@ function StepDetailPanel({
             size="small"
             multiline
             rows={2}
-            value={localDesc}
+            value={stepTextDraft?.description ?? ''}
             onChange={(e) => {
-              setLocalDesc(e.target.value);
-              onFieldChange('description', e.target.value);
+              handleTextDraftChange('description', e.target.value);
             }}
           />
         </Box>
@@ -936,10 +988,9 @@ function StepDetailPanel({
             size="small"
             multiline
             rows={8}
-            value={localInstructions}
+            value={stepTextDraft?.instructions ?? ''}
             onChange={(e) => {
-              setLocalInstructions(e.target.value);
-              onFieldChange('instructions', e.target.value);
+              handleTextDraftChange('instructions', e.target.value);
             }}
             placeholder="Enter step instructions... Use {{artifact_name}} for variable references."
           />
