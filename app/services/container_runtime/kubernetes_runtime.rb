@@ -576,14 +576,11 @@ module ContainerRuntime
       ws_state[:closed] || !websocket_open?(ws)
     end
 
-    def build_exec_command(cmd, tty)
+    def build_exec_command(cmd, _tty)
       if cmd.is_a?(String)
         [ "/bin/sh", "-c", cmd ]
       elsif cmd.is_a?(Array) && cmd.size == 1
         [ "/bin/sh", "-c", cmd.first.to_s ]
-      elsif tty == false
-        joined = Array(cmd).map { |word| "\"#{word}\"" }.join(" ")
-        [ "/bin/sh", "-c", joined ]
       else
         Array(cmd)
       end
