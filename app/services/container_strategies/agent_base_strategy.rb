@@ -140,10 +140,6 @@ module ContainerStrategies
       Settings.traefik.ws_base
     end
 
-    def mcp_server_url
-      Settings.mcp.server_url
-    end
-
     def mark_session_ready(container_id)
       session = TerminalSession.find(input[:session_id])
       session.update!(container_id: container_id)
