@@ -23,8 +23,8 @@ Rails.application.config.after_initialize do
   ActionMCP::Server::Tools.module_eval do
     # Override tools/list to return session-specific tools
     def send_tools_list(request_id, params = {})
-      session = ActionMCP::Current.terminal_session
-      return super if session.nil?
+      session = current_terminal_session!(request_id)
+      return unless session
 
       tools = session.available_tools.map do |tool|
         schema = tool.input_schema.presence || { "type" => "object", "properties" => {}, "required" => [] }
@@ -42,8 +42,8 @@ Rails.application.config.after_initialize do
 
     # Override tools/call to execute via Temporal
     def send_tools_call(request_id, tool_name, arguments, _meta = {})
-      session = ActionMCP::Current.terminal_session
-      return super if session.nil?
+      session = current_terminal_session!(request_id)
+      return unless session
 
       tool = session.available_tools.detect { |t| t.name == tool_name }
 
@@ -63,6 +63,15 @@ Rails.application.config.after_initialize do
     end
 
     private
+
+    def current_terminal_session!(request_id)
+      session = ActionMCP::Current.terminal_session
+      return session if session.present?
+
+      Rails.logger.error("[MCP] Authenticated request reached tools handler without terminal_session context")
+      send_jsonrpc_error(request_id, :internal_error, "Terminal session context is missing for this MCP request")
+      nil
+    end
 
     def execute_tool(tool, arguments, session)
       params = resolve_repository_params(arguments || {}, session)
