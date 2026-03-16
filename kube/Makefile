@@ -39,7 +39,7 @@ kube-help:
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
 	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
 	@echo "  make kube-arc-install            - Install ARC controller + deploy RBAC + runner scale set"
-	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm (Prometheus, Loki, Grafana, Headlamp)"
+	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm + metrics-server (Prometheus, Loki, Grafana, Headlamp)"
 	@echo "  make kube-observability-uninstall - Uninstall all observability Helm releases"
 	@echo "  make kube-rm                - Delete dev manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod manifests (secrets are not touched)"
@@ -140,6 +140,7 @@ kube-observability-add-repos:
 #   make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
 kube-observability-install: kube-observability-add-repos
 	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/00-namespace.yaml
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/02-metrics-server.yaml
 	helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
 		--namespace $(MONITORING_NAMESPACE) \
 		--values $(OBSERVABILITY_HELM_DIR)/values-kube-prometheus-stack.yaml \
@@ -165,6 +166,7 @@ kube-observability-uninstall:
 	helm uninstall promtail --namespace $(MONITORING_NAMESPACE) || true
 	helm uninstall headlamp --namespace $(MONITORING_NAMESPACE) || true
 	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml || true
+	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/02-metrics-server.yaml || true
 
 # Install/upgrade Actions Runner Controller (ARC) controller chart.
 kube-arc-install-controller:
