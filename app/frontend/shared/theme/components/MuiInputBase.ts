@@ -25,5 +25,10 @@ export const MuiInputBase: Components<Theme>['MuiInputBase'] = {
         WebkitTextFillColor: 'rgba(255, 255, 255, 0.3) !important',
       },
     },
+    multiline: {
+      '& textarea': {
+        resize: 'vertical',
+      },
+    },
   },
 };

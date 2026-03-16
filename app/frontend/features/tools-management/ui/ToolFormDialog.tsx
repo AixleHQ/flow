@@ -266,7 +266,7 @@ const ToolFormDialog: FC<ToolFormDialogProps> = ({ open, onClose, projectId, edi
                   placeholder="What this tool does..."
                   fullWidth
                   multiline
-                  rows={2}
+                  minRows={2}
                   error={!!methods.formState.errors.description}
                   helperText={methods.formState.errors.description?.message}
                 />
@@ -289,7 +289,7 @@ const ToolFormDialog: FC<ToolFormDialogProps> = ({ open, onClose, projectId, edi
                   placeholder="python /app/script.py --query {{query}}"
                   fullWidth
                   multiline
-                  rows={2}
+                  minRows={2}
                   error={!!methods.formState.errors.command}
                   helperText={
                     methods.formState.errors.command?.message || 'Command template with {{param}} placeholders'

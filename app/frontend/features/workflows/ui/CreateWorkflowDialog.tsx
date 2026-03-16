@@ -90,7 +90,7 @@ const CreateWorkflowDialog: FC<CreateWorkflowDialogProps> = ({ open, onClose, pr
               placeholder="What this workflow does..."
               fullWidth
               multiline
-              rows={3}
+              minRows={3}
               error={!!errors.description}
               helperText={errors.description?.message}
             />

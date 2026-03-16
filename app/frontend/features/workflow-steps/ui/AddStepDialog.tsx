@@ -124,7 +124,7 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
               label="Description"
               fullWidth
               multiline
-              rows={2}
+              minRows={2}
               error={!!errors.description}
               helperText={errors.description?.message}
             />
@@ -134,7 +134,7 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
               label="Instructions"
               fullWidth
               multiline
-              rows={6}
+              minRows={6}
               placeholder="Step instructions for the agent... Use {{artifact_name}} for variable references."
               InputProps={{ sx: { fontFamily: '"JetBrains Mono", monospace', fontSize: '0.85rem' } }}
             />

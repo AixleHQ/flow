@@ -160,7 +160,7 @@ const AgentFormDialog: FC<AgentFormDialogProps> = ({ open, onClose, projectId, e
                 placeholder="Senior analyst with deep expertise in market research..."
                 fullWidth
                 multiline
-                rows={4}
+                minRows={4}
                 error={!!methods.formState.errors.persona}
                 helperText={methods.formState.errors.persona?.message || 'Who the agent is, their role and identity'}
               />
@@ -172,7 +172,7 @@ const AgentFormDialog: FC<AgentFormDialogProps> = ({ open, onClose, projectId, e
                 placeholder="Speaks with precision and clarity..."
                 fullWidth
                 multiline
-                rows={2}
+                minRows={2}
                 error={!!methods.formState.errors.communicationStyle}
                 helperText={
                   methods.formState.errors.communicationStyle?.message || 'How the agent communicates (optional)'
@@ -186,7 +186,7 @@ const AgentFormDialog: FC<AgentFormDialogProps> = ({ open, onClose, projectId, e
                 placeholder="Ground findings in verifiable evidence..."
                 fullWidth
                 multiline
-                rows={2}
+                minRows={2}
                 error={!!methods.formState.errors.principles}
                 helperText={methods.formState.errors.principles?.message || 'Operating principles (optional)'}
               />
