@@ -5,6 +5,7 @@
 # Build command: docker build -f claude-code/Dockerfile -t palad/claude-code:latest .
 # =============================================================================
 ARG BASE_IMAGE=palad/agent-base-core:latest
+ARG CLAUDE_CODE_VERSION=1.0.100
 FROM ${BASE_IMAGE}
 
 # =============================================================================
@@ -13,11 +14,8 @@ FROM ${BASE_IMAGE}
 RUN useradd -m -d /home/claude -s /bin/bash claude \
     && chown -R claude:claude /workspace /home/claude
 
-USER claude
-WORKDIR /home/claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
-
-ENV PATH="/home/claude/.local/bin:${PATH}"
+# Pin Claude Code explicitly so MCP protocol support is reproducible across builds.
+RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
 USER root
 RUN mkdir -p /home/claude/.claude \
@@ -50,6 +48,7 @@ RUN chown -R claude:claude /opt/watcher
 WORKDIR /workspace
 ENV HOME=/home/claude \
     AGENT_NAME="Claude Code" \
+    PATH="/home/claude/.local/bin:${PATH}" \
     LANG=C.UTF-8
 
 # Run as non-root user (required for --dangerously-skip-permissions)
