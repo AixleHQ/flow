@@ -112,6 +112,42 @@ resource "aws_cloudfront_distribution" "static_assets" {
     response_headers_policy_id = data.aws_cloudfront_response_headers_policy.managed_simple_cors[0].id
   }
 
+  # Avoid caching transient error responses for static assets.
+  custom_error_response {
+    error_code            = 400
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 403
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 500
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 502
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 503
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 504
+    error_caching_min_ttl = 0
+  }
+
   restrictions {
     geo_restriction {
       restriction_type = "none"

@@ -279,6 +279,10 @@ resource "aws_eks_node_group" "main" {
   })
 
   lifecycle {
+    ignore_changes = [
+      scaling_config[0].desired_size
+    ]
+
     precondition {
       condition     = var.eks_node_min_size <= var.eks_node_desired_size && var.eks_node_desired_size <= var.eks_node_max_size
       error_message = "EKS node scaling must satisfy min <= desired <= max."
