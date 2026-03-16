@@ -919,7 +919,9 @@ module ContainerRuntime
         NamespaceResourceQuota.find_by(scope_type: "User", scope_id: context[:user_id])
       end
 
-      return unless quota_record
+      # Fall back to a default quota instance (using column defaults) when no
+      # explicit quota record has been configured for this namespace scope.
+      quota_record ||= NamespaceResourceQuota.new
 
       hard_limits = quota_record.to_k8s_hard_limits
       return if hard_limits.empty?
