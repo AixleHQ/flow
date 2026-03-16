@@ -1,0 +1,101 @@
+## ── Datasources provisioning ──────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus.monitoring.svc.cluster.local:9090
+        isDefault: true
+        jsonData:
+          timeInterval: "30s"
+
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki.monitoring.svc.cluster.local:3100
+        jsonData:
+          maxLines: 1000
+---
+## ── Dashboard providers provisioning ─────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-providers
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: default
+        orgId: 1
+        folder: "Palad"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+## ── Pre-built dashboards ──────────────────────────────────────────────────────
+# Dashboard: Kubernetes cluster monitoring (Grafana ID 315)
+# Source: https://grafana.com/grafana/dashboards/315
+# Pinned to a minimal inline version — replace with full JSON downloaded from
+# grafana.com/grafana/dashboards/315 for the complete dashboard.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+data:
+  kubernetes-cluster.json: |
+    {
+      "__inputs": [],
+      "__requires": [],
+      "annotations": { "list": [] },
+      "description": "Kubernetes cluster monitoring — import full dashboard from grafana.com/dashboards/315",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [],
+      "refresh": "30s",
+      "schemaVersion": 38,
+      "tags": ["kubernetes", "prometheus"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Kubernetes Cluster — import from grafana.com/dashboards/315",
+      "uid": "k8s-cluster-315",
+      "version": 1
+    }
+  loki-logs.json: |
+    {
+      "__inputs": [],
+      "__requires": [],
+      "annotations": { "list": [] },
+      "description": "Loki log explorer — import full dashboard from grafana.com/dashboards/13639",
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [],
+      "panels": [],
+      "refresh": "30s",
+      "schemaVersion": 38,
+      "tags": ["loki", "logs"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "browser",
+      "title": "Loki Logs — import from grafana.com/dashboards/13639",
+      "uid": "loki-logs-13639",
+      "version": 1
+    }

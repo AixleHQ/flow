@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: headlamp
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: headlamp
+  template:
+    metadata:
+      labels:
+        app: headlamp
+    spec:
+      serviceAccountName: headlamp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+      containers:
+        - name: headlamp
+          image: ghcr.io/headlamp-k8s/headlamp:v0.27.0
+          args:
+            - "-in-cluster"
+            - "-base-url=/"
+          ports:
+            - name: http
+              containerPort: 4466
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4466
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4466
+            initialDelaySeconds: 20
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: headlamp
+  namespace: monitoring
+spec:
+  selector:
+    app: headlamp
+  ports:
+    - name: http
+      port: 4466
+      targetPort: 4466
+---
+# Expose Headlamp via the existing Traefik admin entry point
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+  namespace: monitoring
+spec:
+  entryPoints:
+    - adminwebsecure
+  routes:
+    - match: Host(`headlamp.palad.ai`)
+      kind: Rule
+      middlewares:
+        - name: admin-basic-auth
+          namespace: palad
+      services:
+        - name: headlamp
+          port: 4466
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai
+          - grafana.palad.ai
+          - headlamp.palad.ai
