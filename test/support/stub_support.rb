@@ -88,6 +88,9 @@ module StubSupport
     core.stubs(:create_service).returns(true)
     core.stubs(:get_service).returns(true)
     core.stubs(:delete_service).returns(true)
+    core.stubs(:get_resource_quota).raises(Kubeclient::ResourceNotFoundError)
+    core.stubs(:create_resource_quota).returns(true)
+    core.stubs(:update_resource_quota).returns(true)
     core
   end
 
