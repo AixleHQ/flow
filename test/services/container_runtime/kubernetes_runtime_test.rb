@@ -271,5 +271,74 @@ module ContainerRuntime
 
       assert_equal "PathPrefix(`/t/abc123/tty`)", route[:match]
     end
+
+    test "build_quota_hard_limits uses settings project_defaults when no db record" do
+      project_defaults = OpenStruct.new(
+        cpu_requests: nil,
+        memory_requests: nil,
+        cpu_limits: "2000m",
+        memory_limits: "4Gi",
+        max_pods: 50
+      )
+      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil))
+      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
+
+      hard = @runtime.send(:build_quota_hard_limits, nil, "Project")
+
+      assert_equal "2000m", hard["limits.cpu"]
+      assert_equal "4Gi",   hard["limits.memory"]
+      assert_equal "50",    hard["count/pods"]
+      assert_not hard.key?("requests.cpu")
+      assert_not hard.key?("requests.memory")
+    end
+
+    test "build_quota_hard_limits db record values override settings defaults" do
+      project_defaults = OpenStruct.new(
+        cpu_requests: nil,
+        memory_requests: nil,
+        cpu_limits: "2000m",
+        memory_limits: "4Gi",
+        max_pods: 50
+      )
+      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil))
+      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
+
+      record = NamespaceResourceQuota.new(cpu_limits: "8000m", memory_limits: nil, max_pods: nil)
+
+      hard = @runtime.send(:build_quota_hard_limits, record, "Project")
+
+      assert_equal "8000m", hard["limits.cpu"]
+      assert_equal "4Gi",   hard["limits.memory"]
+      assert_equal "50",    hard["count/pods"]
+    end
+
+    test "build_quota_hard_limits returns empty hash when all settings and record values are nil" do
+      empty_defaults = OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil)
+      ns_quota_settings = OpenStruct.new(project_defaults: empty_defaults, user_defaults: empty_defaults)
+      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
+
+      hard = @runtime.send(:build_quota_hard_limits, nil, "Project")
+
+      assert_empty hard
+    end
+
+    test "build_quota_hard_limits uses user_defaults for User scope" do
+      user_defaults = OpenStruct.new(
+        cpu_requests: nil,
+        memory_requests: nil,
+        cpu_limits: "1000m",
+        memory_limits: "2Gi",
+        max_pods: 20
+      )
+      project_defaults = OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: "4000m", memory_limits: "8Gi", max_pods: 100)
+      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: user_defaults)
+      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
+
+      hard = @runtime.send(:build_quota_hard_limits, nil, "User")
+
+      assert_equal "1000m", hard["limits.cpu"]
+      assert_equal "2Gi",   hard["limits.memory"]
+      assert_equal "20",    hard["count/pods"]
+    end
   end
 end

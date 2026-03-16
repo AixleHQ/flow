@@ -148,3 +148,17 @@ container_execution:
       cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
       pids_limit: 100      # Max processes
       max_timeout: 1800    # Absolute max timeout (30 min)
+
+namespace_resource_quotas:
+  project_defaults:
+    cpu_requests:    ~
+    memory_requests: ~
+    cpu_limits:      "4000m"
+    memory_limits:   "8Gi"
+    max_pods:        100
+  user_defaults:
+    cpu_requests:    ~
+    memory_requests: ~
+    cpu_limits:      "4000m"
+    memory_limits:   "8Gi"
+    max_pods:        100
