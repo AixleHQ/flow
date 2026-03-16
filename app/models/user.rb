@@ -29,6 +29,7 @@ class User < ApplicationRecord
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
   has_many :agent_credentials, dependent: :destroy
+  has_one :namespace_resource_quota, as: :scope, dependent: :destroy
   belongs_to :default_agent_credential, class_name: "AgentCredential", optional: true
 
   # Validations

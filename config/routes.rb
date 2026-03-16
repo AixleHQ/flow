@@ -211,6 +211,7 @@ Rails.application.routes.draw do
     resources :task_comments, only: %i[index show]
     resources :task_assets, only: %i[index show]
     resources :usage_statistics, only: %i[index show]
+    resources :namespace_resource_quotas
   end
 
   scope module: :web, defaults: { format: :html } do

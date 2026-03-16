@@ -77,7 +77,7 @@ class Api::V1::Company::Projects::ConfigItemsControllerTest < ActionController::
     json = response.parsed_body
 
     # PROJECT_URL overrides company item
-    project_url = json["items"].find { |i| i["name"] == "PROJECT_URL" }
+    project_url = json["items"].find { |i| i["name"] == "PROJECT_URL" && i["scope_type"] == "Project" }
     assert { project_url["scope_indicator"] == "overrides_company" }
 
     # PROJECT_SECRET is project-only

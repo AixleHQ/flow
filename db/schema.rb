@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_15_134656) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_16_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -346,6 +346,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_15_134656) do
     t.string "url"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
+  end
+
+  create_table "namespace_resource_quotas", force: :cascade do |t|
+    t.string "scope_type", null: false
+    t.bigint "scope_id", null: false
+    t.string "cpu_requests"
+    t.string "memory_requests"
+    t.string "cpu_limits", default: "4000m"
+    t.string "memory_limits", default: "8Gi"
+    t.integer "max_pods", default: 100
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scope_type", "scope_id"], name: "index_namespace_resource_quotas_on_scope_type_and_scope_id", unique: true
   end
 
   create_table "project_collaborators", force: :cascade do |t|
