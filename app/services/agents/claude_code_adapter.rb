@@ -117,8 +117,6 @@ module Agents
     end
 
     # MCP config: /workspace/.mcp.json
-    # Claude Code does not expose protocol-version selection in this config;
-    # compatibility is determined by the CLI version baked into the image.
     # Claude Code supports: "http" (streamable-http), "sse" (deprecated), "stdio"
     # See: https://code.claude.com/docs/en/mcp
     def mcp_config(servers)
