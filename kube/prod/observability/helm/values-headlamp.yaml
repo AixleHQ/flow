@@ -1,0 +1,54 @@
+# Helm values for headlamp-k8s/headlamp
+# Install: make kube-observability-install
+# Docs: https://github.com/headlamp-k8s/headlamp/tree/main/charts/headlamp
+
+config:
+  inCluster: true
+  baseURL: "/"
+
+service:
+  port: 80
+  targetPort: 4466
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+
+# Bind the Headlamp ServiceAccount to a ClusterRole that allows full read
+# access plus pod exec/log — required for in-UI log viewing and exec.
+clusterRoleBinding:
+  create: true
+
+# Extend the default RBAC with exec and log permissions via an extra ClusterRole
+extraDeploy:
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRole
+    metadata:
+      name: headlamp-cluster-reader
+    rules:
+      - apiGroups: ["*"]
+        resources: ["*"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: [""]
+        resources: ["pods/exec", "pods/log"]
+        verbs: ["create", "get"]
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: ClusterRoleBinding
+    metadata:
+      name: headlamp-cluster-reader
+    subjects:
+      - kind: ServiceAccount
+        name: headlamp
+        namespace: monitoring
+    roleRef:
+      kind: ClusterRole
+      name: headlamp-cluster-reader
+      apiGroup: rbac.authorization.k8s.io
+
+# Expose via Traefik IngressRoute defined in extra/01-ingressroutes.yaml
+ingress:
+  enabled: false

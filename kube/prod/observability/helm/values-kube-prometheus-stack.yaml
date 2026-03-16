@@ -1,0 +1,76 @@
+# Helm values for prometheus-community/kube-prometheus-stack
+# Install: make kube-observability-install
+# Docs: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+
+prometheus:
+  prometheusSpec:
+    externalLabels:
+      cluster: palad-eks
+      env: prod
+    retention: 15d
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp2
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 20Gi
+    resources:
+      requests:
+        cpu: "200m"
+        memory: "512Mi"
+      limits:
+        cpu: "1000m"
+        memory: "2Gi"
+
+grafana:
+  admin:
+    # Secret created with: make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
+    existingSecret: grafana-admin-secret
+    passwordKey: GF_SECURITY_ADMIN_PASSWORD
+  grafana.ini:
+    server:
+      root_url: "https://grafana.palad.ai"
+  persistence:
+    enabled: true
+    storageClassName: gp2
+    size: 2Gi
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+  # Loki datasource (Prometheus is auto-provisioned by the chart)
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+      jsonData:
+        maxLines: 1000
+  # Expose via Traefik IngressRoute defined in extra/01-ingressroutes.yaml
+  ingress:
+    enabled: false
+  service:
+    port: 80
+    targetPort: 3000
+  # Sidecar picks up dashboards from ConfigMaps labelled grafana_dashboard: "1"
+  sidecar:
+    dashboards:
+      enabled: true
+
+# Alertmanager not required for the initial stack
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true

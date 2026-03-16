@@ -1,0 +1,46 @@
+# Helm values for grafana/loki
+# Install: make kube-observability-install
+# Docs: https://github.com/grafana/loki/tree/main/production/helm/loki
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  limits_config:
+    retention_period: 720h  # 30 days
+
+singleBinary:
+  replicas: 1
+  persistence:
+    size: 20Gi
+    storageClass: gp2
+
+# Disable multi-component mode (only singleBinary is active)
+backend:
+  replicas: 0
+read:
+  replicas: 0
+write:
+  replicas: 0
+
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Do not deploy Grafana via this chart (kube-prometheus-stack provides it)
+grafana:
+  enabled: false

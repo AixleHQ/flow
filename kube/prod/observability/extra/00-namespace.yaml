@@ -5,7 +5,7 @@ metadata:
   labels:
     palad.ai/env: prod
 ---
-# Allow all pods within monitoring to talk to each other
+# Allow all pods within the monitoring namespace to communicate
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -26,11 +26,7 @@ metadata:
   name: allow-traefik-to-observability-uis
   namespace: monitoring
 spec:
-  podSelector:
-    matchExpressions:
-      - key: app
-        operator: In
-        values: [grafana, headlamp]
+  podSelector: {}
   policyTypes:
     - Ingress
   ingress:
@@ -41,8 +37,3 @@ spec:
           podSelector:
             matchLabels:
               app: traefik
-      ports:
-        - protocol: TCP
-          port: 3000   # Grafana
-        - protocol: TCP
-          port: 4466   # Headlamp

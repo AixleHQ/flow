@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-install kube-observability-uninstall
 
 KUBE_DEV_DIR = ./kube/dev
 KUBE_PROD_DIR = ./kube/prod
@@ -39,6 +39,8 @@ kube-help:
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
 	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
 	@echo "  make kube-arc-install            - Install ARC controller + deploy RBAC + runner scale set"
+	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm (Prometheus, Loki, Grafana, Headlamp)"
+	@echo "  make kube-observability-uninstall - Uninstall all observability Helm releases"
 	@echo "  make kube-rm                - Delete dev manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod manifests (secrets are not touched)"
 
@@ -120,6 +122,49 @@ kube-secrets-apply-prod:
 # Restart web-related deployments to pick up new config/secrets
 kube-web-rollout:
 	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_PROD_NAMESPACE)
+
+# ── Observability stack (Helm) ────────────────────────────────────────────────
+OBSERVABILITY_HELM_DIR = ./kube/prod/observability/helm
+OBSERVABILITY_EXTRA_DIR = ./kube/prod/observability/extra
+MONITORING_NAMESPACE = monitoring
+
+# Add the Helm repos used by the observability stack.
+kube-observability-add-repos:
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo add headlamp-k8s https://headlamp-k8s.github.io/headlamp/
+	helm repo update
+
+# Install or upgrade all observability components via Helm.
+# Pre-requisite: create the Grafana admin secret first:
+#   make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
+kube-observability-install: kube-observability-add-repos
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/00-namespace.yaml
+	helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-kube-prometheus-stack.yaml \
+		--wait
+	helm upgrade --install loki grafana/loki \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-loki.yaml \
+		--wait
+	helm upgrade --install promtail grafana/promtail \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-promtail.yaml \
+		--wait
+	helm upgrade --install headlamp headlamp-k8s/headlamp \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-headlamp.yaml \
+		--wait
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml
+
+# Uninstall all observability Helm releases.
+kube-observability-uninstall:
+	helm uninstall kube-prometheus-stack --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall loki --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall promtail --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall headlamp --namespace $(MONITORING_NAMESPACE) || true
+	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml || true
 
 # Install/upgrade Actions Runner Controller (ARC) controller chart.
 kube-arc-install-controller:
