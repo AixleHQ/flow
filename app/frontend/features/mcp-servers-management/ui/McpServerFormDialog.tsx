@@ -411,7 +411,7 @@ export const McpServerFormDialog: FC<McpServerFormDialogProps> = ({ open, onClos
                   isStdio ? 'Browser automation via Playwright...' : 'Provides documentation lookup capabilities...'
                 }
                 multiline
-                rows={2}
+                minRows={2}
                 fullWidth
               />
             )}

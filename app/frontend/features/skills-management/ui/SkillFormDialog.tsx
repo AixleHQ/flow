@@ -144,7 +144,7 @@ const SkillFormDialog: FC<SkillFormDialogProps> = ({ open, onClose, projectId, e
                 placeholder="# Skill Instructions&#10;&#10;Write markdown instructions that will be injected into agent sessions..."
                 fullWidth
                 multiline
-                rows={10}
+                minRows={10}
                 error={!!methods.formState.errors.content}
                 helperText={
                   methods.formState.errors.content?.message || 'Markdown instructions injected into agent containers'
@@ -161,7 +161,7 @@ const SkillFormDialog: FC<SkillFormDialogProps> = ({ open, onClose, projectId, e
                 placeholder="Brief description of what this skill does..."
                 fullWidth
                 multiline
-                rows={2}
+                minRows={2}
                 error={!!methods.formState.errors.description}
                 helperText={methods.formState.errors.description?.message || 'Optional description (optional)'}
               />

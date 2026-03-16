@@ -84,7 +84,7 @@ const EditWorkflowDialog: FC<EditWorkflowDialogProps> = ({ open, onClose, workfl
               label="Description"
               fullWidth
               multiline
-              rows={3}
+              minRows={3}
               error={!!errors.description}
               helperText={errors.description?.message}
             />

@@ -228,7 +228,7 @@ const ConfigItemFormDialog: FC<ConfigItemFormDialogProps> = ({ open, onClose, pr
                 placeholder="Optional description for this config item"
                 fullWidth
                 multiline
-                rows={2}
+                minRows={2}
                 error={!!methods.formState.errors.description}
                 helperText={methods.formState.errors.description?.message}
               />
