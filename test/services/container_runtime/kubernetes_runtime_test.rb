@@ -146,6 +146,8 @@ module ContainerRuntime
           (data[:".dockerconfigjson"] || data[".dockerconfigjson"]) == "ZXhhbXBsZQ=="
       end.returns(true)
       core_mock.expects(:create_pod).returns(true)
+      core_mock.expects(:get_resource_quota).with("palad-resource-quota", "palad-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
+      core_mock.expects(:create_resource_quota).returns(true)
 
       traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
       traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
