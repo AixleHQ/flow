@@ -1,0 +1,98 @@
+# Allow all pods within the staging namespace to communicate with each other.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-from-same-namespace
+  namespace: palad-staging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+---
+# Restrict public ingress to Traefik only.
+# Only agent subnets and the owner IP are allowed — enforced at the NLB level
+# via loadBalancerSourceRanges on the traefik service (see 09-traefik.yaml).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-restricted-ingress-to-traefik
+  namespace: palad-staging
+spec:
+  podSelector:
+    matchLabels:
+      app: traefik
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+---
+# Allow agent runtime namespaces to reach the web and mcp services.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-web
+  namespace: palad-staging
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-mcp
+  namespace: palad-staging
+spec:
+  podSelector:
+    matchLabels:
+      app: mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4002
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-runtime-namespaces-to-otlp-ingest
+  namespace: palad-staging
+spec:
+  podSelector:
+    matchLabels:
+      app: otlp-ingest
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              palad.ai/runtime-isolated: "true"
+      ports:
+        - protocol: TCP
+          port: 4318

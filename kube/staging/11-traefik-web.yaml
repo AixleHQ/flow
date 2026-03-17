@@ -1,0 +1,24 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: web
+  namespace: palad-staging
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: (Host(`staging.palad.ai`) || Host(`www.staging.palad.ai`)) && PathPrefix(`/`)
+      kind: Rule
+      middlewares:
+        - name: staging-basic-auth
+      services:
+        - name: web
+          port: 4000
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: staging.palad.ai
+        sans:
+          - www.staging.palad.ai
+          - traefik.staging.palad.ai
+          - temporal.staging.palad.ai

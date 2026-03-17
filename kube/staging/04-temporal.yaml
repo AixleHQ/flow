@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: temporal
+  namespace: palad-staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: temporal
+  template:
+    metadata:
+      labels:
+        app: temporal
+    spec:
+      containers:
+        - name: temporal
+          image: temporalio/auto-setup:1.29.0
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "3Gi"
+          env:
+            - name: DB
+              value: postgres12
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_PORT
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_USERNAME
+            - name: POSTGRES_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: palad-app-secrets
+                  key: TEMPORAL_DB_PASSWORD
+            - name: POSTGRES_SEEDS
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_HOST
+            - name: DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_NAME
+            - name: VISIBILITY_DBNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_VISIBILITY_DB_NAME
+            - name: POSTGRES_TLS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_ENABLED
+            - name: POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+            - name: POSTGRES_TLS_SERVER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_HOST
+            - name: SQL_TLS_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_ENABLED
+            - name: SQL_TLS
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_SQL_TLS
+            - name: SQL_TLS_DISABLE_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION
+            - name: SQL_HOST_VERIFICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_SQL_HOST_VERIFICATION
+            - name: SQL_HOST_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: palad-app-config
+                  key: TEMPORAL_DB_HOST
+            - name: LOG_LEVEL
+              value: error
+            - name: BIND_ON_IP
+              value: "0.0.0.0"
+            - name: TEMPORAL_BROADCAST_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 7233
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: temporal
+  namespace: palad-staging
+spec:
+  selector:
+    app: temporal
+  ports:
+    - name: temporal
+      port: 7233
+      targetPort: 7233
