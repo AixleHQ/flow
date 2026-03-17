@@ -8,10 +8,10 @@ import { AgentsPanel } from 'features/agents-management';
 import { AssetPreview } from 'features/asset-preview';
 import { useGetProjectAssetsQuery, AssetsPanel } from 'features/assets-management';
 import { BoardPanel } from 'features/board-management';
-import { ProjectAnalyticsPanel } from 'features/project-analytics';
-import { ProjectOverviewPanel } from 'features/project-overview';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
+import { ProjectAnalyticsPanel } from 'features/project-analytics';
+import { ProjectOverviewPanel } from 'features/project-overview';
 import { RepositoriesPanel } from 'features/repositories-management';
 import { RunWorkflowModal } from 'features/run-workflow';
 import { SkillsPanel } from 'features/skills-management';
@@ -43,7 +43,6 @@ const styles = {
     justifyContent: 'center',
     minHeight: '400px',
   },
-
 } satisfies Record<string, SxProps<Theme>>;
 
 const VALID_TABS: ProjectTab[] = [
@@ -87,7 +86,6 @@ const ConnectedRunModal = ({
     />
   );
 };
-
 
 const ProjectPage = () => {
   const navigate = useNavigate();

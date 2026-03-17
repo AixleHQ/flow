@@ -1,11 +1,11 @@
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import WorkflowsIcon from '@mui/icons-material/AccountTree';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import FolderIcon from '@mui/icons-material/Folder';
 import GroupIcon from '@mui/icons-material/Group';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import WorkflowsIcon from '@mui/icons-material/AccountTree';
 import { Box, Card, Chip, Divider, LinearProgress, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 
@@ -217,6 +217,7 @@ interface ProjectOverviewPanelProps {
 }
 
 const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
+  void _projectId; // placeholder — projectId will be used for API calls when this moves out of stub phase
   return (
     <Box sx={styles.container}>
       <Box sx={styles.pageHeader}>
@@ -264,7 +265,10 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
                 <Box sx={styles.progressLabel}>
                   <Typography sx={styles.progressLabelText}>{item.label}</Typography>
                   <Typography sx={styles.progressLabelValue}>
-                    {item.value} <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>/ {item.total}</Typography>
+                    {item.value}{' '}
+                    <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
+                      / {item.total}
+                    </Typography>
                   </Typography>
                 </Box>
                 <LinearProgress
@@ -310,7 +314,15 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
 
       {/* Tasks by status */}
       <Typography sx={styles.sectionTitle}>Board Task Distribution</Typography>
-      <Card sx={{ ...styles.card, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px' }} elevation={0}>
+      <Card
+        sx={{
+          ...styles.card,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '16px',
+        }}
+        elevation={0}
+      >
         {[
           { label: 'Backlog', count: 34, color: '#607d8b' },
           { label: 'In Progress', count: 18, color: '#2196f3' },
@@ -319,7 +331,10 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
           { label: 'Code Review', count: 11, color: '#00bcd4' },
           { label: 'Done', count: 33, color: '#4caf50' },
         ].map((col) => (
-          <Box key={col.label} sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}>
+          <Box
+            key={col.label}
+            sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+          >
             <Typography sx={{ fontSize: '28px', fontWeight: 700, color: col.color }}>{col.count}</Typography>
             <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.label}</Typography>
           </Box>

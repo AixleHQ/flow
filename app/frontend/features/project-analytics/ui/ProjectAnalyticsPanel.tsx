@@ -190,13 +190,7 @@ const styles = {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const ScopeSelector = ({
-  scope,
-  onScope,
-}: {
-  scope: string;
-  onScope: (v: string) => void;
-}) => (
+const ScopeSelector = ({ scope, onScope }: { scope: string; onScope: (v: string) => void }) => (
   <ToggleButtonGroup
     value={scope}
     exclusive
@@ -234,6 +228,7 @@ interface ProjectAnalyticsPanelProps {
 }
 
 const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelProps) => {
+  void _projectId; // placeholder — projectId will be used for API calls when this moves out of stub phase
   const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
   const [scope, setScope] = useState('project');
 
@@ -253,7 +248,9 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
       <Box sx={styles.pageHeader}>
         <Box>
           <Typography sx={styles.pageTitle}>Analytics</Typography>
-          <Typography sx={styles.pageSubtitle}>Agent activity, costs, and session insights — static demo data</Typography>
+          <Typography sx={styles.pageSubtitle}>
+            Agent activity, costs, and session insights — static demo data
+          </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <ScopeSelector scope={scope} onScope={setScope} />
@@ -277,11 +274,36 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
       {/* Summary Stats */}
       <Box sx={styles.statsGrid}>
         {[
-          { label: 'Total Sessions', value: totalSessions.toLocaleString(), change: '+14% vs prev', icon: <AccessTimeIcon sx={{ fontSize: 14 }} /> },
-          { label: 'Total Cost', value: `$${totalCost.toFixed(0)}`, change: '+9% vs prev', icon: <AttachMoneyIcon sx={{ fontSize: 14 }} /> },
-          { label: 'Total Tokens', value: (totalTokens / 1_000_000).toFixed(1) + 'M', change: '+11% vs prev', icon: <TokenIcon sx={{ fontSize: 14 }} /> },
-          { label: 'Avg Cost / Session', value: `$${avgSessionCost.toFixed(2)}`, change: '−3% vs prev', icon: <SmartToyIcon sx={{ fontSize: 14 }} /> },
-          { label: 'Workflows Run', value: '847', change: '+22% vs prev', icon: <AccountTreeIcon sx={{ fontSize: 14 }} /> },
+          {
+            label: 'Total Sessions',
+            value: totalSessions.toLocaleString(),
+            change: '+14% vs prev',
+            icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
+          },
+          {
+            label: 'Total Cost',
+            value: `$${totalCost.toFixed(0)}`,
+            change: '+9% vs prev',
+            icon: <AttachMoneyIcon sx={{ fontSize: 14 }} />,
+          },
+          {
+            label: 'Total Tokens',
+            value: (totalTokens / 1_000_000).toFixed(1) + 'M',
+            change: '+11% vs prev',
+            icon: <TokenIcon sx={{ fontSize: 14 }} />,
+          },
+          {
+            label: 'Avg Cost / Session',
+            value: `$${avgSessionCost.toFixed(2)}`,
+            change: '−3% vs prev',
+            icon: <SmartToyIcon sx={{ fontSize: 14 }} />,
+          },
+          {
+            label: 'Workflows Run',
+            value: '847',
+            change: '+22% vs prev',
+            icon: <AccountTreeIcon sx={{ fontSize: 14 }} />,
+          },
         ].map((s) => (
           <Card key={s.label} sx={styles.statCard} elevation={0}>
             <Typography sx={styles.statLabel}>
@@ -326,9 +348,33 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
               <YAxis tick={{ fontSize: 11 }} />
               <Tooltip contentStyle={chartTooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="sonnet" name="Sonnet" stroke="#2196f3" fill="url(#grad-sonnet)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="opus" name="Opus" stroke="#9c27b0" fill="url(#grad-opus)" strokeWidth={2} dot={false} />
-              <Area type="monotone" dataKey="haiku" name="Haiku" stroke="#4caf50" fill="url(#grad-haiku)" strokeWidth={2} dot={false} />
+              <Area
+                type="monotone"
+                dataKey="sonnet"
+                name="Sonnet"
+                stroke="#2196f3"
+                fill="url(#grad-sonnet)"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="opus"
+                name="Opus"
+                stroke="#9c27b0"
+                fill="url(#grad-opus)"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Area
+                type="monotone"
+                dataKey="haiku"
+                name="Haiku"
+                stroke="#4caf50"
+                fill="url(#grad-haiku)"
+                strokeWidth={2}
+                dot={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -396,7 +442,15 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
               <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`$${Number(v).toFixed(2)}`, 'Cost']} />
-              <Area type="monotone" dataKey="cost" name="Cost" stroke="#ff9800" fill="url(#grad-cost)" strokeWidth={2} dot={false} />
+              <Area
+                type="monotone"
+                dataKey="cost"
+                name="Cost"
+                stroke="#ff9800"
+                fill="url(#grad-cost)"
+                strokeWidth={2}
+                dot={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -419,7 +473,15 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
                 contentStyle={chartTooltipStyle}
                 formatter={(v) => [`${(Number(v) / 1000).toFixed(0)}k`, 'Tokens']}
               />
-              <Area type="monotone" dataKey="tokens" name="Tokens" stroke="#00bcd4" fill="url(#grad-tokens)" strokeWidth={2} dot={false} />
+              <Area
+                type="monotone"
+                dataKey="tokens"
+                name="Tokens"
+                stroke="#00bcd4"
+                fill="url(#grad-tokens)"
+                strokeWidth={2}
+                dot={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -513,7 +575,9 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
           { label: 'p50 Duration', value: '4.2 min', sublabel: 'last 30d' },
         ].map((item) => (
           <Card key={item.label} sx={{ ...styles.statCard, backgroundColor: 'background.paper' }} elevation={0}>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginBottom: '6px' }}>{item.label}</Typography>
+            <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginBottom: '6px' }}>
+              {item.label}
+            </Typography>
             <Typography sx={{ fontSize: '24px', fontWeight: 700, color: 'text.primary' }}>{item.value}</Typography>
             <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>{item.sublabel}</Typography>
           </Card>
