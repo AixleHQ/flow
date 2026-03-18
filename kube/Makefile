@@ -197,7 +197,7 @@ kube-secret-edit:
 	fi; \
 	echo "Editing $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"; \
 	KUBE_SECRET_FILE="$$tmp_file" KUBE_EDITOR_CMD='$(KUBE_EDITOR)' sh -c 'exec $$KUBE_EDITOR_CMD "$$KUBE_SECRET_FILE"'; \
-	encoded_value="$$(base64 < "$$tmp_file" | tr -d '\n')"; \
+	encoded_value="$$(perl -0pe 's/\n\z//' "$$tmp_file" | base64 | tr -d '\n')"; \
 	jq -n --arg key "$$secret_key" --arg value "$$encoded_value" '{data: {($$key): $$value}}' > "$$patch_file"; \
 	$(KUBECTL) patch secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" --type merge --patch-file "$$patch_file" >/dev/null; \
 	echo "Updated $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"
