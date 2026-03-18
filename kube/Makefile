@@ -1,6 +1,7 @@
 # Kubernetes targets
 .PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
 
+KUBE_CLUSTER_STORAGECLASS = ./kube/00-storageclass-gp3.yaml
 KUBE_DEV_DIR = ./kube/dev
 KUBE_PROD_DIR = ./kube/prod
 KUBE_STAGING_DIR = ./kube/staging
@@ -84,6 +85,7 @@ kube-setup:
 	@make build-otlp-ingest
 	@make build-agents
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)/00-namespace.yaml
 	@if [ "$(KUBE_SETUP_WITH_ARC)" = "true" ]; then \
 		$(MAKE) kube-arc-install; \
@@ -101,6 +103,7 @@ kube-setup:
 # Production Kubernetes setup: CRDs + secrets + production manifests
 kube-setup-prod:
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_PROD_DIR)/00-namespace.yaml
 	$(KUBECTL) apply -f $(KUBE_PROD_SECRETS_DIR)
 	@make kube-apply-prod
@@ -108,6 +111,7 @@ kube-setup-prod:
 # Staging Kubernetes setup: CRDs + secrets + staging manifests
 kube-setup-staging:
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_STAGING_DIR)/00-namespace.yaml
 	$(KUBECTL) apply -f $(KUBE_STAGING_SECRETS_DIR)
 	@make kube-apply-staging

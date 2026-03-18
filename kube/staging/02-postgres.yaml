@@ -52,6 +52,7 @@ metadata:
   name: postgres-data
   namespace: palad-staging
 spec:
+  storageClassName: gp3
   accessModes:
     - ReadWriteOnce
   resources:
