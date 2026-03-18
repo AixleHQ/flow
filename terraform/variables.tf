@@ -210,6 +210,18 @@ variable "eks_traefik_service_account_name" {
   default     = "traefik"
 }
 
+variable "eks_staging_traefik_namespace" {
+  description = "Namespace of the staging Traefik service account used for IRSA"
+  type        = string
+  default     = "palad-staging"
+}
+
+variable "eks_staging_traefik_service_account_name" {
+  description = "Name of the staging Traefik service account used for IRSA"
+  type        = string
+  default     = "traefik"
+}
+
 variable "create_managed_data_services" {
   description = "Whether to create managed RDS PostgreSQL and ElastiCache Redis resources"
   type        = bool

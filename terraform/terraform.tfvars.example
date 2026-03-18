@@ -42,6 +42,8 @@ eks_admin_temporal_dns_name   = "temporal.palad.ai"
 # Traefik IRSA identity for Route53 DNS challenge
 eks_traefik_namespace            = "palad"
 eks_traefik_service_account_name = "traefik"
+eks_staging_traefik_namespace            = "palad-staging"
+eks_staging_traefik_service_account_name = "traefik"
 
 # Managed node group (x86, on-demand)
 eks_node_group_name     = "palad-on-demand"

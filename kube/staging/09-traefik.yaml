@@ -4,8 +4,8 @@ metadata:
   name: traefik
   namespace: palad-staging
   annotations:
-    # Reuse the existing Traefik IRSA role for Route53 DNS challenge (Let's Encrypt).
-    eks.amazonaws.com/role-arn: arn:aws:iam::541894707537:role/palad-eks-traefik-dns-role
+    # Dedicated staging Traefik IRSA role for Route53 DNS challenge (Let's Encrypt).
+    eks.amazonaws.com/role-arn: arn:aws:iam::541894707537:role/palad-eks-traefik-dns-staging-role
 ---
 # ClusterRole and ClusterRoleBinding for Traefik are shared with production
 # (defined in kube/prod/09-traefik.yaml). Only the service-account subject needs

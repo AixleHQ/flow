@@ -543,6 +543,40 @@ data "aws_iam_policy_document" "eks_traefik_irsa_assume_role" {
   }
 }
 
+data "aws_iam_policy_document" "eks_staging_traefik_irsa_assume_role" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "sts:AssumeRoleWithWebIdentity"
+    ]
+
+    principals {
+      type = "Federated"
+      identifiers = [
+        aws_iam_openid_connect_provider.eks[0].arn
+      ]
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "sts.amazonaws.com"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:aud"
+    }
+
+    condition {
+      test = "StringEquals"
+      values = [
+        "system:serviceaccount:${var.eks_staging_traefik_namespace}:${var.eks_staging_traefik_service_account_name}"
+      ]
+      variable = "${replace(aws_eks_cluster.main[0].identity[0].oidc[0].issuer, "https://", "")}:sub"
+    }
+  }
+}
+
 resource "aws_iam_role" "eks_traefik_dns" {
   count = var.create_eks_cluster ? 1 : 0
 
@@ -551,6 +585,17 @@ resource "aws_iam_role" "eks_traefik_dns" {
 
   tags = merge(local.eks_common_tags, {
     Name = "${var.eks_cluster_name}-traefik-dns-role"
+  })
+}
+
+resource "aws_iam_role" "eks_staging_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-traefik-dns-staging-role"
+  assume_role_policy = data.aws_iam_policy_document.eks_staging_traefik_irsa_assume_role[0].json
+
+  tags = merge(local.eks_common_tags, {
+    Name = "${var.eks_cluster_name}-traefik-dns-staging-role"
   })
 }
 
@@ -597,5 +642,12 @@ resource "aws_iam_role_policy_attachment" "eks_traefik_dns" {
   count = var.create_eks_cluster ? 1 : 0
 
   role       = aws_iam_role.eks_traefik_dns[0].name
+  policy_arn = aws_iam_policy.eks_traefik_dns[0].arn
+}
+
+resource "aws_iam_role_policy_attachment" "eks_staging_traefik_dns" {
+  count = var.create_eks_cluster ? 1 : 0
+
+  role       = aws_iam_role.eks_staging_traefik_dns[0].name
   policy_arn = aws_iam_policy.eks_traefik_dns[0].arn
 }

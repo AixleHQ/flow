@@ -145,6 +145,11 @@ output "eks_traefik_dns_irsa_role_arn" {
   value       = try(aws_iam_role.eks_traefik_dns[0].arn, null)
 }
 
+output "eks_staging_traefik_dns_irsa_role_arn" {
+  description = "IAM role ARN for staging Traefik IRSA Route53 DNS challenge access"
+  value       = try(aws_iam_role.eks_staging_traefik_dns[0].arn, null)
+}
+
 output "eks_cluster_autoscaler_irsa_role_arn" {
   description = "IAM role ARN for Cluster Autoscaler IRSA access"
   value       = try(aws_iam_role.eks_cluster_autoscaler[0].arn, null)
