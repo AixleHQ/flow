@@ -245,19 +245,19 @@ output "redis_port" {
   value       = var.redis_port
 }
 
-output "ci_runner_instance_id" {
-  description = "Instance ID of the GitHub Actions CI runner"
-  value       = try(aws_instance.ci_runner[0].id, null)
+output "ci_runner_instance_ids" {
+  description = "Instance IDs of the GitHub Actions CI runners"
+  value       = values(aws_instance.ci_runner)[*].id
 }
 
-output "ci_runner_private_ip" {
-  description = "Private IP address of the GitHub Actions CI runner"
-  value       = try(aws_instance.ci_runner[0].private_ip, null)
+output "ci_runner_private_ips" {
+  description = "Private IP addresses of the GitHub Actions CI runners"
+  value       = values(aws_instance.ci_runner)[*].private_ip
 }
 
-output "ci_runner_public_ip" {
-  description = "Public IP address of the GitHub Actions CI runner when placed in a public subnet"
-  value       = try(aws_instance.ci_runner[0].public_ip, null)
+output "ci_runner_public_ips" {
+  description = "Public IP addresses of the GitHub Actions CI runners when placed in public subnets"
+  value       = values(aws_instance.ci_runner)[*].public_ip
 }
 
 output "ci_runner_security_group_id" {
@@ -265,9 +265,12 @@ output "ci_runner_security_group_id" {
   value       = try(aws_security_group.ci_runner[0].id, null)
 }
 
-output "ci_runner_ssm_start_session_command" {
-  description = "AWS CLI command to open an SSM shell session to the CI runner"
-  value       = try("aws ssm start-session --region ${var.aws_region} --target ${aws_instance.ci_runner[0].id}", null)
+output "ci_runner_ssm_start_session_commands" {
+  description = "AWS CLI commands to open SSM shell sessions to the CI runners"
+  value = [
+    for instance in values(aws_instance.ci_runner) :
+    "aws ssm start-session --region ${var.aws_region} --target ${instance.id}"
+  ]
 }
 
 output "ci_runner_ssm_parameter_names" {

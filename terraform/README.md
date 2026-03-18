@@ -11,6 +11,7 @@ The current configuration sets up:
 - **Route53 Hosted Zone and DNS Records** for `palad.ai`
 - **EKS Cluster + Networking** for production workloads
 - **Optional EC2 GitHub Actions Self-Hosted Runner** for CI workloads
+  - supports a fixed-size pool via `ci_runner_count`
 - **RDS PostgreSQL (Rails app)** for production application database
 - **RDS PostgreSQL (Temporal)** for Temporal persistence
 - **ElastiCache Redis** for production cache/cable/jobs

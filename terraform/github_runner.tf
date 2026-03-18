@@ -24,10 +24,12 @@ data "aws_ami" "ci_runner" {
 
 locals {
   ci_runner_repo_url = "https://github.com/${var.ci_runner_github_owner}/${var.ci_runner_github_repo}"
-  ci_runner_tags = merge(local.eks_common_tags, var.ci_runner_tags, {
-    Name      = var.ci_runner_instance_name
+  ci_runner_base_tags = merge(local.eks_common_tags, var.ci_runner_tags, {
     Component = "github-actions-runner"
     Stack     = "github-runner"
+  })
+  ci_runner_tags = merge(local.ci_runner_base_tags, {
+    Name = var.ci_runner_instance_name
   })
   ci_runner_subnet_ids = var.ci_runner_subnet_type == "public" ? aws_subnet.eks_public[*].id : aws_subnet.eks_private[*].id
   ci_runner_labels_csv = join(",", var.ci_runner_labels)
@@ -40,6 +42,8 @@ locals {
     for name in local.ci_runner_ssm_parameter_names :
     "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/${trimprefix(name, "/")}"
   ]
+  ci_runner_enabled = var.create_ci_runner_instance && var.create_eks_cluster
+  ci_runner_indices = local.ci_runner_enabled ? toset([for index in range(var.ci_runner_count) : tostring(index)]) : toset([])
 }
 
 resource "aws_ssm_parameter" "ci_runner_github_app_id" {
@@ -159,11 +163,11 @@ resource "aws_iam_instance_profile" "ci_runner" {
 }
 
 resource "aws_instance" "ci_runner" {
-  count = var.create_ci_runner_instance && var.create_eks_cluster ? 1 : 0
+  for_each = local.ci_runner_indices
 
   ami                         = data.aws_ami.ci_runner[0].id
   instance_type               = var.ci_runner_instance_type
-  subnet_id                   = local.ci_runner_subnet_ids[var.ci_runner_subnet_index]
+  subnet_id                   = local.ci_runner_subnet_ids[(var.ci_runner_subnet_index + tonumber(each.key)) % length(local.ci_runner_subnet_ids)]
   vpc_security_group_ids      = [aws_security_group.ci_runner[0].id]
   iam_instance_profile        = aws_iam_instance_profile.ci_runner[0].name
   associate_public_ip_address = var.ci_runner_subnet_type == "public"
@@ -176,7 +180,7 @@ resource "aws_instance" "ci_runner" {
     github_repo                   = var.ci_runner_github_repo
     github_repo_url               = local.ci_runner_repo_url
     runner_labels                 = local.ci_runner_labels_csv
-    runner_name_prefix            = var.ci_runner_name_prefix
+    runner_name_prefix            = "${var.ci_runner_name_prefix}-${each.key}"
     github_app_id_parameter_name  = var.ci_runner_github_app_id_ssm_parameter_name
     github_app_installation_param = var.ci_runner_github_app_installation_id_ssm_parameter_name
     github_app_private_key_param  = var.ci_runner_github_app_private_key_ssm_parameter_name
@@ -192,12 +196,14 @@ resource "aws_instance" "ci_runner" {
     volume_size = var.ci_runner_root_volume_size
     encrypted   = true
 
-    tags = merge(local.ci_runner_tags, {
-      Name = "${var.ci_runner_instance_name}-root"
+    tags = merge(local.ci_runner_base_tags, {
+      Name = "${var.ci_runner_instance_name}-${each.key}-root"
     })
   }
 
-  tags = local.ci_runner_tags
+  tags = merge(local.ci_runner_base_tags, {
+    Name = "${var.ci_runner_instance_name}-${each.key}"
+  })
 
   lifecycle {
     precondition {

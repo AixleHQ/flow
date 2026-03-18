@@ -294,6 +294,17 @@ variable "ci_runner_instance_type" {
   default     = "t3.large"
 }
 
+variable "ci_runner_count" {
+  description = "Number of persistent EC2 GitHub Actions runners to create"
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.ci_runner_count >= 1
+    error_message = "ci_runner_count must be at least 1."
+  }
+}
+
 variable "ci_runner_root_volume_size" {
   description = "Size in GiB for the runner root volume"
   type        = number

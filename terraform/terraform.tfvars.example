@@ -131,6 +131,7 @@ create_ci_runner_instance = false
 ci_runner_instance_name   = "palad-ci-runner"
 ci_runner_name_prefix     = "palad-ci"
 ci_runner_instance_type   = "t3.large"
+ci_runner_count           = 1
 ci_runner_root_volume_size = 100
 ci_runner_subnet_type     = "private"
 ci_runner_subnet_index    = 0
