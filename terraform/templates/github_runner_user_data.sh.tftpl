@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec > >(tee /var/log/github-runner-bootstrap.log | logger -t github-runner-bootstrap -s 2>/dev/console) 2>&1
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y ca-certificates curl git jq openssl tar unzip docker.io
+
+if ! command -v aws >/dev/null 2>&1; then
+  tmpdir="$(mktemp -d)"
+  curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$${tmpdir}/awscliv2.zip"
+  unzip -q "$${tmpdir}/awscliv2.zip" -d "$${tmpdir}"
+  "$${tmpdir}/aws/install" --update
+  rm -rf "$${tmpdir}"
+fi
+
+if ! apt-get install -y docker-compose-plugin; then
+  apt-get install -y docker-compose-v2
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y nodejs
+fi
+
+systemctl enable --now docker
+
+APP_ID_PARAM="${github_app_id_parameter_name}"
+INSTALLATION_ID_PARAM="${github_app_installation_param}"
+PRIVATE_KEY_PARAM="${github_app_private_key_param}"
+AWS_REGION="${aws_region}"
+GITHUB_OWNER="${github_owner}"
+GITHUB_REPO="${github_repo}"
+RUNNER_LABELS="${runner_labels}"
+RUNNER_NAME="${runner_name_prefix}-$(hostname -s)"
+REPO_URL="${github_repo_url}"
+
+APP_ID="$(aws ssm get-parameter --region "$AWS_REGION" --name "$APP_ID_PARAM" --output json | jq -r '.Parameter.Value')"
+INSTALLATION_ID="$(aws ssm get-parameter --region "$AWS_REGION" --name "$INSTALLATION_ID_PARAM" --output json | jq -r '.Parameter.Value')"
+PRIVATE_KEY_FILE="$(mktemp)"
+aws ssm get-parameter --region "$AWS_REGION" --with-decryption --name "$PRIVATE_KEY_PARAM" --output json | jq -r '.Parameter.Value' >"$PRIVATE_KEY_FILE"
+chmod 600 "$PRIVATE_KEY_FILE"
+
+base64url() {
+  openssl base64 -A | tr '+/' '-_' | tr -d '='
+}
+
+build_jwt() {
+  local now iat exp header payload header_b64 payload_b64 signature
+
+  now="$(date +%s)"
+  iat="$((now - 60))"
+  exp="$((now + 540))"
+  header='{"alg":"RS256","typ":"JWT"}'
+  payload="$(printf '{"iat":%s,"exp":%s,"iss":"%s"}' "$iat" "$exp" "$APP_ID")"
+
+  header_b64="$(printf '%s' "$header" | base64url)"
+  payload_b64="$(printf '%s' "$payload" | base64url)"
+  signature="$(printf '%s.%s' "$header_b64" "$payload_b64" | openssl dgst -binary -sha256 -sign "$PRIVATE_KEY_FILE" | base64url)"
+
+  printf '%s.%s.%s' "$header_b64" "$payload_b64" "$signature"
+}
+
+request_installation_token() {
+  local jwt response
+
+  jwt="$(build_jwt)"
+  response="$(curl -fsSL \
+    -X POST \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer $jwt" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -d '{}' \
+    "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens")"
+
+  printf '%s' "$response" | jq -r '.token'
+}
+
+request_runner_registration_token() {
+  local installation_token response
+
+  installation_token="$(request_installation_token)"
+  response="$(curl -fsSL \
+    -X POST \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer $installation_token" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/repos/$GITHUB_OWNER/$GITHUB_REPO/actions/runners/registration-token")"
+
+  printf '%s' "$response" | jq -r '.token'
+}
+
+REGISTRATION_TOKEN=""
+for attempt in 1 2 3 4 5; do
+  if REGISTRATION_TOKEN="$(request_runner_registration_token)"; then
+    break
+  fi
+
+  echo "GitHub registration token request failed on attempt $attempt"
+  sleep "$((attempt * 5))"
+done
+
+if [ -z "$REGISTRATION_TOKEN" ] || [ "$REGISTRATION_TOKEN" = "null" ]; then
+  echo "Failed to obtain a GitHub runner registration token"
+  exit 1
+fi
+
+RUNNER_USER="github-runner"
+RUNNER_DIR="/opt/actions-runner"
+RUNNER_ARCH="x64"
+
+if ! id -u "$RUNNER_USER" >/dev/null 2>&1; then
+  useradd --create-home --shell /bin/bash "$RUNNER_USER"
+fi
+
+usermod -aG docker "$RUNNER_USER"
+install -d -o "$RUNNER_USER" -g "$RUNNER_USER" "$RUNNER_DIR"
+
+if [ ! -x "$${RUNNER_DIR}/config.sh" ]; then
+  RUNNER_VERSION="$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name | ltrimstr("v")')"
+  RUNNER_TARBALL="actions-runner-linux-$${RUNNER_ARCH}-$${RUNNER_VERSION}.tar.gz"
+  RUNNER_DOWNLOAD_URL="https://github.com/actions/runner/releases/download/v$${RUNNER_VERSION}/$${RUNNER_TARBALL}"
+
+  sudo -u "$RUNNER_USER" bash -lc "
+    cd '$RUNNER_DIR'
+    curl -fsSL -o '$RUNNER_TARBALL' '$RUNNER_DOWNLOAD_URL'
+    tar xzf '$RUNNER_TARBALL'
+    rm -f '$RUNNER_TARBALL'
+  "
+
+  (
+    cd "$RUNNER_DIR"
+    ./bin/installdependencies.sh
+  )
+fi
+
+sudo -u "$RUNNER_USER" bash -lc "
+  cd '$RUNNER_DIR'
+  ./config.sh \
+    --url '$REPO_URL' \
+    --token '$REGISTRATION_TOKEN' \
+    --name '$RUNNER_NAME' \
+    --labels '$RUNNER_LABELS' \
+    --work '_work' \
+    --unattended \
+    --replace
+"
+
+(
+  cd "$RUNNER_DIR"
+  ./svc.sh install "$RUNNER_USER"
+  ./svc.sh start
+)
+
+rm -f "$PRIVATE_KEY_FILE"

@@ -16,7 +16,7 @@ env:
 jobs:
   build-web:
     name: Build Web
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     outputs:
       deploy_environment: ${{ steps.web_config.outputs.deploy_environment }}
       kube_namespace: ${{ steps.web_config.outputs.kube_namespace }}
@@ -157,7 +157,7 @@ jobs:
   db-migrate:
     name: DB Migrate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: palad-deploy-runner
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
     environment: ${{ needs.build-web.outputs.deploy_environment }}
     needs:
       - build-web
@@ -257,7 +257,7 @@ jobs:
   deploy:
     name: Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: palad-deploy-runner
+    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
     environment: ${{ needs.build-web.outputs.deploy_environment }}
     permissions:
       contents: read
@@ -287,7 +287,7 @@ jobs:
   # ---------------------------------------------------------------------------
   sentry-sourcemaps:
     name: Sentry Source Maps
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     needs: deploy
     if: github.ref_name == 'main'
     env:

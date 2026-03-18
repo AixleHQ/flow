@@ -10,6 +10,7 @@ The current configuration sets up:
 - **CloudFront CDN for Static Rails/Vite Assets** on `static.palad.ai`
 - **Route53 Hosted Zone and DNS Records** for `palad.ai`
 - **EKS Cluster + Networking** for production workloads
+- **Optional EC2 GitHub Actions Self-Hosted Runner** for CI workloads
 - **RDS PostgreSQL (Rails app)** for production application database
 - **RDS PostgreSQL (Temporal)** for Temporal persistence
 - **ElastiCache Redis** for production cache/cable/jobs
@@ -79,6 +80,7 @@ terraform output  # Display output values
 - **s3_assets.tf** - S3 assets bucket and EKS IRSA role/policy for app uploads
 - **cloudfront_static_assets.tf** - CloudFront, ACM, and Route53 alias for static asset delivery
 - **eks.tf** - EKS cluster and VPC resources
+- **github_runner.tf** - Optional EC2 GitHub Actions runner resources
 - **rds.tf** - Managed RDS PostgreSQL resources
 - **rds_temporal.tf** - Dedicated managed RDS PostgreSQL resources for Temporal
 - **redis.tf** - Managed ElastiCache Redis resources
@@ -94,6 +96,14 @@ terraform output  # Display output values
 ⚠️ **Production DB Passwords**:
 - `rds_master_password` is required for Rails RDS.
 - `temporal_rds_master_password` is required for Temporal RDS when enabled.
+
+⚠️ **GitHub Runner Bootstrap**:
+- The EC2 runner path creates three SSM parameters for the GitHub App bootstrap values:
+  - app ID
+  - installation ID
+  - private key PEM as `SecureString`
+- The GitHub App must have repository `Administration: Read and write` on the target repo so the instance can mint runner registration tokens at boot.
+- Those secret values will exist in Terraform state because Terraform is managing the SSM parameters directly.
 
 ⚠️ **Kubernetes Sync**: After `terraform apply`, update production Kubernetes values:
 - `kube/prod/07-app-config.yaml`:

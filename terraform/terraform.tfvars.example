@@ -122,3 +122,30 @@ redis_auth_token                 = null
 redis_snapshot_retention_limit   = 1
 redis_maintenance_window         = "mon:05:00-mon:06:00"
 redis_apply_immediately          = false
+
+# GitHub Actions self-hosted CI runner on EC2
+# GitHub App bootstrap secrets are stored in SSM Parameter Store by Terraform when enabled.
+create_ci_runner_instance = false
+ci_runner_instance_name   = "palad-ci-runner"
+ci_runner_name_prefix     = "palad-ci"
+ci_runner_instance_type   = "t3.large"
+ci_runner_root_volume_size = 100
+ci_runner_subnet_type     = "private"
+ci_runner_subnet_index    = 0
+ci_runner_labels          = ["palad-ci"]
+ci_runner_github_owner    = "palad-ai"
+ci_runner_github_repo     = "palad-app"
+ci_runner_manage_bootstrap_parameters = true
+ci_runner_github_app_id_ssm_parameter_name = "/palad/github-runner/app-id"
+ci_runner_github_app_installation_id_ssm_parameter_name = "/palad/github-runner/installation-id"
+ci_runner_github_app_private_key_ssm_parameter_name = "/palad/github-runner/private-key"
+ci_runner_github_app_id_value = "1234567"
+ci_runner_github_app_installation_id_value = "12345678"
+ci_runner_github_app_private_key_value = <<EOF
+-----BEGIN RSA PRIVATE KEY-----
+replace_me
+-----END RSA PRIVATE KEY-----
+EOF
+# Optional SSH fallback. Leave empty to rely on SSM only.
+ci_runner_ssh_key_name      = null
+ci_runner_ssh_ingress_cidrs = []

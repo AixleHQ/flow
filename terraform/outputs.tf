@@ -240,6 +240,40 @@ output "redis_port" {
   value       = var.redis_port
 }
 
+output "ci_runner_instance_id" {
+  description = "Instance ID of the GitHub Actions CI runner"
+  value       = try(aws_instance.ci_runner[0].id, null)
+}
+
+output "ci_runner_private_ip" {
+  description = "Private IP address of the GitHub Actions CI runner"
+  value       = try(aws_instance.ci_runner[0].private_ip, null)
+}
+
+output "ci_runner_public_ip" {
+  description = "Public IP address of the GitHub Actions CI runner when placed in a public subnet"
+  value       = try(aws_instance.ci_runner[0].public_ip, null)
+}
+
+output "ci_runner_security_group_id" {
+  description = "Security group ID attached to the GitHub Actions CI runner"
+  value       = try(aws_security_group.ci_runner[0].id, null)
+}
+
+output "ci_runner_ssm_start_session_command" {
+  description = "AWS CLI command to open an SSM shell session to the CI runner"
+  value       = try("aws ssm start-session --region ${var.aws_region} --target ${aws_instance.ci_runner[0].id}", null)
+}
+
+output "ci_runner_ssm_parameter_names" {
+  description = "SSM parameter names used for the GitHub runner bootstrap credentials"
+  value = {
+    app_id          = var.ci_runner_github_app_id_ssm_parameter_name
+    installation_id = var.ci_runner_github_app_installation_id_ssm_parameter_name
+    private_key     = var.ci_runner_github_app_private_key_ssm_parameter_name
+  }
+}
+
 output "redis_url_database_1" {
   description = "Redis URL for app config (DB 1)"
   value       = try("redis://${aws_elasticache_replication_group.redis[0].primary_endpoint_address}:${var.redis_port}/1", null)
