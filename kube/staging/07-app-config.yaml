@@ -53,10 +53,10 @@ data:
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/metrics"
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/logs"
-  GITHUB_APP_ID: "3090688"
-  GITHUB_APP_SLUG: palad-ai
-  GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
+  GITHUB_APP_ID: "replace_me"
+  GITHUB_APP_SLUG: replace_me
+  GITHUB_APP_URL: "replace_me"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
   K8S_RUNTIME_LIMITS_MEMORY: 2Gi
-  GOOGLE_CLIENT_ID: 517277132860-t98k8t78dl7l597ut5moric15dsr09ch.apps.googleusercontent.com
+  GOOGLE_CLIENT_ID: replace_me

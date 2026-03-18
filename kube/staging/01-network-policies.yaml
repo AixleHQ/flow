@@ -52,7 +52,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-env: staging
+              palad.ai/runtime-namespace: palad-staging
       ports:
         - protocol: TCP
           port: 4000
@@ -72,7 +72,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-env: staging
+              palad.ai/runtime-namespace: palad-staging
       ports:
         - protocol: TCP
           port: 4002
@@ -92,7 +92,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-env: staging
+              palad.ai/runtime-namespace: palad-staging
       ports:
         - protocol: TCP
           port: 4318

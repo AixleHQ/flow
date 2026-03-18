@@ -1016,9 +1016,8 @@ module ContainerRuntime
       context = (context || {}).with_indifferent_access
 
       labels = {
-        "palad.ai/runtime-isolated" => "true",
         "palad.ai/runtime-origin" => runtime_namespace,
-        "palad.ai/runtime-namespace" => namespace
+        "palad.ai/runtime-namespace" => runtime_namespace
       }
 
       if context[:project_id].present?
