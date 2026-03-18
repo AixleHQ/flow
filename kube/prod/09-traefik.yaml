@@ -82,6 +82,7 @@ spec:
             - "--api.dashboard=true"
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.allowCrossNamespace=true"
             - "--providers.kubernetescrd.namespaces=palad"
             - "--providers.kubernetesingress=true"
             - "--providers.kubernetesingress.namespaces=palad"

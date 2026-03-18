@@ -149,12 +149,12 @@ module ContainerRuntime
       core_mock.expects(:get_resource_quota).with("palad-resource-quota", "palad-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
       core_mock.expects(:create_resource_quota).returns(true)
 
-      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad").raises(StandardError)
       traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
         kind == "Middleware" &&
           resource_type == "middlewares" &&
           resource.kind == "Middleware" &&
-          resource.metadata[:namespace] == "palad-project-77"
+          resource.metadata[:namespace] == "palad"
       end.returns(true)
 
       %w[
@@ -224,9 +224,11 @@ module ContainerRuntime
 
       @runtime.stubs(:traefik_entrypoint).returns("websecure")
       @runtime.stubs(:traefik_auth_middleware).returns("terminal-auth")
+      @runtime.stubs(:traefik_namespace).returns("palad")
 
       traefik_mock = mock("traefik_client")
       traefik_mock.expects(:create_entity).with do |kind, resource_type, ingress|
+        metadata = ingress.metadata.respond_to?(:to_h) ? ingress.metadata.to_h : ingress.metadata
         spec = ingress.spec.respond_to?(:to_h) ? ingress.spec.to_h : ingress.spec
         routes = spec[:routes] || spec["routes"] || []
         ide_route = routes.find do |route|
@@ -243,10 +245,11 @@ module ContainerRuntime
         kind == "IngressRoute" &&
           resource_type == "ingressroutes" &&
           ingress.kind == "IngressRoute" &&
+          (metadata[:namespace] || metadata["namespace"]) == "palad" &&
           routes.size == 3 &&
           ide_route.present? &&
           normalized_middlewares == [ { name: "terminal-auth" } ] &&
-          normalized_services == [ { name: "my-pod", port: 8443 } ]
+          normalized_services == [ { name: "my-pod", namespace: "default", port: 8443 } ]
       end.returns(true)
 
       @runtime.stubs(:traefik_client).returns(traefik_mock)

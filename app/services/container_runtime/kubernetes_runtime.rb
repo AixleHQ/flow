@@ -43,8 +43,11 @@ module ContainerRuntime
 
       if handle.service_ports.any?
         create_service(handle)
-        create_middlewares(handle)
-        create_ingressroute(handle) if handle.route_token.present?
+        if handle.route_token.present?
+          ensure_terminal_auth_middleware
+          create_middlewares(handle)
+          create_ingressroute(handle)
+        end
       end
 
       handle
@@ -342,7 +345,7 @@ module ContainerRuntime
         kind: "IngressRoute",
         metadata: {
           name: handle.ingress_name,
-          namespace: handle.namespace
+          namespace: traefik_namespace
         },
         spec: {
           entryPoints: [ traefik_entrypoint ],
@@ -360,12 +363,12 @@ module ContainerRuntime
     end
 
     def delete_ingressroute(handle)
-      traefik_client.delete_entity("ingressroutes", handle.ingress_name, handle.namespace)
+      traefik_client.delete_entity("ingressroutes", handle.ingress_name, traefik_namespace)
     end
 
     def delete_middlewares(handle)
       handle.middleware_names.each do |name|
-        traefik_client.delete_entity("middlewares", name, handle.namespace)
+        traefik_client.delete_entity("middlewares", name, traefik_namespace)
       end
     end
 
@@ -670,7 +673,7 @@ module ContainerRuntime
         kind: "Middleware",
         metadata: {
           name: "#{handle.pod_name}-#{suffix}-strip",
-          namespace: handle.namespace
+          namespace: traefik_namespace
         },
         spec: {
           stripPrefix: {
@@ -680,7 +683,7 @@ module ContainerRuntime
       )
     end
 
-    def build_terminal_auth_middleware(namespace)
+    def build_terminal_auth_middleware(namespace = traefik_namespace)
       Kubeclient::Resource.new(
         apiVersion: "traefik.io/v1alpha1",
         kind: "Middleware",
@@ -699,16 +702,17 @@ module ContainerRuntime
     end
 
     def build_route(handle, suffix, port, middlewares)
+      service = {
+        name: handle.service_name,
+        namespace: handle.namespace,
+        port: port
+      }
+
       {
         match: build_route_match(handle, suffix),
         kind: "Rule",
         middlewares: middlewares.map { |name| { name: name } },
-        services: [
-          {
-            name: handle.service_name,
-            port: port
-          }
-        ]
+        services: [ service ]
       }
     end
 
@@ -734,6 +738,10 @@ module ContainerRuntime
 
     def runtime_namespace
       kube_setting(:namespace)
+    end
+
+    def traefik_namespace
+      runtime_namespace
     end
 
     def namespace_for(context)
@@ -905,7 +913,7 @@ module ContainerRuntime
 
       ensure_namespace(handle.namespace, namespace_context)
       ensure_runtime_image_pull_secrets(handle.namespace)
-      ensure_terminal_auth_middleware(handle.namespace)
+      ensure_terminal_auth_middleware
       ensure_runtime_network_policies(handle.namespace)
       ensure_namespace_resource_quota(handle.namespace, namespace_context)
     end
@@ -1033,7 +1041,7 @@ module ContainerRuntime
       labels
     end
 
-    def ensure_terminal_auth_middleware(namespace)
+    def ensure_terminal_auth_middleware(namespace = traefik_namespace)
       traefik_client.get_entity("middlewares", traefik_auth_middleware, namespace)
     rescue StandardError
       traefik_client.create_entity("Middleware", "middlewares", build_terminal_auth_middleware(namespace))
@@ -1259,7 +1267,7 @@ module ContainerRuntime
       return if handle.route_token.blank?
 
       (handle.middleware_names + [ traefik_auth_middleware ]).uniq.each do |name|
-        traefik_client.get_entity("middlewares", name, handle.namespace)
+        traefik_client.get_entity("middlewares", name, traefik_namespace)
       end
     rescue StandardError => e
       raise "Middleware not ready: #{e.message}"
@@ -1268,7 +1276,7 @@ module ContainerRuntime
     def ensure_ingressroute(handle)
       return if handle.route_token.blank?
 
-      traefik_client.get_entity("ingressroutes", handle.ingress_name, handle.namespace)
+      traefik_client.get_entity("ingressroutes", handle.ingress_name, traefik_namespace)
     rescue StandardError => e
       raise "IngressRoute not ready: #{handle.ingress_name} (#{e.message})"
     end
