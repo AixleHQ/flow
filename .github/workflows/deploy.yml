@@ -57,7 +57,7 @@ jobs:
             echo "raw_tag=latest" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
-            echo "deploy_environment=dev" >> "$GITHUB_OUTPUT"
+            echo "deploy_environment=development" >> "$GITHUB_OUTPUT"
             echo "kube_namespace=palad-dev" >> "$GITHUB_OUTPUT"
             echo "job_prefix=db-migrate-dev" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
