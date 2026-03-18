@@ -10,14 +10,14 @@ data:
 
     App secret setup:
     1) Edit app secret in cluster:
-       make kube-secret-set SECRET_NAME=palad-app-secrets SECRET_KEY=RAILS_SECRET_KEY_BASE
+       make kube-secret-edit SECRET_NAME=palad-app-secrets SECRET_KEY=RAILS_SECRET_KEY_BASE
     2) Apply production manifests:
        make kube-apply-prod
 
     Production image pull setup (GHCR):
     1) Create a GitHub token with package read access.
     2) Edit pull secret in cluster:
-       make kube-secret-set SECRET_NAME=ghcr-pull-secret SECRET_KEY=.dockerconfigjson
+       make kube-secret-edit SECRET_NAME=ghcr-pull-secret SECRET_KEY=.dockerconfigjson
     3) Re-apply prod manifests:
        make kube-apply-prod
 

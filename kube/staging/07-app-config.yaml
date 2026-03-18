@@ -14,8 +14,8 @@ data:
   DB_USERNAME: postgres
   DB_NAME: palad_staging
   DOMAIN: staging.palad.ai
-  # Staging S3 bucket for object storage (AWS S3, no CloudFront).
-  ASSET_HOST: "https://palad-assets-staging.s3.amazonaws.com"
+  # Staging serves compiled web assets directly from the application domain.
+  ASSET_HOST: "https://staging.palad.ai"
   AWS_S3_BUCKET: "palad-assets-staging"
   AWS_DEFAULT_REGION: "us-east-1"
   AWS_REGION: "us-east-1"
@@ -42,6 +42,7 @@ data:
   TRAEFIK_HTTP_BASE: https://staging.palad.ai
   TRAEFIK_DASHBOARD_URL: https://traefik.staging.palad.ai
   TRAEFIK_CORS_ORIGINS: https://staging.palad.ai
+  # Uploaded files remain in S3; container-side URLs should continue to target S3 directly.
   CONTAINER_ASSET_HOST: "https://palad-assets-staging.s3.amazonaws.com"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad-staging

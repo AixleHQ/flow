@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
 
 KUBE_DEV_DIR = ./kube/dev
 KUBE_PROD_DIR = ./kube/prod
@@ -39,7 +39,7 @@ kube-help:
 	@echo "  make kube-secrets-apply     - Apply dev secret manifests explicitly"
 	@echo "  make kube-secrets-apply-prod    - Apply prod secret manifests explicitly"
 	@echo "  make kube-secrets-apply-staging - Apply staging secret manifests explicitly"
-	@echo "  make kube-secret-set        - Edit one decoded secret key and patch it back (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...])"
+	@echo "  make kube-secret-edit       - Edit one decoded secret key and patch it back (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
@@ -167,23 +167,23 @@ kube-arc-install-runner-set:
 kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set
 
 # Edit one decoded secret key interactively and patch it back to the cluster
-kube-secret-set:
+kube-secret-edit:
 	@set -eu; \
 	if [ -z "$(SECRET_NAME)" ]; then \
 		echo "SECRET_NAME is not set. Available secrets in namespace $(SECRET_NAMESPACE):"; \
 		$(KUBECTL) get secrets -n "$(SECRET_NAMESPACE)" || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	secret_key="$(if $(SECRET_VAR),$(SECRET_VAR),$(SECRET_KEY))"; \
 	if [ -z "$$secret_key" ]; then \
 		echo "SECRET_KEY is not set. Available keys in $(SECRET_NAME):"; \
 		$(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r '.data | keys[]?' || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
-	tmp_file="$$(mktemp /tmp/kube-secret-set.XXXXXX)"; \
-	patch_file="$$(mktemp /tmp/kube-secret-set-patch.XXXXXX)"; \
+	tmp_file="$$(mktemp /tmp/kube-secret-edit.XXXXXX)"; \
+	patch_file="$$(mktemp /tmp/kube-secret-edit-patch.XXXXXX)"; \
 	cleanup() { rm -f "$$tmp_file" "$$patch_file"; }; \
 	trap cleanup EXIT INT TERM; \
 	current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \

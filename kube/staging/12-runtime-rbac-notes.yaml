@@ -35,7 +35,7 @@ data:
          kubectl apply -f kube/staging/
     2) Run DB setup (first deploy only):
          kubectl -n palad-staging run db-setup \
-           --image=ghcr.io/palad-ai/palad-app-web:latest \
+           --image=ghcr.io/palad-ai/palad-app-web:staging \
            --restart=Never \
            --env-from=configmap/palad-app-config \
            --env-from=secret/palad-app-secrets \
