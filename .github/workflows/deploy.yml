@@ -17,6 +17,11 @@ jobs:
   build-web:
     name: Build Web
     runs-on: ubuntu-latest
+    outputs:
+      deploy_environment: ${{ steps.web_config.outputs.deploy_environment }}
+      kube_namespace: ${{ steps.web_config.outputs.kube_namespace }}
+      job_prefix: ${{ steps.web_config.outputs.job_prefix }}
+      web_image_tag: ${{ steps.web_config.outputs.web_image_tag }}
     env:
       IMAGE_NAME: ${{ github.repository }}-web
 
@@ -27,16 +32,35 @@ jobs:
       - name: Compute Web Build Config
         id: web_config
         run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+
           if [ "${GITHUB_REF}" = "refs/heads/staging" ]; then
             echo "asset_host=https://static.staging.palad.ai" >> "$GITHUB_OUTPUT"
             echo "raw_tag=staging" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=staging-" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image-staging" >> "$GITHUB_OUTPUT"
+            echo "deploy_environment=staging" >> "$GITHUB_OUTPUT"
+            echo "kube_namespace=palad-staging" >> "$GITHUB_OUTPUT"
+            echo "job_prefix=db-migrate-staging" >> "$GITHUB_OUTPUT"
+            echo "web_image_tag=staging-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            echo "asset_host=https://static.palad.ai" >> "$GITHUB_OUTPUT"
+            echo "raw_tag=main" >> "$GITHUB_OUTPUT"
+            echo "sha_prefix=" >> "$GITHUB_OUTPUT"
+            echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
+            echo "deploy_environment=production" >> "$GITHUB_OUTPUT"
+            echo "kube_namespace=palad" >> "$GITHUB_OUTPUT"
+            echo "job_prefix=db-migrate" >> "$GITHUB_OUTPUT"
+            echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           else
             echo "asset_host=https://static.palad.ai" >> "$GITHUB_OUTPUT"
             echo "raw_tag=latest" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
+            echo "deploy_environment=dev" >> "$GITHUB_OUTPUT"
+            echo "kube_namespace=palad-dev" >> "$GITHUB_OUTPUT"
+            echo "job_prefix=db-migrate-dev" >> "$GITHUB_OUTPUT"
+            echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Docker Buildx
@@ -134,7 +158,7 @@ jobs:
     name: DB Migrate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
     runs-on: palad-deploy-runner
-    environment: ${{ github.ref == 'refs/heads/staging' && 'staging' || 'production' }}
+    environment: ${{ needs.build-web.outputs.deploy_environment }}
     needs:
       - build-web
       - be-test
@@ -144,7 +168,7 @@ jobs:
       - fe-typecheck
       - fe-fsd
     env:
-      KUBE_NAMESPACE: ${{ github.ref == 'refs/heads/staging' && 'palad-staging' || 'palad' }}
+      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
 
     steps:
       - name: Setup kubectl
@@ -153,15 +177,8 @@ jobs:
       - name: Create migration job
         id: migrate_job
         run: |
-          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
-          if [ "${GITHUB_REF}" = "refs/heads/staging" ]; then
-            JOB_PREFIX="db-migrate-staging"
-            WEB_IMAGE_TAG="staging-${SHORT_SHA}"
-          else
-            JOB_PREFIX="db-migrate"
-            WEB_IMAGE_TAG="${SHORT_SHA}"
-          fi
-
+          JOB_PREFIX="${{ needs.build-web.outputs.job_prefix }}"
+          WEB_IMAGE_TAG="${{ needs.build-web.outputs.web_image_tag }}"
           JOB_NAME="${JOB_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
 
@@ -241,14 +258,15 @@ jobs:
     name: Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
     runs-on: palad-deploy-runner
-    environment: ${{ github.ref == 'refs/heads/staging' && 'staging' || 'production' }}
+    environment: ${{ needs.build-web.outputs.deploy_environment }}
     permissions:
       contents: read
       id-token: write
     needs:
+      - build-web
       - db-migrate
     env:
-      KUBE_NAMESPACE: ${{ github.ref == 'refs/heads/staging' && 'palad-staging' || 'palad' }}
+      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
 
     steps:
       - name: Setup kubectl

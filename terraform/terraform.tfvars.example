@@ -27,6 +27,11 @@ create_eks_dns_records = true
 eks_ingress_namespace  = "palad"
 eks_ingress_service_name = "traefik"
 
+# Route53 alias records to the staging EKS ingress NLB
+create_eks_staging_dns_records = true
+eks_staging_ingress_namespace  = "palad-staging"
+eks_staging_ingress_service_name = "traefik"
+
 # Dedicated admin DNS record (overrides wildcard for traefik.palad.ai)
 create_eks_admin_dns_record   = true
 eks_admin_ingress_namespace   = "palad"
