@@ -1017,7 +1017,7 @@ module ContainerRuntime
 
       labels = {
         "palad.ai/runtime-origin" => runtime_namespace,
-        "palad.ai/runtime-namespace" => runtime_namespace
+        "palad.ai/runtime-namespace" => namespace
       }
 
       if context[:project_id].present?
