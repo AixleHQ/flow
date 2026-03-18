@@ -152,6 +152,7 @@ kube-arc-install-controller:
 # Apply runner service account in arc-runners and rollout RBAC in the prod namespace.
 kube-arc-apply-deploy-rbac:
 	$(KUBECTL) apply -f ./kube/arc/01-deploy-runner-rbac.yaml
+	$(KUBECTL) apply -f ./kube/arc/02-deploy-runner-rbac-staging.yaml
 
 # Install/upgrade ARC runner scale set for deploy jobs.
 kube-arc-install-runner-set:
