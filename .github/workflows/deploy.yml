@@ -109,6 +109,7 @@ jobs:
       command: rails-test
       needs-db: true
       timeout: 20
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   be-lint:
@@ -117,6 +118,7 @@ jobs:
     uses: ./.github/workflows/code-check.yml
     with:
       command: rubocop
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   be-security:
@@ -125,6 +127,7 @@ jobs:
     uses: ./.github/workflows/code-check.yml
     with:
       command: brakeman
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   fe-lint:
@@ -133,6 +136,7 @@ jobs:
     uses: ./.github/workflows/code-check.yml
     with:
       command: eslint
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   fe-typecheck:
@@ -141,6 +145,7 @@ jobs:
     uses: ./.github/workflows/code-check.yml
     with:
       command: typescript
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   fe-fsd:
@@ -149,6 +154,7 @@ jobs:
     uses: ./.github/workflows/code-check.yml
     with:
       command: fsd
+      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
   # ---------------------------------------------------------------------------
