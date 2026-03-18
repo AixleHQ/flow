@@ -39,7 +39,7 @@ kube-help:
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
 	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
 	@echo "  make kube-arc-install            - Install ARC controller + deploy RBAC + runner scale set"
-	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm + metrics-server (Prometheus, Loki, Grafana, Headlamp)"
+	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm + metrics-server (Prometheus, Loki, Grafana, Alloy, Headlamp)"
 	@echo "  make kube-observability-uninstall - Uninstall all observability Helm releases"
 	@echo "  make kube-rm                - Delete dev manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod manifests (secrets are not touched)"
@@ -149,9 +149,9 @@ kube-observability-install: kube-observability-add-repos
 		--namespace $(MONITORING_NAMESPACE) \
 		--values $(OBSERVABILITY_HELM_DIR)/values-loki.yaml \
 		--wait
-	helm upgrade --install promtail grafana/promtail \
+	helm upgrade --install alloy grafana/alloy \
 		--namespace $(MONITORING_NAMESPACE) \
-		--values $(OBSERVABILITY_HELM_DIR)/values-promtail.yaml \
+		--values $(OBSERVABILITY_HELM_DIR)/values-alloy.yaml \
 		--wait
 	helm upgrade --install headlamp headlamp-k8s/headlamp \
 		--namespace $(MONITORING_NAMESPACE) \
@@ -163,7 +163,7 @@ kube-observability-install: kube-observability-add-repos
 kube-observability-uninstall:
 	helm uninstall kube-prometheus-stack --namespace $(MONITORING_NAMESPACE) || true
 	helm uninstall loki --namespace $(MONITORING_NAMESPACE) || true
-	helm uninstall promtail --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall alloy --namespace $(MONITORING_NAMESPACE) || true
 	helm uninstall headlamp --namespace $(MONITORING_NAMESPACE) || true
 	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml || true
 	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/02-metrics-server.yaml || true

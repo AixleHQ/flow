@@ -26,7 +26,7 @@ singleBinary:
   replicas: 1
   persistence:
     size: 20Gi
-    storageClass: gp2
+    storageClass: gp3
 
 # Disable multi-component mode (only singleBinary is active)
 backend:

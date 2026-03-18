@@ -1,0 +1,74 @@
+# Helm values for grafana/alloy (replaces the deprecated grafana/promtail)
+# Install: make kube-observability-install
+# Docs: https://github.com/grafana/alloy/tree/main/operations/helm/charts/alloy
+# Migration guide: https://grafana.com/docs/alloy/latest/collect/kubernetes-logs/
+
+alloy:
+  configMap:
+    content: |
+      // Discover all Kubernetes pods
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Relabel pod metadata into Loki labels and resolve log file paths
+      discovery.relabel "pod_logs" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+        // Resolve the on-disk log path for each container
+        rule {
+          source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+          separator     = "/"
+          target_label  = "__path__"
+          replacement   = "/var/log/pods/*$1/*.log"
+        }
+      }
+
+      // Collect log files discovered above
+      loki.source.file "pod_logs" {
+        targets    = discovery.relabel.pod_logs.output
+        forward_to = [loki.process.parse_cri.receiver]
+      }
+
+      // Parse CRI log format used by containerd / CRI-O
+      loki.process "parse_cri" {
+        stage.cri {}
+        forward_to = [loki.write.loki.receiver]
+      }
+
+      // Push logs to Loki
+      loki.write "loki" {
+        endpoint {
+          url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+        }
+      }
+
+# Run as DaemonSet so every node's logs are collected
+controller:
+  type: daemonset
+
+# Mount the pod log directory from the host
+alloy:
+  mounts:
+    varlog: true
+    dockercontainers: false
