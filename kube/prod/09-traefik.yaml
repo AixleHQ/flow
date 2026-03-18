@@ -83,7 +83,7 @@ spec:
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
             - "--providers.kubernetescrd.allowCrossNamespace=true"
-            - "--providers.kubernetescrd.namespaces=palad"
+            - "--providers.kubernetescrd.labelselector=palad.ai/runtime-origin=palad"
             - "--providers.kubernetesingress=true"
             - "--providers.kubernetesingress.namespaces=palad"
             - "--entrypoints.traefik.http.tls=true"
@@ -179,6 +179,8 @@ kind: IngressRoute
 metadata:
   name: traefik-dashboard
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure
@@ -207,6 +209,8 @@ kind: Middleware
 metadata:
   name: traefik-dashboard-redirect
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   redirectRegex:
     regex: "^(https?://[^/]+)/?$"

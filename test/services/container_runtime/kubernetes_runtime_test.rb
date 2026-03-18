@@ -149,12 +149,13 @@ module ContainerRuntime
       core_mock.expects(:get_resource_quota).with("palad-resource-quota", "palad-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
       core_mock.expects(:create_resource_quota).returns(true)
 
-      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad").raises(StandardError)
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
       traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
         kind == "Middleware" &&
           resource_type == "middlewares" &&
           resource.kind == "Middleware" &&
-          resource.metadata[:namespace] == "palad"
+          resource.metadata[:namespace] == "palad-project-77" &&
+          resource.metadata[:labels]["palad.ai/runtime-origin"] == "palad"
       end.returns(true)
 
       %w[
@@ -224,8 +225,6 @@ module ContainerRuntime
 
       @runtime.stubs(:traefik_entrypoint).returns("websecure")
       @runtime.stubs(:traefik_auth_middleware).returns("terminal-auth")
-      @runtime.stubs(:traefik_namespace).returns("palad")
-
       traefik_mock = mock("traefik_client")
       traefik_mock.expects(:create_entity).with do |kind, resource_type, ingress|
         metadata = ingress.metadata.respond_to?(:to_h) ? ingress.metadata.to_h : ingress.metadata
@@ -245,7 +244,8 @@ module ContainerRuntime
         kind == "IngressRoute" &&
           resource_type == "ingressroutes" &&
           ingress.kind == "IngressRoute" &&
-          (metadata[:namespace] || metadata["namespace"]) == "palad" &&
+          (metadata[:namespace] || metadata["namespace"]) == "default" &&
+          (metadata.dig(:labels, :"palad.ai/runtime-origin") || metadata.dig("labels", "palad.ai/runtime-origin")) == "palad" &&
           routes.size == 3 &&
           ide_route.present? &&
           normalized_middlewares == [ { name: "terminal-auth" } ] &&
@@ -273,6 +273,14 @@ module ContainerRuntime
       route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
 
       assert_equal "PathPrefix(`/t/abc123/tty`)", route[:match]
+    end
+
+    test "resource_labels include runtime origin and namespace when provided" do
+      @runtime.stubs(:runtime_namespace).returns("palad-staging")
+      labels = @runtime.send(:resource_labels, namespace: "palad-staging-project-1")
+
+      assert_equal "palad-staging", labels["palad.ai/runtime-origin"]
+      assert_equal "palad-staging-project-1", labels["palad.ai/runtime-namespace"]
     end
 
     test "build_quota_hard_limits uses settings project_defaults when no db record" do

@@ -3,6 +3,8 @@ kind: IngressRoute
 metadata:
   name: web
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - websecure

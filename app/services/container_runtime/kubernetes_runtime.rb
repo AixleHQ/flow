@@ -44,7 +44,7 @@ module ContainerRuntime
       if handle.service_ports.any?
         create_service(handle)
         if handle.route_token.present?
-          ensure_terminal_auth_middleware
+          ensure_terminal_auth_middleware(handle.namespace)
           create_middlewares(handle)
           create_ingressroute(handle)
         end
@@ -345,7 +345,8 @@ module ContainerRuntime
         kind: "IngressRoute",
         metadata: {
           name: handle.ingress_name,
-          namespace: traefik_namespace
+          namespace: handle.namespace,
+          labels: resource_labels(namespace: handle.namespace)
         },
         spec: {
           entryPoints: [ traefik_entrypoint ],
@@ -363,12 +364,12 @@ module ContainerRuntime
     end
 
     def delete_ingressroute(handle)
-      traefik_client.delete_entity("ingressroutes", handle.ingress_name, traefik_namespace)
+      traefik_client.delete_entity("ingressroutes", handle.ingress_name, handle.namespace)
     end
 
     def delete_middlewares(handle)
       handle.middleware_names.each do |name|
-        traefik_client.delete_entity("middlewares", name, traefik_namespace)
+        traefik_client.delete_entity("middlewares", name, handle.namespace)
       end
     end
 
@@ -673,7 +674,8 @@ module ContainerRuntime
         kind: "Middleware",
         metadata: {
           name: "#{handle.pod_name}-#{suffix}-strip",
-          namespace: traefik_namespace
+          namespace: handle.namespace,
+          labels: resource_labels(namespace: handle.namespace)
         },
         spec: {
           stripPrefix: {
@@ -689,7 +691,8 @@ module ContainerRuntime
         kind: "Middleware",
         metadata: {
           name: traefik_auth_middleware,
-          namespace: namespace
+          namespace: namespace,
+          labels: resource_labels(namespace: namespace)
         },
         spec: {
           forwardAuth: {
@@ -742,6 +745,13 @@ module ContainerRuntime
 
     def traefik_namespace
       runtime_namespace
+    end
+
+    def resource_labels(namespace:)
+      {
+        "palad.ai/runtime-origin" => runtime_namespace,
+        "palad.ai/runtime-namespace" => namespace
+      }
     end
 
     def namespace_for(context)
@@ -913,7 +923,7 @@ module ContainerRuntime
 
       ensure_namespace(handle.namespace, namespace_context)
       ensure_runtime_image_pull_secrets(handle.namespace)
-      ensure_terminal_auth_middleware
+      ensure_terminal_auth_middleware(handle.namespace)
       ensure_runtime_network_policies(handle.namespace)
       ensure_namespace_resource_quota(handle.namespace, namespace_context)
     end
@@ -1023,10 +1033,7 @@ module ContainerRuntime
     def namespace_labels(namespace, context)
       context = (context || {}).with_indifferent_access
 
-      labels = {
-        "palad.ai/runtime-origin" => runtime_namespace,
-        "palad.ai/runtime-namespace" => namespace
-      }
+      labels = resource_labels(namespace: namespace)
 
       if context[:project_id].present?
         labels["palad.ai/scope"] = "project"
@@ -1267,7 +1274,7 @@ module ContainerRuntime
       return if handle.route_token.blank?
 
       (handle.middleware_names + [ traefik_auth_middleware ]).uniq.each do |name|
-        traefik_client.get_entity("middlewares", name, traefik_namespace)
+        traefik_client.get_entity("middlewares", name, handle.namespace)
       end
     rescue StandardError => e
       raise "Middleware not ready: #{e.message}"
@@ -1276,7 +1283,7 @@ module ContainerRuntime
     def ensure_ingressroute(handle)
       return if handle.route_token.blank?
 
-      traefik_client.get_entity("ingressroutes", handle.ingress_name, traefik_namespace)
+      traefik_client.get_entity("ingressroutes", handle.ingress_name, handle.namespace)
     rescue StandardError => e
       raise "IngressRoute not ready: #{handle.ingress_name} (#{e.message})"
     end
