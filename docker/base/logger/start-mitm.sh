@@ -58,9 +58,8 @@ MITM_PID=$!
 # Wait for CA certificate to be generated (needed for HTTPS interception)
 for _ in {1..20}; do
     if [ -f "$MITM_CA_CERT" ]; then
-        # Node.js uses NODE_EXTRA_CA_CERTS
         export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
-        # Create combined cert bundle with system certs + mitmproxy CA
+
         COMBINED_CERTS="${HOME:-/root}/.mitmproxy/combined-ca-bundle.pem"
         cat /etc/ssl/certs/ca-certificates.crt "$MITM_CA_CERT" > "$COMBINED_CERTS" 2>/dev/null || \
         cat "$MITM_CA_CERT" > "$COMBINED_CERTS"
@@ -72,7 +71,8 @@ done
 
 # HTTP/2 logger: patches http2.connect() to log request headers
 # This captures traffic that bypasses HTTPS_PROXY (e.g. AgentService/Run)
-export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /opt/mitm/http2-logger.js"
+# --use-system-ca makes Node 22+ trust system-installed CA certs (incl. mitmproxy CA)
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-system-ca --require /opt/mitm/http2-logger.js"
 
 # Verify startup
 if kill -0 $MITM_PID 2>/dev/null; then
