@@ -4,8 +4,9 @@ metadata:
   name: palad-web
   namespace: palad-staging
   annotations:
-    # Reuse the existing IRSA role — it grants access to palad-assets-staging S3 bucket.
-    # Set from Terraform output: eks_assets_irsa_role_arn (staging variant).
+    # IRSA role for staging S3 bucket access.
+    # Provisioned by Terraform resource: aws_iam_role.eks_assets_staging (terraform/s3_assets_staging.tf).
+    # ARN is the output of: terraform output eks_assets_staging_irsa_role_arn
     eks.amazonaws.com/role-arn: "arn:aws:iam::541894707537:role/palad-eks-assets-staging-role"
 imagePullSecrets:
   - name: ghcr-pull-secret
@@ -16,6 +17,7 @@ metadata:
   name: palad-worker
   namespace: palad-staging
   annotations:
+    # Same IRSA role as palad-web — see terraform/s3_assets_staging.tf (aws_iam_role.eks_assets_staging).
     eks.amazonaws.com/role-arn: "arn:aws:iam::541894707537:role/palad-eks-assets-staging-role"
 imagePullSecrets:
   - name: ghcr-pull-secret

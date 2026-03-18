@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15.3-alpine
+          image: postgres:16-alpine
           resources:
             requests:
               cpu: "300m"
