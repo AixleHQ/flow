@@ -65,4 +65,6 @@ spec:
     domains:
       - main: staging.palad.ai
         sans:
+          - www.staging.palad.ai
+          - traefik.staging.palad.ai
           - temporal.staging.palad.ai

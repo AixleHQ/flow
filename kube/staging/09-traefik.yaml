@@ -31,6 +31,8 @@ metadata:
   namespace: palad-staging
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: traefik
@@ -66,7 +68,9 @@ spec:
             - "--api.dashboard=true"
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.namespaces=palad-staging"
             - "--providers.kubernetesingress=true"
+            - "--providers.kubernetesingress.namespaces=palad-staging"
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
@@ -159,6 +163,7 @@ spec:
     domains:
       - main: staging.palad.ai
         sans:
+          - www.staging.palad.ai
           - traefik.staging.palad.ai
           - temporal.staging.palad.ai
 ---

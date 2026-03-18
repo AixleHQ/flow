@@ -45,6 +45,8 @@ metadata:
   namespace: palad
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: traefik
@@ -80,7 +82,9 @@ spec:
             - "--api.dashboard=true"
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.namespaces=palad"
             - "--providers.kubernetesingress=true"
+            - "--providers.kubernetesingress.namespaces=palad"
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
