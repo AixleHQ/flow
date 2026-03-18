@@ -150,6 +150,24 @@ variable "eks_ingress_service_name" {
   default     = "traefik"
 }
 
+variable "create_eks_staging_dns_records" {
+  description = "Whether to create Route53 records for staging.palad.ai to point at the staging EKS ingress NLB"
+  type        = bool
+  default     = true
+}
+
+variable "eks_staging_ingress_namespace" {
+  description = "Namespace of the staging Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "palad-staging"
+}
+
+variable "eks_staging_ingress_service_name" {
+  description = "Name of the staging Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "traefik"
+}
+
 variable "create_eks_admin_dns_record" {
   description = "Whether to create a dedicated Route53 record for traefik.palad.ai pointing to restricted admin NLB"
   type        = bool

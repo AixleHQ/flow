@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: palad-app-config
+  namespace: palad-staging
+data:
+  RAILS_ENV: staging
+  RAILS_PORT: "4000"
+  RAILS_LOG_TO_STDOUT: "true"
+  ACTION_CABLE_URL: /cable
+  # In-cluster PostgreSQL (no RDS).
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_USERNAME: postgres
+  DB_NAME: palad_staging
+  DOMAIN: staging.palad.ai
+  # Staging S3 bucket for object storage (AWS S3, no CloudFront).
+  ASSET_HOST: "https://palad-assets-staging.s3.amazonaws.com"
+  AWS_S3_BUCKET: "palad-assets-staging"
+  AWS_DEFAULT_REGION: "us-east-1"
+  AWS_REGION: "us-east-1"
+  # In-cluster Redis (no ElastiCache).
+  REDIS_URL: "redis://redis:6379/1"
+  TEMPORAL_ENABLED: "true"
+  TEMPORAL_DEBUG: "true"
+  TEMPORAL_HOST: temporal
+  TEMPORAL_PORT: "7233"
+  TEMPORAL_NAMESPACE: default
+  TEMPORAL_TASK_QUEUE: palad_ruby
+  TEMPORAL_UI_URL: https://temporal.staging.palad.ai
+  # Temporal uses the same in-cluster PostgreSQL.
+  TEMPORAL_DB_HOST: db
+  TEMPORAL_DB_PORT: "5432"
+  TEMPORAL_DB_USERNAME: postgres
+  TEMPORAL_DB_NAME: temporal_staging
+  TEMPORAL_VISIBILITY_DB_NAME: temporal_visibility_staging
+  TEMPORAL_POSTGRES_TLS_ENABLED: "false"
+  TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION: "false"
+  TEMPORAL_SQL_TLS: "false"
+  TEMPORAL_SQL_HOST_VERIFICATION: "false"
+  TRAEFIK_WS_BASE: wss://staging.palad.ai
+  TRAEFIK_HTTP_BASE: https://staging.palad.ai
+  TRAEFIK_DASHBOARD_URL: https://traefik.staging.palad.ai
+  TRAEFIK_CORS_ORIGINS: https://staging.palad.ai
+  CONTAINER_ASSET_HOST: "https://palad-assets-staging.s3.amazonaws.com"
+  CONTAINER_RUNTIME: k8s
+  K8S_NAMESPACE: palad-staging
+  K8S_IMAGE_PULL_POLICY: Always
+  K8S_EKS_VPC_CIDR: "10.10.0.0/16"
+  K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
+  MCP_SERVER_URL: "http://mcp.palad-staging.svc.cluster.local:4002/action_mcp"
+  MCP_PORT: "4002"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/metrics"
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/logs"
+  GITHUB_APP_ID: "replace_me"
+  GITHUB_APP_SLUG: replace_me
+  GITHUB_APP_URL: "replace_me"
+  BITBUCKET_OAUTH_KEY: "get_from_1password"
+  GITLAB_APP_ID: "get_from_1password"
+  K8S_RUNTIME_LIMITS_MEMORY: 2Gi
+  GOOGLE_CLIENT_ID: replace_me

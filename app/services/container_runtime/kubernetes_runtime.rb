@@ -1016,7 +1016,6 @@ module ContainerRuntime
       context = (context || {}).with_indifferent_access
 
       labels = {
-        "palad.ai/runtime-isolated" => "true",
         "palad.ai/runtime-origin" => runtime_namespace,
         "palad.ai/runtime-namespace" => namespace
       }

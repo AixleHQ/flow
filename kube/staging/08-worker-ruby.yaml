@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: worker-ruby
-  namespace: palad
+  namespace: palad-staging
 spec:
   replicas: 1
   selector:
@@ -34,7 +34,7 @@ spec:
               done
       containers:
         - name: worker-ruby
-          image: ghcr.io/palad-ai/palad-app-web:main
+          image: ghcr.io/palad-ai/palad-app-web:staging
           imagePullPolicy: Always
           resources:
             requests:

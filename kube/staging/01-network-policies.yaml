@@ -1,8 +1,9 @@
+# Allow all pods within the staging namespace to communicate with each other.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-ingress-from-same-namespace
-  namespace: palad-dev
+  namespace: palad-staging
 spec:
   podSelector: {}
   policyTypes:
@@ -11,11 +12,14 @@ spec:
     - from:
         - podSelector: {}
 ---
+# Restrict public ingress to Traefik only.
+# Only agent subnets and the owner IP are allowed — enforced at the NLB level
+# via loadBalancerSourceRanges on the traefik service (see 09-traefik.yaml).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-public-ingress-to-traefik
-  namespace: palad-dev
+  name: allow-restricted-ingress-to-traefik
+  namespace: palad-staging
 spec:
   podSelector:
     matchLabels:
@@ -32,11 +36,12 @@ spec:
         - protocol: TCP
           port: 443
 ---
+# Allow agent runtime namespaces to reach the web and mcp services.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-runtime-namespaces-to-web
-  namespace: palad-dev
+  namespace: palad-staging
 spec:
   podSelector:
     matchLabels:
@@ -47,7 +52,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-dev
+              palad.ai/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4000
@@ -56,7 +61,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-runtime-namespaces-to-mcp
-  namespace: palad-dev
+  namespace: palad-staging
 spec:
   podSelector:
     matchLabels:
@@ -67,7 +72,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-dev
+              palad.ai/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4002
@@ -76,7 +81,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-runtime-namespaces-to-otlp-ingest
-  namespace: palad-dev
+  namespace: palad-staging
 spec:
   podSelector:
     matchLabels:
@@ -87,7 +92,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-dev
+              palad.ai/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4318
