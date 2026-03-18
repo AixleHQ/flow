@@ -13,8 +13,9 @@ spec:
         - podSelector: {}
 ---
 # Restrict public ingress to Traefik only.
-# Only agent subnets and the owner IP are allowed — enforced at the NLB level
-# via loadBalancerSourceRanges on the traefik service (see 09-traefik.yaml).
+# Only the current external prod-agent egress IP and the owner IP are allowed;
+# this is enforced at the NLB level via loadBalancerSourceRanges on the traefik
+# service (see 09-traefik.yaml).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

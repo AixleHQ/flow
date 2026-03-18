@@ -53,6 +53,7 @@ data:
     - The wildcard record covers traefik.staging.palad.ai and temporal.staging.palad.ai.
 
     Access control:
-    - External access is restricted to the EKS VPC CIDR (10.10.0.0/16) and the owner
-      IP (34.1.250.211/32) via loadBalancerSourceRanges on the Traefik Service.
+    - External access is restricted to the current external prod-agent egress IP
+      (3.217.219.60/32) and the owner IP (34.1.250.211/32) via
+      loadBalancerSourceRanges on the Traefik Service.
     - HTTP basic auth (staging-basic-auth middleware) is applied to all IngressRoutes.

@@ -114,9 +114,9 @@ spec:
       storage: 1Gi
 ---
 # Restrict external access to the staging environment:
-# - Agent subnets (GitHub Actions / EKS node CIDR) and the owner IP are allowlisted.
-# - Replace 34.1.250.211/32 with the owner's current IP if it changes.
-# - Replace 10.10.0.0/16 with the actual EKS VPC CIDR if it differs.
+# - Allow traffic from the observed external prod-agent egress IP.
+# - Keep the owner IP allowlisted for direct browser access.
+# - Update these CIDRs if either egress path changes.
 apiVersion: v1
 kind: Service
 metadata:
@@ -130,9 +130,10 @@ spec:
   type: LoadBalancer
   selector:
     app: traefik
-  # Only allow traffic from the EKS VPC (agent subnets) and the owner IP.
+  # Allow production agents and owner access without exposing staging broadly.
   loadBalancerSourceRanges:
     - 10.10.0.0/16
+    - 3.217.219.60/32
     - 34.1.250.211/32
   ports:
     - name: web
