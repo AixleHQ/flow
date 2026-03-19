@@ -24,7 +24,15 @@ const styles = {
   body: { fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: 1.5 },
   tags: { display: 'flex', gap: 0.5, mt: 0.75 },
   tagChip: { height: 18, fontSize: '10px' },
-  form: { display: 'flex', flexDirection: 'column', gap: 1, borderBottom: '1px solid', borderColor: 'divider', pb: 2, mb: 2 },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    pb: 2,
+    mb: 2,
+  },
 } satisfies Record<string, SxProps<Theme>>;
 
 const AUTHOR_TYPES = ['all', 'human', 'agent', 'system'] as const;
