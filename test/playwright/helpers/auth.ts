@@ -1,7 +1,10 @@
 import { Page } from '@playwright/test';
 
-const BASE_URL = 'https://staging.palad.ai';
-const HTTP_CREDENTIALS = { username: 'admin', password: 'REDACTED_STAGING_HTTP_PASSWORD' };
+const BASE_URL = process.env.STAGING_URL ?? 'https://staging.palad.ai';
+const HTTP_CREDENTIALS = {
+  username: process.env.STAGING_HTTP_USER ?? 'admin',
+  password: process.env.STAGING_HTTP_PASSWORD ?? '',
+};
 
 export interface LoginCredentials {
   email: string;
@@ -10,16 +13,16 @@ export interface LoginCredentials {
 
 export const CREDENTIALS = {
   admin: {
-    email: 'admin-agent@palad.ai',
-    password: 'REDACTED_STAGING_ADMIN_PASSWORD',
+    email: process.env.STAGING_ADMIN_EMAIL ?? 'admin-agent@palad.ai',
+    password: process.env.STAGING_ADMIN_PASSWORD ?? '',
   },
   companyAdmin: {
-    email: 'admin-atc@staging.palad.ai',
-    password: 'REDACTED_STAGING_COMPANY_ADMIN_PASSWORD',
+    email: process.env.STAGING_COMPANY_ADMIN_EMAIL ?? 'admin-atc@staging.palad.ai',
+    password: process.env.STAGING_COMPANY_ADMIN_PASSWORD ?? '',
   },
   companyEmployee: {
-    email: 'employee-atc@staging.palad.ai',
-    password: 'REDACTED_STAGING_EMPLOYEE_PASSWORD',
+    email: process.env.STAGING_EMPLOYEE_EMAIL ?? 'employee-atc@staging.palad.ai',
+    password: process.env.STAGING_EMPLOYEE_PASSWORD ?? '',
   },
 } as const;
 
