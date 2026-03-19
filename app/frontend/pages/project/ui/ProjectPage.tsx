@@ -1,5 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo } from 'react';
@@ -10,6 +10,8 @@ import { useGetProjectAssetsQuery, AssetsPanel } from 'features/assets-managemen
 import { BoardPanel } from 'features/board-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
+import { ProjectAnalyticsPanel } from 'features/project-analytics';
+import { ProjectOverviewPanel } from 'features/project-overview';
 import { RepositoriesPanel } from 'features/repositories-management';
 import { RunWorkflowModal } from 'features/run-workflow';
 import { SkillsPanel } from 'features/skills-management';
@@ -40,23 +42,6 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '400px',
-  },
-  emptyPage: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '400px',
-    gap: 2,
-  },
-  emptyTitle: {
-    fontSize: '20px',
-    fontWeight: 500,
-    color: 'text.primary',
-  },
-  emptySubtitle: {
-    fontSize: '14px',
-    color: 'text.secondary',
   },
 } satisfies Record<string, SxProps<Theme>>;
 
@@ -102,20 +87,6 @@ const ConnectedRunModal = ({
   );
 };
 
-const OverviewPage = () => (
-  <Box sx={styles.emptyPage}>
-    <Typography sx={styles.emptyTitle}>Project Overview</Typography>
-    <Typography sx={styles.emptySubtitle}>Dashboard with project summary and recent activity coming soon.</Typography>
-  </Box>
-);
-
-const AnalyticsPage = () => (
-  <Box sx={styles.emptyPage}>
-    <Typography sx={styles.emptyTitle}>Analytics</Typography>
-    <Typography sx={styles.emptySubtitle}>Charts and insights about project performance coming soon.</Typography>
-  </Box>
-);
-
 const ProjectPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
@@ -144,7 +115,7 @@ const ProjectPage = () => {
   return (
     <Box sx={styles.root}>
       <Box sx={styles.content}>
-        {activeTab === 'overview' && <OverviewPage />}
+        {activeTab === 'overview' && <ProjectOverviewPanel projectId={Number(projectId)} />}
         {activeTab === 'board' && <BoardPanel projectId={Number(projectId)} />}
         {activeTab === 'workflows' && (
           <WorkflowsPanel
@@ -191,7 +162,7 @@ const ProjectPage = () => {
         {activeTab === 'skills' && <SkillsPanel projectId={Number(projectId)} />}
         {activeTab === 'repositories' && <RepositoriesPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && <SettingsTab projectId={projectId} />}
-        {activeTab === 'analytics' && <AnalyticsPage />}
+        {activeTab === 'analytics' && <ProjectAnalyticsPanel projectId={Number(projectId)} />}
       </Box>
     </Box>
   );

@@ -13,5 +13,8 @@ test:
 qa:
   <<: *common
 
+staging:
+  <<: *common
+
 production:
   <<: *common

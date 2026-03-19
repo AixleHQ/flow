@@ -34,7 +34,7 @@ spec:
               done
       containers:
         - name: worker-ruby
-          image: ghcr.io/palad-ai/palad-app-web:latest
+          image: ghcr.io/palad-ai/palad-app-web:main
           imagePullPolicy: Always
           resources:
             requests:

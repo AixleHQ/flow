@@ -10,6 +10,13 @@ This folder contains resources to run GitHub Actions deploy jobs inside the clus
     - `deployment/web`
     - `deployment/worker-ruby`
     - `deployment/mcp`
+  - Migration job permissions in `palad` (`batch/jobs`)
+- `02-deploy-runner-rbac-staging.yaml`
+  - Minimal `Role`/`RoleBinding` in `palad-staging` namespace to restart and watch:
+    - `deployment/web`
+    - `deployment/worker-ruby`
+    - `deployment/mcp`
+  - Migration job permissions in `palad-staging` (`batch/jobs`)
 - `values-runner-scale-set.yaml`
   - Runner scale set name: `palad-deploy-runner` (used by workflow `runs-on`)
 
@@ -23,4 +30,4 @@ This folder contains resources to run GitHub Actions deploy jobs inside the clus
 ## Notes
 
 - Deploy workflow uses `runs-on: palad-deploy-runner`.
-- No Terraform changes are required for rollout-only access inside the cluster.
+- No Terraform changes are required for deploy runner RBAC inside the cluster.

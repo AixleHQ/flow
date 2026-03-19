@@ -2,6 +2,14 @@
 # Install: make kube-observability-install
 # Docs: https://github.com/grafana/alloy/tree/main/operations/helm/charts/alloy
 # Migration guide: https://grafana.com/docs/alloy/latest/collect/kubernetes-logs/
+#
+# Resource estimate (palad-eks, t3.large nodes — 2 vCPU / 8 GiB each):
+#   Alloy runs as a DaemonSet (one pod per node). At current cluster size (2-3 nodes):
+#   Steady-state per pod: ~20-50m CPU, ~64-128 MiB RAM
+#   Tail file handles: ~20-40 (one per container log file across all pods on the node)
+#   Network push to Loki: ~10-50 KiB/s per node under normal Rails traffic
+#   Noisy kube-system health-check and AWS VPC CNI logs are dropped before pushing
+#   to avoid wasting Loki ingest quota on low-value entries.
 
 alloy:
   configMap:
@@ -50,9 +58,24 @@ alloy:
         forward_to = [loki.process.parse_cri.receiver]
       }
 
-      // Parse CRI log format used by containerd / CRI-O
+      // Parse CRI log format used by containerd / CRI-O, then drop high-volume
+      // low-value lines before sending to Loki to reduce ingest load.
       loki.process "parse_cri" {
+        // Decode the CRI envelope (timestamp, stream, flags, message)
         stage.cri {}
+
+        // Drop Kubernetes liveness/readiness probe noise (GET /healthz, /livez, /readyz)
+        stage.drop {
+          expression  = "(?i)(GET|HEAD) /(health|healthz|livez|readyz|ping)"
+          drop_counter_reason = "health_probe"
+        }
+
+        // Drop AWS VPC CNI and kube-proxy frequent debug lines that add little value
+        stage.drop {
+          expression  = "(?i)(aws-cni|ipamd|kube-proxy).*(Successfully|Skipping|already set|no change)"
+          drop_counter_reason = "aws_cni_noise"
+        }
+
         forward_to = [loki.write.loki.receiver]
       }
 
@@ -66,6 +89,14 @@ alloy:
 # Run as DaemonSet so every node's logs are collected
 controller:
   type: daemonset
+  # Resource limits per node agent — sized for a lightly loaded t3.large
+  resources:
+    requests:
+      cpu: "20m"
+      memory: "64Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
 
 # Mount the pod log directory from the host
 alloy:

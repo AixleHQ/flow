@@ -43,8 +43,11 @@ module ContainerRuntime
 
       if handle.service_ports.any?
         create_service(handle)
-        create_middlewares(handle)
-        create_ingressroute(handle) if handle.route_token.present?
+        if handle.route_token.present?
+          ensure_terminal_auth_middleware(handle.namespace)
+          create_middlewares(handle)
+          create_ingressroute(handle)
+        end
       end
 
       handle
@@ -342,7 +345,8 @@ module ContainerRuntime
         kind: "IngressRoute",
         metadata: {
           name: handle.ingress_name,
-          namespace: handle.namespace
+          namespace: handle.namespace,
+          labels: resource_labels(namespace: handle.namespace)
         },
         spec: {
           entryPoints: [ traefik_entrypoint ],
@@ -670,7 +674,8 @@ module ContainerRuntime
         kind: "Middleware",
         metadata: {
           name: "#{handle.pod_name}-#{suffix}-strip",
-          namespace: handle.namespace
+          namespace: handle.namespace,
+          labels: resource_labels(namespace: handle.namespace)
         },
         spec: {
           stripPrefix: {
@@ -680,13 +685,14 @@ module ContainerRuntime
       )
     end
 
-    def build_terminal_auth_middleware(namespace)
+    def build_terminal_auth_middleware(namespace = traefik_namespace)
       Kubeclient::Resource.new(
         apiVersion: "traefik.io/v1alpha1",
         kind: "Middleware",
         metadata: {
           name: traefik_auth_middleware,
-          namespace: namespace
+          namespace: namespace,
+          labels: resource_labels(namespace: namespace)
         },
         spec: {
           forwardAuth: {
@@ -699,16 +705,17 @@ module ContainerRuntime
     end
 
     def build_route(handle, suffix, port, middlewares)
+      service = {
+        name: handle.service_name,
+        namespace: handle.namespace,
+        port: port
+      }
+
       {
         match: build_route_match(handle, suffix),
         kind: "Rule",
         middlewares: middlewares.map { |name| { name: name } },
-        services: [
-          {
-            name: handle.service_name,
-            port: port
-          }
-        ]
+        services: [ service ]
       }
     end
 
@@ -734,6 +741,17 @@ module ContainerRuntime
 
     def runtime_namespace
       kube_setting(:namespace)
+    end
+
+    def traefik_namespace
+      runtime_namespace
+    end
+
+    def resource_labels(namespace:)
+      {
+        "palad.ai/runtime-origin" => runtime_namespace,
+        "palad.ai/runtime-namespace" => namespace
+      }
     end
 
     def namespace_for(context)
@@ -913,17 +931,15 @@ module ContainerRuntime
     def ensure_namespace_resource_quota(namespace, context)
       context = (context || {}).with_indifferent_access
 
-      quota_record = if context[:project_id].present?
-        NamespaceResourceQuota.find_by(scope_type: "Project", scope_id: context[:project_id])
+      scope_type, quota_record = if context[:project_id].present?
+        [ "Project", NamespaceResourceQuota.find_by(scope_type: "Project", scope_id: context[:project_id]) ]
       elsif context[:user_id].present?
-        NamespaceResourceQuota.find_by(scope_type: "User", scope_id: context[:user_id])
+        [ "User", NamespaceResourceQuota.find_by(scope_type: "User", scope_id: context[:user_id]) ]
+      else
+        [ nil, nil ]
       end
 
-      # Fall back to a default quota instance (using column defaults) when no
-      # explicit quota record has been configured for this namespace scope.
-      quota_record ||= NamespaceResourceQuota.new
-
-      hard_limits = quota_record.to_k8s_hard_limits
+      hard_limits = build_quota_hard_limits(quota_record, scope_type)
       return if hard_limits.empty?
 
       quota_name = "palad-resource-quota"
@@ -949,6 +965,27 @@ module ContainerRuntime
       rescue Kubeclient::ResourceNotFoundError
         core_client.create_resource_quota(resource)
       end
+    end
+
+    def build_quota_hard_limits(quota_record, scope_type)
+      settings_key = scope_type == "Project" ? :project_defaults : :user_defaults
+      defaults = Settings.namespace_resource_quotas&.send(settings_key) || {}
+
+      fields = %i[cpu_requests memory_requests cpu_limits memory_limits max_pods]
+
+      merged = fields.each_with_object({}) do |field, hash|
+        value = quota_record&.send(field)
+        value = defaults[field] if value.nil?
+        hash[field] = value unless value.nil?
+      end
+
+      hard = {}
+      hard["requests.cpu"]    = merged[:cpu_requests].to_s    if merged.key?(:cpu_requests)
+      hard["requests.memory"] = merged[:memory_requests].to_s if merged.key?(:memory_requests)
+      hard["limits.cpu"]      = merged[:cpu_limits].to_s      if merged.key?(:cpu_limits)
+      hard["limits.memory"]   = merged[:memory_limits].to_s   if merged.key?(:memory_limits)
+      hard["count/pods"]      = merged[:max_pods].to_s        if merged.key?(:max_pods)
+      hard
     end
 
     def ensure_runtime_image_pull_secrets(namespace)
@@ -996,11 +1033,7 @@ module ContainerRuntime
     def namespace_labels(namespace, context)
       context = (context || {}).with_indifferent_access
 
-      labels = {
-        "palad.ai/runtime-isolated" => "true",
-        "palad.ai/runtime-origin" => runtime_namespace,
-        "palad.ai/runtime-namespace" => namespace
-      }
+      labels = resource_labels(namespace: namespace)
 
       if context[:project_id].present?
         labels["palad.ai/scope"] = "project"
@@ -1015,7 +1048,7 @@ module ContainerRuntime
       labels
     end
 
-    def ensure_terminal_auth_middleware(namespace)
+    def ensure_terminal_auth_middleware(namespace = traefik_namespace)
       traefik_client.get_entity("middlewares", traefik_auth_middleware, namespace)
     rescue StandardError
       traefik_client.create_entity("Middleware", "middlewares", build_terminal_auth_middleware(namespace))

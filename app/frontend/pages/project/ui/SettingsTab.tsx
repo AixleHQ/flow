@@ -97,7 +97,7 @@ const SettingsTab = ({ projectId }: SettingsTabProps) => {
           <TextField
             fullWidth
             multiline
-            rows={3}
+            minRows={3}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Enter project description"
