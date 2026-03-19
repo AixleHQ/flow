@@ -11,7 +11,9 @@ FROM ${BASE_IMAGE}
 # Agent-specific layers (CACHED when only shared scripts change)
 # =============================================================================
 RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /home/claude
+    && chown -R claude:claude /workspace /home/claude \
+    && chown -R root:claude /opt/playwright-browsers \
+    && chmod -R 775 /opt/playwright-browsers
 
 USER claude
 WORKDIR /home/claude
