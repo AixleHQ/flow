@@ -75,3 +75,12 @@ production:
   flush_interval: 0.05
 
   server_session_store_type: active_record
+
+# Staging environment
+staging:
+  adapter: solid_mcp
+  polling_interval: 0.5.seconds
+  batch_size: 200
+  flush_interval: 0.05
+
+  server_session_store_type: active_record

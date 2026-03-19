@@ -120,7 +120,7 @@ export const CreateTaskDialog: FC<CreateTaskDialogProps> = ({
             onChange={(e) => setDescription(e.target.value)}
             fullWidth
             multiline
-            rows={3}
+            minRows={3}
           />
 
           <Stack direction="row" spacing={2}>

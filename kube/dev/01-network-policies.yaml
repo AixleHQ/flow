@@ -47,7 +47,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-isolated: "true"
+              palad.ai/runtime-origin: palad-dev
       ports:
         - protocol: TCP
           port: 4000
@@ -67,7 +67,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-isolated: "true"
+              palad.ai/runtime-origin: palad-dev
       ports:
         - protocol: TCP
           port: 4002
@@ -87,7 +87,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-isolated: "true"
+              palad.ai/runtime-origin: palad-dev
       ports:
         - protocol: TCP
           port: 4318

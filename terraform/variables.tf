@@ -150,6 +150,24 @@ variable "eks_ingress_service_name" {
   default     = "traefik"
 }
 
+variable "create_eks_staging_dns_records" {
+  description = "Whether to create Route53 records for staging.palad.ai to point at the staging EKS ingress NLB"
+  type        = bool
+  default     = true
+}
+
+variable "eks_staging_ingress_namespace" {
+  description = "Namespace of the staging Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "palad-staging"
+}
+
+variable "eks_staging_ingress_service_name" {
+  description = "Name of the staging Kubernetes Service that exposes ingress via NLB"
+  type        = string
+  default     = "traefik"
+}
+
 variable "create_eks_admin_dns_record" {
   description = "Whether to create a dedicated Route53 record for traefik.palad.ai pointing to restricted admin NLB"
   type        = bool
@@ -188,6 +206,18 @@ variable "eks_traefik_namespace" {
 
 variable "eks_traefik_service_account_name" {
   description = "Name of the Traefik service account used for IRSA"
+  type        = string
+  default     = "traefik"
+}
+
+variable "eks_staging_traefik_namespace" {
+  description = "Namespace of the staging Traefik service account used for IRSA"
+  type        = string
+  default     = "palad-staging"
+}
+
+variable "eks_staging_traefik_service_account_name" {
+  description = "Name of the staging Traefik service account used for IRSA"
   type        = string
   default     = "traefik"
 }
@@ -238,6 +268,145 @@ variable "assets_irsa_namespace" {
   description = "Kubernetes namespace containing service accounts allowed to assume the assets IRSA role"
   type        = string
   default     = "palad"
+}
+
+variable "create_ci_runner_instance" {
+  description = "Whether to create a persistent EC2 instance for GitHub Actions self-hosted CI jobs"
+  type        = bool
+  default     = true
+}
+
+variable "ci_runner_instance_name" {
+  description = "Name tag and IAM resource prefix for the GitHub Actions CI runner instance"
+  type        = string
+  default     = "palad-ci-runner"
+}
+
+variable "ci_runner_name_prefix" {
+  description = "Prefix used when registering the self-hosted runner in GitHub"
+  type        = string
+  default     = "palad-ci"
+}
+
+variable "ci_runner_instance_type" {
+  description = "EC2 instance type for the GitHub Actions CI runner"
+  type        = string
+  default     = "t3.large"
+}
+
+variable "ci_runner_count" {
+  description = "Number of persistent EC2 GitHub Actions runners to create"
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.ci_runner_count >= 1
+    error_message = "ci_runner_count must be at least 1."
+  }
+}
+
+variable "ci_runner_root_volume_size" {
+  description = "Size in GiB for the runner root volume"
+  type        = number
+  default     = 100
+}
+
+variable "ci_runner_subnet_type" {
+  description = "Which existing EKS subnet tier to place the runner into"
+  type        = string
+  default     = "private"
+
+  validation {
+    condition     = contains(["private", "public"], var.ci_runner_subnet_type)
+    error_message = "ci_runner_subnet_type must be either private or public."
+  }
+}
+
+variable "ci_runner_subnet_index" {
+  description = "Index into the selected EKS subnet list used for the runner instance"
+  type        = number
+  default     = 0
+}
+
+variable "ci_runner_labels" {
+  description = "Custom GitHub runner labels assigned to the EC2 runner"
+  type        = list(string)
+  default     = ["palad-ci"]
+}
+
+variable "ci_runner_github_owner" {
+  description = "GitHub owner or organization for the repository that will use the runner"
+  type        = string
+  default     = "palad-ai"
+}
+
+variable "ci_runner_github_repo" {
+  description = "GitHub repository name that will use the runner"
+  type        = string
+  default     = "palad-app"
+}
+
+variable "ci_runner_github_app_id_ssm_parameter_name" {
+  description = "SSM parameter name containing the GitHub App ID used to mint runner registration tokens"
+  type        = string
+  default     = "/palad/github-runner/app-id"
+}
+
+variable "ci_runner_github_app_installation_id_ssm_parameter_name" {
+  description = "SSM parameter name containing the GitHub App installation ID for the repository"
+  type        = string
+  default     = "/palad/github-runner/installation-id"
+}
+
+variable "ci_runner_github_app_private_key_ssm_parameter_name" {
+  description = "SSM SecureString parameter name containing the GitHub App private key PEM"
+  type        = string
+  default     = "/palad/github-runner/private-key"
+}
+
+variable "ci_runner_manage_bootstrap_parameters" {
+  description = "Whether Terraform should create and update the SSM parameters used to bootstrap the GitHub Actions runner"
+  type        = bool
+  default     = true
+}
+
+variable "ci_runner_github_app_id_value" {
+  description = "GitHub App ID stored in SSM for runner bootstrap"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ci_runner_github_app_installation_id_value" {
+  description = "GitHub App installation ID stored in SSM for runner bootstrap"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ci_runner_github_app_private_key_value" {
+  description = "GitHub App private key PEM stored in SSM for runner bootstrap"
+  type        = string
+  sensitive   = true
+  default     = null
+}
+
+variable "ci_runner_ssh_key_name" {
+  description = "Optional EC2 key pair name for SSH access to the runner"
+  type        = string
+  default     = null
+}
+
+variable "ci_runner_ssh_ingress_cidrs" {
+  description = "Optional CIDR blocks allowed to SSH to the runner. Leave empty to rely on SSM only."
+  type        = list(string)
+  default     = []
+}
+
+variable "ci_runner_tags" {
+  description = "Additional tags for the GitHub Actions CI runner resources"
+  type        = map(string)
+  default     = {}
 }
 
 variable "assets_irsa_service_account_names" {

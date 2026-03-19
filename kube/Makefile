@@ -1,14 +1,18 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secret-set kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-install kube-observability-uninstall
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-install kube-observability-uninstall
 
+KUBE_CLUSTER_STORAGECLASS = ./kube/00-storageclass-gp3.yaml
 KUBE_DEV_DIR = ./kube/dev
 KUBE_PROD_DIR = ./kube/prod
+KUBE_STAGING_DIR = ./kube/staging
 KUBE_DEV_SECRETS_DIR = ./kube/dev/secrets
 KUBE_PROD_SECRETS_DIR = ./kube/prod/secrets
+KUBE_STAGING_SECRETS_DIR = ./kube/staging/secrets
 TRAEFIK_CRD_URL = https://raw.githubusercontent.com/traefik/traefik/v3.3/docs/content/reference/dynamic-configuration/kubernetes-crd-definition-v1.yml
 KUBE_CONTEXT ?=
 KUBE_DEV_NAMESPACE ?= palad-dev
 KUBE_PROD_NAMESPACE ?= palad
+KUBE_STAGING_NAMESPACE ?= palad-staging
 KUBE_NAMESPACE ?= $(KUBE_DEV_NAMESPACE)
 SECRET_NAMESPACE ?= $(KUBE_NAMESPACE)
 SECRET_NAME ?=
@@ -29,12 +33,15 @@ kube-help:
 	@echo "  make kube-status            - Show cluster and namespace health (use KUBE_CONTEXT=... KUBE_NAMESPACE=...)"
 	@echo "  make kube-setup             - Build images + apply dev secrets/manifests + run db-prepare"
 	@echo "  make kube-setup-prod        - Install Traefik CRDs + apply prod secrets/manifests"
+	@echo "  make kube-setup-staging     - Install Traefik CRDs + apply staging secrets/manifests"
 	@echo "  make kube-apply             - Apply dev manifests (secrets are not touched)"
 	@echo "  make kube-apply-dev         - Apply dev manifests + WEB_HOST_PATH mount for web"
 	@echo "  make kube-apply-prod        - Apply prod manifests (secrets are not touched)"
+	@echo "  make kube-apply-staging     - Apply staging manifests (secrets are not touched)"
 	@echo "  make kube-secrets-apply     - Apply dev secret manifests explicitly"
-	@echo "  make kube-secrets-apply-prod - Apply prod secret manifests explicitly"
-	@echo "  make kube-secret-set        - Edit one decoded secret key and patch it back, creating the secret if missing (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...] [SECRET_TYPE=Opaque])"
+	@echo "  make kube-secrets-apply-prod    - Apply prod secret manifests explicitly"
+	@echo "  make kube-secrets-apply-staging - Apply staging secret manifests explicitly"
+	@echo "  make kube-secret-edit       - Edit one decoded secret key and patch it back, creating the secret if missing (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...] [SECRET_TYPE=Opaque])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
@@ -44,6 +51,7 @@ kube-help:
 	@echo "  make kube-observability-uninstall - Uninstall all observability Helm releases"
 	@echo "  make kube-rm                - Delete dev manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod manifests (secrets are not touched)"
+	@echo "  make kube-rm-staging        - Delete staging manifests (secrets are not touched)"
 
 kube-status:
 	@echo "=== Kubernetes Status ==="
@@ -80,6 +88,7 @@ kube-setup:
 	@make build-otlp-ingest
 	@make build-agents
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)/00-namespace.yaml
 	@if [ "$(KUBE_SETUP_WITH_ARC)" = "true" ]; then \
 		$(MAKE) kube-arc-install; \
@@ -97,9 +106,18 @@ kube-setup:
 # Production Kubernetes setup: CRDs + secrets + production manifests
 kube-setup-prod:
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_PROD_DIR)/00-namespace.yaml
 	$(KUBECTL) apply -f $(KUBE_PROD_SECRETS_DIR)
 	@make kube-apply-prod
+
+# Staging Kubernetes setup: CRDs + secrets + staging manifests
+kube-setup-staging:
+	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
+	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
+	$(KUBECTL) apply -f $(KUBE_STAGING_DIR)/00-namespace.yaml
+	$(KUBECTL) apply -f $(KUBE_STAGING_SECRETS_DIR)
+	@make kube-apply-staging
 
 kube-apply:
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)
@@ -111,6 +129,10 @@ kube-apply-dev: kube-apply kube-mount-dev
 kube-apply-prod:
 	$(KUBECTL) apply -f $(KUBE_PROD_DIR)
 
+# Apply staging Kubernetes manifests
+kube-apply-staging:
+	$(KUBECTL) apply -f $(KUBE_STAGING_DIR)
+
 # Apply secret manifests only when explicitly requested
 kube-secrets-apply: kube-secrets-apply-dev
 
@@ -119,6 +141,9 @@ kube-secrets-apply-dev:
 
 kube-secrets-apply-prod:
 	$(KUBECTL) apply -f $(KUBE_PROD_SECRETS_DIR)
+
+kube-secrets-apply-staging:
+	$(KUBECTL) apply -f $(KUBE_STAGING_SECRETS_DIR)
 
 # Restart web-related deployments to pick up new config/secrets
 kube-web-rollout:
@@ -185,6 +210,7 @@ kube-arc-install-controller:
 # Apply runner service account in arc-runners and rollout RBAC in the prod namespace.
 kube-arc-apply-deploy-rbac:
 	$(KUBECTL) apply -f ./kube/arc/01-deploy-runner-rbac.yaml
+	$(KUBECTL) apply -f ./kube/arc/02-deploy-runner-rbac-staging.yaml
 
 # Install/upgrade ARC runner scale set for deploy jobs.
 kube-arc-install-runner-set:
@@ -201,23 +227,23 @@ kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-ar
 
 # Edit one decoded secret key interactively and patch it back to the cluster.
 # If the secret does not exist yet, create it first using SECRET_TYPE (default: Opaque).
-kube-secret-set:
+kube-secret-edit:
 	@set -eu; \
 	if [ -z "$(SECRET_NAME)" ]; then \
 		echo "SECRET_NAME is not set. Available secrets in namespace $(SECRET_NAMESPACE):"; \
 		$(KUBECTL) get secrets -n "$(SECRET_NAMESPACE)" || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	secret_key="$(if $(SECRET_VAR),$(SECRET_VAR),$(SECRET_KEY))"; \
 	if [ -z "$$secret_key" ]; then \
 		echo "SECRET_KEY is not set. Available keys in $(SECRET_NAME):"; \
 		$(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r '.data | keys[]?' || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
-	tmp_file="$$(mktemp /tmp/kube-secret-set.XXXXXX)"; \
-	patch_file="$$(mktemp /tmp/kube-secret-set-patch.XXXXXX)"; \
+	tmp_file="$$(mktemp /tmp/kube-secret-edit.XXXXXX)"; \
+	patch_file="$$(mktemp /tmp/kube-secret-edit-patch.XXXXXX)"; \
 	cleanup() { rm -f "$$tmp_file" "$$patch_file"; }; \
 	trap cleanup EXIT INT TERM; \
 	if $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" >/dev/null 2>&1; then \
@@ -232,7 +258,7 @@ kube-secret-set:
 	fi; \
 	echo "Editing $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"; \
 	KUBE_SECRET_FILE="$$tmp_file" KUBE_EDITOR_CMD='$(KUBE_EDITOR)' sh -c 'exec $$KUBE_EDITOR_CMD "$$KUBE_SECRET_FILE"'; \
-	encoded_value="$$(base64 < "$$tmp_file" | tr -d '\n')"; \
+	encoded_value="$$(perl -0pe 's/\n\z//' "$$tmp_file" | base64 | tr -d '\n')"; \
 	jq -n --arg key "$$secret_key" --arg value "$$encoded_value" '{data: {($$key): $$value}}' > "$$patch_file"; \
 	$(KUBECTL) patch secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" --type merge --patch-file "$$patch_file" >/dev/null; \
 	echo "Updated $(SECRET_NAME)/$$secret_key in namespace $(SECRET_NAMESPACE)"
@@ -254,3 +280,7 @@ kube-rm:
 # Remove production Kubernetes manifests
 kube-rm-prod:
 	$(KUBECTL) delete -f $(KUBE_PROD_DIR)
+
+# Remove staging Kubernetes manifests
+kube-rm-staging:
+	$(KUBECTL) delete -f $(KUBE_STAGING_DIR)

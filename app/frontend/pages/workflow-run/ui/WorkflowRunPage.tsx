@@ -840,7 +840,7 @@ const WorkflowRunPage = () => {
             label="Reason (optional)"
             fullWidth
             multiline
-            rows={3}
+            minRows={3}
             value={skipReason}
             onChange={(e) => setSkipReason(e.target.value)}
           />

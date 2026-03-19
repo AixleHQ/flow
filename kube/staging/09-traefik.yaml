@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: traefik
+  namespace: palad-staging
+  annotations:
+    # Dedicated staging Traefik IRSA role for Route53 DNS challenge (Let's Encrypt).
+    eks.amazonaws.com/role-arn: arn:aws:iam::541894707537:role/palad-eks-traefik-dns-staging-role
+---
+# ClusterRole and ClusterRoleBinding for Traefik are shared with production
+# (defined in kube/prod/09-traefik.yaml). Only the service-account subject needs
+# to be added to the existing binding, which is handled by the ClusterRoleBinding
+# in this file.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: traefik-staging
+subjects:
+  - kind: ServiceAccount
+    name: traefik
+    namespace: palad-staging
+roleRef:
+  kind: ClusterRole
+  name: traefik
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traefik
+  namespace: palad-staging
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: traefik
+  template:
+    metadata:
+      labels:
+        app: traefik
+    spec:
+      serviceAccountName: traefik
+      initContainers:
+        - name: init-acme
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              touch /data/acme.json
+              chmod 600 /data/acme.json
+          volumeMounts:
+            - name: acme-storage
+              mountPath: /data
+      containers:
+        - name: traefik
+          image: traefik:v3.3
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1Gi"
+          args:
+            - "--api.dashboard=true"
+            - "--api.insecure=true"
+            - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.allowCrossNamespace=true"
+            - "--providers.kubernetescrd.labelselector=palad.ai/runtime-origin=palad-staging"
+            - "--providers.kubernetesingress=true"
+            - "--providers.kubernetesingress.namespaces=palad-staging"
+            - "--entrypoints.traefik.http.tls=true"
+            - "--entrypoints.web.address=:80"
+            - "--entrypoints.websecure.address=:443"
+            - "--certificatesresolvers.letsencrypt.acme.email=admin@palad.ai"
+            - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
+            - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
+            - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=route53"
+            - "--log.level=DEBUG"
+          env:
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+          ports:
+            - name: web
+              containerPort: 80
+            - name: websecure
+              containerPort: 443
+            - name: traefik
+              containerPort: 8090
+          volumeMounts:
+            - name: acme-storage
+              mountPath: /data
+      volumes:
+        - name: acme-storage
+          persistentVolumeClaim:
+            claimName: traefik-acme
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: traefik-acme
+  namespace: palad-staging
+spec:
+  storageClassName: gp2
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Restrict external access to the staging environment:
+# - Allow traffic from the observed external prod-agent egress IP.
+# - Keep the owner IP allowlisted for direct browser access.
+# - Update these CIDRs if either egress path changes.
+apiVersion: v1
+kind: Service
+metadata:
+  name: traefik
+  namespace: palad-staging
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+spec:
+  type: LoadBalancer
+  selector:
+    app: traefik
+  # Allow production agents and owner access without exposing staging broadly.
+  loadBalancerSourceRanges:
+    - 10.10.0.0/16
+    - 3.217.219.60/32
+    - 34.1.250.211/32
+  ports:
+    - name: web
+      port: 80
+      targetPort: 80
+    - name: websecure
+      port: 443
+      targetPort: 443
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: traefik-dashboard
+  namespace: palad-staging
+  labels:
+    palad.ai/runtime-origin: palad-staging
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`traefik.staging.palad.ai`)
+      kind: Rule
+      middlewares:
+        - name: staging-basic-auth
+        - name: traefik-dashboard-redirect
+      services:
+        - name: api@internal
+          kind: TraefikService
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: staging.palad.ai
+        sans:
+          - www.staging.palad.ai
+          - traefik.staging.palad.ai
+          - temporal.staging.palad.ai
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: traefik-dashboard-redirect
+  namespace: palad-staging
+  labels:
+    palad.ai/runtime-origin: palad-staging
+spec:
+  redirectRegex:
+    regex: "^(https?://[^/]+)/?$"
+    replacement: "${1}/dashboard/"

@@ -22,5 +22,8 @@ qa:
 uat:
   <<: *default
 
+staging:
+  <<: *default
+
 production:
   <<: *default

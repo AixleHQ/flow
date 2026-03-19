@@ -49,6 +49,8 @@ kind: IngressRoute
 metadata:
   name: temporal-ui
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure

@@ -979,7 +979,7 @@ function StepDetailPanel({
             fullWidth
             size="small"
             multiline
-            rows={2}
+            minRows={2}
             value={stepTextDraft?.description ?? ''}
             onChange={(e) => {
               handleTextDraftChange('description', e.target.value);
@@ -993,7 +993,7 @@ function StepDetailPanel({
             fullWidth
             size="small"
             multiline
-            rows={8}
+            minRows={8}
             value={stepTextDraft?.instructions ?? ''}
             onChange={(e) => {
               handleTextDraftChange('instructions', e.target.value);
@@ -1289,7 +1289,7 @@ function StepDetailPanel({
                   size="small"
                   fullWidth
                   multiline
-                  rows={3}
+                  minRows={3}
                   placeholder="Instructions"
                   defaultValue={ss.instructions || ''}
                   onBlur={(e) => onUpdateSubStep(ss.id, 'instructions', e.target.value)}

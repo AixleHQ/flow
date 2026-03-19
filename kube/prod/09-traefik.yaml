@@ -45,6 +45,8 @@ metadata:
   namespace: palad
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: traefik
@@ -80,7 +82,10 @@ spec:
             - "--api.dashboard=true"
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.allowCrossNamespace=true"
+            - "--providers.kubernetescrd.labelselector=palad.ai/runtime-origin=palad"
             - "--providers.kubernetesingress=true"
+            - "--providers.kubernetesingress.namespaces=palad"
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
@@ -174,6 +179,8 @@ kind: IngressRoute
 metadata:
   name: traefik-dashboard
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure
@@ -202,6 +209,8 @@ kind: Middleware
 metadata:
   name: traefik-dashboard-redirect
   namespace: palad
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   redirectRegex:
     regex: "^(https?://[^/]+)/?$"

@@ -75,6 +75,7 @@ spec:
             - "--api.dashboard=true"
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
+            - "--providers.kubernetescrd.allowCrossNamespace=true"
             - "--providers.kubernetesingress=true"
             - "--entrypoints.traefik.http.tls=true"
             - "--entrypoints.web.address=:80"

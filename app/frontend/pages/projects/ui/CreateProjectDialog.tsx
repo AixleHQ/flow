@@ -102,7 +102,7 @@ const CreateProjectDialog = ({ open, onClose, onSuccess }: CreateProjectDialogPr
             onChange={(e) => setDescription(e.target.value)}
             fullWidth
             multiline
-            rows={3}
+            minRows={3}
             disabled={isLoading}
             inputProps={{ maxLength: 500 }}
           />

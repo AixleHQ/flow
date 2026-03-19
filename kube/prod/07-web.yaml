@@ -22,7 +22,7 @@ spec:
       serviceAccountName: palad-web
       containers:
         - name: web
-          image: ghcr.io/palad-ai/palad-app-web:latest
+          image: ghcr.io/palad-ai/palad-app-web:main
           imagePullPolicy: Always
           resources:
             requests:
@@ -97,7 +97,7 @@ spec:
       serviceAccountName: palad-web
       containers:
         - name: mcp
-          image: ghcr.io/palad-ai/palad-app-web:latest
+          image: ghcr.io/palad-ai/palad-app-web:main
           imagePullPolicy: Always
           resources:
             requests:

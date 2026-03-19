@@ -69,6 +69,11 @@ output "eks_ingress_nlb_dns_name" {
   value       = try(data.aws_lb.eks_ingress_nlb[0].dns_name, null)
 }
 
+output "eks_staging_ingress_nlb_dns_name" {
+  description = "DNS name of the staging EKS ingress NLB discovered from kubernetes.io/service-name tag"
+  value       = try(data.aws_lb.eks_staging_ingress_nlb[0].dns_name, null)
+}
+
 output "eks_admin_ingress_nlb_dns_name" {
   description = "DNS name of the restricted EKS admin ingress NLB"
   value       = try(data.aws_lb.eks_admin_ingress_nlb[0].dns_name, null)
@@ -82,6 +87,16 @@ output "palad_ai_dns_record" {
 output "palad_ai_wildcard_dns_record" {
   description = "Route53 wildcard A record for *.palad.ai pointing to EKS ingress NLB"
   value       = try(aws_route53_record.palad_ai_wildcard[0].fqdn, null)
+}
+
+output "staging_palad_ai_dns_record" {
+  description = "Route53 A record for staging.palad.ai pointing to the staging EKS ingress NLB"
+  value       = try(aws_route53_record.staging_palad_ai_root[0].fqdn, null)
+}
+
+output "staging_palad_ai_wildcard_dns_record" {
+  description = "Route53 wildcard A record for *.staging.palad.ai pointing to the staging EKS ingress NLB"
+  value       = try(aws_route53_record.staging_palad_ai_wildcard[0].fqdn, null)
 }
 
 output "palad_ai_traefik_admin_dns_record" {
@@ -128,6 +143,11 @@ output "eks_oidc_provider_arn" {
 output "eks_traefik_dns_irsa_role_arn" {
   description = "IAM role ARN for Traefik IRSA Route53 DNS challenge access"
   value       = try(aws_iam_role.eks_traefik_dns[0].arn, null)
+}
+
+output "eks_staging_traefik_dns_irsa_role_arn" {
+  description = "IAM role ARN for staging Traefik IRSA Route53 DNS challenge access"
+  value       = try(aws_iam_role.eks_staging_traefik_dns[0].arn, null)
 }
 
 output "eks_cluster_autoscaler_irsa_role_arn" {
@@ -223,6 +243,43 @@ output "redis_reader_endpoint" {
 output "redis_port" {
   description = "Redis port"
   value       = var.redis_port
+}
+
+output "ci_runner_instance_ids" {
+  description = "Instance IDs of the GitHub Actions CI runners"
+  value       = values(aws_instance.ci_runner)[*].id
+}
+
+output "ci_runner_private_ips" {
+  description = "Private IP addresses of the GitHub Actions CI runners"
+  value       = values(aws_instance.ci_runner)[*].private_ip
+}
+
+output "ci_runner_public_ips" {
+  description = "Public IP addresses of the GitHub Actions CI runners when placed in public subnets"
+  value       = values(aws_instance.ci_runner)[*].public_ip
+}
+
+output "ci_runner_security_group_id" {
+  description = "Security group ID attached to the GitHub Actions CI runner"
+  value       = try(aws_security_group.ci_runner[0].id, null)
+}
+
+output "ci_runner_ssm_start_session_commands" {
+  description = "AWS CLI commands to open SSM shell sessions to the CI runners"
+  value = [
+    for instance in values(aws_instance.ci_runner) :
+    "aws ssm start-session --region ${var.aws_region} --target ${instance.id}"
+  ]
+}
+
+output "ci_runner_ssm_parameter_names" {
+  description = "SSM parameter names used for the GitHub runner bootstrap credentials"
+  value = {
+    app_id          = var.ci_runner_github_app_id_ssm_parameter_name
+    installation_id = var.ci_runner_github_app_installation_id_ssm_parameter_name
+    private_key     = var.ci_runner_github_app_private_key_ssm_parameter_name
+  }
 }
 
 output "redis_url_database_1" {

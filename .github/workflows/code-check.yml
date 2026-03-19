@@ -14,6 +14,10 @@ on:
         required: false
         type: number
         default: 10
+      image-tag:
+        required: false
+        type: string
+        default: ""
 
 env:
   REGISTRY: ghcr.io
@@ -23,7 +27,7 @@ env:
 jobs:
   check:
     name: Run
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: ${{ inputs.timeout }}
     env:
       RAILS_ENV: test
@@ -38,9 +42,14 @@ jobs:
 
       - name: Pull image
         run: |
-          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
-          docker pull "${IMAGE}:${SHORT_SHA}"
-          docker tag  "${IMAGE}:${SHORT_SHA}" web
+          IMAGE_TAG="${{ inputs.image-tag }}"
+
+          if [ -z "$IMAGE_TAG" ]; then
+            IMAGE_TAG="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          fi
+
+          docker pull "${IMAGE}:${IMAGE_TAG}"
+          docker tag  "${IMAGE}:${IMAGE_TAG}" web
 
       - name: Start database
         if: ${{ inputs.needs-db }}
