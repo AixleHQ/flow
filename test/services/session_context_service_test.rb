@@ -1085,6 +1085,145 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   # Story 19.12: Tool Execution Modes — tested in ContextBuilders::Tools
 
+  # ====================================================================
+  # Story 33.6: BMAD Method injection in assemble_session_context
+  # ====================================================================
+
+  test "assemble_session_context calls BmadMethodInjector when bmad_enabled is true" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true })
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.expects(:inject!).once
+    BmadMethodInjector.expects(:new).with("ctr1", session, runtime: runtime_mock).returns(injector_mock)
+
+    SessionContextService.assemble_session_context("ctr1", session)
+  end
+
+  test "assemble_session_context skips BmadMethodInjector when bmad_enabled is false" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => false })
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    BmadMethodInjector.expects(:new).never
+
+    SessionContextService.assemble_session_context("ctr1", session)
+  end
+
+  test "assemble_session_context skips BmadMethodInjector when bmad_enabled is absent" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: {})
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    BmadMethodInjector.expects(:new).never
+
+    SessionContextService.assemble_session_context("ctr1", session)
+  end
+
+  test "assemble_session_context measures bmad_method step timing" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true })
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.stubs(:inject!)
+    BmadMethodInjector.stubs(:new).returns(injector_mock)
+
+    Rails.logger.unstub(:info)
+    logged_messages = []
+    Rails.logger.stubs(:info).with { |msg| logged_messages << msg; true }
+
+    SessionContextService.assemble_session_context("ctr1", session)
+
+    assert logged_messages.any? { |m| m.include?("[SessionContext] Step 'bmad_method'") },
+      "Expected bmad_method step timing to be logged"
+  end
+
+  test "assemble_session_context runs bmad_method after repositories and before context_file" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true })
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:copy_to).returns(true)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    Rails.logger.unstub(:info)
+    step_order = []
+    Rails.logger.stubs(:info).with do |msg|
+      if msg.include?("[SessionContext] Step '")
+        step_name = msg.match(/Step '([\w]+)'/)[1]
+        step_order << step_name
+      end
+      true
+    end
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.stubs(:inject!)
+    BmadMethodInjector.stubs(:new).returns(injector_mock)
+
+    SessionContextService.assemble_session_context("ctr1", session)
+
+    repo_idx = step_order.index("repositories")
+    bmad_idx = step_order.index("bmad_method")
+    ctx_idx = step_order.index("context_file")
+
+    assert_not_nil repo_idx, "repositories step should be logged"
+    assert_not_nil bmad_idx, "bmad_method step should be logged"
+    assert_not_nil ctx_idx, "context_file step should be logged"
+    assert bmad_idx > repo_idx, "bmad_method should run after repositories"
+    assert bmad_idx < ctx_idx, "bmad_method should run before context_file"
+  end
+
+  test "assemble_session_context records bmad_method in context_log" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli",
+                     mode: "interactive", session_config: { "bmad_enabled" => true, "bmad_modules" => %w[bmm cis] })
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:exec).returns([ [], [], 0 ])
+
+    injector_mock = mock("bmad_injector")
+    injector_mock.stubs(:inject!)
+    BmadMethodInjector.stubs(:new).returns(injector_mock)
+
+    context_log_content = nil
+    runtime_mock.stubs(:copy_to).with do |_ctr, path, content|
+      context_log_content = content if path == "/var/log/context.log"
+      true
+    end.returns(true)
+
+    SessionContextService.assemble_session_context("ctr1", session)
+
+    assert_not_nil context_log_content, "Context log should be written"
+    assert_includes context_log_content, "bmad_method"
+    assert_includes context_log_content, "bmm"
+    assert_includes context_log_content, "cis"
+  end
+
   private
 
   # Build a tar stream containing a single file (mirrors ContainerRuntime.copy_from output)

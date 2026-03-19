@@ -6,6 +6,7 @@ class TerminalSession < ApplicationRecord
   include TerminalSessionStateMachine
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
+  BMAD_DEFAULT_MODULES = %w[bmm].freeze
 
   # Associations
   belongs_to :user
@@ -69,6 +70,14 @@ class TerminalSession < ApplicationRecord
 
   def env_vars
     session_config["env_vars"] || {}
+  end
+
+  def bmad_enabled?
+    session_config&.dig("bmad_enabled") == true
+  end
+
+  def bmad_modules
+    session_config&.dig("bmad_modules") || BMAD_DEFAULT_MODULES
   end
 
   def workflow_id

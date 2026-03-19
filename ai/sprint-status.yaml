@@ -32,6 +32,7 @@
 # Phase 16: Session Context Constructor (Epic 25, 26, 27, 28)
 # Phase 17: Session Config Cascade (Epic 29, 30, 31)
 # Phase 18: Service Layer Pyramid (Epic 32)
+# Phase 19: BMAD Method Integration (Epic 33, 34, 35)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -453,12 +454,40 @@ development_status:
   # PHASE 18: SERVICE LAYER PYRAMID
   # ============================================
 
-  epic-32: in-progress  # Service Layer Pyramid (Phase 18) — TaskService, WorkflowService, SessionService; clean models, thin controllers
-  32-1-session-service: review  # SessionService: create_and_start, finish, cancel, create_for_workflow_step; remove Temporal from TerminalSession model
-  32-2-workflow-service: review  # WorkflowService: start, cancel, approve_step, retry_step, skip_step; simplify WorkflowRunsController
-  32-3-task-service: review  # TaskService: create, update, destroy, move, trigger_workflow; absorb TaskMoveService + WorkflowAutoTriggerService
-  32-4-broadcast-simplification: review  # Minimal broadcast format { event, id } without payload; frontend refetch
-  32-5-state-machine-cleanup: review  # Remove orchestration side effects from state machine callbacks
-  32-6-temporal-activities-update: review  # Thin activities delegating to services
-  32-7-cleanup-and-removal: review  # Delete TaskMoveService, WorkflowAutoTriggerService, dead model methods
+  epic-32: done  # Service Layer Pyramid (Phase 18) — TaskService, WorkflowService, SessionService; clean models, thin controllers
+  # NOTE: Epic 32 stories are in review, not yet merged
+  32-1-session-service: done  # SessionService: create_and_start, finish, cancel, create_for_workflow_step; remove Temporal from TerminalSession model
+  32-2-workflow-service: done  # WorkflowService: start, cancel, approve_step, retry_step, skip_step; simplify WorkflowRunsController
+  32-3-task-service: done  # TaskService: create, update, destroy, move, trigger_workflow; absorb TaskMoveService + WorkflowAutoTriggerService
+  32-4-broadcast-simplification: done  # Minimal broadcast format { event, id } without payload; frontend refetch
+  32-5-state-machine-cleanup: done  # Remove orchestration side effects from state machine callbacks
+  32-6-temporal-activities-update: done  # Thin activities delegating to services
+  32-7-cleanup-and-removal: done  # Delete TaskMoveService, WorkflowAutoTriggerService, dead model methods
   epic-32-retrospective: optional
+
+  # ============================================
+  # PHASE 19: BMAD METHOD INTEGRATION
+  # ============================================
+
+  epic-33: done  # BMAD Method — Standalone Session Integration (Phase 19) — Toggle, installer, context builder, VS Code hide, frontend
+  33-1-data-model-bmad-enabled-in-session-config: done  # bmad_enabled + bmad_modules in session_config JSONB, helper methods
+  33-2-bmad-method-injector-install-in-container: done  # BmadMethodInjector: npx bmad-method install with agent_type mapping
+  33-3-hide-bmad-files-in-vscode: done  # files.exclude for _bmad/, skills dirs in VS Code settings
+  33-4-context-builders-bmad-method: done  # ContextBuilders::BmadMethod: XML section with BMAD info for agent
+  33-5-session-config-resolver-bmad-enabled: done  # SessionConfigResolver#resolve_bmad_enabled (standalone + workflow)
+  33-6-integration-injector-in-assemble-session-context: done  # Parallel install in assemble_session_context, Thread.new + join
+  33-7-frontend-bmad-toggle-in-session-launch: done  # MUI Switch in SessionLaunchWidget, session_config payload
+  epic-33-retrospective: optional
+
+  epic-34: done  # BMAD Method — Workflow Step Integration (Phase 19) — Per-step toggle, migration, output pipeline
+  34-1-migration-bmad-enabled-on-steps: done  # add_column :steps, :bmad_enabled, :boolean, default: false
+  34-2-workflow-step-bmad-execution-and-output-pipeline: done  # E2E: BMAD install in workflow step, outputs as WorkflowRunAsset
+  34-3-frontend-bmad-toggle-in-step-editor: done  # MUI Switch in StepConfigPanel
+  epic-34-retrospective: optional
+
+  epic-35: done  # BMAD Method — Container Hardening & Resilience (Phase 19) — Node.js, error handling, parallel install, E2E
+  35-1-docker-nodejs-v20-in-agent-images: done  # Node.js v20+ in base container image — ALREADY SATISFIED (node:22-slim base)
+  35-2-graceful-error-handling-in-injector: done  # Rescue, timeout 60s, log, proceed without BMAD
+  35-3-parallel-bmad-installation: done  # Concurrent install with other assemble steps (Thread.new)
+  35-4-e2e-testing-all-agent-runtimes: done  # Integration tests: cursor_cli, claude_code, codex, gemini_cli
+  epic-35-retrospective: optional

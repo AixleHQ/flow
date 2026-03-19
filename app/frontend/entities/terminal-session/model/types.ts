@@ -7,6 +7,7 @@ export type TerminalSessionType = 'auth_setup' | 'agent_session' | 'tool_setup' 
 export type SessionMode = 'interactive' | 'non_interactive';
 
 export interface ISessionConfig {
+  bmadEnabled?: boolean;
   configFiles?: Record<string, string>;
   envVars?: Record<string, string>;
 }

@@ -104,7 +104,7 @@ module Api
 
         if params.dig(:terminal_session, :session_config).present?
           raw = params[:terminal_session][:session_config]
-          permitted[:session_config] = raw.to_unsafe_h.slice("config_files", "env_vars")
+          permitted[:session_config] = raw.to_unsafe_h.slice("config_files", "env_vars", "bmad_enabled", "bmad_modules")
         end
 
         permitted
