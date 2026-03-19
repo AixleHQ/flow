@@ -4,7 +4,6 @@ metadata:
   name: otlp-ingest
   namespace: palad
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: otlp-ingest
