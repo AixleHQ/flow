@@ -241,20 +241,14 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     (newFilters: BoardFilters) => {
       setFilters(newFilters);
       void navigate({
-        search: (prev) => {
-          const next = { ...(prev as Record<string, unknown>) };
-          delete next.assigneeId;
-          delete next.taskType;
-          delete next.priority;
-          delete next.tags;
-          delete next.search;
-          if (newFilters.assigneeId) next.assigneeId = newFilters.assigneeId;
-          if (newFilters.taskType) next.taskType = newFilters.taskType;
-          if (newFilters.priority) next.priority = newFilters.priority;
-          if (newFilters.tags?.length) next.tags = newFilters.tags.join(',');
-          if (newFilters.search) next.search = newFilters.search;
-          return next;
-        },
+        search: (prev) => ({
+          ...prev,
+          assigneeId: newFilters.assigneeId,
+          taskType: newFilters.taskType,
+          priority: newFilters.priority,
+          tags: newFilters.tags?.length ? newFilters.tags.join(',') : undefined,
+          search: newFilters.search,
+        }),
         replace: true,
       });
     },
