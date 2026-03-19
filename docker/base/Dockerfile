@@ -87,7 +87,11 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # Playwright MCP + Chromium (headless browser for agent automation)
 #
 # Installs @playwright/mcp globally so `npx @playwright/mcp` resolves instantly.
-# Chromium binary + system deps are installed via `npx playwright install`.
+# Chromium is installed using the playwright CLI bundled INSIDE @playwright/mcp
+# to ensure the browser revision exactly matches what the MCP expects at runtime.
+# Using a mismatched playwright version (e.g. the global `npx playwright`) would
+# install the wrong chromium revision, causing EACCES errors when the MCP tries
+# to download the correct revision into the root-owned /opt/playwright-browsers/.
 # Browsers stored in /opt/playwright-browsers (shared, readable by all users).
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
@@ -95,7 +99,7 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 RUN npm install -g @playwright/mcp
 
 RUN apt-get update \
-    && npx playwright install --with-deps chromium \
+    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chromium \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
