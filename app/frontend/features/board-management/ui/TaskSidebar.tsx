@@ -89,10 +89,7 @@ const styles = {
 export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const { isOpen, activeTaskId, activeTab, close, setTab } = useBoardSidebarStore();
   const { data: boardData } = useGetBoardQuery(projectId);
-  const { data: taskDetails } = useGetTaskDetailsQuery(
-    { projectId, taskId: activeTaskId! },
-    { skip: !activeTaskId },
-  );
+  const { data: taskDetails } = useGetTaskDetailsQuery({ projectId, taskId: activeTaskId! }, { skip: !activeTaskId });
   const [triggerWorkflow, { isLoading: isTriggering }] = useTriggerWorkflowMutation();
   const [updateTask] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
