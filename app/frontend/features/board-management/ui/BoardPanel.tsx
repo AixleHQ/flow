@@ -30,8 +30,6 @@ import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { projectTabRoute } from 'app/routeTree';
-
 import type { BoardTask } from 'entities/board-task';
 import { TaskCard } from 'entities/board-task';
 import { useGetCurrentUserQuery } from 'entities/user';
@@ -112,7 +110,7 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     tags?: string;
     search?: string;
   };
-  const navigate = useNavigate({ from: projectTabRoute.id });
+  const navigate = useNavigate({ from: '/company/projects/$projectId/$tab' });
 
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [creatingInColumn, setCreatingInColumn] = useState<number | null>(null);
