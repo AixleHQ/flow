@@ -38,6 +38,8 @@ eks_admin_ingress_namespace   = "palad"
 eks_admin_ingress_service_name = "traefik-admin"
 eks_admin_dns_name            = "traefik.palad.ai"
 eks_admin_temporal_dns_name   = "temporal.palad.ai"
+eks_admin_grafana_dns_name    = "grafana.palad.ai"
+eks_admin_headlamp_dns_name   = "headlamp.palad.ai"
 
 # Traefik IRSA identity for Route53 DNS challenge
 eks_traefik_namespace            = "palad"

@@ -1,0 +1,35 @@
+# Helm values for headlamp/headlamp
+# Install: make kube-observability-install
+# Docs: https://headlamp.dev/docs/latest/installation/in-cluster/
+
+config:
+  inCluster: true
+  # Headlamp is served at the root of its own hostname, so do not force a
+  # baseURL. Using "/" can produce protocol-relative asset URLs like
+  # //assets/... behind the Helm chart/runtime combination.
+  baseURL: null
+  # The current Headlamp chart defaults sessionTTL to 86400 and renders
+  # -session-ttl, but the bundled backend does not define that flag.
+  sessionTTL: null
+
+service:
+  port: 80
+  targetPort: 4466
+
+resources:
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+  limits:
+    cpu: "200m"
+    memory: "256Mi"
+
+# Keep the chart-managed ClusterRoleBinding for the Headlamp pod's own
+# in-cluster kubeconfig. End-user login is handled separately via a dedicated
+# service account token in kube/prod/observability/extra/02-headlamp-access.yaml.
+clusterRoleBinding:
+  create: true
+
+# Expose via Traefik IngressRoute defined in extra/01-ingressroutes.yaml
+ingress:
+  enabled: false

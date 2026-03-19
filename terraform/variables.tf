@@ -198,6 +198,18 @@ variable "eks_admin_temporal_dns_name" {
   default     = "temporal.palad.ai"
 }
 
+variable "eks_admin_grafana_dns_name" {
+  description = "DNS hostname for restricted Grafana ingress"
+  type        = string
+  default     = "grafana.palad.ai"
+}
+
+variable "eks_admin_headlamp_dns_name" {
+  description = "DNS hostname for restricted Headlamp ingress"
+  type        = string
+  default     = "headlamp.palad.ai"
+}
+
 variable "eks_traefik_namespace" {
   description = "Namespace of the Traefik service account used for IRSA"
   type        = string

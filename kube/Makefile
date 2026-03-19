@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-apply-dashboards kube-observability-install kube-observability-print-headlamp-token kube-observability-uninstall
 
 KUBE_CLUSTER_STORAGECLASS = ./kube/00-storageclass-gp3.yaml
 KUBE_DEV_DIR = ./kube/dev
@@ -18,6 +18,7 @@ SECRET_NAMESPACE ?= $(KUBE_NAMESPACE)
 SECRET_NAME ?=
 SECRET_KEY ?=
 SECRET_VAR ?= $(SECRET_KEY)
+SECRET_TYPE ?= Opaque
 KUBE_EDITOR ?= vim
 KUBECTL = kubectl $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
 ARC_CONTROLLER_INSTALLATION_NAME ?= arc
@@ -40,12 +41,14 @@ kube-help:
 	@echo "  make kube-secrets-apply     - Apply dev secret manifests explicitly"
 	@echo "  make kube-secrets-apply-prod    - Apply prod secret manifests explicitly"
 	@echo "  make kube-secrets-apply-staging - Apply staging secret manifests explicitly"
-	@echo "  make kube-secret-edit       - Edit one decoded secret key and patch it back (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...])"
+	@echo "  make kube-secret-edit       - Edit one decoded secret key and patch it back, creating the secret if missing (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...] [SECRET_TYPE=Opaque])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
 	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
 	@echo "  make kube-arc-install            - Install ARC controller + deploy RBAC + runner scale set"
+	@echo "  make kube-observability-install  - Install/upgrade observability stack via Helm (Prometheus, Loki, Grafana, Alloy, Headlamp, metrics-server)"
+	@echo "  make kube-observability-uninstall - Uninstall all observability Helm releases"
 	@echo "  make kube-rm                - Delete dev manifests (secrets are not touched)"
 	@echo "  make kube-rm-prod           - Delete prod manifests (secrets are not touched)"
 	@echo "  make kube-rm-staging        - Delete staging manifests (secrets are not touched)"
@@ -146,6 +149,72 @@ kube-secrets-apply-staging:
 kube-web-rollout:
 	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_PROD_NAMESPACE)
 
+# ── Observability stack (Helm) ────────────────────────────────────────────────
+OBSERVABILITY_HELM_DIR = ./kube/prod/observability/helm
+OBSERVABILITY_EXTRA_DIR = ./kube/prod/observability/extra
+OBSERVABILITY_DASHBOARDS_DIR = ./kube/prod/observability/dashboards
+MONITORING_NAMESPACE = monitoring
+
+# Add the Helm repos used by the observability stack.
+kube-observability-add-repos:
+	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+	helm repo add grafana https://grafana.github.io/helm-charts
+	helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
+	helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+	helm repo update
+
+# Install or upgrade all observability components via Helm.
+# Pre-requisite: create the Grafana admin secret first:
+#   make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
+kube-observability-install: kube-observability-add-repos
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/00-namespace.yaml
+	@$(MAKE) kube-observability-apply-dashboards
+	helm upgrade --install metrics-server metrics-server/metrics-server \
+		--namespace kube-system \
+		--values $(OBSERVABILITY_HELM_DIR)/values-metrics-server.yaml \
+		--wait
+	helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-kube-prometheus-stack.yaml \
+		--wait
+	helm upgrade --install loki grafana/loki \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-loki.yaml \
+		--wait
+	helm upgrade --install alloy grafana/alloy \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-alloy.yaml \
+		--wait
+	helm upgrade --install headlamp headlamp/headlamp \
+		--namespace $(MONITORING_NAMESPACE) \
+		--values $(OBSERVABILITY_HELM_DIR)/values-headlamp.yaml \
+		--wait
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/02-headlamp-access.yaml
+
+# Provision Grafana dashboards from version-controlled JSON files.
+kube-observability-apply-dashboards:
+	$(KUBECTL) create configmap grafana-dashboard-k8s-views-global \
+		-n $(MONITORING_NAMESPACE) \
+		--from-file=k8s-views-global.json=$(OBSERVABILITY_DASHBOARDS_DIR)/k8s-views-global.json \
+		--dry-run=client -o yaml | \
+		$(KUBECTL) label --local -f - grafana_dashboard=1 -o yaml | \
+		$(KUBECTL) apply -f -
+
+kube-observability-print-headlamp-token:
+	@$(KUBECTL) create token headlamp-admin -n $(MONITORING_NAMESPACE); echo
+
+# Uninstall all observability Helm releases.
+kube-observability-uninstall:
+	helm uninstall metrics-server --namespace kube-system || true
+	helm uninstall kube-prometheus-stack --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall loki --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall alloy --namespace $(MONITORING_NAMESPACE) || true
+	helm uninstall headlamp --namespace $(MONITORING_NAMESPACE) || true
+	$(KUBECTL) delete configmap grafana-dashboard-k8s-views-global -n $(MONITORING_NAMESPACE) --ignore-not-found=true
+	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/02-headlamp-access.yaml || true
+	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml || true
+
 # Install/upgrade Actions Runner Controller (ARC) controller chart.
 kube-arc-install-controller:
 	helm upgrade --install "$(ARC_CONTROLLER_INSTALLATION_NAME)" \
@@ -171,27 +240,34 @@ kube-arc-install-runner-set:
 # One-shot ARC setup for deploy runner scale set.
 kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set
 
-# Edit one decoded secret key interactively and patch it back to the cluster
+# Edit one decoded secret key interactively and patch it back to the cluster.
+# If the secret does not exist yet, create it first using SECRET_TYPE (default: Opaque).
 kube-secret-edit:
 	@set -eu; \
 	if [ -z "$(SECRET_NAME)" ]; then \
 		echo "SECRET_NAME is not set. Available secrets in namespace $(SECRET_NAMESPACE):"; \
 		$(KUBECTL) get secrets -n "$(SECRET_NAMESPACE)" || true; \
-		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	secret_key="$(if $(SECRET_VAR),$(SECRET_VAR),$(SECRET_KEY))"; \
 	if [ -z "$$secret_key" ]; then \
 		echo "SECRET_KEY is not set. Available keys in $(SECRET_NAME):"; \
 		$(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r '.data | keys[]?' || true; \
-		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-edit SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	tmp_file="$$(mktemp /tmp/kube-secret-edit.XXXXXX)"; \
 	patch_file="$$(mktemp /tmp/kube-secret-edit-patch.XXXXXX)"; \
 	cleanup() { rm -f "$$tmp_file" "$$patch_file"; }; \
 	trap cleanup EXIT INT TERM; \
-	current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \
+	if $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" >/dev/null 2>&1; then \
+		current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \
+	else \
+		echo "Secret $(SECRET_NAME) not found in namespace $(SECRET_NAMESPACE); creating it with type $(SECRET_TYPE)."; \
+		$(KUBECTL) create secret generic "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" --type "$(SECRET_TYPE)" --from-literal "$$secret_key=" >/dev/null; \
+		current_value=""; \
+	fi; \
 	if [ -n "$$current_value" ]; then \
 		printf '%s' "$$current_value" | base64 -d > "$$tmp_file"; \
 	fi; \

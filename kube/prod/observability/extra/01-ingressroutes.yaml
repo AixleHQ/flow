@@ -1,0 +1,66 @@
+# Traefik IngressRoutes for the observability UIs.
+# These supplement the Helm charts, which do not generate Traefik CRD resources.
+# Both routes sit behind admin-basic-auth and share the existing Let's Encrypt
+# certificate that already covers grafana.palad.ai and headlamp.palad.ai.
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    palad.ai/runtime-origin: palad
+spec:
+  entryPoints:
+    - adminwebsecure
+  routes:
+    - match: Host(`grafana.palad.ai`)
+      kind: Rule
+      middlewares:
+        - name: admin-basic-auth
+          namespace: palad
+      services:
+        # Service name is {release-name}-grafana; release name is kube-prometheus-stack
+        - name: kube-prometheus-stack-grafana
+          port: 80
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai
+          - grafana.palad.ai
+          - headlamp.palad.ai
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: headlamp
+  namespace: monitoring
+  labels:
+    palad.ai/runtime-origin: palad
+spec:
+  entryPoints:
+    - adminwebsecure
+  routes:
+    - match: Host(`headlamp.palad.ai`)
+      kind: Rule
+      middlewares:
+        - name: admin-basic-auth
+          namespace: palad
+      services:
+        # Service name is {release-name}; release name is headlamp
+        - name: headlamp
+          port: 80
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: palad.ai
+        sans:
+          - www.palad.ai
+          - traefik.palad.ai
+          - temporal.palad.ai
+          - grafana.palad.ai
+          - headlamp.palad.ai

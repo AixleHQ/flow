@@ -4,7 +4,6 @@ metadata:
   name: web
   namespace: palad
 spec:
-  replicas: 1
   minReadySeconds: 5
   strategy:
     type: RollingUpdate
@@ -79,7 +78,6 @@ metadata:
   name: mcp
   namespace: palad
 spec:
-  replicas: 1
   minReadySeconds: 5
   strategy:
     type: RollingUpdate

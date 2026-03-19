@@ -109,6 +109,16 @@ output "palad_ai_temporal_admin_dns_record" {
   value       = try(aws_route53_record.palad_ai_temporal_admin[0].fqdn, null)
 }
 
+output "palad_ai_grafana_admin_dns_record" {
+  description = "Route53 A record for grafana.palad.ai pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.palad_ai_grafana_admin[0].fqdn, null)
+}
+
+output "palad_ai_headlamp_admin_dns_record" {
+  description = "Route53 A record for headlamp.palad.ai pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.palad_ai_headlamp_admin[0].fqdn, null)
+}
+
 # EKS outputs
 output "eks_cluster_name" {
   description = "Name of the EKS cluster"
