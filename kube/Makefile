@@ -14,6 +14,7 @@ SECRET_NAMESPACE ?= $(KUBE_NAMESPACE)
 SECRET_NAME ?=
 SECRET_KEY ?=
 SECRET_VAR ?= $(SECRET_KEY)
+SECRET_TYPE ?= Opaque
 KUBE_EDITOR ?= vim
 KUBECTL = kubectl $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
 ARC_CONTROLLER_INSTALLATION_NAME ?= arc
@@ -33,7 +34,7 @@ kube-help:
 	@echo "  make kube-apply-prod        - Apply prod manifests (secrets are not touched)"
 	@echo "  make kube-secrets-apply     - Apply dev secret manifests explicitly"
 	@echo "  make kube-secrets-apply-prod - Apply prod secret manifests explicitly"
-	@echo "  make kube-secret-set        - Edit one decoded secret key and patch it back (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...])"
+	@echo "  make kube-secret-set        - Edit one decoded secret key and patch it back, creating the secret if missing (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...] [SECRET_TYPE=Opaque])"
 	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
@@ -132,7 +133,7 @@ MONITORING_NAMESPACE = monitoring
 kube-observability-add-repos:
 	helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 	helm repo add grafana https://grafana.github.io/helm-charts
-	helm repo add headlamp-k8s https://headlamp-k8s.github.io/headlamp/
+	helm repo add headlamp https://kubernetes-sigs.github.io/headlamp/
 	helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
 	helm repo update
 
@@ -158,7 +159,7 @@ kube-observability-install: kube-observability-add-repos
 		--namespace $(MONITORING_NAMESPACE) \
 		--values $(OBSERVABILITY_HELM_DIR)/values-alloy.yaml \
 		--wait
-	helm upgrade --install headlamp headlamp-k8s/headlamp \
+	helm upgrade --install headlamp headlamp/headlamp \
 		--namespace $(MONITORING_NAMESPACE) \
 		--values $(OBSERVABILITY_HELM_DIR)/values-headlamp.yaml \
 		--wait
@@ -198,27 +199,34 @@ kube-arc-install-runner-set:
 # One-shot ARC setup for deploy runner scale set.
 kube-arc-install: kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set
 
-# Edit one decoded secret key interactively and patch it back to the cluster
+# Edit one decoded secret key interactively and patch it back to the cluster.
+# If the secret does not exist yet, create it first using SECRET_TYPE (default: Opaque).
 kube-secret-set:
 	@set -eu; \
 	if [ -z "$(SECRET_NAME)" ]; then \
 		echo "SECRET_NAME is not set. Available secrets in namespace $(SECRET_NAMESPACE):"; \
 		$(KUBECTL) get secrets -n "$(SECRET_NAMESPACE)" || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	secret_key="$(if $(SECRET_VAR),$(SECRET_VAR),$(SECRET_KEY))"; \
 	if [ -z "$$secret_key" ]; then \
 		echo "SECRET_KEY is not set. Available keys in $(SECRET_NAME):"; \
 		$(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r '.data | keys[]?' || true; \
-		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [KUBE_EDITOR=vim]"; \
+		echo "Usage: make kube-secret-set SECRET_NAME=<secret-name> SECRET_KEY=<env-var-name> [SECRET_NAMESPACE=$(KUBE_DEV_NAMESPACE)] [SECRET_TYPE=Opaque] [KUBE_EDITOR=vim]"; \
 		exit 1; \
 	fi; \
 	tmp_file="$$(mktemp /tmp/kube-secret-set.XXXXXX)"; \
 	patch_file="$$(mktemp /tmp/kube-secret-set-patch.XXXXXX)"; \
 	cleanup() { rm -f "$$tmp_file" "$$patch_file"; }; \
 	trap cleanup EXIT INT TERM; \
-	current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \
+	if $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" >/dev/null 2>&1; then \
+		current_value="$$( $(KUBECTL) get secret "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" -o json | jq -r --arg key "$$secret_key" '.data[$$key] // empty' )"; \
+	else \
+		echo "Secret $(SECRET_NAME) not found in namespace $(SECRET_NAMESPACE); creating it with type $(SECRET_TYPE)."; \
+		$(KUBECTL) create secret generic "$(SECRET_NAME)" -n "$(SECRET_NAMESPACE)" --type "$(SECRET_TYPE)" --from-literal "$$secret_key=" >/dev/null; \
+		current_value=""; \
+	fi; \
 	if [ -n "$$current_value" ]; then \
 		printf '%s' "$$current_value" | base64 -d > "$$tmp_file"; \
 	fi; \

@@ -32,6 +32,8 @@ grafana:
     # Secret created with: make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
     existingSecret: grafana-admin-secret
     passwordKey: GF_SECURITY_ADMIN_PASSWORD
+  env:
+    GF_SECURITY_ADMIN_USER: admin
   grafana.ini:
     server:
       root_url: "https://grafana.palad.ai"

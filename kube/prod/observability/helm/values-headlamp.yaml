@@ -1,10 +1,13 @@
-# Helm values for headlamp-k8s/headlamp
+# Helm values for headlamp/headlamp
 # Install: make kube-observability-install
-# Docs: https://github.com/headlamp-k8s/headlamp/tree/main/charts/headlamp
+# Docs: https://headlamp.dev/docs/latest/installation/in-cluster/
 
 config:
   inCluster: true
   baseURL: "/"
+  # The current Headlamp chart defaults sessionTTL to 86400 and renders
+  # -session-ttl, but the bundled backend does not define that flag.
+  sessionTTL: null
 
 service:
   port: 80
