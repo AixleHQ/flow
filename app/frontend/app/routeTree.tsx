@@ -93,7 +93,7 @@ export const projectRoute = createRoute({
 // Project tab route
 export const projectTabRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: Routes.frontend.companyProjectTabPath('$projectId', '$tab'),
+  path: '/company/projects/$projectId/$tab',
   validateSearch: (search: Record<string, unknown>) => ({
     assigneeId: search.assigneeId as string | undefined,
     taskType: search.taskType as string | undefined,
