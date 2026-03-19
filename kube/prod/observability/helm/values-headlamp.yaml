@@ -4,7 +4,10 @@
 
 config:
   inCluster: true
-  baseURL: "/"
+  # Headlamp is served at the root of its own hostname, so do not force a
+  # baseURL. Using "/" can produce protocol-relative asset URLs like
+  # //assets/... behind the Helm chart/runtime combination.
+  baseURL: null
   # The current Headlamp chart defaults sessionTTL to 86400 and renders
   # -session-ttl, but the bundled backend does not define that flag.
   sessionTTL: null
@@ -21,36 +24,11 @@ resources:
     cpu: "200m"
     memory: "256Mi"
 
-# Bind the Headlamp ServiceAccount to a ClusterRole that allows full read
-# access plus pod exec/log — required for in-UI log viewing and exec.
+# Keep the chart-managed ClusterRoleBinding for the Headlamp pod's own
+# in-cluster kubeconfig. End-user login is handled separately via a dedicated
+# service account token in kube/prod/observability/extra/02-headlamp-access.yaml.
 clusterRoleBinding:
   create: true
-
-# Extend the default RBAC with exec and log permissions via an extra ClusterRole
-extraDeploy:
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRole
-    metadata:
-      name: headlamp-cluster-reader
-    rules:
-      - apiGroups: ["*"]
-        resources: ["*"]
-        verbs: ["get", "list", "watch"]
-      - apiGroups: [""]
-        resources: ["pods/exec", "pods/log"]
-        verbs: ["create", "get"]
-  - apiVersion: rbac.authorization.k8s.io/v1
-    kind: ClusterRoleBinding
-    metadata:
-      name: headlamp-cluster-reader
-    subjects:
-      - kind: ServiceAccount
-        name: headlamp
-        namespace: monitoring
-    roleRef:
-      kind: ClusterRole
-      name: headlamp-cluster-reader
-      apiGroup: rbac.authorization.k8s.io
 
 # Expose via Traefik IngressRoute defined in extra/01-ingressroutes.yaml
 ingress:

@@ -8,6 +8,8 @@ kind: IngressRoute
 metadata:
   name: grafana
   namespace: monitoring
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure
@@ -37,6 +39,8 @@ kind: IngressRoute
 metadata:
   name: headlamp
   namespace: monitoring
+  labels:
+    palad.ai/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure

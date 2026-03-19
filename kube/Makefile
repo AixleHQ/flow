@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-install kube-observability-uninstall
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-apply-dashboards kube-observability-install kube-observability-print-headlamp-token kube-observability-uninstall
 
 KUBE_CLUSTER_STORAGECLASS = ./kube/00-storageclass-gp3.yaml
 KUBE_DEV_DIR = ./kube/dev
@@ -152,6 +152,7 @@ kube-web-rollout:
 # ── Observability stack (Helm) ────────────────────────────────────────────────
 OBSERVABILITY_HELM_DIR = ./kube/prod/observability/helm
 OBSERVABILITY_EXTRA_DIR = ./kube/prod/observability/extra
+OBSERVABILITY_DASHBOARDS_DIR = ./kube/prod/observability/dashboards
 MONITORING_NAMESPACE = monitoring
 
 # Add the Helm repos used by the observability stack.
@@ -167,6 +168,7 @@ kube-observability-add-repos:
 #   make kube-secret-set SECRET_NAMESPACE=monitoring SECRET_NAME=grafana-admin-secret SECRET_KEY=GF_SECURITY_ADMIN_PASSWORD
 kube-observability-install: kube-observability-add-repos
 	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/00-namespace.yaml
+	@$(MAKE) kube-observability-apply-dashboards
 	helm upgrade --install metrics-server metrics-server/metrics-server \
 		--namespace kube-system \
 		--values $(OBSERVABILITY_HELM_DIR)/values-metrics-server.yaml \
@@ -188,6 +190,19 @@ kube-observability-install: kube-observability-add-repos
 		--values $(OBSERVABILITY_HELM_DIR)/values-headlamp.yaml \
 		--wait
 	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml
+	$(KUBECTL) apply -f $(OBSERVABILITY_EXTRA_DIR)/02-headlamp-access.yaml
+
+# Provision Grafana dashboards from version-controlled JSON files.
+kube-observability-apply-dashboards:
+	$(KUBECTL) create configmap grafana-dashboard-k8s-views-global \
+		-n $(MONITORING_NAMESPACE) \
+		--from-file=k8s-views-global.json=$(OBSERVABILITY_DASHBOARDS_DIR)/k8s-views-global.json \
+		--dry-run=client -o yaml | \
+		$(KUBECTL) label --local -f - grafana_dashboard=1 -o yaml | \
+		$(KUBECTL) apply -f -
+
+kube-observability-print-headlamp-token:
+	@$(KUBECTL) create token headlamp-admin -n $(MONITORING_NAMESPACE); echo
 
 # Uninstall all observability Helm releases.
 kube-observability-uninstall:
@@ -196,6 +211,8 @@ kube-observability-uninstall:
 	helm uninstall loki --namespace $(MONITORING_NAMESPACE) || true
 	helm uninstall alloy --namespace $(MONITORING_NAMESPACE) || true
 	helm uninstall headlamp --namespace $(MONITORING_NAMESPACE) || true
+	$(KUBECTL) delete configmap grafana-dashboard-k8s-views-global -n $(MONITORING_NAMESPACE) --ignore-not-found=true
+	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/02-headlamp-access.yaml || true
 	$(KUBECTL) delete -f $(OBSERVABILITY_EXTRA_DIR)/01-ingressroutes.yaml || true
 
 # Install/upgrade Actions Runner Controller (ARC) controller chart.

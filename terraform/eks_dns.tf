@@ -99,3 +99,29 @@ resource "aws_route53_record" "palad_ai_temporal_admin" {
     evaluate_target_health = true
   }
 }
+
+resource "aws_route53_record" "palad_ai_grafana_admin" {
+  count   = var.create_eks_admin_dns_record ? 1 : 0
+  zone_id = aws_route53_zone.palad_ai.zone_id
+  name    = var.eks_admin_grafana_dns_name
+  type    = "A"
+
+  alias {
+    name                   = data.aws_lb.eks_admin_ingress_nlb[0].dns_name
+    zone_id                = data.aws_lb.eks_admin_ingress_nlb[0].zone_id
+    evaluate_target_health = true
+  }
+}
+
+resource "aws_route53_record" "palad_ai_headlamp_admin" {
+  count   = var.create_eks_admin_dns_record ? 1 : 0
+  zone_id = aws_route53_zone.palad_ai.zone_id
+  name    = var.eks_admin_headlamp_dns_name
+  type    = "A"
+
+  alias {
+    name                   = data.aws_lb.eks_admin_ingress_nlb[0].dns_name
+    zone_id                = data.aws_lb.eks_admin_ingress_nlb[0].zone_id
+    evaluate_target_health = true
+  }
+}

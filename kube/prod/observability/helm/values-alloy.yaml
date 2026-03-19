@@ -4,75 +4,83 @@
 # Migration guide: https://grafana.com/docs/alloy/latest/collect/kubernetes-logs/
 #
 # Resource estimate (palad-eks, t3.large nodes — 2 vCPU / 8 GiB each):
-#   Alloy runs as a DaemonSet (one pod per node). At current cluster size (2-3 nodes):
-#   Steady-state per pod: ~20-50m CPU, ~64-128 MiB RAM
-#   Tail file handles: ~20-40 (one per container log file across all pods on the node)
-#   Network push to Loki: ~10-50 KiB/s per node under normal Rails traffic
+#   Alloy runs as a single Deployment and tails pod logs via the Kubernetes API.
+#   Steady-state: ~50-150m CPU, ~128-256 MiB RAM for a small cluster.
 #   Noisy kube-system health-check and AWS VPC CNI logs are dropped before pushing
 #   to avoid wasting Loki ingest quota on low-value entries.
 
 alloy:
   configMap:
     content: |
-      // Discover all Kubernetes pods
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      // Discover all Kubernetes pods across the cluster.
       discovery.kubernetes "pods" {
         role = "pod"
       }
 
-      // Relabel pod metadata into Loki labels and resolve log file paths
+      // Relabel pod metadata into Loki labels.
       discovery.relabel "pod_logs" {
         targets = discovery.kubernetes.pods.targets
 
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
+          action        = "replace"
           target_label  = "namespace"
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_name"]
+          action        = "replace"
           target_label  = "pod"
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_container_name"]
+          action        = "replace"
           target_label  = "container"
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_label_app"]
+          action        = "replace"
           target_label  = "app"
         }
         rule {
           source_labels = ["__meta_kubernetes_node_name"]
+          action        = "replace"
           target_label  = "node"
         }
-        // Resolve the on-disk log path for each container
         rule {
-          source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
-          separator     = "/"
-          target_label  = "__path__"
-          replacement   = "/var/log/pods/*$1/*.log"
+          source_labels = ["__meta_kubernetes_pod_container_id"]
+          action        = "replace"
+          target_label  = "container_runtime"
+          regex         = `^(\S+):\/\/.+$`
+          replacement   = "$1"
         }
       }
 
-      // Collect log files discovered above
-      loki.source.file "pod_logs" {
+      // Tail pod logs using the Kubernetes API.
+      loki.source.kubernetes "pod_logs" {
         targets    = discovery.relabel.pod_logs.output
-        forward_to = [loki.process.parse_cri.receiver]
+        forward_to = [loki.process.pod_logs.receiver]
       }
 
-      // Parse CRI log format used by containerd / CRI-O, then drop high-volume
-      // low-value lines before sending to Loki to reduce ingest load.
-      loki.process "parse_cri" {
-        // Decode the CRI envelope (timestamp, stream, flags, message)
-        stage.cri {}
+      // Drop high-volume low-value lines before sending to Loki.
+      loki.process "pod_logs" {
+        stage.static_labels {
+          values = {
+            cluster = "palad-eks",
+          }
+        }
 
-        // Drop Kubernetes liveness/readiness probe noise (GET /healthz, /livez, /readyz)
         stage.drop {
-          expression  = "(?i)(GET|HEAD) /(health|healthz|livez|readyz|ping)"
+          expression          = "(?i)(GET|HEAD) /(health|healthz|livez|readyz|ping)"
           drop_counter_reason = "health_probe"
         }
 
-        // Drop AWS VPC CNI and kube-proxy frequent debug lines that add little value
         stage.drop {
-          expression  = "(?i)(aws-cni|ipamd|kube-proxy).*(Successfully|Skipping|already set|no change)"
+          expression          = "(?i)(aws-cni|ipamd|kube-proxy).*(Successfully|Skipping|already set|no change)"
           drop_counter_reason = "aws_cni_noise"
         }
 
@@ -85,21 +93,16 @@ alloy:
           url = "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
         }
       }
-
-# Run as DaemonSet so every node's logs are collected
+# Run as a single Deployment because Kubernetes API log collection does not
+# need node-local filesystem access.
 controller:
-  type: daemonset
-  # Resource limits per node agent — sized for a lightly loaded t3.large
+  type: deployment
+  replicas: 1
+  # Resource limits for cluster-wide pod log collection.
   resources:
     requests:
-      cpu: "20m"
-      memory: "64Mi"
+      cpu: "50m"
+      memory: "128Mi"
     limits:
-      cpu: "200m"
-      memory: "256Mi"
-
-# Mount the pod log directory from the host
-alloy:
-  mounts:
-    varlog: true
-    dockercontainers: false
+      cpu: "300m"
+      memory: "512Mi"
