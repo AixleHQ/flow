@@ -364,6 +364,15 @@ export const boardApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [QueryTag.TaskAsset, QueryTag.Task],
     }),
+
+    getTaskDetails: builder.query<BoardTask, { projectId: number; taskId: number }>({
+      query: ({ projectId, taskId }) => ({
+        url: `${tasksBasePath(projectId)}/${taskId}`,
+        method: 'GET',
+      }),
+      transformResponse: (response: { data: BoardTask }) => response.data,
+      providesTags: [QueryTag.Task],
+    }),
   }),
 });
 
@@ -395,4 +404,5 @@ export const {
   useCreateWorkflowBindingMutation,
   useUpdateWorkflowBindingMutation,
   useDeleteWorkflowBindingMutation,
+  useGetTaskDetailsQuery,
 } = boardApi;

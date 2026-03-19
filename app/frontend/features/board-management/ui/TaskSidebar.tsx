@@ -26,6 +26,7 @@ import { TASK_TYPE_COLORS } from 'entities/board-task';
 import {
   useDeleteTaskMutation,
   useGetBoardQuery,
+  useGetTaskDetailsQuery,
   useUpdateTaskMutation,
   useTriggerWorkflowMutation,
 } from '../api/boardApi';
@@ -87,13 +88,14 @@ const styles = {
 
 export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const { isOpen, activeTaskId, activeTab, close, setTab } = useBoardSidebarStore();
-  const { data } = useGetBoardQuery(projectId);
+  const { data: boardData } = useGetBoardQuery(projectId);
+  const { data: taskDetails } = useGetTaskDetailsQuery({ projectId, taskId: activeTaskId! }, { skip: !activeTaskId });
   const [triggerWorkflow, { isLoading: isTriggering }] = useTriggerWorkflowMutation();
   const [updateTask] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
 
-  const task = data?.tasks.find((t) => t.id === activeTaskId);
-  const column = data?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
+  const task = taskDetails ?? boardData?.tasks.find((t) => t.id === activeTaskId);
+  const column = boardData?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
   const hasActiveRun = task?.recentWorkflowRuns.some((r) => ['pending', 'running', 'paused'].includes(r.state));
   const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !hasActiveRun;
 
