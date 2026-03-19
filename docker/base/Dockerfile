@@ -61,6 +61,17 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # -----------------------------------------------------------------------------
 RUN python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==10.2.4
 
+# Pre-generate MITM CA so every container starts with certs already in place
+# (eliminates the race between mitmdump startup and agent HTTPS requests).
+RUN mkdir -p /opt/mitm/ca && \
+    mitmdump --listen-port 0 -q & PID=$! && sleep 1 && kill $PID 2>/dev/null; \
+    cp /root/.mitmproxy/mitmproxy-ca*.pem /root/.mitmproxy/mitmproxy-ca*.p12 \
+       /root/.mitmproxy/mitmproxy-dhparam.pem /opt/mitm/ca/ && \
+    cat /etc/ssl/certs/ca-certificates.crt /opt/mitm/ca/mitmproxy-ca-cert.pem \
+        > /opt/mitm/ca/combined-ca-bundle.pem && \
+    chmod -R 644 /opt/mitm/ca/* && \
+    rm -rf /root/.mitmproxy
+
 # Create fd symlink (fd-find installs as fdfind on Debian)
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
 
