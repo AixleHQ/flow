@@ -94,6 +94,13 @@ export const projectRoute = createRoute({
 export const projectTabRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.companyProjectTabPath('$projectId', '$tab'),
+  validateSearch: (search: Record<string, unknown>) => ({
+    assigneeId: search.assigneeId as string | undefined,
+    taskType: search.taskType as string | undefined,
+    priority: search.priority as string | undefined,
+    tags: search.tags as string | undefined,
+    search: search.search as string | undefined,
+  }),
   component: ProjectPage,
 });
 

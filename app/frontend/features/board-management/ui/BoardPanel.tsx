@@ -27,6 +27,7 @@ import {
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BoardTask } from 'entities/board-task';
@@ -102,9 +103,24 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const { data: collaborators } = useGetProjectMembersQuery(projectId);
   const { data: currentUser } = useGetCurrentUserQuery();
 
+  const urlSearch = useSearch({ strict: false }) as {
+    assigneeId?: string;
+    taskType?: string;
+    priority?: string;
+    tags?: string;
+    search?: string;
+  };
+  const navigate = useNavigate();
+
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [creatingInColumn, setCreatingInColumn] = useState<number | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>({});
+  const [filters, setFilters] = useState<BoardFilters>(() => ({
+    assigneeId: urlSearch.assigneeId,
+    taskType: urlSearch.taskType,
+    priority: urlSearch.priority,
+    tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
+    search: urlSearch.search,
+  }));
   const boardId = data?.board.id;
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
@@ -221,6 +237,30 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   }, [data]);
 
+  const handleFilterChange = useCallback(
+    (newFilters: BoardFilters) => {
+      setFilters(newFilters);
+      void navigate({
+        search: (prev) => {
+          const next = { ...(prev as Record<string, unknown>) };
+          delete next.assigneeId;
+          delete next.taskType;
+          delete next.priority;
+          delete next.tags;
+          delete next.search;
+          if (newFilters.assigneeId) next.assigneeId = newFilters.assigneeId;
+          if (newFilters.taskType) next.taskType = newFilters.taskType;
+          if (newFilters.priority) next.priority = newFilters.priority;
+          if (newFilters.tags?.length) next.tags = newFilters.tags.join(',');
+          if (newFilters.search) next.search = newFilters.search;
+          return next;
+        },
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
   const handleCreateTask = useCallback(
     async (taskData: Partial<BoardTask>) => {
       await createTask({ projectId, boardTask: taskData });
@@ -251,7 +291,7 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
         <Box sx={{ flex: 1 }}>
           <BoardFilterBar
             filters={filters}
-            onChange={setFilters}
+            onChange={handleFilterChange}
             projectId={projectId}
             members={(collaborators?.items || []).map((m) => ({ id: m.id, name: m.name || m.email }))}
             currentUserId={currentUser?.id}
