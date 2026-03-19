@@ -40,8 +40,17 @@ mkdir -p "$(dirname "${MITM_LOG_PATH}")" 2>/dev/null || true
 
 echo -e "${CYAN:-}🛡️  Starting MITM proxy on port ${MITM_PROXY_PORT}...${NC:-}"
 
-# Ensure mitmproxy config directory exists (may be on tmpfs)
-mkdir -p "${HOME:-/root}/.mitmproxy" 2>/dev/null || true
+# Seed $HOME/.mitmproxy with the pre-generated CA from the Docker image.
+# This avoids the race between mitmdump generating a CA on first start and
+# child processes making HTTPS requests before the cert exists.
+MITMPROXY_DIR="${HOME:-/root}/.mitmproxy"
+mkdir -p "$MITMPROXY_DIR" 2>/dev/null || true
+cp /opt/mitm/ca/* "$MITMPROXY_DIR/" 2>/dev/null || true
+
+# TLS trust: point Node.js and OpenSSL at the combined bundle
+# (system CAs + mitmproxy CA, built at image build time).
+export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
+export SSL_CERT_FILE="$MITMPROXY_DIR/combined-ca-bundle.pem"
 
 # Set proxy environment variables for all child processes
 HTTP_PROXY="http://localhost:${MITM_PROXY_PORT}"
@@ -55,23 +64,16 @@ mitmdump --listen-host 0.0.0.0 --listen-port "${MITM_PROXY_PORT}" \
     -q -s /opt/mitm/mitm_logger.py &
 MITM_PID=$!
 
-# Wait for CA certificate to be generated (needed for HTTPS interception)
-for _ in {1..20}; do
-    if [ -f "$MITM_CA_CERT" ]; then
-        export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
-
-        COMBINED_CERTS="${HOME:-/root}/.mitmproxy/combined-ca-bundle.pem"
-        cat /etc/ssl/certs/ca-certificates.crt "$MITM_CA_CERT" > "$COMBINED_CERTS" 2>/dev/null || \
-        cat "$MITM_CA_CERT" > "$COMBINED_CERTS"
-        export SSL_CERT_FILE="$COMBINED_CERTS"
+# Wait until mitmdump is accepting connections (up to 5 s)
+for _ in {1..50}; do
+    if bash -c "echo >/dev/tcp/127.0.0.1/${MITM_PROXY_PORT}" 2>/dev/null; then
         break
     fi
     sleep 0.1
 done
 
 # HTTP/2 logger: patches http2.connect() to log request headers
-# This captures traffic that bypasses HTTPS_PROXY (e.g. AgentService/Run)
-# --use-system-ca makes Node 22+ trust system-installed CA certs (incl. mitmproxy CA)
+# --use-system-ca makes Node 22+ trust CAs from SSL_CERT_FILE
 export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-system-ca --require /opt/mitm/http2-logger.js"
 
 # Verify startup
