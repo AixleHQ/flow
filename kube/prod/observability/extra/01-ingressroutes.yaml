@@ -47,9 +47,9 @@ spec:
   routes:
     - match: Host(`headlamp.palad.ai`)
       kind: Rule
-      middlewares:
-        - name: admin-basic-auth
-          namespace: palad
+      # middlewares:
+      #   - name: admin-basic-auth
+      #     namespace: palad
       services:
         # Service name is {release-name}; release name is headlamp
         - name: headlamp
