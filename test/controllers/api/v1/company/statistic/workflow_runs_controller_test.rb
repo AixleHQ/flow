@@ -7,7 +7,7 @@ class Api::V1::Company::Statistic::WorkflowRunsControllerTest < ActionController
     @company = create(:company, email_domain: "testcompany.com")
     @admin = create(:user, :admin, company: @company)
     @employee = create(:user, :employee, company: @company)
-    @project = create(:project, company: @company)
+    @project = create(:project, company: @company, owner: @admin)
     @other_company = create(:company, email_domain: "other.com")
     @other_admin = create(:user, :admin, company: @other_company)
   end
@@ -66,7 +66,7 @@ class Api::V1::Company::Statistic::WorkflowRunsControllerTest < ActionController
     create(:workflow_run, :completed, project: @project, user: @admin)
     create(:workflow_run, :running, project: @project, user: @admin)
 
-    other_project = create(:project, company: @other_company)
+    other_project = create(:project, company: @other_company, owner: @other_admin)
     create(:workflow_run, :completed, project: other_project, user: @other_admin)
 
     sign_in @admin
