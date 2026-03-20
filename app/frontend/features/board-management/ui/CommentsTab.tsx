@@ -24,7 +24,15 @@ const styles = {
   body: { fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: 1.5 },
   tags: { display: 'flex', gap: 0.5, mt: 0.75 },
   tagChip: { height: 18, fontSize: '10px' },
-  form: { display: 'flex', flexDirection: 'column', gap: 1, borderTop: '1px solid', borderColor: 'divider', pt: 2 },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    pb: 2,
+    mb: 2,
+  },
 } satisfies Record<string, SxProps<Theme>>;
 
 const AUTHOR_TYPES = ['all', 'human', 'agent', 'system'] as const;
@@ -76,32 +84,6 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
         />
       </Box>
 
-      <Box sx={styles.commentList}>
-        {comments.map((comment: TaskComment) => (
-          <Box key={comment.id} sx={styles.comment}>
-            <Box sx={styles.commentHeader}>
-              <Avatar sx={{ width: 22, height: 22, fontSize: '10px' }}>{comment.authorName?.[0] || 'U'}</Avatar>
-              <Typography sx={styles.authorName}>{comment.authorName}</Typography>
-              <Chip label={comment.authorType} size="small" sx={styles.authorBadge} />
-              <Typography sx={styles.timestamp}>{new Date(comment.createdAt).toLocaleString()}</Typography>
-            </Box>
-            <Typography sx={styles.body}>{comment.body}</Typography>
-            {comment.tags.length > 0 && (
-              <Box sx={styles.tags}>
-                {comment.tags.map((tag) => (
-                  <Chip key={tag} label={tag} size="small" variant="outlined" sx={styles.tagChip} />
-                ))}
-              </Box>
-            )}
-          </Box>
-        ))}
-        {comments.length === 0 && (
-          <Typography sx={{ color: 'text.disabled', fontSize: '13px', textAlign: 'center', py: 3 }}>
-            No comments yet
-          </Typography>
-        )}
-      </Box>
-
       <Box sx={styles.form}>
         <TextField
           multiline
@@ -133,6 +115,32 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
         >
           Send
         </Button>
+      </Box>
+
+      <Box sx={styles.commentList}>
+        {comments.map((comment: TaskComment) => (
+          <Box key={comment.id} sx={styles.comment}>
+            <Box sx={styles.commentHeader}>
+              <Avatar sx={{ width: 22, height: 22, fontSize: '10px' }}>{comment.authorName?.[0] || 'U'}</Avatar>
+              <Typography sx={styles.authorName}>{comment.authorName}</Typography>
+              <Chip label={comment.authorType} size="small" sx={styles.authorBadge} />
+              <Typography sx={styles.timestamp}>{new Date(comment.createdAt).toLocaleString()}</Typography>
+            </Box>
+            <Typography sx={styles.body}>{comment.body}</Typography>
+            {comment.tags.length > 0 && (
+              <Box sx={styles.tags}>
+                {comment.tags.map((tag) => (
+                  <Chip key={tag} label={tag} size="small" variant="outlined" sx={styles.tagChip} />
+                ))}
+              </Box>
+            )}
+          </Box>
+        ))}
+        {comments.length === 0 && (
+          <Typography sx={{ color: 'text.disabled', fontSize: '13px', textAlign: 'center', py: 3 }}>
+            No comments yet
+          </Typography>
+        )}
       </Box>
     </Box>
   );
