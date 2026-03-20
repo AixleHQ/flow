@@ -142,14 +142,4 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal session, step_run.reload.terminal_session
     assert_not_nil session.temporal_workflow_id
   end
-
-  private
-
-  def mock_temporal_start
-    TemporalService.stubs(:start_workflow).returns({
-      ok: true,
-      workflow_id: "temporal-wf-#{SecureRandom.hex(4)}",
-      run_id: "temporal-run-#{SecureRandom.hex(4)}"
-    })
-  end
 end
