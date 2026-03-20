@@ -42,5 +42,4 @@ class SubStepTest < ActiveSupport::TestCase
     sub_step = create(:sub_step, step: @step, position: 1)
     assert sub_step.required
   end
-
 end
