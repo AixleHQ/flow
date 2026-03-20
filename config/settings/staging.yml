@@ -1,0 +1,6 @@
+agents:
+  images:
+    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'ghcr.io/palad-ai/palad-app-claude-code' %>
+    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'ghcr.io/palad-ai/palad-app-cursor-cli' %>
+    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'ghcr.io/palad-ai/palad-app-codex' %>
+    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/palad-ai/palad-app-gemini-cli' %>

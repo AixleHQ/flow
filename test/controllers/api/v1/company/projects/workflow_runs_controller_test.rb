@@ -108,5 +108,4 @@ class Api::V1::Company::Projects::WorkflowRunsControllerTest < ActionController:
     data = body["data"] || body["workflow_run"] || body
     assert_equal "non_interactive", data["mode"]
   end
-
 end

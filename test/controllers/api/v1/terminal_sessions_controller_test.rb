@@ -275,7 +275,6 @@ module Api
 
         assert_response :not_found
       end
-
     end
   end
 end
