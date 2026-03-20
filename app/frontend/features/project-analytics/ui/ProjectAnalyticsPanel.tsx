@@ -247,10 +247,11 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
   const chartData = generateDailyData(days);
   const tickInterval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
 
-  const { data: summary, isLoading, isError } = useGetProjectAnalyticsQuery(
-    { projectId: projectId!, scope, period },
-    { skip: !projectId }
-  );
+  const {
+    data: summary,
+    isLoading,
+    isError,
+  } = useGetProjectAnalyticsQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
   const statBlocks = summary
     ? [
