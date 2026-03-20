@@ -2,6 +2,7 @@
 
 class SubStep < ApplicationRecord
   belongs_to :step
+  has_many :sub_step_runs
 
   validates :name, presence: true
   validates :position, presence: true
@@ -17,7 +18,11 @@ class SubStep < ApplicationRecord
   end
 
   def destroy
-    soft_delete!
-    self
+    if sub_step_runs.exists?
+      soft_delete!
+      self
+    else
+      super
+    end
   end
 end

@@ -56,11 +56,20 @@ class SubStepTest < ActiveSupport::TestCase
     assert sub_step.deleted?
   end
 
-  test "destroy performs soft delete instead of hard delete" do
+  test "destroy performs soft delete when sub_step_runs exist" do
     sub_step = create(:sub_step, step: @step, position: 1)
+    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @project.owner)
+    step_run = create(:step_run, workflow_run: workflow_run, step: @step)
+    create(:sub_step_run, sub_step: sub_step, step_run: step_run)
     sub_step.destroy
     assert_not_nil sub_step.reload.deleted_at
     assert SubStep.unscoped.exists?(sub_step.id)
+  end
+
+  test "destroy performs hard delete when no sub_step_runs exist" do
+    sub_step = create(:sub_step, step: @step, position: 1)
+    sub_step.destroy
+    assert_not SubStep.unscoped.exists?(sub_step.id)
   end
 
   test "default scope excludes soft-deleted records" do
@@ -73,7 +82,8 @@ class SubStepTest < ActiveSupport::TestCase
 
   test "destroy does not raise FK violation when sub_step_runs exist" do
     sub_step = create(:sub_step, step: @step, position: 1)
-    step_run = create(:step_run, step: @step)
+    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @project.owner)
+    step_run = create(:step_run, workflow_run: workflow_run, step: @step)
     create(:sub_step_run, sub_step: sub_step, step_run: step_run)
     assert_nothing_raised { sub_step.destroy }
     assert_not_nil sub_step.reload.deleted_at
