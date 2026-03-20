@@ -41,7 +41,10 @@ module StubSupport
     c.define_singleton_method(:remove) { |*| true }
     c.define_singleton_method(:refresh!) { |*| self }
     c.define_singleton_method(:json) { { "State" => { "Running" => true, "Status" => "running" } } }
-    c.define_singleton_method(:archive) { |*| "" }
+    c.define_singleton_method(:archive) do |path|
+      content = captured_fs[path]
+      content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
+    end
     c.define_singleton_method(:archive_in) { |*| true }
     c.define_singleton_method(:archive_out) { |*| "" }
     c.define_singleton_method(:logs) { |*, **| "" }
@@ -73,6 +76,12 @@ module StubSupport
       StubSupport.route_exec_k8s(cmd, captured_fs)
     end
     ContainerRuntime::KubernetesRuntime.define_method(:wait_for_traefik_route) { |_| true }
+
+    @_k8s_original_copy_from = ContainerRuntime::KubernetesRuntime.instance_method(:copy_from)
+    ContainerRuntime::KubernetesRuntime.define_method(:copy_from) do |_id, path|
+      content = captured_fs[path]
+      content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
+    end
   end
 
   def stub_k8s_core_client
@@ -129,12 +138,26 @@ module StubSupport
         nil
       end
     end
+    if @_k8s_original_copy_from
+      ContainerRuntime::KubernetesRuntime.define_method(:copy_from, @_k8s_original_copy_from)
+      @_k8s_original_copy_from = nil
+    end
     restore_runtime_timeouts
   end
 
   # ===========================================================================
   # Exec routing — maps commands to virtual filesystem
   # ===========================================================================
+
+  def self.build_tar_for_path(path, content)
+    normalized = path.to_s.sub(%r{\A/}, "")
+    io = StringIO.new("".b)
+    Gem::Package::TarWriter.new(io) do |tar|
+      data = content.respond_to?(:b) ? content.b : content.to_s.b
+      tar.add_file_simple(normalized, 0o644, data.bytesize) { |entry_io| entry_io.write(data) }
+    end
+    io.string
+  end
 
   def self.route_exec_docker(cmd, fs)
     stdout = resolve_command(cmd, fs)
