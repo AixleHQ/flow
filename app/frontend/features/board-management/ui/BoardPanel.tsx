@@ -27,11 +27,13 @@ import {
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { useNavigate, useSearch } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { BoardTask } from 'entities/board-task';
 import { TaskCard } from 'entities/board-task';
 import { useGetCurrentUserQuery } from 'entities/user';
+import { Routes } from 'shared/routes';
 
 import {
   useGetBoardQuery,
@@ -102,9 +104,26 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const { data: collaborators } = useGetProjectMembersQuery(projectId);
   const { data: currentUser } = useGetCurrentUserQuery();
 
+  const urlSearch = useSearch({ strict: false }) as {
+    assigneeId?: string;
+    taskType?: string;
+    priority?: string;
+    tags?: string;
+    search?: string;
+  };
+  const navigate = useNavigate({
+    from: Routes.frontend.companyProjectTabPath('$projectId', '$tab') as '/company/projects/$projectId/$tab',
+  });
+
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [creatingInColumn, setCreatingInColumn] = useState<number | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>({});
+  const [filters, setFilters] = useState<BoardFilters>(() => ({
+    assigneeId: urlSearch.assigneeId,
+    taskType: urlSearch.taskType,
+    priority: urlSearch.priority,
+    tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
+    search: urlSearch.search,
+  }));
   const boardId = data?.board.id;
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
@@ -221,6 +240,24 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   }, [data]);
 
+  const handleFilterChange = useCallback(
+    (newFilters: BoardFilters) => {
+      setFilters(newFilters);
+      void navigate({
+        search: (prev) => ({
+          ...prev,
+          assigneeId: newFilters.assigneeId,
+          taskType: newFilters.taskType,
+          priority: newFilters.priority,
+          tags: newFilters.tags?.length ? newFilters.tags.join(',') : undefined,
+          search: newFilters.search,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
   const handleCreateTask = useCallback(
     async (taskData: Partial<BoardTask>) => {
       await createTask({ projectId, boardTask: taskData });
@@ -251,7 +288,7 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
         <Box sx={{ flex: 1 }}>
           <BoardFilterBar
             filters={filters}
-            onChange={setFilters}
+            onChange={handleFilterChange}
             projectId={projectId}
             members={(collaborators?.items || []).map((m) => ({ id: m.id, name: m.name || m.email }))}
             currentUserId={currentUser?.id}
