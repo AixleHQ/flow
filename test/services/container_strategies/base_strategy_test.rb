@@ -293,6 +293,19 @@ module ContainerStrategies
       assert_nil content
     end
 
+    test "read_file_from_container returns binary content as binary string" do
+      strategy = BaseStrategy.new
+      binary_data = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
+
+      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/image.png" ])
+        .returns([ [ binary_data ], [], 0 ])
+
+      content = strategy.send(:read_file_from_container, "container-ref", "/path/to/image.png")
+
+      assert_equal Encoding::ASCII_8BIT, content.encoding
+      assert_equal binary_data, content
+    end
+
     test "read_file_from_container handles errors" do
       strategy = BaseStrategy.new
 

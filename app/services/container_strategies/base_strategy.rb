@@ -171,7 +171,7 @@ module ContainerStrategies
       result = runtime.exec(container, [ "cat", path ])
       return nil unless result[2].zero?
 
-      result[0].join
+      result[0].map(&:b).join
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
       nil
