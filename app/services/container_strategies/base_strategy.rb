@@ -168,7 +168,7 @@ module ContainerStrategies
     end
 
     def read_file_from_container(container, path)
-      result = runtime.exec(container, [ "cat", path ])
+      result = runtime.exec(container, [ "cat", path ], binary: true)
       return nil unless result[2].zero?
 
       result[0].map(&:b).join

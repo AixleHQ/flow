@@ -274,7 +274,7 @@ module ContainerStrategies
     test "read_file_from_container returns file content" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/test.txt" ])
+      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/test.txt" ], binary: true)
         .returns([ [ "Hello, World!" ], [], 0 ])
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/test.txt")
@@ -285,7 +285,7 @@ module ContainerStrategies
     test "read_file_from_container returns nil for missing file" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/missing/file" ])
+      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/missing/file" ], binary: true)
         .returns([ [], [ "No such file" ], 1 ])
 
       content = strategy.send(:read_file_from_container, "container-ref", "/missing/file")
@@ -297,7 +297,7 @@ module ContainerStrategies
       strategy = BaseStrategy.new
       binary_data = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/image.png" ])
+      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/image.png" ], binary: true)
         .returns([ [ binary_data ], [], 0 ])
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/image.png")
