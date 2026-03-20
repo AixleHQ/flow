@@ -187,10 +187,30 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
 
   const workflowStatus = workflowRunStats
     ? [
-        { label: 'Completed', value: workflowRunStats.completed, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Completed'] },
-        { label: 'In Progress', value: workflowRunStats.inProgress, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['In Progress'] },
-        { label: 'Failed', value: workflowRunStats.failed, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Failed'] },
-        { label: 'Queued', value: workflowRunStats.queued, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Queued'] },
+        {
+          label: 'Completed',
+          value: workflowRunStats.completed,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Completed'],
+        },
+        {
+          label: 'In Progress',
+          value: workflowRunStats.inProgress,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['In Progress'],
+        },
+        {
+          label: 'Failed',
+          value: workflowRunStats.failed,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Failed'],
+        },
+        {
+          label: 'Queued',
+          value: workflowRunStats.queued,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Queued'],
+        },
       ]
     : [];
 
