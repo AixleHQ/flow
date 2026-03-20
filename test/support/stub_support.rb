@@ -77,6 +77,7 @@ module StubSupport
     end
     ContainerRuntime::KubernetesRuntime.define_method(:wait_for_traefik_route) { |_| true }
 
+    @_k8s_original_copy_from = ContainerRuntime::KubernetesRuntime.instance_method(:copy_from)
     ContainerRuntime::KubernetesRuntime.define_method(:copy_from) do |_id, path|
       content = captured_fs[path]
       content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
@@ -126,7 +127,7 @@ module StubSupport
   # ===========================================================================
 
   RUNTIME_METHOD_OVERRIDES = {
-    ContainerRuntime::KubernetesRuntime => [ :exec_via_websocket, :wait_for_traefik_route, :copy_from ]
+    ContainerRuntime::KubernetesRuntime => [ :exec_via_websocket, :wait_for_traefik_route ]
   }.freeze
 
   def cleanup_runtime_overrides
@@ -136,6 +137,10 @@ module StubSupport
       rescue NameError
         nil
       end
+    end
+    if @_k8s_original_copy_from
+      ContainerRuntime::KubernetesRuntime.define_method(:copy_from, @_k8s_original_copy_from)
+      @_k8s_original_copy_from = nil
     end
     restore_runtime_timeouts
   end
