@@ -1,10 +1,9 @@
 import AddIcon from '@mui/icons-material/Add';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import { Autocomplete, Box, Button, Chip, Link, MenuItem, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCallback, useMemo, useState } from 'react';
-
-import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 
 import type { BoardTask } from 'entities/board-task';
 import { TASK_TYPE_COLORS } from 'entities/board-task';

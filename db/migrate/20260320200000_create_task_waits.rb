@@ -14,6 +14,6 @@ class CreateTaskWaits < ActiveRecord::Migration[7.2]
     end
 
     add_index :task_waits, :status
-    add_index :task_waits, [:wait_type, :status]
+    add_index :task_waits, [ :wait_type, :status ]
   end
 end

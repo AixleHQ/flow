@@ -41,6 +41,6 @@ class Webhooks::GithubController < ActionController::API
     return head :unauthorized if sig_header.blank?
 
     expected = "sha256=#{OpenSSL::HMAC.hexdigest('SHA256', secret, request.raw_post)}"
-    return head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(sig_header, expected)
+    head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(sig_header, expected)
   end
 end
