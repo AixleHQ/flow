@@ -154,14 +154,11 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
   const sensors = useSensors(mouseSensor, touchSensor);
 
-  const collisionDetection = useCallback<CollisionDetection>(
-    (args) => {
-      const pointerCollisions = pointerWithin(args);
-      if (pointerCollisions.length > 0) return pointerCollisions;
-      return closestCorners(args);
-    },
-    [],
-  );
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerCollisions = pointerWithin(args);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return closestCorners(args);
+  }, []);
 
   useBoardChannel({ boardId: data?.board.id ?? null, projectId });
 
