@@ -143,6 +143,7 @@ Rails.application.routes.draw do
                 resources :activities, controller: "board/task/activities", only: %i[index]
               end
             end
+            resource :analytics, only: %i[show], controller: "analytics"
             resources :terminal_sessions, only: %i[index show]
             resources :workflow_runs, only: %i[index show create] do
               member do

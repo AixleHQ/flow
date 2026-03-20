@@ -14,6 +14,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  Skeleton,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -35,6 +36,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+
+import type { AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
+import { useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
 
 // ─── Static Data Generators ─────────────────────────────────────────────────
 
@@ -149,10 +153,6 @@ const styles = {
     lineHeight: 1.1,
     marginBottom: '4px',
   },
-  statChange: {
-    fontSize: '12px',
-    color: 'success.main',
-  },
   card: {
     padding: '24px',
     backgroundColor: 'background.paper',
@@ -190,18 +190,18 @@ const styles = {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-const ScopeSelector = ({ scope, onScope }: { scope: string; onScope: (v: string) => void }) => (
+const ScopeSelector = ({ scope, onScope }: { scope: AnalyticsScope; onScope: (v: AnalyticsScope) => void }) => (
   <ToggleButtonGroup
     value={scope}
     exclusive
-    onChange={(_, v) => v && onScope(v)}
+    onChange={(_, v) => v && onScope(v as AnalyticsScope)}
     size="small"
     sx={{ '& .MuiToggleButton-root': { textTransform: 'none', fontSize: '12px', px: 2 } }}
   >
     {[
-      { value: 'user', icon: <PersonIcon sx={{ fontSize: 14 }} />, label: 'User' },
-      { value: 'project', icon: <FolderIcon sx={{ fontSize: 14 }} />, label: 'Project' },
-      { value: 'company', icon: <BusinessIcon sx={{ fontSize: 14 }} />, label: 'Company' },
+      { value: 'user' as const, icon: <PersonIcon sx={{ fontSize: 14 }} />, label: 'User' },
+      { value: 'project' as const, icon: <FolderIcon sx={{ fontSize: 14 }} />, label: 'Project' },
+      { value: 'company' as const, icon: <BusinessIcon sx={{ fontSize: 14 }} />, label: 'Company' },
     ].map((item) => (
       <ToggleButton key={item.value} value={item.value}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -221,26 +221,66 @@ const chartTooltipStyle = {
   color: '#fff',
 };
 
+function formatCostCents(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1000) return `$${(dollars / 1000).toFixed(1)}k`;
+  return `$${dollars.toFixed(2)}`;
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}k`;
+  return tokens.toLocaleString();
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 interface ProjectAnalyticsPanelProps {
   projectId?: number;
 }
 
-const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelProps) => {
-  void _projectId; // placeholder — projectId will be used for API calls when this moves out of stub phase
-  const [period, setPeriod] = useState<'7d' | '30d' | '90d' | '1y'>('30d');
-  const [scope, setScope] = useState('project');
+const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
+  const [period, setPeriod] = useState<AnalyticsPeriod>('30d');
+  const [scope, setScope] = useState<AnalyticsScope>('project');
 
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-  const data = generateDailyData(days);
-
+  const chartData = generateDailyData(days);
   const tickInterval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
 
-  const totalSessions = AGENT_TYPE_BREAKDOWN.reduce((s, a) => s + a.sessions, 0);
-  const totalCost = data.reduce((s, d) => s + d.cost, 0);
-  const totalTokens = data.reduce((s, d) => s + d.tokens, 0);
-  const avgSessionCost = totalCost / totalSessions;
+  const { data: summary, isLoading, isError } = useGetProjectAnalyticsQuery(
+    { projectId: projectId!, scope, period },
+    { skip: !projectId }
+  );
+
+  const statBlocks = summary
+    ? [
+        {
+          label: 'Total Sessions',
+          value: summary.totalSessions.toLocaleString(),
+          icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
+        },
+        {
+          label: 'Total Cost',
+          value: formatCostCents(summary.totalCostCents),
+          icon: <AttachMoneyIcon sx={{ fontSize: 14 }} />,
+        },
+        {
+          label: 'Total Tokens',
+          value: formatTokens(summary.totalTokens),
+          icon: <TokenIcon sx={{ fontSize: 14 }} />,
+        },
+        {
+          label: 'Avg Cost / Session',
+          value: formatCostCents(summary.avgCostCentsPerSession),
+          icon: <SmartToyIcon sx={{ fontSize: 14 }} />,
+        },
+        {
+          label: 'Workflows Run',
+          value: summary.workflowsRun.toLocaleString(),
+          icon: <AccountTreeIcon sx={{ fontSize: 14 }} />,
+        },
+      ]
+    : [];
 
   return (
     <Box sx={styles.container}>
@@ -248,9 +288,7 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
       <Box sx={styles.pageHeader}>
         <Box>
           <Typography sx={styles.pageTitle}>Analytics</Typography>
-          <Typography sx={styles.pageSubtitle}>
-            Agent activity, costs, and session insights — static demo data
-          </Typography>
+          <Typography sx={styles.pageSubtitle}>Agent activity, costs, and session insights</Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <ScopeSelector scope={scope} onScope={setScope} />
@@ -259,7 +297,7 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
             <Select
               value={period}
               label="Period"
-              onChange={(e) => setPeriod(e.target.value as typeof period)}
+              onChange={(e) => setPeriod(e.target.value as AnalyticsPeriod)}
               sx={{ backgroundColor: 'background.paper' }}
             >
               <MenuItem value="7d">Last 7 days</MenuItem>
@@ -272,55 +310,28 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
       </Box>
 
       {/* Summary Stats */}
+      {isError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load analytics. Please refresh to try again.
+        </Typography>
+      )}
       <Box sx={styles.statsGrid}>
-        {[
-          {
-            label: 'Total Sessions',
-            value: totalSessions.toLocaleString(),
-            change: '+14% vs prev',
-            icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
-          },
-          {
-            label: 'Total Cost',
-            value: `$${totalCost.toFixed(0)}`,
-            change: '+9% vs prev',
-            icon: <AttachMoneyIcon sx={{ fontSize: 14 }} />,
-          },
-          {
-            label: 'Total Tokens',
-            value: (totalTokens / 1_000_000).toFixed(1) + 'M',
-            change: '+11% vs prev',
-            icon: <TokenIcon sx={{ fontSize: 14 }} />,
-          },
-          {
-            label: 'Avg Cost / Session',
-            value: `$${avgSessionCost.toFixed(2)}`,
-            change: '−3% vs prev',
-            icon: <SmartToyIcon sx={{ fontSize: 14 }} />,
-          },
-          {
-            label: 'Workflows Run',
-            value: '847',
-            change: '+22% vs prev',
-            icon: <AccountTreeIcon sx={{ fontSize: 14 }} />,
-          },
-        ].map((s) => (
-          <Card key={s.label} sx={styles.statCard} elevation={0}>
-            <Typography sx={styles.statLabel}>
-              {s.icon}
-              {s.label}
-            </Typography>
-            <Typography sx={styles.statValue}>{s.value}</Typography>
-            <Typography
-              sx={{
-                fontSize: '12px',
-                color: s.change.startsWith('−') ? 'success.main' : 'success.main',
-              }}
-            >
-              {s.change}
-            </Typography>
-          </Card>
-        ))}
+        {isLoading || !projectId
+          ? Array.from({ length: 5 }).map((_, i) => (
+              <Card key={i} sx={styles.statCard} elevation={0}>
+                <Skeleton variant="text" width={100} height={16} sx={{ marginBottom: '8px' }} />
+                <Skeleton variant="text" width={80} height={36} />
+              </Card>
+            ))
+          : statBlocks.map((s) => (
+              <Card key={s.label} sx={styles.statCard} elevation={0}>
+                <Typography sx={styles.statLabel}>
+                  {s.icon}
+                  {s.label}
+                </Typography>
+                <Typography sx={styles.statValue}>{s.value}</Typography>
+              </Card>
+            ))}
       </Box>
 
       {/* ── Agent Activity ─────────────────────────────────────────── */}
@@ -330,7 +341,7 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Sessions per Agent — Trend</Typography>
           <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
               <defs>
                 {[
                   { id: 'sonnet', color: '#2196f3' },
@@ -431,7 +442,7 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Daily Cost</Typography>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="grad-cost" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ff9800" stopOpacity={0.3} />
@@ -459,7 +470,7 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Daily Token Consumption</Typography>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="grad-tokens" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#00bcd4" stopOpacity={0.3} />
@@ -554,35 +565,6 @@ const ProjectAnalyticsPanel = ({ projectId: _projectId }: ProjectAnalyticsPanelP
           </BarChart>
         </ResponsiveContainer>
       </Card>
-
-      {/* ── Aggregation Summary ───────────────────────────────────── */}
-      <Typography sx={styles.sectionTitle}>Aggregation Summary</Typography>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '16px',
-        }}
-      >
-        {[
-          { label: 'Total Sessions', value: '1,284', sublabel: 'all time' },
-          { label: 'Avg Sessions / Day', value: '42.8', sublabel: 'last 30d' },
-          { label: 'Total Cost', value: '$3,841', sublabel: 'all time' },
-          { label: 'Avg Cost / Run', value: '$2.99', sublabel: 'last 30d' },
-          { label: 'p95 Session Cost', value: '$18.40', sublabel: 'last 30d' },
-          { label: 'Total Tokens', value: '14.2M', sublabel: 'last 30d' },
-          { label: 'Avg Token / Session', value: '11,065', sublabel: 'last 30d' },
-          { label: 'p50 Duration', value: '4.2 min', sublabel: 'last 30d' },
-        ].map((item) => (
-          <Card key={item.label} sx={{ ...styles.statCard, backgroundColor: 'background.paper' }} elevation={0}>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginBottom: '6px' }}>
-              {item.label}
-            </Typography>
-            <Typography sx={{ fontSize: '24px', fontWeight: 700, color: 'text.primary' }}>{item.value}</Typography>
-            <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>{item.sublabel}</Typography>
-          </Card>
-        ))}
-      </Box>
     </Box>
   );
 };

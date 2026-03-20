@@ -21,4 +21,5 @@ export enum QueryTag {
   Comment = 'Comment',
   TaskAsset = 'TaskAsset',
   PlatformSummary = 'PlatformSummary',
+  ProjectAnalytics = 'ProjectAnalytics',
 }
