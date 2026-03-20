@@ -168,13 +168,25 @@ module ContainerStrategies
     end
 
     def read_file_from_container(container, path)
-      result = runtime.exec(container, [ "cat", path ], binary: true)
-      return nil unless result[2].zero?
+      tar_data = runtime.copy_from(container, path)
+      return nil if tar_data.blank?
 
-      result[0].map(&:b).join
+      normalized = path.to_s.sub(%r{\A/}, "")
+      basename   = File.basename(normalized)
+
+      reader = Gem::Package::TarReader.new(StringIO.new(tar_data))
+      reader.each do |entry|
+        next unless entry.file?
+
+        entry_name = entry.full_name.sub(%r{\A\.?/}, "")
+        return entry.read if entry_name == normalized || File.basename(entry_name) == basename
+      end
+      nil
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
       nil
+    ensure
+      reader&.close
     end
 
     protected
