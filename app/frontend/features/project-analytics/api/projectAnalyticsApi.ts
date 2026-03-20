@@ -22,7 +22,7 @@ export const projectAnalyticsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getProjectAnalytics: builder.query<ProjectAnalyticsSummary, ProjectAnalyticsParams>({
       query: ({ projectId, scope, period }) => ({
-        url: Routes.backend.apiV1CompanyProjectAnalyticsPath(projectId),
+        url: Routes.backend.apiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
         params: { scope, period },
       }),
