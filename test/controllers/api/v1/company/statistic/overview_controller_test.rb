@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class Api::V1::Company::OverviewControllerTest < ActionController::TestCase
+class Api::V1::Company::Statistic::OverviewControllerTest < ActionController::TestCase
   setup do
     @company = create(:company, email_domain: "testcompany.com")
     @admin = create(:user, :admin, company: @company)

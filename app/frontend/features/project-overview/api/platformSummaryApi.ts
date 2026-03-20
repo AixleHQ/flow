@@ -15,7 +15,7 @@ export const platformSummaryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getPlatformSummary: builder.query<PlatformSummary, void>({
       query: () => ({
-        url: Routes.backend.apiV1CompanyOverviewPath(),
+        url: Routes.backend.apiV1CompanyStatisticOverviewPath(),
         method: 'GET',
       }),
       providesTags: [QueryTag.PlatformSummary],

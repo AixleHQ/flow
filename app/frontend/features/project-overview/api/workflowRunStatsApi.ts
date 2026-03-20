@@ -13,7 +13,7 @@ export const workflowRunStatsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getWorkflowRunStats: builder.query<WorkflowRunStats, void>({
       query: () => ({
-        url: Routes.backend.apiV1CompanyWorkflowRunStatsPath(),
+        url: Routes.backend.apiV1CompanyStatisticWorkflowRunsPath(),
         method: 'GET',
       }),
       providesTags: [QueryTag.WorkflowRunStats],
