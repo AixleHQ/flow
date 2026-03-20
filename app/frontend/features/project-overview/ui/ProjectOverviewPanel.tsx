@@ -9,6 +9,7 @@ import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '
 import type { SxProps, Theme } from '@mui/material/styles';
 
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
+import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
 const styles = {
   container: {
@@ -148,12 +149,12 @@ const RECENT_ACTIVITY = [
   { text: 'Agent usage report generated for March 2026', time: '5 hr ago', color: '#607d8b' },
 ];
 
-const WORKFLOW_STATUS = [
-  { label: 'Completed', value: 724, total: 1050, color: '#4caf50' },
-  { label: 'In Progress', value: 187, total: 1050, color: '#2196f3' },
-  { label: 'Failed', value: 89, total: 1050, color: '#f44336' },
-  { label: 'Queued', value: 50, total: 1050, color: '#ff9800' },
-];
+const WORKFLOW_STATUS_COLORS: Record<string, string> = {
+  Completed: '#4caf50',
+  'In Progress': '#2196f3',
+  Failed: '#f44336',
+  Queued: '#ff9800',
+};
 
 const AGENT_USAGE = [
   { label: 'claude-sonnet-4-6', sessions: 812, cost: '$2,104' },
@@ -175,6 +176,23 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
   } = useGetPlatformSummaryQuery(undefined, {
     pollingInterval: 60_000,
   });
+
+  const {
+    data: workflowRunStats,
+    isLoading: workflowRunStatsLoading,
+    isError: workflowRunStatsError,
+  } = useGetWorkflowRunStatsQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const workflowStatus = workflowRunStats
+    ? [
+        { label: 'Completed', value: workflowRunStats.completed, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Completed'] },
+        { label: 'In Progress', value: workflowRunStats.inProgress, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['In Progress'] },
+        { label: 'Failed', value: workflowRunStats.failed, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Failed'] },
+        { label: 'Queued', value: workflowRunStats.queued, total: workflowRunStats.total, color: WORKFLOW_STATUS_COLORS['Queued'] },
+      ]
+    : [];
 
   const platformStats = summary
     ? [
@@ -272,29 +290,44 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <Card sx={styles.card} elevation={0}>
             <Typography sx={styles.sectionTitle}>Workflow Runs</Typography>
-            {WORKFLOW_STATUS.map((item) => (
-              <Box key={item.label} sx={styles.progressRow}>
-                <Box sx={styles.progressLabel}>
-                  <Typography sx={styles.progressLabelText}>{item.label}</Typography>
-                  <Typography sx={styles.progressLabelValue}>
-                    {item.value}{' '}
-                    <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
-                      / {item.total}
-                    </Typography>
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={(item.value / item.total) * 100}
-                  sx={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: 'background.elevated',
-                    '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
-                  }}
-                />
-              </Box>
-            ))}
+            {workflowRunStatsError && (
+              <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+                Failed to load workflow run stats. Please refresh to try again.
+              </Typography>
+            )}
+            {workflowRunStatsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <Box key={i} sx={styles.progressRow}>
+                    <Box sx={styles.progressLabel}>
+                      <Skeleton variant="text" width={80} />
+                      <Skeleton variant="text" width={60} />
+                    </Box>
+                    <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3 }} />
+                  </Box>
+                ))
+              : workflowStatus.map((item) => (
+                  <Box key={item.label} sx={styles.progressRow}>
+                    <Box sx={styles.progressLabel}>
+                      <Typography sx={styles.progressLabelText}>{item.label}</Typography>
+                      <Typography sx={styles.progressLabelValue}>
+                        {item.value}{' '}
+                        <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
+                          / {item.total}
+                        </Typography>
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={item.total > 0 ? (item.value / item.total) * 100 : 0}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'background.elevated',
+                        '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
+                      }}
+                    />
+                  </Box>
+                ))}
           </Card>
 
           <Card sx={styles.card} elevation={0}>
