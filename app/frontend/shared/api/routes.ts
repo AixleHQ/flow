@@ -147,9 +147,14 @@ export function apiV1InternalUsageStatisticsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "internal" + "/" + "usage_statistics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/company/overview(.:format) */
-export function apiV1CompanyOverviewPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /api/v1/company/statistic/overview(.:format) */
+export function apiV1CompanyStatisticOverviewPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/statistic/workflow_runs(.:format) */
+export function apiV1CompanyStatisticWorkflowRunsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "workflow_runs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /api/v1/company/integrations/github_setup(.:format) */

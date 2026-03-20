@@ -273,9 +273,9 @@ module ContainerStrategies
 
     test "read_file_from_container returns file content" do
       strategy = BaseStrategy.new
+      tar_data  = build_test_tar("path/to/test.txt", "Hello, World!")
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/test.txt" ])
-        .returns([ [ "Hello, World!" ], [], 0 ])
+      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/test.txt").returns(tar_data)
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/test.txt")
 
@@ -285,8 +285,7 @@ module ContainerStrategies
     test "read_file_from_container returns nil for missing file" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/missing/file" ])
-        .returns([ [], [ "No such file" ], 1 ])
+      @runtime_mock.expects(:copy_from).with("container-ref", "/missing/file").returns("")
 
       content = strategy.send(:read_file_from_container, "container-ref", "/missing/file")
 
@@ -294,11 +293,11 @@ module ContainerStrategies
     end
 
     test "read_file_from_container returns binary content as binary string" do
-      strategy = BaseStrategy.new
-      binary_data = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
+      strategy     = BaseStrategy.new
+      binary_data  = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
+      tar_data     = build_test_tar("path/to/image.png", binary_data)
 
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/path/to/image.png" ])
-        .returns([ [ binary_data ], [], 0 ])
+      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/image.png").returns(tar_data)
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/image.png")
 
@@ -309,7 +308,7 @@ module ContainerStrategies
     test "read_file_from_container handles errors" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:exec).raises(StandardError.new("connection error"))
+      @runtime_mock.expects(:copy_from).raises(StandardError.new("connection error"))
 
       content = strategy.send(:read_file_from_container, "container-ref", "/any/file")
 
@@ -361,6 +360,17 @@ module ContainerStrategies
       assert_equal 1024 * 1024 * 1024, limits[:memory_bytes]
       assert_equal 50_000, limits[:cpu_quota]
       assert_equal 100, limits[:pids_limit]
+    end
+
+    private
+
+    def build_test_tar(normalized_path, content)
+      io = StringIO.new("".b)
+      Gem::Package::TarWriter.new(io) do |tar|
+        data = content.b
+        tar.add_file_simple(normalized_path, 0o644, data.bytesize) { |entry_io| entry_io.write(data) }
+      end
+      io.string
     end
   end
 end

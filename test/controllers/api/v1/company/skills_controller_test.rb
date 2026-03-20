@@ -8,7 +8,6 @@ class Api::V1::Company::SkillsControllerTest < ActionController::TestCase
     @admin = create(:user, :admin, company: @company)
     @employee = create(:user, :employee, company: @company)
     @other_company = create(:company, email_domain: "other.com")
-    @other_admin = create(:user, :admin, company: @other_company)
 
     @skill = @company.skills.create!(
       name: "coding-standards",

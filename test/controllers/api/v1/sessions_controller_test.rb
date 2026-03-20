@@ -3,22 +3,16 @@
 require "test_helper"
 
 class Api::V1::SessionsControllerTest < ActionController::TestCase
-  setup do
-    @password = generate(:password)
-    company = create(:company)
-    @user = create(:user, password: @password, company: company)
-  end
-
   test "#create" do
-    auth_params = { user: { email: @user.email, password: @password } }
+    auth_params = { user: { email: user.email, password: password } }
     post :create, params: auth_params
 
     assert_response :success
-    assert { current_user.id == @user.id }
+    assert { current_user.id == user.id }
   end
 
   test "#create fails with invalid password" do
-    auth_params = { user: { email: @user.email, password: "invalid_password" } }
+    auth_params = { user: { email: user.email, password: "invalid_password" } }
     post :create, params: auth_params
 
     assert_response :unprocessable_entity
@@ -26,15 +20,15 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
   end
 
   test "#create with uppercase email" do
-    auth_params = { user: { email: @user.email.upcase, password: @password } }
+    auth_params = { user: { email: user.email.upcase, password: password } }
     post :create, params: auth_params
 
     assert_response :success
-    assert { current_user.id == @user.id }
+    assert { current_user.id == user.id }
   end
 
   test "#destroy" do
-    sign_in @user
+    sign_in user
 
     delete :destroy
 
@@ -44,8 +38,8 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#create with admin user redirects to root" do
     company = create(:company)
-    admin_user = create(:user, :admin, company: company, password: @password, onboarding_state: "completed")
-    auth_params = { user: { email: admin_user.email, password: @password } }
+    admin_user = create(:user, :admin, company: company, password: password, onboarding_state: "completed")
+    auth_params = { user: { email: admin_user.email, password: password } }
 
     post :create, params: auth_params
 
@@ -55,19 +49,19 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
 
   test "#create with user without onboarding redirects to root" do
     company = create(:company)
-    user = create(:user, :employee, company: company, password: @password, onboarding_state: "step1")
-    auth_params = { user: { email: user.email, password: @password } }
+    incomplete_user = create(:user, :employee, company: company, password: password, onboarding_state: "step1")
+    auth_params = { user: { email: incomplete_user.email, password: password } }
 
     post :create, params: auth_params
 
     assert_response :success
-    assert { current_user.id == user.id }
+    assert { current_user.id == incomplete_user.id }
   end
 
   test "#create with pending user fails" do
     company = create(:company)
-    pending_user = create(:user, :pending, company: company, password: @password)
-    auth_params = { user: { email: pending_user.email, password: @password } }
+    pending_user = create(:user, :pending, company: company, password: password)
+    auth_params = { user: { email: pending_user.email, password: password } }
 
     post :create, params: auth_params
 
@@ -76,7 +70,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
   end
 
   test "#create with invalid password fails" do
-    auth_params = { user: { email: @user.email, password: "wrong_password" } }
+    auth_params = { user: { email: user.email, password: "wrong_password" } }
 
     post :create, params: auth_params
 
@@ -85,7 +79,7 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
   end
 
   test "#create with non-existent email fails" do
-    auth_params = { user: { email: "nonexistent@example.com", password: @password } }
+    auth_params = { user: { email: "nonexistent@example.com", password: password } }
 
     post :create, params: auth_params
 
@@ -94,9 +88,9 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
   end
 
   test "#create with suspended user fails" do
-    suspended_user = create(:user, company: create(:company), password: @password)
+    suspended_user = create(:user, company: create(:company), password: password)
     suspended_user.suspend!
-    auth_params = { user: { email: suspended_user.email, password: @password } }
+    auth_params = { user: { email: suspended_user.email, password: password } }
 
     post :create, params: auth_params
 
@@ -208,6 +202,14 @@ class Api::V1::SessionsControllerTest < ActionController::TestCase
   end
 
   private
+
+  def password
+    @password ||= generate(:password)
+  end
+
+  def user
+    @user ||= create(:user, password: password, company: create(:company))
+  end
 
   def current_user
     User.find_by(id: session[:user_id])

@@ -71,6 +71,8 @@ module Api
 
       # CREATE tests
       test "#create creates auth_setup terminal session" do
+        mock_temporal_start
+
         assert_difference -> { TerminalSession.count }, 1 do
           post :create, params: {
             terminal_session: attributes_for(:terminal_session,
@@ -115,6 +117,8 @@ module Api
 
       # CREATE with normalized config params
       test "#create creates session with config_files and env_vars" do
+        mock_temporal_start
+
         project = create(:project, owner: @user, company: @company)
 
         assert_difference -> { TerminalSession.count }, 1 do
@@ -143,6 +147,8 @@ module Api
       end
 
       test "#create creates session with tool_ids and skill_ids" do
+        mock_temporal_start
+
         project = create(:project, owner: @user, company: @company)
         tool = create(:tool, scope: @company)
         skill = create(:skill, scope: @company)
