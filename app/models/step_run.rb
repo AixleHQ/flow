@@ -47,7 +47,7 @@ class StepRun < ApplicationRecord
   end
 
   def create_sub_step_runs!
-    step.sub_steps.order(:position).each do |sub_step|
+    step.sub_steps.active.each do |sub_step|
       sub_step_runs.find_or_create_by!(sub_step: sub_step) do |ssr|
         ssr.state = :pending
       end

@@ -7,7 +7,7 @@ class SubStep < ApplicationRecord
   validates :name, presence: true
   validates :position, presence: true
 
-  default_scope { where(deleted_at: nil).order(:position) }
+  scope :active, -> { where(deleted_at: nil) }
 
   def soft_delete!
     update_column(:deleted_at, Time.current)

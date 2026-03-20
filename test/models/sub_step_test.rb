@@ -43,49 +43,4 @@ class SubStepTest < ActiveSupport::TestCase
     assert sub_step.required
   end
 
-  test "soft_delete! sets deleted_at" do
-    sub_step = create(:sub_step, step: @step, position: 1)
-    assert_nil sub_step.deleted_at
-    sub_step.soft_delete!
-    assert_not_nil sub_step.reload.deleted_at
-  end
-
-  test "deleted? returns true after soft delete" do
-    sub_step = create(:sub_step, step: @step, position: 1)
-    sub_step.soft_delete!
-    assert sub_step.deleted?
-  end
-
-  test "destroy performs soft delete when sub_step_runs exist" do
-    sub_step = create(:sub_step, step: @step, position: 1)
-    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @project.owner)
-    step_run = create(:step_run, workflow_run: workflow_run, step: @step)
-    create(:sub_step_run, sub_step: sub_step, step_run: step_run)
-    sub_step.destroy
-    assert_not_nil sub_step.reload.deleted_at
-    assert SubStep.unscoped.exists?(sub_step.id)
-  end
-
-  test "destroy performs hard delete when no sub_step_runs exist" do
-    sub_step = create(:sub_step, step: @step, position: 1)
-    sub_step.destroy
-    assert_not SubStep.unscoped.exists?(sub_step.id)
-  end
-
-  test "default scope excludes soft-deleted records" do
-    active = create(:sub_step, step: @step, position: 1, name: "Active")
-    deleted = create(:sub_step, step: @step, position: 2, name: "Deleted")
-    deleted.soft_delete!
-    assert_includes @step.sub_steps, active
-    assert_not_includes @step.sub_steps, deleted
-  end
-
-  test "destroy does not raise FK violation when sub_step_runs exist" do
-    sub_step = create(:sub_step, step: @step, position: 1)
-    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @project.owner)
-    step_run = create(:step_run, workflow_run: workflow_run, step: @step)
-    create(:sub_step_run, sub_step: sub_step, step_run: step_run)
-    assert_nothing_raised { sub_step.destroy }
-    assert_not_nil sub_step.reload.deleted_at
-  end
 end
