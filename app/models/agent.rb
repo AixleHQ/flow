@@ -36,6 +36,10 @@ class Agent < ApplicationRecord
     where(scope_type: "Company", scope_id: project.company_id)
       .or(where(scope_type: "Project", scope_id: project.id))
   }
+  scope :belonging_to_company, ->(company) {
+    where(scope_type: "Company", scope_id: company.id)
+      .or(where(scope_type: "Project", scope_id: company.project_ids))
+  }
 
   def scope_indicator
     scope_type == "Company" ? "company" : "project"

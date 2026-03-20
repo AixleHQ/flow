@@ -28,6 +28,10 @@ class Workflow < ApplicationRecord
           .or(active.where(scope_type: "Company", scope_id: project.company_id))
   }
   scope :visible_for_company, ->(company) { active.for_company(company) }
+  scope :belonging_to_company, ->(company) {
+    active.where(scope_type: "Company", scope_id: company.id)
+          .or(active.where(scope_type: "Project", scope_id: company.project_ids))
+  }
 
   def soft_delete!
     if column_workflow_bindings.any?

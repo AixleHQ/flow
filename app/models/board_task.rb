@@ -30,6 +30,7 @@ class BoardTask < ApplicationRecord
   after_commit :broadcast_updated, on: :update
   after_commit :broadcast_destroyed, on: :destroy
 
+  scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
 

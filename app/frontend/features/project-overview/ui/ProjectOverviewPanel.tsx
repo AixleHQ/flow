@@ -2,12 +2,13 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import WorkflowsIcon from '@mui/icons-material/AccountTree';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import FolderIcon from '@mui/icons-material/Folder';
-import GroupIcon from '@mui/icons-material/Group';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import { Box, Card, Chip, Divider, LinearProgress, Typography } from '@mui/material';
+import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+
+import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
 
 const styles = {
   container: {
@@ -129,64 +130,13 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-const PLATFORM_STATS = [
-  {
-    label: 'Sessions Launched',
-    value: '1,284',
-    change: '+48 this week',
-    icon: <PlayCircleIcon sx={{ color: 'primary.main', fontSize: 20 }} />,
-    color: 'primary.main',
-  },
-  {
-    label: 'Total Spend',
-    value: '$3,841',
-    change: '+$214 this week',
-    icon: <AttachMoneyIcon sx={{ color: 'success.main', fontSize: 20 }} />,
-    color: 'success.main',
-  },
-  {
-    label: 'Workflows',
-    value: '37',
-    change: '+3 this week',
-    icon: <WorkflowsIcon sx={{ color: 'info.main', fontSize: 20 }} />,
-    color: 'info.main',
-  },
-  {
-    label: 'Board Tasks',
-    value: '112',
-    change: '18 in progress',
-    icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
-    color: 'warning.main',
-  },
-  {
-    label: 'Users',
-    value: '24',
-    change: '+2 this month',
-    icon: <AccountCircleIcon sx={{ color: 'secondary.main', fontSize: 20 }} />,
-    color: 'secondary.main',
-  },
-  {
-    label: 'Agents',
-    value: '61',
-    change: '47 active',
-    icon: <SmartToyIcon sx={{ color: 'error.main', fontSize: 20 }} />,
-    color: 'error.main',
-  },
-  {
-    label: 'Projects',
-    value: '9',
-    change: '7 active',
-    icon: <FolderIcon sx={{ color: 'primary.light', fontSize: 20 }} />,
-    color: 'primary.light',
-  },
-  {
-    label: 'Members',
-    value: '24',
-    change: '3 teams',
-    icon: <GroupIcon sx={{ color: 'text.secondary', fontSize: 20 }} />,
-    color: 'text.secondary',
-  },
-];
+function formatSpend(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1000) {
+    return `$${(dollars / 1000).toFixed(1)}k`;
+  }
+  return `$${dollars.toFixed(2)}`;
+}
 
 const RECENT_ACTIVITY = [
   { text: 'Workflow "Data Ingestion Pipeline" completed successfully', time: '2 min ago', color: '#4caf50' },
@@ -217,27 +167,89 @@ interface ProjectOverviewPanelProps {
 }
 
 const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
-  void _projectId; // placeholder — projectId will be used for API calls when this moves out of stub phase
+  void _projectId;
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+  } = useGetPlatformSummaryQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const platformStats = summary
+    ? [
+        {
+          label: 'Sessions Launched',
+          value: summary.sessionsLaunched.toLocaleString(),
+          icon: <PlayCircleIcon sx={{ color: 'primary.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Total Spend',
+          value: formatSpend(summary.totalSpendCents),
+          icon: <AttachMoneyIcon sx={{ color: 'success.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Workflows',
+          value: summary.workflowsCount.toLocaleString(),
+          icon: <WorkflowsIcon sx={{ color: 'info.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Board Tasks',
+          value: summary.boardTasksCount.toLocaleString(),
+          icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Users',
+          value: summary.usersCount.toLocaleString(),
+          icon: <AccountCircleIcon sx={{ color: 'secondary.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Agents',
+          value: summary.agentsCount.toLocaleString(),
+          icon: <SmartToyIcon sx={{ color: 'error.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Projects',
+          value: summary.projectsCount.toLocaleString(),
+          icon: <FolderIcon sx={{ color: 'primary.light', fontSize: 20 }} />,
+        },
+      ]
+    : [];
+
   return (
     <Box sx={styles.container}>
       <Box sx={styles.pageHeader}>
         <Typography sx={styles.pageTitle}>Project Overview</Typography>
-        <Typography sx={styles.pageSubtitle}>Platform-wide activity at a glance — static demo data</Typography>
+        <Typography sx={styles.pageSubtitle}>Platform-wide activity at a glance</Typography>
       </Box>
 
       {/* Platform Stats */}
       <Typography sx={styles.sectionTitle}>Platform Summary</Typography>
+      {summaryError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load platform summary. Please refresh to try again.
+        </Typography>
+      )}
       <Box sx={styles.statsGrid}>
-        {PLATFORM_STATS.map((stat) => (
-          <Card key={stat.label} sx={styles.statCard} elevation={0}>
-            <Box sx={styles.statIconWrap}>
-              {stat.icon}
-              <Typography sx={styles.statLabel}>{stat.label}</Typography>
-            </Box>
-            <Typography sx={styles.statValue}>{stat.value}</Typography>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>{stat.change}</Typography>
-          </Card>
-        ))}
+        {summaryLoading
+          ? Array.from({ length: 7 }).map((_, i) => (
+              <Card key={i} sx={styles.statCard} elevation={0}>
+                <Box sx={styles.statIconWrap}>
+                  <Skeleton variant="circular" width={20} height={20} />
+                  <Skeleton variant="text" width={80} />
+                </Box>
+                <Skeleton variant="text" width={60} height={40} />
+              </Card>
+            ))
+          : platformStats.map((stat) => (
+              <Card key={stat.label} sx={styles.statCard} elevation={0}>
+                <Box sx={styles.statIconWrap}>
+                  {stat.icon}
+                  <Typography sx={styles.statLabel}>{stat.label}</Typography>
+                </Box>
+                <Typography sx={styles.statValue}>{stat.value}</Typography>
+              </Card>
+            ))}
       </Box>
 
       {/* Two-column section */}

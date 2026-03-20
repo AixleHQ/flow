@@ -40,6 +40,7 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
+        resource :overview, only: %i[show], controller: "overview"
         resources :integrations, only: %i[index show create destroy] do
           collection do
             get :github_setup, defaults: { format: :html }

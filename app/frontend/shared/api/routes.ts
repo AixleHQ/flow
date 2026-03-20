@@ -147,6 +147,11 @@ export function apiV1InternalUsageStatisticsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "internal" + "/" + "usage_statistics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /api/v1/company/overview(.:format) */
+export function apiV1CompanyOverviewPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /api/v1/company/integrations/github_setup(.:format) */
 export function githubSetupApiV1CompanyIntegrationsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
