@@ -40,7 +40,10 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
-        resource :overview, only: %i[show], controller: "overview"
+        namespace :statistic do
+          resource :overview, only: %i[show], controller: "overview"
+          resource :workflow_runs, only: %i[show], controller: "workflow_runs"
+        end
         resources :integrations, only: %i[index show create destroy] do
           collection do
             get :github_setup, defaults: { format: :html }
