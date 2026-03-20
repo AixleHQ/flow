@@ -4,6 +4,8 @@ import { Autocomplete, Box, Button, Chip, Link, MenuItem, TextField, Typography 
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCallback, useMemo, useState } from 'react';
 
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
+
 import type { BoardTask } from 'entities/board-task';
 import { TASK_TYPE_COLORS } from 'entities/board-task';
 import { Routes } from 'shared/routes';
@@ -271,6 +273,30 @@ export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
             projectId={projectId}
             defaultParentTaskId={task.id}
           />
+        </Box>
+      )}
+
+      {task.pendingWaits.length > 0 && (
+        <Box sx={styles.hierarchy}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <HourglassEmptyIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+            <Typography sx={styles.label}>Pending Waits ({task.pendingWaits.length})</Typography>
+          </Box>
+          {task.pendingWaits.map((wait) => (
+            <Box key={wait.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, py: 0.5 }}>
+              <Chip
+                label={wait.waitType.replace(/_/g, ' ')}
+                size="small"
+                color="warning"
+                sx={{ fontSize: '10px', height: 20, fontWeight: 600, flexShrink: 0 }}
+              />
+              {wait.waitType === 'github_checks_completed' && (
+                <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
+                  {String(wait.metadata.repo_full_name)} #{String(wait.metadata.pr_number)}
+                </Typography>
+              )}
+            </Box>
+          ))}
         </Box>
       )}
 

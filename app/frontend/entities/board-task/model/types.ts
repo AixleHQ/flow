@@ -1,3 +1,10 @@
+export interface TaskWait {
+  id: number;
+  waitType: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface BoardTask {
   id: number;
   title: string;
@@ -14,6 +21,7 @@ export interface BoardTask {
   commentsCount: number;
   assetsCount: number;
   recentWorkflowRuns: Array<{ id: number; state: string }>;
+  pendingWaits: TaskWait[];
   createdAt: string;
   updatedAt: string;
 }

@@ -13,6 +13,7 @@ class BoardTask < ApplicationRecord
   has_many :workflow_runs
   has_many :column_transitions, dependent: :delete_all
   has_many :board_activities, dependent: :delete_all
+  has_many :task_waits, dependent: :destroy
 
   enumerize :task_type, in: %i[epic story bug not_specified], default: :not_specified, predicates: true
   enumerize :priority, in: %i[low medium high critical]
@@ -33,6 +34,10 @@ class BoardTask < ApplicationRecord
   scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
+
+  def waits_clear?
+    task_waits.pending.none?
+  end
 
   def broadcast_change(action)
     BoardChannel.broadcast_event(board, "board_task.#{action}", { id: id })

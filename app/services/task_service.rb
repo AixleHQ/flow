@@ -115,6 +115,33 @@ class TaskService
       )
     end
 
+    def resolve_wait(wait:, resolution_data: {})
+      wait.update!(
+        status: :resolved,
+        resolved_at: Time.current,
+        resolution_data: resolution_data
+      )
+
+      task = wait.board_task
+      check_auto_trigger(task: task, column: task.board_column, actor: task.assignee)
+    end
+
+    def check_auto_trigger(task:, column:, actor:)
+      binding = column.column_workflow_binding
+      return unless binding&.trigger_mode&.to_sym == :auto
+      return if task.task_waits.pending.exists?
+
+      WorkflowService.start(
+        workflow: binding.workflow,
+        project: column.board.project,
+        user: actor,
+        task: task,
+        mode: :non_interactive
+      )
+    rescue StandardError => e
+      Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
+    end
+
     private
 
     def record_activity(board, event_type, actor, task: nil, metadata: {})
@@ -129,21 +156,6 @@ class TaskService
       )
     rescue StandardError => e
       Rails.logger.warn("[TaskService] Failed to record activity #{event_type}: #{e.message}")
-    end
-
-    def check_auto_trigger(task:, column:, actor:)
-      binding = column.column_workflow_binding
-      return unless binding&.trigger_mode&.to_sym == :auto
-
-      WorkflowService.start(
-        workflow: binding.workflow,
-        project: column.board.project,
-        user: actor,
-        task: task,
-        mode: :non_interactive
-      )
-    rescue StandardError => e
-      Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
     end
 
     def insert_at_position(target_column, task, position)
