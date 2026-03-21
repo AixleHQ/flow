@@ -15,6 +15,10 @@ const styles = {
     borderColor: 'divider',
     borderRadius: '12px',
     transition: 'all 0.2s ease',
+    height: '100%',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
     '&:hover': {
       borderColor: 'primary.main',
       transform: 'translateY(-2px)',
@@ -26,7 +30,9 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-start',
-    height: '100%',
+    flex: 1,
+    width: '100%',
+    minHeight: 0,
   },
   header: {
     display: 'flex',
@@ -34,6 +40,7 @@ const styles = {
     justifyContent: 'space-between',
     width: '100%',
     marginBottom: '12px',
+    minHeight: '28px',
   },
   title: {
     fontSize: '18px',
@@ -44,16 +51,23 @@ const styles = {
   description: {
     fontSize: '14px',
     color: 'text.secondary',
-    marginBottom: '16px',
     display: '-webkit-box',
     WebkitLineClamp: 2,
     WebkitBoxOrient: 'vertical',
     overflow: 'hidden',
   },
+  descriptionSlot: {
+    width: '100%',
+    minHeight: '52px',
+    marginBottom: '16px',
+  },
+  footer: {
+    width: '100%',
+    marginTop: 'auto',
+  },
   stats: {
     display: 'flex',
     gap: '16px',
-    marginTop: 'auto',
     width: '100%',
   },
   stat: {
@@ -81,6 +95,8 @@ const styles = {
     fontSize: '12px',
     color: 'text.disabled',
     marginTop: '12px',
+    minHeight: '18px',
+    lineHeight: '18px',
   },
 } satisfies Record<string, SxProps<Theme>>;
 
@@ -118,18 +134,26 @@ const ProjectCard = ({ project, onClick }: IProjectCardProps) => {
           )}
         </Box>
 
-        {project.description && <Typography sx={styles.description}>{project.description}</Typography>}
-
-        <Box sx={styles.stats}>
-          <Box sx={styles.stat}>
-            <Typography sx={styles.statValue}>{project.collaboratorsCount}</Typography>
-            <Typography sx={styles.statLabel}>Collaborators</Typography>
-          </Box>
+        <Box sx={styles.descriptionSlot}>
+          {project.description ? <Typography sx={styles.description}>{project.description}</Typography> : null}
         </Box>
 
-        {project.lastActivityAt && (
-          <Typography sx={styles.lastActivity}>Last activity {formatRelativeTime(project.lastActivityAt)}</Typography>
-        )}
+        <Box sx={styles.footer}>
+          <Box sx={styles.stats}>
+            <Box sx={styles.stat}>
+              <Typography sx={styles.statValue}>{project.collaboratorsCount}</Typography>
+              <Typography sx={styles.statLabel}>Collaborators</Typography>
+            </Box>
+          </Box>
+          <Typography
+            sx={{
+              ...styles.lastActivity,
+              visibility: project.lastActivityAt ? 'visible' : 'hidden',
+            }}
+          >
+            Last activity {formatRelativeTime(project.lastActivityAt ?? undefined)}
+          </Typography>
+        </Box>
       </CardActionArea>
     </Card>
   );
