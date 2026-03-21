@@ -88,6 +88,39 @@ module ContainerRuntime
       assert_equal false, @runtime.copy_to("id", nil, "content")
     end
 
+    test "read_file returns nil when path blank" do
+      assert_nil @runtime.read_file("id", "")
+      assert_nil @runtime.read_file("id", nil)
+    end
+
+    test "read_file returns nil when copy_from returns empty" do
+      @runtime.stubs(:copy_from).returns("")
+
+      assert_nil @runtime.read_file("id", "/workspace/file.txt")
+    end
+
+    test "read_file returns file content from tar archive" do
+      tar_data = build_test_tar("file.txt", "hello world")
+      @runtime.stubs(:copy_from).returns(tar_data)
+
+      result = @runtime.read_file("id", "/workspace/file.txt")
+
+      assert_equal "hello world", result
+    end
+
+    test "read_file returns nil when file not found in tar archive" do
+      tar_data = build_test_tar("other.txt", "other content")
+      @runtime.stubs(:copy_from).returns(tar_data)
+
+      assert_nil @runtime.read_file("id", "/workspace/file.txt")
+    end
+
+    test "read_file returns nil on StandardError" do
+      @runtime.stubs(:copy_from).raises(StandardError, "connection error")
+
+      assert_nil @runtime.read_file("id", "/workspace/file.txt")
+    end
+
     test "remove_image is no-op" do
       assert_nil @runtime.remove_image("alpine:latest")
     end
@@ -350,6 +383,16 @@ module ContainerRuntime
       assert_equal "1000m", hard["limits.cpu"]
       assert_equal "2Gi",   hard["limits.memory"]
       assert_equal "20",    hard["count/pods"]
+    end
+    private
+
+    def build_test_tar(filename, content)
+      io = StringIO.new
+      io.binmode
+      Gem::Package::TarWriter.new(io) do |tar|
+        tar.add_file_simple(filename, 0o644, content.bytesize) { |f| f.write(content) }
+      end
+      io.string
     end
   end
 end
