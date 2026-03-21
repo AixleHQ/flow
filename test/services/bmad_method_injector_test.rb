@@ -70,7 +70,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "passes bmad_modules as comma-separated --modules flag" do
     session = build_bmad_session(
       agent_type: "cursor_cli",
-      bmad_modules: ["bmm", "cis", "bmb"]
+      bmad_modules: [ "bmm", "cis", "bmb" ]
     )
 
     expect_exec_matching("--modules bmm,cis,bmb")
@@ -132,14 +132,14 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     session = build_bmad_session(
       agent_type: "claude_code",
       user: user,
-      bmad_modules: ["bmm", "cis"]
+      bmad_modules: [ "bmm", "cis" ]
     )
 
     captured_cmd = nil
     @runtime.expects(:exec).with do |cid, cmd|
-      captured_cmd = cmd[1] if cmd.is_a?(Array)
+      captured_cmd = cmd[2] if cmd.is_a?(Array)
       cid == "cid-1" && cmd.is_a?(Array)
-    end.returns([[], [], 0])
+    end.returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
@@ -150,7 +150,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     assert_includes captured_cmd, "--yes"
     assert_includes captured_cmd, "--modules bmm,cis"
     assert_includes captured_cmd, "--directory /workspace"
-    assert_includes captured_cmd, "--output-folder _bmad-output"
+    assert_includes captured_cmd, "--output-folder outputs"
     assert_includes captured_cmd, "--document-output-language English"
   end
 
@@ -185,7 +185,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "non-zero exit code does not raise, logs warn, and records failure in context_metadata" do
     session = build_bmad_session(agent_type: "cursor_cli")
 
-    @runtime.stubs(:exec).returns([[], ["npm ERR! not found"], 1])
+    @runtime.stubs(:exec).returns([ [], [ "npm ERR! not found" ], 1 ])
 
     Rails.logger.expects(:warn).with(regexp_matches(/Install failed.*proceeding without BMAD/)).at_least_once
 
@@ -206,9 +206,9 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     session = build_bmad_session(agent_type: "cursor_cli")
 
     @runtime.stubs(:exec).with do |cid, cmd|
-      raise Timeout::Error if cmd.is_a?(Array) && cmd[1]&.include?("npx")
+      raise Timeout::Error if cmd.is_a?(Array) && cmd[2].to_s.include?("npx")
       true
-    end.returns([[], [], 0])
+    end.returns([ [], [], 0 ])
 
     Rails.logger.expects(:warn).with(regexp_matches(/timed out.*proceeding without BMAD/)).at_least_once
 
@@ -248,7 +248,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "successful install records success status in context_metadata" do
     session = build_bmad_session(agent_type: "cursor_cli")
 
-    @runtime.stubs(:exec).returns([[], [], 0])
+    @runtime.stubs(:exec).returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
@@ -260,7 +260,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "failure records both status and error in context_metadata" do
     session = build_bmad_session(agent_type: "cursor_cli")
 
-    @runtime.stubs(:exec).returns([[], ["some error output"], 127])
+    @runtime.stubs(:exec).returns([ [], [ "some error output" ], 127 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
@@ -273,7 +273,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     session = build_bmad_session(agent_type: "cursor_cli")
     session.update_column(:context_metadata, { "session_id" => session.id, "built_at" => Time.current.iso8601 })
 
-    @runtime.stubs(:exec).returns([[], [], 0])
+    @runtime.stubs(:exec).returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
@@ -352,13 +352,13 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     injector = BmadMethodInjector.new("cid-1", session, runtime: @runtime)
 
     @runtime.expects(:exec)
-      .with("cid-1", ["cat", BmadMethodInjector::VSCODE_SETTINGS_PATH])
-      .returns([[], [], 1])
+      .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
+      .returns([ [], [], 1 ])
 
     captured_cmd = nil
     @runtime.expects(:exec)
       .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && cmd[1] == "-c" && (captured_cmd = cmd[2]) }
-      .returns([[], [], 0])
+      .returns([ [], [], 0 ])
 
     injector.send(:hide_bmad_in_vscode)
 
@@ -384,13 +384,13 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     }
 
     @runtime.expects(:exec)
-      .with("cid-1", ["cat", BmadMethodInjector::VSCODE_SETTINGS_PATH])
-      .returns([[JSON.generate(existing)], [], 0])
+      .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
+      .returns([ [ JSON.generate(existing) ], [], 0 ])
 
     captured_cmd = nil
     @runtime.expects(:exec)
       .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && cmd[1] == "-c" && (captured_cmd = cmd[2]) }
-      .returns([[], [], 0])
+      .returns([ [], [], 0 ])
 
     injector.send(:hide_bmad_in_vscode)
 
@@ -410,13 +410,13 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     existing = { "editor.tabSize" => 2, "terminal.integrated.fontSize" => 12 }
 
     @runtime.expects(:exec)
-      .with("cid-1", ["cat", BmadMethodInjector::VSCODE_SETTINGS_PATH])
-      .returns([[JSON.generate(existing)], [], 0])
+      .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
+      .returns([ [ JSON.generate(existing) ], [], 0 ])
 
     captured_cmd = nil
     @runtime.expects(:exec)
       .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([[], [], 0])
+      .returns([ [], [], 0 ])
 
     injector.send(:hide_bmad_in_vscode)
 
@@ -436,13 +436,13 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     injector = BmadMethodInjector.new("cid-1", session, runtime: @runtime)
 
     @runtime.expects(:exec)
-      .with("cid-1", ["cat", BmadMethodInjector::VSCODE_SETTINGS_PATH])
-      .returns([["{ invalid json }}}"], [], 0])
+      .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
+      .returns([ [ "{ invalid json }}}" ], [], 0 ])
 
     captured_cmd = nil
     @runtime.expects(:exec)
       .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([[], [], 0])
+      .returns([ [], [], 0 ])
 
     injector.send(:hide_bmad_in_vscode)
 
@@ -460,13 +460,13 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     injector = BmadMethodInjector.new("cid-1", session, runtime: @runtime)
 
     @runtime.expects(:exec)
-      .with("cid-1", ["cat", BmadMethodInjector::VSCODE_SETTINGS_PATH])
-      .returns([[], [], 1])
+      .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
+      .returns([ [], [], 1 ])
 
     captured_cmd = nil
     @runtime.expects(:exec)
       .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([[], [], 0])
+      .returns([ [], [], 0 ])
 
     injector.send(:hide_bmad_in_vscode)
 
@@ -497,8 +497,8 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
 
   def expect_exec_matching(substring)
     @runtime.expects(:exec).with do |cid, cmd|
-      cid == "cid-1" && cmd.is_a?(Array) && cmd[1].include?(substring)
-    end.returns([[], [], 0])
+      cid == "cid-1" && cmd.is_a?(Array) && cmd[2].to_s.include?(substring)
+    end.returns([ [], [], 0 ])
   end
 
   def decode_written_settings(shell_cmd)
@@ -508,7 +508,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
 
   def expect_exec_not_matching(substring)
     @runtime.expects(:exec).with do |cid, cmd|
-      cid == "cid-1" && cmd.is_a?(Array) && !cmd[1].include?(substring)
-    end.returns([[], [], 0])
+      cid == "cid-1" && cmd.is_a?(Array) && !cmd[2].to_s.include?(substring)
+    end.returns([ [], [], 0 ])
   end
 end

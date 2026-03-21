@@ -38,7 +38,9 @@ interface UploadAssetDialogProps {
 
 function extractCachedFileData(uploadURL: string): CachedFileData {
   const url = new URL(uploadURL, window.location.origin);
-  const pathname = decodeURIComponent(url.pathname);
+  // Path segments are not query strings: "+" must not be treated as space by URL alone.
+  // Some S3 responses still surface "+" where the object key has spaces — normalize before decode.
+  const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
   const cachePrefix = '/cache/';
   const idx = pathname.indexOf(cachePrefix);
   if (idx === -1) throw new Error('Cannot extract cache data from upload URL');

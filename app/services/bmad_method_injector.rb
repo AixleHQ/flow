@@ -69,7 +69,7 @@ class BmadMethodInjector
 
   def run_bmad_install
     cmd = build_install_command
-    result = runtime.exec(container_id, ["sh", "-c", cmd])
+    result = runtime.exec(container_id, [ "sh", "-c", cmd ])
     exit_code = result[2].to_i
 
     if exit_code.zero?
@@ -90,10 +90,11 @@ class BmadMethodInjector
   end
 
   def build_install_command
-    parts = ["npx bmad-method install"]
+    parts = [ "npx bmad-method install" ]
     parts << "--directory /workspace"
     parts << "--tools #{resolve_tool}"
-    parts << "--modules #{resolve_modules.join(',')}"
+    modules = resolve_modules.join(",")
+    parts << "--modules #{modules}" if modules.present?
     parts << "--user-name #{sanitize_cli_arg(resolve_user_name)}"
     parts << "--communication-language #{sanitize_cli_arg(resolve_language)}"
     parts << "--document-output-language English"
@@ -130,7 +131,7 @@ class BmadMethodInjector
   end
 
   def read_vscode_settings
-    result = runtime.exec(container_id, ["cat", VSCODE_SETTINGS_PATH])
+    result = runtime.exec(container_id, [ "cat", VSCODE_SETTINGS_PATH ])
     return nil unless result[2].to_i.zero?
 
     Array(result[0]).join.presence
@@ -148,7 +149,7 @@ class BmadMethodInjector
   def write_vscode_settings(json_content)
     encoded = Base64.strict_encode64(json_content)
     cmd = "mkdir -p /workspace/.vscode && echo '#{encoded}' | base64 -d > #{VSCODE_SETTINGS_PATH}"
-    runtime.exec(container_id, ["sh", "-c", cmd])
+    runtime.exec(container_id, [ "sh", "-c", cmd ])
   end
 
   def record_install_status(status, error: nil)

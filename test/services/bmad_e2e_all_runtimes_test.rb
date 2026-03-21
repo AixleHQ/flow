@@ -56,7 +56,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
     @runtime_mock = mock("runtime")
     @runtime_mock.stubs(:copy_to).returns(true)
-    @runtime_mock.stubs(:exec).returns([[], [], 0])
+    @runtime_mock.stubs(:exec).returns([ [], [], 0 ])
     @runtime_mock.stubs(:copy_from).returns(nil)
     ContainerRuntime.stubs(:build).returns(@runtime_mock)
   end
@@ -201,7 +201,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     AGENT_RUNTIMES.each_key do |agent_type|
       session = create_bmad_session(agent_type)
       runtime = mock("runtime_#{agent_type}")
-      runtime.stubs(:exec).returns([[], [], 0])
+      runtime.stubs(:exec).returns([ [], [], 0 ])
 
       BmadMethodInjector.new("cid-e2e", session, runtime: runtime).inject!
 
@@ -221,7 +221,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     AGENT_RUNTIMES.each_key do |agent_type|
       session = create_bmad_session(agent_type)
       runtime = mock("runtime_#{agent_type}")
-      runtime.stubs(:exec).returns([[], ["npm ERR!"], 1])
+      runtime.stubs(:exec).returns([ [], [ "npm ERR!" ], 1 ])
 
       assert_nothing_raised do
         BmadMethodInjector.new("cid-e2e", session, runtime: runtime).inject!
@@ -317,7 +317,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
     expected_paths.each do |agent_type, expected_path|
       adapter = AgentCredentialsService.for(agent_type).adapter
-      files = adapter.skill_files([skill])
+      files = adapter.skill_files([ skill ])
 
       assert files.key?(expected_path),
         "#{agent_type}: Expected skill at #{expected_path}, got #{files.keys.inspect}"
@@ -365,7 +365,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
           end
         end
         true
-      end.returns([[], [], 0])
+      end.returns([ [], [], 0 ])
 
       Thread.current[:session_context_runtime] = nil
       ContainerRuntime.stubs(:build).returns(runtime)
@@ -398,42 +398,30 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   end
 
   def capture_install_command(session)
-    captured_cmd = nil
-    runtime = mock("runtime_capture")
-    runtime.stubs(:exec).with do |_cid, cmd|
-      if cmd.is_a?(Array)
-        full = cmd.join(" ")
-        captured_cmd = full if full.include?("npx bmad-method install")
-      end
-      true
-    end.returns([[], [], 0])
+    all_calls = []
+    runtime = stub("runtime_capture")
+    runtime.stubs(:exec).with { |*args| all_calls << args; true }.returns([ [], [], 0 ])
 
     BmadMethodInjector.any_instance.stubs(:hide_bmad_in_vscode)
     BmadMethodInjector.new("cid-cap", session, runtime: runtime).inject!
 
-    assert_not_nil captured_cmd, "Expected install command to be captured"
-    captured_cmd
+    install_call = all_calls.find { |args| args[1].is_a?(Array) && args[1][2].to_s.include?("npx bmad-method install") }
+    assert_not_nil install_call, "Expected install command to be captured"
+    install_call[1][2]
   end
 
   def capture_vscode_settings(session)
-    runtime = mock("runtime_vscode")
-    captured_cmd = nil
-
-    runtime.stubs(:exec).with do |_cid, cmd|
-      if cmd.is_a?(Array) && cmd[0] == "cat" && cmd[1] == BmadMethodInjector::VSCODE_SETTINGS_PATH
-        true
-      elsif cmd.is_a?(Array) && cmd[0] == "sh" && cmd[1] == "-c"
-        captured_cmd = cmd[2] if cmd[2].to_s.include?("base64")
-        true
-      else
-        true
-      end
-    end.returns([[], [], 0])
+    BmadMethodInjector.any_instance.unstub(:hide_bmad_in_vscode)
+    all_calls = []
+    runtime = stub("runtime_vscode")
+    runtime.stubs(:exec).with { |*args| all_calls << args; true }.returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-vs", session, runtime: runtime).inject!
 
-    assert_not_nil captured_cmd, "Expected VS Code settings write command"
-    base64_content = captured_cmd[/echo '([^']+)' \| base64 -d/, 1]
+    write_call = all_calls.find { |args| args[1].is_a?(Array) && args[1][2].to_s.include?("base64") }
+    assert_not_nil write_call, "Expected VS Code settings write command, got calls: #{all_calls.map { |a| a[1].inspect }.join('; ')}"
+    shell_cmd = write_call[1][2]
+    base64_content = shell_cmd[/echo '([^']+)' \| base64 -d/, 1]
     JSON.parse(Base64.decode64(base64_content))
   end
 
@@ -475,7 +463,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     # 5. Verify successful install records status
     success_session = create_bmad_session(agent_type)
     success_runtime = mock("runtime_success_#{agent_type}")
-    success_runtime.stubs(:exec).returns([[], [], 0])
+    success_runtime.stubs(:exec).returns([ [], [], 0 ])
     BmadMethodInjector.new("cid-ok", success_session, runtime: success_runtime).inject!
     success_session.reload
     assert_equal "success", success_session.context_metadata["bmad_install_status"]

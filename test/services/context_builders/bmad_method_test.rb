@@ -27,9 +27,9 @@ class ContextBuilders::BmadMethodTest < ActiveSupport::TestCase
     assert_not builder.applicable?
   end
 
-  test "applicable? returns false when session_config is nil" do
+  test "applicable? returns false when session_config is empty" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
-      session_config: nil)
+      session_config: {})
 
     builder = ContextBuilders::BmadMethod.new(session)
     assert_not builder.applicable?
