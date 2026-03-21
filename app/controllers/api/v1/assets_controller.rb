@@ -14,7 +14,8 @@ module Api
           }
         else
           storage = Shrine.storages[:cache]
-          uid = "#{SecureRandom.hex(30)}/#{params[:filename]}"
+          extension = File.extname(params[:filename].to_s)
+          uid = "#{SecureRandom.hex(30)}#{extension}"
           presign_data = storage.presign(uid,
             content_type: params[:type],
             content_disposition: ::ContentDisposition.inline(params[:filename]),

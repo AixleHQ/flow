@@ -50,7 +50,7 @@ module StepsActions
     params.require(:step).permit(
       :name, :description, :instructions, :position, :agent_id,
       :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
-      :mount_repositories, :required_agent_runtime,
+      :mount_repositories, :bmad_enabled, :required_agent_runtime,
       input_asset_specs: [ :name, :asset_type, :required ],
       output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
       tool_ids: [],

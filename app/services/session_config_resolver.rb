@@ -25,7 +25,8 @@ class SessionConfigResolver
       mcp_server_ids: resolve_mcp_server_ids,
       repository_ids: resolve_repository_ids,
       input_asset_ids: resolve_input_asset_ids,
-      mode: resolve_mode
+      mode: resolve_mode,
+      bmad_enabled: resolve_bmad_enabled
     }
   end
 
@@ -40,8 +41,17 @@ class SessionConfigResolver
       mcp_servers: build_resource_breakdown(:mcp_server_ids),
       input_assets: build_input_asset_breakdown,
       repositories: build_repository_breakdown,
-      mode: resolve_mode
+      mode: resolve_mode,
+      bmad_enabled: resolve_bmad_enabled
     }
+  end
+
+  def resolve_bmad_enabled
+    if standalone_session?
+      session.bmad_enabled?
+    else
+      step&.bmad_enabled || false
+    end
   end
 
   private
