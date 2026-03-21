@@ -7,6 +7,7 @@ import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,12 +27,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { TASK_TYPE_COLORS } from 'entities/board-task';
 
 import {
+  boardApi,
   useDeleteTaskMutation,
   useGetBoardQuery,
   useGetTaskDetailsQuery,
   useUpdateTaskMutation,
   useTriggerWorkflowMutation,
 } from '../api/boardApi';
+import { useAppDispatch } from '../lib/useAppDispatch';
 import { useBoardSidebarStore } from '../model/useBoardSidebarStore';
 
 import { ActivityTab } from './ActivityTab';
@@ -89,20 +92,67 @@ const styles = {
     overflow: 'auto',
     p: 2,
   },
+  loading: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 200,
+  },
 } satisfies Record<string, SxProps<Theme>>;
 
 export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
+  const dispatch = useAppDispatch();
   const { isOpen, activeTaskId, activeTab, close, setTab } = useBoardSidebarStore();
   const { data: boardData } = useGetBoardQuery(projectId);
-  const { data: taskDetails } = useGetTaskDetailsQuery({ projectId, taskId: activeTaskId! }, { skip: !activeTaskId });
+  const { data: taskDetails, isError: isDetailsError } = useGetTaskDetailsQuery(
+    { projectId, taskId: activeTaskId! },
+    { skip: !isOpen || !activeTaskId },
+  );
   const [triggerWorkflow, { isLoading: isTriggering }] = useTriggerWorkflowMutation();
   const [updateTask] = useUpdateTaskMutation();
   const [deleteTask] = useDeleteTaskMutation();
 
-  const task = taskDetails ?? boardData?.tasks.find((t) => t.id === activeTaskId);
+  const [isRefreshingOnOpen, setIsRefreshingOnOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen || !activeTaskId) {
+      setIsRefreshingOnOpen(false);
+      return;
+    }
+    let cancelled = false;
+    setIsRefreshingOnOpen(true);
+    void dispatch(
+      boardApi.endpoints.getTaskDetails.initiate({ projectId, taskId: activeTaskId }, { forceRefetch: true }),
+    )
+      .unwrap()
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIsRefreshingOnOpen(false);
+      });
+
+    void dispatch(
+      boardApi.endpoints.getTaskComments.initiate({ projectId, taskId: activeTaskId }, { forceRefetch: true }),
+    );
+    void dispatch(
+      boardApi.endpoints.getTaskAssets.initiate({ projectId, taskId: activeTaskId }, { forceRefetch: true }),
+    );
+    void dispatch(
+      boardApi.endpoints.getTaskActivities.initiate(
+        { projectId, taskId: activeTaskId, page: 1, perPage: 15 },
+        { forceRefetch: true },
+      ),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [dispatch, isOpen, activeTaskId, projectId]);
+
+  const task = taskDetails;
   const column = boardData?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
-  const hasActiveRun = task?.recentWorkflowRuns.some((r) => ['pending', 'running', 'paused'].includes(r.state));
-  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'auto' && !hasActiveRun;
+  const hasActiveRun =
+    task?.recentWorkflowRuns?.some((r) => ['pending', 'running', 'paused'].includes(r.state)) ?? false;
+  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !hasActiveRun;
 
   const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -131,7 +181,21 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
     close();
   }, [task, projectId, deleteTask, close]);
 
-  if (!isOpen || !task) return null;
+  if (!isOpen || !activeTaskId) return null;
+
+  if (isRefreshingOnOpen || !task) {
+    return (
+      <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={styles.drawer}>
+        <Box sx={styles.loading}>
+          {isDetailsError ? (
+            <Typography color="error">Could not load task. Try again or close the panel.</Typography>
+          ) : (
+            <CircularProgress />
+          )}
+        </Box>
+      </Drawer>
+    );
+  }
 
   return (
     <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={getDrawerSx(expanded)}>

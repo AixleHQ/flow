@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { QueryTag } from 'shared/api';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 
-import { boardApi } from '../api/boardApi';
+import { boardApi, scheduleBoardTaskRealtimeSync } from '../api/boardApi';
 
 import { useAppDispatch } from './useAppDispatch';
 
@@ -47,7 +47,7 @@ export function useBoardChannel({ boardId, projectId }: UseBoardChannelOptions) 
           switch (message.type) {
             case 'board_task.created':
             case 'board_task.updated':
-              dispatch(boardApi.util.invalidateTags([QueryTag.Task, QueryTag.Comment]));
+              scheduleBoardTaskRealtimeSync(dispatch);
               break;
 
             case 'board_task.destroyed':

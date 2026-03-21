@@ -30,7 +30,7 @@ import {
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useSearch } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { BoardTask } from 'entities/board-task';
 import { TaskCard } from 'entities/board-task';
@@ -58,8 +58,6 @@ import { TaskSidebar } from './TaskSidebar';
 interface BoardPanelProps {
   projectId: number;
 }
-
-const MOVE_DEBOUNCE_MS = 500;
 
 const styles = {
   root: {
@@ -131,8 +129,6 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const lastMoveRef = useRef<Record<number, number>>({});
-
   const openTask = useBoardSidebarStore((s) => s.openTask);
   const activeTaskId = useBoardSidebarStore((s) => s.activeTaskId);
   const isOpen = useBoardSidebarStore((s) => s.isOpen);
@@ -243,17 +239,14 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
       if (sameColumn && targetPosition === undefined) return;
       if (sameColumn && targetPosition === task.position) return;
 
-      const now = Date.now();
-      const lastMove = lastMoveRef.current[task.id];
-      if (lastMove && now - lastMove < MOVE_DEBOUNCE_MS) return;
-      lastMoveRef.current[task.id] = now;
-
-      const position =
-        targetPosition ?? (tasksByColumn[targetColumnId] || []).reduce((max, t) => Math.max(max, t.position), 0) + 1;
+      const maxInTargetColumn = data.tasks
+        .filter((t) => t.boardColumnId === targetColumnId)
+        .reduce((max, t) => Math.max(max, t.position), 0);
+      const position = targetPosition ?? maxInTargetColumn + 1;
 
       moveTask({ projectId, taskId: task.id, columnId: targetColumnId, position });
     },
-    [data, moveTask, projectId, tasksByColumn],
+    [data, moveTask, projectId],
   );
 
   const handleToggleCollapse = useCallback((columnId: number) => {

@@ -8,6 +8,7 @@ import type {
   TaskComment,
   TaskWorkflowRun,
 } from 'entities/board-task';
+import type { AppDispatch } from 'shared/api';
 import { baseApi, QueryTag } from 'shared/api';
 
 interface BoardWithTasks {
@@ -115,6 +116,7 @@ export const boardApi = baseApi.injectEndpoints({
       }),
       transformResponse: (response: { data: BoardTask }) => response.data,
       async onQueryStarted({ projectId, taskId, columnId, position }, { dispatch, queryFulfilled }) {
+        boardMoveMutationStarted();
         const patchResult = dispatch(
           boardApi.util.updateQueryData('getBoard', projectId, (draft) => {
             const task = draft.tasks.find((t) => t.id === taskId);
@@ -137,6 +139,10 @@ export const boardApi = baseApi.injectEndpoints({
               } else {
                 for (const t of draft.tasks) {
                   if (t.id === taskId) continue;
+                  if (t.boardColumnId === oldColumnId && t.position > oldPosition) t.position -= 1;
+                }
+                for (const t of draft.tasks) {
+                  if (t.id === taskId) continue;
                   if (t.boardColumnId === columnId && t.position >= position) t.position += 1;
                 }
               }
@@ -147,9 +153,19 @@ export const boardApi = baseApi.injectEndpoints({
           }),
         );
         try {
-          await queryFulfilled;
+          const { data: movedTask } = await queryFulfilled;
+          if (movedTask) {
+            dispatch(
+              boardApi.util.updateQueryData('getBoard', projectId, (draft) => {
+                const t = draft.tasks.find((x) => x.id === taskId);
+                if (t) Object.assign(t, movedTask);
+              }),
+            );
+          }
         } catch {
           patchResult.undo();
+        } finally {
+          boardMoveMutationFinished(dispatch);
         }
       },
     }),
@@ -375,6 +391,30 @@ export const boardApi = baseApi.injectEndpoints({
     }),
   }),
 });
+
+let boardMoveMutationsInFlight = 0;
+let deferredBoardTaskRealtimeSync = false;
+
+function boardMoveMutationStarted(): void {
+  boardMoveMutationsInFlight += 1;
+}
+
+function boardMoveMutationFinished(dispatch: AppDispatch): void {
+  boardMoveMutationsInFlight = Math.max(0, boardMoveMutationsInFlight - 1);
+  if (boardMoveMutationsInFlight === 0 && deferredBoardTaskRealtimeSync) {
+    deferredBoardTaskRealtimeSync = false;
+    dispatch(boardApi.util.invalidateTags([QueryTag.Task, QueryTag.Comment]));
+  }
+}
+
+/** Defer board refetch while move PATCHs are in flight (avoids snapping tasks back). */
+export function scheduleBoardTaskRealtimeSync(dispatch: AppDispatch): void {
+  if (boardMoveMutationsInFlight > 0) {
+    deferredBoardTaskRealtimeSync = true;
+  } else {
+    dispatch(boardApi.util.invalidateTags([QueryTag.Task, QueryTag.Comment]));
+  }
+}
 
 export const {
   useGetBoardPresetsQuery,
