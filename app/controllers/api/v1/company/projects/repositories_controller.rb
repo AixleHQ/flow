@@ -6,7 +6,7 @@ module Api
       module Projects
         class RepositoriesController < ApplicationController
           def index
-            repositories = Repository.visible_for_project(current_project)
+            repositories = Repository.visible_for_project(current_project).includes(:integration)
             respond_with repositories, each_serializer: RepositorySerializer, project: current_project
           end
 

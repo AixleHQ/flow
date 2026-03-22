@@ -23,7 +23,9 @@ module Api
                                    :skills,
                                    :mcp_servers,
                                    :input_assets,
-                                   :repositories
+                                   :repositories,
+                                   :output_assets,
+                                   :session_logs
                                  )
                                  .ransack(q_params).result
                                  .order(created_at: :desc)

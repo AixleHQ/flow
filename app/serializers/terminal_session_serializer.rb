@@ -80,31 +80,31 @@ class TerminalSessionSerializer < ApplicationSerializer
   end
 
   def tool_ids
-    object.tool_ids
+    object.tools.map(&:id)
   end
 
   def skill_ids
-    object.skill_ids
+    object.skills.map(&:id)
   end
 
   def mcp_server_ids
-    object.mcp_server_ids
+    object.mcp_servers.map(&:id)
   end
 
   def input_asset_ids
-    object.input_asset_ids
+    object.input_assets.map(&:id)
   end
 
   def repository_ids
-    object.repository_ids
+    object.repositories.map(&:id)
   end
 
   def pending_artifacts_count
-    object.output_assets.pending_review.count
+    object.output_assets.count { |a| a.status == "pending_review" }
   end
 
   def session_logs_count
-    object.session_logs.count
+    object.session_logs.size
   end
 
   def user_name
