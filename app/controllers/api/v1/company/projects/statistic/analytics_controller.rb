@@ -27,6 +27,39 @@ module Api
                 workflowsRun: result.workflows_run
               }
             end
+
+            # GET /api/v1/company/projects/:project_id/statistic/analytics/agent_activity
+            #
+            # Query params:
+            #   scope  - user | project | company (default: project)
+            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            def agent_activity
+              result = AgentActivityService.new(
+                project: current_project,
+                user: current_user,
+                scope: params.fetch(:scope, "project"),
+                period: params.fetch(:period, "30d")
+              ).call
+
+              render json: {
+                agentTypes: result.agent_types,
+                sessionsByAgent: result.sessions_by_agent.map do |a|
+                  {
+                    agentType: a.agent_type,
+                    sessions: a.sessions,
+                    costCents: a.cost_cents,
+                    tokens: a.tokens
+                  }
+                end,
+                activityOverTime: result.activity_over_time.map do |p|
+                  {
+                    date: p.date,
+                    agentType: p.agent_type,
+                    sessions: p.sessions
+                  }
+                end
+              }
+            end
           end
         end
       end

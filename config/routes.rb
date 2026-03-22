@@ -147,7 +147,11 @@ Rails.application.routes.draw do
               end
             end
             namespace :statistic do
-              resource :analytics, only: %i[show], controller: "analytics"
+              resource :analytics, only: %i[show], controller: "analytics" do
+                member do
+                  get :agent_activity
+                end
+              end
             end
             resources :terminal_sessions, only: %i[index show]
             resources :workflow_runs, only: %i[index show create] do

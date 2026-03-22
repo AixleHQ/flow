@@ -10,6 +10,10 @@ module Api
               project_accessible?
             end
 
+            def agent_activity?
+              project_accessible?
+            end
+
             private
 
             def project
