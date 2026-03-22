@@ -36,6 +36,7 @@ class Api::V1::Company::Projects::WorkflowRunsControllerTest < ActionController:
 
   test "#create creates a workflow run with interactive mode" do
     sign_in @admin
+    mock_workflow_execution_start
 
     assert_difference "WorkflowRun.count", 1 do
       post :create, params: {
@@ -58,6 +59,7 @@ class Api::V1::Company::Projects::WorkflowRunsControllerTest < ActionController:
 
   test "#create creates first step run" do
     sign_in @admin
+    mock_workflow_execution_start
 
     post :create, params: {
       project_id: @project.id,
@@ -91,6 +93,7 @@ class Api::V1::Company::Projects::WorkflowRunsControllerTest < ActionController:
   test "#create allows non_interactive mode when all steps support it" do
     sign_in @admin
     @step.update!(allow_non_interactive: true)
+    mock_workflow_execution_start
 
     post :create, params: {
       project_id: @project.id,

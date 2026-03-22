@@ -630,6 +630,9 @@ const WorkflowBuilderPage = () => {
                     {step.allowNonInteractive && (
                       <Chip label="Auto-run" size="small" sx={{ height: 18, fontSize: '10px' }} />
                     )}
+                    {step.bmadEnabled && (
+                      <Chip label="BMAD" size="small" color="info" sx={{ height: 18, fontSize: '10px' }} />
+                    )}
                     {(step.dependsOnStepIds ?? []).length === 0 ? (
                       <Chip label="Root" size="small" variant="outlined" sx={{ height: 18, fontSize: '10px' }} />
                     ) : (
@@ -1188,6 +1191,22 @@ function StepDetailPanel({
         />
         <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
           Repositories are selected when running the workflow
+        </Typography>
+      </Box>
+
+      {/* BMAD Method */}
+      <Box sx={styles.formField}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={step.bmadEnabled ?? false}
+              onChange={(e) => onFieldChange('bmadEnabled', e.target.checked, true)}
+            />
+          }
+          label="Use BMAD Method"
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ ml: 4 }}>
+          Enable the BMAD methodology for this step
         </Typography>
       </Box>
 

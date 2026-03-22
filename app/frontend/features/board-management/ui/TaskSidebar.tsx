@@ -1,3 +1,5 @@
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -42,18 +44,21 @@ interface TaskSidebarProps {
 }
 
 const DRAWER_WIDTH = 480;
+const DRAWER_WIDTH_EXPANDED = '50vw';
 const HEADER_HEIGHT = 48;
 
-const styles = {
-  drawer: {
-    width: DRAWER_WIDTH,
-    flexShrink: 0,
-    '& .MuiDrawer-paper': {
-      width: DRAWER_WIDTH,
-      top: HEADER_HEIGHT,
-      height: `calc(100% - ${HEADER_HEIGHT}px)`,
-    },
+const getDrawerSx = (expanded: boolean) => ({
+  width: expanded ? DRAWER_WIDTH_EXPANDED : DRAWER_WIDTH,
+  flexShrink: 0,
+  '& .MuiDrawer-paper': {
+    width: expanded ? DRAWER_WIDTH_EXPANDED : DRAWER_WIDTH,
+    top: HEADER_HEIGHT,
+    height: `calc(100% - ${HEADER_HEIGHT}px)`,
+    transition: 'width 0.2s ease',
   },
+});
+
+const styles = {
   header: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -97,11 +102,16 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const task = taskDetails ?? boardData?.tasks.find((t) => t.id === activeTaskId);
   const column = boardData?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
   const hasActiveRun = task?.recentWorkflowRuns.some((r) => ['pending', 'running', 'paused'].includes(r.state));
-  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !hasActiveRun;
+  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'auto' && !hasActiveRun;
 
+  const [expanded, setExpanded] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setExpanded(false);
+  }, [isOpen]);
 
   useEffect(() => {
     if (task) setTitleValue(task.title);
@@ -124,8 +134,11 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   if (!isOpen || !task) return null;
 
   return (
-    <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={styles.drawer}>
+    <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={getDrawerSx(expanded)}>
       <Box sx={styles.header}>
+        <IconButton onClick={() => setExpanded((prev) => !prev)} size="small" sx={{ mr: 1, mt: 0.25 }}>
+          {expanded ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+        </IconButton>
         <Box sx={styles.headerLeft}>
           {editingTitle ? (
             <TextField
@@ -166,7 +179,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
               onClick={() => triggerWorkflow({ projectId, taskId: task.id })}
               disabled={isTriggering}
             >
-              Start Workflow
+              Run workflow
             </Button>
           )}
           <Tooltip title="Delete task">

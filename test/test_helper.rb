@@ -14,8 +14,9 @@ require "minitest/power_assert"
 require "webmock/minitest"
 require "mocha/minitest"
 
-# Load all support files
-Dir[File.expand_path("../support/**/*.rb", __FILE__)].each { |file| require file }
+# Load shared test helpers and support files
+Dir[File.expand_path("../helpers/**/*.rb", __FILE__)].sort.each { |file| require file }
+Dir[File.expand_path("../support/**/*.rb", __FILE__)].sort.each { |file| require file }
 
 # Disable external web requests in tests
 WebMock.disable_net_connect!(allow_localhost: true, allow: "lvh.me")
@@ -30,6 +31,7 @@ class ActiveSupport::TestCase
   # Include FactoryBot methods
   include FactoryBot::Syntax::Methods
   include AuthHelper
+  include TemporalHelper
   include UploadSupport
   include StubSupport
   # Add more helper methods to be used by all tests here...

@@ -40,6 +40,61 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal({}, session.env_vars)
   end
 
+  # == BMAD config helpers ==
+
+  test "bmad_enabled? returns true when bmad_enabled is true" do
+    session = build(:terminal_session, user: @user, session_config: { "bmad_enabled" => true })
+    assert session.bmad_enabled?
+  end
+
+  test "bmad_enabled? returns false when bmad_enabled is false" do
+    session = build(:terminal_session, user: @user, session_config: { "bmad_enabled" => false })
+    assert_not session.bmad_enabled?
+  end
+
+  test "bmad_enabled? returns false when bmad_enabled is absent" do
+    session = build(:terminal_session, user: @user, session_config: {})
+    assert_not session.bmad_enabled?
+  end
+
+  test "bmad_enabled? returns false when session_config is nil" do
+    session = build(:terminal_session, user: @user, session_config: nil)
+    assert_not session.bmad_enabled?
+  end
+
+  test "bmad_enabled? returns false for non-boolean truthy values" do
+    session = build(:terminal_session, user: @user, session_config: { "bmad_enabled" => "true" })
+    assert_not session.bmad_enabled?
+  end
+
+  test "bmad_modules returns default modules when not specified" do
+    session = build(:terminal_session, user: @user, session_config: { "bmad_enabled" => true })
+    assert_equal %w[bmm], session.bmad_modules
+  end
+
+  test "bmad_modules returns custom modules when specified" do
+    session = build(:terminal_session, user: @user, session_config: {
+      "bmad_enabled" => true,
+      "bmad_modules" => %w[bmm cis bmb]
+    })
+    assert_equal %w[bmm cis bmb], session.bmad_modules
+  end
+
+  test "bmad_modules returns default when session_config is nil" do
+    session = build(:terminal_session, user: @user, session_config: nil)
+    assert_equal %w[bmm], session.bmad_modules
+  end
+
+  test "bmad_modules returns default when bmad_modules key is absent" do
+    session = build(:terminal_session, user: @user, session_config: {})
+    assert_equal %w[bmm], session.bmad_modules
+  end
+
+  test "BMAD_DEFAULT_MODULES constant is frozen" do
+    assert TerminalSession::BMAD_DEFAULT_MODULES.frozen?
+    assert_equal %w[bmm], TerminalSession::BMAD_DEFAULT_MODULES
+  end
+
   # == mode and initial_prompt columns ==
 
   test "mode defaults to interactive" do

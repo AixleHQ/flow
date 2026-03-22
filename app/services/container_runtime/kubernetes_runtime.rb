@@ -102,6 +102,18 @@ module ContainerRuntime
       tar_io&.close!
     end
 
+    def read_file(id, path)
+      return nil if path.blank?
+
+      tar_data = copy_from(id, path)
+      return nil if tar_data.blank?
+
+      extract_from_tar(tar_data, File.basename(path))
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] read_file failed for #{path}: #{e.message}")
+      nil
+    end
+
     def stop_container(id, _timeout = nil, _options = {})
       handle = resolve_handle(id)
       core_client.delete_pod(handle.pod_name, handle.namespace)

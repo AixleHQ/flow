@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tree \
     cloc \
     ca-certificates \
+    libnss3-tools \
     # Archive extraction (tar/gzip already in base image)
     unzip \
     p7zip-full \
@@ -40,6 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zstd \
     # Process management
     tini \
+    sudo \
     # Build tools (for native npm modules)
     python3 \
     python3-pip \
@@ -71,6 +73,11 @@ RUN mkdir -p /opt/mitm/ca && \
         > /opt/mitm/ca/combined-ca-bundle.pem && \
     chmod -R 644 /opt/mitm/ca/* && \
     rm -rf /root/.mitmproxy
+
+# Trust MITM CA in the system bundle (curl/apt/OpenSSL; may help Chromium via platform hooks).
+# No runtime hook — same CA files are baked at build time.
+RUN cp /opt/mitm/ca/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca.crt \
+    && update-ca-certificates
 
 # Create fd symlink (fd-find installs as fdfind on Debian)
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true

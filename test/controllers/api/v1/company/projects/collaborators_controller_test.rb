@@ -10,9 +10,6 @@ class Api::V1::Company::Projects::CollaboratorsControllerTest < ActionController
     @non_collaborator = create(:user, :employee, company: @company)
     @project = create(:project, company: @company, owner: @owner)
     @project.add_collaborator(@collaborator)
-
-    @other_company = create(:company, email_domain: "other.com")
-    @other_user = create(:user, :employee, company: @other_company)
   end
 
   # ====== INDEX Tests ======
@@ -87,9 +84,10 @@ class Api::V1::Company::Projects::CollaboratorsControllerTest < ActionController
 
   test "#create validates same company" do
     sign_in @owner
+    other_user = create(:user, :employee, company: create(:company, email_domain: "other.com"))
 
     assert_no_difference "ProjectCollaborator.count" do
-      post :create, params: { project_id: @project.id, collaborator: { user_id: @other_user.id } }
+      post :create, params: { project_id: @project.id, collaborator: { user_id: other_user.id } }
     end
 
     assert_response :not_found

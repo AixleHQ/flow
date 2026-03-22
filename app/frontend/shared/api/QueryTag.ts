@@ -20,4 +20,8 @@ export enum QueryTag {
   ViewPreset = 'ViewPreset',
   Comment = 'Comment',
   TaskAsset = 'TaskAsset',
+  PlatformSummary = 'PlatformSummary',
+  ProjectAnalytics = 'ProjectAnalytics',
+  WorkflowRunStats = 'WorkflowRunStats',
+  BoardTaskDistribution = 'BoardTaskDistribution',
 }

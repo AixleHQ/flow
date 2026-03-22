@@ -2,12 +2,15 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import WorkflowsIcon from '@mui/icons-material/AccountTree';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import FolderIcon from '@mui/icons-material/Folder';
-import GroupIcon from '@mui/icons-material/Group';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import { Box, Card, Chip, Divider, LinearProgress, Typography } from '@mui/material';
+import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+
+import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
+import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
+import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
 const styles = {
   container: {
@@ -129,64 +132,13 @@ const styles = {
   },
 } satisfies Record<string, SxProps<Theme>>;
 
-const PLATFORM_STATS = [
-  {
-    label: 'Sessions Launched',
-    value: '1,284',
-    change: '+48 this week',
-    icon: <PlayCircleIcon sx={{ color: 'primary.main', fontSize: 20 }} />,
-    color: 'primary.main',
-  },
-  {
-    label: 'Total Spend',
-    value: '$3,841',
-    change: '+$214 this week',
-    icon: <AttachMoneyIcon sx={{ color: 'success.main', fontSize: 20 }} />,
-    color: 'success.main',
-  },
-  {
-    label: 'Workflows',
-    value: '37',
-    change: '+3 this week',
-    icon: <WorkflowsIcon sx={{ color: 'info.main', fontSize: 20 }} />,
-    color: 'info.main',
-  },
-  {
-    label: 'Board Tasks',
-    value: '112',
-    change: '18 in progress',
-    icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
-    color: 'warning.main',
-  },
-  {
-    label: 'Users',
-    value: '24',
-    change: '+2 this month',
-    icon: <AccountCircleIcon sx={{ color: 'secondary.main', fontSize: 20 }} />,
-    color: 'secondary.main',
-  },
-  {
-    label: 'Agents',
-    value: '61',
-    change: '47 active',
-    icon: <SmartToyIcon sx={{ color: 'error.main', fontSize: 20 }} />,
-    color: 'error.main',
-  },
-  {
-    label: 'Projects',
-    value: '9',
-    change: '7 active',
-    icon: <FolderIcon sx={{ color: 'primary.light', fontSize: 20 }} />,
-    color: 'primary.light',
-  },
-  {
-    label: 'Members',
-    value: '24',
-    change: '3 teams',
-    icon: <GroupIcon sx={{ color: 'text.secondary', fontSize: 20 }} />,
-    color: 'text.secondary',
-  },
-];
+function formatSpend(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1000) {
+    return `$${(dollars / 1000).toFixed(1)}k`;
+  }
+  return `$${dollars.toFixed(2)}`;
+}
 
 const RECENT_ACTIVITY = [
   { text: 'Workflow "Data Ingestion Pipeline" completed successfully', time: '2 min ago', color: '#4caf50' },
@@ -198,12 +150,12 @@ const RECENT_ACTIVITY = [
   { text: 'Agent usage report generated for March 2026', time: '5 hr ago', color: '#607d8b' },
 ];
 
-const WORKFLOW_STATUS = [
-  { label: 'Completed', value: 724, total: 1050, color: '#4caf50' },
-  { label: 'In Progress', value: 187, total: 1050, color: '#2196f3' },
-  { label: 'Failed', value: 89, total: 1050, color: '#f44336' },
-  { label: 'Queued', value: 50, total: 1050, color: '#ff9800' },
-];
+const WORKFLOW_STATUS_COLORS: Record<string, string> = {
+  Completed: '#4caf50',
+  'In Progress': '#2196f3',
+  Failed: '#f44336',
+  Queued: '#ff9800',
+};
 
 const AGENT_USAGE = [
   { label: 'claude-sonnet-4-6', sessions: 812, cost: '$2,104' },
@@ -217,27 +169,134 @@ interface ProjectOverviewPanelProps {
 }
 
 const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
-  void _projectId; // placeholder — projectId will be used for API calls when this moves out of stub phase
+  void _projectId;
+  const {
+    data: summary,
+    isLoading: summaryLoading,
+    isError: summaryError,
+  } = useGetPlatformSummaryQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const {
+    data: workflowRunStats,
+    isLoading: workflowRunStatsLoading,
+    isError: workflowRunStatsError,
+  } = useGetWorkflowRunStatsQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const {
+    data: boardTaskDistribution,
+    isLoading: boardTaskDistributionLoading,
+    isError: boardTaskDistributionError,
+  } = useGetBoardTaskDistributionQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const workflowStatus = workflowRunStats
+    ? [
+        {
+          label: 'Completed',
+          value: workflowRunStats.completed,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Completed'],
+        },
+        {
+          label: 'In Progress',
+          value: workflowRunStats.inProgress,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['In Progress'],
+        },
+        {
+          label: 'Failed',
+          value: workflowRunStats.failed,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Failed'],
+        },
+        {
+          label: 'Queued',
+          value: workflowRunStats.queued,
+          total: workflowRunStats.total,
+          color: WORKFLOW_STATUS_COLORS['Queued'],
+        },
+      ]
+    : [];
+
+  const platformStats = summary
+    ? [
+        {
+          label: 'Sessions Launched',
+          value: summary.sessionsLaunched.toLocaleString(),
+          icon: <PlayCircleIcon sx={{ color: 'primary.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Total Spend',
+          value: formatSpend(summary.totalSpendCents),
+          icon: <AttachMoneyIcon sx={{ color: 'success.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Workflows',
+          value: summary.workflowsCount.toLocaleString(),
+          icon: <WorkflowsIcon sx={{ color: 'info.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Board Tasks',
+          value: summary.boardTasksCount.toLocaleString(),
+          icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Users',
+          value: summary.usersCount.toLocaleString(),
+          icon: <AccountCircleIcon sx={{ color: 'secondary.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Agents',
+          value: summary.agentsCount.toLocaleString(),
+          icon: <SmartToyIcon sx={{ color: 'error.main', fontSize: 20 }} />,
+        },
+        {
+          label: 'Projects',
+          value: summary.projectsCount.toLocaleString(),
+          icon: <FolderIcon sx={{ color: 'primary.light', fontSize: 20 }} />,
+        },
+      ]
+    : [];
+
   return (
     <Box sx={styles.container}>
       <Box sx={styles.pageHeader}>
         <Typography sx={styles.pageTitle}>Project Overview</Typography>
-        <Typography sx={styles.pageSubtitle}>Platform-wide activity at a glance — static demo data</Typography>
+        <Typography sx={styles.pageSubtitle}>Platform-wide activity at a glance</Typography>
       </Box>
 
       {/* Platform Stats */}
       <Typography sx={styles.sectionTitle}>Platform Summary</Typography>
+      {summaryError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load platform summary. Please refresh to try again.
+        </Typography>
+      )}
       <Box sx={styles.statsGrid}>
-        {PLATFORM_STATS.map((stat) => (
-          <Card key={stat.label} sx={styles.statCard} elevation={0}>
-            <Box sx={styles.statIconWrap}>
-              {stat.icon}
-              <Typography sx={styles.statLabel}>{stat.label}</Typography>
-            </Box>
-            <Typography sx={styles.statValue}>{stat.value}</Typography>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>{stat.change}</Typography>
-          </Card>
-        ))}
+        {summaryLoading
+          ? Array.from({ length: 7 }).map((_, i) => (
+              <Card key={i} sx={styles.statCard} elevation={0}>
+                <Box sx={styles.statIconWrap}>
+                  <Skeleton variant="circular" width={20} height={20} />
+                  <Skeleton variant="text" width={80} />
+                </Box>
+                <Skeleton variant="text" width={60} height={40} />
+              </Card>
+            ))
+          : platformStats.map((stat) => (
+              <Card key={stat.label} sx={styles.statCard} elevation={0}>
+                <Box sx={styles.statIconWrap}>
+                  {stat.icon}
+                  <Typography sx={styles.statLabel}>{stat.label}</Typography>
+                </Box>
+                <Typography sx={styles.statValue}>{stat.value}</Typography>
+              </Card>
+            ))}
       </Box>
 
       {/* Two-column section */}
@@ -260,29 +319,44 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <Card sx={styles.card} elevation={0}>
             <Typography sx={styles.sectionTitle}>Workflow Runs</Typography>
-            {WORKFLOW_STATUS.map((item) => (
-              <Box key={item.label} sx={styles.progressRow}>
-                <Box sx={styles.progressLabel}>
-                  <Typography sx={styles.progressLabelText}>{item.label}</Typography>
-                  <Typography sx={styles.progressLabelValue}>
-                    {item.value}{' '}
-                    <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
-                      / {item.total}
-                    </Typography>
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={(item.value / item.total) * 100}
-                  sx={{
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: 'background.elevated',
-                    '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
-                  }}
-                />
-              </Box>
-            ))}
+            {workflowRunStatsError && (
+              <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+                Failed to load workflow run stats. Please refresh to try again.
+              </Typography>
+            )}
+            {workflowRunStatsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <Box key={i} sx={styles.progressRow}>
+                    <Box sx={styles.progressLabel}>
+                      <Skeleton variant="text" width={80} />
+                      <Skeleton variant="text" width={60} />
+                    </Box>
+                    <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3 }} />
+                  </Box>
+                ))
+              : workflowStatus.map((item) => (
+                  <Box key={item.label} sx={styles.progressRow}>
+                    <Box sx={styles.progressLabel}>
+                      <Typography sx={styles.progressLabelText}>{item.label}</Typography>
+                      <Typography sx={styles.progressLabelValue}>
+                        {item.value}{' '}
+                        <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
+                          / {item.total}
+                        </Typography>
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={item.total > 0 ? (item.value / item.total) * 100 : 0}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'background.elevated',
+                        '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
+                      }}
+                    />
+                  </Box>
+                ))}
           </Card>
 
           <Card sx={styles.card} elevation={0}>
@@ -314,6 +388,11 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
 
       {/* Tasks by status */}
       <Typography sx={styles.sectionTitle}>Board Task Distribution</Typography>
+      {boardTaskDistributionError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load board task distribution. Please refresh to try again.
+        </Typography>
+      )}
       <Card
         sx={{
           ...styles.card,
@@ -323,22 +402,52 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         }}
         elevation={0}
       >
-        {[
-          { label: 'Backlog', count: 34, color: '#607d8b' },
-          { label: 'In Progress', count: 18, color: '#2196f3' },
-          { label: 'Fix Tests', count: 7, color: '#ff9800' },
-          { label: 'QA', count: 9, color: '#9c27b0' },
-          { label: 'Code Review', count: 11, color: '#00bcd4' },
-          { label: 'Done', count: 33, color: '#4caf50' },
-        ].map((col) => (
+        {boardTaskDistributionLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <Box
+                key={i}
+                sx={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'background.default',
+                }}
+              >
+                <Skeleton variant="text" width={60} height={40} sx={{ margin: '0 auto' }} />
+                <Skeleton variant="text" width={80} sx={{ margin: '4px auto 0' }} />
+              </Box>
+            ))
+          : (boardTaskDistribution?.columns ?? []).map((col) => (
+              <Box
+                key={col.name}
+                sx={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'background.default',
+                }}
+              >
+                <Typography sx={{ fontSize: '28px', fontWeight: 700, color: 'text.primary' }}>{col.count}</Typography>
+                <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.name}</Typography>
+              </Box>
+            ))}
+        {!boardTaskDistributionLoading && boardTaskDistribution && (
           <Box
-            key={col.label}
-            sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+            sx={{
+              textAlign: 'center',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'primary.main',
+            }}
           >
-            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: col.color }}>{col.count}</Typography>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.label}</Typography>
+            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: 'primary.contrastText' }}>
+              {boardTaskDistribution.total}
+            </Typography>
+            <Typography sx={{ fontSize: '12px', color: 'primary.contrastText', marginTop: '4px', opacity: 0.85 }}>
+              Total
+            </Typography>
           </Box>
-        ))}
+        )}
       </Card>
     </Box>
   );

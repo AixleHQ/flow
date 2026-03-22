@@ -28,6 +28,7 @@ export interface Step {
   mcpServerIds: number[];
   skillIds: number[];
   mountRepositories: boolean;
+  bmadEnabled: boolean;
   dependsOnStepIds: number[];
   requiredAgentRuntime: string | null;
   subSteps: SubStep[];
@@ -71,6 +72,7 @@ export interface UpdateStepRequest {
   mcpServerIds?: number[];
   skillIds?: number[];
   mountRepositories?: boolean;
+  bmadEnabled?: boolean;
   dependsOnStepIds?: number[];
   requiredAgentRuntime?: string | null;
   subStepsAttributes?: SubStepAttribute[];

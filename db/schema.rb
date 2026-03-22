@@ -496,6 +496,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
   create_table "steps", force: :cascade do |t|
     t.bigint "agent_id"
     t.boolean "allow_non_interactive", default: false, null: false
+    t.boolean "bmad_enabled", default: false, null: false
     t.datetime "created_at", null: false
     t.jsonb "depends_on_step_ids", default: [], null: false
     t.text "description"

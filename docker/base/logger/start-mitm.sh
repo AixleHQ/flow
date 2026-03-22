@@ -30,7 +30,6 @@ fi
 MITM_PROXY_PORT="${MITM_PROXY_PORT:-8888}"
 MITM_LOG_PATH="${MITM_LOG_PATH:-/var/log/mitm/http.log}"
 MITM_LOG_MAX_BODY="${MITM_LOG_MAX_BODY:-0}"
-MITM_CA_CERT="${HOME:-/root}/.mitmproxy/mitmproxy-ca-cert.pem"
 
 # Export for mitm_logger.py and http2-logger.js
 export MITM_LOG_PATH MITM_LOG_MAX_BODY MITM_TRACKED_DOMAINS
@@ -47,16 +46,39 @@ MITMPROXY_DIR="${HOME:-/root}/.mitmproxy"
 mkdir -p "$MITMPROXY_DIR" 2>/dev/null || true
 cp /opt/mitm/ca/* "$MITMPROXY_DIR/" 2>/dev/null || true
 
-# TLS trust: point Node.js and OpenSSL at the combined bundle
-# (system CAs + mitmproxy CA, built at image build time).
-export NODE_EXTRA_CA_CERTS="$MITM_CA_CERT"
-export SSL_CERT_FILE="$MITMPROXY_DIR/combined-ca-bundle.pem"
+# TLS trust (MITM TLS to the proxy uses a cert signed by mitm CA):
+# - Node: use built-in Mozilla roots for real sites + NODE_EXTRA_CA_CERTS for mitm only.
+#   Do NOT use --use-system-ca here: it makes Node rely mostly on SSL_CERT_FILE; a bad/missing
+#   bundle then breaks all HTTPS (e.g. "unable to get local issuer certificate", upstream 502).
+# - OpenSSL/curl/git/Python: single bundle = Debian CA store + mitm CA (rebuilt every start).
+SYSTEM_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+MITM_CA_PEM="$MITMPROXY_DIR/mitmproxy-ca-cert.pem"
+COMBINED_CA_PEM="$MITMPROXY_DIR/combined-ca-bundle.pem"
+if [ -r "$MITM_CA_PEM" ] && [ -r "$SYSTEM_CA_BUNDLE" ]; then
+  cat "$SYSTEM_CA_BUNDLE" "$MITM_CA_PEM" >"$COMBINED_CA_PEM"
+  chmod 644 "$COMBINED_CA_PEM" 2>/dev/null || true
+fi
+
+export NODE_EXTRA_CA_CERTS="$MITM_CA_PEM"
+if [ -r "$COMBINED_CA_PEM" ]; then
+  export SSL_CERT_FILE="$COMBINED_CA_PEM"
+  export CURL_CA_BUNDLE="$COMBINED_CA_PEM"
+  export REQUESTS_CA_BUNDLE="$COMBINED_CA_PEM"
+  export GIT_SSL_CAINFO="$COMBINED_CA_PEM"
+else
+  export SSL_CERT_FILE="$SYSTEM_CA_BUNDLE"
+fi
 
 # Set proxy environment variables for all child processes
 HTTP_PROXY="http://localhost:${MITM_PROXY_PORT}"
 HTTPS_PROXY="$HTTP_PROXY"
 NO_PROXY="localhost,127.0.0.1,::1"
 export HTTP_PROXY HTTPS_PROXY NO_PROXY
+
+# Chromium/Playwright: trust MITM CA via NSS (~/.pki/nssdb), not only NODE_EXTRA_CA_CERTS.
+if command -v certutil >/dev/null 2>&1 && [ -r /opt/mitm/nss-trust-mitm-ca.sh ]; then
+  bash /opt/mitm/nss-trust-mitm-ca.sh || echo -e "${YELLOW:-}⚠️  NSS mitm CA import failed (HTTPS via proxy may fail)${NC:-}"
+fi
 
 # Start mitmdump in background with logging addon
 mitmdump --listen-host 0.0.0.0 --listen-port "${MITM_PROXY_PORT}" \
@@ -72,9 +94,8 @@ for _ in {1..50}; do
     sleep 0.1
 done
 
-# HTTP/2 logger: patches http2.connect() to log request headers
-# --use-system-ca makes Node 22+ trust CAs from SSL_CERT_FILE
-export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--use-system-ca --require /opt/mitm/http2-logger.js"
+# HTTP/2 logger: patches http2.connect() to log request headers (trust via NODE_EXTRA_CA_CERTS + built-in roots)
+export NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--require /opt/mitm/http2-logger.js"
 
 # Verify startup
 if kill -0 $MITM_PID 2>/dev/null; then

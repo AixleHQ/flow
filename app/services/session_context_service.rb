@@ -103,19 +103,27 @@ class SessionContextService
       skill_content = measure_step("skills") { inject_skills(container_id, session) }
       context_log.record_files(:skills, skill_content)
 
-      # Step 5: Context file (after skills — append to same file for Gemini)
-      ctx_content = measure_step("context_file") { inject_context_file(container_id, session) }
-      context_log.record_files(:context_file, ctx_content)
-
-      # Step 6: Assets
+      # Step 5: Assets
       measure_step("assets") { inject_assets(container_id, session) }
       context_log.record(:assets, session.input_asset_ids || [])
 
-      # Step 7: Repositories (shallow clone from GitHub)
+      # Step 6: Repositories (shallow clone from GitHub)
       measure_step("repositories") { inject_repositories(container_id, session) }
       context_log.record(:repositories, session.repositories.pluck(:full_name))
 
-      # Step 8: Write context log to container for debugging
+      # Step 7: BMAD Method (install after repos, before context file)
+      if SessionConfigResolver.new(session).resolve_bmad_enabled
+        measure_step("bmad_method") do
+          BmadMethodInjector.new(container_id, session, runtime: runtime).inject!
+        end
+        context_log.record(:bmad_method, modules: session.bmad_modules)
+      end
+
+      # Step 8: Context file (after skills + BMAD)
+      ctx_content = measure_step("context_file") { inject_context_file(container_id, session) }
+      context_log.record_files(:context_file, ctx_content)
+
+      # Step 9: Write context log to container for debugging
       measure_step("context_log") { write_context_log(container_id, context_log) }
 
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
@@ -197,6 +205,7 @@ class SessionContextService
     # Produces XML-tagged markdown with priority-sorted sections.
     # Stores JSON metadata on session for traceability.
     def inject_context_file(container_id, session)
+      session.reload
       result = SessionContextConstructor.build_result(session)
       content = result.render
       return {} if content.blank?
@@ -208,7 +217,8 @@ class SessionContextService
       expanded = expand_path(path, adapter.home_dir)
       write_file(container_id, expanded, content, adapter.tmpfs_uid)
 
-      session.update_column(:context_metadata, result.to_json_hash)
+      merged_metadata = (session.context_metadata || {}).merge(result.to_json_hash)
+      session.update_column(:context_metadata, merged_metadata)
 
       Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes, #{result.applied_builders.size} builders)")
       { path => content }
