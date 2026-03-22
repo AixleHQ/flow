@@ -73,7 +73,7 @@ class WorkflowCostAnalyticsService
 
   def build_workflow_breakdown(runs)
     rows = runs
-      .joins("JOIN workflows ON workflows.id = workflow_runs.workflow_id")
+      .joins(:workflow)
       .joins(
         "LEFT JOIN step_runs ON step_runs.workflow_run_id = workflow_runs.id"
       )

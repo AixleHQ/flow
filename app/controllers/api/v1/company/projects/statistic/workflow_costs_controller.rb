@@ -19,34 +19,7 @@ module Api
                 period: params.fetch(:period, "30d")
               ).call
 
-              render json: {
-                workflows: result.workflows.map do |w|
-                  {
-                    workflowId: w.workflow_id,
-                    workflowName: w.workflow_name,
-                    totalCostCents: w.total_cost_cents,
-                    inputTokens: w.input_tokens,
-                    outputTokens: w.output_tokens,
-                    totalTokens: w.total_tokens,
-                    runCount: w.run_count
-                  }
-                end,
-                timeSeries: result.time_series.map do |p|
-                  {
-                    date: p.date,
-                    costCents: p.cost_cents,
-                    totalTokens: p.total_tokens
-                  }
-                end,
-                totals: {
-                  totalCostCents: result.totals[:total_cost_cents],
-                  inputTokens: result.totals[:input_tokens],
-                  outputTokens: result.totals[:output_tokens],
-                  totalTokens: result.totals[:total_tokens],
-                  workflowCount: result.totals[:workflow_count],
-                  avgCostCentsPerWorkflow: result.totals[:avg_cost_cents_per_workflow]
-                }
-              }
+              render json: WorkflowCostAnalyticsSerializer.new(result).as_json
             end
           end
         end
