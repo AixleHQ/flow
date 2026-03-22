@@ -10,6 +10,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
+import { useGetTopAgentsBySessionsQuery } from '../api/topAgentsBySessionsApi';
 import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
 const styles = {
@@ -157,13 +158,6 @@ const WORKFLOW_STATUS_COLORS: Record<string, string> = {
   Queued: '#ff9800',
 };
 
-const AGENT_USAGE = [
-  { label: 'claude-sonnet-4-6', sessions: 812, cost: '$2,104' },
-  { label: 'claude-opus-4-6', sessions: 241, cost: '$1,287' },
-  { label: 'claude-haiku-4-5', sessions: 147, cost: '$312' },
-  { label: 'custom-agent-v2', sessions: 84, cost: '$138' },
-];
-
 interface ProjectOverviewPanelProps {
   projectId?: number;
 }
@@ -193,6 +187,17 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
   } = useGetBoardTaskDistributionQuery(undefined, {
     pollingInterval: 60_000,
   });
+
+  const {
+    data: topAgents,
+    isLoading: topAgentsLoading,
+    isError: topAgentsError,
+  } = useGetTopAgentsBySessionsQuery(
+    { limit: 10 },
+    {
+      pollingInterval: 60_000,
+    },
+  );
 
   const workflowStatus = workflowRunStats
     ? [
@@ -361,27 +366,63 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
 
           <Card sx={styles.card} elevation={0}>
             <Typography sx={styles.sectionTitle}>Top Agents by Sessions</Typography>
-            {AGENT_USAGE.map((agent, idx) => (
-              <Box key={agent.label}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: '10px' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <SmartToyIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                    <Typography sx={{ fontSize: '13px', color: 'text.primary' }}>{agent.label}</Typography>
+            {topAgentsError && (
+              <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+                Failed to load top agents. Please refresh to try again.
+              </Typography>
+            )}
+            {topAgentsLoading
+              ? Array.from({ length: 4 }).map((_, i) => (
+                  <Box key={i}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: '10px' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Skeleton variant="circular" width={16} height={16} />
+                        <Skeleton variant="text" width={120} />
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Skeleton variant="rectangular" width={80} height={20} sx={{ borderRadius: 1 }} />
+                        <Skeleton variant="rectangular" width={60} height={20} sx={{ borderRadius: 1 }} />
+                      </Box>
+                    </Box>
+                    {i < 3 && <Divider />}
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
-                    <Chip label={`${agent.sessions} sessions`} size="small" sx={{ fontSize: '11px', height: 20 }} />
-                    <Chip
-                      label={agent.cost}
-                      size="small"
-                      color="success"
-                      variant="outlined"
-                      sx={{ fontSize: '11px', height: 20 }}
-                    />
+                ))
+              : (topAgents ?? []).map((agent, idx) => (
+                  <Box key={agent.rank}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: '10px' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <SmartToyIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                        <Typography sx={{ fontSize: '13px', color: 'text.primary' }}>{agent.name}</Typography>
+                        <Chip
+                          label={agent.agentType}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontSize: '10px', height: 16 }}
+                        />
+                      </Box>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Chip
+                          label={`${agent.sessionsCount} sessions`}
+                          size="small"
+                          sx={{ fontSize: '11px', height: 20 }}
+                        />
+                        <Chip
+                          label={formatSpend(agent.totalCostCents)}
+                          size="small"
+                          color="success"
+                          variant="outlined"
+                          sx={{ fontSize: '11px', height: 20 }}
+                        />
+                      </Box>
+                    </Box>
+                    {idx < (topAgents ?? []).length - 1 && <Divider />}
                   </Box>
-                </Box>
-                {idx < AGENT_USAGE.length - 1 && <Divider />}
-              </Box>
-            ))}
+                ))}
+            {!topAgentsLoading && !topAgentsError && (topAgents ?? []).length === 0 && (
+              <Typography sx={{ fontSize: '13px', color: 'text.disabled', py: '10px' }}>
+                No agent sessions found.
+              </Typography>
+            )}
           </Card>
         </Box>
       </Box>
