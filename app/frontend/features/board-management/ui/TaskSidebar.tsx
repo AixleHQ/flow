@@ -97,7 +97,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const task = taskDetails ?? boardData?.tasks.find((t) => t.id === activeTaskId);
   const column = boardData?.board.boardColumns.find((c) => c.id === task?.boardColumnId);
   const hasActiveRun = task?.recentWorkflowRuns.some((r) => ['pending', 'running', 'paused'].includes(r.state));
-  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'manual' && !hasActiveRun;
+  const canTriggerWorkflow = column?.workflowBinding?.triggerMode === 'auto' && !hasActiveRun;
 
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
@@ -166,7 +166,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
               onClick={() => triggerWorkflow({ projectId, taskId: task.id })}
               disabled={isTriggering}
             >
-              Start Workflow
+              Run workflow
             </Button>
           )}
           <Tooltip title="Delete task">
