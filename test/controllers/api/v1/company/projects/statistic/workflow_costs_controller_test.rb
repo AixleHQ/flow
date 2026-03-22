@@ -31,6 +31,7 @@ class Api::V1::Company::Projects::Statistic::WorkflowCostsControllerTest < Actio
   end
 
   test "#show returns 200 for company employee" do
+    @project.add_collaborator(@employee)
     sign_in @employee
 
     get :show, params: { project_id: @project.id }
@@ -41,9 +42,9 @@ class Api::V1::Company::Projects::Statistic::WorkflowCostsControllerTest < Actio
   test "#show returns 404 for admin of another company" do
     sign_in @other_admin
 
-    assert_raises(ActiveRecord::RecordNotFound) do
-      get :show, params: { project_id: @project.id }
-    end
+    get :show, params: { project_id: @project.id }
+
+    assert_response :not_found
   end
 
   # ====== JSON shape ======

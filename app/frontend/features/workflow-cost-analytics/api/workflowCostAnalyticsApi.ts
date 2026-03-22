@@ -1,5 +1,5 @@
-import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 import { baseApi, QueryTag } from 'shared/api';
+import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 import { Routes } from 'shared/routes';
 
 export interface WorkflowCostRow {
