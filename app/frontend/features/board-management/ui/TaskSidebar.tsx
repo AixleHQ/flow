@@ -1,3 +1,5 @@
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -102,6 +104,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (task) setTitleValue(task.title);
@@ -123,9 +126,28 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
 
   if (!isOpen || !task) return null;
 
+  const drawerWidth = expanded ? '50vw' : DRAWER_WIDTH;
+
   return (
-    <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={styles.drawer}>
+    <Drawer
+      variant="temporary"
+      anchor="right"
+      open={isOpen}
+      onClose={close}
+      sx={{
+        width: drawerWidth,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: drawerWidth,
+          top: HEADER_HEIGHT,
+          height: `calc(100% - ${HEADER_HEIGHT}px)`,
+        },
+      }}
+    >
       <Box sx={styles.header}>
+        <IconButton onClick={() => setExpanded((prev) => !prev)} size="small" sx={{ mr: 1, mt: 0.25 }}>
+          {expanded ? <ChevronRightIcon fontSize="small" /> : <ChevronLeftIcon fontSize="small" />}
+        </IconButton>
         <Box sx={styles.headerLeft}>
           {editingTitle ? (
             <TextField
