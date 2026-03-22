@@ -35,8 +35,16 @@ function formatTokens(tokens: number): string {
 }
 
 const WORKFLOW_COLORS = [
-  '#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#e91e63',
-  '#00bcd4', '#ff5722', '#3f51b5', '#8bc34a', '#ffc107',
+  '#2196f3',
+  '#9c27b0',
+  '#4caf50',
+  '#ff9800',
+  '#e91e63',
+  '#00bcd4',
+  '#ff5722',
+  '#3f51b5',
+  '#8bc34a',
+  '#ffc107',
 ];
 
 const chartTooltipStyle = {
@@ -147,8 +155,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
 
   const maxCost = workflows.length > 0 ? workflows[0].totalCostCents : 1;
 
-  const tickInterval =
-    timeSeries.length <= 7 ? 0 : timeSeries.length <= 30 ? 4 : timeSeries.length <= 90 ? 8 : 1;
+  const tickInterval = timeSeries.length <= 7 ? 0 : timeSeries.length <= 30 ? 4 : timeSeries.length <= 90 ? 8 : 1;
 
   const summaryStats = totals
     ? [
@@ -235,10 +242,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 100).toFixed(0)}`} />
-                <Tooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatCostCents(Number(v)), 'Cost']}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatCostCents(Number(v)), 'Cost']} />
                 <Area
                   type="monotone"
                   dataKey="costCents"
@@ -270,10 +274,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatTokens(Number(v))} />
-                <Tooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatTokens(Number(v)), 'Tokens']}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatTokens(Number(v)), 'Tokens']} />
                 <Area
                   type="monotone"
                   dataKey="totalTokens"
@@ -300,8 +301,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
             <ResponsiveContainer width="100%" height={220}>
               <BarChart
                 data={workflows.map((w, i) => ({
-                  name:
-                    w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
+                  name: w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
                   costCents: w.totalCostCents,
                   color: WORKFLOW_COLORS[i % WORKFLOW_COLORS.length],
                 }))}
@@ -309,16 +309,9 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => `$${(v / 100).toFixed(0)}`}
-                />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 100).toFixed(0)}`} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
-                <Tooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatCostCents(Number(v)), 'Cost']}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatCostCents(Number(v)), 'Cost']} />
                 <Bar dataKey="costCents" name="Cost" radius={[0, 4, 4, 0]}>
                   {workflows.map((_, i) => (
                     <Cell key={i} fill={WORKFLOW_COLORS[i % WORKFLOW_COLORS.length]} />
@@ -338,8 +331,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
             <ResponsiveContainer width="100%" height={220}>
               <BarChart
                 data={workflows.map((w, i) => ({
-                  name:
-                    w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
+                  name: w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
                   inputTokens: w.inputTokens,
                   outputTokens: w.outputTokens,
                   color: WORKFLOW_COLORS[i % WORKFLOW_COLORS.length],
@@ -348,16 +340,9 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v) => formatTokens(Number(v))}
-                />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatTokens(Number(v))} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
-                <Tooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v, name) => [formatTokens(Number(v)), name]}
-                />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v, name) => [formatTokens(Number(v)), name]} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="inputTokens" name="Input" stackId="tokens" fill="#2196f3" radius={[0, 0, 0, 0]} />
                 <Bar dataKey="outputTokens" name="Output" stackId="tokens" fill="#9c27b0" radius={[0, 4, 4, 0]} />
@@ -393,7 +378,10 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
               }}
             >
               {['Workflow', 'Total Cost', 'Input Tokens', 'Output Tokens', 'Total Tokens', 'Runs'].map((h) => (
-                <Typography key={h} sx={{ fontSize: '11px', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                <Typography
+                  key={h}
+                  sx={{ fontSize: '11px', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.4px' }}
+                >
                   {h}
                 </Typography>
               ))}

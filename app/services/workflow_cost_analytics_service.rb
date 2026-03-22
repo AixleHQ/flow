@@ -8,6 +8,24 @@ class WorkflowCostAnalyticsService
     "1y" => 365
   }.freeze
 
+  DATE_TRUNC_GROUP_SQL = {
+    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at)"),
+    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at)"),
+    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at)")
+  }.freeze
+
+  DATE_TRUNC_ORDER_SQL = {
+    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at) ASC"),
+    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at) ASC"),
+    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at) ASC")
+  }.freeze
+
+  DATE_TRUNC_SELECT_SQL = {
+    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at) AS period_date"),
+    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at) AS period_date"),
+    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at) AS period_date")
+  }.freeze
+
   WorkflowRow = Struct.new(
     :workflow_id, :workflow_name,
     :total_cost_cents, :input_tokens, :output_tokens, :total_tokens,
@@ -93,7 +111,7 @@ class WorkflowCostAnalyticsService
   end
 
   def build_time_series(runs)
-    date_trunc = time_series_trunc
+    trunc_key = time_series_trunc
 
     points = WorkflowRun
       .from(runs, :wr)
@@ -103,10 +121,10 @@ class WorkflowCostAnalyticsService
       .joins(
         "LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = step_runs.terminal_session_id"
       )
-      .group(Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at)"))
-      .order(Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at) ASC"))
+      .group(DATE_TRUNC_GROUP_SQL.fetch(trunc_key, DATE_TRUNC_GROUP_SQL["day"]))
+      .order(DATE_TRUNC_ORDER_SQL.fetch(trunc_key, DATE_TRUNC_ORDER_SQL["day"]))
       .select(
-        Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at) AS period_date"),
+        DATE_TRUNC_SELECT_SQL.fetch(trunc_key, DATE_TRUNC_SELECT_SQL["day"]),
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS cost_cents",
         "COALESCE(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
         "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0) AS total_tokens"

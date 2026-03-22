@@ -1,7 +1,6 @@
+import type { AnalyticsPeriod, AnalyticsScope } from 'features/project-analytics/api/projectAnalyticsApi';
 import { baseApi, QueryTag } from 'shared/api';
 import { Routes } from 'shared/routes';
-
-import type { AnalyticsPeriod, AnalyticsScope } from 'features/project-analytics/api/projectAnalyticsApi';
 
 export interface WorkflowCostRow {
   workflowId: number;
