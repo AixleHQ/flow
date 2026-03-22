@@ -100,6 +100,7 @@ export const projectTabRoute = createRoute({
     priority: search.priority as string | undefined,
     tags: search.tags as string | undefined,
     search: search.search as string | undefined,
+    task: search.task as number | undefined,
   }),
   component: ProjectPage,
 });
