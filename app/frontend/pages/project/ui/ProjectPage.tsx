@@ -9,6 +9,7 @@ import { AssetPreview } from 'features/asset-preview';
 import { useGetProjectAssetsQuery, AssetsPanel } from 'features/assets-management';
 import { BoardPanel } from 'features/board-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
+import { IntegrationsPanel } from 'features/integrations-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
 import { ProjectAnalyticsPanel } from 'features/project-analytics';
 import { ProjectOverviewPanel } from 'features/project-overview';
@@ -50,6 +51,7 @@ const VALID_TABS: ProjectTab[] = [
   'board',
   'assets',
   'repositories',
+  'integrations',
   'workflows',
   'runs',
   'sessions',
@@ -161,6 +163,7 @@ const ProjectPage = () => {
         {activeTab === 'mcp-servers' && <McpServersPanel projectId={Number(projectId)} />}
         {activeTab === 'skills' && <SkillsPanel projectId={Number(projectId)} />}
         {activeTab === 'repositories' && <RepositoriesPanel projectId={Number(projectId)} />}
+        {activeTab === 'integrations' && <IntegrationsPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && <SettingsTab projectId={projectId} />}
         {activeTab === 'analytics' && <ProjectAnalyticsPanel projectId={Number(projectId)} />}
       </Box>

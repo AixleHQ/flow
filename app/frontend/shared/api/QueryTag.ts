@@ -15,6 +15,7 @@ export enum QueryTag {
   Skills = 'Skills',
   Assets = 'Assets',
   Integrations = 'Integrations',
+  ProjectIntegrations = 'ProjectIntegrations',
   Repositories = 'Repositories',
   Activity = 'Activity',
   ViewPreset = 'ViewPreset',

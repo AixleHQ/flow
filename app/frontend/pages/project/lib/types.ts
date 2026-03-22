@@ -3,6 +3,7 @@ export type ProjectTab =
   | 'board'
   | 'assets'
   | 'repositories'
+  | 'integrations'
   | 'workflows'
   | 'runs'
   | 'sessions'

@@ -11,7 +11,7 @@ module Api
           end
 
           def create
-            integration = current_company.integrations.find(params[:integration_id])
+            integration = Integration.visible_for_project(current_project).find(params[:integration_id])
             repo_info = Github::RepositoryService.new(integration).find_repo(params[:full_name])
 
             if repo_info.nil?
@@ -44,13 +44,13 @@ module Api
           end
 
           def available
-            integration = current_company.integrations.find(params[:integration_id])
+            integration = Integration.visible_for_project(current_project).find(params[:integration_id])
             repos = Github::RepositoryService.new(integration).list_available
             render json: { items: repos }
           end
 
           def branches
-            integration = current_company.integrations.find(params[:integration_id])
+            integration = Integration.visible_for_project(current_project).find(params[:integration_id])
             branches = Github::RepositoryService.new(integration).list_branches(params[:full_name])
             render json: { items: branches }
           end

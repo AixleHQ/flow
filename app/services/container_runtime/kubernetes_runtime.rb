@@ -5,6 +5,7 @@ require "json"
 require "ostruct"
 require "securerandom"
 require "shellwords"
+require "stringio"
 require "tempfile"
 require "uri"
 require "websocket-client-simple"
@@ -68,7 +69,7 @@ module ContainerRuntime
 
       handle = resolve_handle(id)
       normalized = normalize_tar_path(path)
-      return "" if normalized.blank?
+      return "" if normalized.blank?db/schema.rb
 
       output = Tempfile.new("palad-copy-from")
       output.binmode
@@ -102,13 +103,15 @@ module ContainerRuntime
       tar_io&.close!
     end
 
+    # Read file via exec + tar stream (same mechanism as #copy_from), then extract one entry.
+    # Mirrors DockerRuntime#read_file (archive_out + tar extract); requires a running pod.
     def read_file(id, path)
       return nil if path.blank?
 
-      tar_data = copy_from(id, path)
-      return nil if tar_data.blank?
+      tar_content = copy_from(id, path)
+      return nil if tar_content.blank?
 
-      extract_from_tar(tar_data, File.basename(path))
+      extract_from_tar(tar_content, File.basename(path))
     rescue StandardError => e
       Rails.logger.warn("[KubernetesRuntime] read_file failed for #{path}: #{e.message}")
       nil
@@ -1357,6 +1360,20 @@ module ContainerRuntime
       end
 
       values.map(&:to_s).map(&:strip).reject(&:blank?).uniq
+    end
+
+    # Extract a single file from tar bytes (aligned with DockerRuntime#extract_from_tar).
+    def extract_from_tar(tar_data, filename)
+      io = StringIO.new(tar_data)
+      Gem::Package::TarReader.new(io) do |tar|
+        tar.each do |entry|
+          return entry.read if entry.file? && File.basename(entry.full_name) == filename
+        end
+      end
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] extract_from_tar failed: #{e.message}")
+      nil
     end
 
     def kube_setting(key)

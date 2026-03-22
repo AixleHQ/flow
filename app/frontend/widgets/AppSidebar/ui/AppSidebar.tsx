@@ -7,6 +7,7 @@ import DashboardOutlined from '@mui/icons-material/DashboardOutlined';
 import DnsOutlined from '@mui/icons-material/DnsOutlined';
 import GroupOutlined from '@mui/icons-material/GroupOutlined';
 import InsertDriveFileOutlined from '@mui/icons-material/InsertDriveFileOutlined';
+import LinkOutlined from '@mui/icons-material/LinkOutlined';
 import PlaylistPlayOutlined from '@mui/icons-material/PlaylistPlayOutlined';
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined';
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined';
@@ -44,6 +45,7 @@ const navGroups: NavItem[][] = [
   ],
   [
     { tab: 'repositories', label: 'Repositories', icon: <SourceOutlined /> },
+    { tab: 'integrations', label: 'Integrations', icon: <LinkOutlined /> },
     { tab: 'agents', label: 'Agents', icon: <SmartToyOutlined /> },
     { tab: 'tools', label: 'Tools', icon: <BuildOutlined /> },
     { tab: 'mcp-servers', label: 'MCP Servers', icon: <DnsOutlined /> },
@@ -93,7 +95,7 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const getItemStyles = (active: boolean, collapsed: boolean): SxProps<Theme> => ({
-  minHeight: 38,
+  minHeight: 36,
   px: collapsed ? 1 : 1.5,
   mx: collapsed ? 0.5 : 1,
   borderRadius: 1,
@@ -153,6 +155,7 @@ export const AppSidebar: React.FC = () => {
                           primary={item.label}
                           primaryTypographyProps={{
                             fontSize: 13,
+                            lineHeight: 1.7,
                             fontWeight: isActive ? 600 : 400,
                             color: isActive ? 'text.primary' : 'text.secondary',
                             noWrap: true,

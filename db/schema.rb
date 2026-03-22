@@ -10,7 +10,11 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
+<<<<<<< HEAD
 ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
+=======
+ActiveRecord::Schema[8.1].define(version: 2026_03_22_130000) do
+>>>>>>> 8f8dbd4 (fix N+1, add integrations on project level)
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -149,7 +153,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
     t.index ["asset_id"], name: "index_asset_versions_on_asset_id"
   end
 
-  create_table "assets", force: :cascade do |t|
+  create_table "test/services/container_runtime/kubernetes_runtime_test.rb", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.datetime "deleted_at"
@@ -319,12 +323,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
     t.datetime "created_at", null: false
     t.text "credentials"
     t.string "name", null: false
+    t.bigint "project_id"
     t.string "provider", null: false
     t.jsonb "settings", default: {}
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
+    t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
+    t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
   end
 
@@ -803,6 +810,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
   add_foreign_key "column_workflow_bindings", "board_columns"
   add_foreign_key "column_workflow_bindings", "workflows"
   add_foreign_key "integrations", "companies"
+  add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"

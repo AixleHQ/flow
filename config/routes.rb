@@ -98,6 +98,7 @@ Rails.application.routes.draw do
             resources :agents, only: %i[index create update destroy]
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
+            resources :integrations, only: %i[index create destroy]
             resources :skills, only: %i[index create update destroy]
             resources :workflows, only: %i[index show create update destroy] do
               member do

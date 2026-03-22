@@ -7,6 +7,9 @@ interface IntegrationsResponse {
   items: Integration[];
 }
 
+const normalizeIntegrations = (response: Integration[] | IntegrationsResponse): Integration[] =>
+  Array.isArray(response) ? response : response.items;
+
 export const integrationsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getCompanyIntegrations: builder.query<Integration[], void>({
@@ -14,10 +17,17 @@ export const integrationsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyIntegrationsPath(),
         method: 'GET',
       }),
-      transformResponse: (response: Integration[] | IntegrationsResponse) => {
-        return Array.isArray(response) ? response : response.items;
-      },
+      transformResponse: normalizeIntegrations,
       providesTags: [QueryTag.Integrations],
+    }),
+
+    getProjectIntegrations: builder.query<Integration[], number>({
+      query: (projectId) => ({
+        url: Routes.backend.apiV1CompanyProjectIntegrationsPath(projectId),
+        method: 'GET',
+      }),
+      transformResponse: normalizeIntegrations,
+      providesTags: (result, err, projectId) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
     }),
 
     createGithubIntegration: builder.mutation<Integration, CreateGithubIntegrationRequest>({
@@ -29,6 +39,15 @@ export const integrationsApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Integrations],
     }),
 
+    createProjectGithubIntegration: builder.mutation<Integration, { projectId: number } & CreateGithubIntegrationRequest>({
+      query: ({ projectId, installationId }) => ({
+        url: Routes.backend.apiV1CompanyProjectIntegrationsPath(projectId),
+        method: 'POST',
+        data: { installationId },
+      }),
+      invalidatesTags: (result, err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
+    }),
+
     deleteIntegration: builder.mutation<void, number>({
       query: (id) => ({
         url: Routes.backend.apiV1CompanyIntegrationPath(id),
@@ -36,8 +55,22 @@ export const integrationsApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [QueryTag.Integrations],
     }),
+
+    deleteProjectIntegration: builder.mutation<void, { projectId: number; id: number }>({
+      query: ({ projectId, id }) => ({
+        url: Routes.backend.apiV1CompanyProjectIntegrationPath(projectId, id),
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
+    }),
   }),
 });
 
-export const { useGetCompanyIntegrationsQuery, useCreateGithubIntegrationMutation, useDeleteIntegrationMutation } =
-  integrationsApi;
+export const {
+  useGetCompanyIntegrationsQuery,
+  useGetProjectIntegrationsQuery,
+  useCreateGithubIntegrationMutation,
+  useCreateProjectGithubIntegrationMutation,
+  useDeleteIntegrationMutation,
+  useDeleteProjectIntegrationMutation,
+} = integrationsApi;

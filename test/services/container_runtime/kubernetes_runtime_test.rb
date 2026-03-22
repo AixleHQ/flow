@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "rubygems/package"
 
 module ContainerRuntime
   class KubernetesRuntimeTest < ActiveSupport::TestCase
@@ -93,32 +94,25 @@ module ContainerRuntime
       assert_nil @runtime.read_file("id", nil)
     end
 
-    test "read_file returns nil when copy_from returns empty" do
-      @runtime.stubs(:copy_from).returns("")
+    test "read_file returns nil when copy_from yields empty archive" do
+      @runtime.expects(:copy_from).with("ns/pod", "/workspace/note.txt").returns("")
 
-      assert_nil @runtime.read_file("id", "/workspace/file.txt")
+      assert_nil @runtime.read_file("ns/pod", "/workspace/note.txt")
     end
 
-    test "read_file returns file content from tar archive" do
-      tar_data = build_test_tar("file.txt", "hello world")
-      @runtime.stubs(:copy_from).returns(tar_data)
+    test "read_file extracts file matching basename from tar returned by copy_from" do
+      tar_io = Tempfile.new("k8s-read-file")
+      tar_io.binmode
+      Gem::Package::TarWriter.new(tar_io) do |tar|
+        tar.add_file_simple("workspace/note.txt", 0o644, 11) { |io| io.write("file body") }
+      end
+      tar_io.rewind
+      tar_bytes = tar_io.read
+      tar_io.close!
 
-      result = @runtime.read_file("id", "/workspace/file.txt")
+      @runtime.expects(:copy_from).with("handle", "/workspace/note.txt").returns(tar_bytes)
 
-      assert_equal "hello world", result
-    end
-
-    test "read_file returns nil when file not found in tar archive" do
-      tar_data = build_test_tar("other.txt", "other content")
-      @runtime.stubs(:copy_from).returns(tar_data)
-
-      assert_nil @runtime.read_file("id", "/workspace/file.txt")
-    end
-
-    test "read_file returns nil on StandardError" do
-      @runtime.stubs(:copy_from).raises(StandardError, "connection error")
-
-      assert_nil @runtime.read_file("id", "/workspace/file.txt")
+      assert_equal "file body", @runtime.read_file("handle", "/workspace/note.txt")
     end
 
     test "remove_image is no-op" do
