@@ -39,7 +39,10 @@ export const integrationsApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Integrations],
     }),
 
-    createProjectGithubIntegration: builder.mutation<Integration, { projectId: number } & CreateGithubIntegrationRequest>({
+    createProjectGithubIntegration: builder.mutation<
+      Integration,
+      { projectId: number } & CreateGithubIntegrationRequest
+    >({
       query: ({ projectId, installationId }) => ({
         url: Routes.backend.apiV1CompanyProjectIntegrationsPath(projectId),
         method: 'POST',

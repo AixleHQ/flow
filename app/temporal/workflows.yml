@@ -36,3 +36,5 @@ workflows:
         task_queue: palad_ruby
       - name: workflow_launch_step_session_activity
         task_queue: palad_ruby
+      - name: workflow_mark_step_skipped_activity
+        task_queue: palad_ruby

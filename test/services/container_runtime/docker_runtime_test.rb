@@ -124,29 +124,22 @@ module ContainerRuntime
       assert_equal "abcdef123456", @runtime.container_identifier(container)
     end
 
-    test "copy_to returns false when path blank" do
-      assert_equal false, @runtime.copy_to("id", "", "content")
-      assert_equal false, @runtime.copy_to("id", nil, "content")
-    end
-
-    test "copy_to executes mkdir and base64 write" do
+    test "copy_to delegates to container store_file" do
       container_mock = mock("container")
-      container_mock.expects(:exec).returns([ [], [], 0 ])
+      container_mock.expects(:store_file).with("/tmp/file.txt", "hello")
       Docker::Container.stubs(:get).with("cid").returns(container_mock)
 
-      result = @runtime.copy_to("cid", "/tmp/file.txt", "hello")
-
-      assert_equal true, result
+      @runtime.copy_to("cid", "/tmp/file.txt", "hello")
     end
 
-    test "copy_from delegates to container archive" do
+    test "copy_from delegates to container read_file" do
       container_mock = mock("container")
-      container_mock.expects(:archive).with("/path/to/file").returns("tar content")
+      container_mock.expects(:read_file).with("/path/to/file").returns("file content")
       Docker::Container.stubs(:get).with("cid").returns(container_mock)
 
       result = @runtime.copy_from("cid", "/path/to/file")
 
-      assert_equal "tar content", result
+      assert_equal "file content", result
     end
 
     test "stop_container delegates to container" do

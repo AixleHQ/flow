@@ -104,7 +104,6 @@ module Api
 
           current_company.projects.find_by(id: match[1].to_i)
         end
-
       end
     end
   end

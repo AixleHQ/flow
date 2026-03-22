@@ -9,7 +9,8 @@ class Asset < ApplicationRecord
   has_many :versions, class_name: "AssetVersion", dependent: :destroy, inverse_of: :asset
 
   validates :name, presence: true
-  validates :name, uniqueness: { scope: %i[scope_type scope_id folder], message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id folder], message: "already exists in this scope",
+                                 conditions: -> { where(deleted_at: nil) } }
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
   validates :status, presence: true, inclusion: { in: %w[active pending_review dismissed] }

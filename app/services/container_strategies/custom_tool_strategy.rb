@@ -35,7 +35,7 @@ module ContainerStrategies
       (input[:parameters] || {}).each { |k, v| env[k.to_s.upcase.gsub(/[^A-Z0-9_]/, "_")] = v.to_s }
       env.merge!(resolve_config_items)
       inject_project_env(env)
-      env.map { |k, v| "#{k}=#{v}" }
+      super + env.map { |k, v| "#{k}=#{v}" }
     end
 
     def build_labels

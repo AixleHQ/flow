@@ -104,7 +104,7 @@ module ContainerRuntime
       tar_io = Tempfile.new("k8s-read-file")
       tar_io.binmode
       Gem::Package::TarWriter.new(tar_io) do |tar|
-        tar.add_file_simple("workspace/note.txt", 0o644, 11) { |io| io.write("file body") }
+        tar.add_file_simple("workspace/note.txt", 0o644, 9) { |io| io.write("file body") }
       end
       tar_io.rewind
       tar_bytes = tar_io.read

@@ -10,11 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-<<<<<<< HEAD
-ActiveRecord::Schema[8.1].define(version: 2026_03_20_120000) do
-=======
-ActiveRecord::Schema[8.1].define(version: 2026_03_22_130000) do
->>>>>>> 8f8dbd4 (fix N+1, add integrations on project level)
+ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -169,7 +165,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_130000) do
     t.string "tags", default: [], array: true
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
-    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true
+    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["created_by_id"], name: "index_assets_on_created_by_id"
     t.index ["deleted_at"], name: "index_assets_on_deleted_at"
     t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
@@ -485,7 +481,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_130000) do
   create_table "step_runs", force: :cascade do |t|
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.jsonb "error_history", default: [], null: false
     t.text "error_message"
+    t.integer "retry_count", default: 0, null: false
     t.string "skip_reason"
     t.datetime "started_at"
     t.string "state", default: "pending", null: false

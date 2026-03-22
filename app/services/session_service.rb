@@ -37,7 +37,9 @@ class SessionService
 
       prompt = step.instructions.presence || "Execute step: #{step.name}"
       runtime = step.required_agent_runtime.presence ||
-                workflow_run.user.default_agent_runtime ||
+                workflow_run.agent_runtime.presence ||
+                workflow_run.user.default_agent_runtime.presence ||
+                workflow_run.user.agent_credentials.order(created_at: :desc).first&.agent_type ||
                 "cursor_cli"
 
       session = TerminalSession.create!(
@@ -56,12 +58,13 @@ class SessionService
       )
 
       step_run.update!(terminal_session: session)
+      # Notify workflow run subscribers as soon as the step is linked, so the UI can open
+      # TerminalSessionChannel before resolver / Temporal (which can take a long time).
+      step_run.broadcast_update!
 
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
-
-      step_run.broadcast_update!
       session.start! if session.may_start?
       start_temporal_workflow(session)
 
@@ -90,11 +93,10 @@ class SessionService
     end
 
     def signal_container_finished(session)
+      # Signal the container workflow to stop. For workflow_step sessions, the execution
+      # workflow is notified by WorkflowStepStrategy#before_cleanup *after* outputs are
+      # collected, to avoid a race with CompleteStepActivity output validation.
       TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
-
-      if session.session_type == "workflow_step" && session.step_run&.workflow_run_id
-        WorkflowService.notify_container_finished(step_run: session.step_run)
-      end
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
     end

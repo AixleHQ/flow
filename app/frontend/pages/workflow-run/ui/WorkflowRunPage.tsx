@@ -12,10 +12,12 @@ import {
   Tab,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useNavigate, useParams } from '@tanstack/react-router';
+import { useSnackbar } from 'notistack';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -25,10 +27,12 @@ import {
   useRetryStepMutation,
   useSkipStepMutation,
   WorkflowAssetsReview,
+  type StepFailureRecord,
   type StepRunInfo,
   type WorkflowRun,
 } from 'features/workflow-execution';
 import { useGetStepsQuery } from 'features/workflow-steps';
+import { useFinishSessionMutation } from 'shared/api/terminalSessionApi';
 import { useTick, useWorkflowRunChannel } from 'shared/lib/hooks';
 import { Routes } from 'shared/routes';
 import { StatusBar } from 'shared/ui';
@@ -336,7 +340,7 @@ function formatDuration(startedAt: string | null, completedAt?: string | null, n
   if (!startedAt) return '--';
   const start = new Date(startedAt);
   const end = completedAt ? new Date(completedAt) : new Date(now ?? Date.now());
-  const diffMs = end.getTime() - start.getTime();
+  const diffMs = Math.max(0, end.getTime() - start.getTime());
   const diffMins = Math.floor(diffMs / 60000);
   const diffSecs = Math.floor((diffMs % 60000) / 1000);
   return `${diffMins}m ${diffSecs}s`;
@@ -383,6 +387,8 @@ const WorkflowRunPage = () => {
   const [retryStep, { isLoading: retrying }] = useRetryStepMutation();
   const [skipStep, { isLoading: skipping }] = useSkipStepMutation();
   const [cancelRun, { isLoading: cancelling }] = useCancelWorkflowRunMutation();
+  const [finishSession, { isLoading: finishingStepSession }] = useFinishSessionMutation();
+  const { enqueueSnackbar } = useSnackbar();
 
   const stepRuns: StepRunInfo[] = useMemo(() => workflowRun?.stepRuns ?? [], [workflowRun?.stepRuns]);
 
@@ -396,6 +402,8 @@ const WorkflowRunPage = () => {
     stepRun: StepRunInfo | null;
     state: string;
     isParallel: boolean;
+    pastFailures: StepFailureRecord[];
+    onFailure: string;
   }
 
   const timelineSteps: TimelineStep[] = useMemo(() => {
@@ -421,7 +429,11 @@ const WorkflowRunPage = () => {
     });
 
     return sorted.map((step) => {
-      const sr = stepRuns.find((r) => r.stepId === step.id) ?? null;
+      const allRunsForStep = stepRuns.filter((r) => r.stepId === step.id);
+      // Use the latest step_run (by createdAt) as the current one
+      const sr =
+        allRunsForStep.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
+      const pastFailures = sr?.pastFailures ?? [];
       const wave = waveMap.get(step.id) ?? 0;
       return {
         stepId: step.id,
@@ -431,6 +443,8 @@ const WorkflowRunPage = () => {
         stepRun: sr,
         state: sr?.state ?? 'pending',
         isParallel: (waveCounts.get(wave) ?? 1) > 1,
+        pastFailures,
+        onFailure: step.onFailure ?? 'fail',
       };
     });
   }, [workflowSteps, stepRuns]);
@@ -448,9 +462,9 @@ const WorkflowRunPage = () => {
   /* ── selection logic ──────────────────────────────────────────── */
 
   const currentStepRun = stepRuns.find((s) => s.state === 'running' || s.state === 'waiting_input');
-  const selectedTimelineStep = activeStepRunId
-    ? timelineSteps.find((t) => t.stepRun?.id === activeStepRunId)
-    : (timelineSteps.find((t) => t.stepRun?.id === currentStepRun?.id) ?? timelineSteps[0] ?? null);
+  const matchedByActive = activeStepRunId ? timelineSteps.find((t) => t.stepRun?.id === activeStepRunId) : null;
+  const selectedTimelineStep =
+    matchedByActive ?? timelineSteps.find((t) => t.stepRun?.id === currentStepRun?.id) ?? timelineSteps[0] ?? null;
   const selectedStepRun = selectedTimelineStep?.stepRun ?? null;
 
   const prevCurrentIdRef = useRef<number | undefined>(undefined);
@@ -482,6 +496,19 @@ const WorkflowRunPage = () => {
     refreshChannel();
   }, [cancelRun, projectId, runId, refreshChannel]);
 
+  const handleFinishStepSession = useCallback(async () => {
+    const sid = selectedStepRun?.terminalSessionId;
+    if (!sid) return;
+    try {
+      await finishSession({ sessionId: sid }).unwrap();
+      enqueueSnackbar('Session is finishing — the workflow continues after the agent stops.', { variant: 'info' });
+      refreshChannel();
+      refetchRun();
+    } catch {
+      enqueueSnackbar('Could not finish session', { variant: 'error' });
+    }
+  }, [selectedStepRun?.terminalSessionId, finishSession, enqueueSnackbar, refreshChannel, refetchRun]);
+
   /* ── derived ───────────────────────────────────────────────────── */
 
   if (isLoading) {
@@ -508,10 +535,16 @@ const WorkflowRunPage = () => {
 
   const completedCount = timelineSteps.filter((t) => t.state === 'completed').length;
   const canAct = selectedStepRun?.state === 'waiting_input' && isRunActive(workflowRun);
-  const canRetryFailed = selectedStepRun?.state === 'failed' && isRunActive(workflowRun);
   const hasSubSteps = (selectedStepRun?.subStepRuns ?? []).length > 0;
   const isWorkflowRunning = isRunActive(workflowRun);
   const sessionStatus = isWorkflowRunning ? 'running' : workflowRun.state === 'completed' ? 'completed' : 'error';
+  const isStepAutoRun =
+    selectedTimelineStep && (workflowRun.stepOverrides?.[String(selectedTimelineStep.stepId)]?.autoRun ?? false);
+  const canFinishStepSession =
+    isWorkflowRunning &&
+    selectedStepRun?.state === 'running' &&
+    selectedStepRun?.terminalSessionId != null &&
+    !isStepAutoRun;
 
   return (
     <Box sx={styles.root}>
@@ -533,7 +566,7 @@ const WorkflowRunPage = () => {
             <Link
               sx={styles.breadcrumbLink}
               onClick={() =>
-                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'runs') })
+                navigate({ to: Routes.frontend.companyProjectTabPath(String(workflowRun.projectId), 'workflow-runs') })
               }
             >
               Runs
@@ -606,26 +639,74 @@ const WorkflowRunPage = () => {
                   <Box key={wave.wave} sx={{ display: 'flex', alignItems: 'center' }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       {wave.steps.map((ts, stepIdx) => (
-                        <Box
+                        <Tooltip
                           key={ts.stepId}
-                          sx={{
-                            ...styles.stepChip,
-                            ...(selectedTimelineStep?.stepId === ts.stepId ? styles.stepChipActive : {}),
-                          }}
-                          onClick={() => ts.stepRun && setActiveStepRunId(ts.stepRun.id)}
+                          title={
+                            ts.pastFailures.length > 0 ? (
+                              <Box>
+                                <Typography sx={{ fontSize: '11px', fontWeight: 600, mb: 0.5 }}>
+                                  {ts.pastFailures.length} previous{' '}
+                                  {ts.pastFailures.length === 1 ? 'failure' : 'failures'}
+                                </Typography>
+                                {ts.pastFailures.map((f, i) => (
+                                  <Box key={i} sx={{ mb: 0.5 }}>
+                                    <Typography sx={{ fontSize: '10px', color: 'error.light' }}>
+                                      {f.errorMessage ?? 'Unknown error'}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              </Box>
+                            ) : (
+                              ''
+                            )
+                          }
+                          placement="bottom"
+                          arrow
                         >
-                          <Box sx={{ ...styles.stepIndicator, ...getIndicatorStyle(ts.state) }}>
-                            {getStepIcon(ts.state, stepIdx)}
-                          </Box>
-                          <Box>
-                            <Typography sx={styles.stepChipName}>{ts.stepName}</Typography>
-                            {ts.stepRun?.startedAt && (
-                              <Typography sx={styles.stepChipMeta}>
-                                {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt, tick)}
-                              </Typography>
+                          <Box
+                            sx={{
+                              ...styles.stepChip,
+                              ...(selectedTimelineStep?.stepId === ts.stepId ? styles.stepChipActive : {}),
+                              position: 'relative',
+                            }}
+                            onClick={() => ts.stepRun && setActiveStepRunId(ts.stepRun.id)}
+                          >
+                            <Box sx={{ ...styles.stepIndicator, ...getIndicatorStyle(ts.state) }}>
+                              {getStepIcon(ts.state, stepIdx)}
+                            </Box>
+                            <Box>
+                              <Typography sx={styles.stepChipName}>{ts.stepName}</Typography>
+                              {ts.stepRun?.startedAt && (
+                                <Typography sx={styles.stepChipMeta}>
+                                  {formatDuration(ts.stepRun.startedAt, ts.stepRun.completedAt, tick)}
+                                </Typography>
+                              )}
+                            </Box>
+                            {ts.pastFailures.length > 0 && (
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: -6,
+                                  right: -6,
+                                  width: 16,
+                                  height: 16,
+                                  borderRadius: '50%',
+                                  backgroundColor: 'error.main',
+                                  color: 'white',
+                                  fontSize: '9px',
+                                  fontWeight: 700,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  border: '1.5px solid',
+                                  borderColor: 'background.paper',
+                                }}
+                              >
+                                {ts.pastFailures.length}
+                              </Box>
                             )}
                           </Box>
-                        </Box>
+                        </Tooltip>
                       ))}
                     </Box>
                     {waveIdx < timelineWaves.length - 1 && (
@@ -669,6 +750,14 @@ const WorkflowRunPage = () => {
                         ? 'No terminal session assigned yet'
                         : 'Select a running step from the timeline above'}
                     </Typography>
+                    {workflowRun.mode !== 'non_interactive' &&
+                      selectedStepRun?.state === 'running' &&
+                      selectedStepRun?.terminalSessionId != null && (
+                        <Typography sx={{ ...styles.placeholderSubtext, mt: 1 }}>
+                          Done with this step? Use &quot;Finish agent session&quot; in the right panel to stop the agent
+                          and move the workflow forward.
+                        </Typography>
+                      )}
                   </Box>
                 )}
               </Box>
@@ -736,6 +825,26 @@ const WorkflowRunPage = () => {
                 </Box>
               )}
 
+              {canFinishStepSession && selectedStepRun && (
+                <Box sx={styles.stepActionSection}>
+                  <Typography sx={{ fontSize: '11px', color: 'text.secondary', lineHeight: 1.4, mb: 0.5 }}>
+                    Stop the agent when you are satisfied with this step. The workflow will collect outputs and
+                    continue.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    color="secondary"
+                    onClick={handleFinishStepSession}
+                    disabled={finishingStepSession}
+                    fullWidth
+                    sx={{ textTransform: 'none' }}
+                  >
+                    {finishingStepSession ? 'Finishing…' : 'Finish agent session'}
+                  </Button>
+                </Box>
+              )}
+
               {/* Action buttons */}
               {canAct && selectedStepRun && (
                 <Box sx={styles.stepActionSection}>
@@ -776,36 +885,12 @@ const WorkflowRunPage = () => {
                   </Box>
                 </Box>
               )}
-              {canRetryFailed && selectedStepRun && (
+              {selectedStepRun?.state === 'failed' && selectedStepRun.errorMessage && (
                 <Box sx={styles.stepActionSection}>
                   <Typography sx={{ fontSize: '11px', color: 'error.main', fontWeight: 500 }}>Step failed</Typography>
-                  {selectedStepRun.errorMessage && (
-                    <Typography sx={{ fontSize: '10px', color: 'text.secondary' }}>
-                      {selectedStepRun.errorMessage}
-                    </Typography>
-                  )}
-                  <Box sx={{ display: 'flex', gap: '6px' }}>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      color="inherit"
-                      onClick={() => setSkipDialogOpen(true)}
-                      disabled={skipping}
-                      fullWidth
-                    >
-                      Skip
-                    </Button>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      color="warning"
-                      onClick={handleRetry}
-                      disabled={retrying}
-                      fullWidth
-                    >
-                      Retry
-                    </Button>
-                  </Box>
+                  <Typography sx={{ fontSize: '10px', color: 'text.secondary' }}>
+                    {selectedStepRun.errorMessage}
+                  </Typography>
                 </Box>
               )}
             </Box>

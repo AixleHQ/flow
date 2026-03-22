@@ -1,11 +1,12 @@
 export type ProjectTab =
+  | ''
   | 'overview'
   | 'board'
   | 'assets'
   | 'repositories'
   | 'integrations'
   | 'workflows'
-  | 'runs'
+  | 'workflow-runs'
   | 'sessions'
   | 'config'
   | 'agents'

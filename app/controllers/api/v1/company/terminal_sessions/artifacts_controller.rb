@@ -18,11 +18,29 @@ module Api
                 asset = current_session.output_assets.find(asset_id)
                 case decision
                 when "save"
-                  asset.update!(
-                    status: "active",
-                    reviewed_at: Time.current,
-                    folder: nil
-                  )
+                  existing = Asset.where(
+                    name: asset.name,
+                    scope_type: asset.scope_type,
+                    scope_id: asset.scope_id,
+                    folder: nil,
+                    deleted_at: nil
+                  ).where.not(id: asset.id).first
+
+                  if existing
+                    # Merge as new version into existing asset
+                    source_version = asset.latest_version
+                    if source_version&.file
+                      next_ver = (existing.latest_version&.version || 0) + 1
+                      existing.versions.create!(version: next_ver, file: source_version.file, uploaded_by: current_user)
+                    end
+                    asset.update!(status: "dismissed", reviewed_at: Time.current)
+                  else
+                    asset.update!(
+                      status: "active",
+                      reviewed_at: Time.current,
+                      folder: nil
+                    )
+                  end
                 when "dismiss"
                   asset.update!(
                     status: "dismissed",

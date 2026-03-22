@@ -39,7 +39,7 @@ const navGroups: NavItem[][] = [
     { tab: 'board', label: 'Tasks', icon: <ViewKanbanOutlined /> },
     { tab: 'sessions', label: 'Sessions', icon: <TerminalOutlined /> },
     { tab: 'workflows', label: 'Workflows', icon: <AccountTreeOutlined /> },
-    { tab: 'runs', label: 'Runs', icon: <PlaylistPlayOutlined /> },
+    { tab: 'workflow-runs', label: 'Runs', icon: <PlaylistPlayOutlined /> },
     { tab: 'assets', label: 'Assets', icon: <InsertDriveFileOutlined /> },
     { tab: 'analytics', label: 'Analytics', icon: <TrendingUpOutlined /> },
   ],
@@ -121,7 +121,7 @@ export const AppSidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem(STORAGE_KEY) === 'true');
 
   const projectId = params.projectId;
-  const currentTab = params.tab || 'overview';
+  const currentTab = params.tab || '';
   const currentPath = routerState.location.pathname;
   const isProjectRoute = currentPath.startsWith('/company/projects/') && projectId;
   const width = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
@@ -144,7 +144,7 @@ export const AppSidebar: React.FC = () => {
             {groupIdx > 0 && <Divider sx={styles.divider} />}
             <List disablePadding>
               {group.map((item) => {
-                const isActive = currentTab === item.tab;
+                const isActive = currentTab === item.tab || currentPath.includes(item.tab);
                 const to = Routes.frontend.companyProjectTabPath(projectId!, item.tab);
                 return (
                   <Tooltip key={item.tab} title={collapsed ? item.label : ''} placement="right" arrow>

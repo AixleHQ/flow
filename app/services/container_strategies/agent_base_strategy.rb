@@ -110,7 +110,7 @@ module ContainerStrategies
 
       env_vars.merge!(agent_service.adapter.default_env_vars(session))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
-      env_vars.compact.map { |k, v| "#{k}=#{v}" }
+      super + env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
 
     def build_labels

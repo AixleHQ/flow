@@ -47,13 +47,14 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const VALID_TABS: ProjectTab[] = [
+  '',
   'overview',
   'board',
   'assets',
   'repositories',
   'integrations',
   'workflows',
-  'runs',
+  'workflow-runs',
   'sessions',
   'config',
   'agents',
@@ -93,9 +94,9 @@ const ProjectPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const projectId = (params as { projectId?: string }).projectId || '';
-  const tabParam = (params as { tab?: string }).tab || 'overview';
+  const tabParam = (params as { tab?: string }).tab;
   const activeTab = useMemo<ProjectTab>(
-    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : 'overview'),
+    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : ''),
     [tabParam],
   );
 
@@ -125,7 +126,7 @@ const ProjectPage = () => {
             renderRunModal={(slot) => <ConnectedRunModal slot={slot} projectAssets={projectAssets} />}
           />
         )}
-        {activeTab === 'runs' && (
+        {activeTab === 'workflow-runs' && (
           <WorkflowRunsWidget
             projectId={Number(projectId)}
             onRunSelect={(id) => navigate({ to: Routes.frontend.workflowRunPath(projectId, String(id)) as string })}

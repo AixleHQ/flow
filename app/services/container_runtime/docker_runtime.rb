@@ -65,23 +65,12 @@ module ContainerRuntime
 
     def copy_from(id, path)
       container = resolve_container(id)
-      container.archive(path)
+      container.read_file(path)
     end
 
     def copy_to(id, path, content)
-      return false if path.blank?
-
       container = resolve_container(id)
-      dir = File.dirname(path)
-      safe_dir = Shellwords.escape(dir)
-      safe_path = Shellwords.escape(path)
-      encoded = Base64.strict_encode64(content.to_s)
-
-      _stdout, _stderr, exit_code = container.exec(
-        [ "/bin/sh", "-c", "mkdir -p #{safe_dir} && echo '#{encoded}' | base64 -d > #{safe_path}" ]
-      )
-
-      exit_code.to_i.zero?
+      container.store_file(path, content)
     end
 
     # Store file using Docker archive API (works on created/stopped containers)

@@ -97,6 +97,12 @@ module ContextBuilders
         line += " — #{ss.description}" if ss.description.present?
         lines << line
 
+        if ss.instructions.present?
+          lines << ""
+          ss.instructions.each_line { |l| lines << "   #{l.chomp}" }
+          lines << ""
+        end
+
         if ssr&.note.present?
           lines << "   → #{ssr.note.truncate(200)}"
         end

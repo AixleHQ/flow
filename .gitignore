@@ -87,3 +87,4 @@ docker/remote/db_dumps/latest.sql.gz
 andrew-memo/
 .playwright-mcp/
 .stitch/
+.claude/
