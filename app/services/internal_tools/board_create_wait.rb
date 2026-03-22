@@ -16,7 +16,7 @@ module InternalTools
       return error("Unsupported wait_type: #{wait_type}") unless SUPPORTED_WAIT_TYPES.include?(wait_type)
 
       metadata = build_metadata(wait_type)
-      return metadata if metadata.is_a?(Hash) && metadata[:error]
+      return metadata if metadata.is_a?(Hash) && metadata.key?(:exit_code)
 
       wait = task.task_waits.create!(wait_type: wait_type, metadata: metadata)
 

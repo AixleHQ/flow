@@ -6,6 +6,7 @@ class WaitService
       waits = TaskWait
         .pending
         .for_repository(repo_full_name)
+        .where("metadata->>'repo_full_name' = ?", repo_full_name)
         .for_github_pr_number(pr_number)
 
       waits.find_each do |wait|

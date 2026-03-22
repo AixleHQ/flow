@@ -58,7 +58,7 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "does not enqueue job for check_suite with non-completed action" do
     payload = {
-      check_suite: { action: "rerequested", conclusion: nil, pull_requests: [{ number: 10 }] },
+      check_suite: { action: "rerequested", conclusion: nil, pull_requests: [ { number: 10 } ] },
       repository: { full_name: "org/repo" }
     }.to_json
 
@@ -77,7 +77,7 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
       check_suite: {
         action: "completed",
         conclusion: "success",
-        pull_requests: [{ number: 42 }, { number: 43 }]
+        pull_requests: [ { number: 42 }, { number: 43 } ]
       },
       repository: { full_name: "org/app" }
     }.to_json
@@ -97,7 +97,7 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
       check_suite: {
         action: "completed",
         conclusion: "failure",
-        pull_requests: [{ number: 7 }]
+        pull_requests: [ { number: 7 } ]
       },
       repository: { full_name: "org/myrepo" }
     }.to_json
@@ -106,7 +106,7 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     @request.headers["X-GitHub-Event"] = "check_suite"
 
     assert_enqueued_with(job: ResolveGithubChecksJob,
-                         args: [{ repo_full_name: "org/myrepo", pr_number: 7, conclusion: "failure" }]) do
+                         args: [ { repo_full_name: "org/myrepo", pr_number: 7, conclusion: "failure" } ]) do
       post_raw(payload)
     end
   end
@@ -139,11 +139,10 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
   end
 
   # Posts a raw JSON body to the :receive action.
-  # ActionController::TestCase does not have a first-class `body:` kwarg, so we
-  # set RAW_POST_DATA manually and let the controller read it via request.raw_post.
+  # Uses the `body:` kwarg so Rails 8 sets RAW_POST_DATA after recycle!, ensuring
+  # request.raw_post returns the correct bytes for HMAC verification.
   def post_raw(body)
-    @request.env["RAW_POST_DATA"] = body
-    @request.env["CONTENT_TYPE"]  = "application/json"
-    post :receive
+    @request.env["CONTENT_TYPE"] = "application/json"
+    post :receive, body: body
   end
 end
