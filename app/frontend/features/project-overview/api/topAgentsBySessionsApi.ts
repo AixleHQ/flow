@@ -4,9 +4,9 @@ import { Routes } from 'shared/routes';
 export interface AgentSessionStats {
   rank: number;
   name: string;
-  agent_type: string;
-  sessions_count: number;
-  total_cost_cents: number;
+  agentType: string;
+  sessionsCount: number;
+  totalCostCents: number;
 }
 
 export const topAgentsBySessionsApi = baseApi.injectEndpoints({
@@ -17,6 +17,7 @@ export const topAgentsBySessionsApi = baseApi.injectEndpoints({
         method: 'GET',
         params: params ?? {},
       }),
+      transformResponse: (response: { topAgents: AgentSessionStats[] }) => response.topAgents,
       providesTags: [QueryTag.TopAgentsSessions],
     }),
   }),

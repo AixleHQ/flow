@@ -35,14 +35,15 @@ class Api::V1::Company::Statistic::TopAgentsControllerTest < ActionController::T
     assert_response :unauthorized
   end
 
-  test "#show returns an array" do
+  test "#show returns a hash with top_agents array" do
     sign_in @admin
 
     get :show
 
     assert_response :success
     json = response.parsed_body
-    assert { json.is_a?(Array) }
+    assert { json.is_a?(Hash) }
+    assert { json["top_agents"].is_a?(Array) }
   end
 
   test "#show returns agents ranked by session count" do
@@ -57,12 +58,12 @@ class Api::V1::Company::Statistic::TopAgentsControllerTest < ActionController::T
     get :show
 
     assert_response :success
-    json = response.parsed_body
-    assert { json.length == 2 }
-    assert { json.first["name"] == "agent_a" }
-    assert { json.first["sessions_count"] == 3 }
-    assert { json.second["name"] == "agent_b" }
-    assert { json.second["sessions_count"] == 1 }
+    items = response.parsed_body["top_agents"]
+    assert { items.length == 2 }
+    assert { items.first["name"] == "agent_a" }
+    assert { items.first["sessions_count"] == 3 }
+    assert { items.second["name"] == "agent_b" }
+    assert { items.second["sessions_count"] == 1 }
   end
 
   test "#show includes rank, name, agent_type, sessions_count, total_cost_cents" do
@@ -74,8 +75,7 @@ class Api::V1::Company::Statistic::TopAgentsControllerTest < ActionController::T
     get :show
 
     assert_response :success
-    json = response.parsed_body
-    entry = json.first
+    entry = response.parsed_body["top_agents"].first
     assert { entry.key?("rank") }
     assert { entry.key?("name") }
     assert { entry.key?("agent_type") }
@@ -96,8 +96,7 @@ class Api::V1::Company::Statistic::TopAgentsControllerTest < ActionController::T
     get :show
 
     assert_response :success
-    json = response.parsed_body
-    assert { json.empty? }
+    assert { response.parsed_body["top_agents"].empty? }
   end
 
   test "#show respects limit parameter" do
@@ -111,7 +110,6 @@ class Api::V1::Company::Statistic::TopAgentsControllerTest < ActionController::T
     get :show, params: { limit: 3 }
 
     assert_response :success
-    json = response.parsed_body
-    assert { json.length == 3 }
+    assert { response.parsed_body["top_agents"].length == 3 }
   end
 end

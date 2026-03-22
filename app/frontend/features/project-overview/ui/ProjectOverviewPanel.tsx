@@ -394,7 +394,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
                         <SmartToyIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
                         <Typography sx={{ fontSize: '13px', color: 'text.primary' }}>{agent.name}</Typography>
                         <Chip
-                          label={agent.agent_type}
+                          label={agent.agentType}
                           size="small"
                           variant="outlined"
                           sx={{ fontSize: '10px', height: 16 }}
@@ -402,12 +402,12 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
                       </Box>
                       <Box sx={{ display: 'flex', gap: 1 }}>
                         <Chip
-                          label={`${agent.sessions_count} sessions`}
+                          label={`${agent.sessionsCount} sessions`}
                           size="small"
                           sx={{ fontSize: '11px', height: 20 }}
                         />
                         <Chip
-                          label={formatSpend(agent.total_cost_cents)}
+                          label={formatSpend(agent.totalCostCents)}
                           size="small"
                           color="success"
                           variant="outlined"

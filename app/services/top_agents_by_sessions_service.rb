@@ -12,27 +12,25 @@ class TopAgentsBySessionsService
   end
 
   def call
-    agent_ids = Agent.belonging_to_company(company).pluck(:id)
-
     rows = TerminalSession
-      .where(configured_agent_id: agent_ids)
-      .group(:configured_agent_id)
+      .joins(:configured_agent)
+      .merge(Agent.belonging_to_company(company))
+      .group("terminal_sessions.configured_agent_id", "agents.name", "agents.scope_type")
       .select(
-        "configured_agent_id",
+        "terminal_sessions.configured_agent_id",
+        "agents.name AS agent_name",
+        "agents.scope_type AS agent_scope_type",
         "COUNT(*) AS sessions_count",
-        "SUM(cost_cents) AS total_cost_cents"
+        "SUM(terminal_sessions.cost_cents) AS total_cost_cents"
       )
       .order("sessions_count DESC")
       .limit(limit)
 
-    agents = Agent.where(id: rows.map(&:configured_agent_id)).index_by(&:id)
-
     rows.each_with_index.map do |row, idx|
-      agent = agents[row.configured_agent_id]
       AgentStats.new(
         rank: idx + 1,
-        name: agent&.name || "unknown",
-        agent_type: agent&.scope_type&.downcase || "unknown",
+        name: row.agent_name || "unknown",
+        agent_type: row.agent_scope_type&.downcase || "unknown",
         sessions_count: row.sessions_count.to_i,
         total_cost_cents: row.total_cost_cents.to_i
       )

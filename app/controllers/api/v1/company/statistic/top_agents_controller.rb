@@ -8,7 +8,7 @@ module Api
           def show
             limit = params.fetch(:limit, 10).to_i.clamp(1, 50)
             agents = TopAgentsBySessionsService.new(current_company, limit: limit).call
-            render body: agents.map(&:to_h).to_json, content_type: :json
+            render json: { top_agents: agents.map(&:to_h) }
           end
         end
       end
