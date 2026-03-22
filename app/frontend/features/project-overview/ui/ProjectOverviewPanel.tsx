@@ -8,6 +8,7 @@ import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
 import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 
+import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
 import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
@@ -182,6 +183,14 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     isLoading: workflowRunStatsLoading,
     isError: workflowRunStatsError,
   } = useGetWorkflowRunStatsQuery(undefined, {
+    pollingInterval: 60_000,
+  });
+
+  const {
+    data: boardTaskDistribution,
+    isLoading: boardTaskDistributionLoading,
+    isError: boardTaskDistributionError,
+  } = useGetBoardTaskDistributionQuery(undefined, {
     pollingInterval: 60_000,
   });
 
@@ -379,6 +388,11 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
 
       {/* Tasks by status */}
       <Typography sx={styles.sectionTitle}>Board Task Distribution</Typography>
+      {boardTaskDistributionError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load board task distribution. Please refresh to try again.
+        </Typography>
+      )}
       <Card
         sx={{
           ...styles.card,
@@ -388,22 +402,25 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         }}
         elevation={0}
       >
-        {[
-          { label: 'Backlog', count: 34, color: '#607d8b' },
-          { label: 'In Progress', count: 18, color: '#2196f3' },
-          { label: 'Fix Tests', count: 7, color: '#ff9800' },
-          { label: 'QA', count: 9, color: '#9c27b0' },
-          { label: 'Code Review', count: 11, color: '#00bcd4' },
-          { label: 'Done', count: 33, color: '#4caf50' },
-        ].map((col) => (
-          <Box
-            key={col.label}
-            sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
-          >
-            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: col.color }}>{col.count}</Typography>
-            <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.label}</Typography>
-          </Box>
-        ))}
+        {boardTaskDistributionLoading
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <Box
+                key={i}
+                sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+              >
+                <Skeleton variant="text" width={60} height={40} sx={{ margin: '0 auto' }} />
+                <Skeleton variant="text" width={80} sx={{ margin: '4px auto 0' }} />
+              </Box>
+            ))
+          : (boardTaskDistribution?.columns ?? []).map((col) => (
+              <Box
+                key={col.name}
+                sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+              >
+                <Typography sx={{ fontSize: '28px', fontWeight: 700, color: 'text.primary' }}>{col.count}</Typography>
+                <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.name}</Typography>
+              </Box>
+            ))}
       </Card>
     </Box>
   );

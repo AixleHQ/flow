@@ -43,6 +43,7 @@ Rails.application.routes.draw do
         namespace :statistic do
           resource :overview, only: %i[show], controller: "overview"
           resource :workflow_runs, only: %i[show], controller: "workflow_runs"
+          resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
         end
         resources :integrations, only: %i[index show create destroy] do
           collection do
