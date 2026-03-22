@@ -3,5 +3,6 @@ export type {
   WorkflowCostAnalyticsParams,
   WorkflowCostAnalyticsResponse,
   WorkflowCostRow,
+  WorkflowCostTimeSeriesPoint,
   WorkflowCostTotals,
 } from './api/workflowCostAnalyticsApi';

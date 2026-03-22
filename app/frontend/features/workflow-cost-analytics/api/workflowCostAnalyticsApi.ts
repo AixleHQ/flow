@@ -1,4 +1,4 @@
-import type { AnalyticsPeriod, AnalyticsScope } from 'features/project-analytics/api/projectAnalyticsApi';
+import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 import { baseApi, QueryTag } from 'shared/api';
 import { Routes } from 'shared/routes';
 

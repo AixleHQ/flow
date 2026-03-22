@@ -1,0 +1,2 @@
+export type AnalyticsScope = 'user' | 'project' | 'company';
+export type AnalyticsPeriod = '7d' | '30d' | '90d' | '1y';

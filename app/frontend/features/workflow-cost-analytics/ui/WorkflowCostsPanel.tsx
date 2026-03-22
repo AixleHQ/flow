@@ -16,7 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import type { AnalyticsPeriod, AnalyticsScope } from 'features/project-analytics/api/projectAnalyticsApi';
+import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 
 import { useGetWorkflowCostAnalyticsQuery } from '../api/workflowCostAnalyticsApi';
 
@@ -153,9 +153,9 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
   const workflows = data?.workflows ?? [];
   const timeSeries = data?.timeSeries ?? [];
 
-  const maxCost = workflows.length > 0 ? workflows[0].totalCostCents : 1;
+  const maxCost = workflows.length > 0 ? Math.max(...workflows.map((w) => w.totalCostCents)) : 1;
 
-  const tickInterval = timeSeries.length <= 7 ? 0 : timeSeries.length <= 30 ? 4 : timeSeries.length <= 90 ? 8 : 1;
+  const tickInterval = timeSeries.length <= 14 ? 0 : timeSeries.length <= 30 ? 4 : 8;
 
   const summaryStats = totals
     ? [
