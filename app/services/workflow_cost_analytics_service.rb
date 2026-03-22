@@ -9,21 +9,21 @@ class WorkflowCostAnalyticsService
   }.freeze
 
   DATE_TRUNC_GROUP_SQL = {
-    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at)"),
-    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at)"),
-    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at)")
+    "day"   => Arel.sql("DATE_TRUNC('day', workflow_runs.created_at)"),
+    "week"  => Arel.sql("DATE_TRUNC('week', workflow_runs.created_at)"),
+    "month" => Arel.sql("DATE_TRUNC('month', workflow_runs.created_at)")
   }.freeze
 
   DATE_TRUNC_ORDER_SQL = {
-    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at) ASC"),
-    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at) ASC"),
-    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at) ASC")
+    "day"   => Arel.sql("DATE_TRUNC('day', workflow_runs.created_at) ASC"),
+    "week"  => Arel.sql("DATE_TRUNC('week', workflow_runs.created_at) ASC"),
+    "month" => Arel.sql("DATE_TRUNC('month', workflow_runs.created_at) ASC")
   }.freeze
 
   DATE_TRUNC_SELECT_SQL = {
-    "day"   => Arel.sql("DATE_TRUNC('day', wr.created_at) AS period_date"),
-    "week"  => Arel.sql("DATE_TRUNC('week', wr.created_at) AS period_date"),
-    "month" => Arel.sql("DATE_TRUNC('month', wr.created_at) AS period_date")
+    "day"   => Arel.sql("DATE_TRUNC('day', workflow_runs.created_at) AS period_date"),
+    "week"  => Arel.sql("DATE_TRUNC('week', workflow_runs.created_at) AS period_date"),
+    "month" => Arel.sql("DATE_TRUNC('month', workflow_runs.created_at) AS period_date")
   }.freeze
 
   WorkflowRow = Struct.new(
@@ -75,11 +75,10 @@ class WorkflowCostAnalyticsService
   end
 
   def build_workflow_breakdown(runs)
-    rows = WorkflowRun
-      .from(runs, :wr)
-      .joins("JOIN workflows ON workflows.id = wr.workflow_id")
+    rows = runs
+      .joins("JOIN workflows ON workflows.id = workflow_runs.workflow_id")
       .joins(
-        "LEFT JOIN step_runs ON step_runs.workflow_run_id = wr.id"
+        "LEFT JOIN step_runs ON step_runs.workflow_run_id = workflow_runs.id"
       )
       .joins(
         "LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = step_runs.terminal_session_id"
@@ -88,7 +87,7 @@ class WorkflowCostAnalyticsService
       .select(
         "workflows.id AS workflow_id",
         "workflows.name AS workflow_name",
-        "COUNT(DISTINCT wr.id) AS run_count",
+        "COUNT(DISTINCT workflow_runs.id) AS run_count",
         "COALESCE(SUM(usage_statistics.cost_cents), 0) AS total_cost_cents",
         "COALESCE(SUM(usage_statistics.input_tokens), 0) AS input_tokens",
         "COALESCE(SUM(usage_statistics.output_tokens), 0) AS output_tokens",
@@ -113,10 +112,9 @@ class WorkflowCostAnalyticsService
   def build_time_series(runs)
     trunc_key = time_series_trunc
 
-    points = WorkflowRun
-      .from(runs, :wr)
+    points = runs
       .joins(
-        "LEFT JOIN step_runs ON step_runs.workflow_run_id = wr.id"
+        "LEFT JOIN step_runs ON step_runs.workflow_run_id = workflow_runs.id"
       )
       .joins(
         "LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = step_runs.terminal_session_id"
