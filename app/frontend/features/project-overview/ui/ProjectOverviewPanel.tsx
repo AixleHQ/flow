@@ -406,7 +406,12 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
           ? Array.from({ length: 6 }).map((_, i) => (
               <Box
                 key={i}
-                sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+                sx={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'background.default',
+                }}
               >
                 <Skeleton variant="text" width={60} height={40} sx={{ margin: '0 auto' }} />
                 <Skeleton variant="text" width={80} sx={{ margin: '4px auto 0' }} />
@@ -415,7 +420,12 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
           : (boardTaskDistribution?.columns ?? []).map((col) => (
               <Box
                 key={col.name}
-                sx={{ textAlign: 'center', padding: '12px', borderRadius: '8px', backgroundColor: 'background.default' }}
+                sx={{
+                  textAlign: 'center',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  backgroundColor: 'background.default',
+                }}
               >
                 <Typography sx={{ fontSize: '28px', fontWeight: 700, color: 'text.primary' }}>{col.count}</Typography>
                 <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.name}</Typography>
