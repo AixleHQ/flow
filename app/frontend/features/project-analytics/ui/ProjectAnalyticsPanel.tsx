@@ -37,6 +37,8 @@ import {
   YAxis,
 } from 'recharts';
 
+import { WorkflowCostsPanel } from 'features/workflow-cost-analytics';
+
 import type { AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
 import { useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
 
@@ -566,6 +568,9 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
           </BarChart>
         </ResponsiveContainer>
       </Card>
+
+      {/* ── Workflow Costs ────────────────────────────────────────── */}
+      <WorkflowCostsPanel projectId={projectId} scope={scope} period={period} />
     </Box>
   );
 };

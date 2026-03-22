@@ -1,0 +1,144 @@
+# frozen_string_literal: true
+
+class WorkflowCostAnalyticsService
+  PERIOD_DAYS = {
+    "7d" => 7,
+    "30d" => 30,
+    "90d" => 90,
+    "1y" => 365
+  }.freeze
+
+  WorkflowRow = Struct.new(
+    :workflow_id, :workflow_name,
+    :total_cost_cents, :input_tokens, :output_tokens, :total_tokens,
+    :run_count,
+    keyword_init: true
+  )
+
+  TimeSeriesPoint = Struct.new(:date, :cost_cents, :total_tokens, keyword_init: true)
+
+  Result = Struct.new(:workflows, :time_series, :totals, keyword_init: true)
+
+  def initialize(project:, user:, scope:, period:)
+    @project = project
+    @user = user
+    @scope = scope.to_s
+    @period = period.to_s
+    @days = PERIOD_DAYS.fetch(@period, 30)
+    @since = @days.days.ago
+  end
+
+  def call
+    runs = base_workflow_runs
+
+    workflow_rows = build_workflow_breakdown(runs)
+    time_series = build_time_series(runs)
+    totals = aggregate_totals(workflow_rows)
+
+    Result.new(workflows: workflow_rows, time_series:, totals:)
+  end
+
+  private
+
+  attr_reader :project, :user, :scope, :since, :days, :period
+
+  def base_workflow_runs
+    case scope
+    when "user"
+      project.workflow_runs.where(user:, created_at: since..)
+    when "company"
+      WorkflowRun
+        .joins(:project)
+        .where(projects: { company_id: project.company_id })
+        .where(created_at: since..)
+    else
+      project.workflow_runs.where(created_at: since..)
+    end
+  end
+
+  def build_workflow_breakdown(runs)
+    rows = WorkflowRun
+      .from(runs, :wr)
+      .joins("JOIN workflows ON workflows.id = wr.workflow_id")
+      .joins(
+        "LEFT JOIN step_runs ON step_runs.workflow_run_id = wr.id"
+      )
+      .joins(
+        "LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = step_runs.terminal_session_id"
+      )
+      .group("workflows.id, workflows.name")
+      .select(
+        "workflows.id AS workflow_id",
+        "workflows.name AS workflow_name",
+        "COUNT(DISTINCT wr.id) AS run_count",
+        "COALESCE(SUM(usage_statistics.cost_cents), 0) AS total_cost_cents",
+        "COALESCE(SUM(usage_statistics.input_tokens), 0) AS input_tokens",
+        "COALESCE(SUM(usage_statistics.output_tokens), 0) AS output_tokens",
+        "COALESCE(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
+        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0) AS total_tokens"
+      )
+      .order("total_cost_cents DESC")
+
+    rows.map do |row|
+      WorkflowRow.new(
+        workflow_id: row.workflow_id,
+        workflow_name: row.workflow_name,
+        total_cost_cents: row.total_cost_cents.to_i,
+        input_tokens: row.input_tokens.to_i,
+        output_tokens: row.output_tokens.to_i,
+        total_tokens: row.total_tokens.to_i,
+        run_count: row.run_count.to_i
+      )
+    end
+  end
+
+  def build_time_series(runs)
+    date_trunc = time_series_trunc
+
+    points = WorkflowRun
+      .from(runs, :wr)
+      .joins(
+        "LEFT JOIN step_runs ON step_runs.workflow_run_id = wr.id"
+      )
+      .joins(
+        "LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = step_runs.terminal_session_id"
+      )
+      .group(Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at)"))
+      .order(Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at) ASC"))
+      .select(
+        Arel.sql("DATE_TRUNC('#{date_trunc}', wr.created_at) AS period_date"),
+        "COALESCE(SUM(usage_statistics.cost_cents), 0) AS cost_cents",
+        "COALESCE(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
+        "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0) AS total_tokens"
+      )
+
+    points.map do |point|
+      TimeSeriesPoint.new(
+        date: point.period_date.to_date.iso8601,
+        cost_cents: point.cost_cents.to_i,
+        total_tokens: point.total_tokens.to_i
+      )
+    end
+  end
+
+  def aggregate_totals(workflow_rows)
+    {
+      total_cost_cents: workflow_rows.sum(&:total_cost_cents),
+      input_tokens: workflow_rows.sum(&:input_tokens),
+      output_tokens: workflow_rows.sum(&:output_tokens),
+      total_tokens: workflow_rows.sum(&:total_tokens),
+      workflow_count: workflow_rows.size,
+      avg_cost_cents_per_workflow: workflow_rows.empty? ? 0 : (workflow_rows.sum(&:total_cost_cents).to_f / workflow_rows.size).round
+    }
+  end
+
+  def time_series_trunc
+    case period
+    when "7d" then "day"
+    when "30d" then "day"
+    when "90d" then "week"
+    when "1y" then "month"
+    else "day"
+    end
+  end
+end

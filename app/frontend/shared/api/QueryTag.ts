@@ -23,4 +23,5 @@ export enum QueryTag {
   PlatformSummary = 'PlatformSummary',
   ProjectAnalytics = 'ProjectAnalytics',
   WorkflowRunStats = 'WorkflowRunStats',
+  WorkflowCostAnalytics = 'WorkflowCostAnalytics',
 }
