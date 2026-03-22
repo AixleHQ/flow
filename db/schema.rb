@@ -149,7 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
     t.index ["asset_id"], name: "index_asset_versions_on_asset_id"
   end
 
-  create_table "test/services/container_runtime/kubernetes_runtime_test.rb", force: :cascade do |t|
+  create_table "assets", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false
     t.datetime "deleted_at"

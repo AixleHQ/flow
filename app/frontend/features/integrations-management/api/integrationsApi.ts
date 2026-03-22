@@ -27,7 +27,7 @@ export const integrationsApi = baseApi.injectEndpoints({
         method: 'GET',
       }),
       transformResponse: normalizeIntegrations,
-      providesTags: (result, err, projectId) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
+      providesTags: (_result, _err, projectId) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
     }),
 
     createGithubIntegration: builder.mutation<Integration, CreateGithubIntegrationRequest>({
@@ -48,7 +48,7 @@ export const integrationsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { installationId },
       }),
-      invalidatesTags: (result, err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
+      invalidatesTags: (_result, _err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
     }),
 
     deleteIntegration: builder.mutation<void, number>({
@@ -64,7 +64,7 @@ export const integrationsApi = baseApi.injectEndpoints({
         url: Routes.backend.apiV1CompanyProjectIntegrationPath(projectId, id),
         method: 'DELETE',
       }),
-      invalidatesTags: (result, err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
+      invalidatesTags: (_result, _err, { projectId }) => [{ type: QueryTag.ProjectIntegrations, id: String(projectId) }],
     }),
   }),
 });

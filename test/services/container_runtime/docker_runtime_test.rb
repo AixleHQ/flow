@@ -124,12 +124,15 @@ module ContainerRuntime
       assert_equal "abcdef123456", @runtime.container_identifier(container)
     end
 
-    test "copy_to delegates to container store_file" do
+    test "copy_to executes base64 write via container exec" do
       container_mock = mock("container")
-      container_mock.expects(:store_file).with("/tmp/file.txt", "hello")
+      encoded = Base64.strict_encode64("hello")
+      container_mock.expects(:exec).with(
+        [ "/bin/sh", "-c", "mkdir -p /tmp && echo '#{encoded}' | base64 -d > /tmp/file.txt" ]
+      ).returns([ [], [], 0 ])
       Docker::Container.stubs(:get).with("cid").returns(container_mock)
 
-      @runtime.copy_to("cid", "/tmp/file.txt", "hello")
+      assert @runtime.copy_to("cid", "/tmp/file.txt", "hello")
     end
 
     test "copy_from delegates to container read_file" do

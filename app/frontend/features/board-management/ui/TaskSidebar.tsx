@@ -185,7 +185,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
 
   if (isRefreshingOnOpen || !task) {
     return (
-      <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={styles.drawer}>
+      <Drawer variant="temporary" anchor="right" open={isOpen} onClose={close} sx={getDrawerSx(false)}>
         <Box sx={styles.loading}>
           {isDetailsError ? (
             <Typography color="error">Could not load task. Try again or close the panel.</Typography>
