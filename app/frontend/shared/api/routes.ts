@@ -157,6 +157,11 @@ export function apiV1CompanyStatisticWorkflowRunsPath(options?: object): string 
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "workflow_runs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /api/v1/company/statistic/board_task_distribution(.:format) */
+export function apiV1CompanyStatisticBoardTaskDistributionPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "board_task_distribution" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /api/v1/company/integrations/github_setup(.:format) */
 export function githubSetupApiV1CompanyIntegrationsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
