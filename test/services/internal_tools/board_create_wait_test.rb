@@ -4,12 +4,17 @@ require "test_helper"
 
 class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   setup do
-    @company  = create(:company)
-    @user     = create(:user, company: @company)
-    @project  = create(:project, company: @company, owner: @user)
-    @board    = create(:board, project: @project)
-    @column   = create(:board_column, board: @board, name: "In Progress", position: 1)
-    @task     = create(:board_task, board: @board, board_column: @column, title: "My task")
+    @company     = create(:company)
+    @user        = create(:user, company: @company)
+    @integration = create(:integration, :github, :active, company: @company, connected_by: @user)
+    @project     = create(:project, company: @company, owner: @user)
+    @board       = create(:board, project: @project)
+    @column      = create(:board_column, board: @board, name: "In Progress", position: 1)
+    @task        = create(:board_task, board: @board, board_column: @column, title: "My task")
+
+    # Repository linked to the project — required for repo validation in board_create_wait
+    @repo_name   = "org/app"
+    create(:repository, full_name: @repo_name, scope: @project, integration: @integration)
 
     workflow      = create(:workflow, scope: @company)
     step          = create(:step, workflow: workflow)
@@ -27,10 +32,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   test "creates a github_checks_completed wait with valid params" do
     result = InternalTools::BoardCreateWait.new(
       params: {
-        task_id:       @task.id,
-        wait_type:     "github_checks_completed",
-        repo_full_name: "org/app",
-        pr_number:     42
+        task_id:        @task.id,
+        wait_type:      "github_checks_completed",
+        repo_full_name: @repo_name,
+        pr_number:      42
       },
       session: @session
     ).execute
@@ -40,7 +45,7 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal @task.id, data["task_id"]
     assert_equal "github_checks_completed", data["wait_type"]
     assert_equal "pending", data["status"]
-    assert_equal "org/app", data["metadata"]["repo_full_name"]
+    assert_equal @repo_name, data["metadata"]["repo_full_name"]
     assert_equal 42, data["metadata"]["pr_number"]
   end
 
@@ -48,10 +53,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_difference -> { TaskWait.count }, 1 do
       InternalTools::BoardCreateWait.new(
         params: {
-          task_id:       @task.id,
-          wait_type:     "github_checks_completed",
-          repo_full_name: "org/repo",
-          pr_number:     7
+          task_id:        @task.id,
+          wait_type:      "github_checks_completed",
+          repo_full_name: @repo_name,
+          pr_number:      7
         },
         session: @session
       ).execute
@@ -123,7 +128,7 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
       params: {
         task_id:        @task.id,
         wait_type:      "github_checks_completed",
-        repo_full_name: "org/app",
+        repo_full_name: @repo_name,
         pr_number:      0
       },
       session: @session
@@ -131,5 +136,20 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "pr_number must be a positive integer"
+  end
+
+  test "returns error when repository is not linked to the project" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_checks_completed",
+        repo_full_name: "other/unlinked-repo",
+        pr_number:      1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not linked to this task's project"
   end
 end

@@ -14,6 +14,12 @@ class TaskWait < ApplicationRecord
   scope :pending,  -> { where(status: "pending") }
   scope :resolved, -> { where(status: "resolved") }
 
+  # Scope waits by the repo_full_name stored in their metadata JSONB.
+  # Apply after for_repository to keep the result set narrow.
+  scope :for_repo_full_name, ->(repo_full_name) {
+    where("metadata->>'repo_full_name' = ?", repo_full_name)
+  }
+
   # Scope waits by PR number only — used after the query is already scoped to
   # the correct project(s) via for_repository.
   scope :for_github_pr_number, ->(pr_number) {

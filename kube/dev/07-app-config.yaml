@@ -46,5 +46,6 @@ data:
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad-dev.svc.cluster.local:4318/v1/logs"
   GITHUB_CLIENT_ID: "get_from_1password"
   GITHUB_APP_URL: "https://github.com/apps/3po-test-dev-app"
+  GITHUB_WEBHOOK_SECRET: "get_from_1password"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
