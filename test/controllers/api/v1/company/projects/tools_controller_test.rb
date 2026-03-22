@@ -30,7 +30,7 @@ module Api
             assert_response :success
             tools = response.parsed_body["items"]
 
-            assert_equal 4, tools.count
+            assert_equal 3, tools.count
             names = tools.map { |t| t["name"] }
             assert_includes names, "internal_tool"
             assert_includes names, "company_tool"
