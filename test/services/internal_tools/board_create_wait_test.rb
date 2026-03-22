@@ -1,0 +1,135 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
+  setup do
+    @company  = create(:company)
+    @user     = create(:user, company: @company)
+    @project  = create(:project, company: @company, owner: @user)
+    @board    = create(:board, project: @project)
+    @column   = create(:board_column, board: @board, name: "In Progress", position: 1)
+    @task     = create(:board_task, board: @board, board_column: @column, title: "My task")
+
+    workflow      = create(:workflow, scope: @company)
+    step          = create(:step, workflow: workflow)
+    @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
+    @step_run     = create(:step_run, workflow_run: @workflow_run, step: step)
+
+    @session = create(:terminal_session, :running, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
+    @step_run.update!(terminal_session: @session)
+    @session.reload
+  end
+
+  # == github_checks_completed ==
+
+  test "creates a github_checks_completed wait with valid params" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:       @task.id,
+        wait_type:     "github_checks_completed",
+        repo_full_name: "org/app",
+        pr_number:     42
+      },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal @task.id, data["task_id"]
+    assert_equal "github_checks_completed", data["wait_type"]
+    assert_equal "pending", data["status"]
+    assert_equal "org/app", data["metadata"]["repo_full_name"]
+    assert_equal 42, data["metadata"]["pr_number"]
+  end
+
+  test "creates a persisted TaskWait record" do
+    assert_difference -> { TaskWait.count }, 1 do
+      InternalTools::BoardCreateWait.new(
+        params: {
+          task_id:       @task.id,
+          wait_type:     "github_checks_completed",
+          repo_full_name: "org/repo",
+          pr_number:     7
+        },
+        session: @session
+      ).execute
+    end
+  end
+
+  # == validation errors ==
+
+  test "returns error for unknown wait_type" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:       @task.id,
+        wait_type:     "unknown_type",
+        repo_full_name: "org/app",
+        pr_number:     1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "Unsupported wait_type"
+  end
+
+  test "returns error when task not found" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:       999_999,
+        wait_type:     "github_checks_completed",
+        repo_full_name: "org/app",
+        pr_number:     1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "Task not found"
+  end
+
+  test "returns error when repo_full_name is missing" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:   @task.id,
+        wait_type: "github_checks_completed",
+        pr_number: 1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "repo_full_name is required"
+  end
+
+  test "returns error when pr_number is missing" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_checks_completed",
+        repo_full_name: "org/app"
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "pr_number must be a positive integer"
+  end
+
+  test "returns error when pr_number is zero" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_checks_completed",
+        repo_full_name: "org/app",
+        pr_number:      0
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "pr_number must be a positive integer"
+  end
+end
