@@ -158,7 +158,6 @@ const WORKFLOW_STATUS_COLORS: Record<string, string> = {
   Queued: '#ff9800',
 };
 
-
 interface ProjectOverviewPanelProps {
   projectId?: number;
 }
@@ -193,9 +192,12 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     data: topAgents,
     isLoading: topAgentsLoading,
     isError: topAgentsError,
-  } = useGetTopAgentsBySessionsQuery({ limit: 10 }, {
-    pollingInterval: 60_000,
-  });
+  } = useGetTopAgentsBySessionsQuery(
+    { limit: 10 },
+    {
+      pollingInterval: 60_000,
+    },
+  );
 
   const workflowStatus = workflowRunStats
     ? [
