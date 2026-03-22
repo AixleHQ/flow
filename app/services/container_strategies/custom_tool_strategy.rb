@@ -26,8 +26,9 @@ module ContainerStrategies
     end
 
     def start_container(container_id:, **)
-      store_tool_files(container_id)
       super
+      store_tool_files(container_id)
+      {}
     end
 
     def build_env_vars

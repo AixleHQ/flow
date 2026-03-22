@@ -103,6 +103,29 @@ module ContainerRuntime
       tar_io&.close!
     end
 
+    # Store file via exec + tar stream. Requires a running pod.
+    def store_file(id, path, content, mode: 0o644)
+      return false if path.blank?
+
+      handle = resolve_handle(id)
+      tar_io = build_tar_stream(path, content.to_s, mode: mode)
+      cmd = [ "/bin/sh", "-c", "tar -xf - -C /" ]
+      _stdout, _stderr, exit_code = exec_via_websocket(
+        handle,
+        cmd,
+        stdin_io: tar_io,
+        binary: true,
+        close_on_stdin_eof: true
+      )
+
+      exit_code.to_i.zero?
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] store_file failed for #{path}: #{e.message}")
+      false
+    ensure
+      tar_io&.close!
+    end
+
     # Read file via exec + tar stream (same mechanism as #copy_from), then extract one entry.
     # Mirrors DockerRuntime#read_file (archive_out + tar extract); requires a running pod.
     def read_file(id, path)

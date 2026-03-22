@@ -32,7 +32,7 @@ module ContainerRuntime
     end
 
     # Store file using Docker archive API (works on created/stopped containers)
-    def store_file(_id, _path, _content)
+    def store_file(_id, _path, _content, mode: 0o644)
       raise NotImplementedError, "#{self.class.name} must implement #store_file"
     end
 
