@@ -159,7 +159,7 @@ module ContextBuilders
     end
 
     def sub_steps
-      @sub_steps ||= step&.sub_steps&.order(:position) || SubStep.none
+      @sub_steps ||= step&.sub_steps&.active || SubStep.none
     end
 
     def completed_step_runs
