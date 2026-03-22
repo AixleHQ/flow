@@ -37,8 +37,8 @@ import {
   YAxis,
 } from 'recharts';
 
-import type { AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
-import { useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
+import type { AgentActivityData, AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
+import { useGetAgentActivityQuery, useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
 
 // ─── Static Data Generators ─────────────────────────────────────────────────
 
@@ -51,9 +51,6 @@ const generateDailyData = (days: number) => {
     const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     result.push({
       date: label,
-      sonnet: Math.floor(Math.random() * 40 + 15),
-      opus: Math.floor(Math.random() * 20 + 5),
-      haiku: Math.floor(Math.random() * 30 + 8),
       cost: +(Math.random() * 80 + 40).toFixed(2),
       tokens: Math.floor(Math.random() * 500000 + 200000),
     });
@@ -61,12 +58,21 @@ const generateDailyData = (days: number) => {
   return result;
 };
 
-const AGENT_TYPE_BREAKDOWN = [
-  { name: 'claude-sonnet-4-6', sessions: 812, cost: 2104, tokens: 8400000, color: '#2196f3' },
-  { name: 'claude-opus-4-6', sessions: 241, cost: 1287, tokens: 3100000, color: '#9c27b0' },
-  { name: 'claude-haiku-4-5', sessions: 147, cost: 312, tokens: 1900000, color: '#4caf50' },
-  { name: 'custom-agent-v2', sessions: 84, cost: 138, tokens: 740000, color: '#ff9800' },
-];
+// ─── Agent Activity Helpers ───────────────────────────────────────────────────
+
+const AGENT_COLORS = ['#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#00bcd4', '#f44336', '#795548'];
+
+const getAgentColor = (index: number) => AGENT_COLORS[index % AGENT_COLORS.length];
+
+const buildActivityChartData = (data: AgentActivityData): Record<string, string | number>[] => {
+  const dateMap: Record<string, Record<string, string | number>> = {};
+  for (const point of data.activityOverTime) {
+    const label = new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (!dateMap[label]) dateMap[label] = { date: label };
+    dateMap[label][point.agentType] = point.sessions;
+  }
+  return Object.values(dateMap);
+};
 
 const SESSION_SOURCE_DATA = [
   { name: 'From Workflows', value: 624, color: '#2196f3' },
@@ -253,6 +259,15 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
     isError,
   } = useGetProjectAnalyticsQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
+  const { data: agentActivity, isLoading: isAgentActivityLoading } = useGetAgentActivityQuery(
+    { projectId: projectId!, scope, period },
+    { skip: !projectId },
+  );
+
+  const activityChartData = agentActivity ? buildActivityChartData(agentActivity) : [];
+  const agentTypes = agentActivity?.agentTypes ?? [];
+  const sessionsByAgent = agentActivity?.sessionsByAgent ?? [];
+
   const statBlocks = summary
     ? [
         {
@@ -341,98 +356,89 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
         {/* Sessions per agent over time */}
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Sessions per Agent — Trend</Typography>
-          <ResponsiveContainer width="100%" height={240}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-              <defs>
-                {[
-                  { id: 'sonnet', color: '#2196f3' },
-                  { id: 'opus', color: '#9c27b0' },
-                  { id: 'haiku', color: '#4caf50' },
-                ].map(({ id, color }) => (
-                  <linearGradient key={id} id={`grad-${id}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={color} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0} />
-                  </linearGradient>
+          {isAgentActivityLoading ? (
+            <Skeleton variant="rectangular" width="100%" height={240} sx={{ borderRadius: 1 }} />
+          ) : (
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={activityChartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+                <defs>
+                  {agentTypes.map((agentType, idx) => (
+                    <linearGradient key={agentType} id={`grad-agent-${idx}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={getAgentColor(idx)} stopOpacity={0.25} />
+                      <stop offset="95%" stopColor={getAgentColor(idx)} stopOpacity={0} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
+                <YAxis tick={{ fontSize: 11 }} />
+                <Tooltip contentStyle={chartTooltipStyle} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {agentTypes.map((agentType, idx) => (
+                  <Area
+                    key={agentType}
+                    type="monotone"
+                    dataKey={agentType}
+                    name={agentType}
+                    stroke={getAgentColor(idx)}
+                    fill={`url(#grad-agent-${idx})`}
+                    strokeWidth={2}
+                    dot={false}
+                  />
                 ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={chartTooltipStyle} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area
-                type="monotone"
-                dataKey="sonnet"
-                name="Sonnet"
-                stroke="#2196f3"
-                fill="url(#grad-sonnet)"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="opus"
-                name="Opus"
-                stroke="#9c27b0"
-                fill="url(#grad-opus)"
-                strokeWidth={2}
-                dot={false}
-              />
-              <Area
-                type="monotone"
-                dataKey="haiku"
-                name="Haiku"
-                stroke="#4caf50"
-                fill="url(#grad-haiku)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </Card>
 
         {/* Agent type breakdown */}
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Usage Breakdown by Agent Type</Typography>
-          <Box sx={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={AGENT_TYPE_BREAKDOWN}
-                  dataKey="sessions"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={3}
-                >
-                  {AGENT_TYPE_BREAKDOWN.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
-              </PieChart>
-            </ResponsiveContainer>
-            <Box sx={{ flex: 1 }}>
-              {AGENT_TYPE_BREAKDOWN.map((agent) => (
-                <Box key={agent.name} sx={styles.agentRow}>
-                  <Box sx={{ ...styles.agentDot, backgroundColor: agent.color }} />
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontSize: '12px', color: 'text.primary', fontWeight: 500 }}>
-                      {agent.name.replace('claude-', '').replace('-4-6', '').replace('-4-5', '')}
-                    </Typography>
-                    <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>{agent.sessions} sessions</Typography>
+          {isAgentActivityLoading ? (
+            <Skeleton variant="rectangular" width="100%" height={200} sx={{ borderRadius: 1 }} />
+          ) : (
+            <Box sx={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+              <ResponsiveContainer width="50%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={sessionsByAgent}
+                    dataKey="sessions"
+                    nameKey="agentType"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                  >
+                    {sessionsByAgent.map((entry, idx) => (
+                      <Cell key={entry.agentType} fill={getAgentColor(idx)} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
+                </PieChart>
+              </ResponsiveContainer>
+              <Box sx={{ flex: 1 }}>
+                {sessionsByAgent.map((agent, idx) => (
+                  <Box key={agent.agentType} sx={styles.agentRow}>
+                    <Box sx={{ ...styles.agentDot, backgroundColor: getAgentColor(idx) }} />
+                    <Box sx={{ flex: 1 }}>
+                      <Typography sx={{ fontSize: '12px', color: 'text.primary', fontWeight: 500 }}>
+                        {agent.agentType}
+                      </Typography>
+                      <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>
+                        {agent.sessions} sessions
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={formatCostCents(agent.costCents)}
+                      size="small"
+                      sx={{ fontSize: '11px', height: 18, backgroundColor: 'background.elevated' }}
+                    />
                   </Box>
-                  <Chip
-                    label={`$${agent.cost.toLocaleString()}`}
-                    size="small"
-                    sx={{ fontSize: '11px', height: 18, backgroundColor: 'background.elevated' }}
-                  />
-                </Box>
-              ))}
+                ))}
+              </Box>
             </Box>
-          </Box>
+          )}
         </Card>
       </Box>
 
