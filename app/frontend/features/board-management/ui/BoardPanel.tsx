@@ -112,6 +112,7 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     priority?: string;
     tags?: string;
     search?: string;
+    task?: number;
   };
   const navigate = useNavigate({
     from: Routes.frontend.companyProjectTabPath('$projectId', '$tab') as '/company/projects/$projectId/$tab',
@@ -133,6 +134,31 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const lastMoveRef = useRef<Record<number, number>>({});
 
   const openTask = useBoardSidebarStore((s) => s.openTask);
+  const activeTaskId = useBoardSidebarStore((s) => s.activeTaskId);
+  const isOpen = useBoardSidebarStore((s) => s.isOpen);
+
+  const isInitialMount = useRef(true);
+
+  useEffect(() => {
+    if (urlSearch.task != null) {
+      openTask(urlSearch.task);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        task: isOpen && activeTaskId != null ? activeTaskId : undefined,
+      }),
+      replace: true,
+    });
+  }, [isOpen, activeTaskId, navigate]);
 
   useEffect(() => {
     if (!boardId || collapsedRestored) return;
