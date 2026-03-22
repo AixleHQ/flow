@@ -431,6 +431,23 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
                 <Typography sx={{ fontSize: '12px', color: 'text.secondary', marginTop: '4px' }}>{col.name}</Typography>
               </Box>
             ))}
+        {!boardTaskDistributionLoading && boardTaskDistribution && (
+          <Box
+            sx={{
+              textAlign: 'center',
+              padding: '12px',
+              borderRadius: '8px',
+              backgroundColor: 'primary.main',
+            }}
+          >
+            <Typography sx={{ fontSize: '28px', fontWeight: 700, color: 'primary.contrastText' }}>
+              {boardTaskDistribution.total}
+            </Typography>
+            <Typography sx={{ fontSize: '12px', color: 'primary.contrastText', marginTop: '4px', opacity: 0.85 }}>
+              Total
+            </Typography>
+          </Box>
+        )}
       </Card>
     </Box>
   );
