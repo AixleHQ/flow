@@ -35,6 +35,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardTask } from 'entities/board-task';
 import { TaskCard } from 'entities/board-task';
 import { useGetCurrentUserQuery } from 'entities/user';
+import { useLocalStorageState } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
 import {
@@ -118,17 +119,40 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
 
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [creatingInColumn, setCreatingInColumn] = useState<number | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>(() => ({
-    assigneeId: urlSearch.assigneeId,
-    taskType: urlSearch.taskType,
-    priority: urlSearch.priority,
-    tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
-    search: urlSearch.search,
-  }));
   const boardId = data?.board.id;
+  const hasUrlFilters = Boolean(
+    urlSearch.assigneeId || urlSearch.taskType || urlSearch.priority || urlSearch.tags || urlSearch.search,
+  );
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const [filters, setFilters] = useLocalStorageState<BoardFilters>(
+    boardId != null ? `board-${boardId}-filters` : null,
+    {
+      assigneeId: urlSearch.assigneeId,
+      taskType: urlSearch.taskType,
+      priority: urlSearch.priority,
+      tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
+      search: urlSearch.search,
+    },
+    {
+      skipRestore: hasUrlFilters,
+      onRestore: (stored) => {
+        void navigateRef.current({
+          search: (prev) => ({
+            ...prev,
+            assigneeId: stored.assigneeId,
+            taskType: stored.taskType,
+            priority: stored.priority,
+            tags: stored.tags?.length ? stored.tags.join(',') : undefined,
+            search: stored.search,
+          }),
+          replace: true,
+        });
+      },
+    },
+  );
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
-  const [filtersRestored, setFiltersRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openTask = useBoardSidebarStore((s) => s.openTask);
   const activeTaskId = useBoardSidebarStore((s) => s.activeTaskId);
@@ -172,42 +196,6 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     if (!boardId || !collapsedRestored) return;
     localStorage.setItem(`board-${boardId}-collapsed`, JSON.stringify([...collapsedColumns]));
   }, [boardId, collapsedColumns, collapsedRestored]);
-
-  useEffect(() => {
-    if (!boardId || filtersRestored) return;
-    const hasUrlFilters = Boolean(
-      urlSearch.assigneeId || urlSearch.taskType || urlSearch.priority || urlSearch.tags || urlSearch.search,
-    );
-    if (!hasUrlFilters) {
-      try {
-        const stored = localStorage.getItem(`board-${boardId}-filters`);
-        if (stored) {
-          const parsed = JSON.parse(stored) as BoardFilters;
-          setFilters(parsed);
-          void navigate({
-            search: (prev) => ({
-              ...prev,
-              assigneeId: parsed.assigneeId,
-              taskType: parsed.taskType,
-              priority: parsed.priority,
-              tags: parsed.tags?.length ? parsed.tags.join(',') : undefined,
-              search: parsed.search,
-            }),
-            replace: true,
-          });
-        }
-      } catch {
-        /* ignore corrupt data */
-      }
-    }
-    setFiltersRestored(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, filtersRestored]);
-
-  useEffect(() => {
-    if (!boardId || !filtersRestored) return;
-    localStorage.setItem(`board-${boardId}-filters`, JSON.stringify(filters));
-  }, [boardId, filters, filtersRestored]);
 
   const mouseSensor = useSensor(MouseSensor, { activationConstraint: { distance: 8 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
