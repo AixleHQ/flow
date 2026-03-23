@@ -36,7 +36,7 @@ module StepsActions
     positions = positions.select { |k, v| k.match?(/\A\d+\z/) && v.to_s.match?(/\A\d+\z/) }
 
     ActiveRecord::Base.transaction do
-      current_workflow.steps.not_deleted.update_all("position = position + 10000")
+      current_workflow.steps.update_all("position = position + 10000")
       positions.each do |step_id, new_position|
         current_workflow.steps.not_deleted.find(step_id).update_column(:position, new_position.to_i)
       end
