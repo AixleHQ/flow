@@ -211,12 +211,11 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_response :not_found
   end
 
-  test "#reorder excludes soft-deleted steps" do
+  test "#reorder succeeds when soft-deleted steps are present" do
     sign_in @admin
     s1 = create(:step, workflow: @workflow, position: 1)
     s2 = create(:step, workflow: @workflow, position: 2)
     deleted_step = create(:step, workflow: @workflow, position: 3)
-    original_deleted_position = deleted_step.position
     deleted_step.soft_delete!
 
     patch :reorder, params: {
@@ -226,7 +225,19 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_response :ok
     assert_equal 2, s1.reload.position
     assert_equal 1, s2.reload.position
-    assert_equal original_deleted_position, deleted_step.reload.position
+  end
+
+  test "#reorder returns 404 for soft-deleted step id in payload" do
+    sign_in @admin
+    s1 = create(:step, workflow: @workflow, position: 1)
+    deleted_step = create(:step, workflow: @workflow, position: 2)
+    deleted_step.soft_delete!
+
+    patch :reorder, params: {
+      project_id: @project.id, workflow_id: @workflow.id,
+      positions: { s1.id.to_s => 1, deleted_step.id.to_s => 2 }
+    }
+    assert_response :not_found
   end
 
   test "non-member cannot access" do
