@@ -1,7 +1,10 @@
 export interface TaskWait {
   id: number;
   waitType: string;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, unknown> & {
+    repoFullName?: string;
+    prNumber?: number;
+  };
   createdAt: string;
 }
 

@@ -291,7 +291,7 @@ export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
               />
               {wait.waitType === 'github_checks_completed' && (
                 <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-                  {String(wait.metadata.repo_full_name)} #{String(wait.metadata.pr_number)}
+                  {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
                 </Typography>
               )}
             </Box>
