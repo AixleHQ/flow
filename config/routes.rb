@@ -155,6 +155,7 @@ Rails.application.routes.draw do
                   get :agent_activity
                 end
               end
+              resource :workflow_costs, only: %i[show], controller: "workflow_costs"
             end
             resources :terminal_sessions, only: %i[index show]
             resources :workflow_runs, only: %i[index show create] do
