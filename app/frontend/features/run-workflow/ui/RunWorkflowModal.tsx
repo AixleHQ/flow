@@ -143,6 +143,17 @@ const RunWorkflowModal = ({
     }
   }, [steps]);
 
+  useEffect(() => {
+    if (!open || !currentUser) return;
+    const configured = currentUser.configuredAgents ?? [];
+    const options = AVAILABLE_AGENTS.filter((a) => configured.includes(a.type));
+    const preferred =
+      currentUser.defaultAgentRuntime && options.some((a) => a.type === currentUser.defaultAgentRuntime)
+        ? currentUser.defaultAgentRuntime
+        : (options[0]?.type ?? '');
+    setAgentRuntime((prev) => (prev === '' ? (preferred as string) : prev));
+  }, [open, currentUser]);
+
   interface Wave {
     index: number;
     steps: StepOption[];

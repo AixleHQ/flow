@@ -47,6 +47,11 @@ module ContainerStrategies
 
       outputs_count = collect_workflow_outputs(container_id)
 
+      # Notify the workflow execution AFTER outputs are collected so CompleteStepActivity
+      # can validate them. session_service#signal_container_finished sends this signal
+      # immediately (causing a race), so we do it here instead for workflow steps.
+      notify_workflow_execution(session)
+
       Rails.logger.info("[WorkflowStepStrategy] Cleanup: #{logs_count} logs, #{outputs_count} workflow assets")
       { logs_count: logs_count, outputs_count: outputs_count }
     end
@@ -176,6 +181,15 @@ module ContainerStrategies
       end
     end
 
+
+    def notify_workflow_execution(session)
+      step_run = session.step_run
+      return unless step_run&.workflow_run_id
+
+      WorkflowService.notify_container_finished(step_run: step_run)
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowStepStrategy] Failed to notify workflow execution: #{e.message}")
+    end
 
     def download_to_container(container, url, target_path)
       rewritten = rewrite_url_for_container(url)

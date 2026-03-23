@@ -43,7 +43,12 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
-        resource :overview, only: %i[show], controller: "overview"
+        namespace :statistic do
+          resource :overview, only: %i[show], controller: "overview"
+          resource :workflow_runs, only: %i[show], controller: "workflow_runs"
+          resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
+          resource :top_agents, only: %i[show], controller: "top_agents"
+        end
         resources :integrations, only: %i[index show create destroy] do
           collection do
             get :github_setup, defaults: { format: :html }
@@ -96,6 +101,7 @@ Rails.application.routes.draw do
             resources :agents, only: %i[index create update destroy]
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
+            resources :integrations, only: %i[index create destroy]
             resources :skills, only: %i[index create update destroy]
             resources :workflows, only: %i[index show create update destroy] do
               member do
@@ -144,6 +150,13 @@ Rails.application.routes.draw do
                 resources :assets, controller: "board/task/assets", only: %i[index create destroy]
                 resources :transitions, controller: "board/task/transitions", only: %i[index]
                 resources :activities, controller: "board/task/activities", only: %i[index]
+              end
+            end
+            namespace :statistic do
+              resource :analytics, only: %i[show], controller: "analytics" do
+                member do
+                  get :agent_activity
+                end
               end
             end
             resources :terminal_sessions, only: %i[index show]

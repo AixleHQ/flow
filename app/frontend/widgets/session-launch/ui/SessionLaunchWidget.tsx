@@ -5,6 +5,8 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  FormControlLabel,
+  Switch,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -76,6 +78,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [selectedRepos, setSelectedRepos] = useState<Repository[]>([]);
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
+  const [bmadEnabled, setBmadEnabled] = useState(false);
 
   // Prefill agent from user default when form first loads
   useEffect(() => {
@@ -197,6 +200,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           ...(selectedRepos.length > 0 ? { repositoryIds: selectedRepos.map((r) => r.id) } : {}),
           mode: mode,
           ...(mode === 'non_interactive' ? { initialPrompt } : {}),
+          ...(bmadEnabled ? { sessionConfig: { bmadEnabled: true } } : {}),
         },
       });
 
@@ -571,6 +575,26 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           sx={{ mb: 2 }}
         />
       )}
+
+      <Divider sx={{ mb: 3 }}>
+        <Typography variant="caption" color="text.secondary">
+          Context
+        </Typography>
+      </Divider>
+
+      {/* BMAD Method */}
+      <FormControlLabel
+        control={
+          <Switch
+            checked={bmadEnabled}
+            onChange={(e) => setBmadEnabled(e.target.checked)}
+            color="primary"
+            inputProps={{ 'aria-label': 'Enable BMAD Method' }}
+          />
+        }
+        label="Use BMAD Method"
+        sx={{ mb: 2 }}
+      />
 
       {/* Submit */}
       <Box sx={{ mt: 3 }}>

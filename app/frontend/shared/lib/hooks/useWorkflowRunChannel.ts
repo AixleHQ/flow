@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 
 interface RunUpdateMessage {
-  type: 'workflow_run.updated' | 'step_run.updated' | 'sub_step_run.updated' | 'run_update';
+  type: 'workflow_run.updated' | 'step_run.updated' | 'sub_step_run.updated';
   data: { id?: number; workflow_run_id?: number; step_run_id?: number };
 }
 
@@ -34,6 +34,7 @@ export function useWorkflowRunChannel({ runId, onUpdate }: UseWorkflowRunChannel
       {
         connected() {
           setConnected(true);
+          onUpdateRef.current?.();
         },
         disconnected() {
           setConnected(false);
@@ -45,8 +46,7 @@ export function useWorkflowRunChannel({ runId, onUpdate }: UseWorkflowRunChannel
           if (
             message.type === 'workflow_run.updated' ||
             message.type === 'step_run.updated' ||
-            message.type === 'sub_step_run.updated' ||
-            message.type === 'run_update'
+            message.type === 'sub_step_run.updated'
           ) {
             onUpdateRef.current?.();
           }

@@ -13,19 +13,19 @@ class BoardTaskSerializer < ApplicationSerializer
   end
 
   def children_count
-    object.child_tasks.count
+    object.child_tasks.size
   end
 
   def comments_count
-    object.task_comments.count
+    object.task_comments.size
   end
 
   def assets_count
-    object.task_assets.count
+    object.task_assets.size
   end
 
   def recent_workflow_runs
-    object.workflow_runs.order(created_at: :desc).limit(5).map do |run|
+    object.workflow_runs.sort_by { |r| r.created_at }.reverse.first(5).map do |run|
       { id: run.id, state: run.state }
     end
   end

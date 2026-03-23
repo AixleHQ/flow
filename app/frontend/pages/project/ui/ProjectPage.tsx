@@ -9,6 +9,7 @@ import { AssetPreview } from 'features/asset-preview';
 import { useGetProjectAssetsQuery, AssetsPanel } from 'features/assets-management';
 import { BoardPanel } from 'features/board-management';
 import { ConfigItemsPanel } from 'features/config-items-management';
+import { IntegrationsPanel } from 'features/integrations-management';
 import { McpServersPanel } from 'features/mcp-servers-management';
 import { ProjectAnalyticsPanel } from 'features/project-analytics';
 import { ProjectOverviewPanel } from 'features/project-overview';
@@ -46,12 +47,14 @@ const styles = {
 } satisfies Record<string, SxProps<Theme>>;
 
 const VALID_TABS: ProjectTab[] = [
+  '',
   'overview',
   'board',
   'assets',
   'repositories',
+  'integrations',
   'workflows',
-  'runs',
+  'workflow-runs',
   'sessions',
   'config',
   'agents',
@@ -91,9 +94,9 @@ const ProjectPage = () => {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const projectId = (params as { projectId?: string }).projectId || '';
-  const tabParam = (params as { tab?: string }).tab || 'overview';
+  const tabParam = (params as { tab?: string }).tab;
   const activeTab = useMemo<ProjectTab>(
-    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : 'overview'),
+    () => (VALID_TABS.includes(tabParam as ProjectTab) ? (tabParam as ProjectTab) : ''),
     [tabParam],
   );
 
@@ -123,7 +126,7 @@ const ProjectPage = () => {
             renderRunModal={(slot) => <ConnectedRunModal slot={slot} projectAssets={projectAssets} />}
           />
         )}
-        {activeTab === 'runs' && (
+        {activeTab === 'workflow-runs' && (
           <WorkflowRunsWidget
             projectId={Number(projectId)}
             onRunSelect={(id) => navigate({ to: Routes.frontend.workflowRunPath(projectId, String(id)) as string })}
@@ -161,6 +164,7 @@ const ProjectPage = () => {
         {activeTab === 'mcp-servers' && <McpServersPanel projectId={Number(projectId)} />}
         {activeTab === 'skills' && <SkillsPanel projectId={Number(projectId)} />}
         {activeTab === 'repositories' && <RepositoriesPanel projectId={Number(projectId)} />}
+        {activeTab === 'integrations' && <IntegrationsPanel projectId={Number(projectId)} />}
         {activeTab === 'settings' && <SettingsTab projectId={projectId} />}
         {activeTab === 'analytics' && <ProjectAnalyticsPanel projectId={Number(projectId)} />}
       </Box>

@@ -39,10 +39,17 @@ COPY base/watcher/index.js ./
 
 COPY base/auth-check/index.js /opt/auth-check/index.js
 COPY base/logger/ /opt/mitm/
-RUN chmod +x /opt/mitm/start-mitm.sh
+RUN chmod +x /opt/mitm/*.sh
 
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
+
+RUN printf '%s\n' \
+        '# Full passwordless sudo for the agent user (trusted environments only).' \
+        'claude ALL=(root) NOPASSWD: ALL' \
+        > /etc/sudoers.d/claude-agent \
+    && chmod 440 /etc/sudoers.d/claude-agent \
+    && visudo -cf /etc/sudoers.d/claude-agent
 
 # =============================================================================
 # Final setup

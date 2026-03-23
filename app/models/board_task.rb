@@ -10,7 +10,7 @@ class BoardTask < ApplicationRecord
   has_many :child_tasks, class_name: "BoardTask", foreign_key: :parent_task_id, dependent: :nullify
   has_many :task_comments, dependent: :destroy
   has_many :task_assets, dependent: :destroy
-  has_many :workflow_runs
+  has_many :workflow_runs, dependent: :nullify
   has_many :column_transitions, dependent: :delete_all
   has_many :board_activities, dependent: :delete_all
   has_many :task_waits, dependent: :destroy

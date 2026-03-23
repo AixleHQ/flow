@@ -7,19 +7,24 @@ module Api
         skip_before_action :dynamic_authorize!, only: :github_setup
 
         def github_setup
+          target_project = resolve_github_setup_project(params[:state])
           installation_id = params[:installation_id]
+
           if installation_id.blank?
+            redirect_to github_setup_redirect_path(target_project)
+            return
+          end
+
+          if target_project.present? && !target_project.accessible_by?(current_user)
             redirect_to "/company/integrations"
             return
           end
 
-          existing = current_company.integrations.where(provider: :github).find do |i|
-            i.installation_id == installation_id.to_s
-          end
-
-          integration = existing || current_company.integrations.new(
-            provider: :github,
-            connected_by: current_user
+          integration = Integration.find_or_build_github_for_installation(
+            company: current_company,
+            connected_by: current_user,
+            project: target_project,
+            installation_id: installation_id
           )
           integration.credentials_data = { installation_id: installation_id.to_s }
 
@@ -38,11 +43,11 @@ module Api
           end
 
           integration.save
-          redirect_to "/company/integrations"
+          redirect_to github_setup_redirect_path(target_project)
         end
 
         def index
-          integrations = current_company.integrations.ransack(params[:q]).result
+          integrations = current_company.integrations.company_wide.ransack(params[:q]).result
           respond_with integrations, each_serializer: IntegrationSerializer
         end
 
@@ -55,7 +60,8 @@ module Api
           integration = current_company.integrations.new(
             provider: :github,
             connected_by: current_user,
-            status: :inactive
+            status: :inactive,
+            project_id: nil
           )
           integration.credentials_data = { installation_id: params[:installation_id].to_s }
 
@@ -81,6 +87,22 @@ module Api
           integration = current_company.integrations.find(params[:id])
           integration.destroy
           respond_with integration
+        end
+
+        private
+
+        def github_setup_redirect_path(project)
+          project ? "/company/projects/#{project.id}/integrations" : "/company/integrations"
+        end
+
+        # GitHub App passes `state` through the installation flow (e.g. state=project:123).
+        def resolve_github_setup_project(state)
+          return nil if state.blank?
+
+          match = state.to_s.match(/\Aproject:(\d+)\z/)
+          return nil unless match
+
+          current_company.projects.find_by(id: match[1].to_i)
         end
       end
     end

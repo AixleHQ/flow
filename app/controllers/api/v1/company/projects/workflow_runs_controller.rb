@@ -25,7 +25,8 @@ module Api
               mode: workflow_run_params[:mode]&.to_sym || :interactive,
               overrides: workflow_run_params[:step_overrides] || {},
               input_asset_ids: workflow_run_params[:input_asset_ids] || [],
-              repository_ids: workflow_run_params[:repository_ids] || []
+              repository_ids: workflow_run_params[:repository_ids] || [],
+              agent_runtime: workflow_run_params[:agent_runtime]
             )
 
             if run.persisted?
@@ -46,10 +47,10 @@ module Api
 
           def retry_step
             run = current_project.workflow_runs.find(params[:id])
-            current_step = run.current_step_run
-            return head(:not_found) unless current_step
+            step_run = run.current_step_run || run.latest_failed_step_run
+            return head(:not_found) unless step_run&.retryable?
 
-            WorkflowService.retry_step(step_run: current_step)
+            WorkflowService.retry_step(step_run: step_run)
             respond_with run.reload, serializer: WorkflowRunSerializer
           end
 

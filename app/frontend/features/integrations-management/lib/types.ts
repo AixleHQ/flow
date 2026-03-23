@@ -7,6 +7,8 @@ export interface IntegrationConnectedBy {
   email: string;
 }
 
+export type IntegrationScope = 'company' | 'project';
+
 export interface Integration {
   id: number;
   name: string;
@@ -17,6 +19,9 @@ export interface Integration {
   createdAt: string;
   updatedAt: string;
   githubUrl: string | null;
+  /** Present when integration is scoped to a project; company-wide integrations omit this. */
+  projectId?: number | null;
+  scope: IntegrationScope;
 }
 
 export interface CreateGithubIntegrationRequest {

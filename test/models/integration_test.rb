@@ -32,10 +32,39 @@ class IntegrationTest < ActiveSupport::TestCase
     assert { integration.errors[:provider].present? }
   end
 
-  test "allows multiple integrations with same provider per company" do
-    create(:integration, :github, company: @company, connected_by: @user, name: "org-a")
-    second = build(:integration, :github, company: @company, connected_by: @user, name: "org-b")
+  test "allows multiple company-wide integrations with same provider per company" do
+    create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project_id: nil)
+    second = build(:integration, :github, company: @company, connected_by: @user, name: "org-b", project_id: nil)
     assert { second.valid? }
+    assert second.save!
+  end
+
+  test "find_or_build_github_for_installation returns existing row when installation_id matches" do
+    first = create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project_id: nil)
+    first.update!(credentials_data: { "installation_id" => "111" })
+
+    found = Integration.find_or_build_github_for_installation(
+      company: @company,
+      connected_by: @user,
+      project: nil,
+      installation_id: "111"
+    )
+
+    assert_equal first.id, found.id
+  end
+
+  test "find_or_build_github_for_installation builds new when installation_id unknown" do
+    create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project_id: nil)
+
+    built = Integration.find_or_build_github_for_installation(
+      company: @company,
+      connected_by: @user,
+      project: nil,
+      installation_id: "999"
+    )
+
+    assert built.new_record?
+    assert_equal @user, built.connected_by
   end
 
   # ====== Enumerize ======

@@ -81,7 +81,7 @@ module ContainerStrategies
 
     def build_env_vars
       hash = resolve_callable(defn.opts[:env]) || {}
-      hash.map { |k, v| "#{k}=#{v}" }
+      super + hash.map { |k, v| "#{k}=#{v}" }
     end
 
     def build_labels

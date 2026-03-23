@@ -146,6 +146,70 @@ module Api
         assert_equal "Run the tests", data["initial_prompt"]
       end
 
+      test "#create creates session with bmad_enabled and bmad_modules in session_config" do
+        project = create(:project, owner: @user, company: @company)
+
+        post :create, params: {
+          terminal_session: {
+            session_type: "agent_session",
+            agent_type: "claude_code",
+            project_id: project.id,
+            session_config: {
+              bmad_enabled: true,
+              bmad_modules: %w[bmm cis bmb]
+            }
+          }
+        }
+
+        assert_response :created
+        session = TerminalSession.last
+        assert_equal true, session.session_config["bmad_enabled"]
+        assert_equal %w[bmm cis bmb], session.session_config["bmad_modules"]
+        assert session.bmad_enabled?
+        assert_equal %w[bmm cis bmb], session.bmad_modules
+      end
+
+      test "#create creates session with bmad_enabled defaults bmad_modules" do
+        project = create(:project, owner: @user, company: @company)
+
+        post :create, params: {
+          terminal_session: {
+            session_type: "agent_session",
+            agent_type: "claude_code",
+            project_id: project.id,
+            session_config: {
+              bmad_enabled: true
+            }
+          }
+        }
+
+        assert_response :created
+        session = TerminalSession.last
+        assert_equal true, session.session_config["bmad_enabled"]
+        assert session.bmad_enabled?
+        assert_equal %w[bmm], session.bmad_modules
+      end
+
+      test "#create without bmad config leaves bmad_enabled nil" do
+        project = create(:project, owner: @user, company: @company)
+
+        post :create, params: {
+          terminal_session: {
+            session_type: "agent_session",
+            agent_type: "claude_code",
+            project_id: project.id,
+            session_config: {
+              config_files: { "CLAUDE.md" => "# Context" }
+            }
+          }
+        }
+
+        assert_response :created
+        session = TerminalSession.last
+        assert_nil session.session_config["bmad_enabled"]
+        assert_not session.bmad_enabled?
+      end
+
       test "#create creates session with tool_ids and skill_ids" do
         mock_temporal_start
 

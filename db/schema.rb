@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -165,7 +165,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
     t.string "tags", default: [], array: true
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
-    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true
+    t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["created_by_id"], name: "index_assets_on_created_by_id"
     t.index ["deleted_at"], name: "index_assets_on_deleted_at"
     t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
@@ -319,12 +319,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
     t.datetime "created_at", null: false
     t.text "credentials"
     t.string "name", null: false
+    t.bigint "project_id"
     t.string "provider", null: false
     t.jsonb "settings", default: {}
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
+    t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
+    t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
   end
 
@@ -478,7 +481,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
   create_table "step_runs", force: :cascade do |t|
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.jsonb "error_history", default: [], null: false
     t.text "error_message"
+    t.integer "retry_count", default: 0, null: false
     t.string "skip_reason"
     t.datetime "started_at"
     t.string "state", default: "pending", null: false
@@ -496,6 +501,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
   create_table "steps", force: :cascade do |t|
     t.bigint "agent_id"
     t.boolean "allow_non_interactive", default: false, null: false
+    t.boolean "bmad_enabled", default: false, null: false
     t.datetime "created_at", null: false
     t.jsonb "depends_on_step_ids", default: [], null: false
     t.text "description"
@@ -535,6 +541,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
 
   create_table "sub_steps", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.text "description"
     t.text "instructions"
     t.string "name", null: false
@@ -542,6 +549,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
     t.boolean "required", default: true, null: false
     t.bigint "step_id", null: false
     t.datetime "updated_at", null: false
+    t.index ["deleted_at"], name: "index_sub_steps_on_deleted_at"
     t.index ["step_id", "position"], name: "index_sub_steps_on_step_id_and_position"
     t.index ["step_id"], name: "index_sub_steps_on_step_id"
   end
@@ -800,6 +808,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_16_180000) do
   add_foreign_key "column_workflow_bindings", "board_columns"
   add_foreign_key "column_workflow_bindings", "workflows"
   add_foreign_key "integrations", "companies"
+  add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"

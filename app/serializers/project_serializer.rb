@@ -5,10 +5,10 @@ class ProjectSerializer < ApplicationSerializer
              :collaborators_count, :last_activity_at, :created_at, :updated_at
 
   def collaborators_count
-    object.project_collaborators.count
+    object.project_collaborators.size
   end
 
   def last_activity_at
-    object.terminal_sessions.order(started_at: :desc).limit(1).pick(:started_at)
+    object.terminal_sessions.maximum(:started_at)
   end
 end

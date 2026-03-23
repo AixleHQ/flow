@@ -32,7 +32,7 @@ module ContainerRuntime
     end
 
     # Store file using Docker archive API (works on created/stopped containers)
-    def store_file(_id, _path, _content)
+    def store_file(_id, _path, _content, mode: 0o644)
       raise NotImplementedError, "#{self.class.name} must implement #store_file"
     end
 
@@ -76,6 +76,20 @@ module ContainerRuntime
     end
 
     private
+
+    # Extract a single file from tar archive data
+    def extract_from_tar(tar_data, filename)
+      io = StringIO.new(tar_data)
+      Gem::Package::TarReader.new(io) do |tar|
+        tar.each do |entry|
+          return entry.read if entry.file? && File.basename(entry.full_name) == filename
+        end
+      end
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[#{self.class.name}] extract_from_tar failed: #{e.message}")
+      nil
+    end
 
     def build_tar_stream(path, content, mode: 0o644)
       normalized = normalize_tar_path(path)

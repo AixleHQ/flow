@@ -221,9 +221,9 @@ module ContainerStrategies
       end
     end
 
-    test "build_env_vars returns empty array by default" do
+    test "build_env_vars returns locale vars by default" do
       strategy = BaseStrategy.new
-      assert_equal [], strategy.build_env_vars
+      assert_equal [ "LANG=C.UTF-8", "LC_ALL=C.UTF-8" ], strategy.build_env_vars
     end
 
     test "build_labels returns empty hash by default" do
@@ -273,9 +273,8 @@ module ContainerStrategies
 
     test "read_file_from_container returns file content" do
       strategy = BaseStrategy.new
-      tar_data  = build_test_tar("path/to/test.txt", "Hello, World!")
 
-      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/test.txt").returns(tar_data)
+      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/test.txt").returns("Hello, World!")
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/test.txt")
 
@@ -292,16 +291,14 @@ module ContainerStrategies
       assert_nil content
     end
 
-    test "read_file_from_container returns binary content as binary string" do
+    test "read_file_from_container returns binary content" do
       strategy     = BaseStrategy.new
       binary_data  = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
-      tar_data     = build_test_tar("path/to/image.png", binary_data)
 
-      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/image.png").returns(tar_data)
+      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/image.png").returns(binary_data)
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/image.png")
 
-      assert_equal Encoding::ASCII_8BIT, content.encoding
       assert_equal binary_data, content
     end
 

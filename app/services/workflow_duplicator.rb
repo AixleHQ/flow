@@ -53,7 +53,7 @@ class WorkflowDuplicator
       mount_repositories: step.mount_repositories
     )
 
-    step.sub_steps.order(:position).each do |ss|
+    step.sub_steps.active.each do |ss|
       new_step.sub_steps.create!(
         name: ss.name,
         description: ss.description,

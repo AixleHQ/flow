@@ -100,6 +100,7 @@ export const projectTabRoute = createRoute({
     priority: search.priority as string | undefined,
     tags: search.tags as string | undefined,
     search: search.search as string | undefined,
+    task: search.task as number | undefined,
   }),
   component: ProjectPage,
 });
@@ -116,15 +117,6 @@ export const projectSessionViewRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.companyProjectSessionPath('$projectId', '$sessionId'),
   component: CompanySessionViewPage,
-});
-
-// Workflow runs list — redirect to project tab
-export const workflowRunsRoute = createRoute({
-  getParentRoute: () => authLayoutRoute,
-  path: Routes.frontend.workflowRunsPath('$projectId'),
-  beforeLoad: ({ params }: { params: { projectId: string } }) => {
-    throw redirect({ to: Routes.frontend.companyProjectTabPath(params.projectId, 'runs') });
-  },
 });
 
 // Workflow run route - nested under project
@@ -276,7 +268,6 @@ export const routeTree = rootRoute.addChildren([
     projectTabRoute,
     projectSessionNewRoute,
     projectSessionViewRoute,
-    workflowRunsRoute,
     workflowRunRoute,
     companyWorkflowBuilderRoute,
     projectWorkflowBuilderRoute,

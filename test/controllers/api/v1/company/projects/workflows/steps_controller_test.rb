@@ -95,6 +95,53 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_equal 1, s2.reload.position
   end
 
+  test "#update with _destroy: true hard-deletes sub_step when no sub_step_runs" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    sub_step = create(:sub_step, step: step, position: 1, name: "ToDelete")
+
+    patch :update, params: {
+      project_id: @project.id, workflow_id: @workflow.id, id: step.id,
+      step: { sub_steps_attributes: [ { id: sub_step.id, _destroy: true } ] }
+    }
+    assert_response :success
+    assert_not SubStep.exists?(sub_step.id)
+  end
+
+  test "#update with _destroy: true soft-deletes sub_step when sub_step_runs exist" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    sub_step = create(:sub_step, step: step, position: 1, name: "ToSoftDelete")
+    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    step_run = create(:step_run, workflow_run: workflow_run, step: step)
+    create(:sub_step_run, sub_step: sub_step, step_run: step_run)
+
+    patch :update, params: {
+      project_id: @project.id, workflow_id: @workflow.id, id: step.id,
+      step: { sub_steps_attributes: [ { id: sub_step.id, _destroy: true } ] }
+    }
+    assert_response :success
+    assert_not_nil sub_step.reload.deleted_at
+  end
+
+  test "#update soft-deleted sub_step is excluded from response" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    sub_step = create(:sub_step, step: step, position: 1, name: "ToSoftDelete")
+    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    step_run = create(:step_run, workflow_run: workflow_run, step: step)
+    create(:sub_step_run, sub_step: sub_step, step_run: step_run)
+
+    patch :update, params: {
+      project_id: @project.id, workflow_id: @workflow.id, id: step.id,
+      step: { sub_steps_attributes: [ { id: sub_step.id, _destroy: true } ] }
+    }
+    assert_response :success
+    body = response.parsed_body
+    sub_step_ids = body["data"]["sub_steps"].map { |ss| ss["id"] }
+    assert_not_includes sub_step_ids, sub_step.id
+  end
+
   test "non-member cannot access" do
     other_user = create(:user, :employee, company: @company)
     sign_in other_user

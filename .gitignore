@@ -85,3 +85,7 @@ docker/remote/db_dumps/latest.sql.gz
 
 # Personal AI memos
 andrew-memo/
+.playwright-mcp/
+.stitch/
+.claude/
+docker/tools/

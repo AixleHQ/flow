@@ -2,7 +2,7 @@
 
 class WorkflowService
   class << self
-    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [])
+    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil)
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
@@ -10,7 +10,8 @@ class WorkflowService
         mode: mode,
         step_overrides: overrides,
         input_asset_ids: input_asset_ids,
-        repository_ids: repository_ids
+        repository_ids: repository_ids,
+        agent_runtime: agent_runtime.presence
       )
 
       validate_mode!(run, workflow, overrides)
@@ -50,17 +51,21 @@ class WorkflowService
 
     def approve_step(step_run:)
       step_run.mark_completed!
-      send_signal(step_run.workflow_run, "step_completed")
+      send_signal(step_run.workflow_run, "step_completed", step_run.id)
     end
 
     def retry_step(step_run:)
-      step_run.mark_failed!("Retried by user")
-      send_signal(step_run.workflow_run, "step_retried")
+      new_step_run = step_run.workflow_run.step_runs.create!(
+        step: step_run.step,
+        state: :pending
+      )
+      send_signal(step_run.workflow_run, "step_retried",
+                  { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
     end
 
     def skip_step(step_run:, reason: nil)
       step_run.mark_skipped!(reason || "Skipped by user")
-      send_signal(step_run.workflow_run, "step_skipped")
+      send_signal(step_run.workflow_run, "step_skipped", step_run.id)
     end
 
     def notify_container_finished(step_run:)
@@ -76,8 +81,8 @@ class WorkflowService
       "workflow-execution-#{run.id}"
     end
 
-    def send_signal(run, signal_name)
-      TemporalService.send_signal(workflow_execution_id(run), signal_name)
+    def send_signal(run, signal_name, payload = nil)
+      TemporalService.send_signal(workflow_execution_id(run), signal_name, payload)
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to send signal #{signal_name} for run ##{run.id}: #{e.message}")
     end

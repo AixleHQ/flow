@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "rubygems/package"
 
 module ContainerRuntime
   class KubernetesRuntimeTest < ActiveSupport::TestCase
@@ -86,6 +87,32 @@ module ContainerRuntime
     test "copy_to returns false when path blank" do
       assert_equal false, @runtime.copy_to("id", "", "content")
       assert_equal false, @runtime.copy_to("id", nil, "content")
+    end
+
+    test "read_file returns nil when path blank" do
+      assert_nil @runtime.read_file("id", "")
+      assert_nil @runtime.read_file("id", nil)
+    end
+
+    test "read_file returns nil when copy_from yields empty archive" do
+      @runtime.expects(:copy_from).with("ns/pod", "/workspace/note.txt").returns("")
+
+      assert_nil @runtime.read_file("ns/pod", "/workspace/note.txt")
+    end
+
+    test "read_file extracts file matching basename from tar returned by copy_from" do
+      tar_io = Tempfile.new("k8s-read-file")
+      tar_io.binmode
+      Gem::Package::TarWriter.new(tar_io) do |tar|
+        tar.add_file_simple("workspace/note.txt", 0o644, 9) { |io| io.write("file body") }
+      end
+      tar_io.rewind
+      tar_bytes = tar_io.read
+      tar_io.close!
+
+      @runtime.expects(:copy_from).with("handle", "/workspace/note.txt").returns(tar_bytes)
+
+      assert_equal "file body", @runtime.read_file("handle", "/workspace/note.txt")
     end
 
     test "remove_image is no-op" do
@@ -350,6 +377,16 @@ module ContainerRuntime
       assert_equal "1000m", hard["limits.cpu"]
       assert_equal "2Gi",   hard["limits.memory"]
       assert_equal "20",    hard["count/pods"]
+    end
+    private
+
+    def build_test_tar(filename, content)
+      io = StringIO.new
+      io.binmode
+      Gem::Package::TarWriter.new(io) do |tar|
+        tar.add_file_simple(filename, 0o644, content.bytesize) { |f| f.write(content) }
+      end
+      io.string
     end
   end
 end

@@ -17,7 +17,7 @@ class StepRun < ApplicationRecord
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
 
   def mark_running!
-    update!(state: :running, started_at: Time.current)
+    update!(state: :running, started_at: Time.current, error_message: nil)
     broadcast_update!
   end
 
@@ -47,7 +47,7 @@ class StepRun < ApplicationRecord
   end
 
   def create_sub_step_runs!
-    step.sub_steps.order(:position).each do |sub_step|
+    step.sub_steps.active.each do |sub_step|
       sub_step_runs.find_or_create_by!(sub_step: sub_step) do |ssr|
         ssr.state = :pending
       end
@@ -55,11 +55,11 @@ class StepRun < ApplicationRecord
   end
 
   def retryable?
-    failed? && (step.max_retries.to_i > retry_count.to_i)
+    failed?
   end
 
   def retry_count
-    self[:retry_count] || 0
+    self[:retry_count].to_i
   end
 
   def broadcast_update!

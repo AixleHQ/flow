@@ -1,7 +1,7 @@
 project_name: Palad
 
-domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
-asset_host: <%= ENV['ASSET_HOST'] || "lvh.me:4000" %>
+domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
+asset_host: <%= ENV['ASSET_HOST'] || "localhost:4000" %>
 container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:4000" %>
 protocol: "https"
 
@@ -35,7 +35,7 @@ database:
 mailer:
   address: <%= ENV["MAILER_ADDRESS"] %>
   port: <%= ENV["MAILER_PORT"] %>
-  domain: <%= ENV['DOMAIN'] || "lvh.me:4000" %>
+  domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
   user_name: <%= ENV['MAILER_USERNAME'] %>
   password: <%= ENV['MAILER_PASSWORD'] %>
   authentication: <%= ENV["MAILER_AUTHENTICATION"] || 'plain' %>

@@ -19,7 +19,7 @@ Dir[File.expand_path("../helpers/**/*.rb", __FILE__)].sort.each { |file| require
 Dir[File.expand_path("../support/**/*.rb", __FILE__)].sort.each { |file| require file }
 
 # Disable external web requests in tests
-WebMock.disable_net_connect!(allow_localhost: true, allow: "lvh.me")
+WebMock.disable_net_connect!(allow_localhost: true, allow: "localhost")
 
 class ActiveSupport::TestCase
   setup do

@@ -65,13 +65,12 @@ module ContainerRuntime
 
     def copy_from(id, path)
       container = resolve_container(id)
-      container.archive(path)
+      container.read_file(path)
     end
 
     def copy_to(id, path, content)
-      return false if path.blank?
-
       container = resolve_container(id)
+
       dir = File.dirname(path)
       safe_dir = Shellwords.escape(dir)
       safe_path = Shellwords.escape(path)
@@ -307,20 +306,6 @@ module ContainerRuntime
       end
 
       output
-    end
-
-    # Extract a single file from tar archive data
-    def extract_from_tar(tar_data, filename)
-      io = StringIO.new(tar_data)
-      Gem::Package::TarReader.new(io) do |tar|
-        tar.each do |entry|
-          return entry.read if entry.file? && File.basename(entry.full_name) == filename
-        end
-      end
-      nil
-    rescue StandardError => e
-      Rails.logger.warn("[DockerRuntime] extract_from_tar failed: #{e.message}")
-      nil
     end
 
     def image_exists?(image)

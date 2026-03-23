@@ -37,7 +37,7 @@ COPY base/watcher/index.js ./
 
 COPY base/auth-check/index.js /opt/auth-check/index.js
 COPY base/logger/ /opt/mitm/
-RUN chmod +x /opt/mitm/start-mitm.sh
+RUN chmod +x /opt/mitm/*.sh
 
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh

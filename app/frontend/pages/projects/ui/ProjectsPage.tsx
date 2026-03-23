@@ -174,7 +174,7 @@ const ProjectsPage = () => {
       ) : (
         <Grid container spacing={3} sx={styles.grid}>
           {filteredProjects.map((project: IProject) => (
-            <Grid item xs={12} sm={6} lg={4} key={project.id}>
+            <Grid item xs={12} sm={6} lg={4} key={project.id} sx={{ display: 'flex' }}>
               <ProjectCard project={project} onClick={() => handleProjectClick(project.id)} />
             </Grid>
           ))}

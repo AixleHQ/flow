@@ -66,9 +66,14 @@ class Project < ApplicationRecord
     project_collaborators.find_by(user: user)&.destroy
   end
 
-  # Check if user has access to project (owner or collaborator)
+  # Check if user has access to project (owner, collaborator, or company admin)
   def accessible_by?(user)
-    owner_id == user.id || project_collaborators.exists?(user: user)
+    return false unless user
+
+    return true if owner_id == user.id || project_collaborators.exists?(user: user)
+    return true if user.admin? && user.company_id.present? && user.company_id == company_id
+
+    false
   end
 
   # Check if user is admin of project (owner only)

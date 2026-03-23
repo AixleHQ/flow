@@ -98,8 +98,8 @@ class TaskService
     end
 
     def trigger_workflow(task:, binding:, actor:)
-      unless binding&.trigger_mode&.to_sym == :manual
-        return { error: "No manual workflow binding on current column" }
+      unless [ :manual, :auto ].include?(binding&.trigger_mode&.to_sym)
+        return { error: "No workflow binding on current column" }
       end
 
       if task.workflow_runs.where(state: %w[pending running paused]).exists?
