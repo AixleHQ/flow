@@ -1,8 +1,8 @@
 import { baseApi, QueryTag } from 'shared/api';
+import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 import { Routes } from 'shared/routes';
 
-export type AnalyticsScope = 'user' | 'project' | 'company';
-export type AnalyticsPeriod = '7d' | '30d' | '90d' | '1y';
+export type { AnalyticsScope, AnalyticsPeriod };
 
 export interface ProjectAnalyticsSummary {
   totalSessions: number;

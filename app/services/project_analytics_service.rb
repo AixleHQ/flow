@@ -65,7 +65,7 @@ class ProjectAnalyticsService
       .where(terminal_session_id: sessions.select(:id))
       .pick(
         Arel.sql("COALESCE(SUM(cost_cents), 0)"),
-        Arel.sql("COALESCE(SUM(tokens), 0)")
+        Arel.sql("COALESCE(NULLIF(SUM(input_tokens + output_tokens + cache_write_tokens + cache_read_tokens), 0), SUM(tokens), 0)")
       )
     { cost_cents: row[0].to_i, tokens: row[1].to_i }
   end
