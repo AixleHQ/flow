@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_22_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -503,6 +503,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
     t.boolean "allow_non_interactive", default: false, null: false
     t.boolean "bmad_enabled", default: false, null: false
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.jsonb "depends_on_step_ids", default: [], null: false
     t.text "description"
     t.jsonb "input_asset_specs", default: [], null: false
@@ -521,6 +522,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_150000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.index ["agent_id"], name: "index_steps_on_agent_id"
+    t.index ["deleted_at"], name: "index_steps_on_deleted_at"
     t.index ["workflow_id", "position"], name: "index_steps_on_workflow_id_and_position", unique: true
     t.index ["workflow_id"], name: "index_steps_on_workflow_id"
   end

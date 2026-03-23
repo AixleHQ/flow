@@ -5,7 +5,7 @@ module Activities
     class PrepareStepListActivity < ::Activities::Base
       def execute(input)
         workflow_run = WorkflowRun.find(input["workflow_run_id"])
-        steps = workflow_run.workflow.steps.order(:position)
+        steps = workflow_run.workflow.steps.active.order(:position)
         overrides = workflow_run.step_overrides || {}
 
         steps.map do |step|

@@ -66,7 +66,7 @@ module ContextBuilders
         #{workflow.description}
 
         **Mode:** #{workflow_run.mode} | **Run:** #{workflow_run.id}
-        **Step #{step.position} of #{workflow.steps.count}**
+        **Step #{step.position} of #{workflow.steps.active.count}**
       MD
     end
 

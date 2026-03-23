@@ -15,7 +15,7 @@ class WorkflowSerializer < ApplicationSerializer
   end
 
   def steps_count
-    object.steps.size
+    object.steps.active.size
   end
 
   def last_run_at

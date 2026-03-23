@@ -71,7 +71,7 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_equal "Updated", step.reload.name
   end
 
-  test "#destroy removes step" do
+  test "#destroy hard-deletes step when no step_runs" do
     sign_in @admin
     step = create(:step, workflow: @workflow, position: 1)
 
@@ -79,6 +79,33 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
       delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
     end
     assert_response :no_content
+  end
+
+  test "#destroy soft-deletes step when step_runs exist" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    workflow_run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    create(:step_run, workflow_run: workflow_run, step: step)
+
+    assert_no_difference "Step.count" do
+      delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
+    end
+    assert_response :no_content
+    assert_not_nil step.reload.deleted_at
+  end
+
+  test "#index excludes soft-deleted steps" do
+    sign_in @admin
+    active_step = create(:step, workflow: @workflow, position: 1)
+    deleted_step = create(:step, workflow: @workflow, position: 2)
+    deleted_step.soft_delete!
+
+    get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+    assert_response :success
+    body = response.parsed_body
+    step_ids = body["items"].map { |s| s["id"] }
+    assert_includes step_ids, active_step.id
+    assert_not_includes step_ids, deleted_step.id
   end
 
   test "#reorder updates positions" do

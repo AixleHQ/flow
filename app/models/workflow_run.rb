@@ -19,7 +19,7 @@ class WorkflowRun < ApplicationRecord
   scope :active, -> { where(state: %w[pending running paused]) }
 
   def can_run_non_interactive?
-    workflow.steps.all?(&:allow_non_interactive)
+    workflow.steps.active.all?(&:allow_non_interactive)
   end
 
   def step_auto_run?(step_id)
