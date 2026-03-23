@@ -4,7 +4,7 @@ module StepsActions
   extend ActiveSupport::Concern
 
   def index
-    steps = current_workflow.steps.active.includes(:sub_steps)
+    steps = current_workflow.steps.not_deleted.includes(:sub_steps)
     respond_with steps, each_serializer: StepSerializer
   end
 

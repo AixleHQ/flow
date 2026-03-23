@@ -169,6 +169,18 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_not_includes sub_step_ids, sub_step.id
   end
 
+  test "#destroy returns error when another step depends on it" do
+    sign_in @admin
+    step_a = create(:step, workflow: @workflow, position: 1)
+    step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [step_a.id])
+
+    assert_no_difference "Step.count" do
+      delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step_a.id }
+    end
+    assert_response :unprocessable_entity
+    assert_nil step_a.reload.deleted_at
+  end
+
   test "non-member cannot access" do
     other_user = create(:user, :employee, company: @company)
     sign_in other_user

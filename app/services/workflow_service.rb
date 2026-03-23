@@ -19,7 +19,7 @@ class WorkflowService
 
       return run unless run.save
 
-      workflow.steps.active.order(:position).each do |step|
+      workflow.steps.not_deleted.order(:position).each do |step|
         run.step_runs.find_or_create_by!(step: step)
       end
 
@@ -90,7 +90,7 @@ class WorkflowService
     def validate_mode!(run, workflow, overrides)
       return unless run.non_interactive?
 
-      blocking_steps = workflow.steps.active.reject do |step|
+      blocking_steps = workflow.steps.not_deleted.reject do |step|
         override = overrides[step.id.to_s]
         override ? override["auto_run"] : step.allow_non_interactive
       end
