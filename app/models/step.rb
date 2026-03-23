@@ -32,7 +32,7 @@ class Step < ApplicationRecord
 
   def destroy
     dependent = workflow.steps.not_deleted.where.not(id: id)
-                        .where("depends_on_step_ids @> ?::jsonb", [id].to_json)
+                        .where("depends_on_step_ids @> ?::jsonb", [ id ].to_json)
     if dependent.any?
       errors.add(:base, "Cannot delete step: #{dependent.pluck(:name).join(', ')} depend on it")
       return false

@@ -172,7 +172,7 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
   test "#destroy returns error when another step depends on it" do
     sign_in @admin
     step_a = create(:step, workflow: @workflow, position: 1)
-    step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [step_a.id])
+    step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
 
     assert_no_difference "Step.count" do
       delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step_a.id }

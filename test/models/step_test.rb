@@ -78,7 +78,7 @@ class StepTest < ActiveSupport::TestCase
 
   test "destroy returns false when another active step depends on it" do
     step_a = create(:step, workflow: @workflow, position: 1)
-    create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [step_a.id])
+    create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
 
     result = step_a.destroy
     assert_equal false, result
@@ -88,7 +88,7 @@ class StepTest < ActiveSupport::TestCase
 
   test "destroy succeeds when dependent step is already soft-deleted" do
     step_a = create(:step, workflow: @workflow, position: 1)
-    step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [step_a.id])
+    step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
     step_b.soft_delete!
 
     assert_difference "Step.count", -1 do
