@@ -54,8 +54,8 @@ data:
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/metrics"
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: "http://otlp-ingest.palad-staging.svc.cluster.local:4318/v1/logs"
-  GITHUB_APP_ID: "replace_me"
-  GITHUB_APP_SLUG: replace_me
+  GITHUB_APP_ID: "3165896"
+  GITHUB_APP_SLUG: palad-ai-staging
   GITHUB_APP_URL: "replace_me"
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"

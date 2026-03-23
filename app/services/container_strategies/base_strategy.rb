@@ -173,7 +173,7 @@ module ContainerStrategies
     end
 
     def read_file_from_container(container, path)
-      content = runtime.copy_from(container, path)
+      content = runtime.read_file(container, path)
       content.presence
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")

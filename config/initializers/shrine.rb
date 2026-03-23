@@ -10,7 +10,7 @@ def dev_setup
     cache: Shrine::Storage::FileSystem.new("public", prefix: "cache"),
     store: Shrine::Storage::FileSystem.new("public", prefix: "store")
   }
-  Shrine.plugin(:url_options, store: { host: "http://#{Settings.domain}" })
+  Shrine.plugin(:url_options, store: { host: "#{Settings.protocol}://#{Settings.domain}" })
   Shrine.plugin(:presign_endpoint, presign: ->(id, options, request) {
     { url: Rails.application.routes.url_helpers.upload_api_v1_assets_path, fields: { key: "cache/#{id}" }, method: "POST" }
   })

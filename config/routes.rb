@@ -11,6 +11,9 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
 
+  # GitHub webhook endpoint (public, no session auth — verified via HMAC signature)
+  post "/webhooks/github", to: "webhooks/github#receive"
+
   # API routes
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
@@ -146,6 +149,7 @@ Rails.application.routes.draw do
                 end
                 resources :comments, controller: "board/task/comments", only: %i[index create]
                 resources :assets, controller: "board/task/assets", only: %i[index create destroy]
+                resources :waits, controller: "board/task/waits", only: %i[destroy]
                 resources :transitions, controller: "board/task/transitions", only: %i[index]
                 resources :activities, controller: "board/task/activities", only: %i[index]
               end

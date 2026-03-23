@@ -42,10 +42,8 @@ module InternalTools
     def resolve_file_data
       if params[:file_path].present?
         read_file_from_container(params[:file_path])
-      elsif params[:file_content].present?
-        Base64.decode64(params[:file_content])
       else
-        error("Either file_path or file_content is required")
+        error("file_path is required")
       end
     end
 

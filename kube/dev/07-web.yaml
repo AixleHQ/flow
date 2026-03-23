@@ -24,6 +24,9 @@ spec:
         - name: web
           image: web
           imagePullPolicy: IfNotPresent
+          command: ["bash", "-lc"]
+          args:
+            - bundle install && bin/rails db:migrate && exec bundle exec puma -C config/puma.rb
           resources:
             requests:
               cpu: "300m"

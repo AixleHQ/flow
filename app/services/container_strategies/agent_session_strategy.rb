@@ -112,7 +112,7 @@ module ContainerStrategies
         cmd
       end
 
-      runtime.exec(container, [ "sh", "-c", "tmux send-keys -t agent '#{tmux_cmd}' Enter" ])
+      runtime.exec(container, [ "sh", "-c", "for i in $(seq 1 30); do tmux capture-pane -t agent -p 2>/dev/null | grep -q '\\$' && break; sleep 0.2; done; tmux send-keys -t agent '#{tmux_cmd}' Enter" ])
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 
