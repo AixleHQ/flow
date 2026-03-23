@@ -142,4 +142,92 @@ class TaskServiceTest < ActiveSupport::TestCase
     result = TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
     assert_equal "Active workflow run already exists for this task", result[:error]
   end
+
+  # == resolve_wait ==
+
+  test "resolve_wait marks wait as resolved with resolution data" do
+    task = create(:board_task, board: @board, board_column: @column)
+    wait = task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    TaskService.resolve_wait(wait: wait, resolution_data: { conclusion: "success" })
+
+    wait.reload
+    assert wait.resolved?
+    assert_equal "success", wait.resolution_data["conclusion"]
+    assert_not_nil wait.resolved_at
+  end
+
+  test "resolve_wait triggers auto-workflow when all waits resolved" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    wait = task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.resolve_wait(wait: wait, resolution_data: { conclusion: "success" })
+  end
+
+  test "resolve_wait does not trigger auto-workflow when other pending waits remain" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    wait1 = task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+    task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 2 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).never
+
+    TaskService.resolve_wait(wait: wait1, resolution_data: { conclusion: "success" })
+  end
+
+  # == check_auto_trigger (pending waits guard) ==
+
+  test "check_auto_trigger does not start workflow when task has pending waits" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).never
+
+    TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+  end
+
+  test "check_auto_trigger starts workflow when task has no pending waits" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+  end
 end

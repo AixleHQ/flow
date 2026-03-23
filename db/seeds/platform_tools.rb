@@ -173,6 +173,21 @@ module Seeds
           },
           required: %w[action entity_type entity_id tag]
         }
+      },
+      {
+        name: "board_create_wait",
+        display_name: "Board Create Wait",
+        description: "Create a Wait on a board task. The auto-workflow for the task's column will not fire until all Waits are resolved.",
+        input_schema: {
+          type: "object",
+          properties: {
+            task_id:        { type: "integer", description: "Board task ID" },
+            wait_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed" },
+            repo_full_name: { type: "string",  description: "(github_checks_completed) Full repo name, e.g. owner/repo" },
+            pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" }
+          },
+          required: %w[task_id wait_type]
+        }
       }
     ].freeze
 

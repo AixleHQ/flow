@@ -84,6 +84,7 @@ github:
   app_id: <%= ENV['GITHUB_APP_ID'] %>
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
+  webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
 
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
