@@ -158,21 +158,6 @@ class TaskService
       Rails.logger.warn("[TaskService] Failed to record activity #{event_type}: #{e.message}")
     end
 
-    def check_auto_trigger(task:, column:, actor:)
-      binding = column.column_workflow_binding
-      return unless binding&.trigger_mode&.to_sym == :auto
-
-      WorkflowService.start(
-        workflow: binding.workflow,
-        project: column.board.project,
-        user: actor,
-        task: task,
-        mode: :non_interactive
-      )
-    rescue StandardError => e
-      Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
-    end
-
     def insert_at_position(target_column, task, position)
       target_column.board_tasks
         .where.not(id: task.id)
