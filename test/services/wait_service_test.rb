@@ -23,7 +23,8 @@ class WaitServiceTest < ActiveSupport::TestCase
   test "resolves a pending wait matching repo and PR number" do
     wait = @task.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: @repo_name, pr_number: 42 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
     )
 
     TaskService.expects(:resolve_wait).with(
@@ -41,7 +42,8 @@ class WaitServiceTest < ActiveSupport::TestCase
   test "does nothing when no waits match the repo" do
     @task.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: "other/repo", pr_number: 42 }
+      metadata:  { repo_full_name: "other/repo", pr_number: 42 },
+      creator: @user
     )
 
     TaskService.expects(:resolve_wait).never
@@ -56,7 +58,8 @@ class WaitServiceTest < ActiveSupport::TestCase
   test "does nothing when no waits match the PR number" do
     @task.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: @repo_name, pr_number: 99 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 99 },
+      creator: @user
     )
 
     TaskService.expects(:resolve_wait).never
@@ -72,7 +75,8 @@ class WaitServiceTest < ActiveSupport::TestCase
     @task.task_waits.create!(
       wait_type: :github_checks_completed,
       status:    :resolved,
-      metadata:  { repo_full_name: @repo_name, pr_number: 42 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
     )
 
     TaskService.expects(:resolve_wait).never
@@ -89,11 +93,13 @@ class WaitServiceTest < ActiveSupport::TestCase
 
     wait1 = @task.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: @repo_name, pr_number: 42 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
     )
     wait2 = task2.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: @repo_name, pr_number: 42 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
     )
 
     resolved_waits = []
@@ -121,7 +127,8 @@ class WaitServiceTest < ActiveSupport::TestCase
     # This wait belongs to a project with no connection to @repo_name
     other_task.task_waits.create!(
       wait_type: :github_checks_completed,
-      metadata:  { repo_full_name: @repo_name, pr_number: 42 }
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
     )
 
     TaskService.expects(:resolve_wait).never

@@ -4,7 +4,7 @@ class TaskWait < ApplicationRecord
   extend Enumerize
 
   belongs_to :board_task
-  belongs_to :creator, class_name: "User", optional: true
+  belongs_to :creator, class_name: "User"
 
   enumerize :wait_type, in: %i[github_checks_completed], predicates: true
   enumerize :status, in: %i[pending resolved], default: :pending, predicates: true, scope: true

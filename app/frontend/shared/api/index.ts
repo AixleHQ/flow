@@ -8,3 +8,4 @@ export { setErrorsToForm } from './formErrors';
 export * from './routes';
 export * from './terminalSessionApi';
 export * from './configItemsApi';
+export * from './analyticsTypes';

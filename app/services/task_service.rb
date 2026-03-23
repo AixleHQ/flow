@@ -123,12 +123,7 @@ class TaskService
       )
 
       task = wait.board_task
-      actor = wait.creator
-      if actor.nil?
-        Rails.logger.warn("[TaskService] resolve_wait: wait##{wait.id} has no creator — skipping auto-trigger")
-        return
-      end
-      check_auto_trigger(task: task, column: task.board_column, actor: actor)
+      check_auto_trigger(task: task, column: task.board_column, actor: wait.creator)
     end
 
     def check_auto_trigger(task:, column:, actor:)
@@ -161,6 +156,21 @@ class TaskService
       )
     rescue StandardError => e
       Rails.logger.warn("[TaskService] Failed to record activity #{event_type}: #{e.message}")
+    end
+
+    def check_auto_trigger(task:, column:, actor:)
+      binding = column.column_workflow_binding
+      return unless binding&.trigger_mode&.to_sym == :auto
+
+      WorkflowService.start(
+        workflow: binding.workflow,
+        project: column.board.project,
+        user: actor,
+        task: task,
+        mode: :non_interactive
+      )
+    rescue StandardError => e
+      Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
     end
 
     def insert_at_position(target_column, task, position)
