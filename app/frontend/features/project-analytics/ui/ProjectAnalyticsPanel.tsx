@@ -220,17 +220,17 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
     { skip: !projectId },
   );
 
-  const { data: sessionSourceData, isLoading: isSourceLoading } = useGetSessionSourceBreakdownQuery(
+  const { data: sessionSourceData, isLoading: isSourceLoading, isError: isSourceError } = useGetSessionSourceBreakdownQuery(
     { projectId: projectId!, scope, period },
     { skip: !projectId },
   );
 
-  const { data: durationData, isLoading: isDurationLoading } = useGetSessionDurationDistributionQuery(
+  const { data: durationData, isLoading: isDurationLoading, isError: isDurationError } = useGetSessionDurationDistributionQuery(
     { projectId: projectId!, scope, period },
     { skip: !projectId },
   );
 
-  const { data: costTokenData, isLoading: isCostTokenLoading } = useGetCostTokenUsageQuery(
+  const { data: costTokenData, isLoading: isCostTokenLoading, isError: isCostTokenError } = useGetCostTokenUsageQuery(
     { projectId: projectId!, scope, period },
     { skip: !projectId },
   );
@@ -415,6 +415,11 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
 
       {/* ── Cost & Token Usage ────────────────────────────────────── */}
       <Typography sx={styles.sectionTitle}>Cost & Token Usage</Typography>
+      {isCostTokenError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load cost and token data. Please refresh to try again.
+        </Typography>
+      )}
       <Box sx={styles.twoCol}>
         {/* Cost over time */}
         <Card sx={styles.card} elevation={0}>
@@ -483,6 +488,11 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
 
       {/* ── Session Source Breakdown ──────────────────────────────── */}
       <Typography sx={styles.sectionTitle}>Session Source Breakdown</Typography>
+      {isSourceError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load session source data. Please refresh to try again.
+        </Typography>
+      )}
       <Card sx={styles.card} elevation={0}>
         <Typography sx={styles.chartTitle}>Sessions by Origin</Typography>
         {isSourceLoading || !projectId ? (
@@ -527,6 +537,11 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
 
       {/* ── Duration Distribution ─────────────────────────────────── */}
       <Typography sx={styles.sectionTitle}>Session Duration Distribution</Typography>
+      {isDurationError && (
+        <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+          Failed to load session duration data. Please refresh to try again.
+        </Typography>
+      )}
       <Card sx={styles.card} elevation={0}>
         <Typography sx={styles.chartTitle}>Session Duration Histogram</Typography>
         {isDurationLoading || !projectId ? (

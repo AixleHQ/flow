@@ -29,22 +29,25 @@ class SessionDurationDistributionService
   end
 
   def call
-    sessions = base_sessions
+    bucket_sql = Arel.sql(<<~SQL.squish)
+      CASE
+        WHEN EXTRACT(EPOCH FROM (finished_at - started_at)) < 60    THEN '0\u20131 min'
+        WHEN EXTRACT(EPOCH FROM (finished_at - started_at)) < 300   THEN '1\u20135 min'
+        WHEN EXTRACT(EPOCH FROM (finished_at - started_at)) < 900   THEN '5\u201315 min'
+        WHEN EXTRACT(EPOCH FROM (finished_at - started_at)) < 1800  THEN '15\u201330 min'
+        WHEN EXTRACT(EPOCH FROM (finished_at - started_at)) < 3600  THEN '30\u201360 min'
+        ELSE '60+ min'
+      END
+    SQL
+
+    counts = base_sessions
       .where.not(started_at: nil)
       .where.not(finished_at: nil)
-      .pluck(Arel.sql("EXTRACT(EPOCH FROM (finished_at - started_at))::integer AS duration_seconds"))
-
-    bucket_counts = BUCKETS.index_with { 0 }
-
-    sessions.each do |duration|
-      bucket = BUCKETS.find do |b|
-        duration >= b[:min] && (b[:max].nil? || duration < b[:max])
-      end
-      bucket_counts[bucket] += 1 if bucket
-    end
+      .group(bucket_sql)
+      .count
 
     rows = BUCKETS.map do |bucket|
-      BucketRow.new(range: bucket[:range], count: bucket_counts[bucket])
+      BucketRow.new(range: bucket[:range], count: counts.fetch(bucket[:range], 0))
     end
 
     Result.new(buckets: rows)

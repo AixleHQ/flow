@@ -192,9 +192,11 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
         {
           label: 'Avg Time / Workflow',
           value: formatDuration(
-            workflows.length > 0
-              ? Math.round(workflows.reduce((sum, w) => sum + w.avgDurationSeconds, 0) / workflows.length)
-              : 0,
+            (() => {
+              const totalRuns = workflows.reduce((sum, w) => sum + w.runCount, 0);
+              const totalSeconds = workflows.reduce((sum, w) => sum + w.totalDurationSeconds, 0);
+              return totalRuns > 0 ? Math.round(totalSeconds / totalRuns) : 0;
+            })(),
           ),
           icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
         },
