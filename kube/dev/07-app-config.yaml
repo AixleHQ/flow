@@ -36,6 +36,7 @@ data:
   CONTAINER_ASSET_HOST: "https://k8s.orb.local"
   ASSET_HOST: "https://k8s.orb.local"
   DOMAIN: "k8s.orb.local"
+  PROTOCOL: "https"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad-dev
   K8S_IMAGE_PULL_POLICY: IfNotPresent
