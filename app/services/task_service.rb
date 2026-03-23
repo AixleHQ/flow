@@ -126,6 +126,14 @@ class TaskService
       check_auto_trigger(task: task, column: task.board_column, actor: wait.creator)
     end
 
+    def remove_wait(wait:, actor:)
+      task = wait.board_task
+      column = task.board_column
+
+      wait.destroy!
+      check_auto_trigger(task: task, column: column, actor: actor)
+    end
+
     def check_auto_trigger(task:, column:, actor:)
       binding = column.column_workflow_binding
       return unless binding&.trigger_mode&.to_sym == :auto

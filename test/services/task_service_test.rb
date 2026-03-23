@@ -200,6 +200,37 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.resolve_wait(wait: wait1, resolution_data: { conclusion: "success" })
   end
 
+  test "remove_wait deletes pending wait" do
+    task = create(:board_task, board: @board, board_column: @column)
+    wait = task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    assert_difference -> { TaskWait.count }, -1 do
+      TaskService.remove_wait(wait: wait, actor: @user)
+    end
+  end
+
+  test "remove_wait triggers auto-workflow when it removes the last pending wait" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    wait = task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.remove_wait(wait: wait, actor: @user)
+  end
+
   # == check_auto_trigger (pending waits guard) ==
 
   test "check_auto_trigger does not start workflow when task has pending waits" do

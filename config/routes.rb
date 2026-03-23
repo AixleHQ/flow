@@ -148,6 +148,7 @@ Rails.application.routes.draw do
                 end
                 resources :comments, controller: "board/task/comments", only: %i[index create]
                 resources :assets, controller: "board/task/assets", only: %i[index create destroy]
+                resources :waits, controller: "board/task/waits", only: %i[destroy]
                 resources :transitions, controller: "board/task/transitions", only: %i[index]
                 resources :activities, controller: "board/task/activities", only: %i[index]
               end
