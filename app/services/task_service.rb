@@ -123,7 +123,12 @@ class TaskService
       )
 
       task = wait.board_task
-      check_auto_trigger(task: task, column: task.board_column, actor: task.assignee)
+      actor = wait.creator
+      if actor.nil?
+        Rails.logger.warn("[TaskService] resolve_wait: wait##{wait.id} has no creator — skipping auto-trigger")
+        return
+      end
+      check_auto_trigger(task: task, column: task.board_column, actor: actor)
     end
 
     def check_auto_trigger(task:, column:, actor:)

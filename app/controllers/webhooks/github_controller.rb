@@ -21,6 +21,8 @@ class Webhooks::GithubController < ActionController::API
     return unless suite[:action] == "completed"
 
     repo_full_name = params.dig(:repository, :full_name)
+    return if repo_full_name.blank?
+
     conclusion     = suite[:conclusion]
     pr_numbers     = suite[:pull_requests]&.map { |pr| pr[:number].to_i } || []
 

@@ -111,6 +111,25 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     end
   end
 
+  test "does not enqueue job for check_suite with missing repository key" do
+    payload = {
+      check_suite: {
+        action: "completed",
+        conclusion: "success",
+        pull_requests: [ { number: 1 } ]
+      }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "check_suite"
+
+    assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
   test "does not enqueue job for check_suite with no pull requests" do
     payload = {
       check_suite: {

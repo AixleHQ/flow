@@ -35,10 +35,6 @@ class BoardTask < ApplicationRecord
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
 
-  def waits_clear?
-    task_waits.pending.none?
-  end
-
   def broadcast_change(action)
     BoardChannel.broadcast_event(board, "board_task.#{action}", { id: id })
   rescue StandardError => e

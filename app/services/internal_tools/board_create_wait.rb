@@ -18,7 +18,7 @@ module InternalTools
       metadata = build_metadata(wait_type, task)
       return metadata if metadata.is_a?(Hash) && metadata.key?(:exit_code)
 
-      wait = task.task_waits.create!(wait_type: wait_type, metadata: metadata)
+      wait = task.task_waits.create!(wait_type: wait_type, metadata: metadata, creator: workflow_run&.user)
 
       success({
         id:        wait.id,

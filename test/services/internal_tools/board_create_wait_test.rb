@@ -63,6 +63,21 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     end
   end
 
+  test "sets creator from workflow run user" do
+    InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_checks_completed",
+        repo_full_name: @repo_name,
+        pr_number:      42
+      },
+      session: @session
+    ).execute
+
+    wait = TaskWait.last
+    assert_equal @user, wait.creator
+  end
+
   # == validation errors ==
 
   test "returns error for unknown wait_type" do
