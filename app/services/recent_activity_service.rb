@@ -108,7 +108,7 @@ class RecentActivityService
     ActivityItem.new(
       event_type:,
       description:,
-      actor_name: session.user.name,
+      actor_name: session.user&.name || "Unknown",
       actor_type: "human",
       occurred_at: session.created_at,
       metadata: {}
@@ -116,7 +116,7 @@ class RecentActivityService
   end
 
   def build_workflow_item(run)
-    workflow_name = run.workflow.name
+    workflow_name = run.workflow&.name || "Deleted Workflow"
 
     event_type, description = case run.state
     when "pending"   then [ "workflow_triggered",  "Workflow \"#{workflow_name}\" queued" ]
@@ -130,7 +130,7 @@ class RecentActivityService
     ActivityItem.new(
       event_type:,
       description:,
-      actor_name: run.user.name,
+      actor_name: run.user&.name || "Unknown",
       actor_type: "human",
       occurred_at: run.created_at,
       metadata: {}
