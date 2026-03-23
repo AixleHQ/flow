@@ -7,7 +7,7 @@ module Api
         class WorkflowsController < ApplicationController
           def index
             workflows = Workflow.visible_for_project(current_project)
-                                .includes(:steps, :runs)
+                                .includes(:steps, runs: [])
                                 .ransack(params[:q]).result
             respond_with paginate(workflows), each_serializer: WorkflowSerializer
           end

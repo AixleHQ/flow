@@ -8,7 +8,7 @@ module Api
           module Task
             class CommentsController < Api::V1::Company::Projects::ApplicationController
               def index
-                comments = current_task.task_comments.ransack(params[:q]).result.order(created_at: :desc)
+                comments = current_task.task_comments.includes(:author).ransack(params[:q]).result.order(created_at: :desc)
                 respond_with comments, each_serializer: TaskCommentSerializer
               end
 

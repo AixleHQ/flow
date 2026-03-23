@@ -4,6 +4,13 @@
 
 require_relative "../config/environment"
 
+# Ensure DB pool is large enough for concurrent Temporal activities
+desired_pool = (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 2).clamp(10, 30)
+ActiveRecord::Base.connection_pool.disconnect!
+db_config = ActiveRecord::Base.connection_db_config
+new_config = db_config.configuration_hash.merge(pool: desired_pool)
+ActiveRecord::Base.establish_connection(new_config)
+
 if Settings.sentry.temporal_dsn.present? && !Rails.env.development?
   Sentry.init do |config|
     config.dsn = Settings.sentry.temporal_dsn

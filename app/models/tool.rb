@@ -23,7 +23,7 @@ class Tool < ApplicationRecord
 
   has_many :tool_files, dependent: :destroy
   has_many :tool_results, dependent: :nullify
-  accepts_nested_attributes_for :tool_files, allow_destroy: true
+    accepts_nested_attributes_for :tool_files, allow_destroy: true
 
   def name=(val)
     super(val&.downcase&.gsub(/[^a-z0-9_]/, "_"))
