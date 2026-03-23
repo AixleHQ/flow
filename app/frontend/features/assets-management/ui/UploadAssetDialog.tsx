@@ -3,6 +3,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import DeleteIcon from '@mui/icons-material/Delete';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import {
+  Autocomplete,
   Box,
   Button,
   Dialog,
@@ -19,7 +20,7 @@ import Uppy from '@uppy/core';
 import type { Body, Meta, UppyFile } from '@uppy/core';
 import { useSnackbar } from 'notistack';
 import { type FC, useCallback, useEffect, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 
 import { setErrorsToForm } from 'shared/api';
 
@@ -34,12 +35,11 @@ interface UploadAssetDialogProps {
   open: boolean;
   onClose: () => void;
   projectId?: number;
+  folders?: string[];
 }
 
 function extractCachedFileData(uploadURL: string): CachedFileData {
   const url = new URL(uploadURL, window.location.origin);
-  // Path segments are not query strings: "+" must not be treated as space by URL alone.
-  // Some S3 responses still surface "+" where the object key has spaces — normalize before decode.
   const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
   const cachePrefix = '/cache/';
   const idx = pathname.indexOf(cachePrefix);
@@ -53,7 +53,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectId }) => {
+const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectId, folders = [] }) => {
   const { enqueueSnackbar } = useSnackbar();
 
   const [createCompanyAsset, { isLoading: isCreatingCompany }] = useCreateCompanyAssetMutation();
@@ -63,11 +63,12 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uppyFiles, setUppyFiles] = useState<UppyFile<Meta, Body>[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const uppyRef = useRef<InstanceType<typeof Uppy<Meta, Body>> | null>(null);
   if (!uppyRef.current) {
     uppyRef.current = new Uppy<Meta, Body>({
-      restrictions: { maxFileSize: MAX_FILE_SIZE, maxNumberOfFiles: 1 },
+      restrictions: { maxFileSize: MAX_FILE_SIZE },
       autoProceed: false,
     }).use(AwsS3, {
       shouldUseMultipart: false,
@@ -86,12 +87,11 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
 
   const methods = useForm<UploadAssetFormData>({
     resolver: zodResolver(uploadAssetSchema),
-    defaultValues: { name: '', folder: '' },
+    defaultValues: { folder: '' },
   });
 
   useEffect(() => {
-    const onFileAdded = () => setUppyFiles(uppy.getFiles());
-    const onFileRemoved = () => setUppyFiles(uppy.getFiles());
+    const syncFiles = () => setUppyFiles(uppy.getFiles());
     const onProgress = (
       _file: UppyFile<Meta, Body> | undefined,
       progress: { bytesUploaded: number; bytesTotal: number | null },
@@ -101,20 +101,20 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
       }
     };
 
-    uppy.on('file-added', onFileAdded);
-    uppy.on('file-removed', onFileRemoved);
+    uppy.on('file-added', syncFiles);
+    uppy.on('file-removed', syncFiles);
     uppy.on('upload-progress', onProgress);
 
     return () => {
-      uppy.off('file-added', onFileAdded);
-      uppy.off('file-removed', onFileRemoved);
+      uppy.off('file-added', syncFiles);
+      uppy.off('file-removed', syncFiles);
       uppy.off('upload-progress', onProgress);
     };
   }, [uppy]);
 
   useEffect(() => {
     if (open) {
-      methods.reset({ name: '', folder: '' });
+      methods.reset({ folder: '' });
       uppy.cancelAll();
       setUppyFiles([]);
       setUploadProgress(0);
@@ -122,47 +122,41 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
     }
   }, [open, methods, uppy]);
 
+  const addFiles = useCallback(
+    (fileList: FileList) => {
+      Array.from(fileList).forEach((file) => {
+        try {
+          uppy.addFile({ name: file.name, type: file.type, data: file, source: 'local' });
+        } catch (err) {
+          enqueueSnackbar(err instanceof Error ? err.message : 'Failed to add file', { variant: 'error' });
+        }
+      });
+    },
+    [uppy, enqueueSnackbar],
+  );
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      uppy.cancelAll();
-      try {
-        uppy.addFile({ name: file.name, type: file.type, data: file, source: 'local' });
-      } catch (err) {
-        enqueueSnackbar(err instanceof Error ? err.message : 'Failed to add file', { variant: 'error' });
-        return;
-      }
-
-      if (!methods.getValues('name')) {
-        methods.setValue('name', file.name);
-      }
-
+      if (e.target.files) addFiles(e.target.files);
       e.target.value = '';
     },
-    [uppy, methods, enqueueSnackbar],
+    [addFiles],
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
-
-      uppy.cancelAll();
-      try {
-        uppy.addFile({ name: file.name, type: file.type, data: file, source: 'local' });
-      } catch (err) {
-        enqueueSnackbar(err instanceof Error ? err.message : 'Failed to add file', { variant: 'error' });
-        return;
-      }
-
-      if (!methods.getValues('name')) {
-        methods.setValue('name', file.name);
-      }
+      setIsDragOver(false);
+      if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
     },
-    [uppy, methods, enqueueSnackbar],
+    [addFiles],
+  );
+
+  const handleRemoveFile = useCallback(
+    (fileId: string) => {
+      uppy.removeFile(fileId);
+    },
+    [uppy],
   );
 
   const handleClose = () => {
@@ -174,7 +168,7 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
   const onSubmit = async (data: UploadAssetFormData) => {
     const files = uppy.getFiles();
     if (files.length === 0) {
-      enqueueSnackbar('Please select a file', { variant: 'warning' });
+      enqueueSnackbar('Please select at least one file', { variant: 'warning' });
       return;
     }
 
@@ -188,25 +182,40 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
         throw new Error(errorMsg);
       }
 
-      const uploaded = result.successful[0];
-      const cachedFile = extractCachedFileData(uploaded.uploadURL ?? '');
+      const folder = data.folder || undefined;
+      let failed = 0;
 
-      const payload = {
-        name: data.name,
-        folder: data.folder || undefined,
-        file: cachedFile,
-      };
+      for (const uploaded of result.successful) {
+        const cachedFile = extractCachedFileData(uploaded.uploadURL ?? '');
+        const payload = {
+          name: uploaded.name ?? 'file',
+          folder,
+          file: cachedFile,
+        };
 
-      if (projectId) {
-        await createProjectAsset({ projectId, ...payload }).unwrap();
-      } else {
-        await createCompanyAsset(payload).unwrap();
+        try {
+          if (projectId) {
+            await createProjectAsset({ projectId, ...payload }).unwrap();
+          } else {
+            await createCompanyAsset(payload).unwrap();
+          }
+        } catch (error: unknown) {
+          failed++;
+          const message = setErrorsToForm(error, methods.setError) || `Failed to create asset "${uploaded.name}"`;
+          enqueueSnackbar(message, { variant: 'error' });
+        }
       }
 
-      enqueueSnackbar('Asset uploaded successfully', { variant: 'success' });
-      handleClose();
+      const succeeded = result.successful.length - failed;
+      if (succeeded > 0) {
+        enqueueSnackbar(succeeded === 1 ? 'Asset uploaded successfully' : `${succeeded} assets uploaded successfully`, {
+          variant: 'success',
+        });
+      }
+
+      if (failed === 0) handleClose();
     } catch (error: unknown) {
-      const message = setErrorsToForm(error, methods.setError) || 'Failed to upload asset';
+      const message = setErrorsToForm(error, methods.setError) || 'Failed to upload assets';
       enqueueSnackbar(message, { variant: 'error' });
     } finally {
       setIsUploading(false);
@@ -214,68 +223,78 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
   };
 
   const isLoading = isUploading || isSaving;
-  const currentFile = uppyFiles[0];
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Upload Asset</DialogTitle>
+      <DialogTitle>Upload Assets</DialogTitle>
       <form onSubmit={methods.handleSubmit(onSubmit)}>
         <DialogContent>
           <Stack spacing={3}>
-            {currentFile ? (
-              <Box
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'success.main',
-                  borderRadius: 1,
-                  p: 2,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                }}
-              >
-                <InsertDriveFileIcon sx={{ color: 'success.main' }} />
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography noWrap sx={{ fontSize: 14 }}>
-                    {currentFile.name}
-                  </Typography>
-                  <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>
-                    {formatFileSize(currentFile.size ?? 0)}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={() => uppy.cancelAll()}
-                  disabled={isLoading}
-                  sx={{ minWidth: 'auto' }}
-                >
-                  <DeleteIcon fontSize="small" />
-                </Button>
-              </Box>
-            ) : (
-              <Box
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                sx={{
-                  border: '2px dashed',
-                  borderColor: 'border.defaultAlt',
-                  borderRadius: 1,
-                  p: 3,
-                  textAlign: 'center',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.2s',
-                  '&:hover': { borderColor: 'primary.main' },
-                }}
-                component="label"
-              >
-                <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondaryAlt', mb: 1 }} />
-                <Typography sx={{ color: 'text.secondaryAlt', fontSize: 14 }}>
-                  Drag & drop or click to select a file
-                </Typography>
-                <Typography sx={{ color: 'text.disabled', fontSize: 12, mt: 0.5 }}>Max file size: 1 GB</Typography>
-                <input type="file" hidden onChange={handleFileSelect} />
-              </Box>
+            <Box
+              onDrop={handleDrop}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
+              onDragLeave={() => setIsDragOver(false)}
+              sx={{
+                border: '2px dashed',
+                borderColor: isDragOver ? 'primary.main' : 'border.defaultAlt',
+                backgroundColor: isDragOver ? 'action.hover' : 'transparent',
+                borderRadius: 1,
+                p: 3,
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'border-color 0.2s, background-color 0.2s',
+                '&:hover': { borderColor: 'primary.main' },
+              }}
+              component="label"
+            >
+              <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondaryAlt', mb: 1 }} />
+              <Typography sx={{ color: 'text.secondaryAlt', fontSize: 14 }}>
+                Drag & drop or click to select files
+              </Typography>
+              <Typography sx={{ color: 'text.disabled', fontSize: 12, mt: 0.5 }}>Max file size: 1 GB</Typography>
+              <input type="file" hidden multiple onChange={handleFileSelect} />
+            </Box>
+
+            {uppyFiles.length > 0 && (
+              <Stack spacing={1}>
+                {uppyFiles.map((file) => (
+                  <Box
+                    key={file.id}
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'success.main',
+                      borderRadius: 1,
+                      px: 2,
+                      py: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                    }}
+                  >
+                    <InsertDriveFileIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography noWrap sx={{ fontSize: 14 }}>
+                        {file.name}
+                      </Typography>
+                      <Typography sx={{ color: 'text.disabled', fontSize: 12 }}>
+                        {formatFileSize(file.size ?? 0)}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => handleRemoveFile(file.id)}
+                      disabled={isLoading}
+                      sx={{ minWidth: 'auto', p: 0.5 }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </Button>
+                  </Box>
+                ))}
+              </Stack>
             )}
 
             {isUploading && (
@@ -287,23 +306,27 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
               </Box>
             )}
 
-            <TextField
-              {...methods.register('name')}
-              label="Name"
-              fullWidth
-              error={!!methods.formState.errors.name}
-              helperText={methods.formState.errors.name?.message || 'File identifier (auto-populated from filename)'}
-            />
-
-            <TextField
-              {...methods.register('folder')}
-              label="Folder"
-              placeholder="e.g. reports, images"
-              fullWidth
-              error={!!methods.formState.errors.folder}
-              helperText={
-                methods.formState.errors.folder?.message || 'Optional folder (lowercase, hyphens, underscores)'
-              }
+            <Controller
+              name="folder"
+              control={methods.control}
+              render={({ field, fieldState }) => (
+                <Autocomplete
+                  freeSolo
+                  options={folders}
+                  value={field.value || ''}
+                  onChange={(_e, newValue) => field.onChange(newValue ?? '')}
+                  onInputChange={(_e, newValue) => field.onChange(newValue ?? '')}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Folder"
+                      placeholder="Select or type a folder name"
+                      error={!!fieldState.error}
+                      helperText={fieldState.error?.message || 'Optional folder (lowercase, hyphens, underscores)'}
+                    />
+                  )}
+                />
+              )}
             />
           </Stack>
         </DialogContent>
@@ -311,8 +334,8 @@ const UploadAssetDialog: FC<UploadAssetDialogProps> = ({ open, onClose, projectI
           <Button onClick={handleClose} disabled={isLoading}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={isLoading || !currentFile}>
-            {isLoading ? 'Uploading...' : 'Upload'}
+          <Button type="submit" variant="contained" disabled={isLoading || uppyFiles.length === 0}>
+            {isLoading ? 'Uploading...' : uppyFiles.length <= 1 ? 'Upload' : `Upload ${uppyFiles.length} files`}
           </Button>
         </DialogActions>
       </form>
