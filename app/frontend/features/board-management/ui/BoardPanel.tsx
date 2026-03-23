@@ -35,6 +35,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardTask } from 'entities/board-task';
 import { TaskCard } from 'entities/board-task';
 import { useGetCurrentUserQuery } from 'entities/user';
+import { useLocalStorageState } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
 import {
@@ -118,14 +119,38 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
 
   const [activeTask, setActiveTask] = useState<BoardTask | null>(null);
   const [creatingInColumn, setCreatingInColumn] = useState<number | null>(null);
-  const [filters, setFilters] = useState<BoardFilters>(() => ({
-    assigneeId: urlSearch.assigneeId,
-    taskType: urlSearch.taskType,
-    priority: urlSearch.priority,
-    tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
-    search: urlSearch.search,
-  }));
   const boardId = data?.board.id;
+  const hasUrlFilters = Boolean(
+    urlSearch.assigneeId || urlSearch.taskType || urlSearch.priority || urlSearch.tags || urlSearch.search,
+  );
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const [filters, setFilters] = useLocalStorageState<BoardFilters>(
+    boardId != null ? `board-${boardId}-filters` : null,
+    {
+      assigneeId: urlSearch.assigneeId,
+      taskType: urlSearch.taskType,
+      priority: urlSearch.priority,
+      tags: urlSearch.tags ? urlSearch.tags.split(',').filter(Boolean) : undefined,
+      search: urlSearch.search,
+    },
+    {
+      skipRestore: hasUrlFilters,
+      onRestore: (stored) => {
+        void navigateRef.current({
+          search: (prev) => ({
+            ...prev,
+            assigneeId: stored.assigneeId,
+            taskType: stored.taskType,
+            priority: stored.priority,
+            tags: stored.tags?.length ? stored.tags.join(',') : undefined,
+            search: stored.search,
+          }),
+          replace: true,
+        });
+      },
+    },
+  );
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);

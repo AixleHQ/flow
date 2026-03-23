@@ -8,7 +8,7 @@ module Api
           module Task
             class ActivitiesController < Api::V1::Company::Projects::ApplicationController
               def index
-                activities = current_task.board_activities.order(created_at: :desc)
+                activities = current_task.board_activities.includes(:actor, :board_task).order(created_at: :desc)
                 activities = activities.by_event_type(params[:event_type]) if params[:event_type].present?
                 activities = activities.by_actor_type(params[:actor_type]) if params[:actor_type].present?
                 activities = activities.since(Time.parse(params[:since])) if params[:since].present?

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const uploadAssetSchema = z.object({
-  name: z.string().min(1, 'Name is required').max(255, 'Name must be at most 255 characters'),
   folder: z
     .string()
     .regex(/^[a-z0-9_-]*$/, 'Only lowercase letters, numbers, hyphens, underscores')

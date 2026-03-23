@@ -223,7 +223,12 @@ export const AssetsPanel: FC<AssetsPanelProps> = ({ projectId, renderPreview }) 
         />
       )}
 
-      <UploadAssetDialog open={isUploadOpen} onClose={() => setUploadOpen(false)} projectId={projectId} />
+      <UploadAssetDialog
+        open={isUploadOpen}
+        onClose={() => setUploadOpen(false)}
+        projectId={projectId}
+        folders={folders}
+      />
 
       <EditAssetDialog open={!!editAsset} onClose={() => setEditAsset(null)} asset={editAsset} projectId={projectId} />
 
