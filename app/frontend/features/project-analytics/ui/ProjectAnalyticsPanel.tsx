@@ -41,25 +41,13 @@ import { WorkflowCostsPanel } from 'features/workflow-cost-analytics';
 import { formatCostCents, formatTokens } from 'shared/lib';
 
 import type { AgentActivityData, AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
-import { useGetAgentActivityQuery, useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
-
-// ─── Static Data Generators ─────────────────────────────────────────────────
-
-const generateDailyData = (days: number) => {
-  const result = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    result.push({
-      date: label,
-      cost: +(Math.random() * 80 + 40).toFixed(2),
-      tokens: Math.floor(Math.random() * 500000 + 200000),
-    });
-  }
-  return result;
-};
+import {
+  useGetAgentActivityQuery,
+  useGetCostTokenUsageQuery,
+  useGetProjectAnalyticsQuery,
+  useGetSessionDurationDistributionQuery,
+  useGetSessionSourceBreakdownQuery,
+} from '../api/projectAnalyticsApi';
 
 // ─── Agent Activity Helpers ───────────────────────────────────────────────────
 
@@ -77,29 +65,7 @@ const buildActivityChartData = (data: AgentActivityData): Record<string, string 
   return Object.values(dateMap);
 };
 
-const SESSION_SOURCE_DATA = [
-  { name: 'From Workflows', value: 624, color: '#2196f3' },
-  { name: 'Standalone', value: 418, color: '#4caf50' },
-  { name: 'Board Tasks', value: 242, color: '#ff9800' },
-];
-
-const COST_DISTRIBUTION = [
-  { range: '$0–$5', count: 312 },
-  { range: '$5–$15', count: 487 },
-  { range: '$15–$30', count: 241 },
-  { range: '$30–$60', count: 143 },
-  { range: '$60–$100', count: 72 },
-  { range: '$100+', count: 29 },
-];
-
-const DURATION_DISTRIBUTION = [
-  { range: '0–1 min', count: 198 },
-  { range: '1–5 min', count: 413 },
-  { range: '5–15 min', count: 387 },
-  { range: '15–30 min', count: 164 },
-  { range: '30–60 min', count: 87 },
-  { range: '60+ min', count: 35 },
-];
+const SOURCE_COLORS = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#f44336'];
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
@@ -241,7 +207,6 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
   const [scope, setScope] = useState<AnalyticsScope>('project');
 
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
-  const chartData = generateDailyData(days);
   const tickInterval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
 
   const {
@@ -251,6 +216,21 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
   } = useGetProjectAnalyticsQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
   const { data: agentActivity, isLoading: isAgentActivityLoading } = useGetAgentActivityQuery(
+    { projectId: projectId!, scope, period },
+    { skip: !projectId },
+  );
+
+  const { data: sessionSourceData, isLoading: isSourceLoading } = useGetSessionSourceBreakdownQuery(
+    { projectId: projectId!, scope, period },
+    { skip: !projectId },
+  );
+
+  const { data: durationData, isLoading: isDurationLoading } = useGetSessionDurationDistributionQuery(
+    { projectId: projectId!, scope, period },
+    { skip: !projectId },
+  );
+
+  const { data: costTokenData, isLoading: isCostTokenLoading } = useGetCostTokenUsageQuery(
     { projectId: projectId!, scope, period },
     { skip: !projectId },
   );
@@ -439,129 +419,133 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
         {/* Cost over time */}
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Daily Cost</Typography>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-              <defs>
-                <linearGradient id="grad-cost" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff9800" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
-              <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`$${Number(v).toFixed(2)}`, 'Cost']} />
-              <Area
-                type="monotone"
-                dataKey="cost"
-                name="Cost"
-                stroke="#ff9800"
-                fill="url(#grad-cost)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {isCostTokenLoading || !projectId ? (
+            <Skeleton variant="rectangular" width="100%" height={220} sx={{ borderRadius: 1 }} />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={costTokenData?.timeSeries ?? []} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+                <defs>
+                  <linearGradient id="grad-cost" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ff9800" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 100).toFixed(0)}`} />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatCostCents(Number(v)), 'Cost']} />
+                <Area
+                  type="monotone"
+                  dataKey="costCents"
+                  name="Cost"
+                  stroke="#ff9800"
+                  fill="url(#grad-cost)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </Card>
 
         {/* Token usage over time */}
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.chartTitle}>Daily Token Consumption</Typography>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id="grad-tokens" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00bcd4" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
-              <Tooltip
-                contentStyle={chartTooltipStyle}
-                formatter={(v) => [`${(Number(v) / 1000).toFixed(0)}k`, 'Tokens']}
-              />
-              <Area
-                type="monotone"
-                dataKey="tokens"
-                name="Tokens"
-                stroke="#00bcd4"
-                fill="url(#grad-tokens)"
-                strokeWidth={2}
-                dot={false}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {isCostTokenLoading || !projectId ? (
+            <Skeleton variant="rectangular" width="100%" height={220} sx={{ borderRadius: 1 }} />
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={costTokenData?.timeSeries ?? []} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="grad-tokens" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#00bcd4" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatTokens(Number(v))} />
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatTokens(Number(v)), 'Tokens']} />
+                <Area
+                  type="monotone"
+                  dataKey="totalTokens"
+                  name="Tokens"
+                  stroke="#00bcd4"
+                  fill="url(#grad-tokens)"
+                  strokeWidth={2}
+                  dot={false}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </Card>
       </Box>
 
       {/* ── Session Source Breakdown ──────────────────────────────── */}
       <Typography sx={styles.sectionTitle}>Session Source Breakdown</Typography>
-      <Box sx={{ ...styles.twoCol, gridTemplateColumns: '1fr 2fr' }}>
-        <Card sx={styles.card} elevation={0}>
-          <Typography sx={styles.chartTitle}>Sessions by Origin</Typography>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie
-                data={SESSION_SOURCE_DATA}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                paddingAngle={3}
-                label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
-                labelLine={false}
-              >
-                {SESSION_SOURCE_DATA.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* Cost distribution */}
-          <Card sx={styles.card} elevation={0}>
-            <Typography sx={styles.chartTitle}>Cost per Run — Distribution</Typography>
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={COST_DISTRIBUTION} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} runs`]} />
-                <Bar dataKey="count" name="Runs" fill="#2196f3" radius={[4, 4, 0, 0]}>
-                  {COST_DISTRIBUTION.map((_, idx) => (
-                    <Cell key={idx} fill={`hsl(${200 + idx * 12}, 70%, ${55 - idx * 4}%)`} />
+      <Card sx={styles.card} elevation={0}>
+        <Typography sx={styles.chartTitle}>Sessions by Origin</Typography>
+        {isSourceLoading || !projectId ? (
+          <Skeleton variant="rectangular" width="100%" height={200} sx={{ borderRadius: 1 }} />
+        ) : (
+          <Box sx={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+            <ResponsiveContainer width="40%" height={200}>
+              <PieChart>
+                <Pie
+                  data={(sessionSourceData?.sources ?? []).map((s) => ({ name: s.label, value: s.count }))}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  paddingAngle={3}
+                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {(sessionSourceData?.sources ?? []).map((_, idx) => (
+                    <Cell key={idx} fill={SOURCE_COLORS[idx % SOURCE_COLORS.length]} />
                   ))}
-                </Bar>
-              </BarChart>
+                </Pie>
+                <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+              </PieChart>
             </ResponsiveContainer>
-          </Card>
-        </Box>
-      </Box>
+            <Box sx={{ flex: 1 }}>
+              {(sessionSourceData?.sources ?? []).map((s, idx) => (
+                <Box key={s.sessionType} sx={styles.agentRow}>
+                  <Box sx={{ ...styles.agentDot, backgroundColor: SOURCE_COLORS[idx % SOURCE_COLORS.length] }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{ fontSize: '13px', color: 'text.primary', fontWeight: 500 }}>{s.label}</Typography>
+                    <Typography sx={{ fontSize: '11px', color: 'text.disabled' }}>{s.count} sessions</Typography>
+                  </Box>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+      </Card>
 
       {/* ── Duration Distribution ─────────────────────────────────── */}
       <Typography sx={styles.sectionTitle}>Session Duration Distribution</Typography>
       <Card sx={styles.card} elevation={0}>
         <Typography sx={styles.chartTitle}>Session Duration Histogram</Typography>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={DURATION_DISTRIBUTION} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="range" tick={{ fontSize: 12 }} />
-            <YAxis tick={{ fontSize: 12 }} />
-            <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
-            <Bar dataKey="count" name="Sessions" fill="#9c27b0" radius={[4, 4, 0, 0]}>
-              {DURATION_DISTRIBUTION.map((_, idx) => (
-                <Cell key={idx} fill={`hsl(${280 - idx * 8}, 60%, ${55 - idx * 3}%)`} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {isDurationLoading || !projectId ? (
+          <Skeleton variant="rectangular" width="100%" height={220} sx={{ borderRadius: 1 }} />
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={durationData?.buckets ?? []} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+              <XAxis dataKey="range" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${v} sessions`]} />
+              <Bar dataKey="count" name="Sessions" fill="#9c27b0" radius={[4, 4, 0, 0]}>
+                {(durationData?.buckets ?? []).map((_, idx) => (
+                  <Cell key={idx} fill={`hsl(${280 - idx * 8}, 60%, ${55 - idx * 3}%)`} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </Card>
 
       {/* ── Workflow Costs ────────────────────────────────────────── */}

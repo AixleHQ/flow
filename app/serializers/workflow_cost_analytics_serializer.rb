@@ -26,7 +26,9 @@ class WorkflowCostAnalyticsSerializer
         inputTokens: w.input_tokens,
         outputTokens: w.output_tokens,
         totalTokens: w.total_tokens,
-        runCount: w.run_count
+        runCount: w.run_count,
+        totalDurationSeconds: w.total_duration_seconds,
+        avgDurationSeconds: w.avg_duration_seconds
       }
     end
   end
