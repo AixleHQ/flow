@@ -8,7 +8,7 @@ class SessionService
         session_type: session_type,
         agent_type: agent_type,
         configured_agent: configured_agent,
-        **params.slice(:mode, :initial_prompt, :metadata, :session_config,
+        **params.slice(:mode, :initial_prompt, :requested_model, :metadata, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids)
       )
 

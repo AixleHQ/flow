@@ -64,13 +64,15 @@ module Agents
       }
     end
 
-    # Session command: codex --yolo (interactive), codex exec (non-interactive)
-    # Non-interactive runs pin a model explicitly so Codex never opens
-    # interactive model-selection or migration prompts.
-    def session_command(mode:, prompt: nil)
-      return "codex --yolo" unless mode == "non_interactive"
+    # Config files needed before auth starts (config.toml with file-based credential store)
+    def auth_setup_files
+      { "#{home_dir}/.codex/config.toml" => generate_config_toml({}) }
+    end
 
-      %(codex exec --skip-git-repo-check --model #{DEFAULT_MODEL})
+    # Session command: codex --yolo (interactive), codex exec (non-interactive)
+    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
+    def session_command(mode:, prompt: nil, model: nil)
+      model ? "codex --model #{Shellwords.shellescape(model)} --yolo" : "codex --yolo"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)
@@ -124,6 +126,32 @@ module Agents
 
     def mcp_merge_strategy
       :append_toml
+    end
+
+    # Fetch available models from Codex API.
+    CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
+    CODEX_CLIENT_VERSION = "0.116.0"
+
+    def fetch_available_models(credentials)
+      access_token = credentials.dig("tokens", "access_token")
+      return [] if access_token.blank?
+
+      uri = URI("#{CODEX_MODELS_URL}?client_version=#{CODEX_CLIENT_VERSION}")
+      req = Net::HTTP::Get.new(uri)
+      req["Authorization"] = "Bearer #{access_token}"
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      return [] unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      (data["models"] || []).filter_map do |m|
+        next unless m["visibility"] == "list"
+
+        { model_id: m["slug"], display_name: m["display_name"] || m["slug"], description: m["description"].to_s.truncate(120) }
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[CodexAdapter] fetch_available_models failed: #{e.message}")
+      []
     end
 
     # Default environment variables for Codex CLI runtime.
@@ -315,8 +343,12 @@ module Agents
 
     def generate_config_toml(workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"
-      <<~TOML
-        model = "#{DEFAULT_MODEL}"
+      model = workflow_config[:model]
+      toml = +""
+      toml << "model = \"#{model}\"\n\n" if model.present?
+      toml << <<~TOML
+        # Force file-based credential storage (no keyring in Docker)
+        cli_auth_credentials_store = "file"
 
         # Auto-approve all commands without asking
         approval_policy = "never"

@@ -93,6 +93,7 @@ module Api
           :configured_agent_id,
           :mode,
           :initial_prompt,
+          :requested_model,
           metadata: {},
           tool_ids: [],
           skill_ids: [],

@@ -84,7 +84,8 @@ class SessionContextService
       # Step 1: Credentials (optional)
       if credential.present?
         measure_step("credentials") do
-          workflow_config = { enabled_mcp_servers: mcp_server_names }
+          resolved_model = resolve_session_model(session, credential)
+          workflow_config = { enabled_mcp_servers: mcp_server_names, model: resolved_model }.compact
           Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
           credential.write_to_container(container_id, workflow_config)
           context_log.record(:credentials, agent_type: credential.agent_type, config_keys: credential.config_data.keys, workflow_config: workflow_config)
@@ -254,6 +255,20 @@ class SessionContextService
 
       adapter = adapter_for(session)
       adapter.mcp_config(all_servers)
+    end
+
+    # Resolve model for a session: step preferred > session requested > credential default > nil
+    def resolve_session_model(session, credential)
+      # For workflow steps, check the step's preferred model first
+      if session.session_type == "workflow_step" && session.step_run&.step&.preferred_model.present?
+        return session.step_run.step.preferred_model
+      end
+
+      # Session-level requested model
+      return session.requested_model if session.requested_model.present?
+
+      # User's default model from credential metadata
+      credential&.metadata&.dig("default_model")
     end
 
     private

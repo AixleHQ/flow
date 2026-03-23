@@ -19,6 +19,7 @@ export const stepSchema = z.object({
   skipPolicy: z.enum(['never', 'if_outputs_exist', 'manual']).default('never'),
   onFailure: z.enum(['retry', 'skip', 'fail']).default('fail'),
   maxRetries: z.number().min(0).max(10).default(0),
+  preferredModel: z.string().regex(/^[a-z0-9][a-z0-9._:-]*$/, 'Invalid model ID format').nullable().optional(),
   subStepsAttributes: z.array(subStepSchema).optional(),
 });
 

@@ -31,6 +31,7 @@ export interface Step {
   bmadEnabled: boolean;
   dependsOnStepIds: number[];
   requiredAgentRuntime: string | null;
+  preferredModel: string | null;
   subSteps: SubStep[];
   createdAt: string;
   updatedAt: string;
@@ -53,6 +54,7 @@ export interface CreateStepRequest {
   skipPolicy?: string;
   onFailure?: string;
   maxRetries?: number;
+  preferredModel?: string | null;
   subStepsAttributes?: SubStepAttribute[];
 }
 
@@ -75,6 +77,7 @@ export interface UpdateStepRequest {
   bmadEnabled?: boolean;
   dependsOnStepIds?: number[];
   requiredAgentRuntime?: string | null;
+  preferredModel?: string | null;
   subStepsAttributes?: SubStepAttribute[];
 }
 

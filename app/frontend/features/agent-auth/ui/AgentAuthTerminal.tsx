@@ -7,11 +7,7 @@ import { useCreateTerminalSessionMutation, useFinishSessionMutation } from 'shar
 import { TerminalSessionWidget } from 'widgets/terminal-session';
 
 // Agent-specific env fields that must be configured before starting container
-const AGENT_ENV_FIELDS: Record<string, { key: string; label: string; required: boolean; placeholder?: string }[]> = {
-  gemini_cli: [
-    { key: 'google_cloud_project', label: 'Google Cloud Project ID', required: true, placeholder: 'my-project-123' },
-  ],
-};
+const AGENT_ENV_FIELDS: Record<string, { key: string; label: string; required: boolean; placeholder?: string }[]> = {};
 
 interface AuthStatusResponse {
   authenticated: boolean;

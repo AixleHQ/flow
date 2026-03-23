@@ -1,0 +1,48 @@
+<% content_for(:title) { "Agent Models" } %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Agent Models</h1>
+</header>
+
+<section class="main-content__body">
+  <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center;">
+    <% @runtimes.each do |runtime| %>
+      <%= link_to runtime.titleize.gsub("_", " "),
+            admin_agent_models_path(agent_runtime: runtime, user_id: @user.id),
+            class: "button #{runtime == @selected_runtime ? 'button--primary' : ''}",
+            style: "text-decoration: none; padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; #{runtime == @selected_runtime ? 'background: #1976d2; color: white;' : ''}" %>
+    <% end %>
+  </div>
+
+  <p style="color: #666; margin-bottom: 1rem;">
+    User: <strong><%= @user.name %></strong> (<%= @user.email %>)
+    &mdash; Runtime: <strong><%= @selected_runtime %></strong>
+    <% unless @credential_present %>
+      <span style="color: #d32f2f;">&mdash; No credential configured</span>
+    <% end %>
+  </p>
+
+  <% if @models.any? %>
+    <table class="collection-data">
+      <thead>
+        <tr>
+          <th>Model ID</th>
+          <th>Display Name</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @models.each do |model| %>
+          <tr>
+            <td><code><%= model[:model_id] %></code></td>
+            <td><%= model[:display_name] %></td>
+            <td><%= model[:description] %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <p style="color: #666; margin-top: 0.5rem;"><%= @models.size %> models found (cached 24h)</p>
+  <% else %>
+    <p style="color: #999;"><%= @credential_present ? "No models returned from provider API." : "Configure credentials first." %></p>
+  <% end %>
+</section>

@@ -20,6 +20,8 @@ import type { McpServer } from 'entities/mcp-server';
 import { useGetMcpServersQuery, useGetProjectMcpServersQuery } from 'entities/mcp-server';
 import type { AgentType, ITerminalSession, SessionMode } from 'entities/terminal-session';
 import { AGENT_COLORS, AVAILABLE_AGENTS, useGetCurrentUserQuery } from 'entities/user';
+import type { AgentModel } from 'shared/api/agentModelsApi';
+import { useGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
 import type { Asset } from 'features/assets-management';
@@ -79,6 +81,12 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
   const [bmadEnabled, setBmadEnabled] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<AgentModel | null>(null);
+
+  // Fetch models for selected agent runtime
+  const { data: agentModels, isFetching: isLoadingModels } = useGetAgentModelsQuery(selectedAgent!, {
+    skip: !selectedAgent,
+  });
 
   // Prefill agent from user default when form first loads
   useEffect(() => {
@@ -171,6 +179,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const handleAgentChange = (_: React.MouseEvent<HTMLElement>, newAgent: AgentType | null) => {
     if (newAgent) {
       setSelectedAgent(newAgent);
+      setSelectedModel(null);
     }
   };
 
@@ -200,6 +209,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           ...(selectedRepos.length > 0 ? { repositoryIds: selectedRepos.map((r) => r.id) } : {}),
           mode: mode,
           ...(mode === 'non_interactive' ? { initialPrompt } : {}),
+          ...(selectedModel ? { requestedModel: selectedModel.modelId } : {}),
           ...(bmadEnabled ? { sessionConfig: { bmadEnabled: true } } : {}),
         },
       });
@@ -422,6 +432,39 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           );
         })}
       </ToggleButtonGroup>
+
+      {/* Model Selection */}
+      {selectedAgent && (
+        <Autocomplete
+          options={agentModels ?? []}
+          getOptionLabel={(option) => option.displayName}
+          value={selectedModel}
+          onChange={(_, newValue) => setSelectedModel(newValue)}
+          loading={isLoadingModels}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Model (optional)"
+              placeholder="Default (runtime selects)"
+              size="small"
+            />
+          )}
+          isOptionEqualToValue={(option, value) => option.modelId === value.modelId}
+          renderOption={(props, option) => (
+            <li {...props} key={option.modelId}>
+              <Box>
+                <Typography variant="body2">{option.displayName}</Typography>
+                {option.description && (
+                  <Typography variant="caption" color="text.secondary">
+                    {option.description}
+                  </Typography>
+                )}
+              </Box>
+            </li>
+          )}
+          sx={{ mb: 3 }}
+        />
+      )}
 
       <Divider sx={{ mb: 3 }}>
         <Typography variant="caption" color="text.secondary">

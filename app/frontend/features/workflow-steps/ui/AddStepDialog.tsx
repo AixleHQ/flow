@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
+  Autocomplete,
   Button,
   Dialog,
   DialogActions,
@@ -12,10 +13,13 @@ import {
   TextField,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { type FC, useEffect } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import { Controller, type Resolver, useForm } from 'react-hook-form';
 
 import { setErrorsToForm } from 'shared/api';
+import type { AgentModel } from 'shared/api/agentModelsApi';
+import { useGetAgentModelsQuery } from 'shared/api/agentModelsApi';
+import { useGetCurrentUserQuery } from 'entities/user';
 
 import { useCreateStepMutation, useUpdateStepMutation } from '../api/stepsApi';
 import { stepSchema, type StepFormData } from '../lib/stepSchema';
@@ -68,7 +72,9 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
           skipPolicy: editStep.skipPolicy,
           onFailure: editStep.onFailure,
           maxRetries: editStep.maxRetries,
+          preferredModel: editStep.preferredModel,
         });
+        setStepModel(editStep.preferredModel ? { modelId: editStep.preferredModel, displayName: editStep.preferredModel, description: '' } : null);
       } else {
         reset({
           name: '',
@@ -78,10 +84,17 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
           skipPolicy: 'never',
           onFailure: 'fail',
           maxRetries: 0,
+          preferredModel: null,
         });
+        setStepModel(null);
       }
     }
   }, [open, editStep, reset]);
+
+  const [stepModel, setStepModel] = useState<AgentModel | null>(null);
+  const { data: currentUser } = useGetCurrentUserQuery();
+  const modelRuntime = editStep?.requiredAgentRuntime || currentUser?.defaultAgentRuntime || '';
+  const { data: agentModels } = useGetAgentModelsQuery(modelRuntime, { skip: !modelRuntime });
 
   const handleClose = () => {
     reset();
@@ -172,6 +185,29 @@ const AddStepDialog: FC<AddStepDialogProps> = ({ open, onClose, projectId, workf
                 inputProps={{ min: 0, max: 10 }}
               />
             </Stack>
+
+            {modelRuntime && (
+              <Controller
+                name="preferredModel"
+                control={control}
+                render={({ field }) => (
+                  <Autocomplete
+                    options={agentModels ?? []}
+                    getOptionLabel={(option) => (typeof option === 'string' ? option : option.displayName)}
+                    value={stepModel}
+                    onChange={(_, newValue) => {
+                      const model = newValue as AgentModel | null;
+                      setStepModel(model);
+                      field.onChange(model?.modelId ?? null);
+                    }}
+                    renderInput={(params) => (
+                      <TextField {...params} label="Preferred Model (optional)" placeholder="Default (runtime selects)" />
+                    )}
+                    isOptionEqualToValue={(option, value) => option.modelId === value.modelId}
+                  />
+                )}
+              />
+            )}
 
             <Controller
               name="allowNonInteractive"
