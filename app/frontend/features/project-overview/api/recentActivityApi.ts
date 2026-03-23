@@ -26,9 +26,7 @@ export const recentActivityApi = baseApi.injectEndpoints({
       query: (params) => ({
         url: Routes.backend.apiV1CompanyStatisticRecentActivityPath(),
         method: 'GET',
-        params: params
-          ? { page: params.page ?? 1, per_page: params.perPage ?? 20 }
-          : { page: 1, per_page: 20 },
+        params: params ? { page: params.page ?? 1, per_page: params.perPage ?? 20 } : { page: 1, per_page: 20 },
       }),
       providesTags: [QueryTag.RecentActivity],
     }),

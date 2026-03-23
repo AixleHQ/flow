@@ -230,10 +230,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     data: recentActivity,
     isLoading: activityLoading,
     isError: activityError,
-  } = useGetRecentActivityQuery(
-    { page: 1, perPage: activityPage * ACTIVITY_PER_PAGE },
-    { pollingInterval: 60_000 },
-  );
+  } = useGetRecentActivityQuery({ page: 1, perPage: activityPage * ACTIVITY_PER_PAGE }, { pollingInterval: 60_000 });
 
   const workflowStatus = workflowRunStats
     ? [
@@ -376,17 +373,15 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
               No recent activity found.
             </Typography>
           )}
-          {!activityLoading &&
-            recentActivity &&
-            recentActivity.activities.length < recentActivity.meta.total && (
-              <Button
-                size="small"
-                onClick={() => setActivityPage((p) => p + 1)}
-                sx={{ mt: 1, fontSize: '12px', textTransform: 'none' }}
-              >
-                Load more
-              </Button>
-            )}
+          {!activityLoading && recentActivity && recentActivity.activities.length < recentActivity.meta.total && (
+            <Button
+              size="small"
+              onClick={() => setActivityPage((p) => p + 1)}
+              sx={{ mt: 1, fontSize: '12px', textTransform: 'none' }}
+            >
+              Load more
+            </Button>
+          )}
         </Card>
 
         {/* Workflow Status */}

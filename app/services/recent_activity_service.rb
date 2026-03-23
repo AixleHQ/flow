@@ -12,7 +12,7 @@ class RecentActivityService
 
   def initialize(company, page: 1, per_page: 20)
     @company = company
-    @page = [page.to_i, 1].max
+    @page = [ page.to_i, 1 ].max
     @per_page = per_page.to_i.clamp(1, 100)
   end
 
@@ -99,10 +99,10 @@ class RecentActivityService
     agent_label = session.agent_type || "agent"
 
     event_type, description = case session.state
-    when "running"  then ["session_started",   "Session started with #{agent_label}"]
-    when "finished" then ["session_completed",  "Session completed with #{agent_label}"]
-    when "failed"   then ["session_failed",     "Session failed with #{agent_label}"]
-    else                 ["session_#{session.state}", "Session #{session.state} with #{agent_label}"]
+    when "running"  then [ "session_started",   "Session started with #{agent_label}" ]
+    when "finished" then [ "session_completed",  "Session completed with #{agent_label}" ]
+    when "failed"   then [ "session_failed",     "Session failed with #{agent_label}" ]
+    else                 [ "session_#{session.state}", "Session #{session.state} with #{agent_label}" ]
     end
 
     ActivityItem.new(
@@ -119,12 +119,12 @@ class RecentActivityService
     workflow_name = run.workflow.name
 
     event_type, description = case run.state
-    when "pending"   then ["workflow_triggered",  "Workflow \"#{workflow_name}\" queued"]
-    when "running"   then ["workflow_triggered",  "Workflow \"#{workflow_name}\" running"]
-    when "completed" then ["workflow_completed",  "Workflow \"#{workflow_name}\" completed"]
-    when "failed"    then ["workflow_failed",     "Workflow \"#{workflow_name}\" failed"]
-    when "cancelled" then ["workflow_cancelled",  "Workflow \"#{workflow_name}\" cancelled"]
-    else                  ["workflow_#{run.state}", "Workflow \"#{workflow_name}\" #{run.state}"]
+    when "pending"   then [ "workflow_triggered",  "Workflow \"#{workflow_name}\" queued" ]
+    when "running"   then [ "workflow_triggered",  "Workflow \"#{workflow_name}\" running" ]
+    when "completed" then [ "workflow_completed",  "Workflow \"#{workflow_name}\" completed" ]
+    when "failed"    then [ "workflow_failed",     "Workflow \"#{workflow_name}\" failed" ]
+    when "cancelled" then [ "workflow_cancelled",  "Workflow \"#{workflow_name}\" cancelled" ]
+    else                  [ "workflow_#{run.state}", "Workflow \"#{workflow_name}\" #{run.state}" ]
     end
 
     ActivityItem.new(
