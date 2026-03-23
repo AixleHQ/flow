@@ -88,7 +88,7 @@ class RecentActivityService
     ActivityItem.new(
       event_type: activity.event_type,
       description:,
-      actor_name: activity.actor.name,
+      actor_name: activity.actor&.name || "Unknown",
       actor_type: activity.actor_type,
       occurred_at: activity.created_at,
       metadata: activity.metadata
