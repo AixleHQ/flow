@@ -46,7 +46,14 @@ module StubSupport
       content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
     end
     c.define_singleton_method(:archive_in) { |*| true }
-    c.define_singleton_method(:archive_out) { |path, &block| block&.call("") }
+    c.define_singleton_method(:archive_out) do |path, &block|
+      content = captured_fs[path]
+      if content
+        block&.call(StubSupport.build_tar_for_path(path, content))
+      else
+        block&.call("")
+      end
+    end
     c.define_singleton_method(:read_file) { |path| captured_fs[path] }
     c.define_singleton_method(:store_file) { |path, content| captured_fs[path] = content }
     c.define_singleton_method(:logs) { |*, **| "" }
@@ -81,6 +88,11 @@ module StubSupport
 
     @_k8s_original_copy_from = ContainerRuntime::KubernetesRuntime.instance_method(:copy_from)
     ContainerRuntime::KubernetesRuntime.define_method(:copy_from) do |_id, path|
+      captured_fs[path]
+    end
+
+    @_k8s_original_read_file = ContainerRuntime::KubernetesRuntime.instance_method(:read_file)
+    ContainerRuntime::KubernetesRuntime.define_method(:read_file) do |_id, path|
       captured_fs[path]
     end
   end
@@ -142,6 +154,10 @@ module StubSupport
     if @_k8s_original_copy_from
       ContainerRuntime::KubernetesRuntime.define_method(:copy_from, @_k8s_original_copy_from)
       @_k8s_original_copy_from = nil
+    end
+    if @_k8s_original_read_file
+      ContainerRuntime::KubernetesRuntime.define_method(:read_file, @_k8s_original_read_file)
+      @_k8s_original_read_file = nil
     end
     restore_runtime_timeouts
   end

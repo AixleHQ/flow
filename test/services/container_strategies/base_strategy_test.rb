@@ -274,7 +274,7 @@ module ContainerStrategies
     test "read_file_from_container returns file content" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/test.txt").returns("Hello, World!")
+      @runtime_mock.expects(:read_file).with("container-ref", "/path/to/test.txt").returns("Hello, World!")
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/test.txt")
 
@@ -284,7 +284,7 @@ module ContainerStrategies
     test "read_file_from_container returns nil for missing file" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:copy_from).with("container-ref", "/missing/file").returns("")
+      @runtime_mock.expects(:read_file).with("container-ref", "/missing/file").returns("")
 
       content = strategy.send(:read_file_from_container, "container-ref", "/missing/file")
 
@@ -295,7 +295,7 @@ module ContainerStrategies
       strategy     = BaseStrategy.new
       binary_data  = "\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR".b
 
-      @runtime_mock.expects(:copy_from).with("container-ref", "/path/to/image.png").returns(binary_data)
+      @runtime_mock.expects(:read_file).with("container-ref", "/path/to/image.png").returns(binary_data)
 
       content = strategy.send(:read_file_from_container, "container-ref", "/path/to/image.png")
 
@@ -305,7 +305,7 @@ module ContainerStrategies
     test "read_file_from_container handles errors" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:copy_from).raises(StandardError.new("connection error"))
+      @runtime_mock.expects(:read_file).raises(StandardError.new("connection error"))
 
       content = strategy.send(:read_file_from_container, "container-ref", "/any/file")
 

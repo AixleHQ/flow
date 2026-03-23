@@ -10,7 +10,8 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_22_160000) do
+
+ActiveRecord::Schema[8.1].define(version: 2026_03_23_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -580,6 +581,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_160000) do
     t.index ["board_task_id"], name: "index_task_comments_on_board_task_id"
   end
 
+  create_table "task_waits", force: :cascade do |t|
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "creator_id"
+    t.jsonb "metadata", default: {}, null: false
+    t.jsonb "resolution_data", default: {}, null: false
+    t.datetime "resolved_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.string "wait_type", null: false
+    t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
+    t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
+    t.index ["board_task_id"], name: "index_task_waits_on_board_task_id"
+    t.index ["creator_id"], name: "index_task_waits_on_creator_id"
+    t.index ["status"], name: "index_task_waits_on_status"
+    t.index ["wait_type", "status"], name: "index_task_waits_on_wait_type_and_status"
+  end
+
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
@@ -840,6 +859,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_22_160000) do
   add_foreign_key "task_assets", "users", column: "author_id"
   add_foreign_key "task_comments", "board_tasks"
   add_foreign_key "task_comments", "users", column: "author_id"
+  add_foreign_key "task_waits", "board_tasks", on_delete: :cascade
+  add_foreign_key "task_waits", "users", column: "creator_id"
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"

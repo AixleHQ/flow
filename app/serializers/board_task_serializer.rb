@@ -5,7 +5,7 @@ class BoardTaskSerializer < ApplicationSerializer
              :assignee_id, :assignee_name, :board_column_id, :position,
              :parent_task_id, :tags,
              :children_count, :comments_count, :assets_count,
-             :recent_workflow_runs,
+             :recent_workflow_runs, :pending_waits,
              :created_at, :updated_at
 
   def assignee_name
@@ -27,6 +27,12 @@ class BoardTaskSerializer < ApplicationSerializer
   def recent_workflow_runs
     object.workflow_runs.sort_by { |r| r.created_at }.reverse.first(5).map do |run|
       { id: run.id, state: run.state }
+    end
+  end
+
+  def pending_waits
+    object.task_waits.pending.map do |wait|
+      { id: wait.id, wait_type: wait.wait_type, metadata: wait.metadata, created_at: wait.created_at }
     end
   end
 end

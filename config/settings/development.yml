@@ -1,4 +1,4 @@
-protocol: "http"
+protocol: <%= ENV['PROTOCOL'] || "http" %>
 
 authorization:
   otp_enabled: false

@@ -1,0 +1,31 @@
+# frozen_string_literal: true
+
+module Api
+  module V1
+    module Company
+      module Projects
+        module Board
+          module Task
+            class WaitsPolicy < Api::V1::Company::ApplicationPolicy
+              def destroy?
+                project_accessible?
+              end
+
+              private
+
+              def project
+                context.project
+              end
+
+              def project_accessible?
+                return false unless project
+
+                project.accessible_by?(current_user)
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end

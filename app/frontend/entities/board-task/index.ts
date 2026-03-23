@@ -5,6 +5,7 @@ export type {
   BoardTask,
   TaskComment,
   TaskAsset,
+  TaskWait,
   TaskWorkflowRun,
   WorkflowBinding,
   BoardActivity,

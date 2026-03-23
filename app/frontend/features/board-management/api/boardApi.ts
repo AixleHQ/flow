@@ -381,6 +381,14 @@ export const boardApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.TaskAsset, QueryTag.Task],
     }),
 
+    deleteWait: builder.mutation<void, { projectId: number; taskId: number; waitId: number }>({
+      query: ({ projectId, taskId, waitId }) => ({
+        url: `${tasksBasePath(projectId)}/${taskId}/waits/${waitId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: [QueryTag.Task, QueryTag.WorkflowRun],
+    }),
+
     getTaskDetails: builder.query<BoardTask, { projectId: number; taskId: number }>({
       query: ({ projectId, taskId }) => ({
         url: `${tasksBasePath(projectId)}/${taskId}`,
@@ -434,6 +442,7 @@ export const {
   useGetTaskAssetsQuery,
   useCreateAssetMutation,
   useDeleteAssetMutation,
+  useDeleteWaitMutation,
   useGetViewPresetsQuery,
   useCreateViewPresetMutation,
   useDeleteViewPresetMutation,

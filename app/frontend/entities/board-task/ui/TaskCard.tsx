@@ -104,6 +104,15 @@ function workflowDotLabel(state: string): string {
 export const TaskCard = ({ task, onClick, isDragging }: TaskCardProps) => {
   const visibleTags = task.tags.slice(0, 3);
   const overflowCount = task.tags.length - 3;
+  const hasPendingWaits = task.pendingWaits.length > 0;
+  const workflowTooltip = [
+    ...task.recentWorkflowRuns.map((run) => `#${run.id} ${workflowDotLabel(run.state)}`),
+    ...task.pendingWaits.map((wait) =>
+      wait.waitType === 'github_checks_completed'
+        ? `Wait: ${wait.metadata.repoFullName ?? 'Unknown repo'} #${wait.metadata.prNumber ?? 'Unknown PR'}`
+        : `Wait: ${wait.waitType.replace(/_/g, ' ')}`,
+    ),
+  ].join(', ');
 
   return (
     <Card sx={{ ...styles.card, ...(isDragging ? styles.dragging : {}) }} elevation={1}>
@@ -116,8 +125,8 @@ export const TaskCard = ({ task, onClick, isDragging }: TaskCardProps) => {
               </Tooltip>
             )}
             <Typography sx={styles.title}>{task.title}</Typography>
-            {task.recentWorkflowRuns.length > 0 && (
-              <Tooltip title={task.recentWorkflowRuns.map((r) => `#${r.id} ${workflowDotLabel(r.state)}`).join(', ')}>
+            {(hasPendingWaits || task.recentWorkflowRuns.length > 0) && (
+              <Tooltip title={workflowTooltip}>
                 <Box sx={styles.workflowDots}>
                   {[...task.recentWorkflowRuns].reverse().map((run) => (
                     <Box
@@ -133,6 +142,16 @@ export const TaskCard = ({ task, onClick, isDragging }: TaskCardProps) => {
                       }}
                     />
                   ))}
+                  {hasPendingWaits && (
+                    <Box
+                      sx={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: '#eab308',
+                      }}
+                    />
+                  )}
                 </Box>
               </Tooltip>
             )}

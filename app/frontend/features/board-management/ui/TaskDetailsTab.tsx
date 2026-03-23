@@ -1,6 +1,8 @@
 import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
+import HourglassEmptyIcon from '@mui/icons-material/HourglassEmpty';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import { Autocomplete, Box, Button, Chip, Link, MenuItem, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Button, Chip, IconButton, Link, MenuItem, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -10,6 +12,7 @@ import { Routes } from 'shared/routes';
 
 import {
   useCreateTaskMutation,
+  useDeleteWaitMutation,
   useGetBoardQuery,
   useGetProjectMembersQuery,
   useGetTaskWorkflowRunsQuery,
@@ -45,6 +48,7 @@ const styles = {
 export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
   const [updateTask] = useUpdateTaskMutation();
   const [createTask] = useCreateTaskMutation();
+  const [deleteWait, { isLoading: isDeletingWait }] = useDeleteWaitMutation();
   const [editingDesc, setEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState(task.description || '');
   const [childDialogOpen, setChildDialogOpen] = useState(false);
@@ -271,6 +275,41 @@ export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
             projectId={projectId}
             defaultParentTaskId={task.id}
           />
+        </Box>
+      )}
+
+      {task.pendingWaits.length > 0 && (
+        <Box sx={styles.hierarchy}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <HourglassEmptyIcon sx={{ fontSize: 16, color: 'warning.main' }} />
+            <Typography sx={styles.label}>Pending Waits ({task.pendingWaits.length})</Typography>
+          </Box>
+          {task.pendingWaits.map((wait) => (
+            <Box key={wait.id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, py: 0.5 }}>
+              <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <Chip
+                  label={wait.waitType.replace(/_/g, ' ')}
+                  size="small"
+                  color="warning"
+                  sx={{ fontSize: '10px', height: 20, fontWeight: 600, flexShrink: 0 }}
+                />
+                {wait.waitType === 'github_checks_completed' && (
+                  <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
+                    {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
+                  </Typography>
+                )}
+              </Box>
+              <IconButton
+                size="small"
+                onClick={() => deleteWait({ projectId, taskId: task.id, waitId: wait.id })}
+                disabled={isDeletingWait}
+                sx={{ p: 0.25, mt: -0.25 }}
+                aria-label={`Remove wait ${wait.id}`}
+              >
+                <CloseIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            </Box>
+          ))}
         </Box>
       )}
 

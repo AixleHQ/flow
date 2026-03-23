@@ -70,7 +70,7 @@ variable "eks_public_subnet_cidrs" {
 variable "eks_public_access_cidrs" {
   description = "Allowed CIDR blocks for the public EKS API endpoint"
   type        = list(string)
-  default     = ["34.1.250.211/32"]
+  default     = ["34.1.250.211/32", "35.214.143.149/32"]
 }
 
 variable "eks_node_group_name" {

@@ -8,6 +8,7 @@ module Api
           def show
             board = current_project.board
             if board
+              board = ::Board.includes(board_columns: { column_workflow_binding: :workflow }).find(board.id)
               respond_with board, serializer: BoardSerializer
             else
               head :not_found

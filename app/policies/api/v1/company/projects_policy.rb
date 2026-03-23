@@ -16,6 +16,10 @@ module Api
           true # All authenticated users can create projects
         end
 
+        def update?
+          current_project&.accessible_by?(current_user)
+        end
+
         private
 
         def current_project

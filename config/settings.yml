@@ -3,7 +3,7 @@ project_name: Palad
 domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
 asset_host: <%= ENV['ASSET_HOST'] || "localhost:4000" %>
 container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:4000" %>
-protocol: "https"
+protocol: <%= ENV['PROTOCOL'] || "https" %>
 
 google_oauth:
   client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
@@ -84,6 +84,7 @@ github:
   app_id: <%= ENV['GITHUB_APP_ID'] %>
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
+  webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
 
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
