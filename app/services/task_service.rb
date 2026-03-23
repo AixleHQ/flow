@@ -130,7 +130,6 @@ class TaskService
       binding = column.column_workflow_binding
       return unless binding&.trigger_mode&.to_sym == :auto
       return if task.task_waits.pending.exists?
-      return if task.workflow_runs.where(state: %w[pending running paused]).exists?
 
       WorkflowService.start(
         workflow: binding.workflow,
