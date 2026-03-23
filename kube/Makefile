@@ -88,7 +88,6 @@ kube-setup:
 	@make build-otlp-ingest
 	@make build-agents
 	$(KUBECTL) apply -f $(TRAEFIK_CRD_URL)
-	$(KUBECTL) apply -f $(KUBE_CLUSTER_STORAGECLASS)
 	$(KUBECTL) apply -f $(KUBE_DEV_DIR)/00-namespace.yaml
 	@if [ "$(KUBE_SETUP_WITH_ARC)" = "true" ]; then \
 		$(MAKE) kube-arc-install; \
@@ -287,6 +286,8 @@ kube-mount-dev:
 	$(KUBECTL) rollout restart deployment/web -n $(KUBE_DEV_NAMESPACE)
 	$(KUBECTL) patch deployment worker-ruby -n $(KUBE_DEV_NAMESPACE) --type='strategic' -p "{\"spec\":{\"template\":{\"spec\":{\"volumes\":[{\"name\":\"web-source\",\"hostPath\":{\"path\":\"$(WEB_HOST_PATH)\",\"type\":\"Directory\"}}],\"containers\":[{\"name\":\"worker-ruby\",\"volumeMounts\":[{\"name\":\"web-source\",\"mountPath\":\"/app\"}]}]}}}}"
 	$(KUBECTL) rollout restart deployment/worker-ruby -n $(KUBE_DEV_NAMESPACE)
+	$(KUBECTL) patch deployment mcp -n $(KUBE_DEV_NAMESPACE) --type='strategic' -p "{\"spec\":{\"template\":{\"spec\":{\"volumes\":[{\"name\":\"web-source\",\"hostPath\":{\"path\":\"$(WEB_HOST_PATH)\",\"type\":\"Directory\"}}],\"containers\":[{\"name\":\"mcp\",\"volumeMounts\":[{\"name\":\"web-source\",\"mountPath\":\"/app\"}]}]}}}}"
+	$(KUBECTL) rollout restart deployment/mcp -n $(KUBE_DEV_NAMESPACE)
 
 # Remove Kubernetes manifests
 kube-rm:

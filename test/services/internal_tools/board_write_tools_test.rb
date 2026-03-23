@@ -151,19 +151,6 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
 
   # === board_attach_asset ===
 
-  test "board_attach_asset creates asset from base64" do
-    content = Base64.encode64("# QA Report\n\nAll tests passed.")
-
-    result = InternalTools::BoardAttachAsset.new(
-      params: { task_id: @task.id, file_content: content, name: "qa-report.md", tags: [ "qa" ] },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-    assert_equal "qa-report.md", data["name"]
-  end
-
   test "board_attach_asset creates asset from file_path in container" do
     @session.update!(container_id: "test-container-123")
 
@@ -210,14 +197,14 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_match(/No container/, result[:stderr])
   end
 
-  test "board_attach_asset returns error when neither file_path nor file_content" do
+  test "board_attach_asset returns error when file_path missing" do
     result = InternalTools::BoardAttachAsset.new(
       params: { task_id: @task.id, name: "nothing.png" },
       session: @session
     ).execute
 
     assert_equal 1, result[:exit_code]
-    assert_match(/file_path or file_content/, result[:stderr])
+    assert_match(/file_path is required/, result[:stderr])
   end
 
   # === board_manage_tags ===
