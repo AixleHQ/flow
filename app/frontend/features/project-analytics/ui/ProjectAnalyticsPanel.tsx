@@ -37,6 +37,9 @@ import {
   YAxis,
 } from 'recharts';
 
+import { WorkflowCostsPanel } from 'features/workflow-cost-analytics';
+import { formatCostCents, formatTokens } from 'shared/lib';
+
 import type { AgentActivityData, AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
 import { useGetAgentActivityQuery, useGetProjectAnalyticsQuery } from '../api/projectAnalyticsApi';
 
@@ -226,18 +229,6 @@ const chartTooltipStyle = {
   fontSize: 12,
   color: '#fff',
 };
-
-function formatCostCents(cents: number): string {
-  const dollars = cents / 100;
-  if (dollars >= 1000) return `$${(dollars / 1000).toFixed(1)}k`;
-  return `$${dollars.toFixed(2)}`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(0)}k`;
-  return tokens.toLocaleString();
-}
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
@@ -572,6 +563,9 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
           </BarChart>
         </ResponsiveContainer>
       </Card>
+
+      {/* ── Workflow Costs ────────────────────────────────────────── */}
+      <WorkflowCostsPanel projectId={projectId} scope={scope} period={period} />
     </Box>
   );
 };
