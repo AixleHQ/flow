@@ -145,3 +145,5 @@ gem "websocket-client-simple", "~> 0.3"
 # Temporal (Ruby worker/client)
 # Note: temporal-ruby is early; validate in dev.
 # gem "temporal-ruby", "~> 0.1"
+
+gem "stackprof", "~> 0.2.28"

@@ -33,7 +33,7 @@ class WorkflowSerializer < ApplicationSerializer
   def has_active_runs
     return false unless object.respond_to?(:runs)
 
-    object.runs.where(state: %w[running paused]).exists?
+    object.runs.any? { |r| %w[running paused].include?(r.state) }
   end
 
   def description_excerpt
@@ -45,6 +45,6 @@ class WorkflowSerializer < ApplicationSerializer
   private
 
   def latest_run
-    @latest_run ||= object.runs.order(created_at: :desc).first
+    @latest_run ||= object.runs.sort_by(&:created_at).last
   end
 end
