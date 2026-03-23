@@ -181,6 +181,54 @@ class Api::V1::Company::Projects::Workflows::StepsControllerTest < ActionControl
     assert_nil step_a.reload.deleted_at
   end
 
+  test "#show returns 404 for soft-deleted step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    step.soft_delete!
+
+    get :show, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
+    assert_response :not_found
+  end
+
+  test "#update returns 404 for soft-deleted step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    step.soft_delete!
+
+    patch :update, params: {
+      project_id: @project.id, workflow_id: @workflow.id, id: step.id,
+      step: { name: "Updated" }
+    }
+    assert_response :not_found
+  end
+
+  test "#destroy returns 404 for already-soft-deleted step" do
+    sign_in @admin
+    step = create(:step, workflow: @workflow, position: 1)
+    step.soft_delete!
+
+    delete :destroy, params: { project_id: @project.id, workflow_id: @workflow.id, id: step.id }
+    assert_response :not_found
+  end
+
+  test "#reorder excludes soft-deleted steps" do
+    sign_in @admin
+    s1 = create(:step, workflow: @workflow, position: 1)
+    s2 = create(:step, workflow: @workflow, position: 2)
+    deleted_step = create(:step, workflow: @workflow, position: 3)
+    original_deleted_position = deleted_step.position
+    deleted_step.soft_delete!
+
+    patch :reorder, params: {
+      project_id: @project.id, workflow_id: @workflow.id,
+      positions: { s1.id.to_s => 2, s2.id.to_s => 1 }
+    }
+    assert_response :ok
+    assert_equal 2, s1.reload.position
+    assert_equal 1, s2.reload.position
+    assert_equal original_deleted_position, deleted_step.reload.position
+  end
+
   test "non-member cannot access" do
     other_user = create(:user, :employee, company: @company)
     sign_in other_user
