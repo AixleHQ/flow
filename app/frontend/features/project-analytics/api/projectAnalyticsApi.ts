@@ -18,6 +18,25 @@ export interface ProjectAnalyticsParams {
   period: AnalyticsPeriod;
 }
 
+export interface AgentSessionCount {
+  agentType: string;
+  sessions: number;
+  costCents: number;
+  tokens: number;
+}
+
+export interface AgentActivityPoint {
+  date: string;
+  agentType: string;
+  sessions: number;
+}
+
+export interface AgentActivityData {
+  agentTypes: string[];
+  sessionsByAgent: AgentSessionCount[];
+  activityOverTime: AgentActivityPoint[];
+}
+
 export const projectAnalyticsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getProjectAnalytics: builder.query<ProjectAnalyticsSummary, ProjectAnalyticsParams>({
@@ -28,7 +47,15 @@ export const projectAnalyticsApi = baseApi.injectEndpoints({
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
+    getAgentActivity: builder.query<AgentActivityData, ProjectAnalyticsParams>({
+      query: ({ projectId, scope, period }) => ({
+        url: Routes.backend.agentActivityApiV1CompanyProjectStatisticAnalyticsPath(projectId),
+        method: 'GET',
+        params: { scope, period },
+      }),
+      providesTags: [QueryTag.ProjectAnalytics],
+    }),
   }),
 });
 
-export const { useGetProjectAnalyticsQuery } = projectAnalyticsApi;
+export const { useGetProjectAnalyticsQuery, useGetAgentActivityQuery } = projectAnalyticsApi;

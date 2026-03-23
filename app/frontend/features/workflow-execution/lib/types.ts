@@ -9,6 +9,11 @@ export interface SubStepRunInfo {
   completedAt: string | null;
 }
 
+export interface StepFailureRecord {
+  errorMessage: string | null;
+  failedAt: string | null;
+}
+
 export interface StepRunInfo {
   id: number;
   workflowRunId: number;
@@ -23,6 +28,8 @@ export interface StepRunInfo {
   subStepRuns: SubStepRunInfo[];
   startedAt: string | null;
   completedAt: string | null;
+  createdAt: string;
+  pastFailures: StepFailureRecord[];
 }
 
 export interface CurrentStepInfo {

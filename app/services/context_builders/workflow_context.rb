@@ -97,6 +97,12 @@ module ContextBuilders
         line += " — #{ss.description}" if ss.description.present?
         lines << line
 
+        if ss.instructions.present?
+          lines << ""
+          ss.instructions.each_line { |l| lines << "   #{l.chomp}" }
+          lines << ""
+        end
+
         if ssr&.note.present?
           lines << "   → #{ssr.note.truncate(200)}"
         end
@@ -159,7 +165,7 @@ module ContextBuilders
     end
 
     def sub_steps
-      @sub_steps ||= step&.sub_steps&.order(:position) || SubStep.none
+      @sub_steps ||= step&.sub_steps&.active || SubStep.none
     end
 
     def completed_step_runs

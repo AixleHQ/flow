@@ -130,7 +130,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     task = create(:board_task, board: @board, board_column: @column)
 
     result = TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
-    assert_equal "No manual workflow binding on current column", result[:error]
+    assert_equal "No workflow binding on current column", result[:error]
   end
 
   test "trigger_workflow returns error when active run exists" do

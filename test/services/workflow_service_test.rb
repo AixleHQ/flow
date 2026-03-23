@@ -30,6 +30,20 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal 2, run.step_runs.count
   end
 
+  test "start persists agent_runtime when provided" do
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once
+
+    run = WorkflowService.start(
+      workflow: @workflow,
+      project: @project,
+      user: @user,
+      agent_runtime: "claude_code"
+    )
+
+    assert run.persisted?
+    assert_equal "claude_code", run.agent_runtime
+  end
+
   test "start with task associates board_task" do
     TemporalWorkflowRegistry.expects(:start_workflow_execution).once
 
@@ -69,7 +83,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
     run.start! if run.may_start?
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "workflow_cancelled").once
+    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "workflow_cancelled", nil).once
 
     WorkflowService.cancel(run: run)
 
@@ -83,7 +97,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "running")
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "step_completed").once
+    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "step_completed", step_run.id).once
 
     WorkflowService.approve_step(step_run: step_run)
 
@@ -93,16 +107,22 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   # == retry_step ==
 
-  test "retry_step marks failed and sends signal" do
+  test "retry_step creates new step_run and sends signal" do
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
-    step_run = create(:step_run, workflow_run: run, step: @step1, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "step_retried").once
+    TemporalService.expects(:send_signal).with(
+      "workflow-execution-#{run.id}", "step_retried",
+      has_entries("old_step_run_id" => step_run.id, "new_step_run_id" => anything)
+    ).once
 
-    WorkflowService.retry_step(step_run: step_run)
+    assert_difference("StepRun.count", 1) do
+      WorkflowService.retry_step(step_run: step_run)
+    end
 
-    step_run.reload
-    assert_equal "failed", step_run.state
+    new_step_run = run.step_runs.where(step: @step1).order(:created_at).last
+    assert_equal "pending", new_step_run.state
+    assert_not_equal step_run.id, new_step_run.id
   end
 
   # == skip_step ==
@@ -111,7 +131,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "running")
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "step_skipped").once
+    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", "step_skipped", step_run.id).once
 
     WorkflowService.skip_step(step_run: step_run, reason: "Not needed")
 

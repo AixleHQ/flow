@@ -5,7 +5,9 @@ module Api
     module Company
       class ProjectsController < ApplicationController
         def index
-          projects = Project.for_user(current_user).ransack(q_params).result
+          projects = Project.for_user(current_user)
+                            .includes(:project_collaborators)
+                            .ransack(q_params).result
           respond_with paginate(projects)
         end
 

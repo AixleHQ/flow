@@ -69,7 +69,7 @@ class SessionServiceTest < ActiveSupport::TestCase
     SessionService.finish(session: session)
   end
 
-  test "finish signals workflow execution for workflow_step sessions" do
+  test "finish signals container workflow for workflow_step sessions" do
     workflow_run = create(:workflow_run, project: @project, user: @user)
     step = create(:step, workflow: workflow_run.workflow)
     step_run = create(:step_run, workflow_run: workflow_run, step: step)
@@ -77,8 +77,8 @@ class SessionServiceTest < ActiveSupport::TestCase
                      temporal_workflow_id: "wf-456", project: @project)
     step_run.update!(terminal_session: session)
 
+    # Only signals the container workflow; execution workflow is notified by before_cleanup
     TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, step_run.id).once
-    TemporalService.expects(:send_signal).with("workflow-execution-#{workflow_run.id}", :container_finished, step_run.id).once
 
     SessionService.finish(session: session)
   end

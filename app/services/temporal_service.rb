@@ -156,12 +156,18 @@ class TemporalService
           )
         ) if schedule_def.enabled
       end
+    rescue Temporalio::Error::ScheduleAlreadyRunningError => e
+      Rails.logger.warn("[Temporal] Schedule #{workflow&.name} already exists: #{e.message}")
     end
 
     def delete_schedules
       with_test_environment_handling do |cl|
         ids = cl.list_schedules.map { |x| x.id }
-        ids.each { |id| cl.schedule_handle(id).delete }
+        ids.each do |id|
+          cl.schedule_handle(id).delete
+        rescue Temporalio::Error::RPCError => e
+          Rails.logger.warn("[Temporal] Failed to delete schedule #{id}: #{e.message}")
+        end
       end
     end
 

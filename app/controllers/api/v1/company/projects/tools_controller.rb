@@ -6,7 +6,7 @@ module Api
       module Projects
         class ToolsController < ApplicationController
           def index
-            tools = Tool.visible_for_project(current_project)
+            tools = Tool.visible_for_project(current_project).includes(:tool_files)
             respond_with tools, each_serializer: ToolSerializer, project: current_project
           end
 

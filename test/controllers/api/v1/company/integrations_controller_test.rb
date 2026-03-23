@@ -24,6 +24,40 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
     assert_redirected_to "/company/integrations"
   end
 
+  test "#github_setup redirects to project tab when state is project and installation_id blank" do
+    sign_in @admin
+    project = create(:project, company: @company, owner: @admin)
+
+    get :github_setup, params: { installation_id: "", state: "project:#{project.id}" }, format: :html
+
+    assert_redirected_to "/company/projects/#{project.id}/integrations"
+  end
+
+  test "#github_setup creates project-scoped integration when state references project" do
+    sign_in @admin
+    project = create(:project, company: @company, owner: @admin)
+    initial_count = Integration.count
+
+    mock_service = mock("token_service")
+    mock_service.expects(:verify_installation).returns({
+      id: 12_345,
+      account_login: "proj-org",
+      account_type: "Organization",
+      target_type: "Organization",
+      permissions: {}
+    })
+    Github::TokenService.expects(:new).returns(mock_service)
+
+    get :github_setup, params: { installation_id: "12345", state: "project:#{project.id}" }, format: :html
+
+    assert_redirected_to "/company/projects/#{project.id}/integrations"
+    assert_equal initial_count + 1, Integration.count
+    integration = @company.integrations.find { |i| i.installation_id == "12345" }
+    assert integration.present?
+    assert_equal project.id, integration.project_id
+    assert_equal "proj-org", integration.name
+  end
+
   test "#github_setup creates integration when verification succeeds" do
     sign_in @admin
     initial_count = Integration.count

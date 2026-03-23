@@ -39,7 +39,7 @@ class ToolResult < ApplicationRecord
   def attach_output_files(container, paths, runtime)
     collected = {}
     paths.each do |path|
-      content = read_file_from_container(container, path, runtime)
+      content = runtime.read_file(container, path)
       collected[File.basename(path)] = content if content.present?
     end
     return if collected.empty?
@@ -62,14 +62,6 @@ class ToolResult < ApplicationRecord
     parsed = JSON.parse(text)
     parsed.is_a?(Hash) || parsed.is_a?(Array) ? parsed : nil
   rescue JSON::ParserError
-    nil
-  end
-
-  def read_file_from_container(container, path, runtime)
-    result = runtime.exec(container, [ "cat", path ])
-    return nil unless result[2].zero?
-    result[0].join
-  rescue StandardError
     nil
   end
 end

@@ -9,4 +9,8 @@ class StepSerializer < ApplicationSerializer
              :created_at, :updated_at
 
   has_many :sub_steps, serializer: SubStepSerializer
+
+  def sub_steps
+    object.sub_steps.active
+  end
 end

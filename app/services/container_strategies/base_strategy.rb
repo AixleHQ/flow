@@ -140,7 +140,12 @@ module ContainerStrategies
       raise NotImplementedError, "#{self.class.name} must implement #resolve_image"
     end
 
-    def build_env_vars = []
+    def build_env_vars
+      [
+        "LANG=C.UTF-8",
+        "LC_ALL=C.UTF-8"
+      ]
+    end
     def build_labels = {}
     def build_host_config = base_host_config
     def build_exposed_ports = nil
@@ -168,25 +173,11 @@ module ContainerStrategies
     end
 
     def read_file_from_container(container, path)
-      tar_data = runtime.copy_from(container, path)
-      return nil if tar_data.blank?
-
-      normalized = path.to_s.sub(%r{\A/}, "")
-      basename   = File.basename(normalized)
-
-      reader = Gem::Package::TarReader.new(StringIO.new(tar_data))
-      reader.each do |entry|
-        next unless entry.file?
-
-        entry_name = entry.full_name.sub(%r{\A\.?/}, "")
-        return entry.read if entry_name == normalized || File.basename(entry_name) == basename
-      end
-      nil
+      content = runtime.copy_from(container, path)
+      content.presence
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
       nil
-    ensure
-      reader&.close
     end
 
     protected

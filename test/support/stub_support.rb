@@ -46,7 +46,9 @@ module StubSupport
       content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
     end
     c.define_singleton_method(:archive_in) { |*| true }
-    c.define_singleton_method(:archive_out) { |*| "" }
+    c.define_singleton_method(:archive_out) { |path, &block| block&.call("") }
+    c.define_singleton_method(:read_file) { |path| captured_fs[path] }
+    c.define_singleton_method(:store_file) { |path, content| captured_fs[path] = content }
     c.define_singleton_method(:logs) { |*, **| "" }
     c.define_singleton_method(:wait) { |*| { "StatusCode" => 0 } }
     c.define_singleton_method(:kill) { |*| true }
@@ -79,8 +81,7 @@ module StubSupport
 
     @_k8s_original_copy_from = ContainerRuntime::KubernetesRuntime.instance_method(:copy_from)
     ContainerRuntime::KubernetesRuntime.define_method(:copy_from) do |_id, path|
-      content = captured_fs[path]
-      content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
+      captured_fs[path]
     end
   end
 

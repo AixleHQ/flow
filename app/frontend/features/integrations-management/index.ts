@@ -1,4 +1,5 @@
 export { IntegrationsPanel } from './ui/IntegrationsPanel';
+export type { IntegrationsPanelProps } from './ui/IntegrationsPanel';
 export type {
   Integration,
   IntegrationProvider,

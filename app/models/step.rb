@@ -6,7 +6,8 @@ class Step < ApplicationRecord
   belongs_to :workflow
   belongs_to :agent, optional: true
 
-  has_many :sub_steps, dependent: :destroy
+  has_many :step_runs, dependent: :destroy
+  has_many :sub_steps, -> { order(:position) }, dependent: :destroy
 
   accepts_nested_attributes_for :sub_steps, allow_destroy: true
 

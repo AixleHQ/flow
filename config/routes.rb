@@ -43,6 +43,8 @@ Rails.application.routes.draw do
         namespace :statistic do
           resource :overview, only: %i[show], controller: "overview"
           resource :workflow_runs, only: %i[show], controller: "workflow_runs"
+          resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
+          resource :top_agents, only: %i[show], controller: "top_agents"
         end
         resources :integrations, only: %i[index show create destroy] do
           collection do
@@ -96,6 +98,7 @@ Rails.application.routes.draw do
             resources :agents, only: %i[index create update destroy]
             resources :tools, only: %i[index create update destroy]
             resources :mcp_servers, only: %i[index create update destroy]
+            resources :integrations, only: %i[index create destroy]
             resources :skills, only: %i[index create update destroy]
             resources :workflows, only: %i[index show create update destroy] do
               member do
@@ -147,7 +150,11 @@ Rails.application.routes.draw do
               end
             end
             namespace :statistic do
-              resource :analytics, only: %i[show], controller: "analytics"
+              resource :analytics, only: %i[show], controller: "analytics" do
+                member do
+                  get :agent_activity
+                end
+              end
               resource :workflow_costs, only: %i[show], controller: "workflow_costs"
             end
             resources :terminal_sessions, only: %i[index show]

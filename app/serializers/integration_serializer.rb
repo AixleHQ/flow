@@ -2,9 +2,13 @@
 
 class IntegrationSerializer < ApplicationSerializer
   attributes :id, :name, :provider, :status, :settings,
-             :created_at, :updated_at, :github_url
+             :created_at, :updated_at, :github_url, :project_id, :scope
 
   belongs_to :connected_by, serializer: UserSerializer
+
+  def scope
+    object.project_id.present? ? "project" : "company"
+  end
 
   def github_url
     return nil unless object.github?

@@ -12,4 +12,11 @@ export {
 } from './api/workflowRunsApi';
 export { RunWorkflowDialog } from './ui/RunWorkflowDialog';
 export { WorkflowAssetsReview } from './ui/WorkflowAssetsReview';
-export type { WorkflowRun, StepRunInfo, SubStepRunInfo, WorkflowRunAsset, CreateWorkflowRunRequest } from './lib/types';
+export type {
+  WorkflowRun,
+  StepRunInfo,
+  SubStepRunInfo,
+  StepFailureRecord,
+  WorkflowRunAsset,
+  CreateWorkflowRunRequest,
+} from './lib/types';

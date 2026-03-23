@@ -148,6 +148,18 @@ class TerminalSession < ApplicationRecord
   def on_failed
     sync_usage
     update!(finished_at: Time.current, container_id: nil)
+    notify_workflow_execution_if_step_session
+  end
+
+  def notify_workflow_execution_if_step_session
+    return unless session_type == "workflow_step"
+
+    sr = step_run
+    return unless sr&.workflow_run_id
+
+    WorkflowService.notify_container_finished(step_run: sr)
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] notify_workflow_execution_if_step_session failed: #{e.message}")
   end
 
   def sync_usage

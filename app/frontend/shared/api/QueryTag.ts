@@ -15,6 +15,7 @@ export enum QueryTag {
   Skills = 'Skills',
   Assets = 'Assets',
   Integrations = 'Integrations',
+  ProjectIntegrations = 'ProjectIntegrations',
   Repositories = 'Repositories',
   Activity = 'Activity',
   ViewPreset = 'ViewPreset',
@@ -24,4 +25,6 @@ export enum QueryTag {
   ProjectAnalytics = 'ProjectAnalytics',
   WorkflowRunStats = 'WorkflowRunStats',
   WorkflowCostAnalytics = 'WorkflowCostAnalytics',
+  BoardTaskDistribution = 'BoardTaskDistribution',
+  TopAgentsSessions = 'TopAgentsSessions',
 }

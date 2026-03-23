@@ -65,13 +65,12 @@ module ContainerRuntime
 
     def copy_from(id, path)
       container = resolve_container(id)
-      container.archive(path)
+      container.read_file(path)
     end
 
     def copy_to(id, path, content)
-      return false if path.blank?
-
       container = resolve_container(id)
+
       dir = File.dirname(path)
       safe_dir = Shellwords.escape(dir)
       safe_path = Shellwords.escape(path)

@@ -17,7 +17,17 @@ module Api
           #   q[user_id_eq]       - filter by user
           def index
             scope = current_project.terminal_sessions
-                                   .includes(:user, :project)
+                                   .includes(
+                                     :user,
+                                     :project,
+                                     :tools,
+                                     :skills,
+                                     :mcp_servers,
+                                     :input_assets,
+                                     :repositories,
+                                     :output_assets,
+                                     :session_logs
+                                   )
                                    .ransack(q_params).result
                                    .order(created_at: :desc)
 

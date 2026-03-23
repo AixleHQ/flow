@@ -7,18 +7,10 @@ class WorkflowRunChannel < ApplicationCable::Channel
     return reject unless can_access?(@workflow_run)
 
     stream_for @workflow_run
-    transmit_run_data(@workflow_run)
   end
 
   def unsubscribed
     # cleanup
-  end
-
-  def refresh
-    return unless @workflow_run
-
-    @workflow_run.reload
-    transmit_run_data(@workflow_run)
   end
 
   private
@@ -31,14 +23,6 @@ class WorkflowRunChannel < ApplicationCable::Channel
     return false unless current_user
 
     run.project.accessible_by?(current_user)
-  end
-
-  def transmit_run_data(run)
-    transmit({ "type" => "run_update", "data" => serialize_run(run) })
-  end
-
-  def serialize_run(run)
-    WorkflowRunSerializer.new(run).serializable_hash
   end
 
   class << self
