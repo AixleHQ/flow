@@ -191,7 +191,11 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
         },
         {
           label: 'Avg Time / Workflow',
-          value: formatDuration(workflows.length > 0 ? Math.round(workflows.reduce((sum, w) => sum + w.avgDurationSeconds, 0) / workflows.length) : 0),
+          value: formatDuration(
+            workflows.length > 0
+              ? Math.round(workflows.reduce((sum, w) => sum + w.avgDurationSeconds, 0) / workflows.length)
+              : 0,
+          ),
           icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
         },
       ]
@@ -382,7 +386,16 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 mb: 0.5,
               }}
             >
-              {['Workflow', 'Total Cost', 'Input Tokens', 'Output Tokens', 'Total Tokens', 'Runs', 'Avg Time', 'Total Time'].map((h) => (
+              {[
+                'Workflow',
+                'Total Cost',
+                'Input Tokens',
+                'Output Tokens',
+                'Total Tokens',
+                'Runs',
+                'Avg Time',
+                'Total Time',
+              ].map((h) => (
                 <Typography
                   key={h}
                   sx={{ fontSize: '11px', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.4px' }}
