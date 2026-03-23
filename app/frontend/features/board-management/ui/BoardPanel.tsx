@@ -128,6 +128,7 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
   const boardId = data?.board.id;
   const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
   const [collapsedRestored, setCollapsedRestored] = useState(false);
+  const [filtersRestored, setFiltersRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openTask = useBoardSidebarStore((s) => s.openTask);
   const activeTaskId = useBoardSidebarStore((s) => s.activeTaskId);
@@ -171,6 +172,42 @@ export const BoardPanel = ({ projectId }: BoardPanelProps) => {
     if (!boardId || !collapsedRestored) return;
     localStorage.setItem(`board-${boardId}-collapsed`, JSON.stringify([...collapsedColumns]));
   }, [boardId, collapsedColumns, collapsedRestored]);
+
+  useEffect(() => {
+    if (!boardId || filtersRestored) return;
+    const hasUrlFilters = Boolean(
+      urlSearch.assigneeId || urlSearch.taskType || urlSearch.priority || urlSearch.tags || urlSearch.search,
+    );
+    if (!hasUrlFilters) {
+      try {
+        const stored = localStorage.getItem(`board-${boardId}-filters`);
+        if (stored) {
+          const parsed = JSON.parse(stored) as BoardFilters;
+          setFilters(parsed);
+          void navigate({
+            search: (prev) => ({
+              ...prev,
+              assigneeId: parsed.assigneeId,
+              taskType: parsed.taskType,
+              priority: parsed.priority,
+              tags: parsed.tags?.length ? parsed.tags.join(',') : undefined,
+              search: parsed.search,
+            }),
+            replace: true,
+          });
+        }
+      } catch {
+        /* ignore corrupt data */
+      }
+    }
+    setFiltersRestored(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boardId, filtersRestored]);
+
+  useEffect(() => {
+    if (!boardId || !filtersRestored) return;
+    localStorage.setItem(`board-${boardId}-filters`, JSON.stringify(filters));
+  }, [boardId, filters, filtersRestored]);
 
   const mouseSensor = useSensor(MouseSensor, { activationConstraint: { distance: 8 } });
   const touchSensor = useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } });
