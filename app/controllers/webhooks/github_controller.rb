@@ -17,14 +17,22 @@ class Webhooks::GithubController < ActionController::API
   private
 
   def handle_check_suite
-    suite = params.require(:check_suite)
-    return unless suite[:action] == "completed"
+    payload = request.request_parameters
+    return unless payload["action"] == "completed"
 
-    repo_full_name = params.dig(:repository, :full_name)
+    suite = payload["check_suite"]
+    return unless suite.is_a?(Hash)
+    return unless suite["status"] == "completed"
+
+    repo_full_name = payload.dig("repository", "full_name")
     return if repo_full_name.blank?
 
-    conclusion     = suite[:conclusion]
-    pr_numbers     = suite[:pull_requests]&.map { |pr| pr[:number].to_i } || []
+    conclusion = suite["conclusion"]
+    pr_numbers = Array(suite["pull_requests"]).filter_map do |pull_request|
+      next unless pull_request.is_a?(Hash)
+
+      Integer(pull_request["number"], exception: false)
+    end
 
     pr_numbers.each do |pr_number|
       ResolveGithubChecksJob.perform_later(

@@ -58,7 +58,29 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "does not enqueue job for check_suite with non-completed action" do
     payload = {
-      check_suite: { action: "rerequested", conclusion: nil, pull_requests: [ { number: 10 } ] },
+      action: "rerequested",
+      check_suite: { status: "queued", conclusion: nil, pull_requests: [ { number: 10 } ] },
+      repository: { full_name: "org/repo" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "check_suite"
+
+    assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
+  test "does not enqueue job for check_suite with non-completed status" do
+    payload = {
+      action: "completed",
+      check_suite: {
+        status: "in_progress",
+        conclusion: nil,
+        pull_requests: [ { number: 10 } ]
+      },
       repository: { full_name: "org/repo" }
     }.to_json
 
@@ -74,8 +96,9 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "enqueues ResolveGithubChecksJob for each PR when check_suite completed" do
     payload = {
+      action: "completed",
       check_suite: {
-        action: "completed",
+        status: "completed",
         conclusion: "success",
         pull_requests: [ { number: 42 }, { number: 43 } ]
       },
@@ -94,8 +117,9 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "enqueues ResolveGithubChecksJob with correct arguments" do
     payload = {
+      action: "completed",
       check_suite: {
-        action: "completed",
+        status: "completed",
         conclusion: "failure",
         pull_requests: [ { number: 7 } ]
       },
@@ -113,8 +137,9 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "does not enqueue job for check_suite with missing repository key" do
     payload = {
+      action: "completed",
       check_suite: {
-        action: "completed",
+        status: "completed",
         conclusion: "success",
         pull_requests: [ { number: 1 } ]
       }
@@ -132,8 +157,9 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
 
   test "does not enqueue job for check_suite with no pull requests" do
     payload = {
+      action: "completed",
       check_suite: {
-        action: "completed",
+        status: "completed",
         conclusion: "success",
         pull_requests: []
       },
@@ -144,6 +170,27 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     @request.headers["X-GitHub-Event"] = "check_suite"
 
     assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
+  test "ignores pull requests with invalid numbers" do
+    payload = {
+      action: "completed",
+      check_suite: {
+        status: "completed",
+        conclusion: "success",
+        pull_requests: [ { number: "abc" }, {}, { number: 12 } ]
+      },
+      repository: { full_name: "org/app" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "check_suite"
+
+    assert_enqueued_jobs 1, only: ResolveGithubChecksJob do
       post_raw(payload)
     end
 
