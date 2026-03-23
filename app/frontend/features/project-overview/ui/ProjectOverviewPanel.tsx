@@ -5,9 +5,8 @@ import FolderIcon from '@mui/icons-material/Folder';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import { Box, Button, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
+import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useState } from 'react';
 
 import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
@@ -185,11 +184,8 @@ interface ProjectOverviewPanelProps {
   projectId?: number;
 }
 
-const ACTIVITY_PER_PAGE = 10;
-
 const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
   void _projectId;
-  const [activityPage, setActivityPage] = useState(1);
 
   const {
     data: summary,
@@ -230,7 +226,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     data: recentActivity,
     isLoading: activityLoading,
     isError: activityError,
-  } = useGetRecentActivityQuery({ page: 1, perPage: activityPage * ACTIVITY_PER_PAGE }, { pollingInterval: 60_000 });
+  } = useGetRecentActivityQuery({ page: 1, perPage: 10 }, { pollingInterval: 60_000 });
 
   const workflowStatus = workflowRunStats
     ? [
@@ -372,15 +368,6 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
             <Typography sx={{ fontSize: '13px', color: 'text.disabled', py: '10px' }}>
               No recent activity found.
             </Typography>
-          )}
-          {!activityLoading && recentActivity && recentActivity.activities.length < recentActivity.meta.total && (
-            <Button
-              size="small"
-              onClick={() => setActivityPage((p) => p + 1)}
-              sx={{ mt: 1, fontSize: '12px', textTransform: 'none' }}
-            >
-              Load more
-            </Button>
           )}
         </Card>
 
