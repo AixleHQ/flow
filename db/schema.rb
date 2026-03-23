@@ -503,6 +503,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_000000) do
     t.boolean "allow_non_interactive", default: false, null: false
     t.boolean "bmad_enabled", default: false, null: false
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.jsonb "depends_on_step_ids", default: [], null: false
     t.text "description"
     t.jsonb "input_asset_specs", default: [], null: false
@@ -521,6 +522,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_000000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.index ["agent_id"], name: "index_steps_on_agent_id"
+    t.index ["deleted_at"], name: "index_steps_on_deleted_at"
     t.index ["workflow_id", "position"], name: "index_steps_on_workflow_id_and_position", unique: true
     t.index ["workflow_id"], name: "index_steps_on_workflow_id"
   end
@@ -588,10 +590,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_000000) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.string "wait_type", null: false
+    t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
+    t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
     t.index ["board_task_id"], name: "index_task_waits_on_board_task_id"
     t.index ["creator_id"], name: "index_task_waits_on_creator_id"
-    t.index "(metadata->>'repo_full_name')", name: "index_task_waits_on_metadata_repo_full_name"
-    t.index "((metadata->>'pr_number')::int)", name: "index_task_waits_on_metadata_pr_number"
     t.index ["status"], name: "index_task_waits_on_status"
     t.index ["wait_type", "status"], name: "index_task_waits_on_wait_type_and_status"
   end
