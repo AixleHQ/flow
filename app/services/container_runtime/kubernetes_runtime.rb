@@ -69,7 +69,7 @@ module ContainerRuntime
 
       handle = resolve_handle(id)
       normalized = normalize_tar_path(path)
-      return "" if normalized.blank? db/schema.rb
+      return "" if normalized.blank?
 
       output = Tempfile.new("palad-copy-from")
       output.binmode
