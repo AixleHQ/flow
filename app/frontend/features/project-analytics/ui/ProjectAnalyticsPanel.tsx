@@ -220,20 +220,23 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
     { skip: !projectId },
   );
 
-  const { data: sessionSourceData, isLoading: isSourceLoading, isError: isSourceError } = useGetSessionSourceBreakdownQuery(
-    { projectId: projectId!, scope, period },
-    { skip: !projectId },
-  );
+  const {
+    data: sessionSourceData,
+    isLoading: isSourceLoading,
+    isError: isSourceError,
+  } = useGetSessionSourceBreakdownQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
-  const { data: durationData, isLoading: isDurationLoading, isError: isDurationError } = useGetSessionDurationDistributionQuery(
-    { projectId: projectId!, scope, period },
-    { skip: !projectId },
-  );
+  const {
+    data: durationData,
+    isLoading: isDurationLoading,
+    isError: isDurationError,
+  } = useGetSessionDurationDistributionQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
-  const { data: costTokenData, isLoading: isCostTokenLoading, isError: isCostTokenError } = useGetCostTokenUsageQuery(
-    { projectId: projectId!, scope, period },
-    { skip: !projectId },
-  );
+  const {
+    data: costTokenData,
+    isLoading: isCostTokenLoading,
+    isError: isCostTokenError,
+  } = useGetCostTokenUsageQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
 
   const activityChartData = agentActivity ? buildActivityChartData(agentActivity) : [];
   const agentTypes = agentActivity?.agentTypes ?? [];

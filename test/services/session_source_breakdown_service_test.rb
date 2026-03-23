@@ -13,7 +13,9 @@ class SessionSourceBreakdownServiceTest < ActiveSupport::TestCase
   # ─── Helpers ─────────────────────────────────────────────────────────────────
 
   def create_session(project:, user:, session_type:, created_at: Time.current)
-    create(:terminal_session, project: project, user: user, session_type: session_type, created_at: created_at)
+    build(:terminal_session, project: project, user: user, session_type: session_type, created_at: created_at).tap do |s|
+      s.save!(validate: false)
+    end
   end
 
   def call_service(scope:, period: "30d", user: @admin, project: @project)
