@@ -1,7 +1,6 @@
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import AccountTreeIcon from '@mui/icons-material/AccountTree';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import BusinessIcon from '@mui/icons-material/Business';
 import FolderIcon from '@mui/icons-material/Folder';
 import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -176,7 +175,6 @@ const ScopeSelector = ({ scope, onScope }: { scope: AnalyticsScope; onScope: (v:
     {[
       { value: 'user' as const, icon: <PersonIcon sx={{ fontSize: 14 }} />, label: 'User' },
       { value: 'project' as const, icon: <FolderIcon sx={{ fontSize: 14 }} />, label: 'Project' },
-      { value: 'company' as const, icon: <BusinessIcon sx={{ fontSize: 14 }} />, label: 'Company' },
     ].map((item) => (
       <ToggleButton key={item.value} value={item.value}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

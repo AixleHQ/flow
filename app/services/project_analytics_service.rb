@@ -51,10 +51,6 @@ class ProjectAnalyticsService
     case scope
     when "user"
       project.terminal_sessions.where(user:)
-    when "company"
-      TerminalSession
-        .joins(:user)
-        .where(users: { company_id: project.company_id })
     else
       project.terminal_sessions
     end
@@ -74,11 +70,6 @@ class ProjectAnalyticsService
     case scope
     when "user"
       project.workflow_runs.where(user:, created_at: since..)
-    when "company"
-      WorkflowRun
-        .joins(:project)
-        .where(projects: { company_id: project.company_id })
-        .where(created_at: since..)
     else
       project.workflow_runs.where(created_at: since..)
     end

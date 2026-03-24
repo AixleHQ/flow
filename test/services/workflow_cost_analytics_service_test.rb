@@ -74,32 +74,6 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     assert { result.workflows.first.total_cost_cents == 200 }
   end
 
-  # ─── Scope: company ──────────────────────────────────────────────────────────
-
-  test "company scope aggregates runs across all company projects" do
-    other_project = create(:project, company: @company, owner: @admin)
-
-    create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 100, input_tokens: 200, output_tokens: 50)
-    create_workflow_run_with_cost(project: other_project, user: @employee, cost_cents: 150, input_tokens: 300, output_tokens: 100)
-
-    result = call_service(scope: "company")
-
-    assert { result.totals[:total_cost_cents] == 250 }
-  end
-
-  test "company scope excludes runs from other companies" do
-    other_company = create(:company)
-    other_user = create(:user, :admin, company: other_company)
-    other_project = create(:project, company: other_company, owner: other_user)
-    create_workflow_run_with_cost(project: other_project, user: other_user, cost_cents: 999, input_tokens: 1000, output_tokens: 500)
-
-    create_workflow_run_with_cost(project: @project, user: @admin, cost_cents: 100, input_tokens: 200, output_tokens: 50)
-
-    result = call_service(scope: "company")
-
-    assert { result.totals[:total_cost_cents] == 100 }
-  end
-
   # ─── Aggregate totals ────────────────────────────────────────────────────────
 
   test "aggregate_totals sums cost and tokens across all workflow rows" do

@@ -19,7 +19,6 @@ class WorkflowRun < ApplicationRecord
   scope :active, -> { where(state: %w[pending running paused]) }
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
   scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }
-  scope :for_company_in_period, ->(company_id, since) { joins(:project).where(projects: { company_id: company_id }, created_at: since..) }
 
   def can_run_non_interactive?
     workflow.steps.not_deleted.all?(&:allow_non_interactive)

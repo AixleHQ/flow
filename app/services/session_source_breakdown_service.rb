@@ -53,10 +53,6 @@ class SessionSourceBreakdownService
     case scope
     when "user"
       project.terminal_sessions.where(user: user)
-    when "company"
-      TerminalSession
-        .joins(:user)
-        .where(users: { company_id: project.company_id })
     else
       project.terminal_sessions
     end
