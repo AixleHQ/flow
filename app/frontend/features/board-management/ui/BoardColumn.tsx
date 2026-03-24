@@ -189,7 +189,7 @@ export const BoardColumnComponent = ({
 
   if (collapsed) {
     const sortedCollapsedTasks = [...tasks].sort((a, b) => a.position - b.position);
-    const visibleTasks = sortedCollapsedTasks.slice(0, 3);
+    const visibleTasks = sortedCollapsedTasks.slice(0, 10);
     const collapsedTaskIds = visibleTasks.map((t) => `task-${t.id}`);
 
     return (
