@@ -1,14 +1,92 @@
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Badge, Box, IconButton, Tooltip, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
+import { keyframes } from '@mui/system';
 
 import type { BoardColumn as BoardColumnType, BoardTask } from 'entities/board-task';
 
 import { SortableTaskCard } from './SortableTaskCard';
+
+const pulse = keyframes`
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+`;
+
+const ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
+
+function workflowIndicatorColor(state: string): string {
+  if (ACTIVE_STATES.has(state)) return '#1976d2';
+  if (state === 'failed') return '#d32f2f';
+  if (state === 'cancelled') return '#9e9e9e';
+  return '#2e7d32';
+}
+
+interface CollapsedTaskIndicatorProps {
+  task: BoardTask;
+  onClick?: (task: BoardTask) => void;
+}
+
+const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `task-${task.id}`,
+    data: { task },
+  });
+
+  const latestRun = task.recentWorkflowRuns[0];
+  const hasPendingWaits = task.pendingWaits.length > 0;
+
+  let color = '#9e9e9e';
+  let isActive = false;
+  if (latestRun) {
+    color = workflowIndicatorColor(latestRun.state);
+    isActive = ACTIVE_STATES.has(latestRun.state);
+  }
+  if (hasPendingWaits) {
+    color = '#eab308';
+    isActive = false;
+  }
+
+  const tooltipLines = [task.title];
+  if (latestRun) tooltipLines.push(`Status: ${latestRun.state}`);
+  if (hasPendingWaits) tooltipLines.push('Waiting');
+
+  return (
+    <Tooltip title={tooltipLines.join(' · ')} placement="right" arrow>
+      <Box
+        ref={setNodeRef}
+        style={{
+          transform: CSS.Transform.toString(transform),
+          transition,
+          opacity: isDragging ? 0.4 : 1,
+        }}
+        {...attributes}
+        {...listeners}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick?.(task);
+        }}
+        sx={{
+          width: 34,
+          height: 34,
+          borderRadius: '50%',
+          backgroundColor: color,
+          cursor: 'pointer',
+          flexShrink: 0,
+          ...(isActive && {
+            animation: `${pulse} 1.5s ease-in-out infinite`,
+          }),
+          '&:hover': { filter: 'brightness(1.2)' },
+          transition: 'filter 0.15s',
+        }}
+      />
+    </Tooltip>
+  );
+};
 
 interface BoardColumnProps {
   column: BoardColumnType;
@@ -123,19 +201,32 @@ export const BoardColumnComponent = ({
   const { setNodeRef, isOver } = useDroppable({ id: `column-${column.id}`, data: { columnId: column.id } });
 
   if (collapsed) {
+    const sortedCollapsedTasks = [...tasks].sort((a, b) => a.position - b.position);
+    const visibleTasks = sortedCollapsedTasks.slice(0, 3);
+    const collapsedTaskIds = sortedCollapsedTasks.map((t) => `task-${t.id}`);
+
     return (
-      <Tooltip title={`${column.name} (${tasks.length})`} placement="top" arrow>
-        <Box
-          sx={{ ...styles.collapsed, ...(isOver ? styles.columnOver : {}) }}
-          ref={setNodeRef}
-          onClick={() => onToggleCollapse?.(column.id)}
-        >
-          <Badge badgeContent={tasks.length} color="default" max={99}>
-            <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled' }} />
-          </Badge>
+      <Box
+        sx={{ ...styles.collapsed, ...(isOver ? styles.columnOver : {}) }}
+        ref={setNodeRef}
+        onClick={() => onToggleCollapse?.(column.id)}
+      >
+        <Badge badgeContent={tasks.length} color="default" max={99}>
+          <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+        </Badge>
+        <Tooltip title={column.name} placement="right" arrow>
           <Typography sx={styles.collapsedName}>{column.name}</Typography>
-        </Box>
-      </Tooltip>
+        </Tooltip>
+        {visibleTasks.length > 0 && (
+          <SortableContext items={collapsedTaskIds} strategy={verticalListSortingStrategy}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '6px', mt: 'auto', alignItems: 'center' }}>
+              {visibleTasks.map((task) => (
+                <CollapsedTaskIndicator key={task.id} task={task} onClick={onTaskClick} />
+              ))}
+            </Box>
+          </SortableContext>
+        )}
+      </Box>
     );
   }
 
