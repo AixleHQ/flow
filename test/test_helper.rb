@@ -21,6 +21,13 @@ Dir[File.expand_path("../support/**/*.rb", __FILE__)].sort.each { |file| require
 # Disable external web requests in tests
 WebMock.disable_net_connect!(allow_localhost: true, allow: "localhost")
 
+# Configure gitlab-ruby gem so the default client has a valid endpoint.
+# Without this, any code path that invokes Gitlab.client() without explicit
+# options (e.g. via def_delegators :client) raises MissingCredentials.
+Gitlab.configure do |c|
+  c.endpoint = ENV.fetch("GITLAB_ENDPOINT", "https://gitlab.com/api/v4")
+end
+
 class ActiveSupport::TestCase
   setup do
   end
