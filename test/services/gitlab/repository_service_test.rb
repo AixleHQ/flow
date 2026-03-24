@@ -46,7 +46,8 @@ module Gitlab
       mock_client = mock("gitlab_client")
       mock_token_service.expects(:client).returns(mock_client)
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
-      mock_client.expects(:projects).raises(::Gitlab::Error::Unauthorized.new("401 Unauthorized"))
+      mock_response = OpenStruct.new(code: 401, parsed_response: '{"message":"401 Unauthorized"}')
+      mock_client.expects(:projects).raises(::Gitlab::Error::Unauthorized.new(mock_response))
 
       result = Gitlab::RepositoryService.new(@integration).list_available
       assert_equal [], result
@@ -75,7 +76,8 @@ module Gitlab
       mock_client = mock("gitlab_client")
       mock_token_service.expects(:client).returns(mock_client)
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
-      mock_client.expects(:project).raises(::Gitlab::Error::NotFound.new("404 Not Found"))
+      mock_response = OpenStruct.new(code: 404, parsed_response: '{"message":"404 Not Found"}')
+      mock_client.expects(:project).raises(::Gitlab::Error::NotFound.new(mock_response))
 
       result = Gitlab::RepositoryService.new(@integration).find_repo("group/nonexistent")
       assert_nil result
@@ -87,7 +89,7 @@ module Gitlab
       mock_token_service.expects(:client).returns(mock_client)
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
 
-      branches = [OpenStruct.new(name: "main"), OpenStruct.new(name: "develop")]
+      branches = [ OpenStruct.new(name: "main"), OpenStruct.new(name: "develop") ]
       mock_client.expects(:branches).with("group/app").returns(branches)
 
       result = Gitlab::RepositoryService.new(@integration).list_branches("group/app")
@@ -95,7 +97,7 @@ module Gitlab
     end
 
     test "configure_webhook generates secret and calls GitLab API" do
-      repository = create(:repository, full_name: "group/app", integration: @integration)
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @company)
 
       mock_token_service = mock("token_service")
       mock_client = mock("gitlab_client")

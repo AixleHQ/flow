@@ -13,7 +13,8 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     @repository = create(:repository,
       full_name: "group/app",
       integration: @integration,
-      webhook_secret: @webhook_secret)
+      webhook_secret: @webhook_secret,
+      scope: @company)
   end
 
   # == Authentication ==
