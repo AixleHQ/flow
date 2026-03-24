@@ -1,5 +1,5 @@
 # Kubernetes targets
-.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-apply-dashboards kube-observability-install kube-observability-print-headlamp-token kube-observability-uninstall
+.PHONY: kube-help kube-status kube-setup kube-setup-prod kube-setup-staging kube-apply kube-apply-dev kube-apply-prod kube-apply-staging kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secrets-apply-staging kube-secret-edit kube-web-rollout kube-web-rollout-dev kube-web-rollout-prod kube-web-rollout-staging kube-mount-dev kube-rm kube-rm-prod kube-rm-staging kube-arc-install-controller kube-arc-apply-deploy-rbac kube-arc-install-runner-set kube-arc-install kube-observability-add-repos kube-observability-apply-dashboards kube-observability-install kube-observability-print-headlamp-token kube-observability-uninstall
 
 KUBE_CLUSTER_STORAGECLASS = ./kube/00-storageclass-gp3.yaml
 KUBE_DEV_DIR = ./kube/dev
@@ -42,7 +42,10 @@ kube-help:
 	@echo "  make kube-secrets-apply-prod    - Apply prod secret manifests explicitly"
 	@echo "  make kube-secrets-apply-staging - Apply staging secret manifests explicitly"
 	@echo "  make kube-secret-edit       - Edit one decoded secret key and patch it back, creating the secret if missing (SECRET_NAME=... SECRET_KEY=... [SECRET_NAMESPACE=...] [SECRET_TYPE=Opaque])"
-	@echo "  make kube-web-rollout       - Rollout restart web, worker-ruby, and mcp deployments"
+	@echo "  make kube-web-rollout       - Rollout restart dev web, worker-ruby, and mcp deployments"
+	@echo "  make kube-web-rollout-dev   - Rollout restart dev web, worker-ruby, and mcp deployments"
+	@echo "  make kube-web-rollout-prod  - Rollout restart prod web, worker-ruby, and mcp deployments"
+	@echo "  make kube-web-rollout-staging - Rollout restart staging web, worker-ruby, and mcp deployments"
 	@echo "  make kube-arc-install-controller - Install/upgrade ARC controller chart"
 	@echo "  make kube-arc-apply-deploy-rbac  - Apply deploy-runner ServiceAccount and rollout RBAC"
 	@echo "  make kube-arc-install-runner-set - Install/upgrade ARC runner scale set chart"
@@ -145,8 +148,16 @@ kube-secrets-apply-staging:
 	$(KUBECTL) apply -f $(KUBE_STAGING_SECRETS_DIR)
 
 # Restart web-related deployments to pick up new config/secrets
-kube-web-rollout:
+kube-web-rollout: kube-web-rollout-dev
+
+kube-web-rollout-dev:
+	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_DEV_NAMESPACE)
+
+kube-web-rollout-prod:
 	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_PROD_NAMESPACE)
+
+kube-web-rollout-staging:
+	$(KUBECTL) rollout restart deployment/web deployment/worker-ruby deployment/mcp -n $(KUBE_STAGING_NAMESPACE)
 
 # ── Observability stack (Helm) ────────────────────────────────────────────────
 OBSERVABILITY_HELM_DIR = ./kube/prod/observability/helm
