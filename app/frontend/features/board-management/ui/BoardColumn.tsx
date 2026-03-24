@@ -59,8 +59,8 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
         }}
         sx={{
           width: 34,
-          height: 34,
-          borderRadius: '50%',
+          height: 8,
+          borderRadius: '4px',
           backgroundColor: alpha(color, 0.75),
           cursor: 'pointer',
           flexShrink: 0,
