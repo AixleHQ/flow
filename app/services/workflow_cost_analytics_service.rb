@@ -29,7 +29,7 @@ class WorkflowCostAnalyticsService
   WorkflowRow = Struct.new(
     :workflow_id, :workflow_name,
     :total_cost_cents, :input_tokens, :output_tokens, :total_tokens,
-    :run_count,
+    :run_count, :total_duration_seconds, :avg_duration_seconds,
     keyword_init: true
   )
 
@@ -90,7 +90,10 @@ class WorkflowCostAnalyticsService
         "COALESCE(SUM(usage_statistics.output_tokens), 0) AS output_tokens",
         "COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
         "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
-        "SUM(usage_statistics.tokens), 0) AS total_tokens"
+        "SUM(usage_statistics.tokens), 0) AS total_tokens",
+        "COALESCE(SUM(EXTRACT(EPOCH FROM (workflow_runs.completed_at - workflow_runs.started_at))::bigint), 0) AS total_duration_seconds",
+        "COALESCE(AVG(EXTRACT(EPOCH FROM (workflow_runs.completed_at - workflow_runs.started_at))::bigint) " \
+        "FILTER (WHERE workflow_runs.completed_at IS NOT NULL AND workflow_runs.started_at IS NOT NULL), 0) AS avg_duration_seconds"
       )
       .order("total_cost_cents DESC")
 
@@ -102,7 +105,9 @@ class WorkflowCostAnalyticsService
         input_tokens: row.input_tokens.to_i,
         output_tokens: row.output_tokens.to_i,
         total_tokens: row.total_tokens.to_i,
-        run_count: row.run_count.to_i
+        run_count: row.run_count.to_i,
+        total_duration_seconds: row.total_duration_seconds.to_i,
+        avg_duration_seconds: row.avg_duration_seconds.to_i
       )
     end
   end

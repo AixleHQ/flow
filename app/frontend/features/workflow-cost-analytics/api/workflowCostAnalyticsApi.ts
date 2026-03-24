@@ -10,6 +10,8 @@ export interface WorkflowCostRow {
   outputTokens: number;
   totalTokens: number;
   runCount: number;
+  totalDurationSeconds: number;
+  avgDurationSeconds: number;
 }
 
 export interface WorkflowCostTimeSeriesPoint {
