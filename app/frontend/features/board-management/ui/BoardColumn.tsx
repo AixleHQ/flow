@@ -5,26 +5,13 @@ import AddIcon from '@mui/icons-material/Add';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { Badge, Box, IconButton, Tooltip, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { keyframes } from '@mui/system';
 
 import type { BoardColumn as BoardColumnType, BoardTask } from 'entities/board-task';
+import { WORKFLOW_ACTIVE_STATES, workflowPulse, workflowStatusColor } from 'entities/board-task';
 
 import { SortableTaskCard } from './SortableTaskCard';
-
-const pulse = keyframes`
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-`;
-
-const ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
-
-function workflowIndicatorColor(state: string): string {
-  if (ACTIVE_STATES.has(state)) return '#1976d2';
-  if (state === 'failed') return '#d32f2f';
-  if (state === 'cancelled') return '#9e9e9e';
-  return '#2e7d32';
-}
 
 interface CollapsedTaskIndicatorProps {
   task: BoardTask;
@@ -43,8 +30,8 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
   let color = '#9e9e9e';
   let isActive = false;
   if (latestRun) {
-    color = workflowIndicatorColor(latestRun.state);
-    isActive = ACTIVE_STATES.has(latestRun.state);
+    color = workflowStatusColor(latestRun.state);
+    isActive = WORKFLOW_ACTIVE_STATES.has(latestRun.state);
   }
   if (hasPendingWaits) {
     color = '#eab308';
@@ -74,11 +61,11 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
           width: 34,
           height: 34,
           borderRadius: '50%',
-          backgroundColor: color,
+          backgroundColor: alpha(color, 0.75),
           cursor: 'pointer',
           flexShrink: 0,
           ...(isActive && {
-            animation: `${pulse} 1.5s ease-in-out infinite`,
+            animation: `${workflowPulse} 1.5s ease-in-out infinite`,
           }),
           '&:hover': { filter: 'brightness(1.2)' },
           transition: 'filter 0.15s',
@@ -203,7 +190,7 @@ export const BoardColumnComponent = ({
   if (collapsed) {
     const sortedCollapsedTasks = [...tasks].sort((a, b) => a.position - b.position);
     const visibleTasks = sortedCollapsedTasks.slice(0, 3);
-    const collapsedTaskIds = sortedCollapsedTasks.map((t) => `task-${t.id}`);
+    const collapsedTaskIds = visibleTasks.map((t) => `task-${t.id}`);
 
     return (
       <Box
