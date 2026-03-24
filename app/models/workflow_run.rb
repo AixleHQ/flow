@@ -22,7 +22,7 @@ class WorkflowRun < ApplicationRecord
   scope :for_company_in_period, ->(company_id, since) { joins(:project).where(projects: { company_id: company_id }, created_at: since..) }
 
   def can_run_non_interactive?
-    workflow.steps.all?(&:allow_non_interactive)
+    workflow.steps.not_deleted.all?(&:allow_non_interactive)
   end
 
   def step_auto_run?(step_id)
