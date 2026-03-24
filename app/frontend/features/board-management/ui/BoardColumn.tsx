@@ -59,8 +59,8 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
         }}
         sx={{
           width: 34,
-          height: 34,
-          borderRadius: '50%',
+          height: 8,
+          borderRadius: '4px',
           backgroundColor: alpha(color, 0.75),
           cursor: 'pointer',
           flexShrink: 0,
@@ -189,7 +189,7 @@ export const BoardColumnComponent = ({
 
   if (collapsed) {
     const sortedCollapsedTasks = [...tasks].sort((a, b) => a.position - b.position);
-    const visibleTasks = sortedCollapsedTasks.slice(0, 3);
+    const visibleTasks = sortedCollapsedTasks.slice(0, 10);
     const collapsedTaskIds = visibleTasks.map((t) => `task-${t.id}`);
 
     return (
