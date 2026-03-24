@@ -54,7 +54,7 @@ class Api::V1::Company::Statistic::RecentActivityControllerTest < ActionControll
     board = create(:board, project: create(:project, company: @company, owner: @admin))
     column = create(:board_column, board: board)
     task = create(:board_task, board: board, board_column: column)
-    BoardActivity.create!(board: board, board_task: task, actor: @admin, event_type: "task_created", metadata: {})
+    BoardActivity.create!(board: board, board_task: task, actor: @admin, actor_type: :human, event_type: "task_created", metadata: {})
 
     sign_in @admin
 
@@ -87,7 +87,7 @@ class Api::V1::Company::Statistic::RecentActivityControllerTest < ActionControll
     other_board = create(:board, project: other_project)
     other_column = create(:board_column, board: other_board)
     other_task = create(:board_task, board: other_board, board_column: other_column)
-    BoardActivity.create!(board: other_board, board_task: other_task, actor: @other_admin, event_type: "task_created", metadata: {})
+    BoardActivity.create!(board: other_board, board_task: other_task, actor: @other_admin, actor_type: :human, event_type: "task_created", metadata: {})
 
     sign_in @admin
 
