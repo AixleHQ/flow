@@ -167,4 +167,98 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "not linked to this task's project"
   end
+
+  # == github_workflow_completed ==
+
+  test "creates a github_workflow_completed wait with valid params" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_workflow_completed",
+        repo_full_name: @repo_name,
+        run_id:         5000
+      },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal @task.id, data["task_id"]
+    assert_equal "github_workflow_completed", data["wait_type"]
+    assert_equal "pending", data["status"]
+    assert_equal @repo_name, data["metadata"]["repo_full_name"]
+    assert_equal 5000, data["metadata"]["run_id"]
+  end
+
+  test "creates a persisted TaskWait record for github_workflow_completed" do
+    assert_difference -> { TaskWait.count }, 1 do
+      InternalTools::BoardCreateWait.new(
+        params: {
+          task_id:        @task.id,
+          wait_type:      "github_workflow_completed",
+          repo_full_name: @repo_name,
+          run_id:         7
+        },
+        session: @session
+      ).execute
+    end
+  end
+
+  test "returns error when run_id is missing for github_workflow_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_workflow_completed",
+        repo_full_name: @repo_name
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "run_id must be a positive integer"
+  end
+
+  test "returns error when run_id is zero for github_workflow_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_workflow_completed",
+        repo_full_name: @repo_name,
+        run_id:         0
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "run_id must be a positive integer"
+  end
+
+  test "returns error when repo_full_name is missing for github_workflow_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:   @task.id,
+        wait_type: "github_workflow_completed",
+        run_id:    1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "repo_full_name is required"
+  end
+
+  test "returns error when repository is not linked to the project for github_workflow_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "github_workflow_completed",
+        repo_full_name: "other/unlinked-repo",
+        run_id:         1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not linked to this task's project"
+  end
 end

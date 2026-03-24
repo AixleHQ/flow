@@ -11,7 +11,7 @@
 # It's strongly recommended that you check this file into your version control system.
 
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_23_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -592,6 +592,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_160000) do
     t.datetime "updated_at", null: false
     t.string "wait_type", null: false
     t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
+    t.index "(((metadata ->> 'run_id'::text))::bigint)", name: "index_task_waits_on_metadata_run_id"
     t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
     t.index ["board_task_id"], name: "index_task_waits_on_board_task_id"
     t.index ["creator_id"], name: "index_task_waits_on_creator_id"

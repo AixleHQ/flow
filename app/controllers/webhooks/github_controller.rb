@@ -9,6 +9,8 @@ class Webhooks::GithubController < ActionController::API
     case event
     when "check_suite"
       handle_check_suite
+    when "workflow_run"
+      handle_workflow_run
     end
 
     head :ok
@@ -41,6 +43,28 @@ class Webhooks::GithubController < ActionController::API
         conclusion: conclusion
       )
     end
+  end
+
+  def handle_workflow_run
+    payload = request.request_parameters
+    return unless payload["action"] == "completed"
+
+    workflow_run = payload["workflow_run"]
+    return unless workflow_run.is_a?(Hash)
+
+    repo_full_name = payload.dig("repository", "full_name")
+    return if repo_full_name.blank?
+
+    run_id = Integer(workflow_run["id"], exception: false)
+    return unless run_id
+
+    conclusion = workflow_run["conclusion"]
+
+    ResolveGithubWorkflowJob.perform_later(
+      repo_full_name: repo_full_name,
+      run_id: run_id,
+      conclusion: conclusion
+    )
   end
 
   def verify_signature

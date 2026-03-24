@@ -6,7 +6,7 @@ class TaskWait < ApplicationRecord
   belongs_to :board_task
   belongs_to :creator, class_name: "User"
 
-  enumerize :wait_type, in: %i[github_checks_completed], predicates: true
+  enumerize :wait_type, in: %i[github_checks_completed github_workflow_completed], predicates: true
   enumerize :status, in: %i[pending resolved], default: :pending, predicates: true, scope: true
 
   validates :wait_type, presence: true
@@ -26,6 +26,13 @@ class TaskWait < ApplicationRecord
   scope :for_github_pr_number, ->(pr_number) {
     where(wait_type: "github_checks_completed")
       .where("(metadata->>'pr_number')::int = ?", pr_number.to_i)
+  }
+
+  # Scope waits by workflow run ID only — used after the query is already
+  # scoped to the correct project(s) via for_repository.
+  scope :for_github_workflow_run_id, ->(run_id) {
+    where(wait_type: "github_workflow_completed")
+      .where("(metadata->>'run_id')::bigint = ?", run_id.to_i)
   }
 
   # Scope waits to tasks whose boards belong to projects connected to the given

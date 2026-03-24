@@ -181,9 +181,10 @@ module Seeds
           type: "object",
           properties: {
             task_id:        { type: "integer", description: "Board task ID" },
-            wait_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed" },
-            repo_full_name: { type: "string",  description: "(github_checks_completed) Full repo name, e.g. owner/repo" },
-            pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" }
+            wait_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed, github_workflow_completed" },
+            repo_full_name: { type: "string",  description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo" },
+            pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" },
+            run_id:         { type: "integer", description: "(github_workflow_completed) GitHub Actions workflow run ID" }
           },
           required: %w[task_id wait_type]
         }

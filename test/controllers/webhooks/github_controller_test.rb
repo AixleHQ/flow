@@ -197,6 +197,90 @@ class Webhooks::GithubControllerTest < ActionController::TestCase
     assert_response :ok
   end
 
+  # == workflow_run event ==
+
+  test "does not enqueue job for workflow_run with non-completed action" do
+    payload = {
+      action: "requested",
+      workflow_run: { id: 1001, conclusion: nil },
+      repository: { full_name: "org/repo" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "workflow_run"
+
+    assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
+  test "enqueues ResolveGithubWorkflowJob for workflow_run completed" do
+    payload = {
+      action: "completed",
+      workflow_run: { id: 9999, conclusion: "success" },
+      repository: { full_name: "org/app" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "workflow_run"
+
+    assert_enqueued_jobs 1, only: ResolveGithubWorkflowJob do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
+  test "enqueues ResolveGithubWorkflowJob with correct arguments" do
+    payload = {
+      action: "completed",
+      workflow_run: { id: 42, conclusion: "failure" },
+      repository: { full_name: "org/myrepo" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "workflow_run"
+
+    assert_enqueued_with(job: ResolveGithubWorkflowJob,
+                         args: [ { repo_full_name: "org/myrepo", run_id: 42, conclusion: "failure" } ]) do
+      post_raw(payload)
+    end
+  end
+
+  test "does not enqueue job for workflow_run with missing repository key" do
+    payload = {
+      action: "completed",
+      workflow_run: { id: 5, conclusion: "success" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "workflow_run"
+
+    assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
+  test "does not enqueue job for workflow_run with missing workflow_run key" do
+    payload = {
+      action: "completed",
+      repository: { full_name: "org/app" }
+    }.to_json
+
+    @request.headers["X-Hub-Signature-256"] = sign_payload(payload)
+    @request.headers["X-GitHub-Event"] = "workflow_run"
+
+    assert_no_enqueued_jobs do
+      post_raw(payload)
+    end
+
+    assert_response :ok
+  end
+
   private
 
   def sign_payload(body)

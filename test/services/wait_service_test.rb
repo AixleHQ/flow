@@ -139,4 +139,90 @@ class WaitServiceTest < ActiveSupport::TestCase
       conclusion: "success"
     )
   end
+
+  # == resolve_github_workflow ==
+
+  test "resolves a pending workflow wait matching repo and run_id" do
+    wait = @task.task_waits.create!(
+      wait_type: :github_workflow_completed,
+      metadata:  { repo_full_name: @repo_name, run_id: 1001 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).with(
+      wait: wait,
+      resolution_data: { conclusion: "success" }
+    ).once
+
+    WaitService.resolve_github_workflow(
+      repo_full_name: @repo_name,
+      run_id: 1001,
+      conclusion: "success"
+    )
+  end
+
+  test "does nothing when no workflow waits match the repo" do
+    @task.task_waits.create!(
+      wait_type: :github_workflow_completed,
+      metadata:  { repo_full_name: "other/repo", run_id: 1001 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_github_workflow(
+      repo_full_name: @repo_name,
+      run_id: 1001,
+      conclusion: "success"
+    )
+  end
+
+  test "does nothing when no workflow waits match the run_id" do
+    @task.task_waits.create!(
+      wait_type: :github_workflow_completed,
+      metadata:  { repo_full_name: @repo_name, run_id: 9999 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_github_workflow(
+      repo_full_name: @repo_name,
+      run_id: 1001,
+      conclusion: "success"
+    )
+  end
+
+  test "does nothing when no pending workflow waits exist" do
+    @task.task_waits.create!(
+      wait_type: :github_workflow_completed,
+      status:    :resolved,
+      metadata:  { repo_full_name: @repo_name, run_id: 1001 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_github_workflow(
+      repo_full_name: @repo_name,
+      run_id: 1001,
+      conclusion: "success"
+    )
+  end
+
+  test "does not match github_checks_completed waits when resolving workflow" do
+    @task.task_waits.create!(
+      wait_type: :github_checks_completed,
+      metadata:  { repo_full_name: @repo_name, pr_number: 42 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_github_workflow(
+      repo_full_name: @repo_name,
+      run_id: 42,
+      conclusion: "success"
+    )
+  end
 end
