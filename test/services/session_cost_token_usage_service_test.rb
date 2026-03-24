@@ -67,34 +67,6 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
     assert { result.totals.total_tokens == 300 }
   end
 
-  # ─── Scope: company ──────────────────────────────────────────────────────────
-
-  test "company scope aggregates sessions across all company projects" do
-    other_project = create(:project, company: @company, owner: @admin)
-
-    create_session_with_usage(project: @project, user: @admin, cost_cents: 100, total_tokens: 200)
-    create_session_with_usage(project: other_project, user: @employee, cost_cents: 150, total_tokens: 300)
-
-    result = call_service(scope: "company")
-
-    assert { result.totals.total_cost_cents == 250 }
-    assert { result.totals.total_tokens == 500 }
-  end
-
-  test "company scope excludes sessions from other companies" do
-    other_company = create(:company)
-    other_user    = create(:user, :admin, company: other_company)
-    other_project = create(:project, company: other_company, owner: other_user)
-    create_session_with_usage(project: other_project, user: other_user, cost_cents: 999, total_tokens: 9999)
-
-    create_session_with_usage(project: @project, user: @admin, cost_cents: 100, total_tokens: 200)
-
-    result = call_service(scope: "company")
-
-    assert { result.totals.total_cost_cents == 100 }
-    assert { result.totals.total_tokens == 200 }
-  end
-
   # ─── Aggregate totals ────────────────────────────────────────────────────────
 
   test "totals sums cost and tokens across all sessions" do

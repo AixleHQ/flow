@@ -71,33 +71,6 @@ class SessionDurationDistributionServiceTest < ActiveSupport::TestCase
     assert { bucket_count(result, "0\u20131 min") == 1 }
   end
 
-  # ─── Scope: company ──────────────────────────────────────────────────────────
-
-  test "company scope aggregates sessions across all company projects" do
-    other_project = create(:project, company: @company, owner: @admin)
-
-    create_finished_session(project: @project, user: @admin, duration_seconds: 30)
-    create_finished_session(project: other_project, user: @employee, duration_seconds: 30)
-
-    result = call_service(scope: "company")
-
-    assert { bucket_count(result, "0\u20131 min") == 2 }
-  end
-
-  test "company scope excludes sessions from other companies" do
-    other_company = create(:company)
-    other_user    = create(:user, :admin, company: other_company)
-    other_project = create(:project, company: other_company, owner: other_user)
-    create_finished_session(project: other_project, user: other_user, duration_seconds: 30)
-
-    create_finished_session(project: @project, user: @admin, duration_seconds: 200)
-
-    result = call_service(scope: "company")
-
-    assert { result.buckets.sum(&:count) == 1 }
-    assert { bucket_count(result, "1\u20135 min") == 1 }
-  end
-
   # ─── Bucket assignment ───────────────────────────────────────────────────────
 
   test "assigns sessions to the correct buckets based on duration" do

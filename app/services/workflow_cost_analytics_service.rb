@@ -64,8 +64,6 @@ class WorkflowCostAnalyticsService
     case scope
     when "user"
       WorkflowRun.for_user_in_project(project, user, since)
-    when "company"
-      WorkflowRun.for_company_in_period(project.company_id, since)
     else
       WorkflowRun.for_project_in_period(project, since)
     end

@@ -63,34 +63,6 @@ class SessionSourceBreakdownServiceTest < ActiveSupport::TestCase
     assert { result.sources.first.count == 1 }
   end
 
-  # ─── Scope: company ──────────────────────────────────────────────────────────
-
-  test "company scope aggregates sessions across all company projects" do
-    other_project = create(:project, company: @company, owner: @admin)
-
-    create_session(project: @project, user: @admin, session_type: "agent_session")
-    create_session(project: other_project, user: @employee, session_type: "agent_session")
-
-    result = call_service(scope: "company")
-
-    agent_row = result.sources.find { |s| s.session_type == "agent_session" }
-    assert { agent_row.count == 2 }
-  end
-
-  test "company scope excludes sessions from other companies" do
-    other_company = create(:company)
-    other_user    = create(:user, :admin, company: other_company)
-    other_project = create(:project, company: other_company, owner: other_user)
-    create_session(project: other_project, user: other_user, session_type: "agent_session")
-
-    create_session(project: @project, user: @admin, session_type: "workflow_step")
-
-    result = call_service(scope: "company")
-
-    assert { result.sources.size == 1 }
-    assert { result.sources.first.session_type == "workflow_step" }
-  end
-
   # ─── Label mapping ───────────────────────────────────────────────────────────
 
   test "maps known session types to human-readable labels" do

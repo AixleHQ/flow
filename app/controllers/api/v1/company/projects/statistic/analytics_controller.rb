@@ -9,7 +9,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def show
               result = ProjectAnalyticsService.new(
@@ -31,7 +31,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/agent_activity
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def agent_activity
               result = AgentActivityService.new(
@@ -64,7 +64,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/session_source_breakdown
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def session_source_breakdown
               result = SessionSourceBreakdownService.new(
@@ -84,7 +84,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/session_duration_distribution
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def session_duration_distribution
               result = SessionDurationDistributionService.new(
@@ -104,7 +104,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/cost_token_usage
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def cost_token_usage
               result = SessionCostTokenUsageService.new(

@@ -103,14 +103,6 @@ class Api::V1::Company::Projects::Statistic::WorkflowCostsControllerTest < Actio
     assert_response :success
   end
 
-  test "#show accepts scope=company" do
-    sign_in @admin
-
-    get :show, params: { project_id: @project.id, scope: "company" }
-
-    assert_response :success
-  end
-
   # ====== Period param ======
 
   test "#show accepts period=7d" do
