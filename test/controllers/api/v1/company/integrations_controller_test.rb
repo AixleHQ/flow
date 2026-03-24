@@ -202,6 +202,41 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
     assert { json["data"]["status"] == "error" }
   end
 
+  test "#create creates gitlab integration with valid PAT" do
+    sign_in @admin
+
+    mock_service = mock("token_service")
+    mock_service.expects(:verify_token).returns({ username: "gitlab-user" })
+    Gitlab::TokenService.expects(:new).returns(mock_service)
+
+    assert_difference("Integration.count", 1) do
+      post :create, params: { provider: "gitlab", personal_access_token: "glpat-valid" }
+    end
+
+    assert_response :created
+    json = response.parsed_body
+    assert { json["data"]["name"] == "gitlab-user" }
+    assert { json["data"]["status"] == "active" }
+    assert { json["data"]["provider"] == "gitlab" }
+  end
+
+  test "#create sets error status when gitlab PAT is invalid" do
+    sign_in @admin
+
+    Gitlab::TokenService.expects(:new).raises(
+      Gitlab::TokenService::AuthenticationError.new("Invalid PAT")
+    )
+
+    assert_difference("Integration.count", 1) do
+      post :create, params: { provider: "gitlab", personal_access_token: "glpat-bad" }
+    end
+
+    assert_response :created
+    json = response.parsed_body
+    assert { json["data"]["status"] == "error" }
+    assert { json["data"]["provider"] == "gitlab" }
+  end
+
   test "#create requires admin role" do
     sign_in @employee
     post :create, params: { installation_id: "12345" }

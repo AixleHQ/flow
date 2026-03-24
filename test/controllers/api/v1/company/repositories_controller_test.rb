@@ -8,7 +8,10 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     @admin = create(:user, :admin, company: @company)
     @employee = create(:user, :employee, company: @company)
     @integration = create(:integration, :github, :active, company: @company, connected_by: @admin)
+    @gitlab_integration = create(:integration, :gitlab, :active, company: @company, connected_by: @admin)
     @repo = create(:repository, full_name: "org/app", scope: @company, integration: @integration)
+    @gitlab_repo = create(:repository, full_name: "group/gl-app", scope: @company,
+      integration: @gitlab_integration, webhook_secret: "test-secret-abc")
   end
 
   # ====== INDEX ======
@@ -69,6 +72,26 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     assert_response :unprocessable_entity
   end
 
+  test "#create with gitlab integration configures webhook" do
+    sign_in @admin
+    Gitlab::RepositoryService.any_instance.expects(:find_repo).with("group/new-repo").returns({
+      full_name: "group/new-repo",
+      default_branch: "main",
+      clone_url: "https://gitlab.com/group/new-repo.git",
+      is_private: false,
+      description: "GitLab repo"
+    })
+    Gitlab::RepositoryService.any_instance.expects(:configure_webhook).once
+
+    assert_difference("Repository.count", 1) do
+      post :create, params: { integration_id: @gitlab_integration.id, full_name: "group/new-repo" }
+    end
+
+    assert_response :created
+    json = response.parsed_body
+    assert { json["data"]["full_name"] == "group/new-repo" }
+  end
+
   test "#create requires admin" do
     sign_in @employee
     post :create, params: { integration_id: @integration.id, full_name: "org/new" }
@@ -108,6 +131,36 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
   test "#available requires admin" do
     sign_in @employee
     get :available, params: { integration_id: @integration.id }
+    assert_response :forbidden
+  end
+
+  # ====== WEBHOOK_INFO ======
+
+  test "#webhook_info returns webhook url and secret for gitlab repository" do
+    sign_in @admin
+
+    get :webhook_info, params: { id: @gitlab_repo.id }
+
+    assert_response :success
+    json = response.parsed_body
+    assert { json["url"].include?("/webhooks/gitlab") }
+    assert { json["secret_token"] == "test-secret-abc" }
+    assert { json["trigger"] == "Pipeline events" }
+  end
+
+  test "#webhook_info returns 422 for non-gitlab repository" do
+    sign_in @admin
+
+    get :webhook_info, params: { id: @repo.id }
+
+    assert_response :unprocessable_entity
+    json = response.parsed_body
+    assert { json["error"].include?("GitLab") }
+  end
+
+  test "#webhook_info requires admin" do
+    sign_in @employee
+    get :webhook_info, params: { id: @gitlab_repo.id }
     assert_response :forbidden
   end
 end

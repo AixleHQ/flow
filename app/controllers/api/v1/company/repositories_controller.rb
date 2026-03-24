@@ -33,9 +33,7 @@ module Api
             purpose: params[:purpose]
           )
 
-          if integration.gitlab?
-            Gitlab::RepositoryService.new(integration).configure_webhook(repository)
-          end
+          repository_service(integration).configure_webhook(repository)
 
           respond_with repository, serializer: RepositorySerializer
         end

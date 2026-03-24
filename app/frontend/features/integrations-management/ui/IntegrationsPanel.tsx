@@ -16,12 +16,15 @@ import {
   DialogTitle,
   IconButton,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
 import { useState, type FC } from 'react';
 
 import {
+  useCreateGitlabIntegrationMutation,
+  useCreateProjectGitlabIntegrationMutation,
   useDeleteIntegrationMutation,
   useDeleteProjectIntegrationMutation,
   useGetCompanyIntegrationsQuery,
@@ -92,8 +95,13 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
 
   const [deleteCompanyIntegration] = useDeleteIntegrationMutation();
   const [deleteProjectIntegration] = useDeleteProjectIntegrationMutation();
+  const [createGitlabIntegration, { isLoading: isCreatingGitlab }] = useCreateGitlabIntegrationMutation();
+  const [createProjectGitlabIntegration, { isLoading: isCreatingProjectGitlab }] =
+    useCreateProjectGitlabIntegrationMutation();
   const { enqueueSnackbar } = useSnackbar();
   const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
+  const [gitlabDialogOpen, setGitlabDialogOpen] = useState(false);
+  const [gitlabPat, setGitlabPat] = useState('');
 
   const canRemove = (integration: Integration) => {
     if (projectId == null) return true;
@@ -131,6 +139,22 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
     }
   };
 
+  const handleConnectGitlab = async () => {
+    if (!gitlabPat.trim()) return;
+    try {
+      if (projectId != null) {
+        await createProjectGitlabIntegration({ projectId, personalAccessToken: gitlabPat.trim() }).unwrap();
+      } else {
+        await createGitlabIntegration({ personalAccessToken: gitlabPat.trim() }).unwrap();
+      }
+      enqueueSnackbar('GitLab integration connected', { variant: 'success' });
+      setGitlabDialogOpen(false);
+      setGitlabPat('');
+    } catch {
+      enqueueSnackbar('Failed to connect GitLab integration', { variant: 'error' });
+    }
+  };
+
   if (isLoading) {
     return (
       <Box sx={styles.loadingContainer}>
@@ -146,7 +170,26 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
   const renderCard = (integration: Integration) => (
     <Card key={`${integration.scope}-${integration.id}`} variant="outlined" sx={styles.card}>
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, '&:last-child': { pb: 2 } }}>
-        <GitHubIcon sx={{ fontSize: 32, color: 'text.secondary' }} />
+        {integration.provider === 'gitlab' ? (
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              backgroundColor: '#fc6d26',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 700,
+              color: '#fff',
+            }}
+          >
+            GL
+          </Box>
+        ) : (
+          <GitHubIcon sx={{ fontSize: 32, color: 'text.secondary' }} />
+        )}
         <Box sx={{ flex: 1 }}>
           <Typography variant="subtitle1" fontWeight={600}>
             {integration.name}
@@ -190,9 +233,14 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
               : 'Connect external services to your company'}
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<GitHubIcon />} onClick={handleConnectGithub}>
-          Connect GitHub
-        </Button>
+        <Stack direction="row" spacing={1}>
+          <Button variant="outlined" onClick={() => setGitlabDialogOpen(true)}>
+            Connect GitLab
+          </Button>
+          <Button variant="contained" startIcon={<GitHubIcon />} onClick={handleConnectGithub}>
+            Connect GitHub
+          </Button>
+        </Stack>
       </Box>
 
       {showMainEmpty ? (
@@ -240,6 +288,51 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
           <Button onClick={() => setDeleteTarget(null)}>Cancel</Button>
           <Button onClick={handleDelete} color="error" variant="contained">
             Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={gitlabDialogOpen}
+        onClose={() => {
+          setGitlabDialogOpen(false);
+          setGitlabPat('');
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Connect GitLab</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Enter a GitLab Personal Access Token with <strong>api</strong> scope to connect your GitLab account.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Personal Access Token"
+            type="password"
+            value={gitlabPat}
+            onChange={(e) => setGitlabPat(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConnectGitlab();
+            }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setGitlabDialogOpen(false);
+              setGitlabPat('');
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConnectGitlab}
+            variant="contained"
+            disabled={!gitlabPat.trim() || isCreatingGitlab || isCreatingProjectGitlab}
+          >
+            Connect
           </Button>
         </DialogActions>
       </Dialog>

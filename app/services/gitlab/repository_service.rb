@@ -8,7 +8,7 @@ module Gitlab
 
     def list_available
       client = token_service.client
-      projects = client.projects(membership: true, per_page: 100)
+      projects = client.projects(membership: true, per_page: 100, auto_paginate: true)
       projects.map { |proj| map_project(proj) }
     rescue ::Gitlab::Error::Error => e
       Rails.logger.warn("[Gitlab::RepositoryService] Failed to list repos: #{e.message}")
@@ -44,9 +44,6 @@ module Gitlab
         token: webhook_secret,
         pipeline_events: true
       )
-      webhook_secret
-    rescue ::Gitlab::Error::Error => e
-      Rails.logger.warn("[Gitlab::RepositoryService] Failed to configure webhook for #{repository.full_name}: #{e.message}")
       webhook_secret
     end
 

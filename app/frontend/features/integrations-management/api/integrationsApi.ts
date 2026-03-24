@@ -1,7 +1,7 @@
 import { baseApi, QueryTag } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-import type { Integration, CreateGithubIntegrationRequest } from '../lib/types';
+import type { Integration, CreateGithubIntegrationRequest, CreateGitlabIntegrationRequest } from '../lib/types';
 
 interface IntegrationsResponse {
   items: Integration[];
@@ -53,6 +53,29 @@ export const integrationsApi = baseApi.injectEndpoints({
       ],
     }),
 
+    createGitlabIntegration: builder.mutation<Integration, CreateGitlabIntegrationRequest>({
+      query: (data) => ({
+        url: Routes.backend.apiV1CompanyIntegrationsPath(),
+        method: 'POST',
+        data: { provider: 'gitlab', personal_access_token: data.personalAccessToken },
+      }),
+      invalidatesTags: [QueryTag.Integrations],
+    }),
+
+    createProjectGitlabIntegration: builder.mutation<
+      Integration,
+      { projectId: number } & CreateGitlabIntegrationRequest
+    >({
+      query: ({ projectId, personalAccessToken }) => ({
+        url: Routes.backend.apiV1CompanyProjectIntegrationsPath(projectId),
+        method: 'POST',
+        data: { provider: 'gitlab', personal_access_token: personalAccessToken },
+      }),
+      invalidatesTags: (_result, _err, { projectId }) => [
+        { type: QueryTag.ProjectIntegrations, id: String(projectId) },
+      ],
+    }),
+
     deleteIntegration: builder.mutation<void, number>({
       query: (id) => ({
         url: Routes.backend.apiV1CompanyIntegrationPath(id),
@@ -78,6 +101,8 @@ export const {
   useGetProjectIntegrationsQuery,
   useCreateGithubIntegrationMutation,
   useCreateProjectGithubIntegrationMutation,
+  useCreateGitlabIntegrationMutation,
+  useCreateProjectGitlabIntegrationMutation,
   useDeleteIntegrationMutation,
   useDeleteProjectIntegrationMutation,
 } = integrationsApi;
