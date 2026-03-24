@@ -14,7 +14,7 @@ class WorkflowDuplicator
         config: @source.config
       )
 
-      @source.steps.order(:position).each do |step|
+      @source.steps.not_deleted.order(:position).each do |step|
         duplicate_step(step, new_workflow)
       end
 

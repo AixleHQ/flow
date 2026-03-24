@@ -20,10 +20,36 @@ class Step < ApplicationRecord
 
   default_scope { order(:position) }
 
+  scope :not_deleted, -> { where(deleted_at: nil) }
+
+  def soft_delete!
+    update_column(:deleted_at, Time.current)
+  end
+
+  def deleted?
+    deleted_at.present?
+  end
+
+  def destroy
+    dependent = workflow.steps.not_deleted.where.not(id: id)
+                        .where("depends_on_step_ids @> ?::jsonb", [ id ].to_json)
+    if dependent.any?
+      errors.add(:base, "Cannot delete step: #{dependent.pluck(:name).join(', ')} depend on it")
+      return false
+    end
+
+    if step_runs.exists?
+      soft_delete!
+      self
+    else
+      super
+    end
+  end
+
   def dependency_steps
     return Step.none if depends_on_step_ids.blank?
 
-    workflow.steps.where(id: depends_on_step_ids)
+    workflow.steps.not_deleted.where(id: depends_on_step_ids)
   end
 
   def root?
@@ -40,7 +66,7 @@ class Step < ApplicationRecord
       return
     end
 
-    sibling_ids = workflow.steps.where.not(id: id).pluck(:id)
+    sibling_ids = workflow.steps.not_deleted.where.not(id: id).pluck(:id)
     invalid_ids = depends_on_step_ids - sibling_ids
     if invalid_ids.any?
       errors.add(:depends_on_step_ids, "contains invalid step ids: #{invalid_ids.join(', ')}")

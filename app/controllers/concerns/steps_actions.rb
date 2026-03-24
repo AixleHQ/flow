@@ -4,12 +4,12 @@ module StepsActions
   extend ActiveSupport::Concern
 
   def index
-    steps = current_workflow.steps.includes(:sub_steps)
+    steps = current_workflow.steps.not_deleted.includes(:sub_steps)
     respond_with steps, each_serializer: StepSerializer
   end
 
   def show
-    step = current_workflow.steps.find(params[:id])
+    step = current_workflow.steps.not_deleted.find(params[:id])
     respond_with step, serializer: StepSerializer
   end
 
@@ -20,13 +20,13 @@ module StepsActions
   end
 
   def update
-    step = current_workflow.steps.find(params[:id])
+    step = current_workflow.steps.not_deleted.find(params[:id])
     step.update(step_params)
     respond_with step, serializer: StepSerializer
   end
 
   def destroy
-    step = current_workflow.steps.find(params[:id])
+    step = current_workflow.steps.not_deleted.find(params[:id])
     step.destroy
     respond_with step
   end
@@ -38,7 +38,7 @@ module StepsActions
     ActiveRecord::Base.transaction do
       current_workflow.steps.update_all("position = position + 10000")
       positions.each do |step_id, new_position|
-        current_workflow.steps.find(step_id).update_column(:position, new_position.to_i)
+        current_workflow.steps.not_deleted.find(step_id).update_column(:position, new_position.to_i)
       end
     end
     head :ok

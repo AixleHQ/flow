@@ -14,6 +14,18 @@ module Api
               project_accessible?
             end
 
+            def session_source_breakdown?
+              project_accessible?
+            end
+
+            def session_duration_distribution?
+              project_accessible?
+            end
+
+            def cost_token_usage?
+              project_accessible?
+            end
+
             private
 
             def project

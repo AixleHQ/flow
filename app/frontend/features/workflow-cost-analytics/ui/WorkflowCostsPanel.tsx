@@ -1,3 +1,4 @@
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 import TokenIcon from '@mui/icons-material/Token';
 import { Box, Card, Chip, Skeleton, Typography } from '@mui/material';
@@ -22,6 +23,16 @@ import { formatCostCents, formatTokens } from 'shared/lib';
 import { useGetWorkflowCostAnalyticsQuery } from '../api/workflowCostAnalyticsApi';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const formatDuration = (seconds: number): string => {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
+};
 
 const WORKFLOW_COLORS = [
   '#2196f3',
@@ -178,6 +189,17 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
           value: formatCostCents(totals.avgCostCentsPerWorkflow),
           icon: <AttachMoneyIcon sx={{ fontSize: 14 }} />,
         },
+        {
+          label: 'Avg Time / Workflow',
+          value: formatDuration(
+            (() => {
+              const totalRuns = workflows.reduce((sum, w) => sum + w.runCount, 0);
+              const totalSeconds = workflows.reduce((sum, w) => sum + w.totalDurationSeconds, 0);
+              return totalRuns > 0 ? Math.round(totalSeconds / totalRuns) : 0;
+            })(),
+          ),
+          icon: <AccessTimeIcon sx={{ fontSize: 14 }} />,
+        },
       ]
     : [];
 
@@ -195,7 +217,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
       {/* ── Summary Stats ─────────────────────────────────────────── */}
       <Box sx={styles.statsGrid}>
         {isLoading || !projectId
-          ? Array.from({ length: 6 }).map((_, i) => (
+          ? Array.from({ length: 7 }).map((_, i) => (
               <Card key={i} sx={styles.statCard} elevation={0}>
                 <Skeleton variant="text" width={100} height={16} sx={{ marginBottom: '8px' }} />
                 <Skeleton variant="text" width={80} height={34} />
@@ -358,7 +380,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 120px 100px 100px 100px 80px',
+                gridTemplateColumns: '1fr 120px 100px 100px 100px 80px 90px 90px',
                 gap: '8px',
                 padding: '8px 0',
                 borderBottom: '1px solid',
@@ -366,7 +388,16 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                 mb: 0.5,
               }}
             >
-              {['Workflow', 'Total Cost', 'Input Tokens', 'Output Tokens', 'Total Tokens', 'Runs'].map((h) => (
+              {[
+                'Workflow',
+                'Total Cost',
+                'Input Tokens',
+                'Output Tokens',
+                'Total Tokens',
+                'Runs',
+                'Avg Time',
+                'Total Time',
+              ].map((h) => (
                 <Typography
                   key={h}
                   sx={{ fontSize: '11px', color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.4px' }}
@@ -383,7 +414,7 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: '1fr 120px 100px 100px 100px 80px',
+                      gridTemplateColumns: '1fr 120px 100px 100px 100px 80px 90px 90px',
                       gap: '8px',
                       width: '100%',
                       alignItems: 'center',
@@ -424,6 +455,12 @@ const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProp
                       size="small"
                       sx={{ fontSize: '11px', height: 20, backgroundColor: 'background.elevated' }}
                     />
+                    <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>
+                      {formatDuration(w.avgDurationSeconds)}
+                    </Typography>
+                    <Typography sx={{ fontSize: '13px', color: 'text.secondary' }}>
+                      {formatDuration(w.totalDurationSeconds)}
+                    </Typography>
                   </Box>
                 </Box>
               );

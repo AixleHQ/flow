@@ -167,6 +167,11 @@ export function apiV1CompanyStatisticTopAgentsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "top_agents" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /api/v1/company/statistic/recent_activity(.:format) */
+export function apiV1CompanyStatisticRecentActivityPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "recent_activity" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /api/v1/company/integrations/github_setup(.:format) */
 export function githubSetupApiV1CompanyIntegrationsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -490,6 +495,21 @@ export function apiV1CompanyProjectStatisticWorkflowCostsPath(project_id: Scalar
 /** /api/v1/company/projects/:project_id/statistic/analytics/agent_activity(.:format) */
 export function agentActivityApiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "agent_activity" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/analytics/session_source_breakdown(.:format) */
+export function sessionSourceBreakdownApiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "session_source_breakdown" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/analytics/session_duration_distribution(.:format) */
+export function sessionDurationDistributionApiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "session_duration_distribution" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/analytics/cost_token_usage(.:format) */
+export function costTokenUsageApiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "cost_token_usage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/company/projects/:project_id/terminal_sessions(.:format) */
