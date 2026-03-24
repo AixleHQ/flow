@@ -26,6 +26,5 @@ export enum QueryTag {
   WorkflowRunStats = 'WorkflowRunStats',
   WorkflowCostAnalytics = 'WorkflowCostAnalytics',
   BoardTaskDistribution = 'BoardTaskDistribution',
-  TopAgentsSessions = 'TopAgentsSessions',
   RecentActivity = 'RecentActivity',
 }

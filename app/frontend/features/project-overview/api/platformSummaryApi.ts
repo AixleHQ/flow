@@ -6,16 +6,13 @@ export interface PlatformSummary {
   totalSpendCents: number;
   workflowsCount: number;
   boardTasksCount: number;
-  usersCount: number;
-  agentsCount: number;
-  projectsCount: number;
 }
 
 export const platformSummaryApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getPlatformSummary: builder.query<PlatformSummary, void>({
-      query: () => ({
-        url: Routes.backend.apiV1CompanyStatisticOverviewPath(),
+    getPlatformSummary: builder.query<PlatformSummary, { projectId: number }>({
+      query: ({ projectId }) => ({
+        url: Routes.backend.apiV1CompanyProjectStatisticOverviewPath(projectId),
         method: 'GET',
       }),
       providesTags: [QueryTag.PlatformSummary],

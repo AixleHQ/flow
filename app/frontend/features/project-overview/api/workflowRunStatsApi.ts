@@ -11,9 +11,9 @@ export interface WorkflowRunStats {
 
 export const workflowRunStatsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getWorkflowRunStats: builder.query<WorkflowRunStats, void>({
-      query: () => ({
-        url: Routes.backend.apiV1CompanyStatisticWorkflowRunsPath(),
+    getWorkflowRunStats: builder.query<WorkflowRunStats, { projectId: number }>({
+      query: ({ projectId }) => ({
+        url: Routes.backend.apiV1CompanyProjectStatisticWorkflowRunsPath(projectId),
         method: 'GET',
       }),
       providesTags: [QueryTag.WorkflowRunStats],

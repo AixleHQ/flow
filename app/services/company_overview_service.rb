@@ -3,30 +3,55 @@
 class CompanyOverviewService
   Result = Struct.new(
     :sessions_launched, :total_spend_cents, :workflows_count,
-    :board_tasks_count, :users_count, :agents_count, :projects_count,
+    :board_tasks_count,
     keyword_init: true
   )
 
-  def initialize(company)
+  def initialize(company, project: nil)
     @company = company
+    @project = project
   end
 
   def call
     Result.new(
-      sessions_launched: company.terminal_sessions.count,
+      sessions_launched: sessions_scope.count,
       total_spend_cents: UsageStatistic
         .joins(terminal_session: :user)
-        .where(users: { company_id: company.id })
+        .merge(sessions_scope)
         .sum(:cost_cents),
-      workflows_count: Workflow.belonging_to_company(company).count,
-      board_tasks_count: BoardTask.for_company(company).count,
-      users_count: company.users.count,
-      agents_count: Agent.belonging_to_company(company).count,
-      projects_count: company.projects.count
+      workflows_count: workflows_scope.count,
+      board_tasks_count: board_tasks_scope.count
     )
   end
 
   private
 
-  attr_reader :company
+  attr_reader :company, :project
+
+  def sessions_scope
+    if project
+      TerminalSession.where(project_id: project.id)
+    else
+      company.terminal_sessions
+    end
+  end
+
+  def workflows_scope
+    if project
+      Workflow.for_project(project)
+    else
+      Workflow.belonging_to_company(company)
+    end
+  end
+
+  def board_tasks_scope
+    if project
+      board = project.board
+      return BoardTask.none unless board
+
+      BoardTask.where(board_id: board.id)
+    else
+      BoardTask.for_company(company)
+    end
+  end
 end

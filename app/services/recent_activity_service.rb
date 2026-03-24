@@ -10,8 +10,9 @@ class RecentActivityService
   SESSION_FETCH_LIMIT = 75
   WORKFLOW_FETCH_LIMIT = 75
 
-  def initialize(company, page: 1, per_page: 20)
+  def initialize(company, page: 1, per_page: 20, project: nil)
     @company = company
+    @project = project
     @page = [ page.to_i, 1 ].max
     @per_page = per_page.to_i.clamp(1, 100)
   end
@@ -29,10 +30,14 @@ class RecentActivityService
 
   private
 
-  attr_reader :company
+  attr_reader :company, :project
 
   def board_ids
-    @board_ids ||= Board.joins(:project).where(projects: { company_id: company.id }).pluck(:id)
+    @board_ids ||= if project
+      Board.where(project_id: project.id).pluck(:id)
+    else
+      Board.joins(:project).where(projects: { company_id: company.id }).pluck(:id)
+    end
   end
 
   def board_activity_items
@@ -47,23 +52,35 @@ class RecentActivityService
   end
 
   def session_items
-    TerminalSession
+    scope = TerminalSession
       .joins(:user)
-      .where(users: { company_id: company.id })
       .where(session_type: "agent_session")
       .order(created_at: :desc)
       .limit(SESSION_FETCH_LIMIT)
-      .map { |s| build_session_item(s) }
+
+    scope = if project
+      scope.where(project_id: project.id)
+    else
+      scope.where(users: { company_id: company.id })
+    end
+
+    scope.map { |s| build_session_item(s) }
   end
 
   def workflow_items
-    WorkflowRun
+    scope = WorkflowRun
       .joins(:project, :workflow)
       .joins(:user)
-      .where(projects: { company_id: company.id })
       .order(created_at: :desc)
       .limit(WORKFLOW_FETCH_LIMIT)
-      .map { |r| build_workflow_item(r) }
+
+    scope = if project
+      scope.where(project_id: project.id)
+    else
+      scope.where(projects: { company_id: company.id })
+    end
+
+    scope.map { |r| build_workflow_item(r) }
   end
 
   def build_board_item(activity)

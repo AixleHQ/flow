@@ -22,11 +22,11 @@ export interface RecentActivityResponse {
 
 export const recentActivityApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getRecentActivity: builder.query<RecentActivityResponse, { page?: number; perPage?: number } | void>({
-      query: (params) => ({
-        url: Routes.backend.apiV1CompanyStatisticRecentActivityPath(),
+    getRecentActivity: builder.query<RecentActivityResponse, { projectId: number; page?: number; perPage?: number }>({
+      query: ({ projectId, page, perPage }) => ({
+        url: Routes.backend.apiV1CompanyProjectStatisticRecentActivityPath(projectId),
         method: 'GET',
-        params: params ? { page: params.page ?? 1, per_page: params.perPage ?? 20 } : { page: 1, per_page: 20 },
+        params: { page: page ?? 1, per_page: perPage ?? 20 },
       }),
       providesTags: [QueryTag.RecentActivity],
     }),

@@ -147,31 +147,6 @@ export function apiV1InternalUsageStatisticsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "internal" + "/" + "usage_statistics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/company/statistic/overview(.:format) */
-export function apiV1CompanyStatisticOverviewPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /api/v1/company/statistic/workflow_runs(.:format) */
-export function apiV1CompanyStatisticWorkflowRunsPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "workflow_runs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /api/v1/company/statistic/board_task_distribution(.:format) */
-export function apiV1CompanyStatisticBoardTaskDistributionPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "board_task_distribution" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /api/v1/company/statistic/top_agents(.:format) */
-export function apiV1CompanyStatisticTopAgentsPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "top_agents" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /api/v1/company/statistic/recent_activity(.:format) */
-export function apiV1CompanyStatisticRecentActivityPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "statistic" + "/" + "recent_activity" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
 /** /api/v1/company/integrations/github_setup(.:format) */
 export function githubSetupApiV1CompanyIntegrationsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -490,6 +465,26 @@ export function apiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType
 /** /api/v1/company/projects/:project_id/statistic/workflow_costs(.:format) */
 export function apiV1CompanyProjectStatisticWorkflowCostsPath(project_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "workflow_costs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/overview(.:format) */
+export function apiV1CompanyProjectStatisticOverviewPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/recent_activity(.:format) */
+export function apiV1CompanyProjectStatisticRecentActivityPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "recent_activity" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/workflow_runs(.:format) */
+export function apiV1CompanyProjectStatisticWorkflowRunsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "workflow_runs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/company/projects/:project_id/statistic/board_task_distribution(.:format) */
+export function apiV1CompanyProjectStatisticBoardTaskDistributionPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "board_task_distribution" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/company/projects/:project_id/statistic/analytics/agent_activity(.:format) */

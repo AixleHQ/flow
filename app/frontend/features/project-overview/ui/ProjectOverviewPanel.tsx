@@ -1,17 +1,13 @@
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import WorkflowsIcon from '@mui/icons-material/AccountTree';
 import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
-import FolderIcon from '@mui/icons-material/Folder';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
-import SmartToyIcon from '@mui/icons-material/SmartToy';
 import ViewKanbanIcon from '@mui/icons-material/ViewKanban';
-import { Box, Card, Chip, Divider, LinearProgress, Skeleton, Typography } from '@mui/material';
+import { Box, Card, LinearProgress, Skeleton, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 
 import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
 import { useGetRecentActivityQuery } from '../api/recentActivityApi';
-import { useGetTopAgentsBySessionsQuery } from '../api/topAgentsBySessionsApi';
 import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
 const styles = {
@@ -70,10 +66,6 @@ const styles = {
     fontWeight: 700,
     color: 'text.primary',
     lineHeight: 1.1,
-  },
-  statChange: {
-    fontSize: '12px',
-    color: 'success.main',
   },
   twoCol: {
     display: 'grid',
@@ -181,42 +173,38 @@ const WORKFLOW_STATUS_COLORS: Record<string, string> = {
 };
 
 interface ProjectOverviewPanelProps {
-  projectId?: number;
+  projectId: number;
 }
 
-const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
-  void _projectId;
-
+const ProjectOverviewPanel = ({ projectId }: ProjectOverviewPanelProps) => {
   const {
     data: summary,
     isLoading: summaryLoading,
     isError: summaryError,
-  } = useGetPlatformSummaryQuery(undefined, {
-    pollingInterval: 60_000,
-  });
+  } = useGetPlatformSummaryQuery(
+    { projectId },
+    {
+      pollingInterval: 60_000,
+    },
+  );
 
   const {
     data: workflowRunStats,
     isLoading: workflowRunStatsLoading,
     isError: workflowRunStatsError,
-  } = useGetWorkflowRunStatsQuery(undefined, {
-    pollingInterval: 60_000,
-  });
+  } = useGetWorkflowRunStatsQuery(
+    { projectId },
+    {
+      pollingInterval: 60_000,
+    },
+  );
 
   const {
     data: boardTaskDistribution,
     isLoading: boardTaskDistributionLoading,
     isError: boardTaskDistributionError,
-  } = useGetBoardTaskDistributionQuery(undefined, {
-    pollingInterval: 60_000,
-  });
-
-  const {
-    data: topAgents,
-    isLoading: topAgentsLoading,
-    isError: topAgentsError,
-  } = useGetTopAgentsBySessionsQuery(
-    { limit: 10 },
+  } = useGetBoardTaskDistributionQuery(
+    { projectId },
     {
       pollingInterval: 60_000,
     },
@@ -226,7 +214,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     data: recentActivity,
     isLoading: activityLoading,
     isError: activityError,
-  } = useGetRecentActivityQuery({ page: 1, perPage: 10 }, { pollingInterval: 60_000 });
+  } = useGetRecentActivityQuery({ projectId, page: 1, perPage: 10 }, { pollingInterval: 60_000 });
 
   const workflowStatus = workflowRunStats
     ? [
@@ -257,7 +245,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
       ]
     : [];
 
-  const platformStats = summary
+  const projectStats = summary
     ? [
         {
           label: 'Sessions Launched',
@@ -279,21 +267,6 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
           value: summary.boardTasksCount.toLocaleString(),
           icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
         },
-        {
-          label: 'Users',
-          value: summary.usersCount.toLocaleString(),
-          icon: <AccountCircleIcon sx={{ color: 'secondary.main', fontSize: 20 }} />,
-        },
-        {
-          label: 'Agents',
-          value: summary.agentsCount.toLocaleString(),
-          icon: <SmartToyIcon sx={{ color: 'error.main', fontSize: 20 }} />,
-        },
-        {
-          label: 'Projects',
-          value: summary.projectsCount.toLocaleString(),
-          icon: <FolderIcon sx={{ color: 'primary.light', fontSize: 20 }} />,
-        },
       ]
     : [];
 
@@ -301,19 +274,19 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
     <Box sx={styles.container}>
       <Box sx={styles.pageHeader}>
         <Typography sx={styles.pageTitle}>Project Overview</Typography>
-        <Typography sx={styles.pageSubtitle}>Platform-wide activity at a glance</Typography>
+        <Typography sx={styles.pageSubtitle}>Project activity at a glance</Typography>
       </Box>
 
-      {/* Platform Stats */}
-      <Typography sx={styles.sectionTitle}>Platform Summary</Typography>
+      {/* Project Stats */}
+      <Typography sx={styles.sectionTitle}>Project Summary</Typography>
       {summaryError && (
         <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
-          Failed to load platform summary. Please refresh to try again.
+          Failed to load project summary. Please refresh to try again.
         </Typography>
       )}
       <Box sx={styles.statsGrid}>
         {summaryLoading
-          ? Array.from({ length: 7 }).map((_, i) => (
+          ? Array.from({ length: 4 }).map((_, i) => (
               <Card key={i} sx={styles.statCard} elevation={0}>
                 <Box sx={styles.statIconWrap}>
                   <Skeleton variant="circular" width={20} height={20} />
@@ -322,7 +295,7 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
                 <Skeleton variant="text" width={60} height={40} />
               </Card>
             ))
-          : platformStats.map((stat) => (
+          : projectStats.map((stat) => (
               <Card key={stat.label} sx={styles.statCard} elevation={0}>
                 <Box sx={styles.statIconWrap}>
                   {stat.icon}
@@ -372,110 +345,47 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         </Card>
 
         {/* Workflow Status */}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <Card sx={styles.card} elevation={0}>
-            <Typography sx={styles.sectionTitle}>Workflow Runs</Typography>
-            {workflowRunStatsError && (
-              <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
-                Failed to load workflow run stats. Please refresh to try again.
-              </Typography>
-            )}
-            {workflowRunStatsLoading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  <Box key={i} sx={styles.progressRow}>
-                    <Box sx={styles.progressLabel}>
-                      <Skeleton variant="text" width={80} />
-                      <Skeleton variant="text" width={60} />
-                    </Box>
-                    <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3 }} />
+        <Card sx={styles.card} elevation={0}>
+          <Typography sx={styles.sectionTitle}>Workflow Runs</Typography>
+          {workflowRunStatsError && (
+            <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+              Failed to load workflow run stats. Please refresh to try again.
+            </Typography>
+          )}
+          {workflowRunStatsLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <Box key={i} sx={styles.progressRow}>
+                  <Box sx={styles.progressLabel}>
+                    <Skeleton variant="text" width={80} />
+                    <Skeleton variant="text" width={60} />
                   </Box>
-                ))
-              : workflowStatus.map((item) => (
-                  <Box key={item.label} sx={styles.progressRow}>
-                    <Box sx={styles.progressLabel}>
-                      <Typography sx={styles.progressLabelText}>{item.label}</Typography>
-                      <Typography sx={styles.progressLabelValue}>
-                        {item.value}{' '}
-                        <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
-                          / {item.total}
-                        </Typography>
+                  <Skeleton variant="rectangular" height={6} sx={{ borderRadius: 3 }} />
+                </Box>
+              ))
+            : workflowStatus.map((item) => (
+                <Box key={item.label} sx={styles.progressRow}>
+                  <Box sx={styles.progressLabel}>
+                    <Typography sx={styles.progressLabelText}>{item.label}</Typography>
+                    <Typography sx={styles.progressLabelValue}>
+                      {item.value}{' '}
+                      <Typography component="span" sx={{ color: 'text.disabled', fontWeight: 400 }}>
+                        / {item.total}
                       </Typography>
-                    </Box>
-                    <LinearProgress
-                      variant="determinate"
-                      value={item.total > 0 ? (item.value / item.total) * 100 : 0}
-                      sx={{
-                        height: 6,
-                        borderRadius: 3,
-                        backgroundColor: 'background.elevated',
-                        '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
-                      }}
-                    />
+                    </Typography>
                   </Box>
-                ))}
-          </Card>
-
-          <Card sx={styles.card} elevation={0}>
-            <Typography sx={styles.sectionTitle}>Top Agents by Sessions</Typography>
-            {topAgentsError && (
-              <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
-                Failed to load top agents. Please refresh to try again.
-              </Typography>
-            )}
-            {topAgentsLoading
-              ? Array.from({ length: 4 }).map((_, i) => (
-                  <Box key={i}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: '10px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Skeleton variant="circular" width={16} height={16} />
-                        <Skeleton variant="text" width={120} />
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Skeleton variant="rectangular" width={80} height={20} sx={{ borderRadius: 1 }} />
-                        <Skeleton variant="rectangular" width={60} height={20} sx={{ borderRadius: 1 }} />
-                      </Box>
-                    </Box>
-                    {i < 3 && <Divider />}
-                  </Box>
-                ))
-              : (topAgents ?? []).map((agent, idx) => (
-                  <Box key={agent.rank}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: '10px' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <SmartToyIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-                        <Typography sx={{ fontSize: '13px', color: 'text.primary' }}>{agent.name}</Typography>
-                        <Chip
-                          label={agent.agentType}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontSize: '10px', height: 16 }}
-                        />
-                      </Box>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
-                        <Chip
-                          label={`${agent.sessionsCount} sessions`}
-                          size="small"
-                          sx={{ fontSize: '11px', height: 20 }}
-                        />
-                        <Chip
-                          label={formatSpend(agent.totalCostCents)}
-                          size="small"
-                          color="success"
-                          variant="outlined"
-                          sx={{ fontSize: '11px', height: 20 }}
-                        />
-                      </Box>
-                    </Box>
-                    {idx < (topAgents ?? []).length - 1 && <Divider />}
-                  </Box>
-                ))}
-            {!topAgentsLoading && !topAgentsError && (topAgents ?? []).length === 0 && (
-              <Typography sx={{ fontSize: '13px', color: 'text.disabled', py: '10px' }}>
-                No agent sessions found.
-              </Typography>
-            )}
-          </Card>
-        </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={item.total > 0 ? (item.value / item.total) * 100 : 0}
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: 'background.elevated',
+                      '& .MuiLinearProgress-bar': { backgroundColor: item.color, borderRadius: 3 },
+                    }}
+                  />
+                </Box>
+              ))}
+        </Card>
       </Box>
 
       {/* Tasks by status */}

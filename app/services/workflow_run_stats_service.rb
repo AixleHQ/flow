@@ -6,12 +6,17 @@ class WorkflowRunStatsService
     keyword_init: true
   )
 
-  def initialize(company)
+  def initialize(company, project: nil)
     @company = company
+    @project = project
   end
 
   def call
-    base = WorkflowRun.joins(:project).where(projects: { company_id: company.id })
+    base = if project
+      WorkflowRun.where(project_id: project.id)
+    else
+      WorkflowRun.joins(:project).where(projects: { company_id: company.id })
+    end
 
     completed   = base.where(state: "completed").count
     in_progress = base.where(state: %w[running paused]).count
@@ -30,5 +35,5 @@ class WorkflowRunStatsService
 
   private
 
-  attr_reader :company
+  attr_reader :company, :project
 end

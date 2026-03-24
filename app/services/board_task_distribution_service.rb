@@ -12,14 +12,15 @@ class BoardTaskDistributionService
     end
   end
 
-  def initialize(company)
+  def initialize(company, project: nil)
     @company = company
+    @project = project
   end
 
   def call
     rows = BoardColumn
       .joins(board: :project)
-      .where(projects: { company_id: company.id })
+      .then { |q| project ? q.where(boards: { project_id: project.id }) : q.where(projects: { company_id: company.id }) }
       .select("board_columns.name, COUNT(board_tasks.id) AS task_count")
       .joins("LEFT OUTER JOIN board_tasks ON board_tasks.board_column_id = board_columns.id")
       .group("board_columns.id, board_columns.name, board_columns.position")
@@ -33,5 +34,5 @@ class BoardTaskDistributionService
 
   private
 
-  attr_reader :company
+  attr_reader :company, :project
 end

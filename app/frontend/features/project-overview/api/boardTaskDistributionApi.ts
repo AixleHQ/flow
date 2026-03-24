@@ -13,9 +13,9 @@ export interface BoardTaskDistribution {
 
 export const boardTaskDistributionApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getBoardTaskDistribution: builder.query<BoardTaskDistribution, void>({
-      query: () => ({
-        url: Routes.backend.apiV1CompanyStatisticBoardTaskDistributionPath(),
+    getBoardTaskDistribution: builder.query<BoardTaskDistribution, { projectId: number }>({
+      query: ({ projectId }) => ({
+        url: Routes.backend.apiV1CompanyProjectStatisticBoardTaskDistributionPath(projectId),
         method: 'GET',
       }),
       providesTags: [QueryTag.BoardTaskDistribution],

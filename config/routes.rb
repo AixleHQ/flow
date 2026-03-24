@@ -43,13 +43,6 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
-        namespace :statistic do
-          resource :overview, only: %i[show], controller: "overview"
-          resource :workflow_runs, only: %i[show], controller: "workflow_runs"
-          resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
-          resource :top_agents, only: %i[show], controller: "top_agents"
-          resource :recent_activity, only: %i[show], controller: "recent_activity"
-        end
         resources :integrations, only: %i[index show create destroy] do
           collection do
             get :github_setup, defaults: { format: :html }
@@ -164,6 +157,10 @@ Rails.application.routes.draw do
                 end
               end
               resource :workflow_costs, only: %i[show], controller: "workflow_costs"
+              resource :overview, only: %i[show], controller: "overview"
+              resource :recent_activity, only: %i[show], controller: "recent_activity"
+              resource :workflow_runs, only: %i[show], controller: "workflow_runs"
+              resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
             end
             resources :terminal_sessions, only: %i[index show]
             resources :workflow_runs, only: %i[index show create] do
