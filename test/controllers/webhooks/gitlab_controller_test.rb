@@ -126,6 +126,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
   def post_json(payload, token: nil, event: "Pipeline Hook")
     @request.headers["X-Gitlab-Token"] = token if token
     @request.headers["X-Gitlab-Event"] = event
-    post :receive, body: payload.to_json, format: :json
+    @request.env["CONTENT_TYPE"] = "application/json"
+    post :receive, body: payload.to_json
   end
 end

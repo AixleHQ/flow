@@ -42,7 +42,8 @@ module Gitlab
 
     test "raises AuthenticationError on Unauthorized response" do
       mock_client = mock("gitlab_client")
-      mock_response = OpenStruct.new(code: 401, parsed_response: '{"message":"401 Unauthorized"}')
+      mock_response = OpenStruct.new(code: 401, parsed_response: '{"message":"401 Unauthorized"}',
+        request: OpenStruct.new(base_uri: "https://gitlab.com/api/v4", path: "/api/v4/user"))
       mock_client.expects(:user).raises(::Gitlab::Error::Unauthorized.new(mock_response))
 
       ::Gitlab.expects(:client).returns(mock_client)

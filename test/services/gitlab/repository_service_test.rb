@@ -46,7 +46,8 @@ module Gitlab
       mock_client = mock("gitlab_client")
       mock_token_service.expects(:client).returns(mock_client)
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
-      mock_response = OpenStruct.new(code: 401, parsed_response: '{"message":"401 Unauthorized"}')
+      mock_response = OpenStruct.new(code: 401, parsed_response: '{"message":"401 Unauthorized"}',
+        request: OpenStruct.new(base_uri: "https://gitlab.com/api/v4", path: "/api/v4/projects"))
       mock_client.expects(:projects).raises(::Gitlab::Error::Unauthorized.new(mock_response))
 
       result = Gitlab::RepositoryService.new(@integration).list_available
@@ -76,7 +77,8 @@ module Gitlab
       mock_client = mock("gitlab_client")
       mock_token_service.expects(:client).returns(mock_client)
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
-      mock_response = OpenStruct.new(code: 404, parsed_response: '{"message":"404 Not Found"}')
+      mock_response = OpenStruct.new(code: 404, parsed_response: '{"message":"404 Not Found"}',
+        request: OpenStruct.new(base_uri: "https://gitlab.com/api/v4", path: "/api/v4/projects/group%2Fnonexistent"))
       mock_client.expects(:project).raises(::Gitlab::Error::NotFound.new(mock_response))
 
       result = Gitlab::RepositoryService.new(@integration).find_repo("group/nonexistent")
