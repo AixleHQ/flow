@@ -9,7 +9,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/workflow_costs
             #
             # Query params:
-            #   scope  - user | project | company (default: project)
+            #   scope  - user | project (default: project)
             #   period - 7d | 30d | 90d | 1y     (default: 30d)
             def show
               result = WorkflowCostAnalyticsService.new(
