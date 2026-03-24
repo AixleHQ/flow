@@ -31,5 +31,20 @@ class WaitService
         )
       end
     end
+
+    def resolve_gitlab_pipeline(repo_full_name:, pipeline_id:, status:, mr_iid: nil)
+      waits = TaskWait
+        .pending
+        .for_repository(repo_full_name)
+        .for_repo_full_name(repo_full_name)
+        .for_gitlab_pipeline_id(pipeline_id)
+
+      waits.find_each do |wait|
+        TaskService.resolve_wait(
+          wait: wait,
+          resolution_data: { status: status }
+        )
+      end
+    end
   end
 end

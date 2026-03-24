@@ -86,6 +86,11 @@ github:
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
 
+gitlab:
+  endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
+  oauth_client_id: <%= ENV['GITLAB_CLIENT_ID'] %>
+  oauth_client_secret: <%= ENV['GITLAB_CLIENT_SECRET'] %>
+
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
   http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>

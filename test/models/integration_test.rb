@@ -15,6 +15,11 @@ class IntegrationTest < ActiveSupport::TestCase
     assert { integration.valid? }
   end
 
+  test "valid gitlab integration" do
+    integration = build(:integration, :gitlab, :active, company: @company, connected_by: @user)
+    assert { integration.valid? }
+  end
+
   test "valid linear integration" do
     integration = build(:integration, :linear, company: @company, connected_by: @user)
     assert { integration.valid? }
@@ -69,8 +74,21 @@ class IntegrationTest < ActiveSupport::TestCase
 
   # ====== Enumerize ======
 
+  test "find_or_build_gitlab_for_token builds new integration" do
+    built = Integration.find_or_build_gitlab_for_token(
+      company: @company,
+      connected_by: @user,
+      project: nil
+    )
+
+    assert built.new_record?
+    assert_equal :gitlab, built.provider.to_sym
+    assert_equal @user, built.connected_by
+    assert_equal @company, built.company
+  end
+
   test "provider enumerize values" do
-    assert_equal %w[github linear], Integration.provider.values.map(&:to_s)
+    assert_equal %w[github gitlab linear], Integration.provider.values.map(&:to_s)
   end
 
   test "status enumerize values" do

@@ -14,6 +14,9 @@ Rails.application.routes.draw do
   # GitHub webhook endpoint (public, no session auth — verified via HMAC signature)
   post "/webhooks/github", to: "webhooks/github#receive"
 
+  # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
+  post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
+
   # API routes
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
@@ -68,6 +71,9 @@ Rails.application.routes.draw do
             get :available
             get :branches
           end
+          member do
+            get :webhook_info
+          end
         end
         resources :assets, only: %i[index show create update destroy] do
           member do
@@ -113,6 +119,9 @@ Rails.application.routes.draw do
               collection do
                 get :available
                 get :branches
+              end
+              member do
+                get :webhook_info
               end
             end
             resources :assets, only: %i[index show create update destroy] do

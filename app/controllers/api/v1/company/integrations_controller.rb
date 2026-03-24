@@ -57,11 +57,52 @@ module Api
         end
 
         def create
+          provider = params[:provider].to_s
+
+          if provider == "gitlab"
+            create_gitlab_integration(project_id: nil)
+          else
+            create_github_integration(project_id: nil)
+          end
+        end
+
+        def destroy
+          integration = current_company.integrations.find(params[:id])
+          integration.destroy
+          respond_with integration
+        end
+
+        private
+
+        def create_gitlab_integration(project_id:, project: nil)
+          integration = Integration.find_or_build_gitlab_for_token(
+            company: current_company,
+            connected_by: current_user,
+            project: project
+          )
+          integration.project_id = project_id
+          integration.credentials_data = { personal_access_token: params[:personal_access_token].to_s }
+
+          begin
+            info = Gitlab::TokenService.new(integration).verify_token
+            integration.name = info[:username]
+            integration.status = :active
+          rescue Gitlab::TokenService::ConfigurationError, Gitlab::TokenService::AuthenticationError => e
+            integration.name = "GitLab (unverified)" if integration.name.blank?
+            integration.status = :error
+            integration.settings = { error: e.message }
+          end
+
+          integration.save
+          respond_with integration, serializer: IntegrationSerializer
+        end
+
+        def create_github_integration(project_id:, project: nil)
           integration = current_company.integrations.new(
             provider: :github,
             connected_by: current_user,
             status: :inactive,
-            project_id: nil
+            project_id: project_id
           )
           integration.credentials_data = { installation_id: params[:installation_id].to_s }
 
@@ -82,14 +123,6 @@ module Api
           integration.save
           respond_with integration, serializer: IntegrationSerializer
         end
-
-        def destroy
-          integration = current_company.integrations.find(params[:id])
-          integration.destroy
-          respond_with integration
-        end
-
-        private
 
         def github_setup_redirect_path(project)
           project ? "/company/projects/#{project.id}/integrations" : "/company/integrations"

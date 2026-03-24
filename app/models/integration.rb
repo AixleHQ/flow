@@ -4,7 +4,7 @@ class Integration < ApplicationRecord
   include Encryptable
   extend Enumerize
 
-  enumerize :provider, in: %i[github linear], predicates: true
+  enumerize :provider, in: %i[github gitlab linear], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -23,6 +23,11 @@ class Integration < ApplicationRecord
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
   }
+
+  # personal_access_token lives in encrypted credentials — no DB lookup possible.
+  def self.find_or_build_gitlab_for_token(company:, connected_by:, project:)
+    company.integrations.build(provider: :gitlab, connected_by: connected_by, project: project)
+  end
 
   # installation_id lives in encrypted credentials — match in Ruby after scope filter.
   def self.find_or_build_github_for_installation(company:, connected_by:, project:, installation_id:)

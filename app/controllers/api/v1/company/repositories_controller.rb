@@ -16,7 +16,7 @@ module Api
 
         def create
           integration = current_company.integrations.find(params[:integration_id])
-          repo_info = Github::RepositoryService.new(integration).find_repo(params[:full_name])
+          repo_info = repository_service(integration).find_repo(params[:full_name])
 
           if repo_info.nil?
             render json: { error: "Repository not found or not accessible" }, status: :unprocessable_entity
@@ -32,6 +32,11 @@ module Api
             description: repo_info[:description],
             purpose: params[:purpose]
           )
+
+          if integration.gitlab?
+            Gitlab::RepositoryService.new(integration).configure_webhook(repository)
+          end
+
           respond_with repository, serializer: RepositorySerializer
         end
 
@@ -49,17 +54,40 @@ module Api
 
         def available
           integration = current_company.integrations.find(params[:integration_id])
-          repos = Github::RepositoryService.new(integration).list_available
+          repos = repository_service(integration).list_available
           render json: { items: repos }
         end
 
         def branches
           integration = current_company.integrations.find(params[:integration_id])
-          branches = Github::RepositoryService.new(integration).list_branches(params[:full_name])
+          branches = repository_service(integration).list_branches(params[:full_name])
           render json: { items: branches }
         end
 
+        def webhook_info
+          repository = current_company.repositories.find(params[:id])
+
+          unless repository.integration.gitlab?
+            render json: { error: "webhook_info is only available for GitLab repositories" }, status: :unprocessable_entity
+            return
+          end
+
+          render json: {
+            url: "#{Settings.protocol}://#{Settings.domain}/webhooks/gitlab",
+            secret_token: repository.webhook_secret,
+            trigger: "Pipeline events"
+          }
+        end
+
         private
+
+        def repository_service(integration)
+          case integration.provider.to_sym
+          when :github then Github::RepositoryService.new(integration)
+          when :gitlab then Gitlab::RepositoryService.new(integration)
+          else raise "Unsupported provider: #{integration.provider}"
+          end
+        end
 
         def repository_params
           params.require(:repository).permit(:source_branch, :purpose)
