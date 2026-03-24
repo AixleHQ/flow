@@ -12,3 +12,4 @@ export type {
   PaginatedResponse,
 } from './model/types';
 export { TASK_TYPE_COLORS, PRIORITY_COLORS, COMMENT_TAG_SUGGESTIONS } from './model/types';
+export { workflowPulse, WORKFLOW_ACTIVE_STATES, workflowStatusColor } from './model/workflowStatus';
