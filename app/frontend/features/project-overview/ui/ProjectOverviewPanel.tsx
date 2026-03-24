@@ -10,6 +10,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import { useGetBoardTaskDistributionQuery } from '../api/boardTaskDistributionApi';
 import { useGetPlatformSummaryQuery } from '../api/platformSummaryApi';
+import { useGetRecentActivityQuery } from '../api/recentActivityApi';
 import { useGetTopAgentsBySessionsQuery } from '../api/topAgentsBySessionsApi';
 import { useGetWorkflowRunStatsQuery } from '../api/workflowRunStatsApi';
 
@@ -141,15 +142,36 @@ function formatSpend(cents: number): string {
   return `$${dollars.toFixed(2)}`;
 }
 
-const RECENT_ACTIVITY = [
-  { text: 'Workflow "Data Ingestion Pipeline" completed successfully', time: '2 min ago', color: '#4caf50' },
-  { text: 'Agent claude-sonnet-4-6 started new session #1284', time: '7 min ago', color: '#2196f3' },
-  { text: 'Task "Fix auth middleware" moved to QA', time: '15 min ago', color: '#ff9800' },
-  { text: 'User alex@palad.ai joined project "Backend API"', time: '1 hr ago', color: '#9c27b0' },
-  { text: 'Workflow run #847 failed: timeout on step 3', time: '2 hr ago', color: '#f44336' },
-  { text: 'New workflow "Email Notifications" created', time: '3 hr ago', color: '#00bcd4' },
-  { text: 'Agent usage report generated for March 2026', time: '5 hr ago', color: '#607d8b' },
-];
+const ACTIVITY_EVENT_COLORS: Record<string, string> = {
+  task_created: '#00bcd4',
+  task_moved: '#ff9800',
+  task_updated: '#607d8b',
+  task_deleted: '#f44336',
+  comment_added: '#9c27b0',
+  asset_attached: '#795548',
+  workflow_triggered: '#2196f3',
+  workflow_completed: '#4caf50',
+  workflow_failed: '#f44336',
+  workflow_cancelled: '#9e9e9e',
+  session_started: '#2196f3',
+  session_completed: '#4caf50',
+  session_failed: '#f44336',
+};
+
+function getActivityColor(eventType: string): string {
+  return ACTIVITY_EVENT_COLORS[eventType] ?? '#9e9e9e';
+}
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr ago`;
+  return `${Math.floor(diffHr / 24)} d ago`;
+}
 
 const WORKFLOW_STATUS_COLORS: Record<string, string> = {
   Completed: '#4caf50',
@@ -164,6 +186,7 @@ interface ProjectOverviewPanelProps {
 
 const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelProps) => {
   void _projectId;
+
   const {
     data: summary,
     isLoading: summaryLoading,
@@ -198,6 +221,12 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
       pollingInterval: 60_000,
     },
   );
+
+  const {
+    data: recentActivity,
+    isLoading: activityLoading,
+    isError: activityError,
+  } = useGetRecentActivityQuery({ page: 1, perPage: 10 }, { pollingInterval: 60_000 });
 
   const workflowStatus = workflowRunStats
     ? [
@@ -309,15 +338,37 @@ const ProjectOverviewPanel = ({ projectId: _projectId }: ProjectOverviewPanelPro
         {/* Recent Activity */}
         <Card sx={styles.card} elevation={0}>
           <Typography sx={styles.sectionTitle}>Recent Activity</Typography>
-          {RECENT_ACTIVITY.map((item, idx) => (
-            <Box key={idx} sx={styles.activityItem}>
-              <Box sx={{ ...styles.activityDot, backgroundColor: item.color }} />
-              <Box>
-                <Typography sx={styles.activityText}>{item.text}</Typography>
-                <Typography sx={styles.activityTime}>{item.time}</Typography>
-              </Box>
-            </Box>
-          ))}
+          {activityError && (
+            <Typography sx={{ color: 'error.main', fontSize: '13px', marginBottom: '16px' }}>
+              Failed to load recent activity. Please refresh to try again.
+            </Typography>
+          )}
+          {activityLoading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <Box key={i} sx={styles.activityItem}>
+                  <Skeleton variant="circular" width={8} height={8} sx={{ marginTop: '5px', flexShrink: 0 }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Skeleton variant="text" width="80%" />
+                    <Skeleton variant="text" width={60} />
+                  </Box>
+                </Box>
+              ))
+            : (recentActivity?.activities ?? []).map((item, idx) => (
+                <Box key={idx} sx={styles.activityItem}>
+                  <Box sx={{ ...styles.activityDot, backgroundColor: getActivityColor(item.eventType) }} />
+                  <Box>
+                    <Typography sx={styles.activityText}>{item.description}</Typography>
+                    <Typography sx={styles.activityTime}>
+                      {item.actorName} · {formatRelativeTime(item.occurredAt)}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+          {!activityLoading && !activityError && (recentActivity?.activities ?? []).length === 0 && (
+            <Typography sx={{ fontSize: '13px', color: 'text.disabled', py: '10px' }}>
+              No recent activity found.
+            </Typography>
+          )}
         </Card>
 
         {/* Workflow Status */}

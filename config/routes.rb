@@ -48,6 +48,7 @@ Rails.application.routes.draw do
           resource :workflow_runs, only: %i[show], controller: "workflow_runs"
           resource :board_task_distribution, only: %i[show], controller: "board_task_distribution"
           resource :top_agents, only: %i[show], controller: "top_agents"
+          resource :recent_activity, only: %i[show], controller: "recent_activity"
         end
         resources :integrations, only: %i[index show create destroy] do
           collection do
