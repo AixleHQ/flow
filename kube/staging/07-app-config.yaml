@@ -60,4 +60,4 @@ data:
   BITBUCKET_OAUTH_KEY: "get_from_1password"
   GITLAB_APP_ID: "get_from_1password"
   K8S_RUNTIME_LIMITS_MEMORY: 2Gi
-  GOOGLE_CLIENT_ID: replace_me
+  GOOGLE_CLIENT_ID: "517277132860-4g17esguejhb6s4lctth1shote7ip32o.apps.googleusercontent.com"
