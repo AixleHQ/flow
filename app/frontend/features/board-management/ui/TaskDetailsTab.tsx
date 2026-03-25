@@ -293,11 +293,38 @@ export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
                   color="warning"
                   sx={{ fontSize: '10px', height: 20, fontWeight: 600, flexShrink: 0 }}
                 />
-                {wait.waitType === 'github_checks_completed' && (
-                  <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-                    {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
-                  </Typography>
-                )}
+                {wait.waitType === 'github_checks_completed' &&
+                  (wait.metadata.repoFullName && wait.metadata.prNumber ? (
+                    <Link
+                      href={`https://github.com/${wait.metadata.repoFullName}/pull/${wait.metadata.prNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      underline="hover"
+                      sx={{ fontSize: '12px', color: 'text.secondary' }}
+                    >
+                      {wait.metadata.repoFullName} #{wait.metadata.prNumber}
+                    </Link>
+                  ) : (
+                    <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
+                      {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
+                    </Typography>
+                  ))}
+                {wait.waitType === 'github_workflow_completed' &&
+                  (wait.metadata.repoFullName && wait.metadata.runId ? (
+                    <Link
+                      href={`https://github.com/${wait.metadata.repoFullName}/actions/runs/${wait.metadata.runId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      underline="hover"
+                      sx={{ fontSize: '12px', color: 'text.secondary' }}
+                    >
+                      {wait.metadata.repoFullName} #{wait.metadata.runId}
+                    </Link>
+                  ) : (
+                    <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
+                      {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.runId ?? 'Unknown run'}
+                    </Typography>
+                  ))}
               </Box>
               <IconButton
                 size="small"

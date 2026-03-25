@@ -4,6 +4,7 @@ export interface TaskWait {
   metadata: Record<string, unknown> & {
     repoFullName?: string;
     prNumber?: number;
+    runId?: number;
   };
   createdAt: string;
 }
