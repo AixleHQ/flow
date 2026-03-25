@@ -88,8 +88,6 @@ github:
 
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
-  oauth_client_id: <%= ENV['GITLAB_CLIENT_ID'] %>
-  oauth_client_secret: <%= ENV['GITLAB_CLIENT_SECRET'] %>
 
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>

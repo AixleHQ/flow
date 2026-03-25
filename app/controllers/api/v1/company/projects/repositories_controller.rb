@@ -29,7 +29,7 @@ module Api
               purpose: params[:purpose]
             )
 
-            repository_service(integration).configure_webhook(repository)
+            repository_service(integration).configure(repository)
 
             respond_with repository, serializer: RepositorySerializer
           end
@@ -42,6 +42,7 @@ module Api
 
           def destroy
             repository = current_project.repositories.find(params[:id])
+            repository_service(repository.integration).remove(repository)
             repository.destroy
             respond_with repository
           end

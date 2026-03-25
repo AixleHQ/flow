@@ -98,7 +98,7 @@ module Gitlab
       assert_equal %w[main develop], result
     end
 
-    test "configure_webhook generates secret and calls GitLab API" do
+    test "configure generates secret and calls GitLab API" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @company)
 
       mock_token_service = mock("token_service")
@@ -113,11 +113,39 @@ module Gitlab
         pipeline_events: true
       )
 
-      Gitlab::RepositoryService.new(@integration).configure_webhook(repository)
+      Gitlab::RepositoryService.new(@integration).configure(repository)
       repository.reload
 
       assert_not_nil repository.webhook_secret
       assert_equal 64, repository.webhook_secret.length
+    end
+
+    test "remove deletes the matching webhook from GitLab API" do
+      repository = create(:repository, full_name: "group/app", integration: @integration,
+        scope: @company, webhook_secret: "existing-secret")
+
+      mock_token_service = mock("token_service")
+      mock_client = mock("gitlab_client")
+      mock_token_service.stubs(:client).returns(mock_client)
+      Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
+
+      hooks = [
+        OpenStruct.new(id: 42, url: "https://palad.example.com/webhooks/gitlab"),
+        OpenStruct.new(id: 99, url: "https://other.example.com/webhooks/other")
+      ]
+      mock_client.expects(:project_hooks).with("group/app").returns(hooks)
+      mock_client.expects(:delete_project_hook).with("group/app", 42)
+
+      Gitlab::RepositoryService.new(@integration).remove(repository)
+    end
+
+    test "remove is a noop when webhook_secret is blank" do
+      repository = create(:repository, full_name: "group/app", integration: @integration,
+        scope: @company, webhook_secret: nil)
+
+      Gitlab::TokenService.expects(:new).never
+
+      Gitlab::RepositoryService.new(@integration).remove(repository)
     end
   end
 end

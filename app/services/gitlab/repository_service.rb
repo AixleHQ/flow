@@ -32,7 +32,7 @@ module Gitlab
       []
     end
 
-    def configure_webhook(repository)
+    def configure(repository)
       webhook_secret = SecureRandom.hex(32)
       repository.update!(webhook_secret: webhook_secret)
 
@@ -45,6 +45,18 @@ module Gitlab
         pipeline_events: true
       )
       webhook_secret
+    end
+
+    def remove(repository)
+      return if repository.webhook_secret.blank?
+
+      client = token_service.client
+      webhook_url = "#{Settings.protocol}://#{Settings.domain}/webhooks/gitlab"
+      hooks = client.project_hooks(repository.full_name)
+      hook = hooks.find { |h| h.url == webhook_url }
+      client.delete_project_hook(repository.full_name, hook.id) if hook
+    rescue ::Gitlab::Error::Error => e
+      Rails.logger.warn("[Gitlab::RepositoryService] Failed to remove webhook for #{repository.full_name}: #{e.message}")
     end
 
     private

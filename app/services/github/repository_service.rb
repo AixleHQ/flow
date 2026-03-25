@@ -54,8 +54,12 @@ module Github
       []
     end
 
-    def configure_webhook(repository)
+    def configure(repository)
       # GitHub uses App installation webhooks — no per-repository setup needed
+    end
+
+    def remove(repository)
+      # GitHub uses App installation webhooks — no per-repository cleanup needed
     end
   end
 end

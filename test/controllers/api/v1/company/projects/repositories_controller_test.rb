@@ -17,10 +17,13 @@ module Api
             @project.add_collaborator(@member)
 
             @integration = create(:integration, :github, :active, company: @company, connected_by: @admin)
+            @gitlab_integration = create(:integration, :gitlab, :active, company: @company, connected_by: @admin)
             @company_repo = create(:repository, :company_scope, full_name: "org/company-repo",
               scope: @company, integration: @integration)
             @project_repo = create(:repository, :project_scope, full_name: "org/project-repo",
               scope: @project, integration: @integration)
+            @gitlab_project_repo = create(:repository, :project_scope, full_name: "group/gl-repo",
+              scope: @project, integration: @gitlab_integration, webhook_secret: "project-secret-xyz")
           end
 
           # --- Index ---
@@ -134,9 +137,21 @@ module Api
           # --- Destroy ---
           test "destroy removes repository for admin" do
             sign_in_as @admin
+            Github::RepositoryService.any_instance.expects(:remove).once
 
             assert_difference("Repository.count", -1) do
               delete api_v1_company_project_repository_path(@project, @project_repo)
+            end
+
+            assert_response :success
+          end
+
+          test "destroy calls remove on gitlab repository" do
+            sign_in_as @admin
+            Gitlab::RepositoryService.any_instance.expects(:remove).once
+
+            assert_difference("Repository.count", -1) do
+              delete api_v1_company_project_repository_path(@project, @gitlab_project_repo)
             end
 
             assert_response :success
@@ -196,6 +211,58 @@ module Api
 
             get branches_api_v1_company_project_repositories_path(@project),
               params: { integration_id: @integration.id, full_name: "org/repo" }
+
+            assert_response :forbidden
+          end
+
+          # --- Create with GitLab ---
+          test "create with gitlab integration configures webhook" do
+            sign_in_as @admin
+
+            Gitlab::RepositoryService.any_instance.expects(:find_repo).with("group/new-repo").returns({
+              full_name: "group/new-repo",
+              default_branch: "main",
+              clone_url: "https://gitlab.com/group/new-repo.git",
+              is_private: false,
+              description: "GitLab repo"
+            })
+            Gitlab::RepositoryService.any_instance.expects(:configure).once
+
+            assert_difference("Repository.count", 1) do
+              post api_v1_company_project_repositories_path(@project),
+                params: { integration_id: @gitlab_integration.id, full_name: "group/new-repo" }
+            end
+
+            assert_response :created
+            assert_equal "group/new-repo", response.parsed_body["data"]["full_name"]
+          end
+
+          # --- Webhook Info ---
+          test "webhook_info returns webhook url and secret for gitlab project repository" do
+            sign_in_as @admin
+
+            get webhook_info_api_v1_company_project_repository_path(@project, @gitlab_project_repo)
+
+            assert_response :success
+            json = response.parsed_body
+            assert_includes json["url"], "/webhooks/gitlab"
+            assert_equal "project-secret-xyz", json["secret_token"]
+            assert_equal "Pipeline events", json["trigger"]
+          end
+
+          test "webhook_info returns 422 for non-gitlab project repository" do
+            sign_in_as @admin
+
+            get webhook_info_api_v1_company_project_repository_path(@project, @project_repo)
+
+            assert_response :unprocessable_entity
+            assert_includes response.parsed_body["error"], "GitLab"
+          end
+
+          test "webhook_info requires admin" do
+            sign_in_as @member
+
+            get webhook_info_api_v1_company_project_repository_path(@project, @gitlab_project_repo)
 
             assert_response :forbidden
           end

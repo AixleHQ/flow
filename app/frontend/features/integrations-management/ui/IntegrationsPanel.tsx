@@ -142,14 +142,20 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
   const handleConnectGitlab = async () => {
     if (!gitlabPat.trim()) return;
     try {
+      let result;
       if (projectId != null) {
-        await createProjectGitlabIntegration({ projectId, personalAccessToken: gitlabPat.trim() }).unwrap();
+        result = await createProjectGitlabIntegration({ projectId, personalAccessToken: gitlabPat.trim() }).unwrap();
       } else {
-        await createGitlabIntegration({ personalAccessToken: gitlabPat.trim() }).unwrap();
+        result = await createGitlabIntegration({ personalAccessToken: gitlabPat.trim() }).unwrap();
       }
-      enqueueSnackbar('GitLab integration connected', { variant: 'success' });
-      setGitlabDialogOpen(false);
-      setGitlabPat('');
+      if (result.status === 'error') {
+        const errorMsg = (result.settings?.error as string) ?? 'Failed to connect GitLab integration';
+        enqueueSnackbar(errorMsg, { variant: 'error' });
+      } else {
+        enqueueSnackbar('GitLab integration connected', { variant: 'success' });
+        setGitlabDialogOpen(false);
+        setGitlabPat('');
+      }
     } catch {
       enqueueSnackbar('Failed to connect GitLab integration', { variant: 'error' });
     }
@@ -171,22 +177,7 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
     <Card key={`${integration.scope}-${integration.id}`} variant="outlined" sx={styles.card}>
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, '&:last-child': { pb: 2 } }}>
         {integration.provider === 'gitlab' ? (
-          <Box
-            sx={{
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              backgroundColor: '#fc6d26',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 12,
-              fontWeight: 700,
-              color: '#fff',
-            }}
-          >
-            GL
-          </Box>
+          <img src="/images/gitlab.svg" alt="GitLab" width={32} height={32} />
         ) : (
           <GitHubIcon sx={{ fontSize: 32, color: 'text.secondary' }} />
         )}

@@ -81,7 +81,7 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
       is_private: false,
       description: "GitLab repo"
     })
-    Gitlab::RepositoryService.any_instance.expects(:configure_webhook).once
+    Gitlab::RepositoryService.any_instance.expects(:configure).once
 
     assert_difference("Repository.count", 1) do
       post :create, params: { integration_id: @gitlab_integration.id, full_name: "group/new-repo" }
@@ -102,8 +102,18 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
 
   test "#destroy removes repository for admin" do
     sign_in @admin
+    Github::RepositoryService.any_instance.expects(:remove).once
     assert_difference("Repository.count", -1) do
       delete :destroy, params: { id: @repo.id }
+    end
+    assert_response :success
+  end
+
+  test "#destroy calls remove on gitlab repository" do
+    sign_in @admin
+    Gitlab::RepositoryService.any_instance.expects(:remove).once
+    assert_difference("Repository.count", -1) do
+      delete :destroy, params: { id: @gitlab_repo.id }
     end
     assert_response :success
   end
