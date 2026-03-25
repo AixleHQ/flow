@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import FolderIcon from '@mui/icons-material/Folder';
@@ -18,6 +19,7 @@ import {
   DialogTitle,
   IconButton,
   Stack,
+  TextField,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
@@ -32,6 +34,7 @@ import {
   useUpdateProjectRepositoryMutation,
   useDeleteCompanyRepositoryMutation,
   useDeleteProjectRepositoryMutation,
+  useGetWebhookInfoQuery,
 } from '../api/repositoriesApi';
 import type { Repository } from '../lib/types';
 
@@ -76,6 +79,82 @@ const styles = {
   },
 };
 
+interface WebhookInfoDialogProps {
+  repositoryId: number | null;
+  projectId?: number;
+  onClose: () => void;
+}
+
+const WebhookInfoDialog: FC<WebhookInfoDialogProps> = ({ repositoryId, projectId, onClose }) => {
+  const { data: webhookInfo } = useGetWebhookInfoQuery(
+    { id: repositoryId!, projectId },
+    { skip: repositoryId === null },
+  );
+  const { enqueueSnackbar } = useSnackbar();
+
+  const copyToClipboard = (value: string, label: string) => {
+    navigator.clipboard.writeText(value);
+    enqueueSnackbar(`${label} copied to clipboard`, { variant: 'info' });
+  };
+
+  return (
+    <Dialog open={repositoryId !== null} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Configure GitLab Webhook</DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
+        <Typography variant="body2" color="text.secondary">
+          To receive pipeline events, add a webhook to your GitLab repository with the following settings:
+        </Typography>
+        {webhookInfo ? (
+          <>
+            <TextField
+              label="Webhook URL"
+              value={webhookInfo.url}
+              size="small"
+              fullWidth
+              InputProps={{
+                readOnly: true,
+                endAdornment: (
+                  <IconButton size="small" onClick={() => copyToClipboard(webhookInfo.url, 'Webhook URL')}>
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                ),
+              }}
+            />
+            <TextField
+              label="Secret Token"
+              value={webhookInfo.secretToken}
+              size="small"
+              fullWidth
+              InputProps={{
+                readOnly: true,
+                endAdornment: (
+                  <IconButton size="small" onClick={() => copyToClipboard(webhookInfo.secretToken, 'Secret token')}>
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                ),
+              }}
+            />
+            <TextField
+              label="Trigger"
+              value={webhookInfo.trigger}
+              size="small"
+              fullWidth
+              InputProps={{ readOnly: true }}
+            />
+          </>
+        ) : (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} variant="contained">Done</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => {
   const companyQuery = useGetCompanyRepositoriesQuery(undefined, { skip: !!projectId });
   const projectQuery = useGetProjectRepositoriesQuery(projectId!, { skip: !projectId });
@@ -93,13 +172,15 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Repository | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null);
+  const [webhookInfoRepositoryId, setWebhookInfoRepositoryId] = useState<number | null>(null);
 
   const existingRepoNames = useMemo(() => new Set((repositories ?? []).map((r) => r.fullName)), [repositories]);
 
   const handleAdd = async (integrationId: number, fullName: string, sourceBranch: string, purpose: string) => {
     try {
+      let repo: Repository;
       if (projectId) {
-        await createProject({
+        repo = await createProject({
           projectId,
           integrationId,
           fullName,
@@ -107,9 +188,12 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
           purpose: purpose || undefined,
         }).unwrap();
       } else {
-        await createCompany({ integrationId, fullName, sourceBranch, purpose: purpose || undefined }).unwrap();
+        repo = await createCompany({ integrationId, fullName, sourceBranch, purpose: purpose || undefined }).unwrap();
       }
       enqueueSnackbar('Repository added', { variant: 'success' });
+      if (repo.integration?.provider === 'gitlab') {
+        setWebhookInfoRepositoryId(repo.id);
+      }
     } catch {
       enqueueSnackbar('Failed to add repository', { variant: 'error' });
     }
@@ -158,7 +242,7 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
       <Box sx={styles.header}>
         <Box>
           <Typography sx={styles.title}>Repositories</Typography>
-          <Typography sx={styles.subtitle}>GitHub repositories available for agent sessions</Typography>
+          <Typography sx={styles.subtitle}>Repositories available for agent sessions</Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
           Add Repository
@@ -172,7 +256,7 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
             No repositories added
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-            Add GitHub repositories to use as code context in agent sessions
+            Add repositories to use as code context in agent sessions
           </Typography>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
             Add Repository
@@ -240,6 +324,12 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
         repository={editTarget}
         onClose={() => setEditTarget(null)}
         onSave={handleUpdate}
+      />
+
+      <WebhookInfoDialog
+        repositoryId={webhookInfoRepositoryId}
+        projectId={projectId}
+        onClose={() => setWebhookInfoRepositoryId(null)}
       />
 
       <Dialog open={!!deleteTarget} onClose={() => setDeleteTarget(null)}>

@@ -2,14 +2,13 @@
 
 class AddPipelineIdIndexToTaskWaits < ActiveRecord::Migration[8.0]
   def up
-    execute <<~SQL
-      CREATE INDEX IF NOT EXISTS index_task_waits_on_metadata_pipeline_id
-        ON task_waits (((metadata->>'pipeline_id')::bigint))
-        WHERE wait_type = 'gitlab_pipeline_completed'
-    SQL
+    add_index :task_waits,
+              "(metadata->>'pipeline_id')::bigint",
+              where: "wait_type = 'gitlab_pipeline_completed'",
+              name: "index_task_waits_on_metadata_pipeline_id"
   end
 
   def down
-    execute "DROP INDEX IF EXISTS index_task_waits_on_metadata_pipeline_id"
+    remove_index :task_waits, name: "index_task_waits_on_metadata_pipeline_id"
   end
 end

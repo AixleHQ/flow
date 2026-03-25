@@ -34,6 +34,12 @@ interface AddRepositoryDialogProps {
   projectId?: number;
 }
 
+const integrationIcon = (provider: string) => {
+  if (provider === 'github') return <GitHubIcon fontSize="small" />;
+  if (provider === 'gitlab') return <img src="/gitlab-icon.svg" alt="GitLab" width={16} height={16} />;
+  return null;
+};
+
 export const AddRepositoryDialog: FC<AddRepositoryDialogProps> = ({
   open,
   onClose,
@@ -42,8 +48,8 @@ export const AddRepositoryDialog: FC<AddRepositoryDialogProps> = ({
   projectId,
 }) => {
   const { data: integrations } = useGetCompanyIntegrationsQuery();
-  const githubIntegrations = useMemo(
-    () => (integrations ?? []).filter((i: Integration) => i.provider === 'github' && i.status === 'active'),
+  const activeIntegrations = useMemo(
+    () => (integrations ?? []).filter((i: Integration) => (i.provider === 'github' || i.provider === 'gitlab') && i.status === 'active'),
     [integrations],
   );
 
@@ -52,7 +58,7 @@ export const AddRepositoryDialog: FC<AddRepositoryDialogProps> = ({
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [purpose, setPurpose] = useState('');
 
-  const integrationId = selectedIntegrationId || githubIntegrations[0]?.id;
+  const integrationId = selectedIntegrationId || activeIntegrations[0]?.id;
 
   const { data: availableRepos, isLoading: isLoadingRepos } = useGetAvailableRepositoriesQuery(
     { integrationId: integrationId as number, projectId },
@@ -90,22 +96,22 @@ export const AddRepositoryDialog: FC<AddRepositoryDialogProps> = ({
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>Add Repository</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: '8px !important' }}>
-        {githubIntegrations.length > 1 && (
+        {activeIntegrations.length > 1 && (
           <FormControl fullWidth size="small">
-            <InputLabel>GitHub Organization</InputLabel>
+            <InputLabel>Integration</InputLabel>
             <Select
-              value={selectedIntegrationId || githubIntegrations[0]?.id || ''}
-              label="GitHub Organization"
+              value={selectedIntegrationId || activeIntegrations[0]?.id || ''}
+              label="Integration"
               onChange={(e) => {
                 setSelectedIntegrationId(e.target.value as number);
                 setSelectedRepo(null);
                 setSelectedBranch(null);
               }}
             >
-              {githubIntegrations.map((i: Integration) => (
+              {activeIntegrations.map((i: Integration) => (
                 <MenuItem key={i.id} value={i.id}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <GitHubIcon fontSize="small" />
+                    {integrationIcon(i.provider)}
                     {i.name}
                   </Box>
                 </MenuItem>

@@ -80,11 +80,7 @@ module Api
         private
 
         def repository_service(integration)
-          case integration.provider.to_sym
-          when :github then Github::RepositoryService.new(integration)
-          when :gitlab then Gitlab::RepositoryService.new(integration)
-          else raise "Unsupported provider: #{integration.provider}"
-          end
+          RepositoryService.for(integration)
         end
 
         def repository_params

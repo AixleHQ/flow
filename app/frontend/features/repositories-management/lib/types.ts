@@ -42,3 +42,9 @@ export interface CreateRepositoryRequest {
   sourceBranch?: string;
   purpose?: string;
 }
+
+export interface WebhookInfo {
+  url: string;
+  secretToken: string;
+  trigger: string;
+}
