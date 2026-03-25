@@ -1,7 +1,13 @@
 import { baseApi, QueryTag } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-import type { Repository, AvailableRepo, CreateRepositoryRequest, UpdateRepositoryRequest, WebhookInfo } from '../lib/types';
+import type {
+  Repository,
+  AvailableRepo,
+  CreateRepositoryRequest,
+  UpdateRepositoryRequest,
+  WebhookInfo,
+} from '../lib/types';
 
 interface RepositoriesResponse {
   items: Repository[];

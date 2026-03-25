@@ -149,7 +149,9 @@ const WebhookInfoDialog: FC<WebhookInfoDialogProps> = ({ repositoryId, projectId
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="contained">Done</Button>
+        <Button onClick={onClose} variant="contained">
+          Done
+        </Button>
       </DialogActions>
     </Dialog>
   );

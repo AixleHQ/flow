@@ -49,7 +49,10 @@ export const AddRepositoryDialog: FC<AddRepositoryDialogProps> = ({
 }) => {
   const { data: integrations } = useGetCompanyIntegrationsQuery();
   const activeIntegrations = useMemo(
-    () => (integrations ?? []).filter((i: Integration) => (i.provider === 'github' || i.provider === 'gitlab') && i.status === 'active'),
+    () =>
+      (integrations ?? []).filter(
+        (i: Integration) => (i.provider === 'github' || i.provider === 'gitlab') && i.status === 'active',
+      ),
     [integrations],
   );
 
