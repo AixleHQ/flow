@@ -295,7 +295,28 @@ export const TaskDetailsTab = ({ task, projectId }: TaskDetailsTabProps) => {
                 />
                 {wait.waitType === 'github_checks_completed' && (
                   <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
-                    {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
+                    <Link
+                      href={`https://github.com/${wait.metadata.repoFullName}/pull/${wait.metadata.prNumber}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      underline="hover"
+                      sx={{ fontSize: '12px', color: 'text.secondary' }}
+                    >
+                      {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.prNumber ?? 'Unknown PR'}
+                    </Link>
+                  </Typography>
+                )}
+                {wait.waitType === 'github_workflow_completed' && (
+                  <Typography sx={{ fontSize: '12px', color: 'text.secondary' }}>
+                    <Link
+                      href={`https://github.com/${wait.metadata.repoFullName}/actions/runs/${wait.metadata.runId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      underline="hover"
+                      sx={{ fontSize: '12px', color: 'text.secondary' }}
+                    >
+                      {wait.metadata.repoFullName ?? 'Unknown repo'} #{wait.metadata.runId ?? 'Unknown run'}
+                    </Link>
                   </Typography>
                 )}
               </Box>
