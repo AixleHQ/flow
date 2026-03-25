@@ -10,7 +10,6 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import type { BoardColumn as BoardColumnType, BoardTask } from 'entities/board-task';
 import { WORKFLOW_ACTIVE_STATES, workflowPulse, workflowStatusColor } from 'entities/board-task';
-
 import { formatElapsedTime } from 'shared/lib';
 
 import { SortableTaskCard } from './SortableTaskCard';
