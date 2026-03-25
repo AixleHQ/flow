@@ -59,6 +59,7 @@ export const integrationsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { provider: 'gitlab', personal_access_token: data.personalAccessToken },
       }),
+      transformResponse: (response: { data: Integration }) => response.data,
       invalidatesTags: [QueryTag.Integrations],
     }),
 
@@ -71,6 +72,7 @@ export const integrationsApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { provider: 'gitlab', personal_access_token: personalAccessToken },
       }),
+      transformResponse: (response: { data: Integration }) => response.data,
       invalidatesTags: (_result, _err, { projectId }) => [
         { type: QueryTag.ProjectIntegrations, id: String(projectId) },
       ],
