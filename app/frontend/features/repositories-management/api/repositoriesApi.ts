@@ -75,6 +75,7 @@ export const repositoriesApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { integrationId, fullName, sourceBranch: sourceBranch || undefined, purpose: purpose || undefined },
       }),
+      transformResponse: (response: { data: Repository }) => response.data,
       invalidatesTags: [QueryTag.Repositories],
     }),
 
@@ -84,6 +85,7 @@ export const repositoriesApi = baseApi.injectEndpoints({
         method: 'POST',
         data: { integrationId, fullName, sourceBranch: sourceBranch || undefined, purpose: purpose || undefined },
       }),
+      transformResponse: (response: { data: Repository }) => response.data,
       invalidatesTags: [QueryTag.Repositories],
     }),
 

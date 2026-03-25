@@ -36,7 +36,7 @@ interface AddRepositoryDialogProps {
 
 const integrationIcon = (provider: string) => {
   if (provider === 'github') return <GitHubIcon fontSize="small" />;
-  if (provider === 'gitlab') return <img src="/gitlab-icon.svg" alt="GitLab" width={16} height={16} />;
+  if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={16} height={16} />;
   return null;
 };
 
