@@ -136,7 +136,7 @@ container_execution:
     before_create: 30      # 30 seconds
     create: 60             # 1 minute
     before_start: 30       # 30 seconds
-    start: 60              # 1 minute
+    start: 300              # 1 minute
     before_exec: 120       # 2 minutes
     exec_default: 300      # 5 minutes (default for tools)
     exec_max: 1800         # 30 minutes (absolute max for tools)

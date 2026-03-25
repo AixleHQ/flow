@@ -7,6 +7,7 @@ data:
   RAILS_ENV: staging
   RAILS_PORT: "4000"
   RAILS_LOG_TO_STDOUT: "true"
+  RAILS_LOG_LEVEL: debug
   ACTION_CABLE_URL: /cable
   # In-cluster PostgreSQL (no RDS).
   DB_HOST: db
