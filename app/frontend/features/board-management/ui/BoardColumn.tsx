@@ -13,6 +13,14 @@ import { WORKFLOW_ACTIVE_STATES, workflowPulse, workflowStatusColor } from 'enti
 
 import { SortableTaskCard } from './SortableTaskCard';
 
+function formatElapsedTime(since: string): string {
+  const totalSeconds = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m ${totalSeconds % 60}s`;
+  return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
+}
+
 interface CollapsedTaskIndicatorProps {
   task: BoardTask;
   onClick?: (task: BoardTask) => void;
@@ -39,8 +47,18 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
   }
 
   const tooltipLines = [task.title];
-  if (latestRun) tooltipLines.push(`Status: ${latestRun.state}`);
-  if (hasPendingWaits) tooltipLines.push('Waiting');
+  if (latestRun) {
+    const stateLabel = latestRun.state.charAt(0).toUpperCase() + latestRun.state.slice(1);
+    if ((latestRun.state === 'running' || latestRun.state === 'waiting') && latestRun.createdAt) {
+      tooltipLines.push(`${stateLabel} — ${formatElapsedTime(latestRun.createdAt)}`);
+    } else {
+      tooltipLines.push(`Status: ${latestRun.state}`);
+    }
+  }
+  if (hasPendingWaits) {
+    const oldestWait = task.pendingWaits.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+    tooltipLines.push(`Waiting — ${formatElapsedTime(oldestWait.createdAt)}`);
+  }
 
   return (
     <Tooltip title={tooltipLines.join(' · ')} placement="right" arrow>

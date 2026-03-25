@@ -23,7 +23,7 @@ export interface BoardTask {
   childrenCount: number;
   commentsCount: number;
   assetsCount: number;
-  recentWorkflowRuns: Array<{ id: number; state: string }>;
+  recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string }>;
   pendingWaits: TaskWait[];
   createdAt: string;
   updatedAt: string;

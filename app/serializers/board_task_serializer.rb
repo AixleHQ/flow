@@ -26,7 +26,7 @@ class BoardTaskSerializer < ApplicationSerializer
 
   def recent_workflow_runs
     object.workflow_runs.sort_by { |r| r.created_at }.reverse.first(5).map do |run|
-      { id: run.id, state: run.state }
+      { id: run.id, state: run.state, created_at: run.created_at }
     end
   end
 
