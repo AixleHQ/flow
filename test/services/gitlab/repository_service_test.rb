@@ -30,7 +30,7 @@ module Gitlab
           http_url_to_repo: "https://gitlab.com/group/lib.git",
           visibility: "public", description: nil)
       ]
-      mock_client.expects(:projects).with(membership: true, per_page: 100).returns(projects)
+      mock_client.expects(:projects).with(membership: true, per_page: 100, auto_paginate: true).returns(projects)
 
       result = Gitlab::RepositoryService.new(@integration).list_available
 

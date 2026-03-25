@@ -22,8 +22,8 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
 
     assert_response :success
     json = response.parsed_body
-    assert { json["items"].length == 1 }
-    assert { json["items"].first["full_name"] == "org/app" }
+    assert { json["items"].length == 2 }
+    assert { json["items"].map { |r| r["full_name"] }.include?("org/app") }
   end
 
   test "#index requires authentication" do
