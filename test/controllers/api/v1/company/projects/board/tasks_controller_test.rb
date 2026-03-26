@@ -357,4 +357,25 @@ class Api::V1::Company::Projects::Board::TasksControllerTest < ActionController:
     assert_response :success
     assert_nil @task.reload.assignee_id
   end
+
+  # ====== N+1 Query Tests ======
+
+  test "#index does not trigger N+1 queries for pending_waits" do
+    task2 = BoardTask.create!(title: "Task 2", board: @board, board_column: @col1)
+    task3 = BoardTask.create!(title: "Task 3", board: @board, board_column: @col1)
+
+    [@task, task2, task3].each do |task|
+      task.task_waits.create!(
+        wait_type: :github_checks_completed,
+        metadata: { repo_full_name: "org/app", pr_number: 1 },
+        creator: @owner
+      )
+    end
+
+    sign_in @owner
+
+    get :index, params: { project_id: @project.id }
+
+    assert_response :success
+  end
 end
