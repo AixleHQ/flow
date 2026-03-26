@@ -154,24 +154,26 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
   # ─── Task filters ────────────────────────────────────────────────────────────
 
   test "tag filter includes only sessions whose board task has a matching tag" do
-    board = create(:board, project: @project)
-    matching_task = create(:board_task, board: board, tags: ["analytics", "backend"])
-    other_task    = create(:board_task, board: board, tags: ["frontend"])
+    board  = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    matching_task = create(:board_task, board: board, board_column: column, tags: [ "analytics", "backend" ])
+    other_task    = create(:board_task, board: board, board_column: column, tags: [ "frontend" ])
 
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 100, total_tokens: 200, board_task: matching_task)
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 999, total_tokens: 999, board_task: other_task)
     create_session_with_usage(project: @project, user: @admin, cost_cents: 50, total_tokens: 100)
 
-    result = call_service(scope: "project", tags: ["analytics"])
+    result = call_service(scope: "project", tags: [ "analytics" ])
 
     assert { result.totals.total_cost_cents == 100 }
     assert { result.totals.total_tokens == 200 }
   end
 
   test "task_type filter includes only sessions whose board task matches the type" do
-    board = create(:board, project: @project)
-    epic_task  = create(:board_task, board: board, task_type: :epic)
-    story_task = create(:board_task, board: board, task_type: :story)
+    board  = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    epic_task  = create(:board_task, board: board, board_column: column, task_type: :epic)
+    story_task = create(:board_task, board: board, board_column: column, task_type: :story)
 
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 200, total_tokens: 300, board_task: epic_task)
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 999, total_tokens: 999, board_task: story_task)
@@ -183,16 +185,17 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
   end
 
   test "combined tag and task_type filter applies AND semantics" do
-    board = create(:board, project: @project)
-    matching_task    = create(:board_task, board: board, tags: ["analytics"], task_type: :epic)
-    tag_only_task    = create(:board_task, board: board, tags: ["analytics"], task_type: :story)
-    type_only_task   = create(:board_task, board: board, tags: ["backend"],   task_type: :epic)
+    board  = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    matching_task    = create(:board_task, board: board, board_column: column, tags: [ "analytics" ], task_type: :epic)
+    tag_only_task    = create(:board_task, board: board, board_column: column, tags: [ "analytics" ], task_type: :story)
+    type_only_task   = create(:board_task, board: board, board_column: column, tags: [ "backend" ],   task_type: :epic)
 
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 100, total_tokens: 200, board_task: matching_task)
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 999, total_tokens: 999, board_task: tag_only_task)
     create_session_linked_to_task(project: @project, user: @admin, cost_cents: 999, total_tokens: 999, board_task: type_only_task)
 
-    result = call_service(scope: "project", tags: ["analytics"], task_type: "epic")
+    result = call_service(scope: "project", tags: [ "analytics" ], task_type: "epic")
 
     assert { result.totals.total_cost_cents == 100 }
     assert { result.totals.total_tokens == 200 }
@@ -211,7 +214,7 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
   test "tag filter returns empty result when project has no board" do
     create_session_with_usage(project: @project, user: @admin, cost_cents: 100, total_tokens: 200)
 
-    result = call_service(scope: "project", tags: ["analytics"])
+    result = call_service(scope: "project", tags: [ "analytics" ])
 
     assert { result.totals.total_cost_cents == 0 }
     assert { result.totals.total_tokens == 0 }
