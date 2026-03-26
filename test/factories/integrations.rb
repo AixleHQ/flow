@@ -16,6 +16,13 @@ FactoryBot.define do
       provider { :github }
     end
 
+    trait :gitlab do
+      provider { :gitlab }
+      after(:build) do |integration|
+        integration.credentials_data = { personal_access_token: "glpat-test_#{SecureRandom.hex(8)}" }
+      end
+    end
+
     trait :linear do
       provider { :linear }
       after(:build) do |integration|

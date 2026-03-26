@@ -8,7 +8,10 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     @admin = create(:user, :admin, company: @company)
     @employee = create(:user, :employee, company: @company)
     @integration = create(:integration, :github, :active, company: @company, connected_by: @admin)
+    @gitlab_integration = create(:integration, :gitlab, :active, company: @company, connected_by: @admin)
     @repo = create(:repository, full_name: "org/app", scope: @company, integration: @integration)
+    @gitlab_repo = create(:repository, full_name: "group/gl-app", scope: @company,
+      integration: @gitlab_integration, webhook_secret: "test-secret-abc")
   end
 
   # ====== INDEX ======
@@ -19,8 +22,8 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
 
     assert_response :success
     json = response.parsed_body
-    assert { json["items"].length == 1 }
-    assert { json["items"].first["full_name"] == "org/app" }
+    assert { json["items"].length == 2 }
+    assert { json["items"].map { |r| r["full_name"] }.include?("org/app") }
   end
 
   test "#index requires authentication" do
@@ -69,6 +72,26 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     assert_response :unprocessable_entity
   end
 
+  test "#create with gitlab integration configures webhook" do
+    sign_in @admin
+    Gitlab::RepositoryService.any_instance.expects(:find_repo).with("group/new-repo").returns({
+      full_name: "group/new-repo",
+      default_branch: "main",
+      clone_url: "https://gitlab.com/group/new-repo.git",
+      is_private: false,
+      description: "GitLab repo"
+    })
+    Gitlab::RepositoryService.any_instance.expects(:configure).once
+
+    assert_difference("Repository.count", 1) do
+      post :create, params: { integration_id: @gitlab_integration.id, full_name: "group/new-repo" }
+    end
+
+    assert_response :created
+    json = response.parsed_body
+    assert { json["data"]["full_name"] == "group/new-repo" }
+  end
+
   test "#create requires admin" do
     sign_in @employee
     post :create, params: { integration_id: @integration.id, full_name: "org/new" }
@@ -79,8 +102,18 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
 
   test "#destroy removes repository for admin" do
     sign_in @admin
+    Github::RepositoryService.any_instance.expects(:remove).once
     assert_difference("Repository.count", -1) do
       delete :destroy, params: { id: @repo.id }
+    end
+    assert_response :success
+  end
+
+  test "#destroy calls remove on gitlab repository" do
+    sign_in @admin
+    Gitlab::RepositoryService.any_instance.expects(:remove).once
+    assert_difference("Repository.count", -1) do
+      delete :destroy, params: { id: @gitlab_repo.id }
     end
     assert_response :success
   end

@@ -261,4 +261,84 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "not linked to this task's project"
   end
+
+  # == gitlab_pipeline_completed ==
+
+  test "creates a gitlab_pipeline_completed wait with valid params" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "gitlab_pipeline_completed",
+        repo_full_name: @repo_name,
+        pipeline_id:    12345
+      },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal @task.id, data["task_id"]
+    assert_equal "gitlab_pipeline_completed", data["wait_type"]
+    assert_equal "pending", data["status"]
+    assert_equal @repo_name, data["metadata"]["repo_full_name"]
+    assert_equal 12345, data["metadata"]["pipeline_id"]
+  end
+
+  test "returns error when pipeline_id is missing for gitlab_pipeline_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "gitlab_pipeline_completed",
+        repo_full_name: @repo_name
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "pipeline_id must be a positive integer"
+  end
+
+  test "returns error when pipeline_id is zero for gitlab_pipeline_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "gitlab_pipeline_completed",
+        repo_full_name: @repo_name,
+        pipeline_id:    0
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "pipeline_id must be a positive integer"
+  end
+
+  test "returns error when repo_full_name is missing for gitlab_pipeline_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:     @task.id,
+        wait_type:   "gitlab_pipeline_completed",
+        pipeline_id: 1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "repo_full_name is required"
+  end
+
+  test "returns error when repository is not linked to the project for gitlab_pipeline_completed" do
+    result = InternalTools::BoardCreateWait.new(
+      params: {
+        task_id:        @task.id,
+        wait_type:      "gitlab_pipeline_completed",
+        repo_full_name: "other/unlinked-repo",
+        pipeline_id:    1
+      },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not linked to this task's project"
+  end
 end

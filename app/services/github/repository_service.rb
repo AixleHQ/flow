@@ -53,5 +53,13 @@ module Github
       Rails.logger.warn("[Github::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
       []
     end
+
+    def configure(repository)
+      # GitHub uses App installation webhooks — no per-repository setup needed
+    end
+
+    def remove(repository)
+      # GitHub uses App installation webhooks — no per-repository cleanup needed
+    end
   end
 end

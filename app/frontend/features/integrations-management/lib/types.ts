@@ -1,4 +1,4 @@
-export type IntegrationProvider = 'github' | 'linear';
+export type IntegrationProvider = 'github' | 'gitlab' | 'linear';
 export type IntegrationStatus = 'active' | 'inactive' | 'error';
 
 export interface IntegrationConnectedBy {
@@ -26,4 +26,9 @@ export interface Integration {
 
 export interface CreateGithubIntegrationRequest {
   installationId: string;
+}
+
+export interface CreateGitlabIntegrationRequest {
+  personalAccessToken: string;
+  projectId?: number;
 }

@@ -57,29 +57,22 @@ module Api
         end
 
         def create
-          integration = current_company.integrations.new(
-            provider: :github,
-            connected_by: current_user,
-            status: :inactive,
-            project_id: nil
-          )
-          integration.credentials_data = { installation_id: params[:installation_id].to_s }
+          provider = params[:provider].to_s
 
-          begin
-            info = Github::TokenService.new(integration).verify_installation
-            integration.name = info[:account_login]
-            integration.settings = {
-              account_type: info[:account_type],
-              target_type: info[:target_type]
-            }
-            integration.status = :active
-          rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
-            integration.name = "GitHub (unverified)" if integration.name.blank?
-            integration.status = :error
-            integration.settings = { error: e.message }
+          integration = if provider == "gitlab"
+            Gitlab::IntegrationService.new(
+              company: current_company,
+              connected_by: current_user
+            ).create(personal_access_token: params[:personal_access_token].to_s)
+          elsif provider == "github"
+            Github::IntegrationService.new(
+              company: current_company,
+              connected_by: current_user
+            ).create(installation_id: params[:installation_id].to_s)
+          else
+            raise ArgumentError, "Unsupported provider: #{provider}"
           end
 
-          integration.save
           respond_with integration, serializer: IntegrationSerializer
         end
 

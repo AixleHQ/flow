@@ -10,11 +10,11 @@ module Api
           end
 
           def create?
-            project_accessible?
+            project_accessible? && current_user.admin?
           end
 
           def destroy?
-            project_accessible?
+            project_accessible? && current_user.admin?
           end
 
           private

@@ -8,7 +8,7 @@ module Api
           class TasksController < Api::V1::Company::Projects::ApplicationController
             def index
               tasks = current_board.board_tasks
-                                   .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :task_waits)
+                                   .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_task_waits)
                                    .ransack(q_params).result
               tasks = tasks.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
               tasks = tasks.tags_overlap(Array(params[:tags])) if params[:tags].present?

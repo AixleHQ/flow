@@ -14,6 +14,9 @@ Rails.application.routes.draw do
   # GitHub webhook endpoint (public, no session auth — verified via HMAC signature)
   post "/webhooks/github", to: "webhooks/github#receive"
 
+  # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
+  post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
+
   # API routes
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
@@ -145,6 +148,7 @@ Rails.application.routes.draw do
                 resources :waits, controller: "board/task/waits", only: %i[destroy]
                 resources :transitions, controller: "board/task/transitions", only: %i[index]
                 resources :activities, controller: "board/task/activities", only: %i[index]
+                resource :statistics, controller: "board/task/statistics", only: %i[show]
               end
             end
             namespace :statistic do

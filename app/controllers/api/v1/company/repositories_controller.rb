@@ -16,7 +16,7 @@ module Api
 
         def create
           integration = current_company.integrations.find(params[:integration_id])
-          repo_info = Github::RepositoryService.new(integration).find_repo(params[:full_name])
+          repo_info = repository_service(integration).find_repo(params[:full_name])
 
           if repo_info.nil?
             render json: { error: "Repository not found or not accessible" }, status: :unprocessable_entity
@@ -32,6 +32,9 @@ module Api
             description: repo_info[:description],
             purpose: params[:purpose]
           )
+
+          repository_service(integration).configure(repository)
+
           respond_with repository, serializer: RepositorySerializer
         end
 
@@ -43,23 +46,28 @@ module Api
 
         def destroy
           repository = current_company.repositories.find(params[:id])
+          repository_service(repository.integration).remove(repository)
           repository.destroy
           respond_with repository
         end
 
         def available
           integration = current_company.integrations.find(params[:integration_id])
-          repos = Github::RepositoryService.new(integration).list_available
+          repos = repository_service(integration).list_available
           render json: { items: repos }
         end
 
         def branches
           integration = current_company.integrations.find(params[:integration_id])
-          branches = Github::RepositoryService.new(integration).list_branches(params[:full_name])
+          branches = repository_service(integration).list_branches(params[:full_name])
           render json: { items: branches }
         end
 
         private
+
+        def repository_service(integration)
+          RepositoryService.for(integration)
+        end
 
         def repository_params
           params.require(:repository).permit(:source_branch, :purpose)

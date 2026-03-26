@@ -2,7 +2,7 @@
 
 module InternalTools
   class BoardCreateWait < Base
-    SUPPORTED_WAIT_TYPES = %w[github_checks_completed github_workflow_completed].freeze
+    SUPPORTED_WAIT_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
 
     def execute
       require_workflow_context!
@@ -60,6 +60,20 @@ module InternalTools
         end
 
         { repo_full_name: repo_full_name, run_id: run_id }
+
+      when "gitlab_pipeline_completed"
+        repo_full_name = params[:repo_full_name]
+        pipeline_id    = params[:pipeline_id].to_i
+
+        return error("repo_full_name is required") if repo_full_name.blank?
+        return error("pipeline_id must be a positive integer") unless pipeline_id > 0
+
+        project = task.board.project
+        unless Repository.visible_for_project(project).where(full_name: repo_full_name).exists?
+          return error("Repository #{repo_full_name} is not linked to this task's project")
+        end
+
+        { repo_full_name: repo_full_name, pipeline_id: pipeline_id }
       end
     end
   end

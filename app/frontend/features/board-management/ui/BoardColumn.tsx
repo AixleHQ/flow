@@ -10,7 +10,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import type { BoardColumn as BoardColumnType, BoardTask } from 'entities/board-task';
 import { WORKFLOW_ACTIVE_STATES, workflowPulse, workflowStatusColor } from 'entities/board-task';
-import { formatElapsedTime } from 'shared/lib';
+import { formatElapsedTime, useTick } from 'shared/lib';
 
 import { SortableTaskCard } from './SortableTaskCard';
 
@@ -27,6 +27,9 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
 
   const latestRun = task.recentWorkflowRuns[0];
   const hasPendingWaits = task.pendingWaits.length > 0;
+
+  const isLiveTimer = latestRun?.state === 'running' || hasPendingWaits;
+  useTick(isLiveTimer, 10_000);
 
   let color = '#9e9e9e';
   let isActive = false;

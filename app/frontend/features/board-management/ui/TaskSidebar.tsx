@@ -1,3 +1,4 @@
+import BarChartIcon from '@mui/icons-material/BarChart';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
@@ -40,6 +41,7 @@ import { useBoardSidebarStore } from '../model/useBoardSidebarStore';
 import { ActivityTab } from './ActivityTab';
 import { AssetsTab } from './AssetsTab';
 import { CommentsTab } from './CommentsTab';
+import { StatisticsTab } from './StatisticsTab';
 import { TaskDetailsTab } from './TaskDetailsTab';
 
 interface TaskSidebarProps {
@@ -262,6 +264,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
         <Tab value="comments" label={`Comments (${task.commentsCount})`} sx={styles.tab} />
         <Tab value="assets" label={`Assets (${task.assetsCount})`} sx={styles.tab} />
         <Tab value="activity" label="Activity" sx={styles.tab} />
+        <Tab value="statistics" icon={<BarChartIcon fontSize="small" />} sx={styles.tab} />
       </Tabs>
 
       <Box sx={styles.content}>
@@ -269,6 +272,7 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
         {activeTab === 'comments' && <CommentsTab taskId={task.id} projectId={projectId} />}
         {activeTab === 'assets' && <AssetsTab taskId={task.id} projectId={projectId} />}
         {activeTab === 'activity' && <ActivityTab taskId={task.id} projectId={projectId} />}
+        {activeTab === 'statistics' && <StatisticsTab taskId={task.id} projectId={projectId} />}
       </Box>
 
       <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>

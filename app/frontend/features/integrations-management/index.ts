@@ -6,4 +6,5 @@ export type {
   IntegrationStatus,
   IntegrationConnectedBy,
   CreateGithubIntegrationRequest,
+  CreateGitlabIntegrationRequest,
 } from './lib/types';
