@@ -225,4 +225,90 @@ class WaitServiceTest < ActiveSupport::TestCase
       conclusion: "success"
     )
   end
+
+  # == resolve_gitlab_pipeline ==
+
+  test "resolves a pending gitlab pipeline wait matching repo and pipeline_id" do
+    wait = @task.task_waits.create!(
+      wait_type: :gitlab_pipeline_completed,
+      metadata:  { repo_full_name: @repo_name, pipeline_id: 5000 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).with(
+      wait: wait,
+      resolution_data: { status: "success" }
+    ).once
+
+    WaitService.resolve_gitlab_pipeline(
+      repo_full_name: @repo_name,
+      pipeline_id: 5000,
+      status: "success"
+    )
+  end
+
+  test "does nothing when no gitlab pipeline waits match the repo" do
+    @task.task_waits.create!(
+      wait_type: :gitlab_pipeline_completed,
+      metadata:  { repo_full_name: "other/repo", pipeline_id: 5000 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_gitlab_pipeline(
+      repo_full_name: @repo_name,
+      pipeline_id: 5000,
+      status: "success"
+    )
+  end
+
+  test "does nothing when no gitlab pipeline waits match the pipeline_id" do
+    @task.task_waits.create!(
+      wait_type: :gitlab_pipeline_completed,
+      metadata:  { repo_full_name: @repo_name, pipeline_id: 9999 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_gitlab_pipeline(
+      repo_full_name: @repo_name,
+      pipeline_id: 5000,
+      status: "failed"
+    )
+  end
+
+  test "does nothing when gitlab pipeline wait is already resolved" do
+    @task.task_waits.create!(
+      wait_type: :gitlab_pipeline_completed,
+      status:    :resolved,
+      metadata:  { repo_full_name: @repo_name, pipeline_id: 5000 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_gitlab_pipeline(
+      repo_full_name: @repo_name,
+      pipeline_id: 5000,
+      status: "success"
+    )
+  end
+
+  test "does not match github waits when resolving gitlab pipeline" do
+    @task.task_waits.create!(
+      wait_type: :github_workflow_completed,
+      metadata:  { repo_full_name: @repo_name, run_id: 5000 },
+      creator: @user
+    )
+
+    TaskService.expects(:resolve_wait).never
+
+    WaitService.resolve_gitlab_pipeline(
+      repo_full_name: @repo_name,
+      pipeline_id: 5000,
+      status: "success"
+    )
+  end
 end

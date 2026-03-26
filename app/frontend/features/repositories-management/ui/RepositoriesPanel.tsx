@@ -158,7 +158,7 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
       <Box sx={styles.header}>
         <Box>
           <Typography sx={styles.title}>Repositories</Typography>
-          <Typography sx={styles.subtitle}>GitHub repositories available for agent sessions</Typography>
+          <Typography sx={styles.subtitle}>Repositories available for agent sessions</Typography>
         </Box>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
           Add Repository
@@ -172,7 +172,7 @@ export const RepositoriesPanel: FC<RepositoriesPanelProps> = ({ projectId }) => 
             No repositories added
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-            Add GitHub repositories to use as code context in agent sessions
+            Add repositories to use as code context in agent sessions
           </Typography>
           <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setAddDialogOpen(true)}>
             Add Repository

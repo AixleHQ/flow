@@ -408,9 +408,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
     t.string "scope_type", null: false
     t.string "source_branch", default: "main", null: false
     t.datetime "updated_at", null: false
+    t.string "webhook_secret"
     t.index ["integration_id"], name: "index_repositories_on_integration_id"
     t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
+    t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
   end
 
   create_table "session_input_assets", id: false, force: :cascade do |t|
@@ -591,6 +593,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.string "wait_type", null: false
+    t.index "(((metadata ->> 'pipeline_id'::text))::bigint)", name: "index_task_waits_on_metadata_pipeline_id", where: "wait_type = 'gitlab_pipeline_completed'"
     t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
     t.index "(((metadata ->> 'run_id'::text))::bigint)", name: "index_task_waits_on_metadata_run_id"
     t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
