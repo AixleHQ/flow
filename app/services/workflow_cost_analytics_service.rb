@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class WorkflowCostAnalyticsService
+  include TaskFilterable
   PERIOD_DAYS = {
     "7d" => 7,
     "30d" => 30,
@@ -37,13 +38,15 @@ class WorkflowCostAnalyticsService
 
   Result = Struct.new(:workflows, :time_series, :totals, keyword_init: true)
 
-  def initialize(project:, user:, scope:, period:)
+  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil)
     @project = project
     @user = user
     @scope = scope.to_s
     @period = period.to_s
     @days = PERIOD_DAYS.fetch(@period, 30)
     @since = @days.days.ago
+    @tags = Array.wrap(tags).reject(&:blank?)
+    @task_type = task_type.presence
   end
 
   def call
@@ -58,15 +61,21 @@ class WorkflowCostAnalyticsService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :days, :period
+  attr_reader :project, :user, :scope, :since, :days, :period, :tags, :task_type
 
   def base_workflow_runs
-    case scope
-    when "user"
-      WorkflowRun.for_user_in_project(project, user, since)
-    else
-      WorkflowRun.for_project_in_period(project, since)
+    runs = case scope
+           when "user"
+             WorkflowRun.for_user_in_project(project, user, since)
+           else
+             WorkflowRun.for_project_in_period(project, since)
+           end
+
+    if tags.present? || task_type.present?
+      runs = runs.where(board_task_id: filtered_board_tasks.select(:id))
     end
+
+    runs
   end
 
   def build_workflow_breakdown(runs)

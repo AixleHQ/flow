@@ -622,7 +622,13 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
       </Card>
 
       {/* ── Workflow Costs ────────────────────────────────────────── */}
-      <WorkflowCostsPanel projectId={projectId} scope={scope} period={period} />
+      <WorkflowCostsPanel
+        projectId={projectId}
+        scope={scope}
+        period={period}
+        tags={selectedTags.length > 0 ? selectedTags : undefined}
+        taskType={selectedTaskType || undefined}
+      />
     </Box>
   );
 };
