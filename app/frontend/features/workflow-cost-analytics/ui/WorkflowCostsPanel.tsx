@@ -18,21 +18,9 @@ import {
 } from 'recharts';
 
 import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
-import { formatCostCents, formatTokens } from 'shared/lib';
+import { formatCostCents, formatDuration, formatTokens } from 'shared/lib';
 
 import { useGetWorkflowCostAnalyticsQuery } from '../api/workflowCostAnalyticsApi';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const formatDuration = (seconds: number): string => {
-  if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  if (m < 60) return s > 0 ? `${m}m ${s}s` : `${m}m`;
-  const h = Math.floor(m / 60);
-  const rem = m % 60;
-  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
-};
 
 const WORKFLOW_COLORS = [
   '#2196f3',

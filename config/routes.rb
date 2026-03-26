@@ -148,6 +148,7 @@ Rails.application.routes.draw do
                 resources :waits, controller: "board/task/waits", only: %i[destroy]
                 resources :transitions, controller: "board/task/transitions", only: %i[index]
                 resources :activities, controller: "board/task/activities", only: %i[index]
+                resource :statistics, controller: "board/task/statistics", only: %i[show]
               end
             end
             namespace :statistic do

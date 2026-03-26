@@ -11,6 +11,37 @@ import type {
 import type { AppDispatch } from 'shared/api';
 import { baseApi, QueryTag } from 'shared/api';
 
+export interface TaskWaitStat {
+  id: number;
+  waitType: string;
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  durationSeconds: number | null;
+}
+
+export interface TaskWorkflowBreakdown {
+  workflowId: number;
+  workflowName: string;
+  costCents: number;
+  totalTokens: number;
+  durationSeconds: number;
+}
+
+export interface TaskStatisticsResponse {
+  costTotals: {
+    totalCostCents: number;
+  };
+  tokenTotals: {
+    totalTokens: number;
+  };
+  timeTotals: {
+    totalDurationSeconds: number;
+  };
+  waitStats: TaskWaitStat[];
+  workflowBreakdowns: TaskWorkflowBreakdown[];
+}
+
 interface BoardWithTasks {
   board: Board;
   tasks: BoardTask[];
@@ -397,6 +428,14 @@ export const boardApi = baseApi.injectEndpoints({
       transformResponse: (response: { data: BoardTask }) => response.data,
       providesTags: [QueryTag.Task],
     }),
+
+    getTaskStatistics: builder.query<TaskStatisticsResponse, { projectId: number; taskId: number }>({
+      query: ({ projectId, taskId }) => ({
+        url: `${tasksBasePath(projectId)}/${taskId}/statistics`,
+        method: 'GET',
+      }),
+      providesTags: [QueryTag.TaskStatistics],
+    }),
   }),
 });
 
@@ -454,4 +493,5 @@ export const {
   useUpdateWorkflowBindingMutation,
   useDeleteWorkflowBindingMutation,
   useGetTaskDetailsQuery,
+  useGetTaskStatisticsQuery,
 } = boardApi;
