@@ -86,7 +86,7 @@ class ProjectAnalyticsService
              project.workflow_runs.where(user:, created_at: since..)
            else
              project.workflow_runs.where(created_at: since..)
-           end
+    end
     return runs unless tags.present? || task_type.present?
 
     board_tasks = project.board&.board_tasks || BoardTask.none

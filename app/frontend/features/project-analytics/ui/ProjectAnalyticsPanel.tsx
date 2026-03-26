@@ -234,13 +234,19 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
     data: sessionSourceData,
     isLoading: isSourceLoading,
     isError: isSourceError,
-  } = useGetSessionSourceBreakdownQuery({ projectId: projectId!, scope, period, ...filterParams }, { skip: !projectId });
+  } = useGetSessionSourceBreakdownQuery(
+    { projectId: projectId!, scope, period, ...filterParams },
+    { skip: !projectId },
+  );
 
   const {
     data: durationData,
     isLoading: isDurationLoading,
     isError: isDurationError,
-  } = useGetSessionDurationDistributionQuery({ projectId: projectId!, scope, period, ...filterParams }, { skip: !projectId });
+  } = useGetSessionDurationDistributionQuery(
+    { projectId: projectId!, scope, period, ...filterParams },
+    { skip: !projectId },
+  );
 
   const {
     data: costTokenData,
@@ -298,10 +304,18 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
             options={filterOptions?.tags ?? []}
             value={selectedTags}
             onChange={(_, newValue) => setSelectedTags(newValue)}
-            renderInput={(params) => <TextField {...params} label="Tags" sx={{ backgroundColor: 'background.paper' }} />}
+            renderInput={(params) => (
+              <TextField {...params} label="Tags" sx={{ backgroundColor: 'background.paper' }} />
+            )}
             renderTags={(value, getTagProps) =>
               value.map((option, index) => (
-                <Chip label={option} size="small" {...getTagProps({ index })} key={option} sx={{ height: 18, fontSize: '11px' }} />
+                <Chip
+                  label={option}
+                  size="small"
+                  {...getTagProps({ index })}
+                  key={option}
+                  sx={{ height: 18, fontSize: '11px' }}
+                />
               ))
             }
             sx={{ minWidth: 180 }}
