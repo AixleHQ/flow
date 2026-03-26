@@ -39,15 +39,17 @@ export interface WorkflowCostAnalyticsParams {
   projectId: number;
   scope: AnalyticsScope;
   period: AnalyticsPeriod;
+  tags?: string[];
+  taskType?: string;
 }
 
 export const workflowCostAnalyticsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getWorkflowCostAnalytics: builder.query<WorkflowCostAnalyticsResponse, WorkflowCostAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.apiV1CompanyProjectStatisticWorkflowCostsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.WorkflowCostAnalytics],
     }),

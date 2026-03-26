@@ -2,6 +2,11 @@ import { baseApi, QueryTag } from 'shared/api';
 import type { AnalyticsPeriod, AnalyticsScope } from 'shared/api/analyticsTypes';
 import { Routes } from 'shared/routes';
 
+export interface AnalyticsFilterOptions {
+  tags: string[];
+  taskTypes: string[];
+}
+
 export type { AnalyticsScope, AnalyticsPeriod };
 
 export interface ProjectAnalyticsSummary {
@@ -16,6 +21,8 @@ export interface ProjectAnalyticsParams {
   projectId: number;
   scope: AnalyticsScope;
   period: AnalyticsPeriod;
+  tags?: string[];
+  taskType?: string;
 }
 
 export interface AgentSessionCount {
@@ -75,43 +82,50 @@ export interface CostTokenUsageData {
 
 export const projectAnalyticsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
+    getAnalyticsFilterOptions: builder.query<AnalyticsFilterOptions, number>({
+      query: (projectId) => ({
+        url: Routes.backend.filterOptionsApiV1CompanyProjectStatisticAnalyticsPath(projectId),
+        method: 'GET',
+      }),
+      providesTags: [QueryTag.ProjectAnalytics],
+    }),
     getProjectAnalytics: builder.query<ProjectAnalyticsSummary, ProjectAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.apiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
     getAgentActivity: builder.query<AgentActivityData, ProjectAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.agentActivityApiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
     getSessionSourceBreakdown: builder.query<SessionSourceBreakdownData, ProjectAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.sessionSourceBreakdownApiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
     getSessionDurationDistribution: builder.query<SessionDurationDistributionData, ProjectAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.sessionDurationDistributionApiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
     getCostTokenUsage: builder.query<CostTokenUsageData, ProjectAnalyticsParams>({
-      query: ({ projectId, scope, period }) => ({
+      query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.costTokenUsageApiV1CompanyProjectStatisticAnalyticsPath(projectId),
         method: 'GET',
-        params: { scope, period },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.ProjectAnalytics],
     }),
@@ -119,6 +133,7 @@ export const projectAnalyticsApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useGetAnalyticsFilterOptionsQuery,
   useGetProjectAnalyticsQuery,
   useGetAgentActivityQuery,
   useGetSessionSourceBreakdownQuery,
