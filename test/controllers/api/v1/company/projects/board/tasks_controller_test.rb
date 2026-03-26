@@ -364,7 +364,7 @@ class Api::V1::Company::Projects::Board::TasksControllerTest < ActionController:
     task2 = BoardTask.create!(title: "Task 2", board: @board, board_column: @col1)
     task3 = BoardTask.create!(title: "Task 3", board: @board, board_column: @col1)
 
-    [@task, task2, task3].each do |task|
+    [ @task, task2, task3 ].each do |task|
       task.task_waits.create!(
         wait_type: :github_checks_completed,
         metadata: { repo_full_name: "org/app", pr_number: 1 },
