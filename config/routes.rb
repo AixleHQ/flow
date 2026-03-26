@@ -71,9 +71,6 @@ Rails.application.routes.draw do
             get :available
             get :branches
           end
-          member do
-            get :webhook_info
-          end
         end
         resources :assets, only: %i[index show create update destroy] do
           member do
@@ -119,9 +116,6 @@ Rails.application.routes.draw do
               collection do
                 get :available
                 get :branches
-              end
-              member do
-                get :webhook_info
               end
             end
             resources :assets, only: %i[index show create update destroy] do

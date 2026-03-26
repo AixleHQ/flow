@@ -13,11 +13,21 @@ module Api
           def create
             provider = params[:provider].to_s
 
-            if provider == "gitlab"
-              create_gitlab_integration
+            integration = if provider == "gitlab"
+              Gitlab::IntegrationService.new(
+                company: current_company,
+                connected_by: current_user,
+                project: current_project
+              ).create(personal_access_token: params[:personal_access_token].to_s)
             else
-              create_github_integration
+              Github::IntegrationService.new(
+                company: current_company,
+                connected_by: current_user,
+                project: current_project
+              ).create(installation_id: params[:installation_id].to_s)
             end
+
+            respond_with integration, serializer: IntegrationSerializer
           end
 
           def destroy
@@ -26,56 +36,6 @@ module Api
             respond_with integration
           end
 
-          private
-
-          def create_gitlab_integration
-            integration = Integration.find_or_build_gitlab_for_token(
-              company: current_company,
-              connected_by: current_user,
-              project: current_project
-            )
-            integration.credentials_data = { personal_access_token: params[:personal_access_token].to_s }
-
-            begin
-              info = Gitlab::TokenService.new(integration).verify_token
-              integration.name = info[:username]
-              integration.status = :active
-            rescue Gitlab::TokenService::ConfigurationError, Gitlab::TokenService::AuthenticationError => e
-              integration.name = "GitLab (unverified)" if integration.name.blank?
-              integration.status = :error
-              integration.settings = { error: e.message }
-            end
-
-            integration.save
-            respond_with integration, serializer: IntegrationSerializer
-          end
-
-          def create_github_integration
-            integration = current_company.integrations.new(
-              provider: :github,
-              connected_by: current_user,
-              status: :inactive,
-              project: current_project
-            )
-            integration.credentials_data = { installation_id: params[:installation_id].to_s }
-
-            begin
-              info = Github::TokenService.new(integration).verify_installation
-              integration.name = info[:account_login]
-              integration.settings = {
-                account_type: info[:account_type],
-                target_type: info[:target_type]
-              }
-              integration.status = :active
-            rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
-              integration.name = "GitHub (unverified)" if integration.name.blank?
-              integration.status = :error
-              integration.settings = { error: e.message }
-            end
-
-            integration.save
-            respond_with integration, serializer: IntegrationSerializer
-          end
         end
       end
     end

@@ -6,7 +6,6 @@ import type {
   AvailableRepo,
   CreateRepositoryRequest,
   UpdateRepositoryRequest,
-  WebhookInfo,
 } from '../lib/types';
 
 interface RepositoriesResponse {
@@ -123,14 +122,6 @@ export const repositoriesApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.Repositories],
     }),
 
-    getWebhookInfo: builder.query<WebhookInfo, { id: number; projectId?: number }>({
-      query: ({ id, projectId }) => ({
-        url: projectId
-          ? Routes.backend.webhookInfoApiV1CompanyProjectRepositoryPath(projectId, id)
-          : Routes.backend.webhookInfoApiV1CompanyRepositoryPath(id),
-        method: 'GET',
-      }),
-    }),
   }),
 });
 
@@ -145,5 +136,4 @@ export const {
   useCreateProjectRepositoryMutation,
   useDeleteCompanyRepositoryMutation,
   useDeleteProjectRepositoryMutation,
-  useGetWebhookInfoQuery,
 } = repositoriesApi;

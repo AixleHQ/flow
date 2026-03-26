@@ -1,6 +1,7 @@
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/Edit';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import LinkIcon from '@mui/icons-material/Link';
 import {
   Box,
@@ -15,12 +16,16 @@ import {
   DialogContentText,
   DialogTitle,
   IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { useState, type FC } from 'react';
+import { useRef, useState, type FC } from 'react';
 
 import {
   useCreateGitlabIntegrationMutation,
@@ -102,6 +107,8 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
   const [deleteTarget, setDeleteTarget] = useState<Integration | null>(null);
   const [gitlabDialogOpen, setGitlabDialogOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
+  const [connectMenuOpen, setConnectMenuOpen] = useState(false);
+  const connectButtonRef = useRef<HTMLButtonElement>(null);
 
   const canRemove = (integration: Integration) => {
     if (projectId == null) return true;
@@ -224,14 +231,46 @@ export const IntegrationsPanel: FC<IntegrationsPanelProps> = ({ projectId }) => 
               : 'Connect external services to your company'}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={() => setGitlabDialogOpen(true)}>
-            Connect GitLab
+        <Box>
+          <Button
+            ref={connectButtonRef}
+            variant="contained"
+            endIcon={<KeyboardArrowDownIcon />}
+            onClick={() => setConnectMenuOpen(true)}
+          >
+            Connect
           </Button>
-          <Button variant="contained" startIcon={<GitHubIcon />} onClick={handleConnectGithub}>
-            Connect GitHub
-          </Button>
-        </Stack>
+          <Menu
+            anchorEl={connectButtonRef.current}
+            open={connectMenuOpen}
+            onClose={() => setConnectMenuOpen(false)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem
+              onClick={() => {
+                setConnectMenuOpen(false);
+                handleConnectGithub();
+              }}
+            >
+              <ListItemIcon>
+                <GitHubIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>GitHub</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setConnectMenuOpen(false);
+                setGitlabDialogOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />
+              </ListItemIcon>
+              <ListItemText>GitLab</ListItemText>
+            </MenuItem>
+          </Menu>
+        </Box>
       </Box>
 
       {showMainEmpty ? (

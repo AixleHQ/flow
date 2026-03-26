@@ -29,10 +29,6 @@ module Api
             project_accessible? && current_user.admin?
           end
 
-          def webhook_info?
-            project_accessible? && current_user.admin?
-          end
-
           private
 
           def project

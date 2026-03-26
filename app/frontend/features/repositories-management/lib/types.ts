@@ -43,8 +43,3 @@ export interface CreateRepositoryRequest {
   purpose?: string;
 }
 
-export interface WebhookInfo {
-  url: string;
-  secretToken: string;
-  trigger: string;
-}

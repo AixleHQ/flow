@@ -63,21 +63,6 @@ module Api
           render json: { items: branches }
         end
 
-        def webhook_info
-          repository = current_company.repositories.find(params[:id])
-
-          unless repository.integration.gitlab?
-            render json: { error: "webhook_info is only available for GitLab repositories" }, status: :unprocessable_entity
-            return
-          end
-
-          render json: {
-            url: "#{Settings.protocol}://#{Settings.domain}/webhooks/gitlab",
-            secret_token: repository.webhook_secret,
-            trigger: "Pipeline events"
-          }
-        end
-
         private
 
         def repository_service(integration)

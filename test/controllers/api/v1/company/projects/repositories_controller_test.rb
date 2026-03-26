@@ -237,35 +237,6 @@ module Api
             assert_equal "group/new-repo", response.parsed_body["data"]["full_name"]
           end
 
-          # --- Webhook Info ---
-          test "webhook_info returns webhook url and secret for gitlab project repository" do
-            sign_in_as @admin
-
-            get webhook_info_api_v1_company_project_repository_path(@project, @gitlab_project_repo)
-
-            assert_response :success
-            json = response.parsed_body
-            assert_includes json["url"], "/webhooks/gitlab"
-            assert_equal "project-secret-xyz", json["secret_token"]
-            assert_equal "Pipeline events", json["trigger"]
-          end
-
-          test "webhook_info returns 422 for non-gitlab project repository" do
-            sign_in_as @admin
-
-            get webhook_info_api_v1_company_project_repository_path(@project, @project_repo)
-
-            assert_response :unprocessable_entity
-            assert_includes response.parsed_body["error"], "GitLab"
-          end
-
-          test "webhook_info requires admin" do
-            sign_in_as @member
-
-            get webhook_info_api_v1_company_project_repository_path(@project, @gitlab_project_repo)
-
-            assert_response :forbidden
-          end
         end
       end
     end

@@ -267,11 +267,6 @@ export function apiV1CompanyRepositoryPath(id: ScalarType, options?: object): st
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /api/v1/company/repositories/:id/webhook_info(.:format) */
-export function webhookInfoApiV1CompanyRepositoryPath(id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "repositories" + "/" + id + "/" + "webhook_info" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
 /** /api/v1/company/assets/:id/download(.:format) */
 export function downloadApiV1CompanyAssetPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
@@ -435,11 +430,6 @@ export function apiV1CompanyProjectRepositoriesPath(project_id: ScalarType, opti
 /** /api/v1/company/projects/:project_id/repositories/:id(.:format) */
 export function apiV1CompanyProjectRepositoryPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
-}
-
-/** /api/v1/company/projects/:project_id/repositories/:id/webhook_info(.:format) */
-export function webhookInfoApiV1CompanyProjectRepositoryPath(project_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "repositories" + "/" + id + "/" + "webhook_info" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /api/v1/company/projects/:project_id/assets/:id/download(.:format) */

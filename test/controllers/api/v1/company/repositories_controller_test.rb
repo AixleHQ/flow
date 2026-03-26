@@ -144,33 +144,4 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     assert_response :forbidden
   end
 
-  # ====== WEBHOOK_INFO ======
-
-  test "#webhook_info returns webhook url and secret for gitlab repository" do
-    sign_in @admin
-
-    get :webhook_info, params: { id: @gitlab_repo.id }
-
-    assert_response :success
-    json = response.parsed_body
-    assert { json["url"].include?("/webhooks/gitlab") }
-    assert { json["secret_token"] == "test-secret-abc" }
-    assert { json["trigger"] == "Pipeline events" }
-  end
-
-  test "#webhook_info returns 422 for non-gitlab repository" do
-    sign_in @admin
-
-    get :webhook_info, params: { id: @repo.id }
-
-    assert_response :unprocessable_entity
-    json = response.parsed_body
-    assert { json["error"].include?("GitLab") }
-  end
-
-  test "#webhook_info requires admin" do
-    sign_in @employee
-    get :webhook_info, params: { id: @gitlab_repo.id }
-    assert_response :forbidden
-  end
 end
