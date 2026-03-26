@@ -13,12 +13,14 @@ class AgentActivityService
 
   Result = Struct.new(:agent_types, :sessions_by_agent, :activity_over_time, keyword_init: true)
 
-  def initialize(project:, user:, scope:, period:)
+  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil)
     @project = project
     @user = user
     @scope = scope.to_s
     @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
     @period = period.to_s
+    @tags = Array(tags).presence
+    @task_type = task_type.presence
   end
 
   def call
@@ -71,10 +73,10 @@ class AgentActivityService
 
   private
 
-  attr_reader :project, :user, :scope, :since
+  attr_reader :project, :user, :scope, :since, :tags, :task_type
 
   def base_sessions
-    scope_sessions.where(created_at: since..)
+    scope_sessions.where(created_at: since..).then { |s| apply_task_filters(s) }
   end
 
   def scope_sessions
@@ -84,5 +86,17 @@ class AgentActivityService
     else
       project.terminal_sessions
     end
+  end
+
+  def apply_task_filters(sessions)
+    return sessions unless tags.present? || task_type.present?
+
+    board_tasks = project.board&.board_tasks || BoardTask.none
+    board_tasks = board_tasks.tags_overlap(tags) if tags.present?
+    board_tasks = board_tasks.where(task_type: task_type) if task_type.present?
+
+    sessions.where(
+      id: StepRun.where(workflow_run_id: WorkflowRun.where(board_task_id: board_tasks.select(:id))).select(:terminal_session_id)
+    )
   end
 end

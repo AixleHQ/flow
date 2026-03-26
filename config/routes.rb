@@ -154,6 +154,7 @@ Rails.application.routes.draw do
                   get :session_source_breakdown
                   get :session_duration_distribution
                   get :cost_token_usage
+                  get :filter_options
                 end
               end
               resource :workflow_costs, only: %i[show], controller: "workflow_costs"
