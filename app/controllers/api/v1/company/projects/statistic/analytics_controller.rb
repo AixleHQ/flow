@@ -10,7 +10,7 @@ module Api
             def filter_options
               board = current_project.board
               tags = board ? board.board_tasks.pluck(:tags).flatten.compact.uniq.sort : []
-              task_types = BoardTask.task_type.values
+              task_types = BoardTask.task_type.values.map(&:to_s)
 
               render json: { tags: tags, taskTypes: task_types }
             end
