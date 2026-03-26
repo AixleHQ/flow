@@ -7,6 +7,8 @@ module Agents
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
+    DEFAULT_MODEL = "gpt-5.3-codex"
+
     def self.default_config_paths
       [ "~/.codex/config.toml", "AGENTS.md" ]
     end
@@ -63,9 +65,12 @@ module Agents
     end
 
     # Session command: codex --yolo (interactive), codex exec (non-interactive)
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
+    # Non-interactive runs pin a model explicitly so Codex never opens
+    # interactive model-selection or migration prompts.
     def session_command(mode:, prompt: nil)
-      "codex --yolo"
+      return "codex --yolo" unless mode == "non_interactive"
+
+      %(codex exec --skip-git-repo-check --model #{DEFAULT_MODEL})
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)
@@ -311,6 +316,8 @@ module Agents
     def generate_config_toml(workflow_config)
       workspace = workflow_config[:workspace] || "/workspace"
       <<~TOML
+        model = "#{DEFAULT_MODEL}"
+
         # Auto-approve all commands without asking
         approval_policy = "never"
 

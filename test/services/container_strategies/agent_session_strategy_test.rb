@@ -336,6 +336,31 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("empty_key=") }
     end
 
+    test "launch_agent_in_tmux uses codex exec with AGENT_PROMPT for non_interactive codex sessions" do
+      @session.update!(agent_type: "codex", mode: "non_interactive", initial_prompt: "Run tests")
+      strategy = build_strategy(agent_type: "codex")
+      container_mock = mock("container")
+
+      mock_adapter = mock("adapter")
+      mock_adapter.expects(:session_command).with(mode: "non_interactive", prompt: "Run tests")
+                  .returns("codex exec --skip-git-repo-check --model gpt-5.3-codex")
+
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.expects(:for).with("codex").returns(mock_service)
+
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:exec).with do |container, command|
+        container == container_mock &&
+          command[0] == "sh" &&
+          command[1] == "-c" &&
+          command[2].include?('codex exec --skip-git-repo-check --model gpt-5.3-codex "$AGENT_PROMPT"')
+      end
+
+      strategy.send(:launch_agent_in_tmux, container_mock)
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code", credential: nil)

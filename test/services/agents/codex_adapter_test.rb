@@ -89,6 +89,7 @@ module Agents
 
       # Check config.toml content
       toml = files["/home/codex/.codex/config.toml"]
+      assert_includes toml, 'model = "gpt-5.3-codex"'
       assert_includes toml, 'approval_policy = "never"'
       assert_includes toml, 'sandbox_mode = "danger-full-access"'
       assert_includes toml, 'trust_level = "trusted"'
@@ -101,6 +102,12 @@ module Agents
 
       toml = files["/home/codex/.codex/config.toml"]
       assert_includes toml, "/workspace"
+    end
+
+    test "session_command returns codex exec with explicit model for non_interactive mode" do
+      result = @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+
+      assert_equal "codex exec --skip-git-repo-check --model gpt-5.3-codex", result
     end
   end
 end
