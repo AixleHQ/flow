@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class SessionCostTokenUsageService
+  include TaskFilterable
+
   PERIOD_DAYS = {
     "7d" => 7,
     "30d" => 30,
@@ -80,17 +82,5 @@ class SessionCostTokenUsageService
     else
       project.terminal_sessions
     end
-  end
-
-  def apply_task_filters(sessions)
-    return sessions unless tags.present? || task_type.present?
-
-    board_tasks = project.board&.board_tasks || BoardTask.none
-    board_tasks = board_tasks.tags_overlap(tags) if tags.present?
-    board_tasks = board_tasks.where(task_type: task_type) if task_type.present?
-
-    sessions.where(
-      id: StepRun.where(workflow_run_id: WorkflowRun.where(board_task_id: board_tasks.select(:id))).select(:terminal_session_id)
-    )
   end
 end

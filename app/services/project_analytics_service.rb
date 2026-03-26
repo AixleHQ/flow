@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ProjectAnalyticsService
+  include TaskFilterable
+
   PERIOD_DAYS = {
     "7d" => 7,
     "30d" => 30,
@@ -58,18 +60,6 @@ class ProjectAnalyticsService
     end
   end
 
-  def apply_task_filters(sessions)
-    return sessions unless tags.present? || task_type.present?
-
-    board_tasks = project.board&.board_tasks || BoardTask.none
-    board_tasks = board_tasks.tags_overlap(tags) if tags.present?
-    board_tasks = board_tasks.where(task_type: task_type) if task_type.present?
-
-    sessions.where(
-      id: StepRun.where(workflow_run_id: WorkflowRun.where(board_task_id: board_tasks.select(:id))).select(:terminal_session_id)
-    )
-  end
-
   def usage_stats_for(sessions)
     row = UsageStatistic
       .where(terminal_session_id: sessions.select(:id))
@@ -89,10 +79,6 @@ class ProjectAnalyticsService
     end
     return runs unless tags.present? || task_type.present?
 
-    board_tasks = project.board&.board_tasks || BoardTask.none
-    board_tasks = board_tasks.tags_overlap(tags) if tags.present?
-    board_tasks = board_tasks.where(task_type: task_type) if task_type.present?
-
-    runs.where(board_task_id: board_tasks.select(:id))
+    runs.where(board_task_id: filtered_board_tasks.select(:id))
   end
 end
