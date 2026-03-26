@@ -49,7 +49,7 @@ export const workflowCostAnalyticsApi = baseApi.injectEndpoints({
       query: ({ projectId, scope, period, tags, taskType }) => ({
         url: Routes.backend.apiV1CompanyProjectStatisticWorkflowCostsPath(projectId),
         method: 'GET',
-        params: { scope, period, 'tags[]': tags, task_type: taskType },
+        params: { scope, period, tags, task_type: taskType },
       }),
       providesTags: [QueryTag.WorkflowCostAnalytics],
     }),
