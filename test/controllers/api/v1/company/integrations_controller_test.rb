@@ -177,7 +177,7 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
     Github::TokenService.expects(:new).returns(mock_service)
 
     assert_difference("Integration.count", 1) do
-      post :create, params: { installation_id: "99999" }
+      post :create, params: { provider: "github", installation_id: "99999" }
     end
 
     assert_response :created
@@ -194,7 +194,7 @@ class Api::V1::Company::IntegrationsControllerTest < ActionController::TestCase
     )
 
     assert_difference("Integration.count", 1) do
-      post :create, params: { installation_id: "bad-id" }
+      post :create, params: { provider: "github", installation_id: "bad-id" }
     end
 
     assert_response :created
