@@ -69,7 +69,7 @@ class WorkflowCostAnalyticsService
              WorkflowRun.for_user_in_project(project, user, since)
            else
              WorkflowRun.for_project_in_period(project, since)
-           end
+    end
 
     if tags.present? || task_type.present?
       runs = runs.where(board_task_id: filtered_board_tasks.select(:id))
