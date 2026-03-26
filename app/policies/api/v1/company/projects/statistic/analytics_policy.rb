@@ -26,6 +26,10 @@ module Api
               project_accessible?
             end
 
+            def filter_options?
+              project_accessible?
+            end
+
             private
 
             def project
