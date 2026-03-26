@@ -9,7 +9,7 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/filter_options
             def filter_options
               board = current_project.board
-              tags = board ? board.board_tasks.pluck(:tags).flatten.uniq.sort : []
+              tags = board ? board.board_tasks.pluck(:tags).flatten.compact.uniq.sort : []
               task_types = BoardTask.task_type.values
 
               render json: { tags: tags, taskTypes: task_types }
