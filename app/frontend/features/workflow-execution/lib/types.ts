@@ -67,7 +67,7 @@ export interface StepOverride {
 
 export interface IGetWorkflowRunsParams {
   projectId: number;
-  state?: string;
+  state?: WorkflowRun['state'];
   page?: number;
   perPage?: number;
 }
