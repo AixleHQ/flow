@@ -4,6 +4,7 @@ export interface TaskWait {
   metadata: Record<string, unknown> & {
     repoFullName?: string;
     prNumber?: number;
+    runId?: number;
   };
   createdAt: string;
 }
@@ -23,7 +24,7 @@ export interface BoardTask {
   childrenCount: number;
   commentsCount: number;
   assetsCount: number;
-  recentWorkflowRuns: Array<{ id: number; state: string }>;
+  recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string }>;
   pendingWaits: TaskWait[];
   createdAt: string;
   updatedAt: string;

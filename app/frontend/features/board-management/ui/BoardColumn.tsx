@@ -10,6 +10,7 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 import type { BoardColumn as BoardColumnType, BoardTask } from 'entities/board-task';
 import { WORKFLOW_ACTIVE_STATES, workflowPulse, workflowStatusColor } from 'entities/board-task';
+import { formatElapsedTime } from 'shared/lib';
 
 import { SortableTaskCard } from './SortableTaskCard';
 
@@ -39,8 +40,18 @@ const CollapsedTaskIndicator = ({ task, onClick }: CollapsedTaskIndicatorProps) 
   }
 
   const tooltipLines = [task.title];
-  if (latestRun) tooltipLines.push(`Status: ${latestRun.state}`);
-  if (hasPendingWaits) tooltipLines.push('Waiting');
+  if (latestRun) {
+    const stateLabel = latestRun.state.charAt(0).toUpperCase() + latestRun.state.slice(1);
+    if (latestRun.state === 'running' && latestRun.createdAt) {
+      tooltipLines.push(`${stateLabel} — ${formatElapsedTime(latestRun.createdAt)}`);
+    } else {
+      tooltipLines.push(`Status: ${latestRun.state}`);
+    }
+  }
+  if (hasPendingWaits) {
+    const oldestWait = task.pendingWaits.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+    tooltipLines.push(`Waiting — ${formatElapsedTime(oldestWait.createdAt)}`);
+  }
 
   return (
     <Tooltip title={tooltipLines.join(' · ')} placement="right" arrow>
