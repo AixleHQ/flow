@@ -31,7 +31,7 @@ class BoardTaskSerializer < ApplicationSerializer
   end
 
   def pending_waits
-    object.task_waits.select(&:pending?).map do |wait|
+    object.pending_task_waits.map do |wait|
       { id: wait.id, wait_type: wait.wait_type, metadata: wait.metadata, created_at: wait.created_at }
     end
   end
