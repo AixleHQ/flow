@@ -507,6 +507,11 @@ export function costTokenUsageApiV1CompanyProjectStatisticAnalyticsPath(project_
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "cost_token_usage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /api/v1/company/projects/:project_id/statistic/analytics/filter_options(.:format) */
+export function filterOptionsApiV1CompanyProjectStatisticAnalyticsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "statistic" + "/" + "analytics" + "/" + "filter_options" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /api/v1/company/projects/:project_id/terminal_sessions(.:format) */
 export function apiV1CompanyProjectTerminalSessionsPath(project_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "terminal_sessions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);

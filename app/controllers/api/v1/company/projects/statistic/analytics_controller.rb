@@ -6,17 +6,30 @@ module Api
       module Projects
         module Statistic
           class AnalyticsController < Projects::ApplicationController
+            # GET /api/v1/company/projects/:project_id/statistic/analytics/filter_options
+            def filter_options
+              board = current_project.board
+              tags = board ? board.board_tasks.pluck(:tags).flatten.compact.uniq.sort : []
+              task_types = BoardTask.task_type.values.map(&:to_s)
+
+              render json: { tags: tags, taskTypes: task_types }
+            end
+
             # GET /api/v1/company/projects/:project_id/statistic/analytics
             #
             # Query params:
-            #   scope  - user | project (default: project)
-            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            #   scope     - user | project (default: project)
+            #   period    - 7d | 30d | 90d | 1y     (default: 30d)
+            #   tags[]    - array of tags to filter by (optional)
+            #   task_type - task type to filter by (optional)
             def show
               result = ProjectAnalyticsService.new(
                 project: current_project,
                 user: current_user,
                 scope: params.fetch(:scope, "project"),
-                period: params.fetch(:period, "30d")
+                period: params.fetch(:period, "30d"),
+                tags: params[:tags],
+                task_type: params[:task_type]
               ).call
 
               render json: {
@@ -31,14 +44,18 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/agent_activity
             #
             # Query params:
-            #   scope  - user | project (default: project)
-            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            #   scope     - user | project (default: project)
+            #   period    - 7d | 30d | 90d | 1y     (default: 30d)
+            #   tags[]    - array of tags to filter by (optional)
+            #   task_type - task type to filter by (optional)
             def agent_activity
               result = AgentActivityService.new(
                 project: current_project,
                 user: current_user,
                 scope: params.fetch(:scope, "project"),
-                period: params.fetch(:period, "30d")
+                period: params.fetch(:period, "30d"),
+                tags: params[:tags],
+                task_type: params[:task_type]
               ).call
 
               render json: {
@@ -64,14 +81,18 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/session_source_breakdown
             #
             # Query params:
-            #   scope  - user | project (default: project)
-            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            #   scope     - user | project (default: project)
+            #   period    - 7d | 30d | 90d | 1y     (default: 30d)
+            #   tags[]    - array of tags to filter by (optional)
+            #   task_type - task type to filter by (optional)
             def session_source_breakdown
               result = SessionSourceBreakdownService.new(
                 project: current_project,
                 user: current_user,
                 scope: params.fetch(:scope, "project"),
-                period: params.fetch(:period, "30d")
+                period: params.fetch(:period, "30d"),
+                tags: params[:tags],
+                task_type: params[:task_type]
               ).call
 
               render json: {
@@ -84,14 +105,18 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/session_duration_distribution
             #
             # Query params:
-            #   scope  - user | project (default: project)
-            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            #   scope     - user | project (default: project)
+            #   period    - 7d | 30d | 90d | 1y     (default: 30d)
+            #   tags[]    - array of tags to filter by (optional)
+            #   task_type - task type to filter by (optional)
             def session_duration_distribution
               result = SessionDurationDistributionService.new(
                 project: current_project,
                 user: current_user,
                 scope: params.fetch(:scope, "project"),
-                period: params.fetch(:period, "30d")
+                period: params.fetch(:period, "30d"),
+                tags: params[:tags],
+                task_type: params[:task_type]
               ).call
 
               render json: {
@@ -104,14 +129,18 @@ module Api
             # GET /api/v1/company/projects/:project_id/statistic/analytics/cost_token_usage
             #
             # Query params:
-            #   scope  - user | project (default: project)
-            #   period - 7d | 30d | 90d | 1y     (default: 30d)
+            #   scope     - user | project (default: project)
+            #   period    - 7d | 30d | 90d | 1y     (default: 30d)
+            #   tags[]    - array of tags to filter by (optional)
+            #   task_type - task type to filter by (optional)
             def cost_token_usage
               result = SessionCostTokenUsageService.new(
                 project: current_project,
                 user: current_user,
                 scope: params.fetch(:scope, "project"),
-                period: params.fetch(:period, "30d")
+                period: params.fetch(:period, "30d"),
+                tags: params[:tags],
+                task_type: params[:task_type]
               ).call
 
               render json: {

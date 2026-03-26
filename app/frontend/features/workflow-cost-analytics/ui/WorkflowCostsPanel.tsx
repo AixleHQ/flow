@@ -129,11 +129,13 @@ interface WorkflowCostsPanelProps {
   projectId?: number;
   scope: AnalyticsScope;
   period: AnalyticsPeriod;
+  tags?: string[];
+  taskType?: string;
 }
 
-const WorkflowCostsPanel = ({ projectId, scope, period }: WorkflowCostsPanelProps) => {
+const WorkflowCostsPanel = ({ projectId, scope, period, tags, taskType }: WorkflowCostsPanelProps) => {
   const { data, isLoading, isError } = useGetWorkflowCostAnalyticsQuery(
-    { projectId: projectId!, scope, period },
+    { projectId: projectId!, scope, period, tags, taskType },
     { skip: !projectId },
   );
 

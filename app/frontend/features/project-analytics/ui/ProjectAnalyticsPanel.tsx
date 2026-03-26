@@ -6,6 +6,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import TokenIcon from '@mui/icons-material/Token';
 import {
+  Autocomplete,
   Box,
   Card,
   Chip,
@@ -14,6 +15,7 @@ import {
   MenuItem,
   Select,
   Skeleton,
+  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -42,6 +44,7 @@ import { formatCostCents, formatTokens } from 'shared/lib';
 import type { AgentActivityData, AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
 import {
   useGetAgentActivityQuery,
+  useGetAnalyticsFilterOptionsQuery,
   useGetCostTokenUsageQuery,
   useGetProjectAnalyticsQuery,
   useGetSessionDurationDistributionQuery,
@@ -203,18 +206,27 @@ interface ProjectAnalyticsPanelProps {
 const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
   const [period, setPeriod] = useState<AnalyticsPeriod>('30d');
   const [scope, setScope] = useState<AnalyticsScope>('project');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [selectedTaskType, setSelectedTaskType] = useState<string>('');
 
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;
   const tickInterval = days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
+
+  const { data: filterOptions } = useGetAnalyticsFilterOptionsQuery(projectId!, { skip: !projectId });
+
+  const filterParams = {
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
+    taskType: selectedTaskType || undefined,
+  };
 
   const {
     data: summary,
     isLoading,
     isError,
-  } = useGetProjectAnalyticsQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
+  } = useGetProjectAnalyticsQuery({ projectId: projectId!, scope, period, ...filterParams }, { skip: !projectId });
 
   const { data: agentActivity, isLoading: isAgentActivityLoading } = useGetAgentActivityQuery(
-    { projectId: projectId!, scope, period },
+    { projectId: projectId!, scope, period, ...filterParams },
     { skip: !projectId },
   );
 
@@ -222,19 +234,25 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
     data: sessionSourceData,
     isLoading: isSourceLoading,
     isError: isSourceError,
-  } = useGetSessionSourceBreakdownQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
+  } = useGetSessionSourceBreakdownQuery(
+    { projectId: projectId!, scope, period, ...filterParams },
+    { skip: !projectId },
+  );
 
   const {
     data: durationData,
     isLoading: isDurationLoading,
     isError: isDurationError,
-  } = useGetSessionDurationDistributionQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
+  } = useGetSessionDurationDistributionQuery(
+    { projectId: projectId!, scope, period, ...filterParams },
+    { skip: !projectId },
+  );
 
   const {
     data: costTokenData,
     isLoading: isCostTokenLoading,
     isError: isCostTokenError,
-  } = useGetCostTokenUsageQuery({ projectId: projectId!, scope, period }, { skip: !projectId });
+  } = useGetCostTokenUsageQuery({ projectId: projectId!, scope, period, ...filterParams }, { skip: !projectId });
 
   const activityChartData = agentActivity ? buildActivityChartData(agentActivity) : [];
   const agentTypes = agentActivity?.agentTypes ?? [];
@@ -280,6 +298,45 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
         </Box>
         <Box sx={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
           <ScopeSelector scope={scope} onScope={setScope} />
+          <Autocomplete
+            multiple
+            size="small"
+            options={filterOptions?.tags ?? []}
+            value={selectedTags}
+            onChange={(_, newValue) => setSelectedTags(newValue)}
+            renderInput={(params) => (
+              <TextField {...params} label="Tags" sx={{ backgroundColor: 'background.paper' }} />
+            )}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  label={option}
+                  size="small"
+                  {...getTagProps({ index })}
+                  key={option}
+                  sx={{ height: 18, fontSize: '11px' }}
+                />
+              ))
+            }
+            sx={{ minWidth: 180 }}
+            disableCloseOnSelect
+          />
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Task Type</InputLabel>
+            <Select
+              value={selectedTaskType}
+              label="Task Type"
+              onChange={(e) => setSelectedTaskType(e.target.value)}
+              sx={{ backgroundColor: 'background.paper' }}
+            >
+              <MenuItem value="">All types</MenuItem>
+              {(filterOptions?.taskTypes ?? []).map((type) => (
+                <MenuItem key={type} value={type}>
+                  {type.replace(/_/g, ' ')}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <FormControl size="small" sx={{ minWidth: 130 }}>
             <InputLabel>Period</InputLabel>
             <Select
@@ -565,7 +622,13 @@ const ProjectAnalyticsPanel = ({ projectId }: ProjectAnalyticsPanelProps) => {
       </Card>
 
       {/* ── Workflow Costs ────────────────────────────────────────── */}
-      <WorkflowCostsPanel projectId={projectId} scope={scope} period={period} />
+      <WorkflowCostsPanel
+        projectId={projectId}
+        scope={scope}
+        period={period}
+        tags={selectedTags.length > 0 ? selectedTags : undefined}
+        taskType={selectedTaskType || undefined}
+      />
     </Box>
   );
 };
