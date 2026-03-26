@@ -6,7 +6,10 @@ module Api
       module Projects
         class WorkflowRunsController < ApplicationController
           def index
-            runs = current_project.workflow_runs.includes(:workflow, step_runs: [ :step, { sub_step_runs: :sub_step } ]).order(created_at: :desc)
+            runs = current_project.workflow_runs
+                                  .includes(:workflow, step_runs: [ :step, { sub_step_runs: :sub_step } ])
+                                  .ransack(q_params).result
+                                  .order(created_at: :desc)
             respond_with paginate(runs), each_serializer: WorkflowRunSerializer
           end
 
