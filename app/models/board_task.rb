@@ -14,6 +14,7 @@ class BoardTask < ApplicationRecord
   has_many :column_transitions, dependent: :delete_all
   has_many :board_activities, dependent: :delete_all
   has_many :task_waits, dependent: :destroy
+  has_many :pending_task_waits, -> { pending }, class_name: "TaskWait", dependent: :destroy
 
   enumerize :task_type, in: %i[epic story bug not_specified], default: :not_specified, predicates: true
   enumerize :priority, in: %i[low medium high critical]
