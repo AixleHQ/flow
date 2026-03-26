@@ -64,11 +64,13 @@ module Api
               company: current_company,
               connected_by: current_user
             ).create(personal_access_token: params[:personal_access_token].to_s)
-          else
+          elsif provider == "github"
             Github::IntegrationService.new(
               company: current_company,
               connected_by: current_user
             ).create(installation_id: params[:installation_id].to_s)
+          else
+            raise ArgumentError, "Unsupported provider: #{provider}"
           end
 
           respond_with integration, serializer: IntegrationSerializer
