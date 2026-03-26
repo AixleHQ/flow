@@ -65,10 +65,10 @@ class WorkflowCostAnalyticsService
 
   def base_workflow_runs
     runs = case scope
-           when "user"
-             WorkflowRun.for_user_in_project(project, user, since)
-           else
-             WorkflowRun.for_project_in_period(project, since)
+    when "user"
+      WorkflowRun.for_user_in_project(project, user, since)
+    else
+      WorkflowRun.for_project_in_period(project, since)
     end
 
     if tags.present? || task_type.present?
