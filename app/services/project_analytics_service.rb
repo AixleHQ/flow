@@ -82,10 +82,10 @@ class ProjectAnalyticsService
 
   def base_workflow_runs
     runs = case scope
-           when "user"
-             project.workflow_runs.where(user:, created_at: since..)
-           else
-             project.workflow_runs.where(created_at: since..)
+    when "user"
+      project.workflow_runs.where(user:, created_at: since..)
+    else
+      project.workflow_runs.where(created_at: since..)
     end
     return runs unless tags.present? || task_type.present?
 
