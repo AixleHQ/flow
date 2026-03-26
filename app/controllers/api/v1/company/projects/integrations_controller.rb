@@ -35,7 +35,6 @@ module Api
             integration.destroy
             respond_with integration
           end
-
         end
       end
     end

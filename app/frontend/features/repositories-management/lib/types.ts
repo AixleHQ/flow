@@ -42,4 +42,3 @@ export interface CreateRepositoryRequest {
   sourceBranch?: string;
   purpose?: string;
 }
-

@@ -31,7 +31,6 @@ module Api
         def branches?
           current_user.admin?
         end
-
       end
     end
   end

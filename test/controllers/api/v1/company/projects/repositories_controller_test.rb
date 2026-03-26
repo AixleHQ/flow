@@ -236,7 +236,6 @@ module Api
             assert_response :created
             assert_equal "group/new-repo", response.parsed_body["data"]["full_name"]
           end
-
         end
       end
     end

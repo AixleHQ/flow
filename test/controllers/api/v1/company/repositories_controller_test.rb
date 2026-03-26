@@ -143,5 +143,4 @@ class Api::V1::Company::RepositoriesControllerTest < ActionController::TestCase
     get :available, params: { integration_id: @integration.id }
     assert_response :forbidden
   end
-
 end

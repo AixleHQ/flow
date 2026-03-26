@@ -1,12 +1,7 @@
 import { baseApi, QueryTag } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-import type {
-  Repository,
-  AvailableRepo,
-  CreateRepositoryRequest,
-  UpdateRepositoryRequest,
-} from '../lib/types';
+import type { Repository, AvailableRepo, CreateRepositoryRequest, UpdateRepositoryRequest } from '../lib/types';
 
 interface RepositoriesResponse {
   items: Repository[];
@@ -121,7 +116,6 @@ export const repositoriesApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: [QueryTag.Repositories],
     }),
-
   }),
 });
 
