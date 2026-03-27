@@ -29,6 +29,16 @@ const CompanySessionViewPage = () => {
 
   const isTerminal = ['finished', 'failed'].includes(session?.state ?? '');
 
+  // Redirect palad_builder sessions to dedicated page
+  useEffect(() => {
+    if (session?.metadata?.paladBuilder && routeProjectId) {
+      navigate({
+        to: Routes.frontend.paladBuilderRunPath(routeProjectId, String(session.id)),
+        replace: true,
+      });
+    }
+  }, [session, routeProjectId, navigate]);
+
   useEffect(() => {
     if (isTerminal && isStopping) setIsStopping(false);
   }, [isTerminal, isStopping]);
