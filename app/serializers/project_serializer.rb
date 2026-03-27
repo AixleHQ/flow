@@ -9,6 +9,10 @@ class ProjectSerializer < ApplicationSerializer
   end
 
   def last_activity_at
-    object.terminal_sessions.maximum(:started_at)
+    if object.respond_to?(:cached_last_activity_at) && object.has_attribute?(:cached_last_activity_at)
+      object.cached_last_activity_at
+    else
+      object.terminal_sessions.maximum(:started_at)
+    end
   end
 end

@@ -7,6 +7,10 @@ module Api
         def index
           projects = Project.for_user(current_user)
                             .includes(:project_collaborators)
+                            .select(
+                              "projects.*",
+                              "(SELECT MAX(terminal_sessions.started_at) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_last_activity_at"
+                            )
                             .ransack(q_params).result
           respond_with paginate(projects)
         end

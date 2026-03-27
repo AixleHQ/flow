@@ -21,7 +21,7 @@ class StepRunSerializer < ApplicationSerializer
   def sub_step_runs
     return [] unless include_associations
 
-    object.sub_step_runs.includes(:sub_step).sort_by { |ssr| ssr.sub_step&.position || 0 }.map do |ssr|
+    object.sub_step_runs.sort_by { |ssr| ssr.sub_step&.position || 0 }.map do |ssr|
       SubStepRunSerializer.new(ssr).serializable_hash
     end
   end
@@ -30,9 +30,8 @@ class StepRunSerializer < ApplicationSerializer
     return [] unless include_associations
 
     object.workflow_run.step_runs
-      .where(step_id: object.step_id, state: :failed)
-      .where.not(id: object.id)
-      .order(created_at: :asc)
+      .select { |sr| sr.step_id == object.step_id && sr.state == "failed" && sr.id != object.id }
+      .sort_by(&:created_at)
       .map { |sr| { error_message: sr.error_message, failed_at: sr.completed_at&.iso8601 } }
   end
 end

@@ -9,7 +9,7 @@ module Api
             workflows = Workflow.visible_for_project(current_project)
                                 .includes(:steps, runs: [])
                                 .ransack(params[:q]).result
-            respond_with paginate(workflows), each_serializer: WorkflowSerializer
+            respond_with paginate(workflows), each_serializer: WorkflowSerializer, project: current_project
           end
 
           def show
