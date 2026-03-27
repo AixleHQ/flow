@@ -121,6 +121,16 @@ All the tools below are **internal tools** (like `mark_sub_step`), available onl
 | `meta_get_workflow` | Get the full workflow with steps/sub-steps | — |
 | `meta_finalize_workflow` | Finalize and validate the workflow | `workflow:finalized` |
 | `meta_import_bmad` | Import BMAD context (see §5) | — |
+| **Board & Column tools** | | |
+| `meta_get_board` | Get the current state of the project board (columns, bindings) | — |
+| `meta_create_board_column` | Create a new column on the board | `board:column_created` |
+| `meta_update_board_column` | Update a column (name, purpose, position) | `board:column_updated` |
+| `meta_delete_board_column` | Delete an empty column | `board:column_deleted` |
+| `meta_reorder_board_columns` | Reorder columns | `board:columns_reordered` |
+| `meta_create_column_binding` | Bind a workflow to a column (auto/manual trigger) | `board:binding_created` |
+| `meta_update_column_binding` | Update a binding (trigger_mode, cooldown) | `board:binding_updated` |
+| `meta_delete_column_binding` | Remove a workflow binding from a column | `board:binding_deleted` |
+| `meta_setup_board_from_preset` | Create a board from a preset (simple_kanban, dev_team, full_sdlc) | `board:created` |
 
 ### 3.2 Key Tool Definitions
 
@@ -210,6 +220,182 @@ Logic:
    - All sub-steps have a name
 3. Return `{ valid: true/false, errors: [...], summary: "..." }`
 
+### 3.3 Board & Column Tool Definitions
+
+#### meta_get_board
+
+```json
+{
+  "name": "meta_get_board",
+  "description": "Get the current state of the project board: columns with positions, purposes, and workflow bindings. Use this to understand existing board structure before making changes.",
+  "parameters": {}
+}
+```
+
+Logic:
+1. Get the current project's Board (board = project.board)
+2. Load columns with column_workflow_bindings and their associated workflows
+3. Return:
+
+```json
+{
+  "board_id": 1,
+  "name": "Project Board",
+  "preset_origin": "dev_team",
+  "columns": [
+    {
+      "id": 10,
+      "name": "Backlog",
+      "position": 0,
+      "purpose": "Tasks waiting to be picked up",
+      "tasks_count": 12,
+      "workflow_binding": null
+    },
+    {
+      "id": 11,
+      "name": "Tech Design",
+      "position": 1,
+      "purpose": "Architecture and technical specification",
+      "tasks_count": 3,
+      "workflow_binding": {
+        "id": 5,
+        "workflow_id": 42,
+        "workflow_name": "Tech Design Review",
+        "trigger_mode": "auto",
+        "cooldown_seconds": 5
+      }
+    }
+  ]
+}
+```
+
+#### meta_create_board_column
+
+```json
+{
+  "name": "meta_create_board_column",
+  "description": "Create a new column on the project board. Position is auto-assigned to the end unless specified.",
+  "parameters": {
+    "name": { "type": "string", "required": true },
+    "purpose": { "type": "string", "required": false, "description": "Description of what this column represents in the workflow process" },
+    "position": { "type": "integer", "required": false, "description": "0-based position. If omitted, appended to end" }
+  }
+}
+```
+
+Logic:
+1. Get the project's board
+2. Create a `BoardColumn` with the given name and purpose
+3. If position is not specified, assign the next one after the last
+4. If position is specified, shift the remaining columns
+5. Broadcast `board:column_created`
+6. Return `{ column_id, name, position, purpose }`
+
+#### meta_update_board_column
+
+```json
+{
+  "name": "meta_update_board_column",
+  "description": "Update an existing board column's name, purpose, or position.",
+  "parameters": {
+    "column_id": { "type": "integer", "required": true },
+    "name": { "type": "string", "required": false },
+    "purpose": { "type": "string", "required": false },
+    "position": { "type": "integer", "required": false }
+  }
+}
+```
+
+#### meta_delete_board_column
+
+```json
+{
+  "name": "meta_delete_board_column",
+  "description": "Delete a board column. Column must have no tasks (tasks_count == 0). Fails if column contains tasks — move them first.",
+  "parameters": {
+    "column_id": { "type": "integer", "required": true }
+  }
+}
+```
+
+#### meta_reorder_board_columns
+
+```json
+{
+  "name": "meta_reorder_board_columns",
+  "description": "Reorder all board columns. Pass an array of column_ids in the desired order.",
+  "parameters": {
+    "column_ids": { "type": "array", "items": { "type": "integer" }, "required": true, "description": "Ordered array of all column IDs" }
+  }
+}
+```
+
+#### meta_create_column_binding
+
+```json
+{
+  "name": "meta_create_column_binding",
+  "description": "Bind a workflow to a board column. When a task enters this column, the workflow can be triggered manually or automatically. Only one binding per column.",
+  "parameters": {
+    "column_id": { "type": "integer", "required": true },
+    "workflow_id": { "type": "integer", "required": true },
+    "trigger_mode": { "type": "string", "enum": ["manual", "auto"], "default": "manual", "description": "manual = button in UI, auto = triggers when task enters column" },
+    "cooldown_seconds": { "type": "integer", "default": 5, "description": "Minimum seconds between auto-triggers for same task" }
+  }
+}
+```
+
+Logic:
+1. Verify that the column belongs to the current board
+2. Verify that the workflow is available in the project (`Workflow.visible_for_project`)
+3. Verify that the column does not already have a binding (unique constraint)
+4. Create a `ColumnWorkflowBinding`
+5. Broadcast `board:binding_created`
+6. Return `{ binding_id, column_id, column_name, workflow_id, workflow_name, trigger_mode, cooldown_seconds }`
+
+#### meta_update_column_binding
+
+```json
+{
+  "name": "meta_update_column_binding",
+  "description": "Update a column workflow binding's trigger mode or cooldown.",
+  "parameters": {
+    "binding_id": { "type": "integer", "required": true },
+    "trigger_mode": { "type": "string", "enum": ["manual", "auto"], "required": false },
+    "cooldown_seconds": { "type": "integer", "required": false }
+  }
+}
+```
+
+#### meta_delete_column_binding
+
+```json
+{
+  "name": "meta_delete_column_binding",
+  "description": "Remove a workflow binding from a column. Tasks will no longer trigger the workflow.",
+  "parameters": {
+    "binding_id": { "type": "integer", "required": true }
+  }
+}
+```
+
+#### meta_setup_board_from_preset
+
+```json
+{
+  "name": "meta_setup_board_from_preset",
+  "description": "Create or reset board columns from a predefined preset. WARNING: this replaces existing columns if board already has them (only if empty). Use for new projects or initial setup.",
+  "parameters": {
+    "preset": { "type": "string", "enum": ["simple_kanban", "dev_team", "full_sdlc"], "required": true }
+  }
+}
+```
+
+Available presets:
+- **simple_kanban**: Backlog → In Progress → Done (3 columns)
+- **dev_team**: Backlog → Tech Design → Implementation → Code Review → QA → Ready for Release → Done (7 columns, with purposes)
+- **full_sdlc**: 19 columns of the full SDLC cycle (from Design to Release)
+
 ---
 
 ## 4. Steps Meta-Workflow
@@ -248,11 +434,20 @@ Step 3: "Build Workflow Structure"
     4. Configure Dependencies — set up step dependencies
     5. Link Resources — attach agents, tools, MCP servers, skills to steps
 
-Step 4: "Validate & Refine"
+Step 4: "Configure Board & Automation"
+  Agent: Workflow Architect
+  SubSteps:
+    1. Inspect Board — get current board state via meta_get_board
+    2. Propose Board Changes — suggest column additions/modifications for new workflow
+    3. Create/Update Columns — add columns matching workflow stages
+    4. Bind Workflows — create ColumnWorkflowBindings (auto/manual triggers)
+    5. Review Automation — show user the complete board → workflow automation map
+
+Step 5: "Validate & Refine"
   Agent: Workflow Architect
   SubSteps:
     1. Run Validation — execute meta_finalize_workflow
-    2. Review with User — walk through the complete workflow
+    2. Review with User — walk through the complete workflow + board setup
     3. Apply Corrections — make any adjustments user requests
     4. Final Approval — user confirms the workflow is ready
 ```
