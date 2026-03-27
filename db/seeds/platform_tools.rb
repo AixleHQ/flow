@@ -70,12 +70,12 @@ module Seeds
       {
         name: "board_add_comment",
         display_name: "Board Add Comment",
-        description: "Add an agent comment to a task on the current board.",
+        description: "Add an agent comment to a task on the current board. Markdown is supported in the body field (bold, italic, code blocks, lists, links, tables, etc.).",
         input_schema: {
           type: "object",
           properties: {
             task_id: { type: "integer", description: "Board task ID" },
-            body: { type: "string", description: "Comment text" },
+            body: { type: "string", description: "Comment body. Markdown is supported (e.g. **bold**, `code`, lists, headings, links)." },
             tags: {
               type: "array",
               items: { type: "string" },

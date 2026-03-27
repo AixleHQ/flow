@@ -27,4 +27,19 @@ class Seeds::PlatformToolsTest < ActiveSupport::TestCase
       assert tool.enabled?
     end
   end
+
+  test "board_add_comment tool description mentions markdown support" do
+    Seeds::PlatformTools.seed!
+
+    tool = Tool.find_by(name: "board_add_comment")
+    assert_not_nil tool
+
+    assert_match(/markdown/i, tool.description,
+      "board_add_comment description should mention markdown support")
+
+    body_schema = tool.input_schema.dig("properties", "body")
+    assert_not_nil body_schema
+    assert_match(/markdown/i, body_schema["description"],
+      "board_add_comment body parameter description should mention markdown")
+  end
 end

@@ -2,6 +2,8 @@ import SendIcon from '@mui/icons-material/Send';
 import { Autocomplete, Avatar, Box, Button, Chip, MenuItem, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
 import { useCallback, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { COMMENT_TAG_SUGGESTIONS } from 'entities/board-task';
 import type { TaskComment } from 'entities/board-task';
@@ -21,7 +23,43 @@ const styles = {
   authorName: { fontSize: '13px', fontWeight: 600 },
   authorBadge: { height: 18, fontSize: '10px' },
   timestamp: { fontSize: '11px', color: 'text.disabled', ml: 'auto' },
-  body: { fontSize: '13px', whiteSpace: 'pre-wrap', lineHeight: 1.5 },
+  body: {
+    fontSize: '13px',
+    lineHeight: 1.5,
+    '& p': { margin: 0, marginBottom: '4px', fontSize: '13px', lineHeight: 1.5, color: 'text.primary' },
+    '& p:last-child': { marginBottom: 0 },
+    '& strong': { fontWeight: 600 },
+    '& em': { fontStyle: 'italic' },
+    '& code': {
+      backgroundColor: 'action.selected',
+      padding: '1px 4px',
+      borderRadius: '3px',
+      fontSize: '12px',
+      fontFamily: '"JetBrains Mono", monospace',
+    },
+    '& pre': {
+      backgroundColor: 'action.selected',
+      padding: '8px 12px',
+      borderRadius: '6px',
+      overflow: 'auto',
+      fontSize: '12px',
+      fontFamily: '"JetBrains Mono", monospace',
+      lineHeight: 1.5,
+      margin: '4px 0',
+    },
+    '& pre code': { backgroundColor: 'transparent', padding: 0 },
+    '& ul, & ol': { marginLeft: '20px', marginBottom: '4px', marginTop: '2px' },
+    '& li': { fontSize: '13px', lineHeight: 1.5, color: 'text.primary' },
+    '& a': { color: 'primary.main', textDecoration: 'underline' },
+    '& blockquote': {
+      borderLeft: '3px solid',
+      borderColor: 'divider',
+      paddingLeft: '8px',
+      margin: '4px 0',
+      color: 'text.secondary',
+      fontStyle: 'italic',
+    },
+  },
   tags: { display: 'flex', gap: 0.5, mt: 0.75 },
   tagChip: { height: 18, fontSize: '10px' },
   form: {
@@ -126,7 +164,9 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
               <Chip label={comment.authorType} size="small" sx={styles.authorBadge} />
               <Typography sx={styles.timestamp}>{new Date(comment.createdAt).toLocaleString()}</Typography>
             </Box>
-            <Typography sx={styles.body}>{comment.body}</Typography>
+            <Box sx={styles.body}>
+              <Markdown remarkPlugins={[remarkGfm]}>{comment.body}</Markdown>
+            </Box>
             {comment.tags.length > 0 && (
               <Box sx={styles.tags}>
                 {comment.tags.map((tag) => (
