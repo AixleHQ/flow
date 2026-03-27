@@ -38,6 +38,7 @@ export interface IAgentCredential {
   id: number;
   agentType: AgentType;
   configKeys: string[];
+  defaultModel: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;

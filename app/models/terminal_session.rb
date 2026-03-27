@@ -43,6 +43,7 @@ class TerminalSession < ApplicationRecord
   validates :mcp_key, uniqueness: true, allow_nil: true
   validates :mode, inclusion: { in: %w[interactive non_interactive] }, allow_nil: true
   validates :initial_prompt, presence: true, if: -> { mode == "non_interactive" }
+  validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)

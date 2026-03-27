@@ -99,12 +99,20 @@ module ContainerStrategies
       [ 7681, 8443 ]
     end
 
+    def resolve_model(session)
+      return session.requested_model if session.requested_model.present?
+
+      # Fall back to user's default model for this runtime
+      credential = session.user.agent_credentials.find_by(agent_type: session.agent_type)
+      credential&.metadata&.dig("default_model")
+    end
+
     private
 
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
-      cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt)
+      cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt, model: resolve_model(session))
 
       tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
         "#{cmd} \"$AGENT_PROMPT\""

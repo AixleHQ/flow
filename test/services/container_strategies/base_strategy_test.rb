@@ -285,6 +285,7 @@ module ContainerStrategies
       strategy = BaseStrategy.new
 
       @runtime_mock.expects(:read_file).with("container-ref", "/missing/file").returns("")
+      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/missing/file" ]).returns([ [ "" ], [ "" ], 1 ])
 
       content = strategy.send(:read_file_from_container, "container-ref", "/missing/file")
 

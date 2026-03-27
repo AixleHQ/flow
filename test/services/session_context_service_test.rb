@@ -753,13 +753,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
     adapter = Agents::CodexAdapter.new
-    assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "codex --skip-git-repo-check --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Codex adapter session_command returns codex exec for non_interactive mode" do
+  test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex exec --skip-git-repo-check --model gpt-5.3-codex", result
+    assert_equal "codex --skip-git-repo-check --yolo", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
@@ -812,6 +812,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     credential_mock = mock("credential")
     credential_mock.stubs(:agent_type).returns("claude_code")
     credential_mock.stubs(:config_data).returns({ "oauthAccount" => {}, "primaryApiKey" => "sk-test" })
+    credential_mock.stubs(:metadata).returns(nil)
 
     call_order = sequence("assembly_order")
 

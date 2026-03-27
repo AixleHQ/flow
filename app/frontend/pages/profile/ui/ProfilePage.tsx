@@ -33,6 +33,7 @@ import { AgentCredentialsSection } from 'features/agent-credentials';
 import { profileSchema, type IProfileFormData } from '../lib/profileSchema';
 
 import { DefaultAgentSelector } from './DefaultAgentSelector';
+import { DefaultModelSelector } from './DefaultModelSelector';
 
 const styles = {
   root: {
@@ -278,6 +279,7 @@ const ProfilePage: React.FC = () => {
         </Card>
 
         <DefaultAgentSelector />
+        <DefaultModelSelector />
         <AgentCredentialsSection />
       </Box>
     </Box>

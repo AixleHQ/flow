@@ -10,8 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-
-ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_24_100002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -518,6 +517,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
     t.string "on_failure", default: "fail", null: false
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
+    t.string "preferred_model"
     t.string "required_agent_runtime"
     t.jsonb "skill_ids", default: [], null: false
     t.string "skip_policy", default: "never", null: false
@@ -593,7 +593,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.string "wait_type", null: false
-    t.index "(((metadata ->> 'pipeline_id'::text))::bigint)", name: "index_task_waits_on_metadata_pipeline_id", where: "wait_type = 'gitlab_pipeline_completed'"
+    t.index "(((metadata ->> 'pipeline_id'::text))::bigint)", name: "index_task_waits_on_metadata_pipeline_id", where: "((wait_type)::text = 'gitlab_pipeline_completed'::text)"
     t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
     t.index "(((metadata ->> 'run_id'::text))::bigint)", name: "index_task_waits_on_metadata_run_id"
     t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
@@ -626,6 +626,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_000001) do
     t.integer "output_tokens", default: 0, null: false
     t.bigint "project_id"
     t.datetime "ready_at"
+    t.string "requested_model"
     t.string "route_token"
     t.jsonb "session_config", default: {}, null: false
     t.string "session_type", null: false

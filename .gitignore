@@ -80,6 +80,7 @@ ai-engine/app/.idea/
 **/.DS_Store
 .DS_Store
 ai-engine/app/Thumbs.db
+.agents/
 
 docker/remote/db_dumps/latest.sql.gz
 

@@ -49,6 +49,7 @@ export interface ITerminalSession {
   cacheWriteTokens: number;
   costCents: number;
   models: string[];
+  requestedModel: string | null;
   // Artifact review
   artifactsReviewed: boolean;
   pendingArtifactsCount: number;
@@ -72,6 +73,7 @@ export interface ICreateTerminalSessionRequest {
     configuredAgentId?: number;
     mode?: SessionMode;
     initialPrompt?: string;
+    requestedModel?: string;
     metadata?: Record<string, unknown>;
     sessionConfig?: ISessionConfig;
   };

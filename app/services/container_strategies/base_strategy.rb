@@ -174,7 +174,13 @@ module ContainerStrategies
 
     def read_file_from_container(container, path)
       content = runtime.read_file(container, path)
-      content.presence
+      return content if content.present?
+
+      # Fallback: exec cat (tar API can't read files on tmpfs mounts)
+      result = runtime.exec(container, [ "cat", path ])
+      return nil unless result[2].to_i.zero?
+
+      result[0].join.presence
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] Failed to read #{path}: #{e.message}")
       nil

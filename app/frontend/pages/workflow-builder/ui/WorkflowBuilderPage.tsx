@@ -66,6 +66,8 @@ import {
   useUpdateProjectWorkflowMutation,
   useDuplicateWorkflowToProjectMutation,
 } from 'features/workflows';
+import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
+import type { AgentModel } from 'shared/api/agentModelsApi';
 import { useGuardedDraftSync } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
@@ -937,6 +939,17 @@ function StepDetailPanel({
     debouncedCommitTextDraft(nextDraft);
   };
 
+  const [fetchModels, { data: agentModels, isFetching: isLoadingModels }] = useLazyGetAgentModelsQuery();
+  const modelRuntime = step.requiredAgentRuntime || '';
+  const modelsList = Array.isArray(agentModels) ? agentModels : [];
+  const currentStepModel: AgentModel | null = step.preferredModel
+    ? (modelsList.find((m) => m.modelId === step.preferredModel) ?? {
+        modelId: step.preferredModel,
+        displayName: step.preferredModel,
+        description: '',
+      })
+    : null;
+
   const selectedTools = useMemo(() => tools.filter((t: Tool) => step.toolIds?.includes(t.id)), [tools, step.toolIds]);
   const selectedMcpServers = useMemo(
     () => mcpServers.filter((s: McpServer) => step.mcpServerIds?.includes(s.id)),
@@ -1044,6 +1057,53 @@ function StepDetailPanel({
             ))}
           </Select>
         </Box>
+
+        {modelRuntime && (
+          <Box sx={styles.formField}>
+            <Typography sx={styles.label}>Preferred Model</Typography>
+            <Autocomplete
+              size="small"
+              options={modelsList}
+              getOptionLabel={(o) => o.displayName}
+              value={currentStepModel}
+              onChange={(_, newValue) =>
+                onFieldChange('preferredModel', (newValue as AgentModel | null)?.modelId ?? null, true)
+              }
+              onOpen={() => modelRuntime && fetchModels(modelRuntime)}
+              loading={isLoadingModels}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Default (runtime selects)"
+                  slotProps={{
+                    input: {
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isLoadingModels ? <CircularProgress color="inherit" size={18} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    },
+                  }}
+                />
+              )}
+              isOptionEqualToValue={(o, v) => o.modelId === v.modelId}
+              renderOption={(props, option) => (
+                <li {...props} key={option.modelId}>
+                  <Box>
+                    <Typography variant="body2">{option.displayName}</Typography>
+                    {option.description && (
+                      <Typography variant="caption" color="text.secondary">
+                        {option.description}
+                      </Typography>
+                    )}
+                  </Box>
+                </li>
+              )}
+            />
+          </Box>
+        )}
       </Box>
 
       <Divider sx={{ my: 2 }} />

@@ -28,6 +28,13 @@ module Agents
       config_path
     end
 
+    # Config files to write before auth starts (no credentials needed).
+    # Used by AgentAuthStrategy#before_exec.
+    # @return [Hash<String, String>] path => content
+    def auth_setup_files
+      {}
+    end
+
     # Keys to check for auth completion (any key present = auth complete)
     # Supports nested keys like "oauthAccount.accountUuid"
     # @return [Array<String>]
@@ -89,8 +96,9 @@ module Agents
     # Generate CLI command for the session based on mode.
     # @param mode [String] "interactive" or "non_interactive"
     # @param prompt [String, nil] initial prompt for non_interactive mode
+    # @param model [String, nil] requested model ID (nil = runtime default)
     # @return [String] CLI command string
-    def session_command(mode:, prompt: nil)
+    def session_command(mode:, prompt: nil, model: nil)
       raise NotImplementedError, "#{self.class} must implement #session_command"
     end
 
@@ -203,6 +211,17 @@ module Agents
     # @return [Symbol] :ok when persisted, :accepted when no usage found
     def ingest_usage(_payload, _terminal_session)
       pp _payload
+    end
+
+    # =================================================================
+    # Available Models (fetched from provider API)
+    # =================================================================
+
+    # Fetch available models from the provider API using user credentials.
+    # @param credentials [Hash] decrypted credential data from AgentCredential
+    # @return [Array<Hash>] normalized models: [{ model_id:, display_name:, description: }]
+    def fetch_available_models(_credentials)
+      []
     end
 
     # =================================================================

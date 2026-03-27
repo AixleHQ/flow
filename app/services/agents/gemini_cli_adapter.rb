@@ -2,11 +2,11 @@
 
 module Agents
   # Google Gemini CLI adapter for credential handling
-  # Gemini CLI requires GOOGLE_CLOUD_PROJECT environment variable BEFORE starting
   #
   # Config structure (discovered from container):
   #   ~/.gemini/oauth_creds.json - OAuth tokens (access_token, refresh_token, etc.)
-  #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal)
+  #   ~/.gemini/gemini-credentials.json - Encrypted API key (when using API key auth)
+  #   ~/.gemini/settings.json - Auth settings (selectedType: oauth-personal | gemini-api-key)
   #   ~/.gemini/google_accounts.json - Account info
   class GeminiCliAdapter < BaseAdapter
     METRIC_TOKENS_NAME = "gemini_cli.token.usage"
@@ -17,52 +17,105 @@ module Agents
       "terminal.session.cost" => METRIC_COST_NAME
     }.freeze
 
+    API_KEY_CREDS_PATH = "gemini-credentials.json"
+
     def self.default_config_paths
       [ "~/.gemini/settings.json", "GEMINI.md" ]
     end
 
     def config_path
-      "#{home_dir}/.gemini/oauth_creds.json"
+      "#{home_dir}/.gemini/#{API_KEY_CREDS_PATH}"
     end
 
     def home_dir
       "/home/gemini"
     end
 
+    # Watcher monitors settings.json — created when user completes API key auth
+    def auth_watch_path
+      "#{home_dir}/.gemini/settings.json"
+    end
+
+    # Auth files to extract at cleanup
+    def auth_file_paths
+      [
+        "#{home_dir}/.gemini/#{API_KEY_CREDS_PATH}",
+        "#{home_dir}/.gemini/settings.json"
+      ]
+    end
+
     def auth_required_keys
-      %w[refresh_token]
+      %w[security]
     end
 
     def auth_complete?(config_content)
       config = parse_json(config_content)
-      config["refresh_token"].present?
+      config.dig("security", "auth", "selectedType").present?
     end
 
+    # Not used directly — API key is extracted via decrypt in save_credentials
     def extract_credentials(config_content)
-      config = parse_json(config_content)
-      # Extract OAuth credentials
-      config.slice("access_token", "refresh_token", "scope", "token_type", "id_token", "expiry_date")
+      {}
     end
 
     def generate_config(credentials, workflow_config = {})
-      # Return OAuth credentials as-is for oauth_creds.json
       credentials
     end
 
-    # Multiple config files needed for Gemini CLI
+    # API key auth: GEMINI_API_KEY env var + settings.json
     def config_files(credentials, workflow_config = {})
       {
-        # OAuth credentials
-        "#{home_dir}/.gemini/oauth_creds.json" => credentials.to_json,
-        # Settings per https://geminicli.com/docs/get-started/configuration/
-        "#{home_dir}/.gemini/settings.json" => generate_settings.to_json
+        "#{home_dir}/.gemini/settings.json" => generate_settings(
+          model: workflow_config[:model], auth_type: "gemini-api-key"
+        ).to_json
       }
+    end
+
+    # Pass API key as env var — Gemini CLI picks it up automatically
+    def default_env_vars(session)
+      env = { "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}" }
+
+      # Inject API key from credential
+      credential = session.user&.agent_credentials&.find_by(agent_type: "gemini_cli")
+      env["GEMINI_API_KEY"] = credential.config_data["api_key"] if credential&.config_data&.dig("api_key").present?
+
+      env.compact
+    end
+
+    # Decrypt gemini-credentials.json from container.
+    # Gemini CLI encrypts with AES-256-GCM, key derived via scrypt from hostname+username.
+    def decrypt_credentials_file(encrypted_data, hostname, username = "root")
+      parts = encrypted_data.strip.split(":")
+      raise "Invalid format: expected iv:authTag:ciphertext" unless parts.length == 3
+
+      iv = [ parts[0] ].pack("H*")
+      auth_tag = [ parts[1] ].pack("H*")
+      ciphertext = [ parts[2] ].pack("H*")
+
+      salt = "#{hostname}-#{username}-gemini-cli"
+      key = OpenSSL::KDF.scrypt("gemini-cli-oauth", salt: salt, N: 16384, r: 8, p: 1, length: 32)
+
+      decipher = OpenSSL::Cipher.new("aes-256-gcm")
+      decipher.decrypt
+      decipher.key = key
+      decipher.iv_len = iv.bytesize
+      decipher.iv = iv
+      decipher.auth_tag = auth_tag
+      decrypted = decipher.update(ciphertext) + decipher.final
+
+      # Structure: { "gemini-cli-api-key": { "default-api-key": "{\"token\":{\"accessToken\":\"...\"}}" } }
+      data = JSON.parse(decrypted)
+      api_key_json = data.dig("gemini-cli-api-key", "default-api-key")
+      return nil unless api_key_json
+
+      api_key_data = JSON.parse(api_key_json)
+      api_key_data.dig("token", "accessToken")
     end
 
     # Session command: gemini --yolo (interactive), gemini -p (non-interactive)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
-    def session_command(mode:, prompt: nil)
-      "gemini --yolo"
+    def session_command(mode:, prompt: nil, model: nil)
+      model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end
 
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)
@@ -124,29 +177,48 @@ module Agents
     # Environment Variables (from session/credential metadata)
     # =================================================================
 
-    # Fields that must be configured before starting container
-    def required_env_fields
-      [
-        { key: "google_cloud_project", label: "Google Cloud Project ID", required: true, placeholder: "my-project-123" }
-      ]
+    # Fetch available models from Google Generative Language API.
+    GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+
+    def fetch_available_models(credentials)
+      api_key = credentials["api_key"]
+      access_token = credentials["access_token"]
+
+      uri = URI(GEMINI_MODELS_URL)
+      req = Net::HTTP::Get.new(uri)
+
+      if api_key.present?
+        uri.query = URI.encode_www_form(key: api_key, pageSize: 100)
+        req = Net::HTTP::Get.new(uri)
+      elsif access_token.present?
+        uri.query = URI.encode_www_form(pageSize: 100)
+        req = Net::HTTP::Get.new(uri)
+        req["Authorization"] = "Bearer #{access_token}"
+      else
+        return []
+      end
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      return [] unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      (data["models"] || []).filter_map do |m|
+        methods = m["supportedGenerationMethods"] || []
+        next unless methods.include?("generateContent")
+
+        model_id = m["name"].to_s.sub("models/", "")
+        display_name = m["displayName"] || model_id
+
+        # Only keep models that support caching (reliable indicator of full text/agent capability)
+        next unless methods.include?("createCachedContent")
+
+        { model_id: model_id, display_name: display_name, description: m["description"].to_s.truncate(120) }
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[GeminiCliAdapter] fetch_available_models failed: #{e.message}")
+      []
     end
 
-    # Convert metadata to environment variables for container
-    def env_vars_from_metadata(metadata)
-      {
-        "GOOGLE_CLOUD_PROJECT" => metadata["google_cloud_project"]
-      }.compact
-    end
-
-    # Default environment variables for Gemini CLI runtime.
-    def default_env_vars(session)
-      route_token = session.route_token
-      resource_attributes = "terminal_session_token=#{route_token}"
-
-      {
-        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
-      }.compact
-    end
 
     # Parse OTLP payload and persist usage statistics for a terminal session.
     def ingest_usage(payload, terminal_session)
@@ -187,13 +259,10 @@ module Agents
 
     private
 
-    def generate_settings
-      {
-        # Authentication
+    def generate_settings(model: nil, auth_type: "gemini-api-key")
+      settings = {
         "security" => {
-          "auth" => {
-            "selectedType" => "oauth-personal"
-          },
+          "auth" => { "selectedType" => auth_type },
           # Don't ask for folder trust in containers
           "folderTrust" => {
             "enabled" => false
@@ -222,7 +291,7 @@ module Agents
         "telemetry" => {
           "enabled" => true,
           "target" => "local",
-          "otlpEndpoint" => Settings.otel.metrics_endpoint,
+          "otlpEndpoint" => Settings.otel.metrics_endpoint.to_s.sub(%r{/v1/\w+\z}, ""),
           "otlpProtocol" => "http",
           "logPrompts" => false
         },
@@ -239,6 +308,8 @@ module Agents
           "enableAgents" => true             # Enable subagents
         }
       }
+      settings["model"] = { "name" => model } if model.present?
+      settings
     end
 
     def extract_events_from_otlp(payload, terminal_session_token)

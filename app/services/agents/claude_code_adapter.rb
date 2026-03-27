@@ -86,18 +86,19 @@ module Agents
     # Override to write multiple config files
     def config_files(credentials, workflow_config = {})
       mcp_names = workflow_config[:enabled_mcp_servers] || []
+      model = workflow_config[:model]
       {
         # Main config with credentials
         config_path => generate_config(credentials, workflow_config).to_json,
-        # Settings to skip bypass permissions warning
-        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names).to_json
+        # Settings with permissions and optional model override
+        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
       }
     end
 
     # Session command for agent terminal.
     # Both modes use full Claude TUI to preserve streamed terminal UX.
-    def session_command(mode:, prompt: nil)
-      "claude"
+    def session_command(mode:, prompt: nil, model: nil)
+      model ? "claude --model #{Shellwords.shellescape(model)}" : "claude"
     end
 
     # Context file: ~/.claude/CLAUDE.md (auto-read by Claude Code at startup)
@@ -143,6 +144,34 @@ module Agents
         "#{home_dir}/.claude",    # settings directory
         "#{home_dir}/.mitmproxy"  # MITM proxy CA certificates
       ]
+    end
+
+    # Fetch available models from Anthropic API.
+    # Requires API key auth (OAuth accounts may not have access).
+    ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
+
+    def fetch_available_models(credentials)
+      api_key = credentials["primaryApiKey"]
+      return [] if api_key.blank?
+
+      uri = URI(ANTHROPIC_MODELS_URL)
+      uri.query = URI.encode_www_form(limit: 100)
+      req = Net::HTTP::Get.new(uri)
+      req["x-api-key"] = api_key
+      req["anthropic-version"] = "2023-06-01"
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      return [] unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      (data["data"] || []).filter_map do |m|
+        next unless m["id"].to_s.include?("claude")
+
+        { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens" }
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[ClaudeCodeAdapter] fetch_available_models failed: #{e.message}")
+      []
     end
 
     # Default environment variables for Claude Code runtime.
@@ -337,8 +366,8 @@ module Agents
       end
     end
 
-    def generate_settings(mcp_server_names = [])
-      {
+    def generate_settings(mcp_server_names = [], model: nil)
+      settings = {
         # Auto-accept the bypass permissions warning
         "permissions" => {
           "defaultMode" => "dontAsk",
@@ -348,6 +377,8 @@ module Agents
         },
         "bypassPermissionsWarningAccepted" => true
       }
+      settings["model"] = model if model.present?
+      settings
     end
 
     def generate_projects_config(workflow_config)

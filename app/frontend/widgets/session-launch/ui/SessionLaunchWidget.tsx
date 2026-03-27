@@ -33,6 +33,8 @@ import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
 import { useGetCompanyToolsQuery, useGetProjectToolsQuery } from 'features/tools-management';
+import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
+import type { AgentModel } from 'shared/api/agentModelsApi';
 import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
@@ -79,6 +81,8 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [mode, setMode] = useState<SessionMode>('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
   const [bmadEnabled, setBmadEnabled] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<AgentModel | null>(null);
+  const [fetchModels, { data: agentModels, isFetching: isLoadingModels }] = useLazyGetAgentModelsQuery();
 
   // Prefill agent from user default when form first loads
   useEffect(() => {
@@ -171,6 +175,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const handleAgentChange = (_: React.MouseEvent<HTMLElement>, newAgent: AgentType | null) => {
     if (newAgent) {
       setSelectedAgent(newAgent);
+      setSelectedModel(null);
     }
   };
 
@@ -200,6 +205,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           ...(selectedRepos.length > 0 ? { repositoryIds: selectedRepos.map((r) => r.id) } : {}),
           mode: mode,
           ...(mode === 'non_interactive' ? { initialPrompt } : {}),
+          ...(selectedModel ? { requestedModel: selectedModel.modelId } : {}),
           ...(bmadEnabled ? { sessionConfig: { bmadEnabled: true } } : {}),
         },
       });
@@ -422,6 +428,51 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           );
         })}
       </ToggleButtonGroup>
+
+      {/* Model Selection */}
+      {selectedAgent && (
+        <Autocomplete
+          options={agentModels ?? []}
+          getOptionLabel={(option) => option.displayName}
+          value={selectedModel}
+          onChange={(_, newValue) => setSelectedModel(newValue)}
+          onOpen={() => selectedAgent && fetchModels(selectedAgent)}
+          loading={isLoadingModels}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Model (optional)"
+              placeholder="Default (runtime selects)"
+              size="small"
+              slotProps={{
+                input: {
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {isLoadingModels ? <CircularProgress color="inherit" size={18} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                },
+              }}
+            />
+          )}
+          isOptionEqualToValue={(option, value) => option.modelId === value.modelId}
+          renderOption={(props, option) => (
+            <li {...props} key={option.modelId}>
+              <Box>
+                <Typography variant="body2">{option.displayName}</Typography>
+                {option.description && (
+                  <Typography variant="caption" color="text.secondary">
+                    {option.description}
+                  </Typography>
+                )}
+              </Box>
+            </li>
+          )}
+          sx={{ mb: 3 }}
+        />
+      )}
 
       <Divider sx={{ mb: 3 }}>
         <Typography variant="caption" color="text.secondary">

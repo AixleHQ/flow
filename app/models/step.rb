@@ -16,6 +16,7 @@ class Step < ApplicationRecord
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
+  validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
   validate :depends_on_step_ids_valid
 
   default_scope { order(:position) }

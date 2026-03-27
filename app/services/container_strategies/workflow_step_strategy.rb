@@ -74,6 +74,13 @@ module ContainerStrategies
       [ 7681 ]
     end
 
+    def resolve_model(session)
+      step_run = session.step_run
+      return step_run.step.preferred_model if step_run&.step&.preferred_model.present?
+
+      super
+    end
+
     private
 
     def collect_workflow_outputs(container_id)

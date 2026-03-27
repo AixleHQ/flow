@@ -18,6 +18,22 @@ module ContainerStrategies
       end
     end
 
+    # == before_exec(container_id:, **) → {} ==
+    # Write agent-specific config files needed before auth starts
+    # (e.g. Codex config.toml with cli_auth_credentials_store = "file")
+
+    def before_exec(container_id:, **)
+      container = resolve_container(container_id)
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+
+      adapter.auth_setup_files.each do |path, content|
+        runtime.copy_to(container, path, content)
+        Rails.logger.info("[AgentAuth] Wrote auth setup file: #{path}")
+      end
+
+      {}
+    end
+
     # == before_cleanup(container_id:, session_id:, **) → { auth_files:, credential_id: } ==
 
     def before_cleanup(container_id: nil, session_id: nil, **)
@@ -53,30 +69,60 @@ module ContainerStrategies
     def extract_auth_files(container, agent_service)
       auth_files = {}
 
-      if agent_service.adapter.respond_to?(:auth_file_paths)
-        agent_service.adapter.auth_file_paths.each do |path|
-          content = read_file_from_container(container, path)
-          auth_files[path] = content if content.present?
-        rescue StandardError => e
-          Rails.logger.warn("[AgentAuth] Failed to extract #{path}: #{e.message}")
-        end
+      paths = if agent_service.adapter.respond_to?(:auth_file_paths)
+                agent_service.adapter.auth_file_paths
       else
-        content = read_file_from_container(container, agent_service.config_path)
-        auth_files[agent_service.config_path] = content if content.present?
+                [ agent_service.config_path ]
+      end
+
+      paths.each do |path|
+        content = read_file_from_container(container, path)
+        auth_files[path] = content if content.present?
+      rescue StandardError => e
+        Rails.logger.warn("[AgentAuth] Failed to extract #{path}: #{e.message}")
       end
 
       auth_files
     end
 
     def save_credentials(session, auth_files)
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      container = resolve_container(auth_files.values.first ? nil : nil) rescue nil
+
       config_data = {}
       auth_files.each do |path, content|
+        basename = File.basename(path)
+
+        # Encrypted credential files (e.g. Gemini API key) — try to decrypt
+        if basename == "gemini-credentials.json" && adapter.respond_to?(:decrypt_credentials_file)
+          hostname = extract_container_hostname
+          api_key = adapter.decrypt_credentials_file(content, hostname)
+          config_data["api_key"] = api_key if api_key
+          next
+        end
+
         parsed = JSON.parse(content)
-        config_data.merge!(parsed)
+        if basename == "settings.json"
+          # Skip settings — not needed in stored credentials
+        else
+          config_data.merge!(parsed)
+        end
       rescue JSON::ParserError
-        config_data[path] = content
+        config_data["_raw_#{basename}"] = content
+      rescue StandardError => e
+        Rails.logger.warn("[AgentAuth] Failed to process #{path}: #{e.message}")
       end
+
       AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)
+    end
+
+    def extract_container_hostname
+      session = TerminalSession.find(input[:session_id])
+      container = resolve_container(session.container_id)
+      result = runtime.exec(container, [ "hostname" ])
+      result[0].join.strip
+    rescue StandardError
+      ""
     end
   end
 end

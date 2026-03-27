@@ -64,8 +64,8 @@ module Agents
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
-    def session_command(mode:, prompt: nil)
-      "agent --force"
+    def session_command(mode:, prompt: nil, model: nil)
+      model ? "agent --force --model #{Shellwords.shellescape(model)}" : "agent --force"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)
@@ -123,6 +123,32 @@ module Agents
         "#{home_dir}/.cursor",         # cli-config.json location
         "#{home_dir}/.mitmproxy"       # MITM proxy CA certificates
       ]
+    end
+
+    # Fetch available models from Cursor API (Connect protocol, JSON format).
+    CURSOR_MODELS_URL = "https://api2.cursor.sh/aiserver.v1.AiService/GetUsableModels"
+
+    def fetch_available_models(credentials)
+      access_token = credentials["accessToken"]
+      return [] if access_token.blank?
+
+      uri = URI(CURSOR_MODELS_URL)
+      req = Net::HTTP::Post.new(uri)
+      req["Authorization"] = "Bearer #{access_token}"
+      req["Content-Type"] = "application/json"
+      req["Connect-Protocol-Version"] = "1"
+      req.body = "{}"
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      return [] unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      return [] if data["code"].present? # Connect error response
+
+      parse_models_json(data)
+    rescue StandardError => e
+      Rails.logger.warn("[CursorCliAdapter] fetch_available_models failed: #{e.message}")
+      []
     end
 
     # Env vars for MITM proxy and http2-logger configuration.
@@ -460,6 +486,23 @@ module Agents
         "trustedAt" => Time.current.iso8601(3),
         "workspacePath" => workspace
       }
+    end
+
+    # Parse models from Connect JSON response.
+    # Response structure: { "models": [{ "modelId": "...", "displayName": "...", ... }] }
+    # or nested under different keys depending on API version.
+    def parse_models_json(data)
+      models_raw = data["models"] || data["usableModels"] || []
+
+      models_raw.filter_map do |m|
+        model_id = m["modelId"] || m["model_id"] || m["id"]
+        next if model_id.blank?
+
+        display_name = m["displayName"] || m["display_name"] || m["name"] || model_id
+        description = (m["description"] || "").to_s.truncate(120)
+
+        { model_id: model_id, display_name: display_name, description: description }
+      end.uniq { |m| m[:model_id] }
     end
 
     # Generate MCP approval hash matching Cursor CLI algorithm:
