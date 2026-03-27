@@ -5,6 +5,15 @@ module Api
     module Company
       module Projects
         class WorkflowRunsController < ApplicationController
+          # GET /api/v1/company/projects/:project_id/workflow_runs
+          # Project-scoped workflow run history with Ransack filtering.
+          #
+          # Supported filters (via q[] params):
+          #   q[state_eq]          - filter by run state
+          #   q[mode_eq]           - filter by run mode
+          #   q[user_id_eq]        - filter by user
+          #   q[created_at_gteq]   - runs created after date
+          #   q[created_at_lteq]   - runs created before date
           def index
             runs = current_project.workflow_runs
                                   .includes(:workflow, step_runs: [ :step, { sub_step_runs: :sub_step } ])
