@@ -13,7 +13,8 @@ module Api
               workflow: builder_workflow,
               project: current_project,
               user: current_user,
-              mode: :interactive
+              mode: :interactive,
+              agent_runtime: params[:agent_runtime]
             )
 
             if run.persisted?

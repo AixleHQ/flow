@@ -2,11 +2,14 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ListAltIcon from '@mui/icons-material/ListAlt';
-import { Box, Chip, CircularProgress, IconButton, Tab, Tabs, Tooltip, Typography, type SxProps } from '@mui/material';
+import StopIcon from '@mui/icons-material/Stop';
+import { Box, Button, Chip, CircularProgress, IconButton, Tab, Tabs, Tooltip, Typography, type SxProps } from '@mui/material';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useSnackbar } from 'notistack';
 
 import { useGetWorkflowRunQuery } from 'features/workflow-execution';
+import { useFinishSessionMutation } from 'shared/api/terminalSessionApi';
 import { MetaActivityLog } from 'features/palad-builder/ui/MetaActivityLog';
 import { WorkflowPreview } from 'features/palad-builder/ui/WorkflowPreview';
 import { BoardPreview } from 'features/palad-builder/ui/BoardPreview';
@@ -69,6 +72,21 @@ const PaladBuilderRunPage = () => {
   }, [run]);
 
   const terminalSessionId = stepRun?.terminalSessionId || null;
+  const isRunActive = ['running', 'paused'].includes(run?.state || '');
+
+  // Finish session
+  const { enqueueSnackbar } = useSnackbar();
+  const [finishSession] = useFinishSessionMutation();
+  const handleFinish = useCallback(async () => {
+    if (!terminalSessionId) return;
+    try {
+      await finishSession({ sessionId: terminalSessionId }).unwrap();
+      enqueueSnackbar('Session finished', { variant: 'success' });
+      refetchRun();
+    } catch {
+      enqueueSnackbar('Failed to finish session', { variant: 'error' });
+    }
+  }, [terminalSessionId, finishSession, enqueueSnackbar, refetchRun]);
 
   // Find target workflow ID from meta activities
   const targetWorkflowId = useMemo(() => {
@@ -102,6 +120,17 @@ const PaladBuilderRunPage = () => {
         <Typography sx={styles.headerTitle}>Palad Builder</Typography>
         <Chip label={run.state} size="small" color={STATE_COLORS[run.state] || 'default'} />
         <Box sx={{ flex: 1 }} />
+        {isRunActive && terminalSessionId && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="warning"
+            startIcon={<StopIcon />}
+            onClick={handleFinish}
+          >
+            Finish Session
+          </Button>
+        )}
         {connected && <Chip label="Live" size="small" color="success" variant="outlined" sx={{ height: 22 }} />}
       </Box>
 

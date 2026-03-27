@@ -25,7 +25,8 @@ class Api::V1::Company::Projects::PaladBuilderControllerTest < ActionController:
       workflow: @builder_workflow,
       project: @project,
       user: @admin,
-      mode: :interactive
+      mode: :interactive,
+      agent_runtime: nil
     ).returns(create(:workflow_run, workflow: @builder_workflow, project: @project, user: @admin))
 
     post :start, params: { project_id: @project.id }

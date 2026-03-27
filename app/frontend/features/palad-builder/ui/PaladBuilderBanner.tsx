@@ -2,44 +2,24 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { Box, Button, Typography, type SxProps } from '@mui/material';
 import { useNavigate } from '@tanstack/react-router';
-import { useSnackbar } from 'notistack';
 import { type FC } from 'react';
 
 import { Routes } from 'shared/routes';
 
-import { useStartPaladBuilderMutation, useGetPaladBuilderStatusQuery } from '../api/paladBuilderApi';
+import { useGetPaladBuilderStatusQuery } from '../api/paladBuilderApi';
 
 const styles = {
   root: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-    mb: 3,
-    borderRadius: '12px',
-    border: '1px solid',
-    borderColor: 'primary.main',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    padding: '12px 16px', mb: 2, borderRadius: '8px',
+    border: '1px solid', borderColor: 'primary.main',
     backgroundColor: 'background.elevated',
     backgroundImage: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%)',
   },
-  left: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 2,
-  },
-  icon: {
-    fontSize: 32,
-    color: 'primary.main',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: 600,
-    color: 'text.primary',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: 'text.secondary',
-  },
+  left: { display: 'flex', alignItems: 'center', gap: 1.5 },
+  icon: { fontSize: 28, color: 'primary.main' },
+  title: { fontSize: 14, fontWeight: 600, color: 'text.primary' },
+  subtitle: { fontSize: 12, color: 'text.secondary' },
 } satisfies Record<string, SxProps>;
 
 interface PaladBuilderBannerProps {
@@ -48,23 +28,15 @@ interface PaladBuilderBannerProps {
 
 export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) => {
   const navigate = useNavigate();
-  const { enqueueSnackbar } = useSnackbar();
-  const [startBuilder, { isLoading }] = useStartPaladBuilderMutation();
   const { data: runs } = useGetPaladBuilderStatusQuery(projectId);
 
   const activeRun = runs?.find((r) => ['pending', 'running', 'paused'].includes(r.state));
 
-  const handleStart = async () => {
+  const handleClick = () => {
     if (activeRun) {
       navigate({ to: Routes.frontend.paladBuilderRunPath(String(projectId), String(activeRun.id)) });
-      return;
-    }
-
-    try {
-      const run = await startBuilder(projectId).unwrap();
-      navigate({ to: Routes.frontend.paladBuilderRunPath(String(projectId), String(run.id)) });
-    } catch {
-      enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
+    } else {
+      navigate({ to: Routes.frontend.paladBuilderPath(String(projectId)) });
     }
   };
 
@@ -75,19 +47,17 @@ export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) =
         <Box>
           <Typography sx={styles.title}>Palad Builder</Typography>
           <Typography sx={styles.subtitle}>
-            Create workflows with AI assistance. Describe what you need — the builder creates agents, steps, board
-            columns, and automation for you.
+            Build workflows with AI — agents, steps, board automation
           </Typography>
         </Box>
       </Box>
       <Button
         variant="contained"
+        size="small"
         startIcon={activeRun ? <PlayArrowIcon /> : <AutoFixHighIcon />}
-        onClick={handleStart}
-        disabled={isLoading}
-        sx={{ whiteSpace: 'nowrap' }}
+        onClick={handleClick}
       >
-        {activeRun ? 'Continue Building' : 'Start Builder'}
+        {activeRun ? 'Continue Build' : 'Start Builder'}
       </Button>
     </Box>
   );

@@ -5,11 +5,17 @@ interface WorkflowRunSummary {
   id: number;
   state: string;
   mode: string;
+  agentRuntime: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
   workflowId: number;
   projectId: number;
+}
+
+interface StartPaladBuilderRequest {
+  projectId: number;
+  agentRuntime?: string;
 }
 
 interface StartPaladBuilderResponse {
@@ -21,10 +27,11 @@ interface StartPaladBuilderResponse {
 
 export const paladBuilderApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    startPaladBuilder: builder.mutation<StartPaladBuilderResponse, number>({
-      query: (projectId) => ({
+    startPaladBuilder: builder.mutation<StartPaladBuilderResponse, StartPaladBuilderRequest>({
+      query: ({ projectId, agentRuntime }) => ({
         url: Routes.backend.startApiV1CompanyProjectPaladBuilderPath(projectId),
         method: 'POST',
+        data: { agentRuntime },
       }),
       transformResponse: (response: ApiResponse<StartPaladBuilderResponse>) => response.data,
       invalidatesTags: [QueryTag.WorkflowRun],
