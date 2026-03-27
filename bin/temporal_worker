@@ -34,6 +34,7 @@ begin
   TemporalService.sync_schedules
   logger.info("Ruby worker - schedules synced")
 
+  logger.info("Ruby worker - graceful shutdown period: #{Settings.temporal.worker_graceful_shutdown_period}s")
   logger.info("Ruby worker - listening for tasks")
   TemporalService.worker.run(shutdown_signals: ['SIGINT', 'SIGTERM'])
 rescue Interrupt

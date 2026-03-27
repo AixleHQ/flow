@@ -94,11 +94,13 @@ services:
       <<: *web-environment
       TEMPORAL_ENABLED: 'true'
       TEMPORAL_DEBUG: 'true'
+      TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD: '900'
       RAILS_MAX_THREADS: '20'
     command: bin/temporal_worker
     depends_on:
       - temporal
       - db
+    stop_grace_period: 20m
     restart: on-failure:5
 
   db:

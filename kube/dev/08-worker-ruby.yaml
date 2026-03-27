@@ -13,6 +13,7 @@ spec:
       labels:
         app: worker-ruby
     spec:
+      terminationGracePeriodSeconds: 1200
       serviceAccountName: palad-worker
       initContainers:
         - name: wait-for-temporal

@@ -16,6 +16,7 @@ class TemporalService
         activities: activities,
         workflows: workflows,
         interceptors: interceptors,
+        graceful_shutdown_period: worker_graceful_shutdown_period,
         tuner: Temporalio::Worker::Tuner.create_fixed(
           activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
         ),
@@ -181,6 +182,10 @@ class TemporalService
 
     def enabled?
       Settings.temporal.enabled.to_s == "true"
+    end
+
+    def worker_graceful_shutdown_period
+      Settings.temporal.worker_graceful_shutdown_period.to_i
     end
 
     private

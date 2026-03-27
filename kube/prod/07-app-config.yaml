@@ -28,6 +28,7 @@ data:
   TEMPORAL_PORT: "7233"
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
+  TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD: "900"
   TEMPORAL_UI_URL: https://temporal.palad.ai
   # Set from Terraform output: temporal_rds_endpoint
   TEMPORAL_DB_HOST: "palad-temporal-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"

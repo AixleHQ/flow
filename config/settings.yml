@@ -73,6 +73,7 @@ temporal:
   port: <%= ENV['TEMPORAL_PORT'] || 7233 %>
   namespace: <%= ENV['TEMPORAL_NAMESPACE'] || 'default' %>
   task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'palad_ruby' %>
+  worker_graceful_shutdown_period: <%= ENV['TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD'] || 900 %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
 
 encryption:

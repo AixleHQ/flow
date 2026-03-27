@@ -28,6 +28,7 @@ data:
   TEMPORAL_PORT: "7233"
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
+  TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD: "900"
   TEMPORAL_UI_URL: https://temporal.staging.palad.ai
   # Temporal uses the same in-cluster PostgreSQL.
   TEMPORAL_DB_HOST: db
