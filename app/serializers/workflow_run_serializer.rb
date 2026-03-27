@@ -33,7 +33,8 @@ class WorkflowRunSerializer < ApplicationSerializer
       step_id: current.step_id,
       step_name: current.step.name,
       step_position: current.step.position,
-      state: current.state
+      state: current.state,
+      terminal_session_id: current.terminal_session_id
     }
   end
 end

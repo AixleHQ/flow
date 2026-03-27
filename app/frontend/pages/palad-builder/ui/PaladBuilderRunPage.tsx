@@ -65,13 +65,9 @@ const PaladBuilderRunPage = () => {
     onRunUpdate: refetchRun,
   });
 
-  // Single step — find the one step run and its terminal session
-  const stepRun = useMemo(() => {
-    const stepRuns = (run as any)?.stepRuns || [];
-    return stepRuns[0] || null;
-  }, [run]);
-
-  const terminalSessionId = stepRun?.terminalSessionId || null;
+  // Get terminal session from current_step_info (always available, no need for include_associations)
+  const currentStepInfo = (run as any)?.currentStepInfo || null;
+  const terminalSessionId = currentStepInfo?.terminalSessionId || null;
   const isRunActive = ['running', 'paused'].includes(run?.state || '');
 
   // Finish session
