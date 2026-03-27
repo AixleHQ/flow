@@ -96,7 +96,7 @@ const PaladBuilderPage = () => {
 
   const handleStart = async () => {
     if (activeSession) {
-      navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(activeSession.id)) });
+      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(activeSession.id)) });
       return;
     }
     if (!agentRuntime) {
@@ -109,7 +109,7 @@ const PaladBuilderPage = () => {
         agentRuntime,
         preferredModel: selectedModel || undefined,
       }).unwrap();
-      navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(session.id)) });
+      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(session.id)) });
     } catch {
       enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
     }
@@ -209,7 +209,7 @@ const PaladBuilderPage = () => {
                     key={s.id}
                     hover
                     sx={{ cursor: 'pointer' }}
-                    onClick={() => navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(s.id)) })}
+                    onClick={() => navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(s.id)) })}
                   >
                     <TableCell>#{s.id}</TableCell>
                     <TableCell>

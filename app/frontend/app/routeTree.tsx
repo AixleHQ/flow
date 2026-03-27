@@ -13,6 +13,9 @@ const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
 const PaladBuilderPage = lazyRouteComponent(() => import('../pages/palad-builder'));
+const PaladBuilderSessionPage = lazyRouteComponent(() =>
+  import('../pages/palad-builder').then((m) => ({ default: m.PaladBuilderSessionPage })),
+);
 const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
 // Company pages
 const CompanyMembersPage = lazyRouteComponent(() => import('../pages/company-members'));
@@ -147,14 +150,10 @@ export const paladBuilderRoute = createRoute({
   component: PaladBuilderPage,
 });
 
-// Palad Builder run redirects to session view
-export const paladBuilderRunRoute = createRoute({
+export const paladBuilderSessionRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
   path: Routes.frontend.paladBuilderRunPath('$projectId', '$runId'),
-  beforeLoad: ({ params }: { params: { projectId: string; runId: string } }) => {
-    throw redirect({ to: Routes.frontend.companyProjectSessionPath(params.projectId, params.runId) });
-  },
-  component: PaladBuilderPage,
+  component: PaladBuilderSessionPage,
 });
 
 // Profile route
@@ -290,7 +289,7 @@ export const routeTree = rootRoute.addChildren([
     companyWorkflowBuilderRoute,
     projectWorkflowBuilderRoute,
     paladBuilderRoute,
-    paladBuilderRunRoute,
+    paladBuilderSessionRoute,
     profileRoute,
     companyMembersRoute,
     companyConfigItemsRoute,

@@ -18,7 +18,8 @@ module Api
                 mode: "interactive",
                 initial_prompt: palad_builder_prompt,
                 tool_ids: meta_tool_ids,
-                requested_model: params[:preferred_model]
+                requested_model: params[:preferred_model],
+                metadata: { palad_builder: true }
               }
             )
 
@@ -29,7 +30,7 @@ module Api
           def status
             sessions = current_project.terminal_sessions
                                       .where(user: current_user)
-                                      .where("initial_prompt LIKE ?", "%Palad Builder%")
+                                      .where("metadata @> ?", { palad_builder: true }.to_json)
                                       .order(created_at: :desc)
                                       .limit(20)
 

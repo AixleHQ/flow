@@ -50,7 +50,8 @@ class Api::V1::Company::Projects::PaladBuilderControllerTest < ActionController:
     sign_in @admin
 
     session = create(:terminal_session, user: @admin, project: @project,
-                     initial_prompt: "# Palad Builder\nYou are a Workflow Architect...")
+                     initial_prompt: "# Palad Builder\nYou are a Workflow Architect...",
+                     metadata: { "palad_builder" => true })
 
     get :status, params: { project_id: @project.id }
     assert_response :success
