@@ -65,6 +65,13 @@ export interface StepOverride {
   autoRun: boolean;
 }
 
+export interface IGetWorkflowRunsParams {
+  projectId: number;
+  state?: WorkflowRun['state'];
+  page?: number;
+  perPage?: number;
+}
+
 export interface CreateWorkflowRunRequest {
   workflowId: number;
   mode: 'interactive' | 'non_interactive' | 'mixed';

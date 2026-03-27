@@ -25,7 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import { formatDistanceToNow } from 'date-fns';
-import { useMemo, useState, type FC } from 'react';
+import { useState, type FC } from 'react';
 
 import { useGetWorkflowRunsQuery, type WorkflowRun } from 'features/workflow-execution';
 import { Routes } from 'shared/routes';
@@ -76,13 +76,12 @@ function formatDuration(start: string | null, end: string | null): string {
 
 export const WorkflowRunsWidget: FC<WorkflowRunsWidgetProps> = ({ projectId, onRunSelect }) => {
   const [stateFilter, setStateFilter] = useState<RunState | ''>('');
-  const { data: runs, isLoading, isFetching } = useGetWorkflowRunsQuery({ projectId }, { pollingInterval: 10_000 });
+  const { data, isLoading, isFetching } = useGetWorkflowRunsQuery(
+    { projectId, state: stateFilter || undefined },
+    { pollingInterval: 10_000 },
+  );
 
-  const filtered = useMemo(() => {
-    const sorted = [...(runs ?? [])].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (!stateFilter) return sorted;
-    return sorted.filter((r) => r.state === stateFilter);
-  }, [runs, stateFilter]);
+  const filtered = data?.items ?? [];
 
   return (
     <Box sx={{ opacity: isFetching ? 0.7 : 1, transition: 'opacity 0.2s' }}>

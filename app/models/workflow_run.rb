@@ -20,6 +20,14 @@ class WorkflowRun < ApplicationRecord
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
   scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }
 
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[state mode project_id user_id created_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    []
+  end
+
   def can_run_non_interactive?
     workflow.steps.not_deleted.all?(&:allow_non_interactive)
   end

@@ -1,16 +1,22 @@
 import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-import type { WorkflowRun, WorkflowRunAsset, CreateWorkflowRunRequest } from '../lib/types';
+import type { WorkflowRun, WorkflowRunAsset, CreateWorkflowRunRequest, IGetWorkflowRunsParams } from '../lib/types';
 
 export const workflowRunsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    getWorkflowRuns: builder.query<WorkflowRun[], { projectId: number }>({
-      query: ({ projectId }) => ({
-        url: Routes.backend.apiV1CompanyProjectWorkflowRunsPath(projectId),
-        method: 'GET',
-      }),
-      transformResponse: (response: ApiCollectionResponse<WorkflowRun>) => response.items,
+    getWorkflowRuns: builder.query<ApiCollectionResponse<WorkflowRun>, IGetWorkflowRunsParams>({
+      query: ({ projectId, state, page, perPage }) => {
+        const searchParams = new URLSearchParams();
+        if (state) searchParams.set('q[state_eq]', state);
+        if (page) searchParams.set('page', String(page));
+        if (perPage) searchParams.set('per_page', String(perPage));
+        const qs = searchParams.toString();
+        return {
+          url: `${Routes.backend.apiV1CompanyProjectWorkflowRunsPath(projectId)}${qs ? `?${qs}` : ''}`,
+          method: 'GET',
+        };
+      },
       providesTags: [QueryTag.Workflow],
     }),
 
