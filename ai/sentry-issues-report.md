@@ -83,30 +83,32 @@
 
 ---
 
-## Key Patterns & Recommendations
+## Fixes Applied
 
-### 1. N+1 Queries (7 issues, ~1,562 events) — HIGH PRIORITY
-The dominant problem. Affected controllers:
-- `Board::TasksController#index` — 1,492 events (!!!)
-- `WorkflowRunsController#index` — 3 separate N+1 issues (56 events combined)
-- `ProjectsController#index` — 12 events
-- `WorkflowsController#index` — 1 event
-- `Board::TasksController#workflow_runs` — 1 event
+### FIXED: N+1 Queries (7 issues, ~1,562 events)
 
-**Fix:** Add proper `includes`/`preload` to ActiveRecord queries in these controllers/serializers.
+| Issue | Fix | File |
+|-------|-----|------|
+| RAILS-S: TasksController#index (1,492 events) | Added `{ workflow_runs: :workflow }` to includes | `tasks_controller.rb:11` |
+| RAILS-V/P/W: WorkflowRunsController#index (56 events) | Rewrote `current_step_info` to use preloaded step_runs instead of DB query; rewrote `past_failures` to filter in-memory; removed extra `.includes(:sub_step)` from sub_step_runs | `workflow_run_serializer.rb`, `step_run_serializer.rb` |
+| RAILS-H: ProjectsController#index (12 events) | Added SQL subselect for `last_activity_at` to eliminate per-project query | `projects_controller.rb`, `project_serializer.rb` |
+| RAILS-X: WorkflowsController#index (1 event) | Preloaded company_override_names in controller, passed to serializer; added `project:` option | `workflows_controller.rb`, `scope_indicator_serialization.rb` |
+| RAILS-T: TasksController#workflow_runs (1 event) | Added `.includes(:workflow)` to query | `tasks_controller.rb:56` |
 
-### 2. Missing "task_waits" Table (2 issues, 63 events) — HIGH PRIORITY
-Both `TasksController#show` and `TasksController#index` reference a `task_waits` table that doesn't exist. This is a hard error breaking task-related functionality.
+### NOT CODE — Deployment/Config Issues
 
-**Fix:** Either create the missing migration or remove the reference to `task_waits`.
+| Issue | Root Cause | Action Needed |
+|-------|-----------|---------------|
+| RAILS-Q/R: "task_waits" table missing (63 events) | Migration exists (`20260320200000_create_task_waits`), table in schema.rb — DB not migrated on target env | Run `rake db:migrate` on deployed environment |
+| RAILS-3: GitHub token 404 (1 event) | Stale installation_id in encrypted credentials | Re-authenticate GitHub App integration |
+| TEMPORAL-2: Memory quota exceeded (4 events) | K8s resource quota 8Gi hit | Increase quota or optimize pod memory |
+| TEMPORAL-4: Pod start timeout (4 events) | Pod fails to start within 60s | Investigate slow image pulls / resource contention |
+| TEMPORAL-B: Unauthorized container create (1 event) | Auth issue with container registry | Check registry credentials |
+| TEMPORAL-C/D/E: Activity canceled (5 events) | User-initiated or timeout cancellations | Expected behavior, low priority |
+| FRONTEND-3: Dynamic import failed (1 event) | Stale browser cache after deploy | Expected behavior, self-resolving |
 
-### 3. Container Resource Limits (2 issues, 8 events) — MEDIUM
-Pods failing to start due to timeout (60s) or memory quota exceeded (8Gi limit hit).
+### FIXED: Frontend TypeError (2 events)
 
-**Fix:** Review resource quotas and pod startup times. Consider increasing limits or optimizing container startup.
-
-### 4. Activity Cancellation (3 issues, 5 events) — LOW
-Temporal activities being canceled during workflow execution. Likely caused by user-initiated cancellations or timeouts.
-
-### 5. Frontend TypeError (1 issue, 2 events) — LOW
-`toLocaleString` called on undefined in project overview page. Likely a missing null check on a numeric field.
+| Issue | Fix | File |
+|-------|-----|------|
+| FRONTEND-4: toLocaleString on undefined | Added `?? 0` fallback for `sessionsLaunched`, `workflowsCount`, `boardTasksCount` | `ProjectOverviewPanel.tsx:252,262,267` |

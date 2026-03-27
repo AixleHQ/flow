@@ -249,7 +249,7 @@ const ProjectOverviewPanel = ({ projectId }: ProjectOverviewPanelProps) => {
     ? [
         {
           label: 'Sessions Launched',
-          value: summary.sessionsLaunched.toLocaleString(),
+          value: (summary.sessionsLaunched ?? 0).toLocaleString(),
           icon: <PlayCircleIcon sx={{ color: 'primary.main', fontSize: 20 }} />,
         },
         {
@@ -259,12 +259,12 @@ const ProjectOverviewPanel = ({ projectId }: ProjectOverviewPanelProps) => {
         },
         {
           label: 'Workflows',
-          value: summary.workflowsCount.toLocaleString(),
+          value: (summary.workflowsCount ?? 0).toLocaleString(),
           icon: <WorkflowsIcon sx={{ color: 'info.main', fontSize: 20 }} />,
         },
         {
           label: 'Board Tasks',
-          value: summary.boardTasksCount.toLocaleString(),
+          value: (summary.boardTasksCount ?? 0).toLocaleString(),
           icon: <ViewKanbanIcon sx={{ color: 'warning.main', fontSize: 20 }} />,
         },
       ]

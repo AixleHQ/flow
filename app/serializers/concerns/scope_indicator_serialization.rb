@@ -29,10 +29,19 @@ module ScopeIndicatorSerialization
     return false unless project
 
     lookup_name = object.respond_to?(:full_name) ? object.full_name : object.name
-    object.class
-          .where(scope_type: "Company", scope_id: project.company_id)
-          .where(override_name_column => lookup_name)
-          .exists?
+    company_override_names.include?(lookup_name)
+  end
+
+  def company_override_names
+    cache_key = :"_company_override_names_#{object.class.name}"
+    @instance_options[cache_key] ||= begin
+      project = @instance_options[:project]
+      col = override_name_column
+      object.class
+            .where(scope_type: "Company", scope_id: project.company_id)
+            .pluck(col)
+            .to_set
+    end
   end
 
   def override_name_column

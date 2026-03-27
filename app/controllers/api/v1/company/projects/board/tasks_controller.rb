@@ -8,7 +8,7 @@ module Api
           class TasksController < Api::V1::Company::Projects::ApplicationController
             def index
               tasks = current_board.board_tasks
-                                   .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_task_waits)
+                                   .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_task_waits)
                                    .ransack(q_params).result
               tasks = tasks.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
               tasks = tasks.tags_overlap(Array(params[:tags])) if params[:tags].present?
@@ -53,7 +53,7 @@ module Api
 
             def workflow_runs
               task = current_board.board_tasks.find(params[:id])
-              runs = task.workflow_runs.order(created_at: :desc)
+              runs = task.workflow_runs.includes(:workflow).order(created_at: :desc)
               respond_with runs, each_serializer: TaskWorkflowRunSerializer
             end
 

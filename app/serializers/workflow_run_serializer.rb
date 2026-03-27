@@ -23,7 +23,9 @@ class WorkflowRunSerializer < ApplicationSerializer
   end
 
   def current_step_info
-    current = object.current_step_run
+    current = object.step_runs
+      .select { |sr| %w[pending running waiting_input].include?(sr.state) }
+      .min_by(&:created_at)
     return nil unless current
 
     {
