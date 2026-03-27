@@ -343,8 +343,8 @@ module ContainerStrategies
       container_mock = mock("container")
 
       mock_adapter = mock("adapter")
-      mock_adapter.expects(:session_command).with(mode: "non_interactive", prompt: "Run tests")
-                  .returns("codex exec --skip-git-repo-check --model gpt-5.3-codex")
+      mock_adapter.expects(:session_command).with(mode: "non_interactive", prompt: "Run tests", model: nil)
+                  .returns("codex --skip-git-repo-check --yolo")
 
       mock_service = mock("service")
       mock_service.stubs(:adapter).returns(mock_adapter)
@@ -356,7 +356,7 @@ module ContainerStrategies
         container == container_mock &&
           command[0] == "sh" &&
           command[1] == "-c" &&
-          command[2].include?('codex exec --skip-git-repo-check --model gpt-5.3-codex "$AGENT_PROMPT"')
+          command[2].include?('codex --skip-git-repo-check --yolo "$AGENT_PROMPT"')
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)

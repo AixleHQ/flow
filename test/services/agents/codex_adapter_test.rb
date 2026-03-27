@@ -87,9 +87,8 @@ module Agents
       auth = JSON.parse(files["/home/codex/.codex/auth.json"])
       assert_equal({ "access_token" => "abc" }, auth["tokens"])
 
-      # Check config.toml content
+      # Check config.toml content (no model line when model not specified)
       toml = files["/home/codex/.codex/config.toml"]
-      assert_includes toml, 'model = "gpt-5.3-codex"'
       assert_includes toml, 'approval_policy = "never"'
       assert_includes toml, 'sandbox_mode = "danger-full-access"'
       assert_includes toml, 'trust_level = "trusted"'
@@ -104,10 +103,15 @@ module Agents
       assert_includes toml, "/workspace"
     end
 
-    test "session_command returns codex exec with explicit model for non_interactive mode" do
-      result = @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+    test "session_command returns codex --yolo for any mode" do
+      assert_equal "codex --skip-git-repo-check --yolo", @adapter.session_command(mode: "interactive")
+      assert_equal "codex --skip-git-repo-check --yolo", @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+    end
 
-      assert_equal "codex exec --skip-git-repo-check --model gpt-5.3-codex", result
+    test "session_command includes model flag when model provided" do
+      result = @adapter.session_command(mode: "interactive", model: "gpt-5.3-codex")
+
+      assert_equal "codex --skip-git-repo-check --model gpt-5.3-codex --yolo", result
     end
   end
 end
