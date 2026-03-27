@@ -56,13 +56,13 @@ export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) =
 
   const handleStart = async () => {
     if (activeRun) {
-      navigate({ to: Routes.frontend.paladBuilderRunPath(String(projectId), String(activeRun.id)) });
+      navigate({ to: Routes.frontend.workflowRunPath(String(projectId), String(activeRun.id)) });
       return;
     }
 
     try {
       const run = await startBuilder(projectId).unwrap();
-      navigate({ to: Routes.frontend.paladBuilderRunPath(String(projectId), String(run.id)) });
+      navigate({ to: Routes.frontend.workflowRunPath(String(projectId), String(run.id)) });
     } catch {
       enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
     }
