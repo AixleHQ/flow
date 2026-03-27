@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_24_100002) do
+ActiveRecord::Schema[8.1].define(version: 2026_03_27_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -803,6 +803,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_24_100002) do
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
     t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
+    t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
   end
 
   add_foreign_key "action_mcp_session_messages", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_messages_session_id", on_update: :cascade, on_delete: :cascade

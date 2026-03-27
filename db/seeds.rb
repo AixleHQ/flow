@@ -34,6 +34,9 @@ Seeds::PlatformTools.seed!
 require_relative "seeds/internal_skills"
 Seeds::InternalSkills.seed!
 
+require_relative "seeds/palad_builder"
+Seeds::PaladBuilder.seed!
+
 # Stop here in production environment
 if Rails.env.production?
   puts "Skipping test data creation in production environment"

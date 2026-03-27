@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Workflow < ApplicationRecord
-  belongs_to :scope, polymorphic: true
+  belongs_to :scope, polymorphic: true, optional: true
 
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
@@ -17,9 +17,11 @@ class Workflow < ApplicationRecord
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
                                  message: "already exists in this scope" }
+  validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
 
   scope :active, -> { where(deleted_at: nil) }
+  scope :system, -> { where(scope_type: "System") }
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
@@ -51,7 +53,17 @@ class Workflow < ApplicationRecord
   end
 
   def scope_indicator
+    return "system" if scope_type == "System"
+
     scope_type == "Company" ? "company" : "project"
+  end
+
+  def system?
+    scope_type == "System"
+  end
+
+  def self.palad_builder
+    system.active.find_by!(name: "Palad Builder")
   end
 
   def base_tool_ids

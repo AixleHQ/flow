@@ -191,6 +191,357 @@ module Seeds
       }
     ].freeze
 
+    META_WORKFLOW_TOOLS = [
+      {
+        name: "meta_create_workflow",
+        display_name: "Meta Create Workflow",
+        description: "Create a new workflow in the target project. Stores workflow_id in shared context for subsequent tools.",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Workflow name" },
+            description: { type: "string", description: "Workflow description" },
+            project_id: { type: "integer", description: "Target project ID. Defaults to current project." },
+            config: { type: "object", description: "Optional workflow config (base_tool_ids, etc.)" }
+          },
+          required: %w[name]
+        }
+      },
+      {
+        name: "meta_create_agent",
+        display_name: "Meta Create Agent",
+        description: "Create a new agent (LLM persona) in the target scope. Returns agent ID for use in steps.",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Agent identifier (snake_case, auto-generated if omitted)" },
+            title: { type: "string", description: "Display name (e.g. 'Product Manager')" },
+            persona: { type: "string", description: "Core system prompt — defines who the agent IS" },
+            communication_style: { type: "string", description: "HOW the agent communicates (tone, format)" },
+            principles: { type: "string", description: "Guiding principles and constraints" },
+            scope_type: { type: "string", enum: %w[Project Company], description: "Scope type. Default: Project" },
+            scope_id: { type: "integer", description: "Scope ID. Default: current project or company" }
+          },
+          required: %w[title persona]
+        }
+      },
+      {
+        name: "meta_create_step",
+        display_name: "Meta Create Step",
+        description: "Add a step to the target workflow. Steps are added sequentially unless position is specified.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workflow_id: { type: "integer", description: "Target workflow ID. Defaults to last created workflow." },
+            name: { type: "string", description: "Step name" },
+            position: { type: "integer", description: "Position in workflow (0-based). Auto-assigned if omitted." },
+            instructions: { type: "string", description: "Detailed instructions for the agent (markdown)" },
+            description: { type: "string", description: "Brief description for UI" },
+            agent_id: { type: "integer", description: "Agent to run this step" },
+            allow_non_interactive: { type: "boolean", description: "Can run without user interaction" },
+            skip_policy: { type: "string", enum: %w[never if_outputs_exist manual], description: "When to skip" },
+            on_failure: { type: "string", enum: %w[retry skip fail], description: "Failure behavior" },
+            max_retries: { type: "integer", description: "Retry count on failure" },
+            tool_ids: { type: "array", items: { type: "integer" }, description: "Tool IDs available in this step" },
+            skill_ids: { type: "array", items: { type: "integer" }, description: "Skill IDs injected into context" },
+            mcp_server_ids: { type: "array", items: { type: "integer" }, description: "MCP server IDs" },
+            mount_repositories: { type: "boolean", description: "Mount Git repos in /workspace" },
+            input_asset_specs: { type: "array", description: "Required input files" },
+            output_asset_specs: { type: "array", description: "Expected output files" },
+            depends_on_step_ids: { type: "array", items: { type: "integer" }, description: "Step IDs this step depends on (DAG)" }
+          },
+          required: %w[name]
+        }
+      },
+      {
+        name: "meta_create_sub_step",
+        display_name: "Meta Create Sub-Step",
+        description: "Add a trackable sub-step (progress milestone) to a step.",
+        input_schema: {
+          type: "object",
+          properties: {
+            step_id: { type: "integer", description: "Parent step ID" },
+            name: { type: "string", description: "Sub-step name" },
+            position: { type: "integer", description: "Position within step. Auto-assigned if omitted." },
+            description: { type: "string", description: "What this unit of work involves" },
+            instructions: { type: "string", description: "Additional guidance" },
+            required: { type: "boolean", description: "Must be completed for step to finish. Default: true" }
+          },
+          required: %w[step_id name]
+        }
+      },
+      {
+        name: "meta_get_workflow",
+        display_name: "Meta Get Workflow",
+        description: "Get the full definition of a workflow including all steps and sub-steps.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workflow_id: { type: "integer", description: "Workflow ID. Defaults to last created workflow." }
+          },
+          required: []
+        }
+      },
+      {
+        name: "meta_list_workflows",
+        display_name: "Meta List Workflows",
+        description: "List all workflows visible for the target project (project + company scope).",
+        input_schema: {
+          type: "object",
+          properties: {
+            project_id: { type: "integer", description: "Project ID. Defaults to current project." }
+          },
+          required: []
+        }
+      },
+      {
+        name: "meta_finalize_workflow",
+        display_name: "Meta Finalize Workflow",
+        description: "Validate and finalize a workflow. Checks: all steps have instructions, agent references are valid, dependency graph is acyclic, positions are sequential.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workflow_id: { type: "integer", description: "Workflow ID. Defaults to last created workflow." }
+          },
+          required: []
+        }
+      },
+      # --- Step mutation tools ---
+      {
+        name: "meta_update_step",
+        display_name: "Meta Update Step",
+        description: "Update an existing step's fields (name, instructions, agent_id, tool_ids, etc.).",
+        input_schema: {
+          type: "object",
+          properties: {
+            step_id: { type: "integer", description: "Step ID to update" },
+            name: { type: "string" }, instructions: { type: "string" }, description: { type: "string" },
+            agent_id: { type: "integer" }, allow_non_interactive: { type: "boolean" },
+            skip_policy: { type: "string", enum: %w[never if_outputs_exist manual] },
+            on_failure: { type: "string", enum: %w[retry skip fail] },
+            max_retries: { type: "integer" },
+            tool_ids: { type: "array", items: { type: "integer" } },
+            skill_ids: { type: "array", items: { type: "integer" } },
+            mcp_server_ids: { type: "array", items: { type: "integer" } },
+            mount_repositories: { type: "boolean" },
+            depends_on_step_ids: { type: "array", items: { type: "integer" } }
+          },
+          required: %w[step_id]
+        }
+      },
+      {
+        name: "meta_delete_step",
+        display_name: "Meta Delete Step",
+        description: "Delete a step from a workflow. Fails if other steps depend on it.",
+        input_schema: {
+          type: "object",
+          properties: { step_id: { type: "integer", description: "Step ID to delete" } },
+          required: %w[step_id]
+        }
+      },
+      {
+        name: "meta_reorder_steps",
+        display_name: "Meta Reorder Steps",
+        description: "Reorder all steps in a workflow by providing ordered step IDs.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workflow_id: { type: "integer", description: "Workflow ID. Defaults to last created." },
+            step_ids: { type: "array", items: { type: "integer" }, description: "Ordered array of step IDs" }
+          },
+          required: %w[step_ids]
+        }
+      },
+      # --- Resource creation tools ---
+      {
+        name: "meta_create_tool",
+        display_name: "Meta Create Tool",
+        description: "Create a custom tool definition.",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Tool name (snake_case)" },
+            display_name: { type: "string" }, description: { type: "string" },
+            docker_image: { type: "string", description: "Docker image for container execution" },
+            execution_mode: { type: "string", enum: %w[app container], description: "Default: container" },
+            input_schema: { type: "object", description: "JSON Schema for parameters" },
+            command: { type: "string" },
+            scope_type: { type: "string", enum: %w[Project Company] }
+          },
+          required: %w[name]
+        }
+      },
+      {
+        name: "meta_create_skill",
+        display_name: "Meta Create Skill",
+        description: "Create a custom skill (reusable instruction block).",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" }, title: { type: "string" },
+            content: { type: "string", description: "Skill content (instructions/knowledge)" },
+            description: { type: "string" },
+            scope_type: { type: "string", enum: %w[Project Company] },
+            scope_id: { type: "integer" }
+          },
+          required: %w[name title content]
+        }
+      },
+      {
+        name: "meta_create_mcp_server",
+        display_name: "Meta Create MCP Server",
+        description: "Register an MCP (Model Context Protocol) server for external tool access.",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string" }, display_name: { type: "string" }, description: { type: "string" },
+            url: { type: "string", description: "Server endpoint URL" },
+            transport: { type: "string", enum: %w[http sse stdio], description: "Default: http" },
+            command: { type: "string", description: "Command for stdio transport" },
+            headers: { type: "object" }, env: { type: "object" },
+            scope_type: { type: "string", enum: %w[Project Company] },
+            scope_id: { type: "integer" }
+          },
+          required: %w[name]
+        }
+      },
+      # --- Link & list tools ---
+      {
+        name: "meta_link_resource_to_step",
+        display_name: "Meta Link Resource to Step",
+        description: "Link a tool, skill, or MCP server to a step.",
+        input_schema: {
+          type: "object",
+          properties: {
+            step_id: { type: "integer", description: "Step ID" },
+            resource_type: { type: "string", enum: %w[tool skill mcp_server], description: "Resource type" },
+            resource_id: { type: "integer", description: "Resource ID to link" }
+          },
+          required: %w[step_id resource_type resource_id]
+        }
+      },
+      {
+        name: "meta_list_agents",
+        display_name: "Meta List Agents",
+        description: "List agents visible for the target project.",
+        input_schema: { type: "object", properties: {}, required: [] }
+      },
+      {
+        name: "meta_list_tools",
+        display_name: "Meta List Tools",
+        description: "List custom and system tools available for the project.",
+        input_schema: { type: "object", properties: {}, required: [] }
+      },
+      {
+        name: "meta_list_skills",
+        display_name: "Meta List Skills",
+        description: "List skills available for the project.",
+        input_schema: { type: "object", properties: {}, required: [] }
+      },
+      # --- Board tools ---
+      {
+        name: "meta_get_board",
+        display_name: "Meta Get Board",
+        description: "Get the project board with columns, purposes, task counts, and workflow bindings.",
+        input_schema: { type: "object", properties: {}, required: [] }
+      },
+      {
+        name: "meta_create_board_column",
+        display_name: "Meta Create Board Column",
+        description: "Create a new column on the project board.",
+        input_schema: {
+          type: "object",
+          properties: {
+            name: { type: "string", description: "Column name" },
+            purpose: { type: "string", description: "What this column represents" },
+            position: { type: "integer", description: "Position (auto-assigned if omitted)" }
+          },
+          required: %w[name]
+        }
+      },
+      {
+        name: "meta_update_board_column",
+        display_name: "Meta Update Board Column",
+        description: "Update a board column's name, purpose, or position.",
+        input_schema: {
+          type: "object",
+          properties: {
+            column_id: { type: "integer" },
+            name: { type: "string" }, purpose: { type: "string" }, position: { type: "integer" }
+          },
+          required: %w[column_id]
+        }
+      },
+      {
+        name: "meta_delete_board_column",
+        display_name: "Meta Delete Board Column",
+        description: "Delete an empty board column. Fails if column has tasks.",
+        input_schema: {
+          type: "object",
+          properties: { column_id: { type: "integer" } },
+          required: %w[column_id]
+        }
+      },
+      {
+        name: "meta_reorder_board_columns",
+        display_name: "Meta Reorder Board Columns",
+        description: "Reorder all board columns by providing ordered column IDs.",
+        input_schema: {
+          type: "object",
+          properties: { column_ids: { type: "array", items: { type: "integer" }, description: "Ordered column IDs" } },
+          required: %w[column_ids]
+        }
+      },
+      {
+        name: "meta_create_column_binding",
+        display_name: "Meta Create Column Binding",
+        description: "Bind a workflow to a board column for auto or manual triggering.",
+        input_schema: {
+          type: "object",
+          properties: {
+            column_id: { type: "integer" }, workflow_id: { type: "integer" },
+            trigger_mode: { type: "string", enum: %w[manual auto], description: "Default: manual" },
+            cooldown_seconds: { type: "integer", description: "Min gap between auto-triggers. Default: 5" }
+          },
+          required: %w[column_id workflow_id]
+        }
+      },
+      {
+        name: "meta_update_column_binding",
+        display_name: "Meta Update Column Binding",
+        description: "Update a column workflow binding's trigger mode or cooldown.",
+        input_schema: {
+          type: "object",
+          properties: {
+            binding_id: { type: "integer" },
+            trigger_mode: { type: "string", enum: %w[manual auto] },
+            cooldown_seconds: { type: "integer" }
+          },
+          required: %w[binding_id]
+        }
+      },
+      {
+        name: "meta_delete_column_binding",
+        display_name: "Meta Delete Column Binding",
+        description: "Remove a workflow binding from a column.",
+        input_schema: {
+          type: "object",
+          properties: { binding_id: { type: "integer" } },
+          required: %w[binding_id]
+        }
+      },
+      {
+        name: "meta_setup_board_from_preset",
+        display_name: "Meta Setup Board From Preset",
+        description: "Create or reset board from a preset (simple_kanban, dev_team, full_sdlc). Only works if columns are empty.",
+        input_schema: {
+          type: "object",
+          properties: { preset: { type: "string", enum: %w[simple_kanban dev_team full_sdlc] } },
+          required: %w[preset]
+        }
+      }
+    ].freeze
+
     def self.seed!
       puts "Creating platform tools..."
 
@@ -222,6 +573,16 @@ module Seeds
       )
 
       BOARD_WORKFLOW_TOOLS.each do |attrs|
+        Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(
+          display_name: attrs[:display_name],
+          description: attrs[:description],
+          input_schema: attrs[:input_schema],
+          execution_mode: :app
+        )
+      end
+
+      # -- Meta-workflow tools: used by Palad Builder to create entities --
+      META_WORKFLOW_TOOLS.each do |attrs|
         Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(
           display_name: attrs[:display_name],
           description: attrs[:description],

@@ -104,6 +104,10 @@ Rails.application.routes.draw do
             resources :mcp_servers, only: %i[index create update destroy]
             resources :integrations, only: %i[index create destroy]
             resources :skills, only: %i[index create update destroy]
+            resource :palad_builder, only: [], controller: "palad_builder" do
+              post :start
+              get :status
+            end
             resources :workflows, only: %i[index show create update destroy] do
               member do
                 post :duplicate
