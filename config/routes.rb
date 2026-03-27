@@ -27,7 +27,7 @@ Rails.application.routes.draw do
       resource :sessions, only: %i[create destroy]
       resource :current_user, only: %i[show update], controller: "current_user"
 
-      resources :agent_models, only: [:index], controller: "agent_models" do
+      resources :agent_models, only: [ :index ], controller: "agent_models" do
         put :update_default, on: :collection
       end
       resources :contact_requests, only: %i[create]
@@ -197,8 +197,6 @@ Rails.application.routes.draw do
 
   namespace :admin do
     root to: "users#index"
-
-    resources :agent_models, only: [:index]
 
     resources :users do
       member do

@@ -7,7 +7,10 @@ module Agents
   # Config: ~/.codex/auth.json + ~/.codex/config.toml
   # Auth: OAuth via OpenAI (Google login)
   class CodexAdapter < BaseAdapter
-    DEFAULT_MODEL = "gpt-5.3-codex"
+    # Latest model target for migration prompt suppression.
+    # Codex CLI checks: model_migrations[current_user_model] == target_model
+    # Update this slug when OpenAI releases a new default model.
+    LATEST_TARGET_MODEL = "gpt-5.4"
 
     def self.default_config_paths
       [ "~/.codex/config.toml", "AGENTS.md" ]
@@ -361,10 +364,14 @@ module Agents
 
         [notice]
         hide_full_access_warning = true
-
-        [notice.model_migrations]
-        "gpt-5.2-codex" = "gpt-5.3-codex"
+        hide_rate_limit_model_nudge = true
       TOML
+      # Suppress model upgrade prompt: model_migrations[user_model] = latest_target
+      if model.present?
+        toml << "\n[notice.model_migrations]\n"
+        toml << "\"#{model}\" = \"#{LATEST_TARGET_MODEL}\"\n"
+      end
+      toml
     end
   end
 end

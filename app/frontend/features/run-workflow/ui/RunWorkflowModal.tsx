@@ -37,6 +37,7 @@ interface StepOption {
   position: number;
   allowNonInteractive?: boolean;
   dependsOnStepIds?: number[];
+  requiredAgentRuntime?: string | null;
 }
 
 export interface CreateRunParams {
@@ -147,12 +148,18 @@ const RunWorkflowModal = ({
     if (!open || !currentUser) return;
     const configured = currentUser.configuredAgents ?? [];
     const options = AVAILABLE_AGENTS.filter((a) => configured.includes(a.type));
+
+    // Use the most common step-level runtime if set, otherwise user default
+    const stepRuntimes = steps.map((s) => s.requiredAgentRuntime).filter(Boolean) as string[];
+    const stepRuntime = stepRuntimes.length > 0 ? stepRuntimes[0] : null;
+
     const preferred =
-      currentUser.defaultAgentRuntime && options.some((a) => a.type === currentUser.defaultAgentRuntime)
+      (stepRuntime && options.some((a) => a.type === stepRuntime) ? stepRuntime : null) ||
+      (currentUser.defaultAgentRuntime && options.some((a) => a.type === currentUser.defaultAgentRuntime)
         ? currentUser.defaultAgentRuntime
-        : (options[0]?.type ?? '');
+        : (options[0]?.type ?? ''));
     setAgentRuntime((prev) => (prev === '' ? (preferred as string) : prev));
-  }, [open, currentUser]);
+  }, [open, currentUser, steps]);
 
   interface Wave {
     index: number;

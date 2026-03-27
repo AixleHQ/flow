@@ -1,17 +1,13 @@
-import { Autocomplete, Box, Card, CardContent, Stack, TextField, Typography } from '@mui/material';
+import { Autocomplete, Box, Card, CardContent, CircularProgress, Stack, TextField, Typography } from '@mui/material';
 import { enqueueSnackbar } from 'notistack';
 import { useCallback, useState } from 'react';
 
+import { AVAILABLE_AGENTS, useGetCurrentUserQuery, type IAgentCredential } from 'entities/user';
 import type { AgentModel } from 'shared/api/agentModelsApi';
 import { useLazyGetAgentModelsQuery, useUpdateDefaultModelMutation } from 'shared/api/agentModelsApi';
-import {
-  AVAILABLE_AGENTS,
-  useGetCurrentUserQuery,
-  type IAgentCredential,
-} from 'entities/user';
 
 function CredentialModelRow({ credential }: { credential: IAgentCredential }) {
-  const [fetchModels, { data: models }] = useLazyGetAgentModelsQuery();
+  const [fetchModels, { data: models, isFetching }] = useLazyGetAgentModelsQuery();
   const [updateDefaultModel] = useUpdateDefaultModelMutation();
   const [fetched, setFetched] = useState(false);
 
@@ -20,8 +16,8 @@ function CredentialModelRow({ credential }: { credential: IAgentCredential }) {
   const modelsList = Array.isArray(models) ? models : [];
   // Before models are loaded, show saved model ID as a placeholder option
   const currentModel = credential.defaultModel
-    ? modelsList.find((m) => m.modelId === credential.defaultModel) ??
-      (fetched ? null : { modelId: credential.defaultModel, displayName: credential.defaultModel, description: '' })
+    ? (modelsList.find((m) => m.modelId === credential.defaultModel) ??
+      (fetched ? null : { modelId: credential.defaultModel, displayName: credential.defaultModel, description: '' }))
     : null;
 
   const handleOpen = useCallback(() => {
@@ -60,7 +56,24 @@ function CredentialModelRow({ credential }: { credential: IAgentCredential }) {
         value={currentModel}
         onChange={handleChange}
         onOpen={handleOpen}
-        renderInput={(params) => <TextField {...params} placeholder="Default (runtime selects)" />}
+        loading={isFetching}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            placeholder="Default (runtime selects)"
+            slotProps={{
+              input: {
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {isFetching ? <CircularProgress color="inherit" size={18} /> : null}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              },
+            }}
+          />
+        )}
         renderOption={(props, option) => (
           <li {...props} key={option.modelId}>
             <Box>

@@ -88,9 +88,9 @@ module Agents
       parts = encrypted_data.strip.split(":")
       raise "Invalid format: expected iv:authTag:ciphertext" unless parts.length == 3
 
-      iv = [parts[0]].pack("H*")
-      auth_tag = [parts[1]].pack("H*")
-      ciphertext = [parts[2]].pack("H*")
+      iv = [ parts[0] ].pack("H*")
+      auth_tag = [ parts[1] ].pack("H*")
+      ciphertext = [ parts[2] ].pack("H*")
 
       salt = "#{hostname}-#{username}-gemini-cli"
       key = OpenSSL::KDF.scrypt("gemini-cli-oauth", salt: salt, N: 16384, r: 8, p: 1, length: 32)

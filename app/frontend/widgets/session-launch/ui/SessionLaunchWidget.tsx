@@ -20,8 +20,6 @@ import type { McpServer } from 'entities/mcp-server';
 import { useGetMcpServersQuery, useGetProjectMcpServersQuery } from 'entities/mcp-server';
 import type { AgentType, ITerminalSession, SessionMode } from 'entities/terminal-session';
 import { AGENT_COLORS, AVAILABLE_AGENTS, useGetCurrentUserQuery } from 'entities/user';
-import type { AgentModel } from 'shared/api/agentModelsApi';
-import { useGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import type { Agent } from 'features/agents-management';
 import { useGetCompanyAgentsQuery, useGetProjectAgentsQuery } from 'features/agents-management';
 import type { Asset } from 'features/assets-management';
@@ -35,6 +33,8 @@ import type { Skill } from 'features/skills-management';
 import { useGetCompanySkillsQuery, useGetProjectSkillsQuery } from 'features/skills-management';
 import type { Tool } from 'features/tools-management';
 import { useGetCompanyToolsQuery, useGetProjectToolsQuery } from 'features/tools-management';
+import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
+import type { AgentModel } from 'shared/api/agentModelsApi';
 import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 
@@ -82,11 +82,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
   const [initialPrompt, setInitialPrompt] = useState('');
   const [bmadEnabled, setBmadEnabled] = useState(false);
   const [selectedModel, setSelectedModel] = useState<AgentModel | null>(null);
-
-  // Fetch models for selected agent runtime
-  const { data: agentModels, isFetching: isLoadingModels } = useGetAgentModelsQuery(selectedAgent!, {
-    skip: !selectedAgent,
-  });
+  const [fetchModels, { data: agentModels, isFetching: isLoadingModels }] = useLazyGetAgentModelsQuery();
 
   // Prefill agent from user default when form first loads
   useEffect(() => {
@@ -440,6 +436,7 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
           getOptionLabel={(option) => option.displayName}
           value={selectedModel}
           onChange={(_, newValue) => setSelectedModel(newValue)}
+          onOpen={() => selectedAgent && fetchModels(selectedAgent)}
           loading={isLoadingModels}
           renderInput={(params) => (
             <TextField
@@ -447,6 +444,17 @@ export const SessionLaunchWidget: React.FC<SessionLaunchWidgetProps> = ({
               label="Model (optional)"
               placeholder="Default (runtime selects)"
               size="small"
+              slotProps={{
+                input: {
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {isLoadingModels ? <CircularProgress color="inherit" size={18} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                },
+              }}
             />
           )}
           isOptionEqualToValue={(option, value) => option.modelId === value.modelId}

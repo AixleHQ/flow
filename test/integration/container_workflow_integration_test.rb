@@ -203,7 +203,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
     when "codex"
       assert data["tokens"].present?, "Expected tokens in codex credential"
     when "gemini_cli"
-      assert data["refresh_token"].present?, "Expected refresh_token in gemini_cli credential"
+      assert data["api_key"].present?, "Expected api_key in gemini_cli credential"
     end
   end
 

@@ -324,7 +324,8 @@ module ContainerStrategies
 
       env_vars = strategy.build_env_vars
 
-      assert env_vars.any? { |v| v == "GOOGLE_CLOUD_PROJECT=my-project" }
+      # GeminiCliAdapter no longer maps metadata to env vars (API key auth)
+      refute env_vars.any? { |v| v == "GOOGLE_CLOUD_PROJECT=my-project" }
     end
 
     test "builds env vars skips blank credential metadata values" do

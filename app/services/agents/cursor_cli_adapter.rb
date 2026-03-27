@@ -65,8 +65,7 @@ module Agents
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil, model: nil)
-      # Cursor manages models internally — ignore model param
-      "agent --force"
+      model ? "agent --force --model #{Shellwords.shellescape(model)}" : "agent --force"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Cursor at startup, no git required)

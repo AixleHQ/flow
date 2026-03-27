@@ -242,6 +242,7 @@ module StubSupport
 
     fs = {}
     fs[auth[:path]] = auth[:content]
+    auth[:extra_files]&.each { |path, content| fs[path] = content }
     fs["/var/log/mitm/http.log"] = log if log.present?
     fs["/tmp/terminal_output.log"] = terminal_output_fixture(agent_type)
     fs["/workspace/outputs/result.md"] = "# Result\n\nGenerated output.\n"
@@ -354,15 +355,14 @@ module StubSupport
       }.to_json
     },
     "gemini_cli" => {
-      path: "/home/gemini/.gemini/oauth_creds.json",
+      path: "/home/gemini/.gemini/settings.json",
       content: {
-        "access_token" => "ya29.a0ATkoCc5XHtest-gemini-access-token",
-        "refresh_token" => "1//0ciZ2YJxC1AUWtest-gemini-refresh",
-        "scope" => "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever",
-        "token_type" => "Bearer",
-        "id_token" => "eyJhbGciOiJSUzI1NiIsImtpZCI6InRlc3QifQ.test-gemini-id-token",
-        "expiry_date" => (Time.now.to_i + 3600) * 1000
-      }.to_json
+        "security" => { "auth" => { "selectedType" => "gemini-api-key" } }
+      }.to_json,
+      extra_files: {
+        "/home/gemini/.gemini/gemini-credentials.json" =>
+          "9b744f9a5cab60c42a69a50f:04da5baafc2bbc778085937044112f07:2a4afe6a9c8969be3dfa312251b49ef9807b3271175bedacfc2f0f319176956cb144525368f4b9468db780e8d419f6e05ea7881b34370411bd33bdf7b913045dc9f2279f15c5b4bef8933933642f644487b5d141790619784e43c202c64016451d92"
+      }
     }
   }.freeze
 
