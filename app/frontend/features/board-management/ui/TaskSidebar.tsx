@@ -145,6 +145,9 @@ export const TaskSidebar = ({ projectId }: TaskSidebarProps) => {
         { forceRefetch: true },
       ),
     );
+    void dispatch(
+      boardApi.endpoints.getTaskWorkflowRuns.initiate({ projectId, taskId: activeTaskId }, { forceRefetch: true }),
+    );
     return () => {
       cancelled = true;
     };
