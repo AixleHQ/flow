@@ -12,7 +12,7 @@ module Seeds
       agent = seed_agent!
       workflow = seed_workflow!(agent)
 
-      puts "  Palad Builder: workflow ##{workflow.id}, agent ##{agent.id}, #{workflow.steps.count} steps"
+      puts "  Palad Builder: workflow ##{workflow.id}, agent ##{agent.id}, #{workflow.steps.count} step(s)"
       { agent: agent, workflow: workflow }
     end
 
@@ -94,23 +94,6 @@ module Seeds
           4. Write detailed step instructions (the CORE of each step)
           5. Configure board integration if applicable
 
-          ## Step Instructions Template
-
-          ```markdown
-          ## Your Task
-          [Clear statement of what the agent must produce]
-
-          ## Context
-          [What inputs are available, what previous steps have done]
-
-          ## Requirements
-          1. [Specific requirement]
-          ...
-
-          ## Output Format
-          [Exactly what the output should look like]
-          ```
-
           ## Common Patterns
 
           - Linear Pipeline: Step 1 → Step 2 → Step 3
@@ -151,23 +134,70 @@ module Seeds
         scope_id: SYSTEM_SCOPE_ID,
         name: "Palad Builder"
       ).tap do |w|
-        w.description = "System meta-workflow for building Palad workflows, agents, board configurations, and automation bindings via AI"
+        w.description = "Build workflows, agents, and board automation with AI assistance"
         w.config = {}
         w.save!
       end
 
-      # Clear existing steps for idempotent re-seeding
-      workflow.steps.destroy_all
+      # Soft-delete old steps and shift positions to avoid unique constraint conflicts
+      workflow.steps.where(deleted_at: nil).each_with_index do |s, idx|
+        s.update_columns(deleted_at: Time.current, position: 10_000 + idx)
+      end
 
-      meta_tools = Tool.where(kind: :workflow, name: tool_names).index_by(&:name)
-      meta_tool_ids = ->(names) { names.map { |n| meta_tools[n]&.id }.compact }
+      all_tool_ids = Tool.where(kind: :workflow, name: tool_names).pluck(:id)
 
-      seed_step_gather_requirements!(workflow, agent, meta_tool_ids)
-      seed_step_design!(workflow, agent, meta_tool_ids)
-      seed_step_create_agents!(workflow, agent, meta_tool_ids)
-      seed_step_build_structure!(workflow, agent, meta_tool_ids)
-      seed_step_configure_board!(workflow, agent, meta_tool_ids)
-      seed_step_validate!(workflow, agent, meta_tool_ids)
+      workflow.steps.create!(
+        name: "Build Workflow",
+        position: 1,
+        agent: agent,
+        allow_non_interactive: false,
+        tool_ids: all_tool_ids,
+        instructions: <<~MD
+          ## Your Task
+          Help the user design and build a complete workflow automation system in Palad.
+          You have ALL meta-tools available — use them to create entities interactively.
+
+          ## Process
+          1. **Gather Requirements** — Ask the user what they want to automate. Understand:
+             - What process? (code review, product planning, onboarding, etc.)
+             - What deliverables are expected?
+             - Interactive or non-interactive execution?
+             - Should it be triggered from a board column?
+
+          2. **Explore Existing Resources** — Use meta_list_* tools to check what already exists:
+             - meta_list_workflows, meta_list_agents, meta_list_tools, meta_list_skills
+             - meta_get_board — current board structure
+
+          3. **Design** — Propose a workflow structure. Show the user:
+             - How many steps, what each step does
+             - Which agents are needed (existing or new)
+             - How steps connect (dependencies)
+             Wait for user approval before creating anything.
+
+          4. **Create Agents** — For each new agent needed:
+             - meta_create_agent with detailed persona, communication style, principles
+
+          5. **Create Workflow & Steps** — Build the structure:
+             - meta_create_workflow — creates the workflow
+             - meta_create_step — for each step (write detailed instructions!)
+             - meta_create_sub_step — for progress tracking within steps
+             - meta_link_resource_to_step — attach tools, skills, MCP servers
+
+          6. **Configure Board (if requested)** — Set up automation:
+             - meta_get_board — inspect current board
+             - meta_create_board_column / meta_setup_board_from_preset — adjust columns
+             - meta_create_column_binding — bind workflow to column (auto/manual trigger)
+
+          7. **Validate** — Run meta_finalize_workflow and fix any issues.
+             Show the complete result with meta_get_workflow.
+
+          ## Important Rules
+          - ALWAYS propose before creating. ALWAYS ask for confirmation.
+          - Show progress after each creation.
+          - Step instructions are the MOST IMPORTANT thing — be detailed and specific.
+          - If user doesn't need board automation, skip step 6.
+        MD
+      )
 
       workflow
     end
@@ -185,248 +215,6 @@ module Seeds
         meta_create_column_binding meta_update_column_binding
         meta_delete_column_binding meta_setup_board_from_preset
       ]
-    end
-
-    def self.seed_step_gather_requirements!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Gather Requirements",
-        position: 1,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[meta_list_workflows meta_list_agents meta_list_tools meta_list_skills meta_get_board]),
-        instructions: <<~MD
-          ## Your Task
-          Interview the user to understand what workflow they want to build.
-
-          ## Process
-          1. Ask what process they want to automate (e.g., code review, product planning, onboarding)
-          2. Understand the expected inputs and outputs
-          3. Identify how many stages/steps the process has
-          4. Ask about execution mode: interactive (user participates) or non-interactive (fully autonomous)
-          5. Ask if this should be triggered from a board column
-          6. Use meta_list_workflows to show existing workflows for reference
-
-          ## Output
-          Present a structured summary of requirements for user confirmation before proceeding.
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Understand Goal",
-        "Identify Inputs & Outputs",
-        "Define Execution Mode",
-        "Propose Structure"
-      ])
-    end
-
-    def self.seed_step_design!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Design Workflow Architecture",
-        position: 2,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[meta_list_workflows meta_get_workflow]),
-        instructions: <<~MD
-          ## Your Task
-          Based on gathered requirements, design the complete workflow architecture.
-
-          ## Process
-          1. Define how many steps the workflow needs
-          2. For each step, plan: name, agent persona, key instructions, tools needed
-          3. Plan step dependencies (DAG) — which steps can run in parallel
-          4. Decide on skip policies and failure handling
-          5. Present the complete design to the user as a structured outline
-
-          ## Output
-          A clear step-by-step design showing:
-          - Step name, agent, mode (interactive/non-interactive)
-          - Key deliverables per step
-          - Dependency graph
-          - Required agents (new or existing)
-
-          Wait for user approval before proceeding to creation.
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Analyze Requirements",
-        "Design Step Flow",
-        "Plan Agent Personas",
-        "Present Design for Approval"
-      ])
-    end
-
-    def self.seed_step_create_agents!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Create Agents & Resources",
-        position: 3,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[meta_create_agent meta_create_tool meta_create_skill meta_create_mcp_server meta_list_agents]),
-        instructions: <<~MD
-          ## Your Task
-          Create the agent personas needed for the workflow steps.
-
-          ## Process
-          1. For each unique agent role in the design:
-             - Create an agent with meta_create_agent
-             - Write a detailed persona (system prompt)
-             - Set communication style and principles
-          2. Reuse existing agents when appropriate (check with user)
-          3. Report each created agent to the user
-
-          ## Agent Design Guidelines
-          - Start persona with: "You are a [ROLE] with expertise in [DOMAINS]."
-          - Define expertise areas, working style, and constraints
-          - For non-interactive steps: emphasize autonomous decision-making
-          - For interactive steps: emphasize collaboration and question-asking
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Create Agent Personas",
-        "Verify Agent Configuration"
-      ])
-    end
-
-    def self.seed_step_build_structure!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Build Workflow Structure",
-        position: 4,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[
-          meta_create_workflow meta_create_step meta_create_sub_step meta_get_workflow
-          meta_update_step meta_delete_step meta_reorder_steps meta_link_resource_to_step
-        ]),
-        instructions: <<~MD
-          ## Your Task
-          Create the workflow, steps, and sub-steps using meta tools.
-
-          ## Process
-          1. Create the workflow with meta_create_workflow
-          2. For each step in the approved design:
-             - Create the step with meta_create_step (include detailed instructions!)
-             - Add sub-steps with meta_create_sub_step
-             - Link the appropriate agent
-          3. Configure step dependencies via depends_on_step_ids
-          4. Use meta_get_workflow to show progress after each major addition
-
-          ## Critical
-          - Step instructions are the MOST IMPORTANT field — write detailed markdown
-          - Each step's instructions should be self-contained enough for the agent to work autonomously
-          - Always show the user what was created after each step
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Create Workflow",
-        "Create Steps with Instructions",
-        "Add Sub-Steps",
-        "Configure Dependencies",
-        "Review Built Structure"
-      ])
-    end
-
-    def self.seed_step_configure_board!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Configure Board & Automation",
-        position: 5,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[
-          meta_get_board meta_create_board_column meta_update_board_column
-          meta_delete_board_column meta_reorder_board_columns
-          meta_create_column_binding meta_update_column_binding
-          meta_delete_column_binding meta_setup_board_from_preset
-          meta_get_workflow
-        ]),
-        instructions: <<~MD
-          ## Your Task
-          Configure the project board and set up workflow automation bindings.
-
-          ## Process
-          1. Use meta_get_board to inspect the current board state
-          2. Ask the user if they want to:
-             - Use an existing board layout or set up from a preset (simple_kanban, dev_team, full_sdlc)
-             - Add/modify columns to match the new workflow stages
-             - Bind the created workflow to specific columns
-          3. Create or modify columns as needed
-          4. Set up ColumnWorkflowBindings:
-             - Ask which columns should trigger the workflow
-             - Choose trigger mode: auto (runs when task enters column) or manual (button click)
-             - Configure cooldown for auto-triggers
-          5. Show the user the complete board automation map
-
-          ## Board Automation Map Format
-          ```
-          Column Name        │ Workflow Binding
-          ───────────────────┼────────────────────────
-          Backlog            │ (none)
-          Tech Design        │ → "My Workflow" (auto) ⚡
-          Implementation     │ (none)
-          Code Review        │ → "Review Bot" (manual) 👆
-          Done               │ (none)
-          ```
-
-          ## Important
-          - Not every column needs a binding — only automate stages that benefit from AI
-          - Auto-trigger requires the workflow to support non-interactive mode
-          - One binding per column maximum
-          - If the user doesn't need board automation, this step can be brief
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Inspect Current Board",
-        "Propose Board Changes",
-        "Create/Update Columns",
-        "Bind Workflows to Columns",
-        "Review Automation Map"
-      ])
-    end
-
-    def self.seed_step_validate!(workflow, agent, meta_tool_ids)
-      step = workflow.steps.create!(
-        name: "Validate & Finalize",
-        position: 6,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: meta_tool_ids.call(%w[meta_get_workflow meta_finalize_workflow]),
-        instructions: <<~MD
-          ## Your Task
-          Validate the workflow and get user approval.
-
-          ## Process
-          1. Run meta_finalize_workflow to check for issues
-          2. If validation fails — fix the issues and re-validate
-          3. Use meta_get_workflow to show the complete final structure
-          4. Present a summary to the user:
-             - Workflow name and description
-             - Number of steps
-             - Agents used
-             - Execution mode
-          5. Ask the user to confirm the workflow is ready
-
-          ## On Completion
-          Inform the user they can now:
-          - Go to the workflow builder to make manual adjustments
-          - Run the workflow immediately
-          - Bind it to a board column for automation
-        MD
-      )
-
-      create_sub_steps!(step, [
-        "Run Validation",
-        "Present Summary",
-        "Get User Approval"
-      ])
-    end
-
-    def self.create_sub_steps!(step, names)
-      names.each_with_index do |name, idx|
-        step.sub_steps.create!(name: name, position: idx + 1)
-      end
     end
     # rubocop:enable Metrics/MethodLength
   end

@@ -67,20 +67,20 @@ const PaladBuilderPage = () => {
 
   const handleStart = async () => {
     if (activeRun) {
-      navigate({ to: Routes.frontend.workflowRunPath(projectId, String(activeRun.id)) });
+      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(activeRun.id)) });
       return;
     }
 
     try {
       const run = await startBuilder(Number(projectId)).unwrap();
-      navigate({ to: Routes.frontend.workflowRunPath(projectId, String(run.id)) });
+      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(run.id)) });
     } catch {
       enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
     }
   };
 
   const handleGoToRun = (runId: number) => {
-    navigate({ to: Routes.frontend.workflowRunPath(projectId, String(runId)) });
+    navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(runId)) });
   };
 
   return (
