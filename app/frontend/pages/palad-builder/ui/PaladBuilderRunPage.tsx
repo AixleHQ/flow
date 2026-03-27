@@ -65,10 +65,9 @@ const PaladBuilderRunPage = () => {
     onRunUpdate: refetchRun,
   });
 
-  // Get terminal session from current_step_info (always available, no need for include_associations)
-  const currentStepInfo = (run as any)?.currentStepInfo || null;
-  const terminalSessionId = currentStepInfo?.terminalSessionId || null;
-  const isRunActive = ['running', 'paused'].includes(run?.state || '');
+  // Get terminal session from currentStepInfo (always in API response)
+  const terminalSessionId = run?.currentStepInfo?.terminalSessionId ?? null;
+  const isRunActive = run?.state === 'running' || run?.state === 'paused';
 
   // Finish session
   const { enqueueSnackbar } = useSnackbar();
@@ -88,7 +87,7 @@ const PaladBuilderRunPage = () => {
   const targetWorkflowId = useMemo(() => {
     const createWfActivity = activities.find((a) => a.action === 'created_workflow');
     if (createWfActivity) return createWfActivity.entityId;
-    return (run as any)?.sharedContext?.targetWorkflowId || null;
+    return (run?.sharedContext as Record<string, unknown>)?.targetWorkflowId as number | null ?? null;
   }, [activities, run]);
 
   if (isLoading) {

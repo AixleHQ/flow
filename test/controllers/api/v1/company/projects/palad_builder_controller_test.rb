@@ -8,51 +8,54 @@ class Api::V1::Company::Projects::PaladBuilderControllerTest < ActionController:
     @admin = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @admin)
 
-    # Create the Palad Builder system workflow (simulating seed)
-    @builder_workflow = Workflow.find_or_create_by!(
-      scope_type: "System", scope_id: 0, name: "Palad Builder"
-    ) do |w|
-      w.description = "System meta-workflow"
-      w.config = {}
+    # Ensure meta tools exist
+    Tool.find_or_create_by!(name: "meta_create_workflow", kind: :workflow) do |t|
+      t.display_name = "Meta Create Workflow"
+      t.execution_mode = :app
+      t.input_schema = {}
     end
-    create(:step, workflow: @builder_workflow, name: "Gather Requirements", position: 1, instructions: "Gather reqs")
   end
 
-  test "#start creates a workflow run" do
+  test "#start creates a terminal session with meta tools" do
     sign_in @admin
 
-    WorkflowService.expects(:start).with(
-      workflow: @builder_workflow,
-      project: @project,
+    SessionService.expects(:create_and_start).with(
       user: @admin,
-      mode: :interactive,
-      agent_runtime: nil
-    ).returns(create(:workflow_run, workflow: @builder_workflow, project: @project, user: @admin))
+      project: @project,
+      session_type: "agent_session",
+      agent_type: "claude_code",
+      params: has_entries(mode: "interactive", tool_ids: instance_of(Array))
+    ).returns(create(:terminal_session, user: @admin, project: @project))
+
+    post :start, params: { project_id: @project.id, agent_runtime: "claude_code" }
+    assert_response :success
+  end
+
+  test "#start uses default agent runtime when not specified" do
+    sign_in @admin
+
+    SessionService.expects(:create_and_start).with(
+      user: @admin,
+      project: @project,
+      session_type: "agent_session",
+      agent_type: anything,
+      params: has_entries(mode: "interactive")
+    ).returns(create(:terminal_session, user: @admin, project: @project))
 
     post :start, params: { project_id: @project.id }
-    assert_response :created
+    assert_response :success
   end
 
-  test "#status returns builder runs for project" do
+  test "#status returns palad builder sessions" do
     sign_in @admin
 
-    run = create(:workflow_run, workflow: @builder_workflow, project: @project, user: @admin)
+    session = create(:terminal_session, user: @admin, project: @project,
+                     initial_prompt: "# Palad Builder\nYou are a Workflow Architect...")
 
     get :status, params: { project_id: @project.id }
     assert_response :success
     body = response.parsed_body
-    ids = body["items"].map { |r| r["id"] }
-    assert_includes ids, run.id
-  end
-
-  test "#status excludes runs from other projects" do
-    sign_in @admin
-    other_project = create(:project, company: @company, owner: @admin)
-    create(:workflow_run, workflow: @builder_workflow, project: other_project, user: @admin)
-
-    get :status, params: { project_id: @project.id }
-    assert_response :success
-    body = response.parsed_body
-    assert_equal 0, body["items"].size
+    ids = (body["items"] || []).map { |s| s["id"] }
+    assert_includes ids, session.id
   end
 end

@@ -1,6 +1,5 @@
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import HistoryIcon from '@mui/icons-material/History';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import {
   Box,
   Button,
@@ -27,7 +26,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGetCurrentUserQuery } from 'entities/user/api/currentUserApi';
 import { AVAILABLE_AGENTS, AGENT_COLORS } from 'entities/user/model/agentConstants';
 import type { AgentType } from 'entities/user/model/types';
-import { useStartPaladBuilderMutation, useGetPaladBuilderStatusQuery } from 'features/palad-builder';
+import { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } from 'features/palad-builder';
+import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import { Routes } from 'shared/routes';
 
 const styles = {
@@ -46,7 +46,7 @@ const styles = {
 } satisfies Record<string, SxProps>;
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
-  completed: 'success', running: 'warning', paused: 'info', failed: 'error', cancelled: 'default', pending: 'default',
+  finished: 'success', running: 'warning', ready: 'info', failed: 'error', not_started: 'default',
 };
 
 const PaladBuilderPage = () => {
@@ -54,44 +54,62 @@ const PaladBuilderPage = () => {
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
   const [startBuilder, { isLoading: isStarting }] = useStartPaladBuilderMutation();
-  const { data: runs, isLoading } = useGetPaladBuilderStatusQuery(Number(projectId));
+  const { data: sessions, isLoading } = useGetPaladBuilderSessionsQuery(Number(projectId));
   const { data: currentUser } = useGetCurrentUserQuery();
 
-  // Agent runtime selection
   const configuredAgents = useMemo(
     () => AVAILABLE_AGENTS.filter((a) => currentUser?.configuredAgents?.includes(a.type)),
     [currentUser],
   );
   const [agentRuntime, setAgentRuntime] = useState<AgentType | ''>('');
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [fetchModels, { data: models }] = useLazyGetAgentModelsQuery();
 
-  // Set default runtime when user data loads
+  // Set default runtime
   useEffect(() => {
     if (configuredAgents.length > 0 && !agentRuntime) {
-      const defaultRuntime = currentUser?.defaultAgentRuntime;
-      if (defaultRuntime && configuredAgents.some((a) => a.type === defaultRuntime)) {
-        setAgentRuntime(defaultRuntime);
-      } else {
-        setAgentRuntime(configuredAgents[0].type);
-      }
+      const def = currentUser?.defaultAgentRuntime;
+      setAgentRuntime(def && configuredAgents.some((a) => a.type === def) ? def : configuredAgents[0].type);
     }
   }, [configuredAgents, currentUser, agentRuntime]);
 
-  const activeRun = runs?.find((r) => ['pending', 'running', 'paused'].includes(r.state));
+  // Fetch models when runtime changes
+  useEffect(() => {
+    if (agentRuntime) {
+      fetchModels(agentRuntime);
+      setSelectedModel('');
+    }
+  }, [agentRuntime, fetchModels]);
+
+  // Set default model from credential
+  useEffect(() => {
+    if (models && models.length > 0 && !selectedModel) {
+      const credential = currentUser?.agentCredentials?.find((c) => c.agentType === agentRuntime);
+      const defaultModel = credential?.defaultModel;
+      if (defaultModel && models.some((m) => m.modelId === defaultModel)) {
+        setSelectedModel(defaultModel);
+      }
+    }
+  }, [models, selectedModel, currentUser, agentRuntime]);
+
+  const activeSession = sessions?.find((s) => ['running', 'ready'].includes(s.state));
 
   const handleStart = async () => {
-    if (activeRun) {
-      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(activeRun.id)) });
+    if (activeSession) {
+      navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(activeSession.id)) });
       return;
     }
-
     if (!agentRuntime) {
       enqueueSnackbar('Select an agent runtime', { variant: 'warning' });
       return;
     }
-
     try {
-      const run = await startBuilder({ projectId: Number(projectId), agentRuntime }).unwrap();
-      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(run.id)) });
+      const session = await startBuilder({
+        projectId: Number(projectId),
+        agentRuntime,
+        preferredModel: selectedModel || undefined,
+      }).unwrap();
+      navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(session.id)) });
     } catch {
       enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
     }
@@ -107,9 +125,8 @@ const PaladBuilderPage = () => {
           automation for you.
         </Typography>
 
-        {/* Agent Runtime Selector */}
         {configuredAgents.length > 0 && (
-          <Box sx={styles.configRow}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 2, width: '100%', maxWidth: 400 }}>
             <FormControl fullWidth size="small">
               <InputLabel>Agent Runtime</InputLabel>
               <Select
@@ -120,46 +137,66 @@ const PaladBuilderPage = () => {
                 {configuredAgents.map((agent) => (
                   <MenuItem key={agent.type} value={agent.type}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box
-                        sx={{
-                          width: 8, height: 8, borderRadius: '50%',
-                          backgroundColor: AGENT_COLORS[agent.type],
-                        }}
-                      />
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: AGENT_COLORS[agent.type] }} />
                       {agent.name}
                     </Box>
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
+
+            {models && models.length > 0 && (
+              <FormControl fullWidth size="small">
+                <InputLabel>Model (optional)</InputLabel>
+                <Select
+                  value={selectedModel}
+                  label="Model (optional)"
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  displayEmpty
+                >
+                  <MenuItem value="">
+                    <Typography sx={{ color: 'text.secondary', fontSize: 14 }}>Default</Typography>
+                  </MenuItem>
+                  {models.map((m) => (
+                    <MenuItem key={m.modelId} value={m.modelId}>
+                      <Box>
+                        <Typography sx={{ fontSize: 14 }}>{m.displayName}</Typography>
+                        {m.description && (
+                          <Typography sx={{ fontSize: 11, color: 'text.secondary' }}>{m.description}</Typography>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
         )}
 
         <Button
           variant="contained"
           size="large"
-          startIcon={activeRun ? <PlayArrowIcon /> : <AutoFixHighIcon />}
+          startIcon={<AutoFixHighIcon />}
           onClick={handleStart}
-          disabled={isStarting || (!agentRuntime && !activeRun)}
+          disabled={isStarting || (!agentRuntime && !activeSession)}
         >
-          {activeRun ? 'Continue Active Build' : 'Start Builder'}
+          {activeSession ? 'Continue Active Session' : 'Start Builder'}
         </Button>
       </Box>
 
-      {/* Build History */}
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
-      ) : runs && runs.length > 0 ? (
+      ) : sessions && sessions.length > 0 ? (
         <Box sx={styles.section}>
           <Typography sx={styles.sectionTitle}>
             <HistoryIcon fontSize="small" />
-            Build History
+            Previous Sessions
           </Typography>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Run</TableCell>
+                  <TableCell>Session</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell>Runtime</TableCell>
                   <TableCell>Started</TableCell>
@@ -167,21 +204,21 @@ const PaladBuilderPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {runs.map((run) => (
+                {sessions.map((s) => (
                   <TableRow
-                    key={run.id}
+                    key={s.id}
                     hover
                     sx={{ cursor: 'pointer' }}
-                    onClick={() => navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(run.id)) })}
+                    onClick={() => navigate({ to: Routes.frontend.companyProjectSessionPath(projectId, String(s.id)) })}
                   >
-                    <TableCell>#{run.id}</TableCell>
+                    <TableCell>#{s.id}</TableCell>
                     <TableCell>
-                      <Chip label={run.state} size="small" color={stateColors[run.state] || 'default'} />
+                      <Chip label={s.state} size="small" color={stateColors[s.state] || 'default'} />
                     </TableCell>
-                    <TableCell>{run.agentRuntime || '—'}</TableCell>
-                    <TableCell>{run.startedAt ? new Date(run.startedAt).toLocaleString() : '—'}</TableCell>
+                    <TableCell>{s.agentType || '—'}</TableCell>
+                    <TableCell>{s.startedAt ? new Date(s.startedAt).toLocaleString() : '—'}</TableCell>
                     <TableCell>
-                      <Button size="small" variant="text">View</Button>
+                      <Button size="small" variant="text">Open</Button>
                     </TableCell>
                   </TableRow>
                 ))}

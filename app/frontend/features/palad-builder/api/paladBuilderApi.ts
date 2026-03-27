@@ -1,51 +1,35 @@
 import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-interface WorkflowRunSummary {
-  id: number;
-  state: string;
-  mode: string;
-  agentRuntime: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  workflowId: number;
-  projectId: number;
-}
+import type { ITerminalSession } from 'entities/terminal-session';
 
 interface StartPaladBuilderRequest {
   projectId: number;
   agentRuntime?: string;
-}
-
-interface StartPaladBuilderResponse {
-  id: number;
-  state: string;
-  workflowId: number;
-  projectId: number;
+  preferredModel?: string;
 }
 
 export const paladBuilderApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    startPaladBuilder: builder.mutation<StartPaladBuilderResponse, StartPaladBuilderRequest>({
-      query: ({ projectId, agentRuntime }) => ({
+    startPaladBuilder: builder.mutation<ITerminalSession, StartPaladBuilderRequest>({
+      query: ({ projectId, agentRuntime, preferredModel }) => ({
         url: Routes.backend.startApiV1CompanyProjectPaladBuilderPath(projectId),
         method: 'POST',
-        data: { agentRuntime },
+        data: { agentRuntime, preferredModel },
       }),
-      transformResponse: (response: ApiResponse<StartPaladBuilderResponse>) => response.data,
-      invalidatesTags: [QueryTag.WorkflowRun],
+      transformResponse: (response: ApiResponse<ITerminalSession>) => response.data,
+      invalidatesTags: [QueryTag.TerminalSession],
     }),
 
-    getPaladBuilderStatus: builder.query<WorkflowRunSummary[], number>({
+    getPaladBuilderSessions: builder.query<ITerminalSession[], number>({
       query: (projectId) => ({
         url: Routes.backend.statusApiV1CompanyProjectPaladBuilderPath(projectId),
         method: 'GET',
       }),
-      transformResponse: (response: ApiCollectionResponse<WorkflowRunSummary>) => response.items,
-      providesTags: [QueryTag.WorkflowRun],
+      transformResponse: (response: ApiCollectionResponse<ITerminalSession>) => response.items,
+      providesTags: [QueryTag.TerminalSession],
     }),
   }),
 });
 
-export const { useStartPaladBuilderMutation, useGetPaladBuilderStatusQuery } = paladBuilderApi;
+export const { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } = paladBuilderApi;
