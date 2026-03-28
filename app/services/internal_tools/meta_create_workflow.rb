@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       proj = target_project
       return error("No target project available") unless proj
@@ -16,7 +16,7 @@ module InternalTools
         config: params[:config].presence || {}
       )
 
-      store_in_shared_context("target_workflow_id", workflow.id)
+      store_in_context("target_workflow_id", workflow.id)
 
       broadcast_meta_activity(
         action: "created_workflow",

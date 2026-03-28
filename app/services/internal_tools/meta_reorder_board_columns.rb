@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       board = target_project&.board
       return error("Project has no board") unless board

@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       workflow = find_target_workflow!
       step_ids = params[:step_ids]

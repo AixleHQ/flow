@@ -11,7 +11,7 @@ module InternalTools
     }.freeze
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       step = Step.find(params[:step_id])
       resource_type = params[:resource_type]

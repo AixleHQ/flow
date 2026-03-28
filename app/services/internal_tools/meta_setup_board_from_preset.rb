@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       proj = target_project
       return error("No target project available") unless proj

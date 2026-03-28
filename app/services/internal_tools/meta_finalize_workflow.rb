@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       workflow = find_target_workflow!
       errors_list = validate_workflow(workflow)

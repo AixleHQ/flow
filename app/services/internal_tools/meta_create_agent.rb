@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       scope_type = params[:scope_type] || "Project"
       scope_id = params[:scope_id]

@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       step = Step.find(params[:step_id])
       position = params[:position] || (step.sub_steps.maximum(:position).to_i + 1)

@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       binding = ColumnWorkflowBinding.find(params[:binding_id])
 

@@ -307,4 +307,22 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
       ).execute
     end
   end
+
+  # ── works with standalone session (no workflow context) ──
+
+  test "meta tools work with standalone session (no step_run)" do
+    standalone_session = Object.new
+    standalone_session.define_singleton_method(:project) { @project }
+    standalone_session.define_singleton_method(:step_run) { nil }
+    standalone_session.define_singleton_method(:metadata) { {} }
+    standalone_session.define_singleton_method(:update!) { |_| true }
+    standalone_session.instance_variable_set(:@project, @project)
+
+    result = InternalTools::MetaListWorkflows.new(
+      params: {},
+      session: standalone_session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+  end
 end

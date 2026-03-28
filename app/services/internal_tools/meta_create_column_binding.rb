@@ -5,7 +5,7 @@ module InternalTools
     include MetaToolHelpers
 
     def execute
-      require_workflow_context!
+      require_project_context!
 
       column = BoardColumn.find(params[:column_id])
       workflow = Workflow.find(params[:workflow_id])
