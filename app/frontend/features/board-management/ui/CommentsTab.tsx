@@ -1,7 +1,9 @@
 import SendIcon from '@mui/icons-material/Send';
+import UnfoldLessIcon from '@mui/icons-material/UnfoldLess';
+import UnfoldMoreIcon from '@mui/icons-material/UnfoldMore';
 import { Autocomplete, Avatar, Box, Button, Chip, MenuItem, TextField, Typography } from '@mui/material';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -19,7 +21,7 @@ const styles = {
   filters: { display: 'flex', gap: 1, mb: 2 },
   commentList: { display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 },
   comment: { p: 1.5, backgroundColor: 'action.hover', borderRadius: '8px' },
-  commentHeader: { display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 },
+  commentHeader: { display: 'flex', alignItems: 'center', gap: 1, mb: 0.5, cursor: 'pointer', userSelect: 'none' },
   authorName: { fontSize: '13px', fontWeight: 600 },
   authorBadge: { height: 18, fontSize: '10px' },
   timestamp: { fontSize: '11px', color: 'text.disabled', ml: 'auto' },
@@ -60,6 +62,14 @@ const styles = {
       fontStyle: 'italic',
     },
   },
+  collapsedPreview: {
+    fontSize: '13px',
+    color: 'text.secondary',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  listHeader: { display: 'flex', justifyContent: 'flex-end', mb: 1 },
   tags: { display: 'flex', gap: 0.5, mt: 0.75 },
   tagChip: { height: 18, fontSize: '10px' },
   form: {
@@ -81,6 +91,8 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
   const [body, setBody] = useState('');
   const [tags, setTags] = useState<string[]>([]);
 
+  const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+
   const { data: comments = [] } = useGetTaskCommentsQuery({
     projectId,
     taskId,
@@ -88,6 +100,28 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
     authorType: authorTypeFilter === 'all' ? undefined : authorTypeFilter,
   });
   const [createComment, { isLoading }] = useCreateCommentMutation();
+
+  const allCollapsed = useMemo(
+    () => comments.length > 0 && comments.every((c: TaskComment) => collapsedIds.has(c.id)),
+    [comments, collapsedIds],
+  );
+
+  const toggleComment = useCallback((id: number) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    if (allCollapsed) {
+      setCollapsedIds(new Set());
+    } else {
+      setCollapsedIds(new Set(comments.map((c: TaskComment) => c.id)));
+    }
+  }, [allCollapsed, comments]);
 
   const handleSubmit = useCallback(async () => {
     if (!body.trim()) return;
@@ -155,27 +189,47 @@ export const CommentsTab = ({ taskId, projectId }: CommentsTabProps) => {
         </Button>
       </Box>
 
+      {comments.length > 1 && (
+        <Box sx={styles.listHeader}>
+          <Button
+            size="small"
+            startIcon={allCollapsed ? <UnfoldMoreIcon fontSize="small" /> : <UnfoldLessIcon fontSize="small" />}
+            onClick={toggleAll}
+            sx={{ textTransform: 'none', fontSize: '12px' }}
+          >
+            {allCollapsed ? 'Expand all' : 'Collapse all'}
+          </Button>
+        </Box>
+      )}
+
       <Box sx={styles.commentList}>
-        {comments.map((comment: TaskComment) => (
-          <Box key={comment.id} sx={styles.comment}>
-            <Box sx={styles.commentHeader}>
-              <Avatar sx={{ width: 22, height: 22, fontSize: '10px' }}>{comment.authorName?.[0] || 'U'}</Avatar>
-              <Typography sx={styles.authorName}>{comment.authorName}</Typography>
-              <Chip label={comment.authorType} size="small" sx={styles.authorBadge} />
-              <Typography sx={styles.timestamp}>{new Date(comment.createdAt).toLocaleString()}</Typography>
-            </Box>
-            <Box sx={styles.body}>
-              <Markdown remarkPlugins={[remarkGfm]}>{comment.body}</Markdown>
-            </Box>
-            {comment.tags.length > 0 && (
-              <Box sx={styles.tags}>
-                {comment.tags.map((tag) => (
-                  <Chip key={tag} label={tag} size="small" variant="outlined" sx={styles.tagChip} />
-                ))}
+        {comments.map((comment: TaskComment) => {
+          const collapsed = collapsedIds.has(comment.id);
+          return (
+            <Box key={comment.id} sx={styles.comment}>
+              <Box sx={styles.commentHeader} onClick={() => toggleComment(comment.id)}>
+                <Avatar sx={{ width: 22, height: 22, fontSize: '10px' }}>{comment.authorName?.[0] || 'U'}</Avatar>
+                <Typography sx={styles.authorName}>{comment.authorName}</Typography>
+                <Chip label={comment.authorType} size="small" sx={styles.authorBadge} />
+                <Typography sx={styles.timestamp}>{new Date(comment.createdAt).toLocaleString()}</Typography>
               </Box>
-            )}
-          </Box>
-        ))}
+              {collapsed ? (
+                <Typography sx={styles.collapsedPreview}>{comment.body.split('\n')[0]}</Typography>
+              ) : (
+                <Box sx={styles.body}>
+                  <Markdown remarkPlugins={[remarkGfm]}>{comment.body}</Markdown>
+                </Box>
+              )}
+              {comment.tags.length > 0 && (
+                <Box sx={styles.tags}>
+                  {comment.tags.map((tag) => (
+                    <Chip key={tag} label={tag} size="small" variant="outlined" sx={styles.tagChip} />
+                  ))}
+                </Box>
+              )}
+            </Box>
+          );
+        })}
         {comments.length === 0 && (
           <Typography sx={{ color: 'text.disabled', fontSize: '13px', textAlign: 'center', py: 3 }}>
             No comments yet
