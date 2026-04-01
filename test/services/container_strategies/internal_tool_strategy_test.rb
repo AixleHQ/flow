@@ -76,8 +76,8 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
   test "build_labels includes internal_tool type" do
     strategy = build_test_strategy
     labels = strategy.build_labels
-    assert_equal "internal_tool", labels["palad.type"]
-    assert_equal "test_tool", labels["palad.tool"]
+    assert_equal "internal_tool", labels["aixle.type"]
+    assert_equal "test_tool", labels["aixle.tool"]
   end
 
   test "build_host_config with docker_socket mounts docker.sock" do

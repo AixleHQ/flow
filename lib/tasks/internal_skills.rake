@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-namespace :palad do
+namespace :aixle do
   desc "Sync internal skills from db/internal_skills/*.md into the database"
   task sync_internal_skills: :environment do
     skills_dir = Rails.root.join("db", "internal_skills")

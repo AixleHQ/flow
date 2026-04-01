@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Palad — Agentic SDLC Platform</title>
+<title>Aixle — The system that runs work</title>
 <%= csrf_meta_tags %>
 <%= csp_meta_tag %>
 <link rel="icon" sizes="32x32" href="/favicon.ico">
@@ -125,145 +125,19 @@ nav.scrolled{padding:10px 0;background:rgba(9,9,11,.92)}
 .hero p{font-size:18px;color:var(--text-secondary);max-width:560px;margin:0 auto 32px;line-height:1.7}
 .hero-actions{display:flex;gap:12px;justify-content:center;margin-bottom:48px}
 
-/* T2-07: Typewriter terminal in hero */
-.hero-terminal{max-width:640px;width:100%;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 40px rgba(59,130,246,.05);text-align:left}
-.terminal-header{display:flex;align-items:center;gap:8px;padding:14px 18px;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border-default)}
-.terminal-dot{width:12px;height:12px;border-radius:50%}
-.terminal-dot.red{background:#FF5F57}.terminal-dot.yellow{background:#FFBD2E}.terminal-dot.green{background:#28CA41}
-.terminal-title{flex:1;text-align:center;font-size:12px;color:var(--text-muted);font-family:var(--font-mono)}
-.terminal-body{padding:20px;font-family:var(--font-mono);font-size:13px;line-height:1.9;min-height:260px}
-.terminal-line{display:flex;gap:8px;opacity:0;transform:translateY(8px);transition:all .4s var(--ease-out)}
-.terminal-line.visible{opacity:1;transform:translateY(0)}
-.terminal-prompt{color:var(--accent-green);white-space:nowrap}
-.terminal-command{color:var(--text-primary)}
-.terminal-output{color:var(--text-muted);padding-left:18px}
-.terminal-status{padding-left:18px}
-.terminal-success{color:var(--accent-green)}
-.terminal-info{color:var(--accent-blue)}
-.cursor-blink{display:inline-block;width:8px;height:16px;background:var(--accent-green);margin-left:2px;vertical-align:middle;animation:blink 1s step-end infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
 
-/* SDLC Diagram nodes */
-.sdlc-node-full{cursor:pointer;transition:opacity var(--dur-fast) ease}
-.sdlc-node-full circle:first-child{transition:stroke-width var(--dur-fast) ease,filter var(--dur-fast) ease}
-.sdlc-node-full:hover circle:first-child{stroke-width:3.5}
-
-/* T1-12: Carousel */
-.carousel-section{padding:40px 0;border-top:1px solid rgba(63,63,70,.3);border-bottom:1px solid rgba(63,63,70,.3);overflow:hidden;position:relative;z-index:1}
-.carousel-label{text-align:center;font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--text-muted);margin-bottom:24px}
-.carousel-track{display:flex;gap:64px;animation:slide 25s linear infinite;width:max-content}
-@keyframes slide{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-.carousel-item{display:flex;align-items:center;gap:12px;white-space:nowrap;opacity:.5;transition:opacity var(--dur-norm) ease;font-size:16px;font-weight:500;color:var(--text-secondary)}
-.carousel-item:hover{opacity:1}
-.carousel-icon{width:36px;height:36px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700}
-.ci-claude{background:rgba(204,120,50,.15);color:#CC7832}.ci-cursor{background:rgba(59,130,246,.15);color:#3B82F6}
-.ci-codex{background:rgba(34,197,94,.15);color:#22C55E}.ci-gemini{background:rgba(168,85,247,.15);color:#A855F7}
-.ci-temporal{background:rgba(6,182,212,.15);color:#06B6D4}.ci-docker{background:rgba(59,130,246,.15);color:#2496ED}
-.ci-k8s{background:rgba(50,108,229,.15);color:#326CE5}.ci-github{background:rgba(255,255,255,.1);color:#fff}
 
 /* Section eyebrow / titles */
 .section-eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--accent-blue);font-weight:600;margin-bottom:16px}
 .section-title{font-size:clamp(32px,4vw,48px);font-weight:700;letter-spacing:-1.5px;line-height:1.15;margin-bottom:16px}
 .section-subtitle{font-size:18px;color:var(--text-secondary);max-width:600px;line-height:1.7}
 
-/* T3-04: Sticky features */
-.features{padding:120px 0}
-.features-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:80px;margin-top:80px;align-items:start}
-.features-nav{position:sticky;top:120px}
-.feature-nav-item{display:flex;gap:16px;align-items:flex-start;padding:20px 24px;border-left:2px solid var(--border-default);cursor:pointer;transition:all var(--dur-norm) ease;margin-bottom:4px;position:relative}
-.feature-nav-item:hover{background:rgba(255,255,255,.03)}
-.feature-nav-item.active{border-left-color:transparent;background:var(--accent-blue-dim)}
-.feature-nav-item.active::after{content:'';position:absolute;left:-2px;top:0;bottom:0;width:2px;background:linear-gradient(180deg,var(--accent-blue),var(--accent-purple));border-radius:1px}
-.feature-num{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text-muted);opacity:.25;transition:all var(--dur-norm) ease;min-width:22px;padding-top:3px}
-.feature-nav-item:hover .feature-num{opacity:.5}
-.feature-nav-item.active .feature-num{color:var(--accent-blue);opacity:1}
-.feature-nav-item h3{font-size:16px;font-weight:600;margin-bottom:4px;transition:color var(--dur-fast) ease}
-.feature-nav-item.active h3{color:var(--accent-blue)}
-.feature-nav-item p{font-size:14px;color:var(--text-muted);line-height:1.5}
 
-/* Enterprise section (factory.ai style) */
-.enterprise-section{padding:120px 0}
-.enterprise-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:60px}
-.enterprise-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:40px;position:relative;overflow:hidden;transition:all var(--dur-norm) ease}
-.enterprise-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-purple),var(--accent-cyan));opacity:0;transition:opacity .3s ease}
-.enterprise-card:hover{border-color:var(--border-hover);transform:translateY(-2px);box-shadow:0 12px 40px rgba(0,0,0,.3)}
-.enterprise-card:hover::before{opacity:1}
-.enterprise-card-label{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--text-muted);margin-bottom:16px;font-weight:600}
-.enterprise-card h3{font-size:24px;font-weight:700;margin-bottom:12px;letter-spacing:-.5px}
-.enterprise-card p{font-size:15px;color:var(--text-muted);line-height:1.7;margin-bottom:20px}
-.enterprise-link{font-size:13px;color:var(--accent-blue);font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:gap .2s ease}
-.enterprise-link:hover{gap:10px;color:#60A5FA}
-.feature-display{position:sticky;top:120px}
-.feature-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:32px;display:none;animation:cardIn .6s var(--ease-out) forwards;position:relative;overflow:hidden}
-.feature-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent-blue),var(--accent-purple),var(--accent-cyan));transform:scaleX(0);transition:transform .4s var(--ease-out);transform-origin:left}
-.feature-card.active{display:block}
-.feature-card.active::before{transform:scaleX(1)}
-@keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-.feature-card-terminal{background:var(--bg-base);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:16px 20px;font-family:var(--font-mono);font-size:13px;line-height:1.8;margin-top:20px}
-
-/* T3-01: Pipeline */
-.pipeline-section{padding:120px 0}
-.pipeline{display:flex;align-items:center;justify-content:center;padding:40px 0}
-.pipeline-node{display:flex;flex-direction:column;align-items:center;gap:12px;position:relative;z-index:2}
-.pipeline-node-icon{width:64px;height:64px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:24px;border:2px solid var(--border-default);background:var(--bg-surface);transition:all .5s var(--ease-out);position:relative}
-.pipeline-node.completed .pipeline-node-icon{border-color:var(--accent-green);background:var(--accent-green-dim);box-shadow:0 0 20px rgba(34,197,94,.2)}
-.pipeline-node.active .pipeline-node-icon{border-color:var(--accent-blue);background:var(--accent-blue-dim);box-shadow:0 0 20px rgba(59,130,246,.3);animation:nodeActive 2s ease-in-out infinite}
-@keyframes nodeActive{0%,100%{box-shadow:0 0 20px rgba(59,130,246,.2)}50%{box-shadow:0 0 35px rgba(59,130,246,.5)}}
-.pipeline-node.pending .pipeline-node-icon{opacity:.4}
-.pipeline-node-label{font-size:13px;font-weight:500;color:var(--text-secondary);text-align:center}
-.pipeline-node.completed .pipeline-node-label{color:var(--accent-green)}
-.pipeline-node.active .pipeline-node-label{color:var(--accent-blue)}
-.pipeline-connector{width:100px;height:2px;position:relative;z-index:1}
-.pipeline-connector-line{position:absolute;top:0;left:0;right:0;height:2px;background:var(--border-default)}
-.pipeline-connector.completed .pipeline-connector-line{background:var(--accent-green)}
-.pipeline-connector.active .pipeline-connector-line{background:linear-gradient(90deg,var(--accent-green),var(--accent-blue))}
-.pipeline-connector.active .pipeline-connector-line::after{content:'';position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--accent-blue);box-shadow:0 0 12px var(--accent-blue);animation:pulseTravelRight 2s ease-in-out infinite}
-@keyframes pulseTravelRight{0%{left:0;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:100%;opacity:0}}
-.pipeline-stats{display:flex;justify-content:center;gap:48px;margin-top:48px}
-.pipeline-stat{text-align:center}
-.pipeline-stat-value{font-size:36px;font-weight:700;font-family:var(--font-mono);letter-spacing:-1px}
-.pipeline-stat-label{font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-top:4px}
-
-/* T1-02 + T3-15: Cards with hover lift + parallax tilt */
-.cards-section{padding:120px 0}
-/* Bento grid layout */
-.bento-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:60px}
-.bento-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:28px;transition:all var(--dur-norm) var(--ease-out);position:relative;overflow:hidden}
-.bento-card::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);transition:left .6s ease}
-.bento-card:hover::after{left:150%}
-.bento-card:hover{border-color:var(--border-hover);box-shadow:0 8px 30px rgba(0,0,0,.3);transform:translateY(-2px)}
-.bento-wide{grid-column:span 2;padding:36px}
-.bento-card h3{font-size:18px;font-weight:600;margin-bottom:8px}
-.bento-card p{font-size:14px;color:var(--text-muted);line-height:1.6}
-.bento-card-visual{margin-bottom:20px;padding:16px 0}
-.bento-card-accent{width:32px;height:3px;border-radius:2px;margin-bottom:20px;opacity:.7}
-
-/* T3-02: Heatmap */
-.heatmap-section{padding:120px 0}
-.heatmap-wrapper{margin-top:60px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:40px}
-.heatmap-grid{display:grid;grid-template-columns:repeat(52,1fr);gap:3px;margin-top:24px}
-.heatmap-cell{aspect-ratio:1;border-radius:2px;background:var(--bg-elevated);transition:all var(--dur-fast) ease;cursor:pointer;opacity:0;animation:heatFade .3s ease forwards}
-.heatmap-cell:hover{outline:1px solid var(--text-muted);transform:scale(1.5);z-index:1;position:relative}
-.heatmap-cell.l1{background:rgba(59,130,246,.15)}.heatmap-cell.l2{background:rgba(59,130,246,.3)}
-.heatmap-cell.l3{background:rgba(59,130,246,.5)}.heatmap-cell.l4{background:var(--accent-blue)}
-@keyframes heatFade{to{opacity:1}}
-.heatmap-legend{display:flex;align-items:center;gap:4px;justify-content:flex-end;margin-top:12px;font-size:12px;color:var(--text-muted)}
-.heatmap-legend-cell{width:12px;height:12px;border-radius:2px}
 
 
 /* T-NEW: Text scramble animation */
 .scramble-text{position:relative;display:inline-block}
 
-/* Testimonial */
-.testimonials-section{padding:120px 0}
-.testimonial-card{max-width:700px;margin:60px auto 0;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-xl);padding:48px;text-align:center;position:relative}
-.testimonial-card::before{content:'"';position:absolute;top:20px;left:40px;font-size:80px;font-weight:800;color:var(--accent-blue-dim);line-height:1}
-.testimonial-text{font-size:20px;line-height:1.7;color:var(--text-primary);margin-bottom:28px;position:relative}
-.testimonial-author{display:flex;align-items:center;gap:12px;justify-content:center}
-.testimonial-avatar{width:44px;height:44px;border-radius:50%;background:var(--accent-purple-dim);display:flex;align-items:center;justify-content:center;font-weight:600;color:var(--accent-purple);font-size:16px}
-.testimonial-meta{text-align:left}
-.testimonial-name{font-weight:600;font-size:15px}
-.testimonial-role{font-size:13px;color:var(--text-muted)}
 
 /* CTA */
 .cta-section{padding:120px 0 160px;text-align:center;position:relative}
@@ -293,29 +167,6 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 /* T-NEW: Noise texture overlay */
 .noise-overlay{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.03;background:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 
-/* Conveyor Belt Animation — Robot Arm Version */
-.conveyor-section{padding:120px 0}
-.conveyor-wrapper{position:relative;margin-top:60px;padding:40px 0 60px}
-.conveyor-svg-container{width:100%;max-width:1100px;margin:0 auto}
-.conveyor-svg-container svg{width:100%;height:auto;display:block}
-
-/* Gradient separator */
-.gradient-separator{height:1px;background:linear-gradient(90deg,transparent,var(--accent-blue),var(--accent-purple),var(--accent-cyan),transparent);opacity:.3;margin:0 auto;max-width:800px}
-
-/* Integrations section (factory.ai style) */
-.integration-item{display:flex;gap:32px;padding:36px 0;align-items:flex-start;position:relative;transition:all .3s ease}
-.integration-item:hover{padding-left:8px}
-.integration-number{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--text-muted);min-width:32px;padding-top:6px;opacity:.3;transition:all .3s ease}
-.integration-item:hover .integration-number{color:var(--accent-blue);opacity:.9}
-.integration-body{flex:1}
-.integration-title{font-size:clamp(22px,2.5vw,32px);font-weight:700;letter-spacing:-.5px;margin-bottom:12px;color:var(--text-primary);transition:color var(--dur-norm) ease}
-.integration-item:hover .integration-title{color:var(--accent-blue)}
-.integration-desc{font-size:15px;color:var(--text-muted);line-height:1.7;max-width:640px}
-.integration-link{display:inline-flex;align-items:center;gap:6px;margin-top:14px;font-size:14px;font-weight:500;color:var(--accent-blue);transition:gap .2s ease,color var(--dur-fast) ease}
-.integration-link:hover{gap:10px;color:#60A5FA}
-.integration-divider{height:1px;background:linear-gradient(90deg,rgba(63,63,70,.5),rgba(63,63,70,.15));margin-left:64px;position:relative}
-.integration-divider::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(59,130,246,.3),rgba(168,85,247,.15),transparent);opacity:0;transition:opacity .6s ease}
-.integration-item:hover+.integration-divider::after,.integration-divider:hover::after{opacity:1}
 
 /* Floating code badges */
 .floating-badge{position:absolute;padding:6px 16px;background:rgba(24,24,27,.8);border:1px solid var(--border-default);border-radius:var(--radius-full);font-size:11px;font-family:var(--font-mono);color:var(--text-muted);white-space:nowrap;pointer-events:none;backdrop-filter:blur(8px);z-index:3}
@@ -326,36 +177,19 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 @keyframes floatB{0%,100%{transform:translateY(0) rotate(.5deg);opacity:.25}50%{transform:translateY(-10px) rotate(-.5deg);opacity:.55}}
 @keyframes floatC{0%,100%{transform:translateY(0) rotate(-.3deg);opacity:.3}50%{transform:translateY(-12px) rotate(.3deg);opacity:.6}}
 
-/* Terminal scan line */
-.terminal-scan{position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(59,130,246,.25),transparent);animation:scanDown 4s ease-in-out infinite;pointer-events:none;z-index:5}
-@keyframes scanDown{0%{top:0;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0}}
-
-/* Animated border on heatmap */
-.heatmap-wrapper{position:relative}
-.heatmap-wrapper::before{content:'';position:absolute;inset:-1px;border-radius:var(--radius-xl);background:conic-gradient(from var(--hm-angle,0deg) at 50% 50%,transparent 0%,var(--accent-blue) 8%,transparent 16%);opacity:0;transition:opacity .5s ease;z-index:-1;padding:1px}
-.heatmap-wrapper:hover::before{opacity:.5}
 
 /* Hero logo 3D tilt container */
 .hero-logo-wrapper{transition:transform .15s ease}
 
 /* Responsive */
 @media(max-width:1024px){
-  .features-grid{grid-template-columns:1fr;gap:40px}.features-nav{position:static}
-  .bento-grid{grid-template-columns:repeat(2,1fr)}.bento-wide{grid-column:span 1}
   .footer-grid{grid-template-columns:1fr 1fr}
   .floating-badge{display:none}
-  .integration-item{gap:20px}
-  .enterprise-grid{grid-template-columns:1fr;gap:20px}
-  #cycleDiagram{width:400px;height:400px}
 }
-@media(max-width:640px){.bento-grid{grid-template-columns:1fr}.bento-wide{grid-column:span 1}.hero-actions{flex-direction:column}.nav-links{display:none}section{padding:80px 0}.heatmap-grid{grid-template-columns:repeat(26,1fr)}.conveyor-svg-container{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .integration-item{flex-direction:column;gap:8px}
-  .integration-number{min-width:auto}
-  .integration-divider{margin-left:0}
-  .enterprise-grid{grid-template-columns:1fr}
-  .enterprise-card{padding:28px}
-  .feature-num{display:none}
-  #cycleDiagram{width:320px;height:320px}
+@media(max-width:640px){
+  .hero-actions{flex-direction:column}
+  .nav-links{display:none}
+  section{padding:80px 0}
 }
 /* Contact modal */
 .contact-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s ease}
@@ -396,12 +230,12 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 <nav id="nav">
   <div class="nav-inner">
     <a href="#" class="nav-logo">
-      <svg viewBox="0 0 1280 960" height="48" fill="currentColor"><use href="#palad-logo-paths"/></svg>
+      <svg viewBox="0 0 1406 740" height="40" fill="currentColor"><use href="#aixle-logo-paths"/></svg>
     </a>
     <ul class="nav-links">
-      <li><a href="#features">Product</a></li>
-      <li><a href="#pipeline">How It Works</a></li>
-      <li><a href="#why">Why Palad</a></li>
+      <li><a href="#problem">The Problem</a></li>
+      <li><a href="#what">What Aixle Is</a></li>
+      <li><a href="#shift">The Shift</a></li>
       <li><a href="#">Docs</a></li>
     </ul>
     <div class="nav-actions">
@@ -423,24 +257,12 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
       <stop offset="0%" stop-color="#FAFAFA"/>
       <stop offset="100%" stop-color="#A1A1AA"/>
     </linearGradient>
-    <g id="palad-logo-paths" transform="translate(0,960) scale(0.1,-0.1)" fill="currentColor" stroke="none">
-      <path d="M6541 6735 l-154 -144 2 -308 2 -308 60 -60 59 -61 0 -295 0 -295 48 -47 c47 -46 51 -48 98 -45 l49 3 3 853 c1 468 -1 852 -5 851 -5 0 -77 -65 -162 -144z"/>
-      <path d="M11015 6800 c-49 -47 -116 -109 -148 -139 l-59 -54 1 -311 1 -311 69 -68 69 -68 3 -320 3 -320 -94 -94 -95 -95 -103 0 -104 0 7 -42 c13 -84 2 -78 147 -78 124 0 131 1 160 25 37 31 43 31 73 0 30 -29 31 -35 4 -69 -24 -31 -52 -33 -78 -7 -17 17 -39 21 -157 25 l-136 5 6 -37 c3 -20 6 -48 6 -62 l0 -25 255 -3 c197 -1 257 1 260 10 3 7 4 487 3 1067 l-3 1054 -90 -83z"/>
-      <path d="M10672 6488 l-103 -93 3 -423 c2 -232 0 -422 -3 -422 -4 0 -19 15 -35 34 -209 244 -577 330 -912 213 -103 -36 -204 -100 -295 -186 -210 -200 -316 -435 -334 -738 l-6 -113 275 0 276 0 7 78 c26 286 211 506 456 542 216 32 418 -75 521 -276 l33 -65 99 4 98 5 89 88 89 89 0 303 0 304 -75 71 -75 72 -2 303 -3 303 -103 -93z"/>
-      <path d="M6325 6536 c-11 -11 -48 -46 -83 -77 l-62 -56 0 -818 c0 -450 1 -819 2 -821 2 -1 120 -4 263 -5 l260 -2 0 59 0 59 -128 3 c-125 3 -129 2 -158 -23 -17 -14 -38 -25 -48 -25 -23 0 -51 31 -51 57 0 48 76 72 103 33 13 -19 23 -20 148 -18 l134 3 0 55 0 55 -96 3 -95 3 -104 104 c-89 90 -109 105 -137 105 -58 0 -82 51 -43 90 24 24 38 25 68 4 15 -10 22 -25 22 -47 0 -28 14 -46 107 -134 l108 -103 88 0 87 0 0 55 0 55 -63 0 c-62 0 -63 0 -115 53 l-52 53 0 295 0 295 -60 59 -60 59 0 298 c0 164 -3 298 -7 297 -5 -1 -17 -11 -28 -23z"/>
-      <path d="M2805 5835 c-149 -27 -302 -110 -422 -228 l-73 -71 0 137 0 137 -355 0 c-195 0 -355 -4 -355 -8 0 -4 86 -93 190 -197 l190 -189 0 -130 0 -129 63 -59 62 -58 115 0 116 0 31 64 c131 264 470 362 715 205 145 -93 243 -272 264 -479 l7 -70 272 0 c185 0 274 3 277 11 9 26 -14 219 -36 307 -57 226 -149 388 -302 530 -206 193 -486 277 -759 227z"/>
-      <path d="M4855 5839 c-369 -37 -638 -254 -724 -582 -11 -40 -22 -93 -25 -119 l-6 -48 249 0 248 0 6 48 c12 105 103 208 215 242 80 25 262 28 339 5 109 -32 174 -112 189 -232 9 -78 -1 -119 -34 -132 -43 -17 -182 -48 -393 -86 -288 -51 -415 -86 -538 -146 -88 -43 -119 -64 -182 -128 -117 -117 -163 -224 -162 -381 0 -125 16 -197 66 -300 58 -119 140 -199 267 -262 114 -57 209 -78 354 -78 231 0 414 69 559 212 38 37 70 68 71 68 0 0 1 -55 1 -122 l0 -123 68 -3 67 -3 0 379 0 379 -69 65 -68 64 -6 -99 c-4 -84 -10 -109 -36 -162 -52 -105 -152 -184 -291 -231 -74 -25 -206 -25 -279 0 -164 56 -225 266 -115 395 64 74 97 86 469 170 121 27 228 52 238 56 15 6 17 1 17 -46 l1 -54 84 -74 85 -74 -3 -56 c-1 -31 -1 -203 1 -383 l2 -328 38 0 39 0 6 428 c4 235 7 616 7 846 l0 419 -97 98 -97 99 -427 0 c-424 0 -427 0 -441 -21 -9 -14 -24 -21 -43 -21 -50 0 -74 62 -37 95 25 23 55 21 77 -3 18 -19 31 -20 446 -20 l427 0 106 -102 106 -101 0 -859 0 -858 45 0 45 0 0 494 0 493 71 64 c39 35 76 67 81 70 6 4 8 95 5 250 -4 207 -7 253 -24 304 -86 261 -296 431 -598 484 -89 15 -297 21 -400 10z"/>
-      <path d="M7740 5839 c-198 -22 -370 -95 -490 -206 -146 -135 -213 -272 -245 -495 l-7 -48 251 0 251 0 0 38 c0 49 38 128 84 175 76 78 226 118 376 99 191 -24 280 -119 280 -299 l0 -64 -44 -19 c-24 -11 -117 -34 -207 -51 -519 -98 -600 -119 -744 -192 -143 -73 -260 -212 -293 -347 -31 -129 -21 -285 27 -410 46 -120 166 -245 296 -309 98 -49 167 -63 321 -68 122 -4 152 -2 225 16 154 40 305 127 396 230 l32 36 1 -127 0 -128 65 0 65 0 0 382 0 381 -62 56 c-33 31 -64 57 -68 59 -4 1 -9 -46 -12 -105 -6 -131 -24 -172 -107 -254 -134 -131 -342 -179 -505 -118 -179 67 -213 320 -57 430 55 40 127 63 351 113 113 25 228 52 255 61 28 8 53 15 58 15 4 0 7 -22 7 -49 0 -49 0 -49 85 -126 l85 -77 0 -385 0 -384 43 3 42 3 3 845 2 845 -97 97 -98 98 -416 0 c-365 0 -418 -2 -429 -16 -35 -41 -94 -34 -106 12 -14 55 49 94 90 55 22 -21 28 -21 447 -21 l425 0 108 -110 109 -110 -8 -850 -7 -850 46 0 46 0 0 493 0 493 80 73 80 72 0 210 c0 251 -12 327 -73 444 -59 115 -181 235 -297 292 -173 85 -417 119 -660 92z"/>
-      <path d="M1782 5238 l3 -333 261 -3 261 -2 10 55 c5 30 7 57 5 60 -3 3 -58 5 -121 5 l-117 0 -67 68 -67 68 0 129 0 130 -78 78 c-42 42 -81 77 -85 77 -4 0 -6 -150 -5 -332z"/>
-      <path d="M1787 4873 c-11 -10 -8 -2155 2 -2151 5 2 77 66 160 142 l151 139 0 661 0 662 73 72 c67 67 76 72 115 72 l43 0 -6 38 c-13 75 -9 72 -93 72 l-77 0 -83 -83 -82 -82 0 -492 c0 -482 0 -493 20 -503 53 -28 0 -117 -55 -92 -38 17 -43 58 -11 91 l26 27 0 493 0 493 92 89 93 89 79 0 c76 0 78 1 72 23 -3 12 -6 39 -6 60 l0 37 -123 0 c-119 0 -124 -1 -147 -25 -28 -30 -60 -32 -83 -7 -21 23 -21 41 -1 70 20 29 69 30 84 2 10 -18 21 -20 140 -20 l130 0 0 65 0 65 -253 0 c-140 0 -257 -3 -260 -7z"/>
-      <path d="M5801 4696 l-63 -63 4 -476 c2 -261 6 -478 9 -481 3 -4 74 -5 157 -4 l151 3 -90 99 -89 98 0 444 c0 244 -4 444 -8 444 -4 0 -36 -29 -71 -64z"/>
-      <path d="M8697 4702 l-57 -58 0 -487 0 -487 157 0 156 0 -19 23 c-11 12 -52 57 -92 101 l-72 78 0 444 c0 244 -4 444 -8 444 -4 0 -33 -26 -65 -58z"/>
-      <path d="M3345 4668 c-23 -198 -100 -355 -219 -447 -111 -86 -210 -116 -354 -109 -80 4 -99 8 -168 42 -97 48 -188 137 -229 225 l-29 61 -46 0 c-43 0 -49 -4 -110 -65 l-65 -66 3 -632 c2 -348 6 -634 8 -636 1 -2 41 32 88 75 l85 79 1 368 c0 202 1 367 3 367 1 0 34 -31 72 -68 107 -105 242 -177 387 -207 88 -19 273 -19 360 -1 267 57 504 250 642 524 73 145 126 352 126 495 l0 57 -274 0 -274 0 -7 -62z"/>
-      <path d="M6178 4293 l-3 -438 85 -92 c66 -73 90 -93 111 -93 l26 0 -3 384 -2 385 86 85 87 86 73 0 73 0 -3 58 -3 57 -262 3 -263 2 -2 -437z"/>
-      <path d="M8990 4668 c1 -389 229 -776 550 -938 247 -124 522 -125 769 -2 73 36 113 65 178 127 46 44 83 78 84 75 0 -3 0 -60 -1 -128 -1 -93 2 -123 12 -127 7 -3 135 -4 283 -3 l270 3 -148 151 -147 151 0 174 0 175 -63 62 -63 62 -84 0 -85 0 -23 -53 c-45 -104 -147 -202 -262 -253 -60 -27 -74 -29 -190 -29 -116 0 -130 2 -195 30 -55 23 -86 45 -146 105 -111 110 -169 240 -186 413 l-6 67 -273 0 -274 0 0 -62z"/>
-      <path d="M10590 4717 c0 -8 -3 -35 -6 -61 l-7 -46 108 0 109 0 77 -76 c68 -65 81 -74 98 -65 29 16 56 13 74 -7 22 -24 21 -55 -1 -75 -34 -31 -92 -16 -92 23 0 9 -35 51 -79 93 l-78 77 -99 6 c-114 8 -118 6 -128 -68 l-7 -48 83 0 83 -1 74 -70 74 -70 -6 -167 -7 -167 156 -162 156 -163 59 0 c72 0 73 -3 -38 114 -52 54 -83 95 -83 109 0 12 -1 204 -3 427 l-2 405 -257 3 c-214 2 -258 0 -258 -11z"/>
-      <path d="M6497 4502 l-77 -77 0 -378 0 -378 53 3 52 3 5 255 5 255 88 84 87 84 0 113 0 114 -68 0 -67 0 -78 -78z"/>
-      <path d="M6621 4236 l-71 -74 0 -246 0 -246 165 0 c91 0 165 3 165 8 -1 4 -39 48 -85 97 l-85 90 0 217 c0 119 -4 219 -9 222 -4 3 -40 -28 -80 -68z"/>
+    <g id="aixle-logo-paths" transform="translate(20, 590) scale(0.263672, -0.263672)" fill="currentColor" stroke="none">
+      <path d="M47 0 544 1490H1017L1529 0H1133L1032 317H536L439 0ZM619 587H946L926 651Q887 779 850 919Q813 1059 777 1209Q743 1058 709.5 918Q676 778 639 651Z"/>
+      <path transform="translate(1576, 0)" d="M115 0V1118H464V0ZM289 1249Q215 1249 162 1298Q109 1347 109 1417Q109 1487 162 1536Q215 1585 289 1585Q364 1585 417 1536Q470 1487 470 1417Q470 1347 417 1298Q364 1249 289 1249Z"/>
+      <path transform="translate(2156, 0)" d="M33 0 380 574 54 1118H424L510 958Q538 905 562.5 850.5Q587 796 611 742Q635 796 660.5 850.5Q686 905 715 958L805 1118H1169L834 572L1184 0H816L708 194Q679 247 653 301.5Q627 356 603 410Q580 356 555 301.5Q530 247 502 194L396 0Z"/>
+      <path transform="translate(3373, 0)" d="M464 1490V0H115V1490Z"/>
+      <path transform="translate(3953, 0)" d="M636 -21Q373 -21 222.5 132.5Q72 286 72 555Q72 727 139.5 857Q207 987 331 1059.5Q455 1132 623 1132Q780 1132 901.5 1066.5Q1023 1001 1092.5 873.5Q1162 746 1162 562V474H415Q420 353 481.5 292.5Q543 232 642 232Q712 232 763 261.5Q814 291 835 347L1146 296Q1104 151 971.5 65Q839 -21 636 -21ZM417 677H831Q821 772 769 825.5Q717 879 626 879Q534 879 480.5 824.5Q427 770 417 677Z"/>
     </g>
   </defs>
 </svg>
@@ -449,13 +271,13 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
      HERO — Large SVG Logo + Effects
      ========================================== -->
 <section class="hero">
-  <div class="floating-badge fb-1">Signals: 3 new bugs detected</div>
-  <div class="floating-badge fb-2">&check; Build: PR-142 created by Agent</div>
-  <div class="floating-badge fb-3">Audit: full trace logged</div>
+  <div class="floating-badge fb-1">Signal: 3 new issues detected</div>
+  <div class="floating-badge fb-2">&check; Execute: workflow completed</div>
+  <div class="floating-badge fb-3">Monitor: full trace logged</div>
   <div class="container" style="display:flex;flex-direction:column;align-items:center">
     <div class="hero-badge" style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.2s forwards">
       <div class="pulse-dot"></div>
-      Agentic SDLC
+      The System That Runs Work
     </div>
 
     <!-- T-NEW: Large SVG logo with animated gradient glow -->
@@ -463,943 +285,195 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
       <div class="hero-orb hero-orb-1"></div>
       <div class="hero-orb hero-orb-2"></div>
       <div class="hero-orb hero-orb-3"></div>
-      <svg class="hero-logo-svg" viewBox="130 250 1020 470" preserveAspectRatio="xMidYMid meet">
+      <svg class="hero-logo-svg" viewBox="0 0 1406 740" preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="heroLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stop-color="#3B82F6"><animate attributeName="stop-color" values="#3B82F6;#A855F7;#06B6D4;#3B82F6" dur="8s" repeatCount="indefinite"/></stop>
             <stop offset="50%" stop-color="#A855F7"><animate attributeName="stop-color" values="#A855F7;#06B6D4;#3B82F6;#A855F7" dur="8s" repeatCount="indefinite"/></stop>
             <stop offset="100%" stop-color="#06B6D4"><animate attributeName="stop-color" values="#06B6D4;#3B82F6;#A855F7;#06B6D4" dur="8s" repeatCount="indefinite"/></stop>
           </linearGradient>
-        </defs>
-        <g transform="translate(0,960) scale(0.1,-0.1)" fill="url(#heroLogoGrad)" stroke="none">
-          <path d="M6541 6735 l-154 -144 2 -308 2 -308 60 -60 59 -61 0 -295 0 -295 48 -47 c47 -46 51 -48 98 -45 l49 3 3 853 c1 468 -1 852 -5 851 -5 0 -77 -65 -162 -144z"/>
-          <path d="M11015 6800 c-49 -47 -116 -109 -148 -139 l-59 -54 1 -311 1 -311 69 -68 69 -68 3 -320 3 -320 -94 -94 -95 -95 -103 0 -104 0 7 -42 c13 -84 2 -78 147 -78 124 0 131 1 160 25 37 31 43 31 73 0 30 -29 31 -35 4 -69 -24 -31 -52 -33 -78 -7 -17 17 -39 21 -157 25 l-136 5 6 -37 c3 -20 6 -48 6 -62 l0 -25 255 -3 c197 -1 257 1 260 10 3 7 4 487 3 1067 l-3 1054 -90 -83z"/>
-          <path d="M10672 6488 l-103 -93 3 -423 c2 -232 0 -422 -3 -422 -4 0 -19 15 -35 34 -209 244 -577 330 -912 213 -103 -36 -204 -100 -295 -186 -210 -200 -316 -435 -334 -738 l-6 -113 275 0 276 0 7 78 c26 286 211 506 456 542 216 32 418 -75 521 -276 l33 -65 99 4 98 5 89 88 89 89 0 303 0 304 -75 71 -75 72 -2 303 -3 303 -103 -93z"/>
-          <path d="M6325 6536 c-11 -11 -48 -46 -83 -77 l-62 -56 0 -818 c0 -450 1 -819 2 -821 2 -1 120 -4 263 -5 l260 -2 0 59 0 59 -128 3 c-125 3 -129 2 -158 -23 -17 -14 -38 -25 -48 -25 -23 0 -51 31 -51 57 0 48 76 72 103 33 13 -19 23 -20 148 -18 l134 3 0 55 0 55 -96 3 -95 3 -104 104 c-89 90 -109 105 -137 105 -58 0 -82 51 -43 90 24 24 38 25 68 4 15 -10 22 -25 22 -47 0 -28 14 -46 107 -134 l108 -103 88 0 87 0 0 55 0 55 -63 0 c-62 0 -63 0 -115 53 l-52 53 0 295 0 295 -60 59 -60 59 0 298 c0 164 -3 298 -7 297 -5 -1 -17 -11 -28 -23z"/>
-          <path d="M2805 5835 c-149 -27 -302 -110 -422 -228 l-73 -71 0 137 0 137 -355 0 c-195 0 -355 -4 -355 -8 0 -4 86 -93 190 -197 l190 -189 0 -130 0 -129 63 -59 62 -58 115 0 116 0 31 64 c131 264 470 362 715 205 145 -93 243 -272 264 -479 l7 -70 272 0 c185 0 274 3 277 11 9 26 -14 219 -36 307 -57 226 -149 388 -302 530 -206 193 -486 277 -759 227z"/>
-          <path d="M4855 5839 c-369 -37 -638 -254 -724 -582 -11 -40 -22 -93 -25 -119 l-6 -48 249 0 248 0 6 48 c12 105 103 208 215 242 80 25 262 28 339 5 109 -32 174 -112 189 -232 9 -78 -1 -119 -34 -132 -43 -17 -182 -48 -393 -86 -288 -51 -415 -86 -538 -146 -88 -43 -119 -64 -182 -128 -117 -117 -163 -224 -162 -381 0 -125 16 -197 66 -300 58 -119 140 -199 267 -262 114 -57 209 -78 354 -78 231 0 414 69 559 212 38 37 70 68 71 68 0 0 1 -55 1 -122 l0 -123 68 -3 67 -3 0 379 0 379 -69 65 -68 64 -6 -99 c-4 -84 -10 -109 -36 -162 -52 -105 -152 -184 -291 -231 -74 -25 -206 -25 -279 0 -164 56 -225 266 -115 395 64 74 97 86 469 170 121 27 228 52 238 56 15 6 17 1 17 -46 l1 -54 84 -74 85 -74 -3 -56 c-1 -31 -1 -203 1 -383 l2 -328 38 0 39 0 6 428 c4 235 7 616 7 846 l0 419 -97 98 -97 99 -427 0 c-424 0 -427 0 -441 -21 -9 -14 -24 -21 -43 -21 -50 0 -74 62 -37 95 25 23 55 21 77 -3 18 -19 31 -20 446 -20 l427 0 106 -102 106 -101 0 -859 0 -858 45 0 45 0 0 494 0 493 71 64 c39 35 76 67 81 70 6 4 8 95 5 250 -4 207 -7 253 -24 304 -86 261 -296 431 -598 484 -89 15 -297 21 -400 10z"/>
-          <path d="M7740 5839 c-198 -22 -370 -95 -490 -206 -146 -135 -213 -272 -245 -495 l-7 -48 251 0 251 0 0 38 c0 49 38 128 84 175 76 78 226 118 376 99 191 -24 280 -119 280 -299 l0 -64 -44 -19 c-24 -11 -117 -34 -207 -51 -519 -98 -600 -119 -744 -192 -143 -73 -260 -212 -293 -347 -31 -129 -21 -285 27 -410 46 -120 166 -245 296 -309 98 -49 167 -63 321 -68 122 -4 152 -2 225 16 154 40 305 127 396 230 l32 36 1 -127 0 -128 65 0 65 0 0 382 0 381 -62 56 c-33 31 -64 57 -68 59 -4 1 -9 -46 -12 -105 -6 -131 -24 -172 -107 -254 -134 -131 -342 -179 -505 -118 -179 67 -213 320 -57 430 55 40 127 63 351 113 113 25 228 52 255 61 28 8 53 15 58 15 4 0 7 -22 7 -49 0 -49 0 -49 85 -126 l85 -77 0 -385 0 -384 43 3 42 3 3 845 2 845 -97 97 -98 98 -416 0 c-365 0 -418 -2 -429 -16 -35 -41 -94 -34 -106 12 -14 55 49 94 90 55 22 -21 28 -21 447 -21 l425 0 108 -110 109 -110 -8 -850 -7 -850 46 0 46 0 0 493 0 493 80 73 80 72 0 210 c0 251 -12 327 -73 444 -59 115 -181 235 -297 292 -173 85 -417 119 -660 92z"/>
-          <path d="M1782 5238 l3 -333 261 -3 261 -2 10 55 c5 30 7 57 5 60 -3 3 -58 5 -121 5 l-117 0 -67 68 -67 68 0 129 0 130 -78 78 c-42 42 -81 77 -85 77 -4 0 -6 -150 -5 -332z"/>
-          <path d="M1787 4873 c-11 -10 -8 -2155 2 -2151 5 2 77 66 160 142 l151 139 0 661 0 662 73 72 c67 67 76 72 115 72 l43 0 -6 38 c-13 75 -9 72 -93 72 l-77 0 -83 -83 -82 -82 0 -492 c0 -482 0 -493 20 -503 53 -28 0 -117 -55 -92 -38 17 -43 58 -11 91 l26 27 0 493 0 493 92 89 93 89 79 0 c76 0 78 1 72 23 -3 12 -6 39 -6 60 l0 37 -123 0 c-119 0 -124 -1 -147 -25 -28 -30 -60 -32 -83 -7 -21 23 -21 41 -1 70 20 29 69 30 84 2 10 -18 21 -20 140 -20 l130 0 0 65 0 65 -253 0 c-140 0 -257 -3 -260 -7z"/>
-          <path d="M5801 4696 l-63 -63 4 -476 c2 -261 6 -478 9 -481 3 -4 74 -5 157 -4 l151 3 -90 99 -89 98 0 444 c0 244 -4 444 -8 444 -4 0 -36 -29 -71 -64z"/>
-          <path d="M8697 4702 l-57 -58 0 -487 0 -487 157 0 156 0 -19 23 c-11 12 -52 57 -92 101 l-72 78 0 444 c0 244 -4 444 -8 444 -4 0 -33 -26 -65 -58z"/>
-          <path d="M3345 4668 c-23 -198 -100 -355 -219 -447 -111 -86 -210 -116 -354 -109 -80 4 -99 8 -168 42 -97 48 -188 137 -229 225 l-29 61 -46 0 c-43 0 -49 -4 -110 -65 l-65 -66 3 -632 c2 -348 6 -634 8 -636 1 -2 41 32 88 75 l85 79 1 368 c0 202 1 367 3 367 1 0 34 -31 72 -68 107 -105 242 -177 387 -207 88 -19 273 -19 360 -1 267 57 504 250 642 524 73 145 126 352 126 495 l0 57 -274 0 -274 0 -7 -62z"/>
-          <path d="M6178 4293 l-3 -438 85 -92 c66 -73 90 -93 111 -93 l26 0 -3 384 -2 385 86 85 87 86 73 0 73 0 -3 58 -3 57 -262 3 -263 2 -2 -437z"/>
-          <path d="M8990 4668 c1 -389 229 -776 550 -938 247 -124 522 -125 769 -2 73 36 113 65 178 127 46 44 83 78 84 75 0 -3 0 -60 -1 -128 -1 -93 2 -123 12 -127 7 -3 135 -4 283 -3 l270 3 -148 151 -147 151 0 174 0 175 -63 62 -63 62 -84 0 -85 0 -23 -53 c-45 -104 -147 -202 -262 -253 -60 -27 -74 -29 -190 -29 -116 0 -130 2 -195 30 -55 23 -86 45 -146 105 -111 110 -169 240 -186 413 l-6 67 -273 0 -274 0 0 -62z"/>
-          <path d="M10590 4717 c0 -8 -3 -35 -6 -61 l-7 -46 108 0 109 0 77 -76 c68 -65 81 -74 98 -65 29 16 56 13 74 -7 22 -24 21 -55 -1 -75 -34 -31 -92 -16 -92 23 0 9 -35 51 -79 93 l-78 77 -99 6 c-114 8 -118 6 -128 -68 l-7 -48 83 0 83 -1 74 -70 74 -70 -6 -167 -7 -167 156 -162 156 -163 59 0 c72 0 73 -3 -38 114 -52 54 -83 95 -83 109 0 12 -1 204 -3 427 l-2 405 -257 3 c-214 2 -258 0 -258 -11z"/>
-          <path d="M6497 4502 l-77 -77 0 -378 0 -378 53 3 52 3 5 255 5 255 88 84 87 84 0 113 0 114 -68 0 -67 0 -78 -78z"/>
-          <path d="M6621 4236 l-71 -74 0 -246 0 -246 165 0 c91 0 165 3 165 8 -1 4 -39 48 -85 97 l-85 90 0 217 c0 119 -4 219 -9 222 -4 3 -40 -28 -80 -68z"/>
-        </g>
-        <!-- Traveling dot glow filter -->
-        <defs>
           <filter id="dotGlow" x="-200%" y="-200%" width="500%" height="500%">
             <feGaussianBlur stdDeviation="6" result="b1"/>
             <feGaussianBlur stdDeviation="2.5" result="b2"/>
             <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
+          <!-- Circuit trace paths inside A (match visible traces) -->
+          <path id="trkA1" d="M135 580 L135 540 L155 510 L165 440 L190 370 L210 310 L225 270 L210 310 L185 390 L165 460 L145 530 L135 570" fill="none" stroke="none"/>
+          <path id="trkA2" d="M285 580 L282 530 L270 470 L250 410 L230 350 L225 270 L245 360 L270 440 L295 520 L310 570" fill="none" stroke="none"/>
+          <path id="trkA3" d="M160 485 L185 485 L210 480 L240 475 L270 480 L300 485 L270 465 L240 455 L210 460 L180 470 L160 480" fill="none" stroke="none"/>
+          <!-- Circuit trace paths inside i -->
+          <path id="trkI1" d="M488 580 L488 540 L485 480 L480 430 L478 400 L482 370 L488 350 L490 330" fill="none" stroke="none"/>
+          <path id="trkI2" d="M500 330 L502 370 L505 420 L505 470 L502 530 L500 580" fill="none" stroke="none"/>
+          <!-- Circuit trace paths inside x -->
+          <path id="trkX1" d="M615 580 L645 545 L685 495 L720 450 L740 430 L765 455 L800 500 L840 550 L865 580" fill="none" stroke="none"/>
+          <path id="trkX2" d="M870 345 L835 390 L795 440 L760 450 L740 430 L710 400 L675 365 L640 340 L615 345" fill="none" stroke="none"/>
+          <path id="trkX3" d="M720 445 L740 430 L740 460 L735 490 L725 500 L720 480 L720 460 L720 445" fill="none" stroke="none"/>
+          <!-- Circuit trace paths inside l -->
+          <path id="trkL1" d="M955 580 L955 520 L952 450 L950 380 L950 310 L952 250 L955 200" fill="none" stroke="none"/>
+          <path id="trkL2" d="M978 200 L978 270 L980 340 L982 420 L980 500 L978 580" fill="none" stroke="none"/>
+          <!-- Circuit trace paths inside e -->
+          <path id="trkE1" d="M1210 580 L1175 560 L1135 535 L1108 505 L1092 465 L1090 435 L1100 400 L1120 375 L1150 358 L1190 350 L1235 355 L1275 375 L1295 410 L1300 440 L1095 440" fill="none" stroke="none"/>
+          <path id="trkE2" d="M1200 355 L1200 420 L1195 475 L1180 510 L1155 545 L1135 570 L1145 580 L1240 572 L1290 530 L1300 490" fill="none" stroke="none"/>
         </defs>
-        <!-- Track paths: actual letter outlines extracted via getPointAtLength, in viewBox coords -->
-        <defs>
-          <!-- path 0: l-top piece outline -->
-          <path id="trk0" d="M 654.1,286.5 L 648.6,291.6 L 643.2,296.7 L 638.7,302.2 L 638.8,317.2 L 639,339.6 L 639,354.6 L 644.1,367.5 L 651,379.6 L 651,409.5 L 651,431.9 L 655.1,437.7 L 668.3,442.6 L 670.5,437.3 L 670.6,414.8 L 670.7,392.4 L 670.8,362.5 L 670.8,332.6 L 670.8,302.7 L 670.4,272.8 L 665.1,276.4 L 659.6,281.4" fill="none" stroke="none"/>
-          <!-- path 3: l-mid staircase piece -->
-          <path id="trk3" d="M 632.5,306.4 L 623,315.2 L 618,326 L 618,352 L 618,377.9 L 618,403.9 L 618,429.9 L 618.1,455.8 L 618.1,475.3 L 629.4,483.9 L 648.9,484.1 L 668.4,484.3 L 670.5,473.5 L 658.5,472.2 L 645.5,472.4 L 637.2,466.1 L 649,469.9 L 670.5,465 L 660.7,444.9 L 648,425.2 L 648,399.3 L 646.5,373.9 L 636,352.3 L 635.8,313.4" fill="none" stroke="none"/>
-          <!-- path 12: l-lower piece -->
-          <path id="trk12" d="M 617.8,530.7 L 617.7,548.5 L 617.6,560.4 L 617.5,572.3 L 624.1,581.6 L 632.3,590.2 L 639.7,589.4 L 639.6,577.5 L 639.4,559.7 L 639.3,541.8 L 639.2,524 L 642,513.3 L 650.5,504.9 L 659.9,499 L 671.1,498.3 L 670.8,492.3 L 663.5,487.4 L 645.6,487.2 L 627.8,487.1 L 618,489.1 L 617.9,506.9 L 617.9,518.8" fill="none" stroke="none"/>
-          <!-- path 15: l-inner piece -->
-          <path id="trk15" d="M 649.7,509.8 L 643.5,516 L 642,524.2 L 642,541.7 L 642,559.3 L 642,576.9 L 642,590 L 647.7,592.8 L 652.7,584.1 L 653,566.6 L 653.2,557.8 L 653.4,549 L 657.6,537.6 L 663.9,531.5 L 671,521.4 L 671,508.2 L 668.4,502 L 659.6,502 L 652.8,506.7" fill="none" stroke="none"/>
-          <!-- path 16: l-core innermost -->
-          <path id="trk16" d="M 662.1,536.4 L 657.3,541.4 L 655,550.8 L 655,564.6 L 655,578.4 L 655,592.2 L 664.5,593 L 678.3,592.9 L 687.7,591.8 L 683.2,586.5 L 676.2,579 L 671.4,573.9 L 671,567.2 L 671,553.4 L 670.9,543.1 L 670.5,532.8 L 667.1,531.7" fill="none" stroke="none"/>
-          <!-- path 7: P-top small piece -->
-          <path id="trk7" d="M 178.2,436.2 L 178.3,449.5 L 178.5,467.2 L 189.5,469.6 L 207.3,469.8 L 225,470 L 232,462.5 L 227.4,458 L 214.1,458 L 206.2,455.7 L 199.9,449.4 L 195,442.6 L 195,429.3 L 193.2,416.7 L 186.9,410.4 L 178.5,405.2 L 178.2,418.5 L 178.2,431.8" fill="none" stroke="none"/>
-          <!-- path 8: P-bottom tall piece -->
-          <path id="trk8" d="M 178.7,472.7 L 178.1,508.5 L 178,544.3 L 178,580.1 L 178.2,633.9 L 178.8,687.6 L 205.3,664 L 210,648.1 L 210,612.3 L 210,576.5 L 213.3,524.2 L 227,513.1 L 212.8,504.7 L 199,534.9 L 197,568.3 L 197,550.4 L 198.6,515.2 L 211.5,502.8 L 227.9,498.9 L 226.4,487 L 208.5,487.2 L 193.5,488.4 L 222.7,485 L 230,474.4 L 196.6,472" fill="none" stroke="none"/>
-          <!-- path 4: P-body (the bowl of P) -->
-          <path id="trk4" d="M 280.5,376.5 L 255.9,385.9 L 235.2,402.3 L 231,385.8 L 198.1,379 L 171.6,379.2 L 170.2,390.6 L 188.9,409.4 L 198,432.1 L 220.9,456 L 248.8,434 L 272.4,422.5 L 298.5,424.3 L 319.8,439.5 L 334.5,475.8 L 353.6,484 L 380.1,483.8 L 389.2,466.8 L 383.3,441 L 371.8,417.2 L 354.4,397.4 L 332.2,383 L 306.9,375.8" fill="none" stroke="none"/>
-          <!-- path 11: P-leg (lower bowl) -->
-          <path id="trk11" d="M 334.5,493.2 L 327.1,519.7 L 309.2,540.4 L 283.3,548.9 L 256.9,542.7 L 237.9,523 L 212.5,535.6 L 212.7,577.1 L 213.1,632.4 L 227,644.1 L 231,618.1 L 231,576.7 L 244.5,579.2 L 268.7,592.2 L 296,595.9 L 323.2,591.8 L 347.4,578.7 L 366.8,559.2 L 380.6,535.3 L 390,495.1 L 370.4,487 L 342.8,487" fill="none" stroke="none"/>
-          <!-- path 9: a1-stem -->
-          <path id="trk9" d="M 580.1,490.4 L 573.8,498.2 L 573.9,513.8 L 574.1,534.7 L 574.3,555.5 L 574.6,576.4 L 575,592 L 590.3,592.8 L 605.9,592.5 L 598.9,584.8 L 591.9,577.1 L 588,568.2 L 588,547.3 L 588,526.5 L 588,505.6 L 587.6,490 L 583.8,486.8" fill="none" stroke="none"/>
-          <!-- path 10: a2-stem -->
-          <path id="trk10" d="M 869.7,489.8 L 864,497.9 L 864,518.9 L 864,539.8 L 864,560.7 L 864,581.7 L 864,592.1 L 878.8,593 L 894.5,593 L 888.9,585.7 L 881.8,578 L 877,569.4 L 877,548.5 L 877,527.6 L 877,506.6 L 876.6,490.9 L 873.5,486.2" fill="none" stroke="none"/>
-          <!-- path 1: d-stem right side -->
-          <path id="trk1" d="M 1101.5,280 L 1083.8,296.6 L 1080.9,319.5 L 1081,356 L 1094.3,374.6 L 1095.1,410.9 L 1095.4,435.1 L 1081,453.5 L 1058.6,458 L 1068.3,470 L 1091.2,465.2 L 1084.8,473.8 L 1060.6,472.2 L 1059,481.4 L 1080.1,484.7 L 1104.4,484.7 L 1110.7,465.8 L 1110.8,429.4 L 1110.8,393 L 1110.7,356.6 L 1110.6,320.1 L 1110.4,271.8" fill="none" stroke="none"/>
-          <!-- path 2: d-bowl -->
-          <path id="trk2" d="M 1067.2,311.2 L 1057,336.3 L 1057.2,366 L 1057.2,395.7 L 1042.1,391 L 1015.5,378.2 L 986.1,375.4 L 957.3,382.2 L 932.8,398.8 L 914.1,421.8 L 902.8,449.1 L 899,478.5 L 922.9,484 L 952.7,484 L 959.3,456.1 L 976.6,432.4 L 1003.8,421.6 L 1032.3,428.1 L 1052.2,449.6 L 1077.2,453.3 L 1093,430.1 L 1093,400.4 L 1088.6,372.6 L 1077.5,302.9" fill="none" stroke="none"/>
-          <!-- path 13: d-lower -->
-          <path id="trk13" d="M 899,493.2 L 902.1,518.3 L 910.9,542.1 L 924.8,563.3 L 943.3,580.5 L 965.8,591.9 L 990.7,596.3 L 1015.8,593.1 L 1038.8,582.7 L 1057.1,568.2 L 1057,580.9 L 1071.7,592.8 L 1097.1,592.7 L 1107.2,586.1 L 1089.5,568 L 1084,544.8 L 1068.4,515 L 1049.6,525.3 L 1031.5,542.8 L 1007.2,548.5 L 982.8,543.2 L 965,525.5 L 955.5,502.1 L 953.9,489.5 L 930.9,487 L 905.5,487" fill="none" stroke="none"/>
-          <!-- path 14: d-inner right -->
-          <path id="trk14" d="M 1059,488.3 L 1064.1,499 L 1080.7,500.3 L 1093.2,512.1 L 1099.5,523 L 1088.4,510.9 L 1074.9,501.7 L 1058.1,502.5 L 1062.2,513 L 1077.5,517.8 L 1087.2,530.8 L 1086.5,547.9 L 1089.2,563.8 L 1101.1,576.1 L 1112.9,588.5 L 1128,592.4 L 1117.2,579.4 L 1111,564.4 L 1110.9,547.2 L 1110.7,521.5 L 1110.5,495.7 L 1093,487.3 L 1075.8,487.1" fill="none" stroke="none"/>
-          <!-- path 5: first 'a' body -->
-          <path id="trk5" d="M 485.5,376.1 L 447.7,388 L 420.2,416.3 L 413.5,451 L 453.4,451 L 476.9,424 L 516.1,421.6 L 534.6,453.1 L 498.3,465.3 L 459.2,473.4 L 423.5,490.4 L 404.1,524.2 L 410.8,563 L 439.6,589.4 L 478.6,595.8 L 516.3,584.4 L 535.5,582.7 L 549,576.5 L 549,536.5 L 535.2,506.3 L 522,542.4 L 485.3,555.4 L 457.2,532.4 L 479.9,504.3 L 518.7,495 L 545.2,510.4 L 551.7,547.3 L 552,587.2 L 560.1,566.6 L 560.9,486.8 L 561,446.8 L 549.2,411.8 L 512.5,404 L 472.6,404 L 488.7,401 L 528.7,401 L 561.1,419.5 L 563,458.7 L 563,538.5 L 572,576.6 L 572,496.8 L 584.8,424.2 L 561.9,392.2 L 525.3,377.1" fill="none" stroke="none"/>
-          <!-- path 6: second 'a' body -->
-          <path id="trk6" d="M 774,376.1 L 736.4,388.2 L 709.2,416.8 L 704,451 L 743.8,451 L 766.6,423.9 L 805.6,421.9 L 824,453.4 L 788,465.2 L 749,473.3 L 713.2,489.9 L 694,523.7 L 700,562.6 L 728.6,589.4 L 767.5,595.9 L 805.2,584.4 L 825,581.3 L 838,577.9 L 838,538 L 824.6,506.3 L 811.7,542.4 L 775.1,555.5 L 747.1,532.4 L 769.6,504.1 L 808.4,494.8 L 835.1,510.8 L 841,548.1 L 841,587.9 L 849.6,566.3 L 849.9,486.6 L 849.9,446.7 L 838.2,411.7 L 801.6,404 L 761.7,404.1 L 780.1,401 L 820,401 L 851.4,421.1 L 852.9,460.2 L 852.2,539.9 L 861,575.6 L 861,495.8 L 873.6,423.5 L 850.3,391.9 L 813.7,377.1" fill="none" stroke="none"/>
-        </defs>
-
-        <!-- === L letter: dots running along the staircase outlines === -->
-        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".9">
-          <animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trk0"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="11s" repeatCount="indefinite"><mpath href="#trk3"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".5">
-          <animateMotion dur="11s" repeatCount="indefinite" begin="-5.5s"><mpath href="#trk3"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85">
-          <animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trk12"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".7">
-          <animateMotion dur="7s" repeatCount="indefinite" begin="-2s"><mpath href="#trk15"/></animateMotion>
-        </circle>
-        <circle r="2" fill="#06B6D4" filter="url(#dotGlow)" opacity=".6">
-          <animateMotion dur="6s" repeatCount="indefinite"><mpath href="#trk16"/></animateMotion>
-        </circle>
-
-        <!-- === P letter === -->
-        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85">
-          <animateMotion dur="7s" repeatCount="indefinite"><mpath href="#trk7"/></animateMotion>
-        </circle>
-        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="11s" repeatCount="indefinite"><mpath href="#trk8"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".5">
-          <animateMotion dur="11s" repeatCount="indefinite" begin="-5.5s"><mpath href="#trk8"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".75">
-          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk4"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#22C55E" filter="url(#dotGlow)" opacity=".7">
-          <animateMotion dur="9s" repeatCount="indefinite" begin="-2s"><mpath href="#trk11"/></animateMotion>
-        </circle>
-
-        <!-- === First a: body + stem === -->
-        <circle r="3" fill="#22C55E" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="20s" repeatCount="indefinite"><mpath href="#trk5"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#22C55E" filter="url(#dotGlow)" opacity=".45">
-          <animateMotion dur="20s" repeatCount="indefinite" begin="-10s"><mpath href="#trk5"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".7">
-          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk9"/></animateMotion>
-        </circle>
-
-        <!-- === Second a: body + stem === -->
-        <circle r="3" fill="#F59E0B" filter="url(#dotGlow)" opacity=".8">
-          <animateMotion dur="20s" repeatCount="indefinite" begin="-3s"><mpath href="#trk6"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#F59E0B" filter="url(#dotGlow)" opacity=".45">
-          <animateMotion dur="20s" repeatCount="indefinite" begin="-13s"><mpath href="#trk6"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".7">
-          <animateMotion dur="10s" repeatCount="indefinite" begin="-2s"><mpath href="#trk10"/></animateMotion>
-        </circle>
-
-        <!-- === D letter === -->
-        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".85">
-          <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trk1"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".5">
-          <animateMotion dur="10s" repeatCount="indefinite" begin="-5s"><mpath href="#trk1"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".75">
-          <animateMotion dur="9s" repeatCount="indefinite" begin="-2s"><mpath href="#trk2"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#06B6D4" filter="url(#dotGlow)" opacity=".7">
-          <animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trk13"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".5">
-          <animateMotion dur="9s" repeatCount="indefinite" begin="-4.5s"><mpath href="#trk13"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".6">
-          <animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trk14"/></animateMotion>
-        </circle>
+        <!-- Letter fills with gradient -->
+        <g transform="translate(20, 590) scale(0.263672, -0.263672)" fill="url(#heroLogoGrad)" stroke="none">
+          <path d="M47 0 544 1490H1017L1529 0H1133L1032 317H536L439 0ZM619 587H946L926 651Q887 779 850 919Q813 1059 777 1209Q743 1058 709.5 918Q676 778 639 651Z"/>
+          <path transform="translate(1576, 0)" d="M115 0V1118H464V0ZM289 1249Q215 1249 162 1298Q109 1347 109 1417Q109 1487 162 1536Q215 1585 289 1585Q364 1585 417 1536Q470 1487 470 1417Q470 1347 417 1298Q364 1249 289 1249Z"/>
+          <path transform="translate(2156, 0)" d="M33 0 380 574 54 1118H424L510 958Q538 905 562.5 850.5Q587 796 611 742Q635 796 660.5 850.5Q686 905 715 958L805 1118H1169L834 572L1184 0H816L708 194Q679 247 653 301.5Q627 356 603 410Q580 356 555 301.5Q530 247 502 194L396 0Z"/>
+          <path transform="translate(3373, 0)" d="M464 1490V0H115V1490Z"/>
+          <path transform="translate(3953, 0)" d="M636 -21Q373 -21 222.5 132.5Q72 286 72 555Q72 727 139.5 857Q207 987 331 1059.5Q455 1132 623 1132Q780 1132 901.5 1066.5Q1023 1001 1092.5 873.5Q1162 746 1162 562V474H415Q420 353 481.5 292.5Q543 232 642 232Q712 232 763 261.5Q814 291 835 347L1146 296Q1104 151 971.5 65Q839 -21 636 -21ZM417 677H831Q821 772 769 825.5Q717 879 626 879Q534 879 480.5 824.5Q427 770 417 677Z"/>
+        </g>
+        <!-- Glowing dots traveling along circuit traces -->
+        <!-- A letter -->
+        <circle r="3.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".9"><animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trkA1"/></animateMotion></circle>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".8"><animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trkA2"/></animateMotion></circle>
+        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".7"><animateMotion dur="7s" repeatCount="indefinite"><mpath href="#trkA3"/></animateMotion></circle>
+        <!-- i letter -->
+        <circle r="3" fill="#3B82F6" filter="url(#dotGlow)" opacity=".85"><animateMotion dur="7s" repeatCount="indefinite"><mpath href="#trkI1"/></animateMotion></circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".7"><animateMotion dur="8s" repeatCount="indefinite" begin="-3s"><mpath href="#trkI2"/></animateMotion></circle>
+        <!-- x letter -->
+        <circle r="3.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85"><animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trkX1"/></animateMotion></circle>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".75"><animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trkX2"/></animateMotion></circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".5"><animateMotion dur="9s" repeatCount="indefinite" begin="-4.5s"><mpath href="#trkX2"/></animateMotion></circle>
+        <circle r="2" fill="#3B82F6" filter="url(#dotGlow)" opacity=".6"><animateMotion dur="5s" repeatCount="indefinite"><mpath href="#trkX3"/></animateMotion></circle>
+        <!-- l letter -->
+        <circle r="3" fill="#3B82F6" filter="url(#dotGlow)" opacity=".85"><animateMotion dur="8s" repeatCount="indefinite"><mpath href="#trkL1"/></animateMotion></circle>
+        <circle r="2.5" fill="#3B82F6" filter="url(#dotGlow)" opacity=".5"><animateMotion dur="8s" repeatCount="indefinite" begin="-4s"><mpath href="#trkL1"/></animateMotion></circle>
+        <circle r="2.5" fill="#A855F7" filter="url(#dotGlow)" opacity=".7"><animateMotion dur="9s" repeatCount="indefinite"><mpath href="#trkL2"/></animateMotion></circle>
+        <!-- e letter -->
+        <circle r="3.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".85"><animateMotion dur="11s" repeatCount="indefinite"><mpath href="#trkE1"/></animateMotion></circle>
+        <circle r="2.5" fill="#06B6D4" filter="url(#dotGlow)" opacity=".5"><animateMotion dur="11s" repeatCount="indefinite" begin="-5.5s"><mpath href="#trkE1"/></animateMotion></circle>
+        <circle r="3" fill="#A855F7" filter="url(#dotGlow)" opacity=".7"><animateMotion dur="10s" repeatCount="indefinite"><mpath href="#trkE2"/></animateMotion></circle>
+        <circle r="2.5" fill="#22C55E" filter="url(#dotGlow)" opacity=".6"><animateMotion dur="10s" repeatCount="indefinite" begin="-5s"><mpath href="#trkE2"/></animateMotion></circle>
       </svg>
     </div>
 
-    <h1 style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.4s forwards"><span class="gradient-text">Your Entire SDLC,</span><br>Powered by AI Agents</h1>
-    <p style="font-size:18px;color:var(--text-secondary);max-width:620px;margin:0 auto 32px;line-height:1.7;opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.6s forwards">
-      AI agents handle every stage — from signals to deploy.
-      Humans stay in control. Every action is audited.
+    <h1 style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.4s forwards"><span class="gradient-text">Aixle is the system</span><br>that runs work</h1>
+    <p style="font-size:18px;color:var(--text-secondary);max-width:620px;margin:0 auto 16px;line-height:1.7;opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.6s forwards">
+      Move faster with AI by running work inside a system that brings structure, visibility, and control.
+    </p>
+    <p style="font-size:15px;color:var(--text-muted);max-width:620px;margin:0 auto 32px;line-height:1.7;opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.7s forwards">
+      Most organizations are adding AI to existing processes. Aixle replaces those processes with a system that defines how work runs, executes it across humans and AI, and continuously improves performance.
     </p>
     <div class="hero-actions" style="opacity:0;animation:heroFadeUp .8s var(--ease-out) 2.8s forwards">
-      <button class="btn btn-primary" id="ctaBtn" onclick="openContactModal()">Contact Us →</button>
+      <button class="btn btn-primary" id="ctaBtn" onclick="openContactModal()">Request a Demo →</button>
     </div>
 
-    <!-- Hero SDLC visual removed — full diagram in #cycle section below -->
   </div>
 </section>
 
-<!-- Carousel -->
-<div class="carousel-section">
-  <div class="carousel-label">Works with your favorite AI agents and tools</div>
-  <div class="carousel-track" id="carousel">
-    <div class="carousel-item"><div class="carousel-icon ci-claude">C</div>Claude Code</div>
-    <div class="carousel-item"><div class="carousel-icon ci-cursor">▶</div>Cursor CLI</div>
-    <div class="carousel-item"><div class="carousel-icon ci-codex">◇</div>OpenAI Codex</div>
-    <div class="carousel-item"><div class="carousel-icon ci-gemini">G</div>Gemini CLI</div>
-    <div class="carousel-item"><div class="carousel-icon ci-temporal">⟳</div>Temporal</div>
-    <div class="carousel-item"><div class="carousel-icon ci-docker">🐳</div>Docker</div>
-    <div class="carousel-item"><div class="carousel-icon ci-k8s">☸</div>Kubernetes</div>
-    <div class="carousel-item"><div class="carousel-icon ci-github">⬡</div>GitHub</div>
-    <div class="carousel-item"><div class="carousel-icon ci-claude">C</div>Claude Code</div>
-    <div class="carousel-item"><div class="carousel-icon ci-cursor">▶</div>Cursor CLI</div>
-    <div class="carousel-item"><div class="carousel-icon ci-codex">◇</div>OpenAI Codex</div>
-    <div class="carousel-item"><div class="carousel-icon ci-gemini">G</div>Gemini CLI</div>
-    <div class="carousel-item"><div class="carousel-icon ci-temporal">⟳</div>Temporal</div>
-    <div class="carousel-item"><div class="carousel-icon ci-docker">🐳</div>Docker</div>
-    <div class="carousel-item"><div class="carousel-icon ci-k8s">☸</div>Kubernetes</div>
-    <div class="carousel-item"><div class="carousel-icon ci-github">⬡</div>GitHub</div>
-  </div>
-</div>
-<div class="gradient-separator" style="margin:0 auto"></div>
-
-<!-- Features sticky showcase -->
-<section class="features" id="features">
+<!-- The Problem -->
+<section style="padding:120px 0" id="problem">
   <div class="container">
-    <div class="section-eyebrow reveal"><div class="pulse-dot"></div> Capabilities</div>
-    <h2 class="section-title reveal d1">Everything your agentic SDLC needs</h2>
-    <p class="section-subtitle reveal d2">From interactive sessions to automated workflows — the building blocks that power every stage of the lifecycle.</p>
-    <div class="features-grid">
-      <div class="features-nav reveal-left d3">
-        <div class="feature-nav-item active" data-feature="sessions" onclick="switchFeature('sessions')"><span class="feature-num">01</span><div><h3>Agent Sessions</h3><p>Interactive and non-interactive sessions with any AI agent in isolated containers</p></div></div>
-        <div class="feature-nav-item" data-feature="workflows" onclick="switchFeature('workflows')"><span class="feature-num">02</span><div><h3>Workflows</h3><p>Multi-step pipelines that chain agents, tools, and human review</p></div></div>
-        <div class="feature-nav-item" data-feature="tools" onclick="switchFeature('tools')"><span class="feature-num">03</span><div><h3>Custom Tools</h3><p>Run any Docker-based tool with parameters, files, and secrets</p></div></div>
-        <div class="feature-nav-item" data-feature="analytics" onclick="switchFeature('analytics')"><span class="feature-num">04</span><div><h3>Cost Analytics</h3><p>Real-time usage tracking with per-session, per-user, per-project breakdown</p></div></div>
-        <div class="feature-nav-item" data-feature="context" onclick="switchFeature('context')"><span class="feature-num">05</span><div><h3>Smart Context</h3><p>Auto-inject MCPs, skills, repos, and secrets into every session</p></div></div>
-      </div>
-      <div class="feature-display reveal-right d4">
-        <div class="feature-card active" id="feature-sessions">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><span style="font-size:13px;color:var(--text-muted);font-family:var(--font-mono)">SESSION #1847</span><span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--accent-green)"><div class="pulse-dot-green" style="width:6px;height:6px"></div>Ready</span></div>
-          <div class="feature-card-terminal"><div style="color:var(--text-muted)">Agent: Claude Code 4.2</div><div style="color:var(--text-muted)">Mode: Interactive · Runtime: Kubernetes</div><div style="margin-top:12px;color:var(--accent-green)">❯ <span style="color:var(--text-primary)">Implement OAuth2 flow for the user service...</span></div><div style="color:var(--text-secondary);margin-top:4px">  I'll start by creating the OAuth2 controller...</div></div>
-          <div style="display:flex;gap:24px;margin-top:20px;font-size:13px;color:var(--text-muted);font-family:var(--font-mono)"><span>⏱ 12m 34s</span><span style="color:var(--accent-green)">$0.42</span><span>🔤 8,420 tokens</span></div>
-        </div>
-        <div class="feature-card" id="feature-workflows">
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;font-family:var(--font-mono)">WORKFLOW: API Feature Pipeline</div>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--accent-green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--accent-green)">✓</span><span style="flex:1">Step 1: Generate PRD</span><span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">$0.18</span></div>
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--accent-green-dim);border-radius:var(--radius-sm);border:1px solid rgba(34,197,94,.2)"><span style="color:var(--accent-green)">✓</span><span style="flex:1">Step 2: Break into tasks</span><span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">$0.24</span></div>
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--accent-blue-dim);border-radius:var(--radius-sm);border:1px solid rgba(59,130,246,.2)"><span style="display:inline-block;width:12px;height:12px;border:2px solid var(--border-default);border-top-color:var(--accent-blue);border-radius:50%;animation:spin .8s linear infinite"></span><span style="flex:1;color:var(--accent-blue)">Step 3: Implement code</span><span style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)">$0.67...</span></div>
-            <div style="display:flex;align-items:center;gap:12px;padding:12px;background:var(--bg-base);border-radius:var(--radius-sm);border:1px solid var(--border-default);opacity:.5"><span style="color:var(--text-muted)">○</span><span style="flex:1;color:var(--text-muted)">Step 4: Review & test</span></div>
-          </div>
-          <div style="text-align:right;margin-top:16px;font-size:13px;font-family:var(--font-mono);color:var(--accent-amber)">Total: $1.09</div>
-        </div>
-        <div class="feature-card" id="feature-tools">
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;font-family:var(--font-mono)">CUSTOM TOOL EXECUTION</div>
-          <div class="feature-card-terminal"><div style="color:var(--accent-blue)">Tool: slack-history-fetcher</div><div style="color:var(--text-muted)">Image: tools/slack-history:latest</div><div style="color:var(--text-muted)">Params: channel=#dev, days=7</div><div style="margin-top:12px;color:var(--accent-green)">✓ Fetched 342 messages</div><div style="color:var(--accent-green)">✓ Output saved to /workspace/context/slack.json</div></div>
-          <div style="margin-top:16px;padding:16px;background:var(--bg-base);border-radius:var(--radius-sm);border:1px solid var(--border-default)"><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">Available Tools:</div><div style="display:flex;gap:8px;flex-wrap:wrap"><span style="padding:4px 10px;background:var(--bg-elevated);border-radius:var(--radius-full);font-size:12px;color:var(--text-secondary)">slack-history</span><span style="padding:4px 10px;background:var(--bg-elevated);border-radius:var(--radius-full);font-size:12px;color:var(--text-secondary)">jira-fetcher</span><span style="padding:4px 10px;background:var(--bg-elevated);border-radius:var(--radius-full);font-size:12px;color:var(--text-secondary)">db-schema-dump</span><span style="padding:4px 10px;background:var(--bg-elevated);border-radius:var(--radius-full);font-size:12px;color:var(--text-secondary)">test-runner</span></div></div>
-        </div>
-        <div class="feature-card" id="feature-analytics">
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;font-family:var(--font-mono)">COST ANALYTICS — January 2026</div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px"><div style="padding:16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default)"><div style="font-size:28px;font-weight:700;font-family:var(--font-mono);color:var(--accent-green)">$247</div><div style="font-size:12px;color:var(--text-muted)">Total spend</div></div><div style="padding:16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default)"><div style="font-size:28px;font-weight:700;font-family:var(--font-mono)">1.2M</div><div style="font-size:12px;color:var(--text-muted)">Tokens</div></div><div style="padding:16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default)"><div style="font-size:28px;font-weight:700;font-family:var(--font-mono)">89</div><div style="font-size:12px;color:var(--text-muted)">Sessions</div></div></div>
-          <div style="display:flex;gap:12px;align-items:end;height:80px;padding:0 4px"><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:30%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:55%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:40%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:70%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:85%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:60%"></div><div style="flex:1;background:var(--accent-blue);border-radius:3px 3px 0 0;height:100%;opacity:.7;border:1px solid var(--accent-blue)"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:4px;padding:0 4px"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
-        </div>
-        <div class="feature-card" id="feature-context">
-          <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px;font-family:var(--font-mono)">SESSION CONTEXT INJECTION</div>
-          <div style="display:flex;flex-direction:column;gap:12px">
-            <div style="padding:14px 16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default);display:flex;align-items:center;gap:12px"><span style="font-size:18px">🔌</span><div style="flex:1"><div style="font-size:14px;font-weight:500">MCP Servers</div><div style="font-size:12px;color:var(--text-muted)">GitHub, Linear, Slack — auto-connected</div></div><span style="font-size:12px;color:var(--accent-green);font-family:var(--font-mono)">3 active</span></div>
-            <div style="padding:14px 16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default);display:flex;align-items:center;gap:12px"><span style="font-size:18px">📚</span><div style="flex:1"><div style="font-size:14px;font-weight:500">Skills</div><div style="font-size:12px;color:var(--text-muted)">Coding standards, API patterns, testing rules</div></div><span style="font-size:12px;color:var(--accent-green);font-family:var(--font-mono)">5 loaded</span></div>
-            <div style="padding:14px 16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default);display:flex;align-items:center;gap:12px"><span style="font-size:18px">📦</span><div style="flex:1"><div style="font-size:14px;font-weight:500">Repository</div><div style="font-size:12px;color:var(--text-muted)">acme/api-service — branch: feature/oauth</div></div><span style="font-size:12px;color:var(--accent-green);font-family:var(--font-mono)">cloned</span></div>
-            <div style="padding:14px 16px;background:var(--bg-base);border-radius:var(--radius-md);border:1px solid var(--border-default);display:flex;align-items:center;gap:12px"><span style="font-size:18px">🔐</span><div style="flex:1"><div style="font-size:14px;font-weight:500">Secrets</div><div style="font-size:12px;color:var(--text-muted)">API keys, DB credentials — encrypted at rest</div></div><span style="font-size:12px;color:var(--accent-green);font-family:var(--font-mono)">injected</span></div>
-          </div>
-        </div>
-      </div>
+    <div style="text-align:center;margin-bottom:60px">
+      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-red)"></div> The Problem</div>
+      <h2 class="section-title reveal d1">AI is advancing.<br><span class="gradient-text">Execution is not.</span></h2>
+      <p class="section-subtitle reveal d2" style="margin:0 auto">Companies are investing in AI tools across the business. Copilots, agents, and automation are everywhere. But work itself has not changed.</p>
     </div>
-  </div>
-</section>
-
-<!-- Conveyor Workflow with Robot Arm -->
-<section class="conveyor-section" id="pipeline">
-  <div class="container">
-    <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot-green" style="width:6px;height:6px"></div> Workflow Engine</div>
-      <h2 class="section-title reveal d1">Automated workflows.<br><span class="gradient-text">Traceable artifacts.</span></h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Every artifact carries full provenance — which workflow, step, agent, and session created it. Define once, run continuously.</p>
-    </div>
-    <div class="conveyor-wrapper reveal-scale d3">
-      <div class="conveyor-svg-container">
-        <svg id="robotConveyor" viewBox="0 0 1100 380" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <filter id="stationGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <filter id="armGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <filter id="pillGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <linearGradient id="armGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#06B6D4"/></linearGradient>
-            <linearGradient id="armMetalGrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3F3F46"/><stop offset="50%" stop-color="#52525B"/><stop offset="100%" stop-color="#3F3F46"/></linearGradient>
-          </defs>
-
-          <!-- Stations: 5 boxes on a baseline, all start gray, JS updates colors -->
-          <!-- Station 0: Define Task -->
-          <g class="conv-station" data-idx="0">
-            <rect class="st-box" x="50" y="238" width="110" height="56" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2"/>
-            <!-- clipboard SVG icon -->
-            <rect x="88" y="252" width="18" height="24" rx="3" fill="none" stroke="#71717A" stroke-width="1.8"/>
-            <rect x="92" y="249" width="10" height="4" rx="1.5" fill="#71717A"/>
-            <line x1="93" y1="261" x2="101" y2="261" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="93" y1="266" x2="99" y2="266" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="93" y1="271" x2="101" y2="271" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <text x="105" y="315" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600">Define Task</text>
-            <text x="105" y="331" text-anchor="middle" fill="#52525B" font-family="Inter,sans-serif" font-size="10">PRD, issue, prompt</text>
-          </g>
-
-          <!-- Station 1: Select Agent -->
-          <g class="conv-station" data-idx="1">
-            <rect class="st-box" x="270" y="238" width="110" height="56" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2"/>
-            <!-- brain/CPU icon -->
-            <rect x="309" y="253" width="22" height="22" rx="4" fill="none" stroke="#71717A" stroke-width="1.8"/>
-            <circle cx="320" cy="264" r="5" fill="none" stroke="#71717A" stroke-width="1.5"/>
-            <line x1="309" y1="258" x2="304" y2="258" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="309" y1="264" x2="304" y2="264" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="309" y1="270" x2="304" y2="270" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="331" y1="258" x2="336" y2="258" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="331" y1="264" x2="336" y2="264" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="331" y1="270" x2="336" y2="270" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <text x="325" y="315" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600">Select Agent</text>
-            <text x="325" y="331" text-anchor="middle" fill="#52525B" font-family="Inter,sans-serif" font-size="10">Claude, Codex, Gemini</text>
-          </g>
-
-          <!-- Station 2: Inject Context -->
-          <g class="conv-station" data-idx="2">
-            <rect class="st-box" x="490" y="238" width="110" height="56" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2"/>
-            <!-- plug icon -->
-            <circle cx="545" cy="264" r="8" fill="none" stroke="#71717A" stroke-width="1.8"/>
-            <line x1="545" y1="256" x2="545" y2="250" stroke="#71717A" stroke-width="1.8" stroke-linecap="round"/>
-            <line x1="540" y1="256" x2="540" y2="252" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="550" y1="256" x2="550" y2="252" stroke="#71717A" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="545" y1="272" x2="545" y2="278" stroke="#71717A" stroke-width="1.8" stroke-linecap="round"/>
-            <text x="545" y="315" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600">Inject Context</text>
-            <text x="545" y="331" text-anchor="middle" fill="#52525B" font-family="Inter,sans-serif" font-size="10">MCPs, repos, secrets</text>
-          </g>
-
-          <!-- Station 3: Execute -->
-          <g class="conv-station" data-idx="3">
-            <rect class="st-box" x="710" y="238" width="110" height="56" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2"/>
-            <!-- play/rocket icon -->
-            <polygon points="753,254 753,276 771,265" fill="none" stroke="#71717A" stroke-width="1.8" stroke-linejoin="round"/>
-            <text x="765" y="315" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600">Execute</text>
-            <text x="765" y="331" text-anchor="middle" fill="#52525B" font-family="Inter,sans-serif" font-size="10">Isolated container</text>
-          </g>
-
-          <!-- Station 4: Artifact -->
-          <g class="conv-station" data-idx="4">
-            <rect class="st-box" x="930" y="238" width="110" height="56" rx="12" fill="#18181B" stroke="#3F3F46" stroke-width="2"/>
-            <!-- package/box icon -->
-            <rect x="972" y="254" width="22" height="18" rx="2" fill="none" stroke="#71717A" stroke-width="1.8"/>
-            <line x1="972" y1="260" x2="994" y2="260" stroke="#71717A" stroke-width="1.5"/>
-            <line x1="983" y1="254" x2="983" y2="272" stroke="#71717A" stroke-width="1.5"/>
-            <polyline points="972,254 983,248 994,254" fill="none" stroke="#71717A" stroke-width="1.8" stroke-linejoin="round"/>
-            <text x="985" y="315" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600">Artifact</text>
-            <text x="985" y="331" text-anchor="middle" fill="#52525B" font-family="Inter,sans-serif" font-size="10">Code, docs, tests</text>
-          </g>
-
-          <!-- Robot arm — large, industrial -->
-          <g id="robotArm">
-            <!-- Rail at top -->
-            <rect x="50" y="90" width="1000" height="8" rx="4" fill="url(#armMetalGrad)"/>
-            <rect x="50" y="90" width="1000" height="8" rx="4" fill="url(#armGradient)" opacity=".08"/>
-            <!-- Rail detail lines -->
-            <line x1="50" y1="94" x2="1050" y2="94" stroke="#52525B" stroke-width=".5" stroke-dasharray="2 6"/>
-
-            <g id="armCarriage">
-              <!-- Carriage block on rail -->
-              <rect x="-18" y="86" width="36" height="16" rx="4" fill="#27272A" stroke="#52525B" stroke-width="1.5"/>
-              <circle cx="-8" cy="94" r="2" fill="#3B82F6" opacity=".5"/>
-              <circle cx="8" cy="94" r="2" fill="#06B6D4" opacity=".5"/>
-
-              <!-- Upper arm segment -->
-              <rect x="-5" y="102" width="10" height="50" rx="3" fill="#27272A" stroke="#52525B" stroke-width="1.2"/>
-              <rect x="-3" y="104" width="6" height="46" rx="2" fill="url(#armGradient)" opacity=".08"/>
-
-              <!-- Elbow joint -->
-              <circle cx="0" cy="155" r="10" fill="#18181B" stroke="#3B82F6" stroke-width="2" filter="url(#armGlow)"/>
-              <circle cx="0" cy="155" r="4" fill="#3B82F6" opacity=".3"/>
-
-              <!-- Lower arm segment (forearm) -->
-              <rect x="-4" y="165" width="8" height="45" rx="2.5" fill="#27272A" stroke="#52525B" stroke-width="1"/>
-              <rect x="-2.5" y="167" width="5" height="41" rx="1.5" fill="url(#armGradient)" opacity=".06"/>
-
-              <!-- Wrist joint -->
-              <circle cx="0" cy="213" r="7" fill="#18181B" stroke="#06B6D4" stroke-width="1.8"/>
-              <circle cx="0" cy="213" r="3" fill="#06B6D4" opacity=".4">
-                <animate attributeName="opacity" values=".2;.6;.2" dur="1.5s" repeatCount="indefinite"/>
-              </circle>
-
-              <!-- Claw / gripper — two finger prongs -->
-              <path d="M-6 218 L-6 228 L-14 240 L-10 242" stroke="#3B82F6" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" id="clawL" filter="url(#armGlow)"/>
-              <path d="M6 218 L6 228 L14 240 L10 242" stroke="#06B6D4" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round" id="clawR" filter="url(#armGlow)"/>
-              <!-- Finger tips -->
-              <circle cx="-10" cy="242" r="2.5" fill="#3B82F6" opacity=".6"/>
-              <circle cx="10" cy="242" r="2.5" fill="#06B6D4" opacity=".6"/>
-
-              <!-- Held artifact pill -->
-              <g id="heldPill" opacity="0">
-                <rect x="-32" y="243" width="64" height="22" rx="11" fill="#18181B" stroke="#3B82F6" stroke-width="1.2" filter="url(#pillGlow)"/>
-                <text x="0" y="258" text-anchor="middle" fill="#A1A1AA" font-family="JetBrains Mono,monospace" font-size="9" id="heldPillText">artifact</text>
-              </g>
-            </g>
-          </g>
-
-          <!-- Sparkle particles -->
-          <g id="sparkles"></g>
-        </svg>
-      </div>
-    </div>
-    <div class="gradient-separator" style="margin:40px auto"></div>
-    <div class="pipeline-stats reveal d4">
-      <div class="pipeline-stat"><div class="pipeline-stat-value" style="color:var(--accent-blue)"><span class="counter" data-target="30">0</span>s</div><div class="pipeline-stat-label">Avg. session start</div></div>
-      <div class="pipeline-stat"><div class="pipeline-stat-value" style="color:var(--accent-green)">$<span class="counter" data-target="0.42" data-decimals="2">0</span></div><div class="pipeline-stat-label">Avg. cost per session</div></div>
-      <div class="pipeline-stat"><div class="pipeline-stat-value" style="color:var(--accent-purple)"><span class="counter" data-target="4">0</span></div><div class="pipeline-stat-label">AI agents supported</div></div>
-      <div class="pipeline-stat"><div class="pipeline-stat-value"><span class="counter" data-target="100">0</span>%</div><div class="pipeline-stat-label">Cost transparency</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- Agentic SDLC Lifecycle -->
-<section style="padding:120px 0" id="cycle">
-  <div class="container">
-    <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-amber)"></div> Agentic SDLC</div>
-      <h2 class="section-title reveal d1">The complete agentic<br><span class="gradient-text">software lifecycle.</span></h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Three layers working in concert — humans set direction, AI agents execute each stage, and every action flows to an immutable audit core.</p>
-    </div>
-    <div class="reveal-scale d3" style="margin-top:60px;display:flex;justify-content:center">
-      <svg id="sdlcFullDiagram" viewBox="-30 -20 860 740" width="900" height="900" style="max-width:100%;height:auto" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <filter id="cycleGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          <filter id="fDotGlow" x="-200%" y="-200%" width="500%" height="500%">
-            <feGaussianBlur stdDeviation="5" result="b1"/>
-            <feGaussianBlur stdDeviation="2" result="b2"/>
-            <feMerge><feMergeNode in="b1"/><feMergeNode in="b1"/><feMergeNode in="b2"/><feMergeNode in="SourceGraphic"/></feMerge>
-          </filter>
-          <marker id="arrowGray" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="10" markerHeight="7" orient="auto"><path d="M0 0 L10 3.5 L0 7 Z" fill="#52525B"/></marker>
-
-          <!-- Orbital paths for dots (must be <path> for animateMotion) -->
-          <path id="fOrbitOuter" d="M350 40 A310 310 0 0 1 660 350 A310 310 0 0 1 350 660 A310 310 0 0 1 40 350 A310 310 0 0 1 350 40 Z" fill="none" stroke="none"/>
-          <path id="fOrbitWorkflow" d="M350 110 A240 240 0 0 1 590 350 A240 240 0 0 1 350 590 A240 240 0 0 1 110 350 A240 240 0 0 1 350 110 Z" fill="none" stroke="none"/>
-          <path id="fOrbitAgents" d="M350 190 A160 160 0 0 1 510 350 A160 160 0 0 1 350 510 A160 160 0 0 1 190 350 A160 160 0 0 1 350 190 Z" fill="none" stroke="none"/>
-          <!-- Reverse (counter-clockwise) orbital paths -->
-          <path id="fOrbitOuterR" d="M350 40 A310 310 0 0 0 40 350 A310 310 0 0 0 350 660 A310 310 0 0 0 660 350 A310 310 0 0 0 350 40 Z" fill="none" stroke="none"/>
-          <path id="fOrbitWorkflowR" d="M350 110 A240 240 0 0 0 110 350 A240 240 0 0 0 350 590 A240 240 0 0 0 590 350 A240 240 0 0 0 350 110 Z" fill="none" stroke="none"/>
-          <path id="fOrbitAgentsR" d="M350 190 A160 160 0 0 0 190 350 A160 160 0 0 0 350 510 A160 160 0 0 0 510 350 A160 160 0 0 0 350 190 Z" fill="none" stroke="none"/>
-
-          <!-- Radial paths inward (8 stages) -->
-          <path id="fRad0" d="M350 40 L350 110 L350 190 L350 270" fill="none" stroke="none"/>
-          <path id="fRad1" d="M569 131 L524 176 L478 222 L406 294" fill="none" stroke="none"/>
-          <path id="fRad2" d="M660 350 L590 350 L510 350 L430 350" fill="none" stroke="none"/>
-          <path id="fRad3" d="M569 569 L524 524 L478 478 L406 406" fill="none" stroke="none"/>
-          <path id="fRad4" d="M350 660 L350 590 L350 510 L350 430" fill="none" stroke="none"/>
-          <path id="fRad5" d="M131 569 L176 524 L222 478 L294 406" fill="none" stroke="none"/>
-          <path id="fRad6" d="M40 350 L110 350 L190 350 L270 350" fill="none" stroke="none"/>
-          <path id="fRad7" d="M131 131 L176 176 L222 222 L294 294" fill="none" stroke="none"/>
-
-          <!-- Reverse radial (center outward) -->
-          <path id="fRadOut0" d="M350 270 L350 190 L350 110 L350 40" fill="none" stroke="none"/>
-          <path id="fRadOut4" d="M350 430 L350 510 L350 590 L350 660" fill="none" stroke="none"/>
-          <path id="fRadOut2" d="M430 350 L510 350 L590 350 L660 350" fill="none" stroke="none"/>
-        </defs>
-
-        <!-- Three concentric rings -->
-        <circle cx="350" cy="350" r="310" stroke="#71717A" stroke-width="1.2" stroke-dasharray="6 4" fill="none" opacity=".5"/>
-        <circle cx="350" cy="350" r="240" stroke="#A1A1AA" stroke-width="1.5" fill="none" opacity=".4"/>
-        <circle cx="350" cy="350" r="160" stroke="#06B6D4" stroke-width="1.2" stroke-dasharray="4 3" fill="none" opacity=".5"/>
-
-        <!-- Radial spokes: human → stage → agent → audit (8 lines, full radius) -->
-        <line x1="350" y1="40" x2="350" y2="270" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="569" y1="131" x2="406" y2="294" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="660" y1="350" x2="430" y2="350" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="569" y1="569" x2="406" y2="406" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="350" y1="660" x2="350" y2="430" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="131" y1="569" x2="294" y2="406" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="40" y1="350" x2="270" y2="350" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-        <line x1="131" y1="131" x2="294" y2="294" stroke="#71717A" stroke-width="1" stroke-dasharray="4 4" opacity=".45"/>
-
-        <!-- Layer labels (horizontal) -->
-        <text x="200" y="30" text-anchor="start" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="12" font-weight="600" letter-spacing="3" opacity=".7">HUMANS</text>
-        <text x="350" y="478" text-anchor="middle" fill="#06B6D4" font-family="Inter,sans-serif" font-size="11" font-weight="600" letter-spacing="2.5" opacity=".6">AGENTS</text>
-
-        <!-- Center: Immutable Audit -->
-        <circle cx="350" cy="350" r="80" fill="rgba(245,158,11,.03)" stroke="#F59E0B" stroke-width="1.5" opacity=".5" stroke-dasharray="4 3"/>
-        <circle cx="350" cy="350" r="66" fill="rgba(245,158,11,.06)"/>
-        <text x="350" y="330" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="17" font-weight="700" opacity=".9">Immutable</text>
-        <text x="350" y="351" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="17" font-weight="700" opacity=".9">Audit</text>
-        <text x="350" y="370" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Logs · Governance</text>
-        <text x="350" y="383" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Compliance · Traceability</text>
-        <text x="350" y="396" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="9" opacity=".8">Explainability</text>
-
-        <!-- Arrows between stages on workflow ring -->
-        <path d="M408 116 A240 240 0 0 1 556 172" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-        <path d="M596 296 A240 240 0 0 1 596 404" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-        <path d="M556 528 A240 240 0 0 1 408 584" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-        <path d="M292 584 A240 240 0 0 1 144 528" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-        <path d="M104 404 A240 240 0 0 1 104 296" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-        <path d="M144 172 A240 240 0 0 1 292 116" stroke="#52525B" stroke-width="1.5" stroke-dasharray="5 3" fill="none" opacity=".4" marker-end="url(#arrowGray)"/>
-
-        <!-- 8 Workflow Nodes on middle ring (R=240, center=350) -->
-        <!-- 0: Signals (top, -90deg) = (350, 110) -->
-        <g class="sdlc-node-full" data-stage="signals">
-          <circle cx="350" cy="110" r="38" fill="#09090B" stroke="#3B82F6" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <path d="M344 106 A8 8 0 0 1 356 106" stroke="#3B82F6" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-          <path d="M339 101 A16 16 0 0 1 361 101" stroke="#3B82F6" stroke-width="1.2" fill="none" stroke-linecap="round" opacity=".5"/>
-          <circle cx="350" cy="112" r="3" fill="#3B82F6"/>
-          <text x="350" y="62" text-anchor="middle" fill="#3B82F6" font-family="Inter,sans-serif" font-size="15" font-weight="600">Signals</text>
-          <text x="350" y="166" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Features | Bugs | Security</text>
-        </g>
-
-        <!-- 1: Triage (-45deg) = (520, 180) -->
-        <g class="sdlc-node-full" data-stage="triage">
-          <circle cx="520" cy="180" r="38" fill="#09090B" stroke="#22C55E" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <polygon points="510,172 530,172 524,183 516,183" fill="none" stroke="#22C55E" stroke-width="1.5" stroke-linejoin="round"/>
-          <line x1="518" y1="183" x2="518" y2="192" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="522" y1="183" x2="522" y2="190" stroke="#22C55E" stroke-width="1.5" stroke-linecap="round"/>
-          <text x="475" y="132" text-anchor="middle" fill="#22C55E" font-family="Inter,sans-serif" font-size="15" font-weight="600">Triage</text>
-          <text x="565" y="236" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Evaluate | Value | Scope</text>
-        </g>
-
-        <!-- 2: Plan (0deg, right) = (590, 350) -->
-        <g class="sdlc-node-full" data-stage="plan">
-          <circle cx="590" cy="350" r="38" fill="#09090B" stroke="#F59E0B" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <polyline points="577,358 585,346 593,352 601,340" stroke="#F59E0B" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="596,340 601,340 601,345" stroke="#F59E0B" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="590" y="302" text-anchor="middle" fill="#F59E0B" font-family="Inter,sans-serif" font-size="15" font-weight="600">Plan</text>
-          <text x="590" y="406" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Prioritize | Decompose</text>
-        </g>
-
-        <!-- 3: Build (45deg) = (520, 520) -->
-        <g class="sdlc-node-full" data-stage="build">
-          <circle cx="520" cy="520" r="38" fill="#09090B" stroke="#A855F7" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <polyline points="512,512 505,520 512,528" stroke="#A855F7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <polyline points="528,512 535,520 528,528" stroke="#A855F7" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <line x1="523" y1="510" x2="517" y2="530" stroke="#A855F7" stroke-width="1.5" stroke-linecap="round"/>
-          <text x="565" y="472" text-anchor="middle" fill="#A855F7" font-family="Inter,sans-serif" font-size="15" font-weight="600">Build</text>
-          <text x="475" y="576" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Design | Code</text>
-        </g>
-
-        <!-- 4: Test (90deg, bottom) = (350, 590) -->
-        <g class="sdlc-node-full" data-stage="test">
-          <circle cx="350" cy="590" r="38" fill="#09090B" stroke="#06B6D4" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <rect x="338" y="580" width="24" height="20" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.5"/>
-          <polyline points="343,590 348,596 358,585" stroke="#06B6D4" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="350" y="542" text-anchor="middle" fill="#06B6D4" font-family="Inter,sans-serif" font-size="15" font-weight="600">Test</text>
-          <text x="350" y="646" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Automated | Manual QA</text>
-        </g>
-
-        <!-- 5: Review (135deg) = (180, 520) -->
-        <g class="sdlc-node-full" data-stage="review">
-          <circle cx="180" cy="520" r="38" fill="#09090B" stroke="#EF4444" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <rect x="169" y="510" width="18" height="24" rx="2.5" fill="none" stroke="#EF4444" stroke-width="1.5"/>
-          <rect x="173" y="508" width="8" height="4" rx="1.5" fill="#EF4444"/>
-          <polyline points="173,523 176,527 185,519" stroke="#EF4444" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="135" y="472" text-anchor="middle" fill="#EF4444" font-family="Inter,sans-serif" font-size="15" font-weight="600">Review</text>
-          <text x="225" y="576" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Merge Requests | UAT</text>
-        </g>
-
-        <!-- 6: Deploy (180deg, left) = (110, 350) -->
-        <g class="sdlc-node-full" data-stage="deploy">
-          <circle cx="110" cy="350" r="38" fill="#09090B" stroke="#F97316" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <path d="M110 340 L110 362 M103 354 L110 362 L117 354" stroke="#F97316" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="110" cy="344" r="3.5" fill="none" stroke="#F97316" stroke-width="1.3"/>
-          <text x="110" y="302" text-anchor="middle" fill="#F97316" font-family="Inter,sans-serif" font-size="15" font-weight="600">Deploy</text>
-          <text x="110" y="406" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">CI/CD | Smoke Test</text>
-        </g>
-
-        <!-- 7: Monitor (225deg) = (180, 180) -->
-        <g class="sdlc-node-full" data-stage="monitor">
-          <circle cx="180" cy="180" r="38" fill="#09090B" stroke="#EC4899" stroke-width="2.5" filter="url(#cycleGlow)"/>
-          <path d="M166 180 Q180 166 194 180 Q180 194 166 180Z" stroke="#EC4899" stroke-width="1.8" fill="none"/>
-          <circle cx="180" cy="180" r="5" fill="#EC4899" opacity=".5"/>
-          <text x="225" y="132" text-anchor="middle" fill="#EC4899" font-family="Inter,sans-serif" font-size="15" font-weight="600">Monitor</text>
-          <text x="135" y="236" text-anchor="middle" fill="#A1A1AA" font-family="Inter,sans-serif" font-size="11">Canary | Health | Logs</text>
-        </g>
-
-        <!-- Human icons on outer ring R=310, SAME angles as stages -->
-        <!-- 0°: top -->
-        <g transform="translate(350,40)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 45° -->
-        <g transform="translate(569,131)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 90° -->
-        <g transform="translate(660,350)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 135° -->
-        <g transform="translate(569,569)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 180° -->
-        <g transform="translate(350,660)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 225° -->
-        <g transform="translate(131,569)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 270° -->
-        <g transform="translate(40,350)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-        <!-- 315° -->
-        <g transform="translate(131,131)"><circle r="13" fill="#09090B" stroke="#71717A" stroke-width="1.2"/><circle cy="-3" r="3.5" fill="#A1A1AA"/><path d="M-6 5 Q0 10 6 5" stroke="#A1A1AA" stroke-width="1.3" fill="none"/></g>
-
-        <!-- Agent (robot head) icons on inner ring R=160, SAME angles as stages -->
-        <!-- 0°: top -->
-        <g transform="translate(350,190)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 45° -->
-        <g transform="translate(463,237)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 90° -->
-        <g transform="translate(510,350)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 135° -->
-        <g transform="translate(463,463)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 180° -->
-        <g transform="translate(350,510)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 225° -->
-        <g transform="translate(237,463)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 270° -->
-        <g transform="translate(190,350)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-        <!-- 315° -->
-        <g transform="translate(237,237)"><circle r="13" fill="#09090B" stroke="#06B6D4" stroke-width="1.2"/><line x1="0" y1="-10" x2="0" y2="-7" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><circle cy="-11" r="1.5" fill="#06B6D4"/><rect x="-6" y="-6" width="12" height="10" rx="3" fill="none" stroke="#06B6D4" stroke-width="1.1"/><circle cx="-3" cy="-2" r="1.8" fill="#06B6D4"/><circle cx="3" cy="-2" r="1.8" fill="#06B6D4"/><path d="M-3 3 Q0 6 3 3" stroke="#06B6D4" stroke-width="1" fill="none" stroke-linecap="round"/><line x1="-8" y1="-1" x2="-6" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/><line x1="6" y1="-1" x2="8" y2="-1" stroke="#06B6D4" stroke-width="1" stroke-linecap="round"/></g>
-
-        <!-- Animated dots: Orbital -->
-        <circle r="4.5" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".85">
-          <animateMotion dur="20s" repeatCount="indefinite"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-        <circle r="3.5" fill="#A855F7" filter="url(#fDotGlow)" opacity=".7">
-          <animateMotion dur="20s" repeatCount="indefinite" begin="-7s"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-        <circle r="4" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".75">
-          <animateMotion dur="20s" repeatCount="indefinite" begin="-14s"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".6">
-          <animateMotion dur="24s" repeatCount="indefinite" begin="-4s"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-        <!-- Outer ring (Humans) -->
-        <circle r="4" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".45">
-          <animateMotion dur="30s" repeatCount="indefinite"><mpath href="#fOrbitOuter"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#A855F7" filter="url(#fDotGlow)" opacity=".35">
-          <animateMotion dur="30s" repeatCount="indefinite" begin="-15s"><mpath href="#fOrbitOuter"/></animateMotion>
-        </circle>
-        <circle r="3.5" fill="#EC4899" filter="url(#fDotGlow)" opacity=".4">
-          <animateMotion dur="34s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitOuter"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#F97316" filter="url(#fDotGlow)" opacity=".35">
-          <animateMotion dur="28s" repeatCount="indefinite" begin="-20s"><mpath href="#fOrbitOuter"/></animateMotion>
-        </circle>
-        <!-- Inner ring (Agents) -->
-        <circle r="3.5" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".7">
-          <animateMotion dur="14s" repeatCount="indefinite"><mpath href="#fOrbitAgents"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#A855F7" filter="url(#fDotGlow)" opacity=".55">
-          <animateMotion dur="14s" repeatCount="indefinite" begin="-5s"><mpath href="#fOrbitAgents"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".5">
-          <animateMotion dur="11s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitAgents"/></animateMotion>
-        </circle>
-        <circle r="2" fill="#22C55E" filter="url(#fDotGlow)" opacity=".45">
-          <animateMotion dur="16s" repeatCount="indefinite" begin="-3s"><mpath href="#fOrbitAgents"/></animateMotion>
-        </circle>
-        <!-- Extra workflow ring dots -->
-        <circle r="2.5" fill="#EF4444" filter="url(#fDotGlow)" opacity=".5">
-          <animateMotion dur="22s" repeatCount="indefinite" begin="-11s"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#22C55E" filter="url(#fDotGlow)" opacity=".55">
-          <animateMotion dur="26s" repeatCount="indefinite" begin="-18s"><mpath href="#fOrbitWorkflow"/></animateMotion>
-        </circle>
-
-        <!-- Counter-clockwise dots — Outer ring -->
-        <circle r="3" fill="#6366F1" filter="url(#fDotGlow)" opacity=".4">
-          <animateMotion dur="32s" repeatCount="indefinite"><mpath href="#fOrbitOuterR"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#14B8A6" filter="url(#fDotGlow)" opacity=".35">
-          <animateMotion dur="28s" repeatCount="indefinite" begin="-10s"><mpath href="#fOrbitOuterR"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#F43F5E" filter="url(#fDotGlow)" opacity=".35">
-          <animateMotion dur="35s" repeatCount="indefinite" begin="-22s"><mpath href="#fOrbitOuterR"/></animateMotion>
-        </circle>
-        <!-- Counter-clockwise dots — Workflow ring -->
-        <circle r="3.5" fill="#8B5CF6" filter="url(#fDotGlow)" opacity=".6">
-          <animateMotion dur="22s" repeatCount="indefinite" begin="-3s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".5">
-          <animateMotion dur="18s" repeatCount="indefinite" begin="-12s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#10B981" filter="url(#fDotGlow)" opacity=".45">
-          <animateMotion dur="25s" repeatCount="indefinite" begin="-8s"><mpath href="#fOrbitWorkflowR"/></animateMotion>
-        </circle>
-        <!-- Counter-clockwise dots — Agents ring -->
-        <circle r="3" fill="#EC4899" filter="url(#fDotGlow)" opacity=".6">
-          <animateMotion dur="16s" repeatCount="indefinite" begin="-2s"><mpath href="#fOrbitAgentsR"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#F97316" filter="url(#fDotGlow)" opacity=".5">
-          <animateMotion dur="12s" repeatCount="indefinite" begin="-7s"><mpath href="#fOrbitAgentsR"/></animateMotion>
-        </circle>
-        <circle r="2" fill="#6366F1" filter="url(#fDotGlow)" opacity=".45">
-          <animateMotion dur="18s" repeatCount="indefinite" begin="-11s"><mpath href="#fOrbitAgentsR"/></animateMotion>
-        </circle>
-
-        <!-- Radial inward dots (data flowing to Audit) -->
-        <circle r="3" fill="#3B82F6" filter="url(#fDotGlow)" opacity=".8">
-          <animateMotion dur="5s" repeatCount="indefinite"><mpath href="#fRad0"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".7">
-          <animateMotion dur="6s" repeatCount="indefinite" begin="-1s"><mpath href="#fRad1"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#F59E0B" filter="url(#fDotGlow)" opacity=".75">
-          <animateMotion dur="5.5s" repeatCount="indefinite" begin="-2.5s"><mpath href="#fRad2"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#A855F7" filter="url(#fDotGlow)" opacity=".7">
-          <animateMotion dur="6.5s" repeatCount="indefinite" begin="-0.5s"><mpath href="#fRad3"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#06B6D4" filter="url(#fDotGlow)" opacity=".8">
-          <animateMotion dur="5s" repeatCount="indefinite" begin="-3.5s"><mpath href="#fRad4"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#EF4444" filter="url(#fDotGlow)" opacity=".7">
-          <animateMotion dur="6s" repeatCount="indefinite" begin="-2s"><mpath href="#fRad5"/></animateMotion>
-        </circle>
-        <circle r="3" fill="#F97316" filter="url(#fDotGlow)" opacity=".75">
-          <animateMotion dur="5.5s" repeatCount="indefinite" begin="-1.5s"><mpath href="#fRad6"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#EC4899" filter="url(#fDotGlow)" opacity=".65">
-          <animateMotion dur="6s" repeatCount="indefinite" begin="-4s"><mpath href="#fRad7"/></animateMotion>
-        </circle>
-
-        <!-- Radial outward dots (results returning from Audit) -->
-        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".6">
-          <animateMotion dur="7s" repeatCount="indefinite"><mpath href="#fRadOut0"/></animateMotion>
-        </circle>
-        <circle r="2.5" fill="#22C55E" filter="url(#fDotGlow)" opacity=".55">
-          <animateMotion dur="8s" repeatCount="indefinite" begin="-3s"><mpath href="#fRadOut4"/></animateMotion>
-        </circle>
-        <circle r="2" fill="#22C55E" filter="url(#fDotGlow)" opacity=".5">
-          <animateMotion dur="7.5s" repeatCount="indefinite" begin="-5s"><mpath href="#fRadOut2"/></animateMotion>
-        </circle>
-      </svg>
-    </div>
-  </div>
-</section>
-
-<!-- Integrations Section -->
-<section style="padding:120px 0;border-top:1px solid rgba(63,63,70,.2)" id="integrations">
-  <div class="container">
-    <div style="text-align:center;margin-bottom:80px">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-cyan)"></div> Integrations</div>
-      <h2 class="section-title reveal d1">100+ integrations.<br><span class="gradient-text">Zero friction.</span></h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Connect your entire dev stack. Version control, CI/CD, issue trackers, chat, MCP servers — Palad plugs in everywhere.</p>
-    </div>
-    <div style="max-width:860px;margin:0 auto">
-      <div class="integration-item reveal" style="transition-delay:.1s">
-        <div class="integration-number">01</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Version control & code review</h3>
-          <p class="integration-desc">Agents create branches, push code, and open pull requests directly in your repos. Review AI work the same way you review human work.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.2s">
-        <div class="integration-number">02</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Issue trackers & project management</h3>
-          <p class="integration-desc">Assign tickets to agents and track progress alongside your team's work. Automatic status updates as workflows complete.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.3s">
-        <div class="integration-number">03</div>
-        <div class="integration-body">
-          <h3 class="integration-title">CI/CD pipelines</h3>
-          <p class="integration-desc">Trigger workflows from any CI system. Automate refactors, dependency updates, code reviews, and codebase maintenance at scale.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.4s">
-        <div class="integration-number">04</div>
-        <div class="integration-body">
-          <h3 class="integration-title">MCP server ecosystem</h3>
-          <p class="integration-desc">Connect any MCP server — databases, documentation, custom APIs, internal tools. Agents get the context they need automatically.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.5s">
-        <div class="integration-number">05</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Chat & notifications</h3>
-          <p class="integration-desc">Get notified when workflows complete, sessions need attention, or budgets approach limits. Delegate tasks from chat in plain English.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.6s">
-        <div class="integration-number">06</div>
-        <div class="integration-body">
-          <h3 class="integration-title">SSO, SCIM & enterprise identity</h3>
-          <p class="integration-desc">Invite your team, set permissions, and enforce policies. Enterprise plans include single sign-on, provisioning, and org-level controls.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.7s">
-        <div class="integration-number">07</div>
-        <div class="integration-body">
-          <h3 class="integration-title">AI model providers</h3>
-          <p class="integration-desc">Anthropic Claude, OpenAI Codex, Google Gemini, and any OpenAI-compatible endpoint. Assign the right model to each SDLC stage — use Claude for planning, Codex for code generation, Gemini for review.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.8s">
-        <div class="integration-number">08</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Container runtimes & orchestration</h3>
-          <p class="integration-desc">Docker, Kubernetes, or your custom runtime. Every agent session runs in complete isolation. Scale horizontally with your existing infrastructure.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:.9s">
-        <div class="integration-number">09</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Monitoring & observability</h3>
-          <p class="integration-desc">Export metrics to Datadog, Grafana, or Prometheus. Track agent performance, workflow durations, error rates, and cost efficiency across all SDLC stages.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-      <div class="integration-divider"></div>
-      <div class="integration-item reveal" style="transition-delay:1s">
-        <div class="integration-number">10</div>
-        <div class="integration-body">
-          <h3 class="integration-title">Security scanning & compliance</h3>
-          <p class="integration-desc">Integrate Snyk, SonarQube, or Semgrep as workflow steps. Agents automatically run security scans, flag vulnerabilities, and enforce coding standards before merge.</p>
-          <a href="#" class="integration-link">Read the docs →</a>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- Cards — Why Palad (bento grid layout) -->
-<section class="cards-section" id="why">
-  <div class="container">
-    <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-purple)"></div> Why Palad</div>
-      <h2 class="section-title reveal d1">Built for teams, auditable by design</h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Palad brings the missing layer between humans and AI agents — governance, traceability, and control at every stage of your SDLC.</p>
-    </div>
-    <div class="bento-grid">
-      <div class="bento-card bento-wide reveal d1">
-        <div class="bento-card-visual" style="color:var(--accent-amber)">
-          <svg width="120" height="70" viewBox="0 0 120 70" fill="none">
-            <circle cx="60" cy="35" r="28" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2" opacity=".4"/>
-            <circle cx="60" cy="35" r="18" stroke="currentColor" stroke-width="1.5" fill="rgba(245,158,11,.08)"/>
-            <text x="60" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="9" font-weight="700">AUDIT</text>
-            <line x1="20" y1="15" x2="38" y2="24" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
-            <line x1="100" y1="15" x2="82" y2="24" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
-            <line x1="60" y1="63" x2="60" y2="55" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 2" opacity=".5"/>
-          </svg>
-        </div>
-        <h3>Immutable Audit Core</h3>
-        <p>Every agent action, every workflow step, every artifact — logged with full provenance. Governance, compliance, and explainability built into the platform from day one.</p>
-      </div>
-      <div class="bento-card bento-wide reveal d2">
-        <div class="bento-card-visual" style="color:var(--accent-blue)">
-          <svg width="130" height="70" viewBox="0 0 130 70" fill="none">
-            <circle cx="30" cy="35" r="12" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
-            <text x="30" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">H</text>
-            <line x1="42" y1="35" x2="53" y2="35" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/>
-            <circle cx="65" cy="35" r="12" stroke="currentColor" stroke-width="2" fill="rgba(59,130,246,.08)"/>
-            <text x="65" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">WF</text>
-            <line x1="77" y1="35" x2="88" y2="35" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2"/>
-            <circle cx="100" cy="35" r="12" stroke="currentColor" stroke-width="1.5" opacity=".6"/>
-            <text x="100" y="39" text-anchor="middle" fill="currentColor" font-family="Inter,sans-serif" font-size="8" font-weight="600">AI</text>
-          </svg>
-        </div>
-        <h3>Three-Layer Architecture</h3>
-        <p>Humans set direction, workflows orchestrate the stages, AI agents execute in isolated containers. Clear separation of control, logic, and execution.</p>
-      </div>
-      <div class="bento-card reveal d3">
-        <div class="bento-card-accent" style="background:var(--accent-purple)"></div>
-        <h3>Multi-Agent Orchestration</h3>
-        <p>Claude for planning, Codex for generation, Gemini for review — chain different agents across SDLC stages in a single workflow.</p>
-      </div>
-      <div class="bento-card reveal d4">
-        <div class="bento-card-accent" style="background:var(--accent-cyan)"></div>
-        <h3>8 SDLC Stages Covered</h3>
-        <p>Signals, Triage, Plan, Build, Test, Review, Deploy, Monitor — agents participate at every stage, not just code generation.</p>
-      </div>
-      <div class="bento-card reveal d5">
-        <div class="bento-card-accent" style="background:var(--accent-green)"></div>
-        <h3>Human-in-the-Loop</h3>
-        <p>Humans approve at key gates — triage decisions, code reviews, deploy sign-offs. AI proposes, humans dispose.</p>
-      </div>
-      <div class="bento-card reveal d6">
-        <div class="bento-card-accent" style="background:var(--accent-blue)"></div>
-        <h3>Cost & Token Transparency</h3>
-        <p>Per-session, per-agent, per-stage cost tracking. Know exactly what each SDLC stage costs and optimize accordingly.</p>
-      </div>
-      <div class="bento-card reveal d3">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:900px;margin:0 auto 60px">
+      <div class="bento-card reveal d1" style="text-align:center">
         <div class="bento-card-accent" style="background:var(--accent-red)"></div>
-        <h3>Isolated Execution</h3>
-        <p>Every agent session runs in its own Docker or K8s container. No shared state, no credential leaks, no cross-contamination.</p>
+        <h3 style="font-size:16px">Disconnected systems</h3>
+        <p style="font-size:14px">Work is spread across tools with no unified structure</p>
       </div>
-      <div class="bento-card reveal d4">
+      <div class="bento-card reveal d2" style="text-align:center">
         <div class="bento-card-accent" style="background:var(--accent-amber)"></div>
-        <h3>Full Traceability</h3>
-        <p>Every artifact carries its lineage — which signal triggered it, which agent built it, who approved it. From ticket to production.</p>
+        <h3 style="font-size:16px">No AI governance</h3>
+        <p style="font-size:14px">AI operates without consistent boundaries or controls</p>
       </div>
-      <div class="bento-card reveal d1">
-        <div class="bento-card-accent" style="background:var(--accent-cyan)"></div>
-        <h3>Workflow Templates</h3>
-        <p>Pre-built and customizable workflow templates for common SDLC patterns. Start in minutes, tailor to your team's process over time.</p>
-      </div>
-      <div class="bento-card reveal d2">
+      <div class="bento-card reveal d3" style="text-align:center">
         <div class="bento-card-accent" style="background:var(--accent-purple)"></div>
-        <h3>Extensible Integrations</h3>
-        <p>Connect to your existing stack — Git, CI/CD, monitoring, ticketing systems. Agents work with your tools, not instead of them.</p>
+        <h3 style="font-size:16px">Hard to trace</h3>
+        <p style="font-size:14px">Decisions are impossible to validate or explain</p>
       </div>
+      <div class="bento-card reveal d4" style="text-align:center">
+        <div class="bento-card-accent" style="background:var(--accent-blue)"></div>
+        <h3 style="font-size:16px">Tool fatigue</h3>
+        <p style="font-size:14px">Teams cannot keep up with new tools and capabilities</p>
+      </div>
+      <div class="bento-card reveal d5" style="text-align:center">
+        <div class="bento-card-accent" style="background:var(--accent-cyan)"></div>
+        <h3 style="font-size:16px">Inconsistent outcomes</h3>
+        <p style="font-size:14px">Results vary wildly across teams and projects</p>
+      </div>
+    </div>
+    <div class="reveal d4" style="text-align:center;max-width:600px;margin:0 auto;padding:32px;border:1px solid rgba(239,68,68,.2);border-radius:var(--radius-lg);background:rgba(239,68,68,.03)">
+      <p style="font-size:18px;font-weight:600;color:var(--text-primary);margin-bottom:8px">AI is moving fast. Your competitors are moving faster.</p>
+      <p style="font-size:15px;color:var(--text-secondary)">The risk is not inefficiency. It is falling behind.</p>
     </div>
   </div>
 </section>
 
-<!-- Heatmap -->
-<section class="heatmap-section">
+<!-- What Aixle Is -->
+<section style="padding:120px 0;border-top:1px solid rgba(63,63,70,.2)" id="what">
   <div class="container">
-    <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot-green" style="width:6px;height:6px"></div> Activity</div>
-      <h2 class="section-title reveal d1">See your team's AI-powered productivity</h2>
+    <div style="text-align:center;margin-bottom:60px">
+      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-green)"></div> What Aixle Is</div>
+      <h2 class="section-title reveal d1">A governed system<br><span class="gradient-text">for execution.</span></h2>
+      <p class="section-subtitle reveal d2" style="margin:0 auto">Aixle defines how work runs, then executes it within a controlled system across humans and AI.</p>
     </div>
-    <div class="heatmap-wrapper reveal-scale d2">
-      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:14px;color:var(--text-secondary)">Agent sessions in the last year</span><span style="font-size:13px;font-family:var(--font-mono);color:var(--accent-green)">2,847 sessions</span></div>
-      <div class="heatmap-grid" id="heatmap"></div>
-      <div class="heatmap-legend"><span>Less</span><div class="heatmap-legend-cell" style="background:var(--bg-elevated)"></div><div class="heatmap-legend-cell" style="background:rgba(59,130,246,.15)"></div><div class="heatmap-legend-cell" style="background:rgba(59,130,246,.3)"></div><div class="heatmap-legend-cell" style="background:rgba(59,130,246,.5)"></div><div class="heatmap-legend-cell" style="background:var(--accent-blue)"></div><span>More</span></div>
+    <div class="reveal d3" style="max-width:800px;margin:0 auto 60px;padding:32px;border:1px solid rgba(63,63,70,.3);border-radius:var(--radius-lg);background:var(--bg-surface)">
+      <p style="font-size:16px;color:var(--text-secondary);line-height:1.8;margin-bottom:24px">Aixle simplifies how your organization uses AI by running work inside a single, consistent system. Instead of managing tools and workflows, you operate a system that executes work for you.</p>
+      <p style="font-size:16px;color:var(--text-secondary);line-height:1.8;margin-bottom:16px">Aixle brings leading AI tools into a single system: tools like Claude, Cursor, Codex, and others are integrated into how work runs, not used in isolation.</p>
+      <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:12px">
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--text-secondary)"><span style="color:var(--accent-green);font-weight:700;flex-shrink:0">+</span> New capabilities can be adopted without disrupting execution</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--text-secondary)"><span style="color:var(--accent-green);font-weight:700;flex-shrink:0">+</span> Gains from new tools are captured across the system</li>
+        <li style="display:flex;align-items:flex-start;gap:12px;font-size:15px;color:var(--text-secondary)"><span style="color:var(--accent-green);font-weight:700;flex-shrink:0">+</span> Teams no longer need to chase every new tool or workflow</li>
+      </ul>
+      <p style="font-size:14px;color:var(--text-muted);margin-top:24px;font-style:italic">As AI evolves, the system evolves with it.</p>
+    </div>
+    <div class="reveal d4" style="text-align:center;max-width:600px;margin:0 auto;padding:24px;border:1px solid rgba(34,197,94,.2);border-radius:var(--radius-lg);background:rgba(34,197,94,.03)">
+      <p style="font-size:17px;font-weight:600;color:var(--text-primary)">This is not workflow automation. It is a system that runs work.</p>
     </div>
   </div>
 </section>
 
-<!-- Enterprise (factory.ai style) -->
-<section class="enterprise-section">
+<!-- The Shift: Before → After -->
+<section style="padding:120px 0;border-top:1px solid rgba(63,63,70,.2)" id="shift">
   <div class="container">
-    <div style="text-align:center">
-      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-cyan)"></div> Enterprise</div>
-      <h2 class="section-title reveal d1">AI that works with your team,<br><span class="gradient-text">not against it</span></h2>
-      <p class="section-subtitle reveal d2" style="margin:0 auto">Palad is designed to meet the demands of modern engineering teams — secure, scalable, and ready to integrate with your existing tools.</p>
+    <div style="text-align:center;margin-bottom:60px">
+      <div class="section-eyebrow reveal" style="justify-content:center"><div class="pulse-dot" style="width:6px;height:6px;background:var(--accent-blue)"></div> The Shift</div>
+      <h2 class="section-title reveal d1">From AI tools to<br><span class="gradient-text">systems that run work.</span></h2>
+      <p class="section-subtitle reveal d2" style="margin:0 auto">Most organizations add AI to workflows. Aixle replaces workflows with a system of execution.</p>
     </div>
-    <div class="enterprise-grid">
-      <div class="enterprise-card reveal-left d3">
-        <div class="enterprise-card-label">Security</div>
-        <h3>Secure at every level</h3>
-        <p>Industry-grade security and compliance. Every session runs in complete isolation — no shared state, no credential leaks. Secrets are encrypted at rest and scoped to individual containers.</p>
-        <a href="#" class="enterprise-link">Learn more about security <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 7h11M8 3l4 4-4 4"/></svg></a>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:900px;margin:0 auto 60px" class="reveal d3">
+      <div style="padding:32px;border:1px solid rgba(239,68,68,.2);border-radius:var(--radius-lg);background:rgba(239,68,68,.03)">
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--accent-red);font-weight:600;margin-bottom:8px">Today</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-primary);margin-bottom:20px">AI assists work</div>
+        <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:14px">
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-red);flex-shrink:0">×</span> Fragmented tools and workflows</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-red);flex-shrink:0">×</span> Limited control over AI behavior</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-red);flex-shrink:0">×</span> Decisions are hard to trace</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-red);flex-shrink:0">×</span> Teams struggle to keep up with change</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-red);flex-shrink:0">×</span> Inconsistent results</li>
+        </ul>
       </div>
-      <div class="enterprise-card reveal-right d4">
-        <div class="enterprise-card-label">Across your stack</div>
-        <h3>Interface and vendor agnostic</h3>
-        <p>Works with any AI model provider, any IDE, and any container runtime. Swap agents, models, or tools without changing your workflow. As your tooling matures, so does Palad.</p>
-        <a href="#" class="enterprise-link">Learn more about enterprise <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 7h11M8 3l4 4-4 4"/></svg></a>
+      <div style="padding:32px;border:1px solid rgba(34,197,94,.2);border-radius:var(--radius-lg);background:rgba(34,197,94,.03)">
+        <div style="font-size:13px;text-transform:uppercase;letter-spacing:2px;color:var(--accent-green);font-weight:600;margin-bottom:8px">With Aixle</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-primary);margin-bottom:20px">A system runs work</div>
+        <ul style="list-style:none;padding:0;display:flex;flex-direction:column;gap:14px">
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-green);flex-shrink:0">✓</span> Work runs within a defined structure</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-green);flex-shrink:0">✓</span> AI operates within governed boundaries</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-green);flex-shrink:0">✓</span> Every decision is traceable</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-green);flex-shrink:0">✓</span> New AI capabilities are absorbed into the system</li>
+          <li style="display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--text-secondary)"><span style="color:var(--accent-green);flex-shrink:0">✓</span> Faster, repeatable outcomes at scale</li>
+        </ul>
       </div>
+    </div>
+    <div class="reveal d4" style="text-align:center;max-width:700px;margin:0 auto;padding:24px;border:1px solid rgba(63,63,70,.3);border-radius:var(--radius-lg);background:var(--bg-surface)">
+      <p style="font-size:17px;font-weight:600;color:var(--text-primary)">AI does not fail because of capability. It fails because work is not designed to run with it.</p>
     </div>
   </div>
 </section>
-
 
 
 <!-- CTA -->
 <section class="cta-section">
   <div class="container">
-    <h2 class="reveal glitch-hover">Ready to automate<br>your SDLC?</h2>
-    <p class="reveal d1">Let AI agents handle every stage — with full traceability.</p>
+    <h2 class="reveal glitch-hover">Ready to run work<br>with a system?</h2>
+    <p class="reveal d1">Structure, visibility, and control — for humans and AI working together.</p>
     <div class="cta-actions reveal d2">
-      <button class="btn btn-primary" id="ctaBtn2" onclick="openContactModal()">Contact Us →</button>
+      <button class="btn btn-primary" id="ctaBtn2" onclick="openContactModal()">Request a Demo →</button>
     </div>
   </div>
 </section>
@@ -1408,12 +482,12 @@ footer{border-top:1px solid rgba(63,63,70,.3);padding:60px 0 40px;position:relat
 <footer>
   <div class="container">
     <div class="footer-grid">
-      <div class="footer-brand"><a href="#" class="nav-logo"><svg viewBox="0 0 1280 960" height="44" fill="currentColor"><use href="#palad-logo-paths"/></svg></a><p>Agentic SDLC Platform. AI agents execute every stage of your software lifecycle — with immutable audit and full traceability.</p></div>
+      <div class="footer-brand"><a href="#" class="nav-logo"><svg viewBox="0 0 1406 740" height="36" fill="currentColor"><use href="#aixle-logo-paths"/></svg></a><p>The system that runs work. Structure, visibility, and control for humans and AI working together.</p></div>
       <div class="footer-col"><h4>Product</h4><ul><li><a href="#">Agent Sessions</a></li><li><a href="#">Workflows</a></li><li><a href="#">Custom Tools</a></li><li><a href="#">Analytics</a></li></ul></div>
       <div class="footer-col"><h4>Resources</h4><ul><li><a href="#">Documentation</a></li><li><a href="#">API Reference</a></li><li><a href="#">Changelog</a></li><li><a href="#">Status</a></li></ul></div>
       <div class="footer-col"><h4>Company</h4><ul><li><a href="#">About</a></li><li><a href="#">Blog</a></li><li><a href="#">Careers</a></li><li><a href="#">Contact</a></li></ul></div>
     </div>
-    <div class="footer-bottom"><span>© 2026 Palad. All rights reserved.</span><div style="display:flex;gap:20px"><a href="/privacy-policy" style="color:var(--text-muted)">Privacy</a><a href="/terms-of-service" style="color:var(--text-muted)">Terms</a><a href="#" style="color:var(--text-muted)">Security</a></div></div>
+    <div class="footer-bottom"><span>© 2026 Aixle. All rights reserved.</span><div style="display:flex;gap:20px"><a href="/privacy-policy" style="color:var(--text-muted)">Privacy</a><a href="/terms-of-service" style="color:var(--text-muted)">Terms</a><a href="#" style="color:var(--text-muted)">Security</a></div></div>
   </div>
 </footer>
 
@@ -1502,53 +576,7 @@ addEventListener('scroll',()=>{
 
 
 // T2-07: Typewriter
-function typeWriter(el,text,speed=25){return new Promise(r=>{let i=0;const iv=setInterval(()=>{el.textContent=text.slice(0,++i);if(i>=text.length){clearInterval(iv);r()}},speed)})}
-function animateTerminal(){
-  const lines=document.querySelectorAll('#hero-terminal .terminal-line');
-  lines.forEach(l=>{
-    const d=parseInt(l.dataset.delay)||0;
-    setTimeout(()=>{l.classList.add('visible');const tw=l.querySelector('[data-typewriter]');if(tw)typeWriter(tw,tw.dataset.typewriter)},d);
-  });
-}
-const ho=new IntersectionObserver(e=>{e.forEach(en=>{if(en.isIntersecting){animateTerminal();ho.disconnect()}})},{threshold:.3});
-const ht=document.querySelector('.hero-terminal');if(ht)ho.observe(ht);
 
-// Feature tabs with smooth transition
-function switchFeature(f){
-  document.querySelectorAll('.feature-nav-item').forEach(e=>e.classList.toggle('active',e.dataset.feature===f));
-  const cards=document.querySelectorAll('.feature-card');
-  cards.forEach(e=>{
-    if(e.id===`feature-${f}`){
-      e.style.display='block';
-      e.style.animation='none';
-      e.offsetHeight;
-      e.style.animation='';
-      e.classList.add('active');
-    } else {
-      e.classList.remove('active');
-      setTimeout(()=>{if(!e.classList.contains('active'))e.style.display='none'},300);
-    }
-  });
-}
-
-// T2-03: Counters
-function animateCounter(el){
-  const t=parseFloat(el.dataset.target),dec=parseInt(el.dataset.decimals)||0,dur=2000,start=performance.now();
-  function up(now){const p=Math.min((now-start)/dur,1),e=1-Math.pow(1-p,3);el.textContent=dec>0?(t*e).toFixed(dec):Math.round(t*e);if(p<1)requestAnimationFrame(up)}
-  requestAnimationFrame(up);
-}
-const co=new IntersectionObserver(e=>{e.forEach(en=>{if(en.isIntersecting){en.target.querySelectorAll('.counter').forEach(animateCounter);co.unobserve(en.target)}})},{threshold:.5});
-document.querySelectorAll('.pipeline-stats').forEach(el=>co.observe(el));
-
-// T3-02: Heatmap
-(function(){
-  const g=document.getElementById('heatmap');if(!g)return;
-  for(let i=0;i<52*7;i++){
-    const c=document.createElement('div');c.className='heatmap-cell';
-    const r=Math.random();if(r>.7)c.classList.add('l1');if(r>.82)c.classList.add('l2');if(r>.91)c.classList.add('l3');if(r>.96)c.classList.add('l4');
-    c.style.animationDelay=`${(i%52)*15}ms`;g.appendChild(c);
-  }
-})();
 
 // T-NEW: Button ripple effect
 document.querySelectorAll('.btn-primary').forEach(btn=>{
@@ -1609,188 +637,7 @@ document.querySelectorAll('.btn-primary').forEach(btn=>{
   });
 })();
 
-// Animated heatmap conic border angle
-(function(){
-  const hw=document.querySelector('.heatmap-wrapper');
-  if(!hw)return;
-  let angle=0;
-  function tick(){angle=(angle+1)%360;hw.style.setProperty('--hm-angle',angle+'deg');requestAnimationFrame(tick)}
-  tick();
-})();
 
-// Card parallax tilt on hover (bento cards)
-document.querySelectorAll('.bento-card').forEach(card=>{
-  card.addEventListener('mousemove',e=>{
-    const r=card.getBoundingClientRect();
-    const cx=(e.clientX-r.left)/r.width-.5;
-    const cy=(e.clientY-r.top)/r.height-.5;
-    card.style.transform=`translateY(-2px) perspective(600px) rotateY(${cx*6}deg) rotateX(${-cy*4}deg)`;
-  });
-  card.addEventListener('mouseleave',()=>{
-    card.style.transition='transform .4s var(--ease-out)';
-    card.style.transform='';
-    setTimeout(()=>{card.style.transition='all var(--dur-norm) var(--ease-out)'},400);
-  });
-});
-
-// Robot arm conveyor animation
-(function(){
-  const svg = document.getElementById('robotConveyor');
-  if (!svg) return;
-
-  const carriage = document.getElementById('armCarriage');
-  const heldPill = document.getElementById('heldPill');
-  const heldText = document.getElementById('heldPillText');
-  const sparklesG = document.getElementById('sparkles');
-  const clawL = document.getElementById('clawL');
-  const clawR = document.getElementById('clawR');
-
-  const stationXs = [105, 325, 545, 765, 985];
-  const artifacts = ['prd.md', 'tasks.json', 'context.tar', 'pr-142.diff', 'deploy.sh'];
-  const stations = svg.querySelectorAll('.conv-station');
-
-  let currentStation = 0;
-  let animating = false;
-  let armX = stationXs[0];
-
-  const GREEN = '#22C55E', BLUE = '#3B82F6', GRAY = '#3F3F46', GRAY_FILL = '#71717A';
-
-  function setArmPos(x) {
-    armX = x;
-    carriage.setAttribute('transform', `translate(${x}, 0)`);
-  }
-
-  function openClaw() {
-    clawL.setAttribute('d', 'M-6 218 L-6 228 L-16 242 L-12 244');
-    clawR.setAttribute('d', 'M6 218 L6 228 L16 242 L12 244');
-  }
-  function closeClaw() {
-    clawL.setAttribute('d', 'M-6 218 L-6 228 L-8 242 L-5 244');
-    clawR.setAttribute('d', 'M6 218 L6 228 L8 242 L5 244');
-  }
-
-  function updateStations(activeIdx) {
-    stations.forEach((st, i) => {
-      const box = st.querySelector('.st-box');
-      const iconEls = st.querySelectorAll('rect:not(.st-box), circle, line, polyline, polygon, path, text');
-      if (!box) return;
-      if (i < activeIdx) {
-        box.setAttribute('stroke', GREEN);
-        box.setAttribute('fill', 'rgba(34,197,94,.06)');
-        st.setAttribute('opacity', '1');
-        iconEls.forEach(el => { if(el.getAttribute('stroke') && el.getAttribute('stroke') !== 'none') el.setAttribute('stroke', GREEN); if(el.getAttribute('fill') && el.getAttribute('fill') !== 'none' && el.tagName !== 'text') el.setAttribute('fill', GREEN); });
-      } else if (i === activeIdx) {
-        box.setAttribute('stroke', BLUE);
-        box.setAttribute('fill', 'rgba(59,130,246,.08)');
-        st.setAttribute('opacity', '1');
-        iconEls.forEach(el => { if(el.getAttribute('stroke') && el.getAttribute('stroke') !== 'none') el.setAttribute('stroke', BLUE); if(el.getAttribute('fill') && el.getAttribute('fill') !== 'none' && el.tagName !== 'text') el.setAttribute('fill', BLUE); });
-      } else {
-        box.setAttribute('stroke', GRAY);
-        box.setAttribute('fill', '#18181B');
-        st.setAttribute('opacity', '.35');
-        iconEls.forEach(el => { if(el.getAttribute('stroke') && el.getAttribute('stroke') !== 'none') el.setAttribute('stroke', GRAY_FILL); if(el.getAttribute('fill') && el.getAttribute('fill') !== 'none' && el.tagName !== 'text') el.setAttribute('fill', GRAY_FILL); });
-      }
-    });
-  }
-
-  function spawnSparkles(cx) {
-    for (let i = 0; i < 8; i++) {
-      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 18 + Math.random() * 25;
-      const dx = Math.cos(angle) * dist;
-      const dy = Math.sin(angle) * dist;
-      c.setAttribute('cx', cx);
-      c.setAttribute('cy', '242');
-      c.setAttribute('r', 1.5 + Math.random() * 2);
-      c.setAttribute('fill', ['#3B82F6','#06B6D4','#A855F7','#22C55E'][Math.floor(Math.random()*4)]);
-      c.setAttribute('opacity', '1');
-      sparklesG.appendChild(c);
-      const startTime = performance.now();
-      const dur = 400 + Math.random() * 400;
-      function anim(now) {
-        const t = (now - startTime) / dur;
-        if (t >= 1) { c.remove(); return; }
-        c.setAttribute('cx', cx + dx * t);
-        c.setAttribute('cy', 242 + dy * t - 12 * t);
-        c.setAttribute('opacity', 1 - t);
-        requestAnimationFrame(anim);
-      }
-      requestAnimationFrame(anim);
-    }
-  }
-
-  function animateArm(fromX, toX, dur) {
-    return new Promise(resolve => {
-      const start = performance.now();
-      function step(now) {
-        const t = Math.min((now - start) / dur, 1);
-        const eased = 1 - Math.pow(1 - t, 3);
-        setArmPos(fromX + (toX - fromX) * eased);
-        if (t < 1) requestAnimationFrame(step);
-        else resolve();
-      }
-      requestAnimationFrame(step);
-    });
-  }
-
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  async function pickAndPlace() {
-    if (animating) return;
-    animating = true;
-
-    const fromIdx = currentStation;
-    const toIdx = (currentStation + 1) % stationXs.length;
-    const fromX = stationXs[fromIdx];
-    const toX = stationXs[toIdx];
-    const artName = artifacts[fromIdx];
-
-    updateStations(fromIdx);
-    openClaw();
-    await animateArm(armX, fromX, 800);
-    await sleep(250);
-
-    closeClaw();
-    await sleep(150);
-    spawnSparkles(fromX);
-    heldText.textContent = artName;
-    heldPill.setAttribute('opacity', '1');
-    await sleep(200);
-
-    await animateArm(fromX, toX, 1200);
-    await sleep(200);
-
-    openClaw();
-    spawnSparkles(toX);
-    heldPill.setAttribute('opacity', '0');
-    updateStations(toIdx);
-    await sleep(600);
-
-    currentStation = toIdx;
-    animating = false;
-  }
-
-  setArmPos(stationXs[0]);
-  openClaw();
-  updateStations(0);
-
-  const rObs = new IntersectionObserver(entries => {
-    entries.forEach(en => {
-      if (en.isIntersecting) {
-        rObs.disconnect();
-        async function loop() {
-          while (true) {
-            await pickAndPlace();
-            await sleep(500);
-          }
-        }
-        loop();
-      }
-    });
-  }, { threshold: 0.3 });
-  rObs.observe(svg);
-})();
 
 // Smooth scroll
 document.querySelectorAll('a[href^="#"]').forEach(a=>{

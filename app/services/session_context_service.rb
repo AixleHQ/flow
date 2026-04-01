@@ -228,7 +228,7 @@ class SessionContextService
     # == Story 9.4: MCP Config Injection ==
 
     # Generate and inject MCP server config files into container.
-    # Always includes internal Palad MCP + external servers from session_config.
+    # Always includes internal Aixle MCP + external servers from session_config.
     # Delegates format generation to adapter, handles merge strategy.
     def inject_mcp_config(container_id, session)
       all_servers = build_all_servers(session)
@@ -527,7 +527,7 @@ class SessionContextService
 
     # == MCP Server Resolution ==
 
-    # Combine internal Palad MCP + resolved external servers
+    # Combine internal Aixle MCP + resolved external servers
     def build_all_servers(session)
       effective_items = resolve_effective_config_items(session)
       external = resolve_mcp_servers(session).map { |s| resolve_server_secrets(s, effective_items) }
@@ -535,10 +535,10 @@ class SessionContextService
       [ build_internal_mcp(session) ] + external
     end
 
-    # Build internal Palad MCP server entry (always included in session containers)
+    # Build internal Aixle MCP server entry (always included in session containers)
     def build_internal_mcp(session)
       OpenStruct.new(
-        name: "palad-tools",
+        name: "aixle-tools",
         url: Settings.mcp.server_url,
         transport: "streamable-http",
         headers: { "X-Session-Key" => session.mcp_key }

@@ -24,11 +24,11 @@ const styles = {
   subtitle: { fontSize: 12, color: 'text.secondary' },
 } satisfies Record<string, SxProps>;
 
-interface PaladBuilderBannerProps {
+interface AixleBuilderBannerProps {
   projectId: number;
 }
 
-export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) => {
+export const AixleBuilderBanner: FC<AixleBuilderBannerProps> = ({ projectId }) => {
   const navigate = useNavigate();
 
   return (
@@ -36,7 +36,7 @@ export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) =
       <Box sx={styles.left}>
         <AutoFixHighIcon sx={styles.icon} />
         <Box>
-          <Typography sx={styles.title}>Palad Builder</Typography>
+          <Typography sx={styles.title}>Aixle Builder</Typography>
           <Typography sx={styles.subtitle}>Build workflows with AI — agents, steps, board automation</Typography>
         </Box>
       </Box>
@@ -44,7 +44,7 @@ export const PaladBuilderBanner: FC<PaladBuilderBannerProps> = ({ projectId }) =
         variant="contained"
         size="small"
         startIcon={<AutoFixHighIcon />}
-        onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(String(projectId)) })}
+        onClick={() => navigate({ to: Routes.frontend.aixleBuilderPath(String(projectId)) })}
       >
         Open Builder
       </Button>

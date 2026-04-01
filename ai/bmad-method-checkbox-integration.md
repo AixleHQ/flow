@@ -12,7 +12,7 @@
 Add a **"Use BMAD Method"** checkbox when launching a standalone session and in the workflow step configuration. When enabled — automatically install BMAD Method into the container via the official npm CLI, ensuring:
 
 - Slash commands (`/brainstorming`, `/create-prd`, `/dev-story`, etc.) work out of the box
-- Palad context (user, language, project) is seamlessly passed into the BMAD config
+- The Aixle context (user, language, project) is seamlessly passed through into the BMAD config
 - BMAD files are invisible to the user in VS Code
 - BMAD artifact output goes to `/workspace/outputs/` for reuse in the pipeline
 
@@ -57,7 +57,7 @@ npx bmad-method install \
 
 ## 3. Mapping agent_type → BMAD tools flag
 
-| Palad `agent_type` | BMAD `--tools` flag | Skills directory |
+| Aixle `agent_type` | BMAD `--tools` flag | Skills directory |
 |---------------------|---------------------|----------------------------------|
 | `cursor_cli` | `cursor` | `.cursor/skills/<name>/SKILL.md` |
 | `claude_code` | `claude-code` | `.claude/skills/<name>/SKILL.md` |
@@ -303,7 +303,7 @@ At the same time, the agent (Cursor/Claude/Codex/Gemini) **sees** these files an
 ## 7. Output → /workspace/outputs/
 
 BMAD uses `output_folder` from config.yaml for all artifacts.
-We set `--output-folder /workspace/outputs` → artifacts automatically end up in the standard Palad output directory.
+We set `--output-folder /workspace/outputs` → artifacts automatically land in the standard Aixle output directory.
 
 The existing `collect_outputs` mechanism in `AgentSessionStrategy` picks up files from `/workspace/outputs/` and creates `Asset` records.
 

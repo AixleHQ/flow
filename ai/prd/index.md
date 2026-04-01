@@ -1,8 +1,8 @@
-# Product Requirements Document - Palad
+# Product Requirements Document - Aixle
 
 ## Table of Contents
 
-- [Product Requirements Document - Palad](#table-of-contents)
+- [Product Requirements Document - Aixle](#table-of-contents)
   - [Related Documents](./related-documents.md)
   - [Table of Contents](./table-of-contents.md)
   - [Executive Summary](./executive-summary.md)

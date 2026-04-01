@@ -3,14 +3,14 @@ authorization:
 
 temporal:
   enabled: true
-  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.palad.com' %>
+  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.aixle.com' %>
 
 redis:
-  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.palad.com' %>
+  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.aixle.com' %>
 
 agents:
   images:
-    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'ghcr.io/palad-ai/palad-app-claude-code' %>
-    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'ghcr.io/palad-ai/palad-app-cursor-cli' %>
-    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'ghcr.io/palad-ai/palad-app-codex' %>
-    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/palad-ai/palad-app-gemini-cli' %>
+    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'ghcr.io/aixle/aixle-app-claude-code' %>
+    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'ghcr.io/aixle/aixle-app-cursor-cli' %>
+    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'ghcr.io/aixle/aixle-app-codex' %>
+    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/aixle/aixle-app-gemini-cli' %>

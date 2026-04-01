@@ -5,7 +5,7 @@ module ContextBuilders
     def build
       lines = [ "## Session Context" ]
       lines << ""
-      lines << "You are running in a standalone #{session.mode} agent session on the Palad platform."
+      lines << "You are running in a standalone #{session.mode} agent session on the Aixle platform."
       lines << ""
       lines << "- **Session ID:** #{session.id}"
       lines << "- **Agent Runtime:** #{session.agent_type}"

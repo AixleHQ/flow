@@ -35,7 +35,7 @@ require_relative "seeds/internal_skills"
 Seeds::InternalSkills.seed!
 
 require_relative "seeds/palad_builder"
-Seeds::PaladBuilder.seed!
+Seeds::AixleBuilder.seed!
 
 # Stop here in production environment
 if Rails.env.production?
@@ -101,23 +101,23 @@ puts "Agent credentials created"
 
 puts "Creating test projects..."
 
-# Project 1: Palad MVP - owned by Artem
-palad_project = Project.find_or_create_by!(company: test_company, slug: "palad-mvp") do |project|
-  project.name = "Palad MVP"
-  project.description = "MVP development of Palad platform"
+# Project 1: Aixle MVP - owned by Artem
+aixle_project = Project.find_or_create_by!(company: test_company, slug: "aixle-mvp") do |project|
+  project.name = "Aixle MVP"
+  project.description = "MVP development of Aixle platform"
   project.state = :active
   project.owner = artem
   project.settings = {
     linear_team_id: nil,
-    github_repo: "dualboot/palad"
+    github_repo: "aixle/aixle"
   }
 end
 
 # Add collaborators
-palad_project.add_collaborator(andrey)
-palad_project.add_collaborator(alex)
+aixle_project.add_collaborator(andrey)
+aixle_project.add_collaborator(alex)
 
-puts "Project created: #{palad_project.name} (owner: #{palad_project.owner.name}, collaborators: #{palad_project.collaborators.count})"
+puts "Project created: #{aixle_project.name} (owner: #{aixle_project.owner.name}, collaborators: #{aixle_project.collaborators.count})"
 
 # Project 2: Agent Research - owned by Andrey
 research_project = Project.find_or_create_by!(company: test_company, slug: "agent-research") do |project|

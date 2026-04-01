@@ -1,6 +1,6 @@
-# Contributing to Palad App
+# Contributing to Aixle App
 
-Thank you for your interest in contributing to Palad App!
+Thank you for your interest in contributing to Aixle App!
 
 ## Getting Started
 

@@ -261,18 +261,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not config["mcpServers"].key?("disabled-server")
   end
 
-  test "generate_mcp_config always includes internal palad-tools" do
+  test "generate_mcp_config always includes internal aixle-tools" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
     result = SessionContextService.generate_mcp_config(session)
 
     config = JSON.parse(result["/workspace/.mcp.json"])
-    assert config["mcpServers"].key?("palad-tools")
-    assert_equal "http", config["mcpServers"]["palad-tools"]["type"]
-    assert_equal session.mcp_key, config["mcpServers"]["palad-tools"]["headers"]["X-Session-Key"]
+    assert config["mcpServers"].key?("aixle-tools")
+    assert_equal "http", config["mcpServers"]["aixle-tools"]["type"]
+    assert_equal session.mcp_key, config["mcpServers"]["aixle-tools"]["headers"]["X-Session-Key"]
   end
 
-  test "generate_mcp_config keeps palad-tools when associated servers are missing from DB" do
+  test "generate_mcp_config keeps aixle-tools when associated servers are missing from DB" do
     server = create(:mcp_server, :custom, name: "real", url: "https://a.com/mcp",
                     transport: "sse", scope: @company)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
@@ -282,7 +282,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     config = JSON.parse(result["/workspace/.mcp.json"])
     assert_equal 2, config["mcpServers"].size
-    assert config["mcpServers"].key?("palad-tools")
+    assert config["mcpServers"].key?("aixle-tools")
     assert config["mcpServers"].key?("real")
   end
 
@@ -361,7 +361,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.inject_mcp_config("abc123", session)
   end
 
-  test "inject_mcp_config writes palad-tools even without external mcp servers" do
+  test "inject_mcp_config writes aixle-tools even without external mcp servers" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
     runtime_mock = mock("runtime")
@@ -370,7 +370,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     runtime_mock.expects(:copy_to).with do |ctr, path, content|
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
-        JSON.parse(content).dig("mcpServers", "palad-tools").present?
+        JSON.parse(content).dig("mcpServers", "aixle-tools").present?
     end.returns(true)
     runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
@@ -823,7 +823,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     # Step 2: Config files — no config_files in session_config, skipped internally
 
-    # Step 3: MCP config — always includes palad-tools
+    # Step 3: MCP config — always includes aixle-tools
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/workspace/.mcp.json"
     end.returns(true).in_sequence(call_order)
@@ -853,7 +853,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # MCP config (palad-tools)
+    # MCP config (aixle-tools)
     runtime_mock.expects(:copy_to).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/workspace/.mcp.json"
     end.returns(true)

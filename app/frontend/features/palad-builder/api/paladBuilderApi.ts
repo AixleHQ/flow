@@ -2,18 +2,18 @@ import type { ITerminalSession } from 'entities/terminal-session';
 import { baseApi, QueryTag, type ApiResponse, type ApiCollectionResponse } from 'shared/api';
 import { Routes } from 'shared/routes';
 
-interface StartPaladBuilderRequest {
+interface StartAixleBuilderRequest {
   projectId: number;
   agentRuntime?: string;
   preferredModel?: string;
   inputAssetIds?: number[];
 }
 
-export const paladBuilderApi = baseApi.injectEndpoints({
+export const aixleBuilderApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    startPaladBuilder: builder.mutation<ITerminalSession, StartPaladBuilderRequest>({
+    startAixleBuilder: builder.mutation<ITerminalSession, StartAixleBuilderRequest>({
       query: ({ projectId, agentRuntime, preferredModel, inputAssetIds }) => ({
-        url: Routes.backend.startApiV1CompanyProjectPaladBuilderPath(projectId),
+        url: Routes.backend.startApiV1CompanyProjectAixleBuilderPath(projectId),
         method: 'POST',
         data: { agentRuntime, preferredModel, inputAssetIds },
       }),
@@ -21,9 +21,9 @@ export const paladBuilderApi = baseApi.injectEndpoints({
       invalidatesTags: [QueryTag.TerminalSession],
     }),
 
-    getPaladBuilderSessions: builder.query<ITerminalSession[], number>({
+    getAixleBuilderSessions: builder.query<ITerminalSession[], number>({
       query: (projectId) => ({
-        url: Routes.backend.statusApiV1CompanyProjectPaladBuilderPath(projectId),
+        url: Routes.backend.statusApiV1CompanyProjectAixleBuilderPath(projectId),
         method: 'GET',
       }),
       transformResponse: (response: ApiCollectionResponse<ITerminalSession>) => response.items,
@@ -32,4 +32,4 @@ export const paladBuilderApi = baseApi.injectEndpoints({
   }),
 });
 
-export const { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } = paladBuilderApi;
+export const { useStartAixleBuilderMutation, useGetAixleBuilderSessionsQuery } = aixleBuilderApi;

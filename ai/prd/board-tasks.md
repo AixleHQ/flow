@@ -24,15 +24,15 @@ classification:
 
 **Author:** Artem_petrov
 **Date:** 2026-02-26
-**Parent PRD:** [Palad PRD](./index.md)
+**Parent PRD:** [Aixle PRD](./index.md)
 
 ## Executive Summary
 
-PALAD is an AI agent orchestration platform for service companies. Board & Tasks is a semi-automated development module where the task board acts as the control panel of the SDLC process. Columns are development stages, workflow triggers are the executors. The human defines the automation boundary: at which stages the agent works on its own (`auto`), and where manual control is required (`manual`).
+AIXLE is an AI-agent orchestration platform for service companies. Board & Tasks is a semi-automated development module where the task board acts as a control panel for the SDLC process. Columns are development stages, workflow triggers are the executors. A human defines the automation boundary: which stages the agent handles on its own (`auto`), and where manual control is required (`manual`).
 
 A task moves across the board — from backlog to done. On each transition the system can launch an attached workflow: tech design, code review, QA. Agents interact with tasks through 13 internal MCP tools: they read context, write tagged comments, attach artifacts, and move tasks. Tagged comments (`tech_design`, `code_review`, `feedback`) are the feedback channel between human and agent.
 
-Target users: developers and tech leads at a service company who use PALAD to automate the SDLC.
+Target users: developers and tech leads at a service company using AIXLE to automate the SDLC.
 
 ### What Makes This Special
 
@@ -46,7 +46,7 @@ The built-in board is a first-class citizen of the system, not an integration wi
 | **Domain** | Internal (service company tooling) |
 | **Complexity** | Medium |
 | **Project Context** | Greenfield (built from scratch with BMAD) |
-| **Parent System** | PALAD — AI agent orchestration platform |
+| **Parent System** | AIXLE — AI agent orchestration platform |
 
 ## Success Criteria
 
@@ -101,7 +101,7 @@ The built-in board is a first-class citizen of the system, not an integration wi
 **Persona:** Katya, 35, tech lead. She wants to set up the SDLC process so that routine stages (tech design, code review) are performed by agents automatically, while she controls only the key checkpoints.
 
 **Opening Scene:**
-A new project in PALAD. Katya creates a board to track tasks. She used to use Linear, but wants moving a task to automatically trigger the appropriate workflow.
+A new project in AIXLE. Katya creates a board to track tasks. She used to use Linear, but she wants moving a task to start the right workflow on its own.
 
 **Rising Action:**
 1. Katya creates a Board, selects the "Full SDLC" preset → gets the columns: Backlog, Tech Design, Implementation, Code Review, QA, Done
@@ -129,7 +129,7 @@ Katya drags the "Login API" story into the Tech Design column. The system automa
 **Persona:** Misha, 28, mid-level developer. Works with tasks on the board, uses the board as the primary interface.
 
 **Opening Scene:**
-Morning, Misha opens PALAD. On the board in the Implementation column there are 3 tasks assigned to him. For one of them a tech design is already ready (a comment tagged `tech_design` from the agent).
+Morning, Misha opens AIXLE. On the board in the Implementation column there are 3 tasks assigned to him. For one of them a tech design is already ready (a comment with the tag `tech_design` from the agent).
 
 **Rising Action:**
 1. Misha opens the "Login API" task → sees the tech design in the comments, assets (ER diagram)
@@ -314,7 +314,7 @@ Tagged comments (`tech_design`, `feedback`, `code_review`) replace threading. Th
 
 ### Validation Approach
 
-1. **Dogfooding:** A team of 3 people uses Board & Tasks for their own development of PALAD in the first month after MVP
+1. **Dogfooding:** A team of 3 people uses Board & Tasks for AIXLE's own development in the first month after MVP
 2. **Feedback loop effectiveness:** Measure the number of "agent output → human feedback → agent revision" cycles until an acceptable result
 3. **Auto vs Manual ratio:** Track what % of columns the team leaves in `auto` vs `manual` — an indicator of trust in the agents
 4. **Purpose field utility:** Verify that agents use the purpose field for context (via MCP tool call logs)
@@ -332,7 +332,7 @@ Tagged comments (`tech_design`, `feedback`, `code_review`) replace threading. Th
 
 ### Project-Type Overview
 
-Board & Tasks is a module inside the existing PALAD B2B SaaS platform. Multi-tenancy, RBAC, and the subscription model are defined at the parent PRD level. This section specifies how the existing B2B patterns apply to the board module.
+Board & Tasks is a module inside the existing AIXLE SaaS B2B platform. Multi-tenancy, RBAC, and the subscription model are defined at the parent PRD level. This section specifies how the existing B2B patterns apply to the board module.
 
 ### Multi-Tenancy Model
 

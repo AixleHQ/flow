@@ -218,9 +218,9 @@ module ContainerStrategies
 
     def build_labels
       tool = input[:tool]
-      { "palad.type" => "tool_execution",
-        "palad.tool_id" => tool.id.to_s,
-        "palad.tool_name" => tool.name }
+      { "aixle.type" => "tool_execution",
+        "aixle.tool_id" => tool.id.to_s,
+        "aixle.tool_name" => tool.name }
     end
 
     def build_host_config = build_host_config_with_limits
@@ -353,7 +353,7 @@ module ContainerStrategies
     end
 
     def build_labels
-      { "palad.type" => "internal_tool", "palad.tool" => defn.name.to_s }
+      { "aixle.type" => "internal_tool", "aixle.tool" => defn.name.to_s }
     end
 
     def build_host_config
@@ -760,7 +760,7 @@ end
 |--------|-------------|------------------------|
 | Docker socket | **Never** | Per-definition (`docker_socket!`) |
 | Bind mounts | **None** | Per-definition (`binds` block) |
-| Network | palad docker network | palad docker network |
+| Network | aixle docker network | aixle docker network |
 | Memory/CPU | Settings-based limits | Per-definition (can override) |
 | Image source | User-specified | Hardcoded in DSL |
 | File collection | **No** (stdout only) | **Yes** (`output_files`) |

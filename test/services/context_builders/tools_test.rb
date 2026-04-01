@@ -28,7 +28,7 @@ class ContextBuilders::ToolsTest < ActiveSupport::TestCase
 
     mcp = sections.find { |s| s.tag == "mcp-servers" }
     assert_not_nil mcp
-    assert_includes mcp.content, "palad-tools"
+    assert_includes mcp.content, "aixle-tools"
   end
 
   test "custom-tools section not produced when no available tools" do

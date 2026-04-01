@@ -29,11 +29,11 @@ const CompanySessionViewPage = () => {
 
   const isTerminal = ['finished', 'failed'].includes(session?.state ?? '');
 
-  // Redirect palad_builder sessions to dedicated page
+  // Redirect aixle_builder sessions to dedicated page
   useEffect(() => {
-    if (session?.metadata?.paladBuilder && routeProjectId) {
+    if (session?.metadata?.aixleBuilder && routeProjectId) {
       navigate({
-        to: Routes.frontend.paladBuilderRunPath(routeProjectId, String(session.id)),
+        to: Routes.frontend.aixleBuilderRunPath(routeProjectId, String(session.id)),
         replace: true,
       });
     }

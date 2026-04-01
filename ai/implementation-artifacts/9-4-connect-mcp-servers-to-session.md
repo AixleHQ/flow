@@ -11,7 +11,7 @@ so that the agent can access tools (internal and external) via the MCP protocol.
 ## Acceptance Criteria
 
 1. **MCP servers from `session.session_config["mcp_server_ids"]`** loaded and configured
-2. **Merge with internal MCP**: session already has `MCP_SERVER_URL` + `MCP_SESSION_KEY` for internal Palad MCP — external servers added on top
+2. **Merge with internal MCP**: session already has `MCP_SERVER_URL` + `MCP_SESSION_KEY` for internal Aixle MCP — external servers added on top
 3. **Per-CLI MCP config format**: each CLI expects MCP config in different format/location:
    - Claude Code: `.mcp.json` in project root or `~/.claude.json` (mcpServers key)
    - Codex: `~/.codex/config.toml` under `[mcp_servers]` section
@@ -20,7 +20,7 @@ so that the agent can access tools (internal and external) via the MCP protocol.
 4. **MCP config file generated and injected** into container at correct path per CLI type
 5. **Server connection details**: URL, transport type, headers (from MCPServer model) included in config
 6. **Secret resolution in headers**: MCP server headers may reference ConfigItem secrets (same `config_item:NAME` syntax from Story 9.3)
-7. **Internal MCP always included**: Palad's internal MCP server always present regardless of session_config
+7. **Internal MCP always included**: Aixle's internal MCP server always present regardless of session_config
 8. **Disabled/missing servers excluded**: only enabled, existing MCPServer records included; invalid IDs skipped with warning
 
 ## Tasks / Subtasks

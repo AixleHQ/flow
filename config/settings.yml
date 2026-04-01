@@ -1,4 +1,4 @@
-project_name: Palad
+project_name: Aixle
 
 domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
 asset_host: <%= ENV['ASSET_HOST'] || "localhost:4000" %>
@@ -50,7 +50,7 @@ docs:
 
 admin:
   password: <%= ENV['ADMIN_PASSWORD'] || "adminpass" %>
-  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@palad.ai" %>
+  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@aixle.com" %>
 
 aws:
   access_key_id:     <%= ENV['AWS_ACCESS_KEY_ID']%>
@@ -59,7 +59,7 @@ aws:
   region:            <%= ENV['AWS_DEFAULT_REGION'] || 'fake' %>
 
 mcp:
-  name: palad-mcp-server
+  name: aixle-mcp-server
   server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
 
 otel:
@@ -72,7 +72,7 @@ temporal:
   host: <%= ENV['TEMPORAL_HOST'] || 'temporal' %>
   port: <%= ENV['TEMPORAL_PORT'] || 7233 %>
   namespace: <%= ENV['TEMPORAL_NAMESPACE'] || 'default' %>
-  task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'palad_ruby' %>
+  task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'aixle_ruby' %>
   worker_graceful_shutdown_period: <%= ENV['TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD'] || 900 %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
 
@@ -101,16 +101,16 @@ container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
 
 agents:
   images:
-    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'palad/claude-code:latest' %>
-    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'palad/cursor-cli:latest' %>
-    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'palad/codex:latest' %>
-    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'palad/gemini-cli:latest' %>
+    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'aixle/claude-code:latest' %>
+    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'aixle/cursor-cli:latest' %>
+    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'aixle/codex:latest' %>
+    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'aixle/gemini-cli:latest' %>
 
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
 
 kubernetes:
-  namespace: <%= ENV['K8S_NAMESPACE'] || 'palad' %>
+  namespace: <%= ENV['K8S_NAMESPACE'] || 'aixle' %>
   service_host: <%= ENV['KUBERNETES_SERVICE_HOST'] || 'kubernetes.default.svc' %>
   service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
   traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>

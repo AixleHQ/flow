@@ -10,7 +10,7 @@ def default_options
   { host: Settings.domain, protocol: Settings.protocol }
 end
 
-module Palad
+module Aixle
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0

@@ -245,7 +245,7 @@ end
 def generate_mcp_config(session)
   {
     mcpServers: {
-      "palad-tools" => {
+      "aixle-tools" => {
         url: "#{ENV['MCP_SERVER_URL']}/mcp",
         transport: "sse",
         headers: {
@@ -299,7 +299,7 @@ ActionMCP supports SSE (Server-Sent Events) which works well for agents in Docke
 
 - Internal tools (deferred to Epic 11 - Workflows)
 - MCP server configuration UI (not needed — automatic)
-- Multiple MCP servers per session (single "palad-tools" server)
+- Multiple MCP servers per session (single "aixle-tools" server)
 
 ## File List
 

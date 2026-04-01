@@ -15,7 +15,7 @@ so that it shares lifecycle logic with internal tools and persists results to To
 3. `build_cmd` → interpolated command with tool_files support
 4. `build_env_vars` → parameters as ENV + config_items + project env
 5. `build_host_config` → Settings-based resource limits, no bind mounts, no docker socket
-6. `build_labels` → palad labels with tool_id and tool_name
+6. `build_labels` → aixle labels with tool_id and tool_name
 7. Output: stdout/stderr only — no file collection from container
 8. All existing custom tool functionality preserved (command interpolation, tool_files setup, config_item resolution)
 9. Old `ToolExecutionStrategy` functionality fully covered
@@ -30,7 +30,7 @@ so that it shares lifecycle logic with internal tools and persists results to To
   - [ ] `build_working_dir` — `/workspace`
   - [ ] `build_cmd` — interpolate_command + tool_files setup
   - [ ] `build_env_vars` — parameters → ENV vars + config_items + project env
-  - [ ] `build_labels` — palad metadata labels
+  - [ ] `build_labels` — aixle metadata labels
   - [ ] `build_host_config` — delegate to `build_host_config_with_limits`
 - [ ] Task 2: Move private helpers (AC: #8)
   - [ ] `interpolate_command(template, params)` — from `ToolExecutionStrategy`

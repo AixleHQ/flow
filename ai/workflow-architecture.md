@@ -19,9 +19,9 @@
 
 ## Overview
 
-Architecture of the workflow and asset system for Palad. This document defines how workflows, steps, sub-steps, assets, and their execution are modeled and connected.
+Architecture of the workflow and asset system for Aixle. This document defines how workflows, steps, sub-steps, assets, and their execution are modeled and connected.
 
-Key design principle: **Palad is a persistent BMAD runtime** — BMAD today works through fresh LLM chats with markdown files; Palad turns this into a persistent system with tracking, assets, versioning, and automation.
+Key design principle: **Aixle is a persistent BMAD runtime** — BMAD today works through fresh LLM chats with markdown files; Aixle turns this into a persistent system with tracking, assets, versioning, and automation.
 
 ---
 
@@ -44,13 +44,13 @@ Asset                             — Project-level file with versioning, folder
 
 ### 1.2 Granularity Rationale
 
-| Palad | = BMAD equivalent | Why |
+| Aixle | = BMAD equivalent | Why |
 |-------|-------------------|-----|
 | **Workflow** | Entire phase or business process | Full process: planning, code report, story implementation |
 | **Step** | One BMAD workflow (Create Architecture, Create PRD) | 1 terminal session, 1 agent, 1 major deliverable |
 | **SubStep** | One BMAD step file (step-04-decisions.md) | Trackable unit of work within a session |
 
-A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) becomes a **single Step** in Palad with 6-8 SubSteps. No need to spin up separate containers for each section of one document.
+A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) becomes a **single Step** in Aixle with 6-8 SubSteps. No need to spin up separate containers for each section of one document.
 
 ### 1.3 Key Decisions
 
@@ -814,9 +814,9 @@ Per-step via `on_failure` + `max_retries`:
 
 ## 10. BMAD Mapping
 
-### 10.1 How BMAD Workflows Map to Palad
+### 10.1 How BMAD Workflows Map to Aixle
 
-| BMAD | Palad | Notes |
+| BMAD | Aixle | Notes |
 |------|-------|-------|
 | Phase/business process | **Workflow** | "Product Planning", "Code Report" |
 | One BMAD workflow (Create Architecture) | **Step** | 1 session, 1 agent, 1 deliverable |
@@ -903,9 +903,9 @@ Step 2: "Create Client Report"
   Output: report.html (exported as public Asset)
 ```
 
-### 10.4 What Palad Adds Over BMAD
+### 10.4 What Aixle Adds Over BMAD
 
-| BMAD limitation | Palad solution |
+| BMAD limitation | Aixle solution |
 |-----------------|----------------|
 | Fresh chat = lost context | Assets persist, shared_context carries decisions |
 | Manual agent switching | `agent_id` on Step — system provisions correct agent |
@@ -954,7 +954,7 @@ end
 |---|----------|----------|
 | 1 | Naming | ✅ Asset (not Artifact) |
 | 2 | Entity naming | ✅ Workflow → Step → SubStep (clean, no prefixes) |
-| 3 | Granularity | ✅ BMAD workflow = Palad Step; BMAD step-file = Palad SubStep |
+| 3 | Granularity | ✅ BMAD workflow = Aixle Step; BMAD step-file = Aixle SubStep |
 | 4 | Tool calling | ✅ MCP servers |
 | 5 | Parallel steps | ❌ Sequential only |
 | 6 | Branching | ❌ Not needed |

@@ -16,14 +16,14 @@ Then populate the values in `.env`. The helpers read all credentials and URLs fr
 
 | Variable | Description | Default |
 |---|---|---|
-| `STAGING_URL` | Base URL of the staging environment | `https://staging.palad.ai` |
+| `STAGING_URL` | Base URL of the staging environment | `https://staging.aixle.com` |
 | `STAGING_HTTP_USER` | HTTP Basic Auth username | `admin` |
 | `STAGING_HTTP_PASSWORD` | HTTP Basic Auth password | _(required)_ |
-| `STAGING_ADMIN_EMAIL` | Admin role email | `admin-agent@palad.ai` |
+| `STAGING_ADMIN_EMAIL` | Admin role email | `admin-agent@aixle.com` |
 | `STAGING_ADMIN_PASSWORD` | Admin role password | _(required)_ |
-| `STAGING_COMPANY_ADMIN_EMAIL` | Company Admin role email | `admin-atc@staging.palad.ai` |
+| `STAGING_COMPANY_ADMIN_EMAIL` | Company Admin role email | `admin-atc@staging.aixle.com` |
 | `STAGING_COMPANY_ADMIN_PASSWORD` | Company Admin role password | _(required)_ |
-| `STAGING_EMPLOYEE_EMAIL` | Company Employee role email | `employee-atc@staging.palad.ai` |
+| `STAGING_EMPLOYEE_EMAIL` | Company Employee role email | `employee-atc@staging.aixle.com` |
 | `STAGING_EMPLOYEE_PASSWORD` | Company Employee role password | _(required)_ |
 
 ## Authentication Helpers

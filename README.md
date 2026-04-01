@@ -1,4 +1,4 @@
-# Palad App
+# Aixle App
 
 This is a Ruby on Rails application with a modern frontend stack.
 

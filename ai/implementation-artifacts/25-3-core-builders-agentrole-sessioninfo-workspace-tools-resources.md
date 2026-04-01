@@ -95,7 +95,7 @@ So that all current context content is generated through composable builders.
 ### Key Data Access Patterns
 
 - **Agent:** `Agent.find_by(id: session.configured_agent_id)` → `agent.to_system_prompt`
-- **MCP Servers:** `MCPServer.where(id: session.mcp_server_ids, enabled: true)` — always include internal `palad-tools`
+- **MCP Servers:** `MCPServer.where(id: session.mcp_server_ids, enabled: true)` — always include internal `aixle-tools`
 - **Tools:** `session.available_tools` — includes internal tools auto-injected for workflow sessions
 - **Skills:** `Skill.where(id: session.skill_ids)`
 - **Repositories:** `Repository.where(id: session.repository_ids)` — check `session.metadata["failed_repos"]` for clone failures

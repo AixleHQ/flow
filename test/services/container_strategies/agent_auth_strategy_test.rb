@@ -62,25 +62,25 @@ module ContainerStrategies
 
     test "resolves claude_code image" do
       strategy = build_strategy(agent_type: "claude_code")
-      assert_equal "palad/claude-code:latest", strategy.resolve_image
+      assert_equal "aixle/claude-code:latest", strategy.resolve_image
     end
 
     test "resolves cursor_cli image" do
       @session.update!(agent_type: "cursor_cli")
       strategy = build_strategy(agent_type: "cursor_cli")
-      assert_equal "palad/cursor-cli:latest", strategy.resolve_image
+      assert_equal "aixle/cursor-cli:latest", strategy.resolve_image
     end
 
     test "resolves codex image" do
       @session.update!(agent_type: "codex")
       strategy = build_strategy(agent_type: "codex")
-      assert_equal "palad/codex:latest", strategy.resolve_image
+      assert_equal "aixle/codex:latest", strategy.resolve_image
     end
 
     test "resolves gemini_cli image" do
       @session.update!(agent_type: "gemini_cli")
       strategy = build_strategy(agent_type: "gemini_cli")
-      assert_equal "palad/gemini-cli:latest", strategy.resolve_image
+      assert_equal "aixle/gemini-cli:latest", strategy.resolve_image
     end
 
     # == Environment Variables Tests ==
@@ -163,10 +163,10 @@ module ContainerStrategies
 
       labels = strategy.build_labels
 
-      assert_equal "auth_setup", labels["palad.session_type"]
-      assert_equal "claude_code", labels["palad.agent_type"]
-      assert_equal @user.id.to_s, labels["palad.user_id"]
-      assert_equal @session.id.to_s, labels["palad.session_id"]
+      assert_equal "auth_setup", labels["aixle.session_type"]
+      assert_equal "claude_code", labels["aixle.agent_type"]
+      assert_equal @user.id.to_s, labels["aixle.user_id"]
+      assert_equal @session.id.to_s, labels["aixle.session_id"]
     end
 
     test "builds Traefik labels for routing" do

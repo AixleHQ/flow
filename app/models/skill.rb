@@ -3,7 +3,7 @@
 # Skill — reusable domain-specific instructions for AI agent sessions
 #
 # kind: internal | custom
-# - internal: system-provided by Palad, no scope
+# - internal: system-provided by Aixle, no scope
 # - custom: user-created skills with scope (Company or Project)
 #
 # scope: Company | Project (polymorphic, null for internal)

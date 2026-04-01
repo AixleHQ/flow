@@ -64,7 +64,7 @@ module ContainerStrategies
 
     test "create_container creates container via runtime" do
       strategy = TestStrategy.new
-      handle = OpenStruct.new(namespace: "palad", pod_name: "container-handle-123")
+      handle = OpenStruct.new(namespace: "aixle", pod_name: "container-handle-123")
 
       @runtime_mock.expects(:create_container).with do |spec|
         spec[:image] == "test:latest" &&
@@ -109,10 +109,10 @@ module ContainerStrategies
 
     test "create_container preserves namespace-aware runtime identifier" do
       strategy = TestStrategy.new
-      handle = OpenStruct.new(namespace: "palad-user-4", pod_name: "terminal-abc")
+      handle = OpenStruct.new(namespace: "aixle-user-4", pod_name: "terminal-abc")
 
       @runtime_mock.expects(:create_container).returns(handle)
-      @runtime_mock.expects(:container_identifier).with(handle).returns("palad-user-4/terminal-abc")
+      @runtime_mock.expects(:container_identifier).with(handle).returns("aixle-user-4/terminal-abc")
 
       result = strategy.create_container(
         image: "test:latest",
@@ -121,7 +121,7 @@ module ContainerStrategies
         host_config: {}
       )
 
-      assert_equal "palad-user-4/terminal-abc", result[:container_id]
+      assert_equal "aixle-user-4/terminal-abc", result[:container_id]
     end
 
     test "start_container starts container and waits for readiness" do

@@ -906,7 +906,7 @@ Note: Defined B2B SaaS platform for developer teams
 - **Session ID:** sess_xyz789
 - **Agent Runtime:** claude_code
 - **Mode:** non_interactive
-- **Project:** Palad
+- **Project:** Aixle
 
 </session-context>
 
@@ -951,7 +951,7 @@ Your working directory is `/workspace`.
 
 ## Available MCP Servers
 
-### palad-tools
+### aixle-tools
 Internal tools server. Call tools via MCP — use `tools/list` to see available tools.
 
 ### context7
@@ -963,7 +963,7 @@ Documentation lookup. Retrieve up-to-date docs for any library.
 
 ## Available Tools
 
-These tools are provided via the **palad-tools** MCP server.
+These tools are provided via the **aixle-tools** MCP server.
 
 ### cloc_analysis ⚡ app
 Count lines of code by language — Returns: direct result

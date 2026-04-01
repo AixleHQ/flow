@@ -1,7 +1,7 @@
 # Sentry Issues Report
 
 **Date:** 2026-03-27
-**Organization:** palad-ai
+**Organization:** aixle
 **Total unresolved issues:** 18
 
 ---
@@ -10,9 +10,9 @@
 
 | Project | Issues | Total Events | Top Problem |
 |---------|--------|-------------|-------------|
-| palad-ai-rails | 10 | 1,626 | N+1 Queries (7 issues, 1,562 events) |
-| palad-ai-temporal | 6 | 14 | Container phase failures |
-| palad-ai-frontend | 2 | 3 | TypeError |
+| aixle-rails | 10 | 1,626 | N+1 Queries (7 issues, 1,562 events) |
+| aixle-temporal | 6 | 14 | Container phase failures |
+| aixle-frontend | 2 | 3 | TypeError |
 
 ---
 
@@ -20,7 +20,7 @@
 
 ### 1. N+1 Query in TasksController#index — 1,492 events
 - **ID:** [PALAD-AI-RAILS-S](https://palad-ai.sentry.io/issues/PALAD-AI-RAILS-S)
-- **Project:** palad-ai-rails
+- **Project:** aixle-rails
 - **Culprit:** `Api::V1::Company::Projects::Board::TasksController#index`
 - **Users affected:** 2
 - **First seen:** 2026-03-23 | **Last seen:** 2026-03-26
@@ -29,7 +29,7 @@
 
 ### 2. PG::UndefinedTable "task_waits" in TasksController#show — 51 events
 - **ID:** [PALAD-AI-RAILS-Q](https://palad-ai.sentry.io/issues/PALAD-AI-RAILS-Q)
-- **Project:** palad-ai-rails
+- **Project:** aixle-rails
 - **Culprit:** `Api::V1::Company::Projects::Board::TasksController#show`
 - **Users affected:** 1
 - **First seen:** 2026-03-23 | **Last seen:** 2026-03-23
@@ -38,7 +38,7 @@
 
 ### 3. N+1 Query in WorkflowRunsController#index — 34 events
 - **ID:** [PALAD-AI-RAILS-V](https://palad-ai.sentry.io/issues/PALAD-AI-RAILS-V)
-- **Project:** palad-ai-rails
+- **Project:** aixle-rails
 - **Culprit:** `Api::V1::Company::Projects::WorkflowRunsController#index`
 - **Users affected:** 1
 - **First seen:** 2026-03-26 | **Last seen:** 2026-03-27
@@ -48,7 +48,7 @@
 
 ## All Issues by Project
 
-### palad-ai-rails (10 issues)
+### aixle-rails (10 issues)
 
 | # | ID | Title | Events | Users | Culprit | Actionability |
 |---|-----|-------|--------|-------|---------|---------------|
@@ -63,7 +63,7 @@
 | 9 | [RAILS-T](https://palad-ai.sentry.io/issues/PALAD-AI-RAILS-T) | N+1 Query | 1 | 1 | `Board::TasksController#workflow_runs` | — |
 | 10 | [RAILS-3](https://palad-ai.sentry.io/issues/PALAD-AI-RAILS-3) | Github::TokenService::AuthenticationError (404) | 1 | 1 | `RepositoriesController#available` | low |
 
-### palad-ai-temporal (6 issues)
+### aixle-temporal (6 issues)
 
 | # | ID | Title | Events | Culprit | Actionability |
 |---|-----|-------|--------|---------|---------------|
@@ -74,7 +74,7 @@
 | 5 | [TEMPORAL-C](https://palad-ai.sentry.io/issues/PALAD-AI-TEMPORAL-C) | Activity canceled | 1 | `WorkflowRunStateMachine in on_completed` | low |
 | 6 | [TEMPORAL-B](https://palad-ai.sentry.io/issues/PALAD-AI-TEMPORAL-B) | Phase create_container: Unauthorized | 1 | `PhaseActivity in run` | low |
 
-### palad-ai-frontend (2 issues)
+### aixle-frontend (2 issues)
 
 | # | ID | Title | Events | Users | Culprit | Actionability |
 |---|-----|-------|--------|-------|---------|---------------|

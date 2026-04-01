@@ -119,8 +119,8 @@ class MCPServerTest < ActiveSupport::TestCase
 
   test "internal server does not require scope or url" do
     server = MCPServer.new(
-      name: "palad-tools",
-      display_name: "Palad Tools",
+      name: "aixle-tools",
+      display_name: "Aixle Tools",
       kind: "internal"
     )
 
@@ -272,7 +272,7 @@ class MCPServerTest < ActiveSupport::TestCase
 
   test "internal servers skip URL validation" do
     server = MCPServer.new(
-      name: "palad-internal", display_name: "Internal", kind: "internal"
+      name: "aixle-internal", display_name: "Internal", kind: "internal"
     )
     assert server.valid?
   end

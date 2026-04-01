@@ -2,7 +2,9 @@
 
 require "test_helper"
 
-class Api::V1::Company::Projects::PaladBuilderControllerTest < ActionController::TestCase
+class Api::V1::Company::Projects::AixleBuilderControllerTest < ActionController::TestCase
+  tests Api::V1::Company::Projects::PaladBuilderController
+
   setup do
     @company = create(:company)
     @admin = create(:user, :admin, company: @company)
@@ -46,12 +48,12 @@ class Api::V1::Company::Projects::PaladBuilderControllerTest < ActionController:
     assert_response :success
   end
 
-  test "#status returns palad builder sessions" do
+  test "#status returns aixle builder sessions" do
     sign_in @admin
 
     session = create(:terminal_session, user: @admin, project: @project,
-                     initial_prompt: "# Palad Builder\nYou are a Workflow Architect...",
-                     metadata: { "palad_builder" => true })
+                     initial_prompt: "# Aixle Builder\nYou are a Workflow Architect...",
+                     metadata: { "aixle_builder" => true })
 
     get :status, params: { project_id: @project.id }
     assert_response :success

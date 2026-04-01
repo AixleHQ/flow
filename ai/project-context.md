@@ -1,5 +1,5 @@
 ---
-project_name: 'palad'
+project_name: 'aixle'
 date: '2026-02-21'
 status: 'complete'
 optimized_for_llm: true

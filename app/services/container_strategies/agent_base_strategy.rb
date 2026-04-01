@@ -12,10 +12,10 @@ module ContainerStrategies
     VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli].freeze
 
     DEFAULT_AGENT_IMAGES = {
-      "claude_code" => "palad/claude-code:latest",
-      "cursor_cli" => "palad/cursor-cli:latest",
-      "codex" => "palad/codex:latest",
-      "gemini_cli" => "palad/gemini-cli:latest"
+      "claude_code" => "aixle/claude-code:latest",
+      "cursor_cli" => "aixle/cursor-cli:latest",
+      "codex" => "aixle/codex:latest",
+      "gemini_cli" => "aixle/gemini-cli:latest"
     }.freeze
 
     AUTH_COMMANDS = {
@@ -176,11 +176,11 @@ module ContainerStrategies
 
     def base_labels
       {
-        "palad.session_type" => session_type,
-        "palad.agent_type" => input[:agent_type],
-        "palad.user_id" => input[:user_id].to_s,
-        "palad.session_id" => input[:session_id].to_s,
-        "palad.ttyd_port" => "7681"
+        "aixle.session_type" => session_type,
+        "aixle.agent_type" => input[:agent_type],
+        "aixle.user_id" => input[:user_id].to_s,
+        "aixle.session_id" => input[:session_id].to_s,
+        "aixle.ttyd_port" => "7681"
       }
     end
 

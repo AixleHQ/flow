@@ -1,6 +1,6 @@
 import { Page } from '@playwright/test';
 
-const BASE_URL = process.env.STAGING_URL ?? 'https://staging.palad.ai';
+const BASE_URL = process.env.STAGING_URL ?? 'https://staging.aixle.com';
 const HTTP_CREDENTIALS = {
   username: process.env.STAGING_HTTP_USER ?? 'admin',
   password: process.env.STAGING_HTTP_PASSWORD ?? '',
@@ -13,15 +13,15 @@ export interface LoginCredentials {
 
 export const CREDENTIALS = {
   admin: {
-    email: process.env.STAGING_ADMIN_EMAIL ?? 'admin-agent@palad.ai',
+    email: process.env.STAGING_ADMIN_EMAIL ?? 'admin-agent@aixle.com',
     password: process.env.STAGING_ADMIN_PASSWORD ?? '',
   },
   companyAdmin: {
-    email: process.env.STAGING_COMPANY_ADMIN_EMAIL ?? 'admin-atc@staging.palad.ai',
+    email: process.env.STAGING_COMPANY_ADMIN_EMAIL ?? 'admin-atc@staging.aixle.com',
     password: process.env.STAGING_COMPANY_ADMIN_PASSWORD ?? '',
   },
   companyEmployee: {
-    email: process.env.STAGING_EMPLOYEE_EMAIL ?? 'employee-atc@staging.palad.ai',
+    email: process.env.STAGING_EMPLOYEE_EMAIL ?? 'employee-atc@staging.aixle.com',
     password: process.env.STAGING_EMPLOYEE_PASSWORD ?? '',
   },
 } as const;
@@ -44,21 +44,21 @@ export async function login(page: Page, credentials: LoginCredentials): Promise<
 }
 
 /**
- * Log in as Admin (admin-agent@palad.ai).
+ * Log in as Admin (admin-agent@aixle.com).
  */
 export async function loginAsAdmin(page: Page): Promise<void> {
   await login(page, CREDENTIALS.admin);
 }
 
 /**
- * Log in as Company Admin (admin-atc@staging.palad.ai).
+ * Log in as Company Admin (admin-atc@staging.aixle.com).
  */
 export async function loginAsCompanyAdmin(page: Page): Promise<void> {
   await login(page, CREDENTIALS.companyAdmin);
 }
 
 /**
- * Log in as Company Employee (employee-atc@staging.palad.ai).
+ * Log in as Company Employee (employee-atc@staging.aixle.com).
  */
 export async function loginAsCompanyEmployee(page: Page): Promise<void> {
   await login(page, CREDENTIALS.companyEmployee);

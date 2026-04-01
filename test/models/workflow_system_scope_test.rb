@@ -40,9 +40,9 @@ class WorkflowSystemScopeTest < ActiveSupport::TestCase
     refute belonging.pluck(:name).include?("System X")
   end
 
-  test "Workflow.palad_builder returns system workflow" do
-    wf = Workflow.create!(scope_type: "System", scope_id: 0, name: "Palad Builder")
-    assert_equal wf.id, Workflow.palad_builder.id
+  test "Workflow.aixle_builder returns system workflow" do
+    wf = Workflow.create!(scope_type: "System", scope_id: 0, name: "Aixle Builder")
+    assert_equal wf.id, Workflow.aixle_builder.id
   end
 
   test "system? returns true for system workflows" do

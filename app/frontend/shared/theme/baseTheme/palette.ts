@@ -1,4 +1,4 @@
-// Palad Design System - Dark Theme
+// Aixle Design System - Dark Theme
 // Based on UX Design Specification
 
 export default {

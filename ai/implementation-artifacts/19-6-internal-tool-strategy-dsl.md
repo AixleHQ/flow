@@ -39,7 +39,7 @@ so that adding a new tool is ~15 lines instead of ~200.
   - [ ] `build_working_dir` → `defn.opts[:working_dir]`
   - [ ] `build_cmd` → resolve_callable on cmd block
   - [ ] `build_env_vars` → resolve_callable on env block → format as `K=V` array
-  - [ ] `build_labels` → `palad.type: internal_tool, palad.tool: name`
+  - [ ] `build_labels` → `aixle.type: internal_tool, aixle.tool: name`
   - [ ] `build_host_config` → memory/cpu from opts, conditional docker socket + binds
   - [ ] `before_cleanup` → collect output_files, pack, attach to ToolResult
   - [ ] Private `resolve_callable(val)` — Proc → call(input), else return as-is

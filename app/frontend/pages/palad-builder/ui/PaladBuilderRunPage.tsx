@@ -72,7 +72,7 @@ const STATE_COLORS: Record<string, 'success' | 'warning' | 'error' | 'info' | 'd
   pending: 'default',
 };
 
-const PaladBuilderRunPage = () => {
+const AixleBuilderRunPage = () => {
   const { projectId, runId } = useParams({ strict: false }) as { projectId: string; runId: string };
   const navigate = useNavigate();
   const [sideTab, setSideTab] = useState(0);
@@ -139,13 +139,13 @@ const PaladBuilderRunPage = () => {
     <Box sx={styles.root}>
       {/* Header */}
       <Box sx={styles.header}>
-        <Tooltip title="Back to Palad Builder">
-          <IconButton size="small" onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(projectId) })}>
+        <Tooltip title="Back to Aixle Builder">
+          <IconButton size="small" onClick={() => navigate({ to: Routes.frontend.aixleBuilderPath(projectId) })}>
             <ArrowBackIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <AutoFixHighIcon sx={{ fontSize: 20, color: 'primary.main' }} />
-        <Typography sx={styles.headerTitle}>Palad Builder</Typography>
+        <Typography sx={styles.headerTitle}>Aixle Builder</Typography>
         <Chip label={run.state} size="small" color={STATE_COLORS[run.state] || 'default'} />
         <Box sx={{ flex: 1 }} />
         {isRunActive && terminalSessionId && (
@@ -210,4 +210,4 @@ const PaladBuilderRunPage = () => {
   );
 };
 
-export default PaladBuilderRunPage;
+export default AixleBuilderRunPage;

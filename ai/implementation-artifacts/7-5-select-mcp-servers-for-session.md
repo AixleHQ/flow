@@ -11,7 +11,7 @@ So that I control what external tools the agent can access.
 ## Acceptance Criteria
 
 1. Session start form shows available MCP servers (company + project merged)
-2. Internal "Palad Tools" always included if custom tools selected (from 7.2)
+2. Internal "Aixle Tools" always included if custom tools selected (from 7.2)
 3. Can select 0..N custom MCP servers
 4. Selected servers saved to `session_mcp_servers` join table
 5. MCP config injected into agent container with all selected servers
@@ -49,11 +49,11 @@ class TerminalSession < ApplicationRecord
   has_many :mcp_servers, through: :session_mcp_servers
 
   # Returns all MCP servers for this session
-  # Includes: selected custom servers + internal Palad server (if tools selected)
+  # Includes: selected custom servers + internal Aixle server (if tools selected)
   def available_mcp_servers
     servers = mcp_servers.enabled.to_a
 
-    # Add internal Palad server config if any tools are selected
+    # Add internal Aixle server config if any tools are selected
     if tools.any?
       servers << build_internal_mcp_server
     end
@@ -65,8 +65,8 @@ class TerminalSession < ApplicationRecord
 
   def build_internal_mcp_server
     OpenStruct.new(
-      name: 'palad-tools',
-      display_name: 'Palad Tools',
+      name: 'aixle-tools',
+      display_name: 'Aixle Tools',
       url: ENV.fetch('MCP_SERVER_URL', 'http://web:3000/action_mcp'),
       transport: 'sse',
       headers: { 'X-Session-Key' => mcp_key },
@@ -200,7 +200,7 @@ interface AvailableMcpServer {
 
 - [ ] Create `McpServerSelector` component
 - [ ] Display servers as checkboxes with name, URL, scope
-- [ ] Show info about auto-included Palad server when tools selected
+- [ ] Show info about auto-included Aixle server when tools selected
 - [ ] Support multi-select (0..N)
 
 ```typescript
@@ -226,7 +226,7 @@ export const McpServerSelector: FC<McpServerSelectorProps> = ({
 
       {hasToolsSelected && (
         <Alert severity="info" sx={{ mb: 1 }}>
-          "Palad Tools" server will be automatically included for custom tools.
+          "Aixle Tools" server will be automatically included for custom tools.
         </Alert>
       )}
 
@@ -319,7 +319,7 @@ return (
 
 ### Internal Server Logic
 
-The internal "Palad Tools" server is **not stored in database**. It's dynamically added to `available_mcp_servers` when the session has any tools selected (via 7.2).
+The internal "Aixle Tools" server is **not stored in database**. It's dynamically added to `available_mcp_servers` when the session has any tools selected (via 7.2).
 
 This approach:
 - Avoids database clutter
@@ -333,7 +333,7 @@ The MCP config is injected as JSON environment variable. Example:
 ```json
 {
   "mcpServers": {
-    "palad-tools": {
+    "aixle-tools": {
       "url": "http://web:3000/action_mcp",
       "transport": "sse",
       "headers": {
@@ -355,7 +355,7 @@ The MCP config is injected as JSON environment variable. Example:
 
 - 7.2 handles Tool selection → `session_tools`
 - 7.5 handles MCP Server selection → `session_mcp_servers`
-- Internal Palad server is auto-added if tools selected
+- Internal Aixle server is auto-added if tools selected
 
 Both selectors appear on session start form.
 

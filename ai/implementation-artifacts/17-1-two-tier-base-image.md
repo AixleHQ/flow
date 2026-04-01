@@ -12,7 +12,7 @@ so that iterating on container runtime logic is fast (~5s instead of ~5min).
 
 1. **AC1: Dockerfile.core** — New `docker/base/Dockerfile.core` contains only heavy, rarely-changing layers: `node:22-slim`, apt-get system deps (bash, git, ripgrep, fd-find, jq, curl, tree, tmux, tini, python3, make, g++), mitmproxy 10.2.4, ttyd 1.7.7, OpenVSCode Server 1.106.3, workspace dirs. No scripts (entrypoint, watcher, auth-check, logger, inputrc, vscode-settings, tmux config).
 
-2. **AC2: Agent Dockerfiles restructured** — Each of the 4 agent Dockerfiles (`codex`, `claude-code`, `cursor-cli`, `gemini-cli`) follows pattern: `FROM palad/agent-base-core:latest` → agent CLI installation → shared scripts block (tmux config, inputrc, vscode-settings, watcher package.json+install+index.js, auth-check, logger, entrypoint). Agent install layers are cached when only scripts change.
+2. **AC2: Agent Dockerfiles restructured** — Each of the 4 agent Dockerfiles (`codex`, `claude-code`, `cursor-cli`, `gemini-cli`) follows pattern: `FROM aixle/agent-base-core:latest` → agent CLI installation → shared scripts block (tmux config, inputrc, vscode-settings, watcher package.json+install+index.js, auth-check, logger, entrypoint). Agent install layers are cached when only scripts change.
 
 3. **AC3: Build context** — All agents use `docker/` as build context with `COPY base/...` paths for shared scripts.
 

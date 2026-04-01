@@ -13,7 +13,7 @@ module Api
       #
       # Request headers from Traefik:
       #   X-Forwarded-Uri: /t/{route_token}/tty/ws (original request path)
-      #   Cookie: _palad_session=xxx (user session)
+      #   Cookie: _aixle_session=xxx (user session)
       #
       # Response:
       #   200 OK - allow proxy

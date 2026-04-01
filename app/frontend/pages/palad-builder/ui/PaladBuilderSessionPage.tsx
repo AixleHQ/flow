@@ -52,7 +52,7 @@ const STATE_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'd
   not_started: 'default',
 };
 
-const PaladBuilderSessionPage = () => {
+const AixleBuilderSessionPage = () => {
   const { projectId, runId: sessionId } = useParams({ strict: false }) as { projectId: string; runId: string };
   const navigate = useNavigate();
   const [sideTab, setSideTab] = useState(0);
@@ -117,13 +117,13 @@ const PaladBuilderSessionPage = () => {
           <Button
             size="small"
             startIcon={<ArrowBackIcon />}
-            onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(projectId) })}
+            onClick={() => navigate({ to: Routes.frontend.aixleBuilderPath(projectId) })}
             sx={{ color: 'text.secondary', minWidth: 'auto' }}
           >
             Back
           </Button>
           <AutoFixHighIcon sx={{ fontSize: 20, color: 'primary.main' }} />
-          <Typography variant="subtitle2">Palad Builder</Typography>
+          <Typography variant="subtitle2">Aixle Builder</Typography>
           {session && <Chip size="small" label={session.state} color={STATE_COLORS[session.state] || 'default'} />}
           <Typography variant="caption" color="text.secondary">
             #{id}
@@ -158,10 +158,10 @@ const PaladBuilderSessionPage = () => {
             </Typography>
           )}
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button variant="outlined" onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(projectId) })}>
+            <Button variant="outlined" onClick={() => navigate({ to: Routes.frontend.aixleBuilderPath(projectId) })}>
               Back to Builder
             </Button>
-            <Button variant="contained" onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(projectId) })}>
+            <Button variant="contained" onClick={() => navigate({ to: Routes.frontend.aixleBuilderPath(projectId) })}>
               Start New Build
             </Button>
           </Box>
@@ -210,4 +210,4 @@ const PaladBuilderSessionPage = () => {
   );
 };
 
-export default PaladBuilderSessionPage;
+export default AixleBuilderSessionPage;

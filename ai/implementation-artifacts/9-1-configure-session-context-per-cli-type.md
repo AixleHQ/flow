@@ -68,7 +68,7 @@ so that the system knows what to inject into the container.
 - `config_files`: path → content mapping, injected into container (Story 9.2)
 - `env_vars`: name → value mapping, `config_item:NAME` syntax resolved from ConfigItem (Story 9.3)
 - `mcp_server_ids`: external MCPServer IDs to connect via per-CLI config files (Story 9.4)
-- `tool_ids`: Tool IDs exposed through internal Palad MCP (`session_tools` join table created from these)
+- `tool_ids`: Tool IDs exposed through internal Aixle MCP (`session_tools` join table created from these)
 - `agent_id`: Agent persona to load (Story 9.8)
 
 ### Config Sources

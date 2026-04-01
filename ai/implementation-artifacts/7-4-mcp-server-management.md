@@ -17,7 +17,7 @@ MCP Server Types:
 ┌──────────┬────────────────────────────────────┬─────────────┐
 │ Kind     │ Description                        │ Scope       │
 ├──────────┼────────────────────────────────────┼─────────────┤
-│ internal │ Palad tools MCP (auto-configured)  │ None        │
+│ internal │ Aixle tools MCP (auto-configured)  │ None        │
 │ custom   │ User-configured (Context7, etc.)   │ Company/Proj│
 └──────────┴────────────────────────────────────┴─────────────┘
 ```
@@ -332,7 +332,7 @@ Headers stored as JSONB, example:
 
 ### Internal Server
 
-The internal "Palad Tools" server is auto-configured from 7.1 via environment variables.
+The internal "Aixle Tools" server is auto-configured from 7.1 via environment variables.
 It doesn't need a database record — it's added dynamically when building MCP config.
 
 ### FSD Structure

@@ -43,7 +43,7 @@ module ContainerStrategies
     end
 
     def build_labels
-      super.merge("palad.session_type" => "agent_session")
+      super.merge("aixle.session_type" => "agent_session")
     end
 
     # == before_exec(container_id:, **) → {} ==

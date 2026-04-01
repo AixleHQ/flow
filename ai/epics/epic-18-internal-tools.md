@@ -231,7 +231,7 @@ end
   - Image: `codeclimate/codeclimate`
   - Bind mounts: repo → `/code`, Docker socket, `/tmp/cc`
   - Memory limit: 2GB, CPU quota
-  - Labels: `palad.type=internal_tool`, `palad.tool=code_climate`
+  - Labels: `aixle.type=internal_tool`, `aixle.tool=code_climate`
 - Generates default `.codeclimate.yml` if not present in repo
 - Returns analysis output (JSON or text)
 - Container cleaned up after execution (even on error)

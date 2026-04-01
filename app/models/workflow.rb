@@ -62,8 +62,8 @@ class Workflow < ApplicationRecord
     scope_type == "System"
   end
 
-  def self.palad_builder
-    system.active.find_by!(name: "Palad Builder")
+  def self.aixle_builder
+    system.active.find_by!(name: "Aixle Builder")
   end
 
   def base_tool_ids

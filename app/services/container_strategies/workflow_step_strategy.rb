@@ -63,7 +63,7 @@ module ContainerStrategies
     end
 
     def build_labels
-      super.merge("palad.session_type" => "workflow_step")
+      super.merge("aixle.session_type" => "workflow_step")
     end
 
     protected
@@ -72,13 +72,6 @@ module ContainerStrategies
 
     def services_ports
       [ 7681 ]
-    end
-
-    def resolve_model(session)
-      step_run = session.step_run
-      return step_run.step.preferred_model if step_run&.step&.preferred_model.present?
-
-      super
     end
 
     private
