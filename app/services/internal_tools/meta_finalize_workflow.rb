@@ -8,7 +8,9 @@ module InternalTools
       require_project_context!
 
       workflow = find_target_workflow!
-      errors_list = validate_workflow(workflow)
+      result = validate_workflow(workflow)
+      errors_list = result[:errors]
+      warnings_list = result[:warnings]
 
       if errors_list.empty?
         broadcast_meta_activity(
@@ -18,20 +20,24 @@ module InternalTools
           entity_id: workflow.id
         )
 
-        success({
+        response = {
           valid: true,
           workflow_id: workflow.id,
           workflow_name: workflow.name,
           summary: "Workflow '#{workflow.name}' is valid with #{workflow.steps.not_deleted.count} steps."
-        }.to_json)
+        }
+        response[:warnings] = warnings_list if warnings_list.any?
+        success(response.to_json)
       else
-        success({
+        response = {
           valid: false,
           workflow_id: workflow.id,
           workflow_name: workflow.name,
           errors: errors_list,
-          summary: "Workflow '#{workflow.name}' has #{errors_list.size} validation issue(s)."
-        }.to_json)
+          summary: "Workflow '#{workflow.name}' has #{errors_list.size} validation error(s)."
+        }
+        response[:warnings] = warnings_list if warnings_list.any?
+        success(response.to_json)
       end
     rescue RuntimeError => e
       error(e.message)
@@ -41,22 +47,32 @@ module InternalTools
 
     def validate_workflow(workflow)
       errors = []
+      warnings = []
       steps = workflow.steps.not_deleted.includes(:sub_steps, :agent).order(:position)
 
       errors << "Workflow has no steps" if steps.empty?
 
+      bound_to_column = ColumnWorkflowBinding.exists?(workflow_id: workflow.id)
+
       steps.each do |step|
         errors << "Step '#{step.name}' (position #{step.position}) has no instructions" if step.instructions.blank?
 
-        if step.agent_id.present? && !Agent.exists?(step.agent_id)
+        if step.agent_id.blank?
+          warnings << "Step '#{step.name}' has no agent assigned — will use project default"
+        elsif !Agent.exists?(step.agent_id)
           errors << "Step '#{step.name}' references non-existent agent_id #{step.agent_id}"
         end
+
+        if bound_to_column && !step.allow_non_interactive
+          errors << "Step '#{step.name}' must have allow_non_interactive: true (workflow is bound to a board column for auto-trigger)"
+        end
+
+        validate_linked_resources(step, errors)
 
         step.sub_steps.active.each do |ss|
           errors << "SubStep in step '#{step.name}' has no name" if ss.name.blank?
         end
 
-        # Check dependency references
         step.depends_on_step_ids.each do |dep_id|
           unless steps.any? { |s| s.id == dep_id }
             errors << "Step '#{step.name}' depends on non-existent step_id #{dep_id}"
@@ -64,10 +80,8 @@ module InternalTools
         end
       end
 
-      # Check for cycles in dependency graph
       errors << "Dependency graph contains a cycle" if has_cycle?(steps)
 
-      # Check positions are sequential
       if steps.any?
         positions = steps.map(&:position).sort
         expected = (positions.first..positions.first + positions.size - 1).to_a
@@ -76,7 +90,24 @@ module InternalTools
         end
       end
 
-      errors
+      { errors: errors, warnings: warnings }
+    end
+
+    def validate_linked_resources(step, errors)
+      if step.tool_ids.present?
+        missing = step.tool_ids - Tool.where(id: step.tool_ids).pluck(:id)
+        missing.each { |id| errors << "Step '#{step.name}' links non-existent tool_id #{id}" }
+      end
+
+      if step.skill_ids.present?
+        missing = step.skill_ids - Skill.where(id: step.skill_ids).pluck(:id)
+        missing.each { |id| errors << "Step '#{step.name}' links non-existent skill_id #{id}" }
+      end
+
+      if step.mcp_server_ids.present?
+        missing = step.mcp_server_ids - MCPServer.where(id: step.mcp_server_ids).pluck(:id)
+        missing.each { |id| errors << "Step '#{step.name}' links non-existent mcp_server_id #{id}" }
+      end
     end
 
     def has_cycle?(steps)

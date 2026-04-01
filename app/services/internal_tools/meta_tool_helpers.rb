@@ -50,22 +50,35 @@ module InternalTools
     end
 
     def broadcast_meta_activity(action:, entity_type:, entity_name:, entity_id:, details: {})
-      # Broadcast is best-effort, works in both workflow and standalone contexts
-      payload = {
-        "type" => "meta_activity",
-        "data" => {
-          action: action, entity_type: entity_type, entity_name: entity_name,
-          entity_id: entity_id, details: details, timestamp: Time.current.iso8601
-        }
+      activity = {
+        "action" => action, "entity_type" => entity_type, "entity_name" => entity_name,
+        "entity_id" => entity_id, "details" => details, "timestamp" => Time.current.iso8601
       }
 
+      # Persist to session metadata (survives page reloads)
+      persist_activity(activity)
+
+      # Broadcast for real-time updates
+      payload = { "type" => "meta_activity", "data" => activity }
       if workflow_run
         WorkflowRunChannel.broadcast_to(workflow_run, payload)
       elsif session
         TerminalSessionChannel.broadcast_to(session, payload)
       end
     rescue StandardError => e
-      Rails.logger.warn("[MetaToolHelpers] Broadcast failed: #{e.message}")
+      Rails.logger.warn("[MetaToolHelpers] Broadcast/persist failed: #{e.class} — #{e.message}")
+    end
+
+    def persist_activity(activity)
+      target = session || workflow_run
+      return unless target.respond_to?(:metadata)
+
+      meta = target.metadata || {}
+      meta["builder_activities"] ||= []
+      meta["builder_activities"] << activity
+      # Keep last 100 activities to avoid metadata bloat
+      meta["builder_activities"] = meta["builder_activities"].last(100)
+      target.update_column(:metadata, meta)
     end
   end
 end

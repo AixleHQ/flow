@@ -4,17 +4,30 @@ import { Accordion, AccordionDetails, AccordionSummary, Box, Chip, Typography, t
 import { type FC, useEffect } from 'react';
 
 import { useGetWorkflowQuery } from 'features/workflows';
+
 import type { MetaActivity } from '../lib/useMetaActivityChannel';
 
 const styles = {
   root: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' },
   header: {
-    px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider',
-    display: 'flex', alignItems: 'center', gap: 1,
+    px: 2,
+    py: 1.5,
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
   },
   title: { fontSize: 14, fontWeight: 600, color: 'text.primary' },
   content: { flex: 1, overflowY: 'auto', px: 1, py: 1 },
-  empty: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'text.disabled', fontSize: 13 },
+  empty: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    color: 'text.disabled',
+    fontSize: 13,
+  },
   stepName: { fontSize: 13, fontWeight: 500 },
   stepMeta: { fontSize: 12, color: 'text.secondary' },
   subStep: { fontSize: 12, color: 'text.secondary', pl: 2, py: 0.25 },
@@ -27,14 +40,18 @@ interface WorkflowPreviewProps {
 }
 
 export const WorkflowPreview: FC<WorkflowPreviewProps> = ({ projectId, workflowId, activities }) => {
-  const { data: workflow, refetch } = useGetWorkflowQuery(
-    { projectId, id: workflowId! },
-    { skip: !workflowId },
-  );
+  const { data: workflow, refetch } = useGetWorkflowQuery({ projectId, id: workflowId! }, { skip: !workflowId });
 
   // Refetch when new workflow/step/sub_step activities arrive
   const activityCount = activities.filter((a) =>
-    ['created_step', 'created_sub_step', 'updated_step', 'deleted_step', 'reordered_steps', 'created_workflow'].includes(a.action)
+    [
+      'created_step',
+      'created_sub_step',
+      'updated_step',
+      'deleted_step',
+      'reordered_steps',
+      'created_workflow',
+    ].includes(a.action),
   ).length;
 
   useEffect(() => {
@@ -55,7 +72,15 @@ export const WorkflowPreview: FC<WorkflowPreviewProps> = ({ projectId, workflowI
     );
   }
 
-  const steps = (workflow as any).steps || [];
+  interface WorkflowStep {
+    id: number;
+    name: string;
+    position: number;
+    agent?: { title: string } | null;
+    subSteps?: { id: number; name: string; position: number }[];
+  }
+
+  const steps: WorkflowStep[] = (workflow as unknown as { steps?: WorkflowStep[] })?.steps || [];
 
   return (
     <Box sx={styles.root}>
@@ -65,18 +90,34 @@ export const WorkflowPreview: FC<WorkflowPreviewProps> = ({ projectId, workflowI
         <Chip label={`${steps.length} steps`} size="small" variant="outlined" />
       </Box>
       <Box sx={styles.content}>
-        {steps.map((step: any) => (
-          <Accordion key={step.id} disableGutters elevation={0} sx={{ '&:before': { display: 'none' }, border: '1px solid', borderColor: 'divider', mb: 0.5, borderRadius: 1 }}>
-            <AccordionSummary expandIcon={<ExpandMoreIcon />} sx={{ minHeight: 36, '& .MuiAccordionSummary-content': { my: 0.5 } }}>
+        {steps.map((step) => (
+          <Accordion
+            key={step.id}
+            disableGutters
+            elevation={0}
+            sx={{
+              '&:before': { display: 'none' },
+              border: '1px solid',
+              borderColor: 'divider',
+              mb: 0.5,
+              borderRadius: 1,
+            }}
+          >
+            <AccordionSummary
+              expandIcon={<ExpandMoreIcon />}
+              sx={{ minHeight: 36, '& .MuiAccordionSummary-content': { my: 0.5 } }}
+            >
               <Box>
-                <Typography sx={styles.stepName}>{step.position}. {step.name}</Typography>
+                <Typography sx={styles.stepName}>
+                  {step.position}. {step.name}
+                </Typography>
                 <Typography sx={styles.stepMeta}>
                   {step.agent?.title || 'No agent'} &middot; {step.subSteps?.length || 0} sub-steps
                 </Typography>
               </Box>
             </AccordionSummary>
             <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-              {step.subSteps?.map((ss: any) => (
+              {step.subSteps?.map((ss) => (
                 <Typography key={ss.id} sx={styles.subStep}>
                   {ss.position}. {ss.name}
                 </Typography>

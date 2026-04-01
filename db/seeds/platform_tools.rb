@@ -539,6 +539,18 @@ module Seeds
           properties: { preset: { type: "string", enum: %w[simple_kanban dev_team full_sdlc] } },
           required: %w[preset]
         }
+      },
+      {
+        name: "meta_delete_workflow",
+        display_name: "Meta Delete Workflow",
+        description: "Soft-delete a workflow. Fails if workflow has active runs or is bound to a board column.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workflow_id: { type: "integer", description: "Workflow ID to delete" }
+          },
+          required: %w[workflow_id]
+        }
       }
     ].freeze
 

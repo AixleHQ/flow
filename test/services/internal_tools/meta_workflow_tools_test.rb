@@ -282,7 +282,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
   test "meta_delete_step fails if other steps depend on it" do
     wf = create(:workflow, scope: @project)
     step1 = create(:step, workflow: wf, name: "Parent", position: 1)
-    create(:step, workflow: wf, name: "Child", position: 2, depends_on_step_ids: [step1.id])
+    create(:step, workflow: wf, name: "Child", position: 2, depends_on_step_ids: [ step1.id ])
 
     result = InternalTools::MetaDeleteStep.new(
       params: { step_id: step1.id },

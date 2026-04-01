@@ -1,8 +1,10 @@
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import HistoryIcon from '@mui/icons-material/History';
 import {
+  Autocomplete,
   Box,
   Button,
+  Checkbox,
   Chip,
   CircularProgress,
   FormControl,
@@ -16,6 +18,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField as MuiTextField,
   Typography,
   type SxProps,
 } from '@mui/material';
@@ -26,6 +29,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGetCurrentUserQuery } from 'entities/user/api/currentUserApi';
 import { AVAILABLE_AGENTS, AGENT_COLORS } from 'entities/user/model/agentConstants';
 import type { AgentType } from 'entities/user/model/types';
+import { useGetProjectAssetsQuery } from 'features/assets-management';
 import { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } from 'features/palad-builder';
 import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import { Routes } from 'shared/routes';
@@ -33,20 +37,40 @@ import { Routes } from 'shared/routes';
 const styles = {
   root: { p: 4, maxWidth: 700, mx: 'auto' },
   hero: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-    py: 5, px: 4, mb: 4, borderRadius: 2,
-    backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    py: 5,
+    px: 4,
+    mb: 4,
+    borderRadius: 2,
+    backgroundColor: 'background.paper',
+    border: '1px solid',
+    borderColor: 'divider',
   },
   heroIcon: { fontSize: 48, color: 'primary.main', mb: 1.5 },
   heroTitle: { fontSize: 24, fontWeight: 700, color: 'text.primary', mb: 0.5 },
   heroSubtitle: { fontSize: 14, color: 'text.secondary', maxWidth: 480, mb: 3 },
   configRow: { display: 'flex', gap: 2, mb: 2, width: '100%', maxWidth: 400 },
   section: { mb: 4 },
-  sectionTitle: { fontSize: 16, fontWeight: 600, color: 'text.primary', mb: 1.5, display: 'flex', alignItems: 'center', gap: 1 },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: 'text.primary',
+    mb: 1.5,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 1,
+  },
 } satisfies Record<string, SxProps>;
 
 const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'default'> = {
-  finished: 'success', running: 'warning', ready: 'info', failed: 'error', not_started: 'default',
+  finished: 'success',
+  running: 'warning',
+  ready: 'info',
+  failed: 'error',
+  not_started: 'default',
 };
 
 const PaladBuilderPage = () => {
@@ -63,7 +87,9 @@ const PaladBuilderPage = () => {
   );
   const [agentRuntime, setAgentRuntime] = useState<AgentType | ''>('');
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [fetchModels, { data: models }] = useLazyGetAgentModelsQuery();
+  const { data: projectAssets } = useGetProjectAssetsQuery(Number(projectId));
 
   // Set default runtime
   useEffect(() => {
@@ -108,6 +134,7 @@ const PaladBuilderPage = () => {
         projectId: Number(projectId),
         agentRuntime,
         preferredModel: selectedModel || undefined,
+        inputAssetIds: selectedAssetIds.length > 0 ? selectedAssetIds : undefined,
       }).unwrap();
       navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(session.id)) });
     } catch {
@@ -137,7 +164,9 @@ const PaladBuilderPage = () => {
                 {configuredAgents.map((agent) => (
                   <MenuItem key={agent.type} value={agent.type}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: AGENT_COLORS[agent.type] }} />
+                      <Box
+                        sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: AGENT_COLORS[agent.type] }}
+                      />
                       {agent.name}
                     </Box>
                   </MenuItem>
@@ -173,6 +202,31 @@ const PaladBuilderPage = () => {
           </Box>
         )}
 
+        {/* Project assets to include */}
+        {projectAssets && projectAssets.length > 0 && (
+          <Autocomplete
+            multiple
+            size="small"
+            options={projectAssets.filter((a) => !a.deletedAt)}
+            getOptionLabel={(a) => `${a.folder ? a.folder + '/' : ''}${a.name}`}
+            value={projectAssets.filter((a) => selectedAssetIds.includes(a.id))}
+            onChange={(_, selected) => setSelectedAssetIds(selected.map((a) => a.id))}
+            renderOption={(props, option, { selected }) => (
+              <li {...props}>
+                <Checkbox size="small" checked={selected} sx={{ mr: 1 }} />
+                <Typography sx={{ fontSize: 13 }}>
+                  {option.folder ? `${option.folder}/` : ''}
+                  {option.name}
+                </Typography>
+              </li>
+            )}
+            renderInput={(params) => (
+              <MuiTextField {...params} label="Project Assets (optional)" placeholder="Select files to include..." />
+            )}
+            sx={{ width: '100%', maxWidth: 400, mb: 2 }}
+          />
+        )}
+
         <Button
           variant="contained"
           size="large"
@@ -185,7 +239,9 @@ const PaladBuilderPage = () => {
       </Box>
 
       {isLoading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress /></Box>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress />
+        </Box>
       ) : sessions && sessions.length > 0 ? (
         <Box sx={styles.section}>
           <Typography sx={styles.sectionTitle}>
@@ -218,7 +274,9 @@ const PaladBuilderPage = () => {
                     <TableCell>{s.agentType || '—'}</TableCell>
                     <TableCell>{s.startedAt ? new Date(s.startedAt).toLocaleString() : '—'}</TableCell>
                     <TableCell>
-                      <Button size="small" variant="text">Open</Button>
+                      <Button size="small" variant="text">
+                        Open
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

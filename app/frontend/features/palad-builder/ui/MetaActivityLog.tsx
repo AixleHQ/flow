@@ -6,15 +6,8 @@ import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import { Box, Chip, Typography, type SxProps } from '@mui/material';
 import { type FC } from 'react';
 
-import type { MetaActivity } from '../lib/useMetaActivityChannel';
-
 const styles = {
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    overflow: 'hidden',
-  },
+  root: { display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' },
   header: {
     px: 2,
     py: 1.5,
@@ -25,12 +18,7 @@ const styles = {
     gap: 1,
   },
   title: { fontSize: 14, fontWeight: 600, color: 'text.primary' },
-  list: {
-    flex: 1,
-    overflowY: 'auto',
-    px: 2,
-    py: 1,
-  },
+  list: { flex: 1, overflowY: 'auto', px: 2, py: 1 },
   item: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -41,7 +29,6 @@ const styles = {
     '&:last-child': { borderBottom: 'none' },
   },
   itemIcon: { fontSize: 18, mt: 0.3, color: 'primary.main' },
-  itemContent: { flex: 1 },
   itemName: { fontSize: 13, fontWeight: 500, color: 'text.primary' },
   itemAction: { fontSize: 12, color: 'text.secondary' },
   itemTime: { fontSize: 11, color: 'text.disabled', mt: 0.25 },
@@ -54,6 +41,18 @@ const styles = {
     fontSize: 13,
   },
 } satisfies Record<string, SxProps>;
+
+// Supports both snake_case (from DB/API) and camelCase (from WebSocket)
+export interface MetaActivity {
+  action: string;
+  entity_type?: string;
+  entityType?: string;
+  entity_name?: string;
+  entityName?: string;
+  entity_id?: number;
+  entityId?: number;
+  timestamp: string;
+}
 
 const ENTITY_ICONS: Record<string, typeof PersonIcon> = {
   Workflow: AccountTreeIcon,
@@ -70,6 +69,7 @@ const ENTITY_ICONS: Record<string, typeof PersonIcon> = {
 
 const ACTION_LABELS: Record<string, string> = {
   created_workflow: 'Created workflow',
+  deleted_workflow: 'Deleted workflow',
   created_step: 'Created step',
   created_sub_step: 'Created sub-step',
   updated_step: 'Updated step',
@@ -98,11 +98,6 @@ interface MetaActivityLogProps {
 }
 
 export const MetaActivityLog: FC<MetaActivityLogProps> = ({ activities }) => {
-  const Icon = ({ entityType }: { entityType: string }) => {
-    const IconComp = ENTITY_ICONS[entityType] || SmartToyIcon;
-    return <IconComp sx={styles.itemIcon} />;
-  };
-
   return (
     <Box sx={styles.root}>
       <Box sx={styles.header}>
@@ -111,22 +106,23 @@ export const MetaActivityLog: FC<MetaActivityLogProps> = ({ activities }) => {
       </Box>
       <Box sx={styles.list}>
         {activities.length === 0 ? (
-          <Box sx={styles.empty}>Waiting for builder activity...</Box>
+          <Box sx={styles.empty}>No builder activity yet</Box>
         ) : (
-          [...activities].reverse().map((activity, idx) => (
-            <Box key={idx} sx={styles.item}>
-              <Icon entityType={activity.entityType} />
-              <Box sx={styles.itemContent}>
-                <Typography sx={styles.itemName}>{activity.entityName}</Typography>
-                <Typography sx={styles.itemAction}>
-                  {ACTION_LABELS[activity.action] || activity.action}
-                </Typography>
-                <Typography sx={styles.itemTime}>
-                  {new Date(activity.timestamp).toLocaleTimeString()}
-                </Typography>
+          [...activities].reverse().map((activity, idx) => {
+            const entityType = activity.entity_type || activity.entityType || '';
+            const entityName = activity.entity_name || activity.entityName || '';
+            const IconComp = ENTITY_ICONS[entityType] || SmartToyIcon;
+            return (
+              <Box key={idx} sx={styles.item}>
+                <IconComp sx={styles.itemIcon} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography sx={styles.itemName}>{entityName}</Typography>
+                  <Typography sx={styles.itemAction}>{ACTION_LABELS[activity.action] || activity.action}</Typography>
+                  <Typography sx={styles.itemTime}>{new Date(activity.timestamp).toLocaleTimeString()}</Typography>
+                </Box>
               </Box>
-            </Box>
-          ))
+            );
+          })
         )}
       </Box>
     </Box>

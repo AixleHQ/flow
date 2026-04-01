@@ -59,8 +59,7 @@ const frontend = {
 
   // Palad Builder routes
   paladBuilderPath: (projectId: string) => `/company/projects/${projectId}/palad-builder`,
-  paladBuilderRunPath: (projectId: string, runId: string) =>
-    `/company/projects/${projectId}/palad-builder/${runId}`,
+  paladBuilderRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/palad-builder/${runId}`,
 } as const;
 
 // Combine both types of routes into a single export

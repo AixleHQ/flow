@@ -11,7 +11,8 @@ module InternalTools
 
       updatable = %i[name instructions description agent_id allow_non_interactive
                      skip_policy on_failure max_retries tool_ids skill_ids mcp_server_ids
-                     mount_repositories input_asset_specs output_asset_specs depends_on_step_ids]
+                     mount_repositories preferred_model bmad_enabled
+                     input_asset_specs output_asset_specs depends_on_step_ids]
 
       attrs = {}
       updatable.each { |k| attrs[k] = params[k] if params.key?(k) }

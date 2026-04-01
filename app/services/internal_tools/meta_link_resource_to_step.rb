@@ -22,7 +22,7 @@ module InternalTools
 
       current_ids = step.send(field) || []
       unless current_ids.include?(resource_id)
-        step.update!(field => current_ids + [resource_id])
+        step.update!(field => current_ids + [ resource_id ])
       end
 
       broadcast_meta_activity(

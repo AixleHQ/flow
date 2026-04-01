@@ -16,11 +16,15 @@ module Api
               agent_type: params[:agent_runtime] || current_user.default_agent_runtime || "claude_code",
               params: {
                 mode: "interactive",
-                initial_prompt: "Help me build a workflow automation. Start by asking what process I want to automate.",
+                initial_prompt: "First read the reference files in /workspace/references/ (palad-system-reference.md and bmad-llms-full.txt) to understand the platform. Then help me build a workflow automation — start by asking what process I want to automate.",
                 tool_ids: meta_tool_ids,
                 requested_model: params[:preferred_model],
                 metadata: { palad_builder: true },
-                session_config: { "bmad_enabled" => true }
+                input_asset_ids: Array(params[:input_asset_ids]).map(&:to_i),
+                session_config: {
+                  "bmad_enabled" => true,
+                  "config_files" => builder_reference_files
+                }
               }
             )
 
@@ -52,7 +56,22 @@ module Api
               meta_delete_board_column meta_reorder_board_columns
               meta_create_column_binding meta_update_column_binding
               meta_delete_column_binding meta_setup_board_from_preset
+              meta_delete_workflow
             ]
+          end
+
+          # Reference docs injected into /workspace/references/ via config_files
+          def builder_reference_files
+            files = {}
+
+            ref_dir = Rails.root.join("references")
+            if ref_dir.exist?
+              ref_dir.children.select(&:file?).each do |path|
+                files["/workspace/references/#{path.basename}"] = File.read(path)
+              end
+            end
+
+            files
           end
         end
       end

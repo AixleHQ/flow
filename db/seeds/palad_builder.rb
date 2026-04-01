@@ -214,6 +214,7 @@ module Seeds
         meta_delete_board_column meta_reorder_board_columns
         meta_create_column_binding meta_update_column_binding
         meta_delete_column_binding meta_setup_board_from_preset
+        meta_delete_workflow
       ]
     end
     # rubocop:enable Metrics/MethodLength

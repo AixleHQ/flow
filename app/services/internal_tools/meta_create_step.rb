@@ -24,6 +24,8 @@ module InternalTools
         skill_ids: params[:skill_ids] || [],
         mcp_server_ids: params[:mcp_server_ids] || [],
         mount_repositories: params.fetch(:mount_repositories, false),
+        preferred_model: params[:preferred_model],
+        bmad_enabled: params.fetch(:bmad_enabled, false),
         input_asset_specs: params[:input_asset_specs] || [],
         output_asset_specs: params[:output_asset_specs] || [],
         depends_on_step_ids: params[:depends_on_step_ids] || []

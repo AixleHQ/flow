@@ -260,6 +260,17 @@ Users configure credentials per runtime. Each runtime supports different models.
 - `internal` — invisible helpers (finish_session, fail_session, read_tool_result)
 - `workflow` — auto-injected in workflow steps (mark_sub_step, board_*, meta_*)
 
+### When to Use Tools vs MCP Servers
+
+**Prefer MCP Servers** for external service integrations (APIs, databases, SaaS). MCP is the standard protocol — many servers already exist for popular services.
+
+**Use custom Tools only when** no MCP server exists for the needed functionality. Custom tools run as Docker containers — the recommended approach is:
+- Write the tool logic as a compiled binary (Go recommended for small image size and fast startup)
+- Package it in a Docker image (`docker_image` field on the tool)
+- Define `input_schema` for the parameters the tool accepts
+
+**Important**: Creating custom tools is an advanced operation. The Palad Builder agent should NOT attempt to create tools automatically. Instead, explain to the user what tool is needed, recommend an approach, and let them build it separately. The tool can then be registered via `meta_create_tool` and linked to workflow steps.
+
 ---
 
 ## 9. Skills
@@ -321,7 +332,102 @@ When a session runs, the platform builds the agent's context from multiple build
 
 ---
 
-## 13. Available Agent Tools (in workflow/session context)
+## 13. Agent Runtime Environment
+
+When a workflow step executes, the platform spins up an isolated container with a specific filesystem layout, injected data, and connected services. Understanding this runtime is critical for designing effective workflows.
+
+### Container Filesystem
+
+```
+/workspace/                     ← agent working directory
+├── outputs/                    ← put all deliverables here (collected after session)
+├── assets/                     ← pre-loaded input files (read-only)
+│   ├── design-spec.md          ← from workflow base_asset_ids
+│   ├── requirements.pdf        ← from workflow_run input_asset_ids
+│   └── task-brief.md           ← from board task assets
+├── repo/                       ← mounted Git repositories (if mount_repositories: true)
+│   └── <repo_name>/            ← shallow clone, default branch
+│       └── .git/               ← full git access: branch, commit, push
+└── references/                 ← reference docs (Palad Builder sessions only)
+```
+
+### Data Sources for Input Assets
+
+Assets arrive from three additive sources (resolved by `SessionConfigResolver`):
+
+| Source | Configured On | When Used |
+|--------|---------------|-----------|
+| **Workflow base assets** | `workflow.config.base_asset_ids` | Always — shared docs, templates, style guides |
+| **Run-time assets** | `workflow_run.input_asset_ids` | Per-run — user-selected files when starting the run |
+| **Board task assets** | `board_task.task_assets` | Board-triggered — files attached to the task card |
+
+All three are merged, deduplicated, and downloaded to `/workspace/assets/<folder>/<name>`.
+
+Use `input_asset_specs` on a Step to document what files the step expects (informational, helps the builder and users understand the step's requirements).
+Use `output_asset_specs` on a Step to document what files the step produces into `/workspace/outputs/`.
+
+### Repository Mounting & Git Capabilities
+
+When `mount_repositories: true` on a Step:
+
+1. Project repositories are shallow-cloned into `/workspace/repo/<repo_name>/`
+2. A GitHub installation token is injected — agent has authenticated git access
+3. The agent can:
+   - Read and search the entire codebase
+   - Create branches, make commits, push changes
+   - Create pull requests (via GitHub MCP or CLI tools)
+   - The platform can track PR status via `board_create_wait` (waits for CI checks)
+
+Repository resolution for workflow steps:
+- First: `workflow_run.repository_ids` (explicit per-run selection)
+- Fallback (board-triggered + `inherit_all_project_resources`): all project repositories
+
+**Important**: `mount_repositories` is just a flag on the Step. The actual repositories come from the workflow run or project. If no repositories are configured at project/run level, the flag does nothing.
+
+### MCP Server Connectivity
+
+MCP servers configured on a Step are resolved and connected to the container at startup:
+
+1. **Internal MCP** (`palad-tools`) — always connected. Provides board_*, workflow progress, and session tools.
+2. **External MCP servers** — resolved from three additive sources:
+   - `workflow.config.base_mcp_server_ids` — always active for this workflow
+   - `step.mcp_server_ids` — step-specific servers
+   - All project MCP servers (if `inherit_all_project_resources: true`)
+
+Each server's credentials are resolved from Config Items (Secrets & Variables) at runtime. The agent sees them as available MCP tool providers.
+
+### Resource Resolution (Additive Merge)
+
+Tools, Skills, and MCP Servers are resolved identically — additive from three layers:
+
+```
+Resolved = Project (if inherit_all) + Workflow base + Step-level
+```
+
+This means a Step inherits everything from the workflow and optionally from the entire project, plus its own step-specific resources.
+
+### Inter-Step Data Flow
+
+Steps in a workflow execute sequentially (or in parallel per DAG). Later steps receive context about previous steps:
+
+1. **Previous step summaries** — each completed step's `step_note` and sub-step `data`/`note` are shown in the "Previous Steps" context section. Use `finish_session` with a note to pass structured context forward.
+2. **WorkflowRunAssets** — files produced by earlier steps (saved to `/workspace/outputs/`) are collected as `WorkflowRunAsset` records with `produced_by_step_run_id`. These can be referenced by later steps.
+3. **Sub-step data** — `mark_sub_step` accepts a `data` hash and `note` string. Both are visible to subsequent steps in the workflow context.
+4. **Board task** — all steps in a board-triggered workflow share the same task. Comments, assets, and tags added by step 1 are visible to step 2 via board tools.
+
+### Workflow Config (`workflow.config`)
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `base_tool_ids` | Array | Tools available to all steps |
+| `base_skill_ids` | Array | Skills injected into all steps |
+| `base_mcp_server_ids` | Array | MCP servers connected to all steps |
+| `base_asset_ids` | Array | Assets loaded for all steps |
+| `inherit_all_project_resources` | Boolean | Merge all project-level resources into every step |
+
+---
+
+## 14. Available Agent Tools (in workflow/session context)
 
 ### Session Lifecycle
 - `finish_session` — signal successful completion (required in non-interactive)
@@ -346,7 +452,7 @@ When a session runs, the platform builds the agent's context from multiple build
 - `board_create_wait` — block auto-trigger until CI/CD completes
 
 ### Meta Tools (Palad Builder)
-- `meta_create_workflow`, `meta_create_step`, `meta_create_sub_step`
+- `meta_create_workflow`, `meta_delete_workflow`, `meta_create_step`, `meta_create_sub_step`
 - `meta_create_agent`, `meta_create_tool`, `meta_create_skill`, `meta_create_mcp_server`
 - `meta_update_step`, `meta_delete_step`, `meta_reorder_steps`
 - `meta_link_resource_to_step` — attach tool/skill/mcp to step

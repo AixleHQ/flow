@@ -3,23 +3,14 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import StopIcon from '@mui/icons-material/Stop';
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Tab,
-  Tabs,
-  Typography,
-  type SxProps,
-} from '@mui/material';
+import { Box, Button, Chip, CircularProgress, Tab, Tabs, Typography, type SxProps } from '@mui/material';
 import { useNavigate, useParams } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-import { MetaActivityLog } from 'features/palad-builder/ui/MetaActivityLog';
-import { WorkflowPreview } from 'features/palad-builder/ui/WorkflowPreview';
-import { BoardPreview } from 'features/palad-builder/ui/BoardPreview';
 import { useMetaActivityChannel } from 'features/palad-builder/lib/useMetaActivityChannel';
+import { BoardPreview } from 'features/palad-builder/ui/BoardPreview';
+import { MetaActivityLog, type MetaActivity } from 'features/palad-builder/ui/MetaActivityLog';
+import { WorkflowsListPreview } from 'features/palad-builder/ui/WorkflowsListPreview';
 import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 import { TerminalSessionWidget } from 'widgets/terminal-session';
@@ -27,9 +18,15 @@ import { TerminalSessionWidget } from 'widgets/terminal-session';
 const styles = {
   root: { height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
   header: {
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider',
-    bgcolor: 'background.paper', flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    px: 2,
+    py: 1,
+    borderBottom: '1px solid',
+    borderColor: 'divider',
+    bgcolor: 'background.paper',
+    flexShrink: 0,
   },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 1.5 },
   headerRight: { display: 'flex', alignItems: 'center', gap: 1 },
@@ -37,14 +34,22 @@ const styles = {
   terminalPanel: { flex: 1, minWidth: 0, overflow: 'hidden' },
   sidePanel: { width: 300, display: 'flex', flexDirection: 'column', borderLeft: '1px solid', borderColor: 'divider' },
   ended: {
-    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-    flexDirection: 'column', gap: 2,
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: 2,
   },
   loading: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)', gap: 2 },
 } satisfies Record<string, SxProps>;
 
 const STATE_COLORS: Record<string, 'success' | 'info' | 'warning' | 'error' | 'default'> = {
-  ready: 'success', running: 'info', finished: 'default', failed: 'error', not_started: 'default',
+  ready: 'success',
+  running: 'info',
+  finished: 'default',
+  failed: 'error',
+  not_started: 'default',
 };
 
 const PaladBuilderSessionPage = () => {
@@ -60,9 +65,18 @@ const PaladBuilderSessionPage = () => {
     sessionId: id && !isNaN(id) ? id : null,
   });
 
-  // Meta activity channel (listens on WorkflowRunChannel — for future use when
-  // meta tools broadcast. Currently shows activities from tool calls.)
-  const { activities } = useMetaActivityChannel({ runId: null });
+  // Real-time activities from WebSocket
+  const { activities: realtimeActivities } = useMetaActivityChannel({
+    sessionId: id && !isNaN(id) ? id : null,
+  });
+
+  // Merge persisted activities (from session.metadata) + real-time (from WebSocket)
+  const allActivities = useMemo(() => {
+    const persisted: MetaActivity[] = (session?.metadata?.builderActivities as MetaActivity[]) || [];
+    const persistedTimestamps = new Set(persisted.map((a) => a.timestamp));
+    const newOnly = realtimeActivities.filter((a) => !persistedTimestamps.has(a.timestamp));
+    return [...persisted, ...newOnly];
+  }, [session?.metadata?.builderActivities, realtimeActivities]);
 
   const isTerminal = ['finished', 'failed'].includes(session?.state ?? '');
   const isActive = ['running', 'ready'].includes(session?.state ?? '');
@@ -72,7 +86,9 @@ const PaladBuilderSessionPage = () => {
     try {
       await finishSession(id);
     } catch {
-      setIsStopping(false);
+      // error already handled by RTK Query
+    } finally {
+      setTimeout(() => setIsStopping(false), 3000);
     }
   };
 
@@ -108,10 +124,10 @@ const PaladBuilderSessionPage = () => {
           </Button>
           <AutoFixHighIcon sx={{ fontSize: 20, color: 'primary.main' }} />
           <Typography variant="subtitle2">Palad Builder</Typography>
-          {session && (
-            <Chip size="small" label={session.state} color={STATE_COLORS[session.state] || 'default'} />
-          )}
-          <Typography variant="caption" color="text.secondary">#{id}</Typography>
+          {session && <Chip size="small" label={session.state} color={STATE_COLORS[session.state] || 'default'} />}
+          <Typography variant="caption" color="text.secondary">
+            #{id}
+          </Typography>
         </Box>
         <Box sx={styles.headerRight}>
           {isActive && (
@@ -137,7 +153,9 @@ const PaladBuilderSessionPage = () => {
             Session {session?.state}
           </Typography>
           {session?.errorMessage && (
-            <Typography variant="body2" color="error">{session.errorMessage}</Typography>
+            <Typography variant="body2" color="error">
+              {session.errorMessage}
+            </Typography>
           )}
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button variant="outlined" onClick={() => navigate({ to: Routes.frontend.paladBuilderPath(projectId) })}>
@@ -155,7 +173,7 @@ const PaladBuilderSessionPage = () => {
             <TerminalSessionWidget sessionId={id} showEditor={false} showTerminal />
           </Box>
 
-          {/* Side panel */}
+          {/* Side panel — Workflows + Board (auto-refresh from API) */}
           <Box sx={styles.sidePanel}>
             <Tabs
               value={sideTab}
@@ -163,11 +181,14 @@ const PaladBuilderSessionPage = () => {
               variant="fullWidth"
               sx={{ minHeight: 36, borderBottom: '1px solid', borderColor: 'divider' }}
             >
-              <Tab label="Activity" sx={{ minHeight: 36, fontSize: 12, textTransform: 'none' }} />
+              <Tab
+                label={`Activity${allActivities.length ? ` (${allActivities.length})` : ''}`}
+                sx={{ minHeight: 36, fontSize: 12, textTransform: 'none' }}
+              />
               <Tab
                 icon={<ListAltIcon sx={{ fontSize: 14 }} />}
                 iconPosition="start"
-                label="Workflow"
+                label="Workflows"
                 sx={{ minHeight: 36, fontSize: 12, textTransform: 'none' }}
               />
               <Tab
@@ -178,9 +199,9 @@ const PaladBuilderSessionPage = () => {
               />
             </Tabs>
             <Box sx={{ flex: 1, overflow: 'hidden' }}>
-              {sideTab === 0 && <MetaActivityLog activities={activities} />}
-              {sideTab === 1 && <WorkflowPreview projectId={projectIdNum} workflowId={null} activities={activities} />}
-              {sideTab === 2 && <BoardPreview projectId={projectIdNum} activities={activities} />}
+              {sideTab === 0 && <MetaActivityLog activities={allActivities} />}
+              {sideTab === 1 && <WorkflowsListPreview projectId={projectIdNum} />}
+              {sideTab === 2 && <BoardPreview projectId={projectIdNum} activities={allActivities} />}
             </Box>
           </Box>
         </Box>

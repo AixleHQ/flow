@@ -1,5 +1,5 @@
 import { type Subscription } from '@rails/actioncable';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 
@@ -13,27 +13,21 @@ export interface MetaActivity {
 }
 
 interface MetaActivityMessage {
-  type: 'meta_activity' | 'workflow_run.updated' | 'step_run.updated' | 'sub_step_run.updated';
+  type: 'meta_activity' | 'terminal_session.updated' | 'session_update';
   data: MetaActivity | Record<string, unknown>;
 }
 
 interface UseMetaActivityChannelOptions {
-  runId: number | null;
-  onRunUpdate?: () => void;
+  sessionId: number | null;
 }
 
-export function useMetaActivityChannel({ runId, onRunUpdate }: UseMetaActivityChannelOptions) {
+export function useMetaActivityChannel({ sessionId }: UseMetaActivityChannelOptions) {
   const subscriptionRef = useRef<Subscription | null>(null);
-  const onRunUpdateRef = useRef(onRunUpdate);
   const [connected, setConnected] = useState(false);
   const [activities, setActivities] = useState<MetaActivity[]>([]);
 
   useEffect(() => {
-    onRunUpdateRef.current = onRunUpdate;
-  }, [onRunUpdate]);
-
-  useEffect(() => {
-    if (!runId) {
+    if (!sessionId) {
       setConnected(false);
       return;
     }
@@ -42,7 +36,7 @@ export function useMetaActivityChannel({ runId, onRunUpdate }: UseMetaActivityCh
 
     const consumer = getConsumer();
     const subscription = consumer.subscriptions.create(
-      { channel: 'WorkflowRunChannel', run_id: runId },
+      { channel: 'TerminalSessionChannel', session_id: sessionId },
       {
         connected() {
           setConnected(true);
@@ -57,13 +51,6 @@ export function useMetaActivityChannel({ runId, onRunUpdate }: UseMetaActivityCh
           if (message.type === 'meta_activity') {
             setActivities((prev) => [...prev, message.data as MetaActivity]);
           }
-          if (
-            message.type === 'workflow_run.updated' ||
-            message.type === 'step_run.updated' ||
-            message.type === 'sub_step_run.updated'
-          ) {
-            onRunUpdateRef.current?.();
-          }
         },
       },
     );
@@ -74,9 +61,7 @@ export function useMetaActivityChannel({ runId, onRunUpdate }: UseMetaActivityCh
       subscription.unsubscribe();
       subscriptionRef.current = null;
     };
-  }, [runId]);
+  }, [sessionId]);
 
-  const clearActivities = useCallback(() => setActivities([]), []);
-
-  return { connected, activities, clearActivities };
+  return { connected, activities };
 }

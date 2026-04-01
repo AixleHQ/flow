@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module InternalTools
-  class MetaCreateMcpServer < Base
+  class MetaCreateMCPServer < Base
     include MetaToolHelpers
 
     def execute

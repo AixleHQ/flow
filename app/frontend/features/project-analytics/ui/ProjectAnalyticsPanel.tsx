@@ -38,7 +38,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import { WorkflowCostsPanel } from 'features/workflow-cost-analytics';
+import { WorkflowCostsPanel } from 'features/cost-analytics';
 import { formatCostCents, formatTokens } from 'shared/lib';
 
 import type { AgentActivityData, AnalyticsPeriod, AnalyticsScope } from '../api/projectAnalyticsApi';
