@@ -8,8 +8,8 @@
 class Agent < ApplicationRecord
   extend Enumerize
 
-  # Polymorphic scope (Company or Project)
-  belongs_to :scope, polymorphic: true
+  # Polymorphic scope (Company, Project, or System)
+  belongs_to :scope, polymorphic: true, optional: true
 
   # Source: custom (created in UI) or bmad_import (imported from BMAD files)
   enumerize :source, in: %i[custom bmad_import], default: :custom, predicates: true
@@ -25,8 +25,9 @@ class Agent < ApplicationRecord
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :title, presence: true
   validates :persona, presence: true
-  validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
+  validates :scope_type, presence: true, inclusion: { in: %w[Company Project System] }
   validates :scope_id, presence: true
+  validates :scope, presence: true, unless: -> { scope_type == "System" }
 
   # Scopes
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
@@ -42,7 +43,13 @@ class Agent < ApplicationRecord
   }
 
   def scope_indicator
+    return "system" if scope_type == "System"
+
     scope_type == "Company" ? "company" : "project"
+  end
+
+  def system?
+    scope_type == "System"
   end
 
   # Ransack

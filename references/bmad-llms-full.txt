@@ -1,0 +1,2747 @@
+# BMAD Method Documentation (Full)
+
+> Complete documentation for AI consumption
+> Generated: 2026-03-28
+> Repository: https://github.com/bmad-code-org/BMAD-METHOD
+
+<document path="index.md">
+The BMad Method (**B**uild **M**ore **A**rchitect **D**reams) is an AI-driven development framework module within the BMad Method Ecosystem that helps you build software through the whole process from ideation and planning all the way through agentic implementation. It provides specialized AI agents, guided workflows, and intelligent planning that adapts to your project's complexity, whether you're fixing a bug or building an enterprise platform.
+
+If you're comfortable working with AI coding assistants like Claude, Cursor, or GitHub Copilot, you're ready to get started.
+
+:::note[🚀 V6 is Here and We're Just Getting Started!]
+Skills Architecture, BMad Builder v1, Dev Loop Automation, and so much more in the works. **[Check out the Roadmap →](/roadmap/)**
+:::
+
+## New Here? Start with a Tutorial
+
+The fastest way to understand BMad is to try it.
+
+- **[Get Started with BMad](./tutorials/getting-started.md)** — Install and understand how BMad works
+- **[Workflow Map](./reference/workflow-map.md)** — Visual overview of BMM phases, workflows, and context management
+
+:::tip[Just Want to Dive In?]
+Install BMad and use the `bmad-help` skill — it will guide you through everything based on your project and installed modules.
+:::
+
+## How to Use These Docs
+
+These docs are organized into four sections based on what you're trying to do:
+
+| Section           | Purpose                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Tutorials**     | Learning-oriented. Step-by-step guides that walk you through building something. Start here if you're new. |
+| **How-To Guides** | Task-oriented. Practical guides for solving specific problems. "How do I customize an agent?" lives here.  |
+| **Explanation**   | Understanding-oriented. Deep dives into concepts and architecture. Read when you want to know *why*.       |
+| **Reference**     | Information-oriented. Technical specifications for agents, workflows, and configuration.                   |
+
+## Extend and Customize
+
+Want to expand BMad with your own agents, workflows, or modules? The **[BMad Builder](https://bmad-builder-docs.bmad-method.org/)** provides the framework and tools for creating custom extensions, whether you're adding new capabilities to BMad or building entirely new modules from scratch.
+
+## What You'll Need
+
+BMad works with any AI coding assistant that supports custom system prompts or project context. Popular options include:
+
+- **[Claude Code](https://code.claude.com)** — Anthropic's CLI tool (recommended)
+- **[Cursor](https://cursor.sh)** — AI-first code editor
+- **[Codex CLI](https://github.com/openai/codex)** — OpenAI's terminal coding agent
+
+You should be comfortable with basic software development concepts like version control, project structure, and agile workflows. No prior experience with BMad-style agent systems is required—that's what these docs are for.
+
+## Join the Community
+
+Get help, share what you're building, or contribute to BMad:
+
+- **[Discord](https://discord.gg/gk8jAdXWmj)** — Chat with other BMad users, ask questions, share ideas
+- **[GitHub](https://github.com/bmad-code-org/BMAD-METHOD)** — Source code, issues, and contributions
+- **[YouTube](https://www.youtube.com/@BMadCode)** — Video tutorials and walkthroughs
+
+## Next Step
+
+Ready to dive in? **[Get Started with BMad](./tutorials/getting-started.md)** and build your first project.
+</document>
+
+<document path="tutorials/getting-started.md">
+Build software faster using AI-powered workflows with specialized agents that guide you through planning, architecture, and implementation.
+
+## What You'll Learn
+
+- Install and initialize BMad Method for a new project
+- Use **BMad-Help** — your intelligent guide that knows what to do next
+- Choose the right planning track for your project size
+- Progress through phases from requirements to working code
+- Use agents and workflows effectively
+
+:::note[Prerequisites]
+- **Node.js 20+** — Required for the installer
+- **Git** — Recommended for version control
+- **AI-powered IDE** — Claude Code, Cursor, or similar
+- **A project idea** — Even a simple one works for learning
+:::
+
+:::tip[The Easiest Path]
+**Install** → `npx bmad-method install`
+**Ask** → `bmad-help what should I do first?`
+**Build** → Let BMad-Help guide you workflow by workflow
+:::
+
+## Meet BMad-Help: Your Intelligent Guide
+
+**BMad-Help is the fastest way to get started with BMad.** You don't need to memorize workflows or phases — just ask, and BMad-Help will:
+
+- **Inspect your project** to see what's already been done
+- **Show your options** based on which modules you have installed
+- **Recommend what's next** — including the first required task
+- **Answer questions** like "I have a SaaS idea, where do I start?"
+
+### How to Use BMad-Help
+
+Run it in your AI IDE by invoking the skill:
+
+```
+bmad-help
+```
+
+Or combine it with a question for context-aware guidance:
+
+```
+bmad-help I have an idea for a SaaS product, I already know all the features I want. where do I get started?
+```
+
+BMad-Help will respond with:
+- What's recommended for your situation
+- What the first required task is
+- What the rest of the process looks like
+
+### It Powers Workflows Too
+
+BMad-Help doesn't just answer questions — **it automatically runs at the end of every workflow** to tell you exactly what to do next. No guessing, no searching docs — just clear guidance on the next required workflow.
+
+:::tip[Start Here]
+After installing BMad, invoke the `bmad-help` skill immediately. It will detect what modules you have installed and guide you to the right starting point for your project.
+:::
+
+## Understanding BMad
+
+BMad helps you build software through guided workflows with specialized AI agents. The process follows four phases:
+
+| Phase | Name           | What Happens                                        |
+| ----- | -------------- | --------------------------------------------------- |
+| 1     | Analysis       | Brainstorming, research, product brief *(optional)* |
+| 2     | Planning       | Create requirements (PRD or spec)              |
+| 3     | Solutioning    | Design architecture *(BMad Method/Enterprise only)* |
+| 4     | Implementation | Build epic by epic, story by story                  |
+
+**[Open the Workflow Map](../reference/workflow-map.md)** to explore phases, workflows, and context management.
+
+Based on your project's complexity, BMad offers three planning tracks:
+
+| Track           | Best For                                               | Documents Created                      |
+| --------------- | ------------------------------------------------------ | -------------------------------------- |
+| **Quick Flow**  | Bug fixes, simple features, clear scope (1-15 stories) | Tech-spec only                         |
+| **BMad Method** | Products, platforms, complex features (10-50+ stories) | PRD + Architecture + UX                |
+| **Enterprise**  | Compliance, multi-tenant systems (30+ stories)         | PRD + Architecture + Security + DevOps |
+
+:::note
+Story counts are guidance, not definitions. Choose your track based on planning needs, not story math.
+:::
+
+## Installation
+
+Open a terminal in your project directory and run:
+
+```bash
+npx bmad-method install
+```
+
+If you want the newest prerelease build instead of the default release channel, use `npx bmad-method@next install`.
+
+When prompted to select modules, choose **BMad Method**.
+
+The installer creates two folders:
+- `_bmad/` — agents, workflows, tasks, and configuration
+- `_bmad-output/` — empty for now, but this is where your artifacts will be saved
+
+:::tip[Your Next Step]
+Open your AI IDE in the project folder and run:
+
+```
+bmad-help
+```
+
+BMad-Help will detect what you've completed and recommend exactly what to do next. You can also ask it questions like "What are my options?" or "I have a SaaS idea, where should I start?"
+:::
+
+:::note[How to Load Agents and Run Workflows]
+Each workflow has a **skill** you invoke by name in your IDE (e.g., `bmad-create-prd`). Your AI tool will recognize the `bmad-*` name and run it — you don't need to load agents separately. You can also invoke an agent skill directly for general conversation (e.g., `bmad-agent-pm` for the PM agent).
+:::
+
+:::caution[Fresh Chats]
+Always start a fresh chat for each workflow. This prevents context limitations from causing issues.
+:::
+
+## Step 1: Create Your Plan
+
+Work through phases 1-3. **Use fresh chats for each workflow.**
+
+:::tip[Project Context (Optional)]
+Before starting, consider creating `project-context.md` to document your technical preferences and implementation rules. This ensures all AI agents follow your conventions throughout the project.
+
+Create it manually at `_bmad-output/project-context.md` or generate it after architecture using `bmad-generate-project-context`. [Learn more](../explanation/project-context.md).
+:::
+
+### Phase 1: Analysis (Optional)
+
+All workflows in this phase are optional:
+- **brainstorming** (`bmad-brainstorming`) — Guided ideation
+- **research** (`bmad-market-research` / `bmad-domain-research` / `bmad-technical-research`) — Market, domain, and technical research
+- **create-product-brief** (`bmad-create-product-brief`) — Recommended foundation document
+
+### Phase 2: Planning (Required)
+
+**For BMad Method and Enterprise tracks:**
+1. Invoke the **PM agent** (`bmad-agent-pm`) in a new chat
+2. Run the `bmad-create-prd` workflow (`bmad-create-prd`)
+3. Output: `PRD.md`
+
+**For Quick Flow track:**
+- Run `bmad-quick-dev` — it handles planning and implementation in a single workflow, skip to implementation
+
+:::note[UX Design (Optional)]
+If your project has a user interface, invoke the **UX-Designer agent** (`bmad-agent-ux-designer`) and run the UX design workflow (`bmad-create-ux-design`) after creating your PRD.
+:::
+
+### Phase 3: Solutioning (BMad Method/Enterprise)
+
+**Create Architecture**
+1. Invoke the **Architect agent** (`bmad-agent-architect`) in a new chat
+2. Run `bmad-create-architecture` (`bmad-create-architecture`)
+3. Output: Architecture document with technical decisions
+
+**Create Epics and Stories**
+
+:::tip[V6 Improvement]
+Epics and stories are now created *after* architecture. This produces better quality stories because architecture decisions (database, API patterns, tech stack) directly affect how work should be broken down.
+:::
+
+1. Invoke the **PM agent** (`bmad-agent-pm`) in a new chat
+2. Run `bmad-create-epics-and-stories` (`bmad-create-epics-and-stories`)
+3. The workflow uses both PRD and Architecture to create technically-informed stories
+
+**Implementation Readiness Check** *(Highly Recommended)*
+1. Invoke the **Architect agent** (`bmad-agent-architect`) in a new chat
+2. Run `bmad-check-implementation-readiness` (`bmad-check-implementation-readiness`)
+3. Validates cohesion across all planning documents
+
+## Step 2: Build Your Project
+
+Once planning is complete, move to implementation. **Each workflow should run in a fresh chat.**
+
+### Initialize Sprint Planning
+
+Invoke the **SM agent** (`bmad-agent-sm`) and run `bmad-sprint-planning` (`bmad-sprint-planning`). This creates `sprint-status.yaml` to track all epics and stories.
+
+### The Build Cycle
+
+For each story, repeat this cycle with fresh chats:
+
+| Step | Agent | Workflow       | Command                    | Purpose                            |
+| ---- | ----- | -------------- | -------------------------- | ---------------------------------- |
+| 1    | SM    | `bmad-create-story` | `bmad-create-story`  | Create story file from epic        |
+| 2    | DEV   | `bmad-dev-story`    | `bmad-dev-story`     | Implement the story                |
+| 3    | DEV   | `bmad-code-review`  | `bmad-code-review`   | Quality validation *(recommended)* |
+
+After completing all stories in an epic, invoke the **SM agent** (`bmad-agent-sm`) and run `bmad-retrospective` (`bmad-retrospective`).
+
+## What You've Accomplished
+
+You've learned the foundation of building with BMad:
+
+- Installed BMad and configured it for your IDE
+- Initialized a project with your chosen planning track
+- Created planning documents (PRD, Architecture, Epics & Stories)
+- Understood the build cycle for implementation
+
+Your project now has:
+
+```text
+your-project/
+├── _bmad/                                   # BMad configuration
+├── _bmad-output/
+│   ├── planning-artifacts/
+│   │   ├── PRD.md                           # Your requirements document
+│   │   ├── architecture.md                  # Technical decisions
+│   │   └── epics/                           # Epic and story files
+│   ├── implementation-artifacts/
+│   │   └── sprint-status.yaml               # Sprint tracking
+│   └── project-context.md                   # Implementation rules (optional)
+└── ...
+```
+
+## Quick Reference
+
+| Workflow                              | Command                                    | Agent     | Purpose                                         |
+| ------------------------------------- | ------------------------------------------ | --------- | ----------------------------------------------- |
+| **`bmad-help`** ⭐                    | `bmad-help`                               | Any       | **Your intelligent guide — ask anything!**      |
+| `bmad-create-prd`                | `bmad-create-prd`                     | PM        | Create Product Requirements Document            |
+| `bmad-create-architecture`            | `bmad-create-architecture`            | Architect | Create architecture document                     |
+| `bmad-generate-project-context`       | `bmad-generate-project-context`           | Analyst   | Create project context file                     |
+| `bmad-create-epics-and-stories`       | `bmad-create-epics-and-stories`       | PM        | Break down PRD into epics            |
+| `bmad-check-implementation-readiness` | `bmad-check-implementation-readiness` | Architect | Validate planning cohesion           |
+| `bmad-sprint-planning`                | `bmad-sprint-planning`                | SM        | Initialize sprint tracking           |
+| `bmad-create-story`                   | `bmad-create-story`                   | SM        | Create a story file                  |
+| `bmad-dev-story`                      | `bmad-dev-story`                      | DEV       | Implement a story                    |
+| `bmad-code-review`                    | `bmad-code-review`                    | DEV       | Review implemented code              |
+
+## Common Questions
+
+**Do I always need architecture?**
+Only for BMad Method and Enterprise tracks. Quick Flow skips from spec to implementation.
+
+**Can I change my plan later?**
+Yes. The SM agent has a `bmad-correct-course` workflow (`bmad-correct-course`) for handling scope changes.
+
+**What if I want to brainstorm first?**
+Invoke the Analyst agent (`bmad-agent-analyst`) and run `bmad-brainstorming` (`bmad-brainstorming`) before starting your PRD.
+
+**Do I need to follow a strict order?**
+Not strictly. Once you learn the flow, you can run workflows directly using the Quick Reference above.
+
+## Getting Help
+
+:::tip[First Stop: BMad-Help]
+**Invoke `bmad-help` anytime** — it's the fastest way to get unstuck. Ask it anything:
+- "What should I do after installing?"
+- "I'm stuck on workflow X"
+- "What are my options for Y?"
+- "Show me what's been done so far"
+
+BMad-Help inspects your project, detects what you've completed, and tells you exactly what to do next.
+:::
+
+- **During workflows** — Agents guide you with questions and explanations
+- **Community** — [Discord](https://discord.gg/gk8jAdXWmj) (#bmad-method-help, #report-bugs-and-issues)
+
+## Key Takeaways
+
+:::tip[Remember These]
+- **Start with `bmad-help`** — Your intelligent guide that knows your project and options
+- **Always use fresh chats** — Start a new chat for each workflow
+- **Track matters** — Quick Flow uses `bmad-quick-dev`; Method/Enterprise need PRD and architecture
+- **BMad-Help runs automatically** — Every workflow ends with guidance on what's next
+:::
+
+Ready to start? Install BMad, invoke `bmad-help`, and let your intelligent guide lead the way.
+</document>
+
+<document path="how-to/customize-bmad.md">
+Use the `.customize.yaml` files to tailor agent behavior, personas, and menus while preserving your changes across updates.
+
+## When to Use This
+
+- You want to change an agent's name, personality, or communication style
+- You need agents to remember project-specific context
+- You want to add custom menu items that trigger your own workflows or prompts
+- You want agents to perform specific actions every time they start up
+
+:::note[Prerequisites]
+- BMad installed in your project (see [How to Install BMad](./install-bmad.md))
+- A text editor for YAML files
+:::
+
+:::caution[Keep Your Customizations Safe]
+Always use the `.customize.yaml` files described here rather than editing agent files directly. The installer overwrites agent files during updates, but preserves your `.customize.yaml` changes.
+:::
+
+## Steps
+
+### 1. Locate Customization Files
+
+After installation, find one `.customize.yaml` file per agent in:
+
+```text
+_bmad/_config/agents/
+├── core-bmad-master.customize.yaml
+├── bmm-dev.customize.yaml
+├── bmm-pm.customize.yaml
+└── ... (one file per installed agent)
+```
+
+### 2. Edit the Customization File
+
+Open the `.customize.yaml` file for the agent you want to modify. Every section is optional -- customize only what you need.
+
+| Section            | Behavior | Purpose                                         |
+| ------------------ | -------- | ----------------------------------------------- |
+| `agent.metadata`   | Replaces | Override the agent's display name               |
+| `persona`          | Replaces | Set role, identity, style, and principles       |
+| `memories`         | Appends  | Add persistent context the agent always recalls |
+| `menu`             | Appends  | Add custom menu items for workflows or prompts  |
+| `critical_actions` | Appends  | Define startup instructions for the agent       |
+| `prompts`          | Appends  | Create reusable prompts for menu actions        |
+
+Sections marked **Replaces** overwrite the agent's defaults entirely. Sections marked **Appends** add to the existing configuration.
+
+**Agent Name**
+
+Change how the agent introduces itself:
+
+```yaml
+agent:
+  metadata:
+    name: 'Spongebob' # Default: "Amelia"
+```
+
+**Persona**
+
+Replace the agent's personality, role, and communication style:
+
+```yaml
+persona:
+  role: 'Senior Full-Stack Engineer'
+  identity: 'Lives in a pineapple (under the sea)'
+  communication_style: 'Spongebob annoying'
+  principles:
+    - 'Never Nester, Spongebob Devs hate nesting more than 2 levels deep'
+    - 'Favor composition over inheritance'
+```
+
+The `persona` section replaces the entire default persona, so include all four fields if you set it.
+
+**Memories**
+
+Add persistent context the agent will always remember:
+
+```yaml
+memories:
+  - 'Works at Krusty Krab'
+  - 'Favorite Celebrity: David Hasselhoff'
+  - 'Learned in Epic 1 that it is not cool to just pretend that tests have passed'
+```
+
+**Menu Items**
+
+Add custom entries to the agent's display menu. Each item needs a `trigger`, a target (`workflow` path or `action` reference), and a `description`:
+
+```yaml
+menu:
+  - trigger: my-workflow
+    workflow: 'my-custom/workflows/my-workflow.yaml'
+    description: My custom workflow
+  - trigger: deploy
+    action: '#deploy-prompt'
+    description: Deploy to production
+```
+
+**Critical Actions**
+
+Define instructions that run when the agent starts up:
+
+```yaml
+critical_actions:
+  - 'Check the CI Pipelines with the XYZ Skill and alert user on wake if anything is urgently needing attention'
+```
+
+**Custom Prompts**
+
+Create reusable prompts that menu items can reference with `action="#id"`:
+
+```yaml
+prompts:
+  - id: deploy-prompt
+    content: |
+      Deploy the current branch to production:
+      1. Run all tests
+      2. Build the project
+      3. Execute deployment script
+```
+
+### 3. Apply Your Changes
+
+After editing, reinstall to apply changes:
+
+```bash
+npx bmad-method install
+```
+
+The installer detects the existing installation and offers these options:
+
+| Option                       | What It Does                                                        |
+| ---------------------------- | ------------------------------------------------------------------- |
+| **Quick Update**             | Updates all modules to the latest version and applies customizations |
+| **Modify BMad Installation** | Full installation flow for adding or removing modules               |
+
+For customization-only changes, **Quick Update** is the fastest option.
+
+## Troubleshooting
+
+**Changes not appearing?**
+
+- Run `npx bmad-method install` and select **Quick Update** to apply changes
+- Check that your YAML syntax is valid (indentation matters)
+- Verify you edited the correct `.customize.yaml` file for the agent
+
+**Agent not loading?**
+
+- Check for YAML syntax errors using an online YAML validator
+- Ensure you did not leave fields empty after uncommenting them
+- Try reverting to the original template and rebuilding
+
+**Need to reset an agent?**
+
+- Clear or delete the agent's `.customize.yaml` file
+- Run `npx bmad-method install` and select **Quick Update** to restore defaults
+
+## Workflow Customization
+
+Customization of existing BMad Method workflows and skills is coming soon.
+
+## Module Customization
+
+Guidance on building expansion modules and customizing existing modules is coming soon.
+</document>
+
+<document path="how-to/established-projects.md">
+Use BMad Method effectively when working on existing projects and legacy codebases.
+
+This guide covers the essential workflow for onboarding to existing projects with BMad Method.
+
+:::note[Prerequisites]
+- BMad Method installed (`npx bmad-method install`)
+- An existing codebase you want to work on
+- Access to an AI-powered IDE (Claude Code or Cursor)
+:::
+
+## Step 1: Clean Up Completed Planning Artifacts
+
+If you have completed all PRD epics and stories through the BMad process, clean up those files. Archive them, delete them, or rely on version history if needed. Do not keep these files in:
+
+- `docs/`
+- `_bmad-output/planning-artifacts/`
+- `_bmad-output/implementation-artifacts/`
+
+## Step 2: Create Project Context
+
+:::tip[Recommended for Existing Projects]
+Generate `project-context.md` to capture your existing codebase patterns and conventions. This ensures AI agents follow your established practices when implementing changes.
+:::
+
+Run the generate project context workflow:
+
+```bash
+bmad-generate-project-context
+```
+
+This scans your codebase to identify:
+- Technology stack and versions
+- Code organization patterns
+- Naming conventions
+- Testing approaches
+- Framework-specific patterns
+
+You can review and refine the generated file, or create it manually at `_bmad-output/project-context.md` if you prefer.
+
+[Learn more about project context](../explanation/project-context.md)
+
+## Step 3: Maintain Quality Project Documentation
+
+Your `docs/` folder should contain succinct, well-organized documentation that accurately represents your project:
+
+- Intent and business rationale
+- Business rules
+- Architecture
+- Any other relevant project information
+
+For complex projects, consider using the `bmad-document-project` workflow. It offers runtime variants that will scan your entire project and document its actual current state.
+
+## Step 3: Get Help
+
+### BMad-Help: Your Starting Point
+
+**Run `bmad-help` anytime you're unsure what to do next.** This intelligent guide:
+
+- Inspects your project to see what's already been done
+- Shows options based on your installed modules
+- Understands natural language queries
+
+```
+bmad-help I have an existing Rails app, where should I start?
+bmad-help What's the difference between quick-flow and full method?
+bmad-help Show me what workflows are available
+```
+
+BMad-Help also **automatically runs at the end of every workflow**, providing clear guidance on exactly what to do next.
+
+### Choosing Your Approach
+
+You have two primary options depending on the scope of changes:
+
+| Scope                          | Recommended Approach                                                                                                          |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Small updates or additions** | Run `bmad-quick-dev` to clarify intent, plan, implement, and review in a single workflow. The full four-phase BMad Method is likely overkill. |
+| **Major changes or additions** | Start with the BMad Method, applying as much or as little rigor as needed.                                                    |
+
+### During PRD Creation
+
+When creating a brief or jumping directly into the PRD, ensure the agent:
+
+- Finds and analyzes your existing project documentation
+- Reads the proper context about your current system
+
+You can guide the agent explicitly, but the goal is to ensure the new feature integrates well with your existing system.
+
+### UX Considerations
+
+UX work is optional. The decision depends not on whether your project has a UX, but on:
+
+- Whether you will be working on UX changes
+- Whether significant new UX designs or patterns are needed
+
+If your changes amount to simple updates to existing screens you are happy with, a full UX process is unnecessary.
+
+### Architecture Considerations
+
+When doing architecture, ensure the architect:
+
+- Uses the proper documented files
+- Scans the existing codebase
+
+Pay close attention here to prevent reinventing the wheel or making decisions that misalign with your existing architecture.
+
+## More Information
+
+- **[Quick Fixes](./quick-fixes.md)** - Bug fixes and ad-hoc changes
+- **[Established Projects FAQ](../explanation/established-projects-faq.md)** - Common questions about working on established projects
+</document>
+
+<document path="how-to/get-answers-about-bmad.md">
+## Start Here: BMad-Help
+
+**The fastest way to get answers about BMad is the `bmad-help` skill.** This intelligent guide will answer upwards of 80% of all questions and is available to you directly in your IDE as you work.
+
+BMad-Help is more than a lookup tool — it:
+- **Inspects your project** to see what's already been completed
+- **Understands natural language** — ask questions in plain English
+- **Varies based on your installed modules** — shows relevant options
+- **Auto-runs after workflows** — tells you exactly what to do next
+- **Recommends the first required task** — no guessing where to start
+
+### How to Use BMad-Help
+
+Call it by name in your AI session:
+
+```
+bmad-help
+```
+
+:::tip
+You can also use `/bmad-help` or `$bmad-help` depending on your platform, but just `bmad-help` should work everywhere.
+:::
+
+Combine it with a natural language query:
+
+```
+bmad-help I have a SaaS idea and know all the features. Where do I start?
+bmad-help What are my options for UX design?
+bmad-help I'm stuck on the PRD workflow
+bmad-help Show me what's been done so far
+```
+
+BMad-Help responds with:
+- What's recommended for your situation
+- What the first required task is
+- What the rest of the process looks like
+
+## When to Use This Guide
+
+Use this section when:
+- You want to understand BMad's architecture or internals
+- You need answers outside of what BMad-Help provides
+- You're researching BMad before installing
+- You want to explore the source code directly
+
+## Steps
+
+### 1. Choose Your Source
+
+| Source               | Best For                                  | Examples                     |
+| -------------------- | ----------------------------------------- | ---------------------------- |
+| **`_bmad` folder**   | How BMad works—agents, workflows, prompts | "What does the PM agent do?" |
+| **Full GitHub repo** | History, installer, architecture          | "What changed in v6?"        |
+| **`llms-full.txt`**  | Quick overview from docs                  | "Explain BMad's four phases" |
+
+The `_bmad` folder is created when you install BMad. If you don't have it yet, clone the repo instead.
+
+### 2. Point Your AI at the Source
+
+**If your AI can read files (Claude Code, Cursor, etc.):**
+
+- **BMad installed:** Point at the `_bmad` folder and ask directly
+- **Want deeper context:** Clone the [full repo](https://github.com/bmad-code-org/BMAD-METHOD)
+
+**If you use ChatGPT or Claude.ai:**
+
+Fetch `llms-full.txt` into your session:
+
+```text
+https://bmad-code-org.github.io/BMAD-METHOD/llms-full.txt
+```
+
+
+### 3. Ask Your Question
+
+:::note[Example]
+**Q:** "Tell me the fastest way to build something with BMad"
+
+**A:** Use Quick Flow: Run `bmad-quick-dev` — it clarifies your intent, plans, implements, reviews, and presents results in a single workflow, skipping the full planning phases.
+:::
+
+## What You Get
+
+Direct answers about BMad—how agents work, what workflows do, why things are structured the way they are—without waiting for someone else to respond.
+
+## Tips
+
+- **Verify surprising answers** — LLMs occasionally get things wrong. Check the source file or ask on Discord.
+- **Be specific** — "What does step 3 of the PRD workflow do?" beats "How does PRD work?"
+
+## Still Stuck?
+
+Tried the LLM approach and still need help? You now have a much better question to ask.
+
+| Channel                   | Use For                                     |
+| ------------------------- | ------------------------------------------- |
+| `#bmad-method-help`       | Quick questions (real-time chat)            |
+| `help-requests` forum     | Detailed questions (searchable, persistent) |
+| `#suggestions-feedback`   | Ideas and feature requests                  |
+| `#report-bugs-and-issues` | Bug reports                                 |
+
+**Discord:** [discord.gg/gk8jAdXWmj](https://discord.gg/gk8jAdXWmj)
+
+**GitHub Issues:** [github.com/bmad-code-org/BMAD-METHOD/issues](https://github.com/bmad-code-org/BMAD-METHOD/issues) (for clear bugs)
+
+*You!*
+        *Stuck*
+             *in the queue—*
+                      *waiting*
+                              *for who?*
+
+*The source*
+        *is there,*
+                *plain to see!*
+
+*Point*
+     *your machine.*
+              *Set it free.*
+
+*It reads.*
+        *It speaks.*
+                *Ask away—*
+
+*Why wait*
+        *for tomorrow*
+                *when you have*
+                        *today?*
+
+*—Claude*
+</document>
+
+<document path="how-to/install-bmad.md">
+Use the `npx bmad-method install` command to set up BMad in your project with your choice of modules and AI tools.
+
+If you want to use a non interactive installer and provide all install options on the command line, see [this guide](./non-interactive-installation.md).
+
+## When to Use This
+
+- Starting a new project with BMad
+- Adding BMad to an existing codebase
+- Update the existing BMad Installation
+
+:::note[Prerequisites]
+- **Node.js** 20+ (required for the installer)
+- **Git** (recommended)
+- **AI tool** (Claude Code, Cursor, or similar)
+:::
+
+## Steps
+
+### 1. Run the Installer
+
+```bash
+npx bmad-method install
+```
+
+:::tip[Want the newest prerelease build?]
+Use the `next` dist-tag:
+```bash
+npx bmad-method@next install
+```
+
+This gets you newer changes earlier, with a higher chance of churn than the default install.
+:::
+
+:::tip[Bleeding edge]
+To install the latest from the main branch (may be unstable):
+```bash
+npx github:bmad-code-org/BMAD-METHOD install
+```
+:::
+
+### 2. Choose Installation Location
+
+The installer will ask where to install BMad files:
+
+- Current directory (recommended for new projects if you created the directory yourself and ran from within the directory)
+- Custom path
+
+### 3. Select Your AI Tools
+
+Pick which AI tools you use:
+
+- Claude Code
+- Cursor
+- Others
+
+Each tool has its own way of integrating skills. The installer creates tiny prompt files to activate workflows and agents — it just puts them where your tool expects to find them.
+
+:::note[Enabling Skills]
+Some platforms require skills to be explicitly enabled in settings before they appear. If you install BMad and don't see the skills, check your platform's settings or ask your AI assistant how to enable skills.
+:::
+
+### 4. Choose Modules
+
+The installer shows available modules. Select whichever ones you need — most users just want **BMad Method** (the software development module).
+
+### 5. Follow the Prompts
+
+The installer guides you through the rest — custom content, settings, etc.
+
+## What You Get
+
+```text
+your-project/
+├── _bmad/
+│   ├── bmm/            # Your selected modules
+│   │   └── config.yaml # Module settings (if you ever need to change them)
+│   ├── core/           # Required core module
+│   └── ...
+├── _bmad-output/       # Generated artifacts
+├── .claude/            # Claude Code skills (if using Claude Code)
+│   └── skills/
+│       ├── bmad-help/
+│       ├── bmad-persona/
+│       └── ...
+└── .cursor/            # Cursor skills (if using Cursor)
+    └── skills/
+        └── ...
+```
+
+## Verify Installation
+
+Run `bmad-help` to verify everything works and see what to do next.
+
+**BMad-Help is your intelligent guide** that will:
+- Confirm your installation is working
+- Show what's available based on your installed modules
+- Recommend your first step
+
+You can also ask it questions:
+```
+bmad-help I just installed, what should I do first?
+bmad-help What are my options for a SaaS project?
+```
+
+## Troubleshooting
+
+**Installer throws an error** — Copy-paste the output into your AI assistant and let it figure it out.
+
+**Installer worked but something doesn't work later** — Your AI needs BMad context to help. See [How to Get Answers About BMad](./get-answers-about-bmad.md) for how to point your AI at the right sources.
+</document>
+
+<document path="how-to/non-interactive-installation.md">
+Use command-line flags to install BMad non-interactively. This is useful for:
+
+## When to Use This
+
+- Automated deployments and CI/CD pipelines
+- Scripted installations
+- Batch installations across multiple projects
+- Quick installations with known configurations
+
+:::note[Prerequisites]
+Requires [Node.js](https://nodejs.org) v20+ and `npx` (included with npm).
+:::
+
+## Available Flags
+
+### Installation Options
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--directory <path>` | Installation directory | `--directory ~/projects/myapp` |
+| `--modules <modules>` | Comma-separated module IDs | `--modules bmm,bmb` |
+| `--tools <tools>` | Comma-separated tool/IDE IDs (use `none` to skip) | `--tools claude-code,cursor` or `--tools none` |
+| `--custom-content <paths>` | Comma-separated paths to custom modules | `--custom-content ~/my-module,~/another-module` |
+| `--action <type>` | Action for existing installations: `install` (default), `update`, or `quick-update` | `--action quick-update` |
+
+### Core Configuration
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--user-name <name>` | Name for agents to use | System username |
+| `--communication-language <lang>` | Agent communication language | English |
+| `--document-output-language <lang>` | Document output language | English |
+| `--output-folder <path>` | Output folder path (see resolution rules below) | `_bmad-output` |
+
+#### Output Folder Path Resolution
+
+The value passed to `--output-folder` (or entered interactively) is resolved according to these rules:
+
+| Input type | Example | Resolved as |
+|------------|---------|-------------|
+| Relative path (default) | `_bmad-output` | `<project-root>/_bmad-output` |
+| Relative path with traversal | `../../shared-outputs` | Normalized absolute path — e.g. `/Users/me/shared-outputs` |
+| Absolute path | `/Users/me/shared-outputs` | Used as-is — project root is **not** prepended |
+
+The resolved path is what agents and workflows use at runtime when writing output files. Using an absolute path or a traversal-based relative path lets you direct all generated artifacts to a directory outside your project tree — useful for shared or monorepo setups.
+
+### Other Options
+
+| Flag | Description |
+|------|-------------|
+| `-y, --yes` | Accept all defaults and skip prompts |
+| `-d, --debug` | Enable debug output for manifest generation |
+
+## Module IDs
+
+Available module IDs for the `--modules` flag:
+
+- `bmm` — BMad Method Master
+- `bmb` — BMad Builder
+
+Check the [BMad registry](https://github.com/bmad-code-org) for available external modules.
+
+## Tool/IDE IDs
+
+Available tool IDs for the `--tools` flag:
+
+**Preferred:** `claude-code`, `cursor`
+
+Run `npx bmad-method install` interactively once to see the full current list of supported tools, or check the [platform codes configuration](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/tools/installer/ide/platform-codes.yaml).
+
+## Installation Modes
+
+| Mode | Description | Example |
+|------|-------------|---------|
+| Fully non-interactive | Provide all flags to skip all prompts | `npx bmad-method install --directory . --modules bmm --tools claude-code --yes` |
+| Semi-interactive | Provide some flags; BMad prompts for the rest | `npx bmad-method install --directory . --modules bmm` |
+| Defaults only | Accept all defaults with `-y` | `npx bmad-method install --yes` |
+| Without tools | Skip tool/IDE configuration | `npx bmad-method install --modules bmm --tools none` |
+
+## Examples
+
+### CI/CD Pipeline Installation
+
+```bash
+#!/bin/bash
+# install-bmad.sh
+
+npx bmad-method install \
+  --directory "${GITHUB_WORKSPACE}" \
+  --modules bmm \
+  --tools claude-code \
+  --user-name "CI Bot" \
+  --communication-language English \
+  --document-output-language English \
+  --output-folder _bmad-output \
+  --yes
+```
+
+### Update Existing Installation
+
+```bash
+npx bmad-method install \
+  --directory ~/projects/myapp \
+  --action update \
+  --modules bmm,bmb,custom-module
+```
+
+### Quick Update (Preserve Settings)
+
+```bash
+npx bmad-method install \
+  --directory ~/projects/myapp \
+  --action quick-update
+```
+
+### Installation with Custom Content
+
+```bash
+npx bmad-method install \
+  --directory ~/projects/myapp \
+  --modules bmm \
+  --custom-content ~/my-custom-module,~/another-module \
+  --tools claude-code
+```
+
+## What You Get
+
+- A fully configured `_bmad/` directory in your project
+- Agents and workflows configured for your selected modules and tools
+- A `_bmad-output/` folder for generated artifacts
+
+## Validation and Error Handling
+
+BMad validates all provided flags:
+
+- **Directory** — Must be a valid path with write permissions
+- **Modules** — Warns about invalid module IDs (but won't fail)
+- **Tools** — Warns about invalid tool IDs (but won't fail)
+- **Custom Content** — Each path must contain a valid `module.yaml` file
+- **Action** — Must be one of: `install`, `update`, `quick-update`
+
+Invalid values will either:
+1. Show an error and exit (for critical options like directory)
+2. Show a warning and skip (for optional items like custom content)
+3. Fall back to interactive prompts (for missing required values)
+
+:::tip[Best Practices]
+- Use absolute paths for `--directory` to avoid ambiguity
+- Use an absolute path for `--output-folder` when you want artifacts written outside the project tree (e.g. a shared monorepo outputs directory)
+- Test flags locally before using in CI/CD pipelines
+- Combine with `-y` for truly unattended installations
+- Use `--debug` if you encounter issues during installation
+:::
+
+## Troubleshooting
+
+### Installation fails with "Invalid directory"
+
+- The directory path must exist (or its parent must exist)
+- You need write permissions
+- The path must be absolute or correctly relative to the current directory
+
+### Module not found
+
+- Verify the module ID is correct
+- External modules must be available in the registry
+
+### Custom content path invalid
+
+Ensure each custom content path:
+- Points to a directory
+- Contains a `module.yaml` file in the root
+- Has a `code` field in the `module.yaml`
+
+:::note[Still stuck?]
+Run with `--debug` for detailed output, try interactive mode to isolate the issue, or report at <https://github.com/bmad-code-org/BMAD-METHOD/issues>.
+:::
+</document>
+
+<document path="how-to/project-context.md">
+Use the `project-context.md` file to ensure AI agents follow your project's technical preferences and implementation rules throughout all workflows. To make sure this is always available, you can also add the line `Important project context and conventions are located in [path to project context]/project-context.md` to your tools context or always rules file (such as `AGENTS.md`)
+
+:::note[Prerequisites]
+- BMad Method installed
+- Understanding of your project's technology stack and conventions
+:::
+
+## When to Use This
+
+- You have strong technical preferences before starting architecture
+- You've completed architecture and want to capture decisions for implementation
+- You're working on an existing codebase with established patterns
+- You notice agents making inconsistent decisions across stories
+
+## Step 1: Choose Your Approach
+
+**Manual creation** — Best when you know exactly what rules you want to document
+
+**Generate after architecture** — Best for capturing decisions made during solutioning
+
+**Generate for existing projects** — Best for discovering patterns in existing codebases
+
+## Step 2: Create the File
+
+### Option A: Manual Creation
+
+Create the file at `_bmad-output/project-context.md`:
+
+```bash
+mkdir -p _bmad-output
+touch _bmad-output/project-context.md
+```
+
+Add your technology stack and implementation rules:
+
+```markdown
+---
+project_name: 'MyProject'
+user_name: 'YourName'
+date: '2026-02-15'
+sections_completed: ['technology_stack', 'critical_rules']
+---
+
+# Project Context for AI Agents
+
+## Technology Stack & Versions
+
+- Node.js 20.x, TypeScript 5.3, React 18.2
+- State: Zustand
+- Testing: Vitest, Playwright
+- Styling: Tailwind CSS
+
+## Critical Implementation Rules
+
+**TypeScript:**
+- Strict mode enabled, no `any` types
+- Use `interface` for public APIs, `type` for unions
+
+**Code Organization:**
+- Components in `/src/components/` with co-located tests
+- API calls use `apiClient` singleton — never fetch directly
+
+**Testing:**
+- Unit tests focus on business logic
+- Integration tests use MSW for API mocking
+```
+
+### Option B: Generate After Architecture
+
+Run the workflow in a fresh chat:
+
+```bash
+bmad-generate-project-context
+```
+
+The workflow scans your architecture document and project files to generate a context file capturing the decisions made.
+
+### Option C: Generate for Existing Projects
+
+For existing projects, run:
+
+```bash
+bmad-generate-project-context
+```
+
+The workflow analyzes your codebase to identify conventions, then generates a context file you can review and refine.
+
+## Step 3: Verify Content
+
+Review the generated file and ensure it captures:
+
+- Correct technology versions
+- Your actual conventions (not generic best practices)
+- Rules that prevent common mistakes
+- Framework-specific patterns
+
+Edit manually to add anything missing or remove inaccuracies.
+
+## What You Get
+
+A `project-context.md` file that:
+
+- Ensures all agents follow the same conventions
+- Prevents inconsistent decisions across stories
+- Captures architecture decisions for implementation
+- Serves as a reference for your project's patterns and rules
+
+## Tips
+
+:::tip[Best Practices]
+- **Focus on the unobvious** — Document patterns agents might miss (e.g., "Use JSDoc on every public class"), not universal practices like "use meaningful variable names."
+- **Keep it lean** — This file is loaded by every implementation workflow. Long files waste context. Exclude content that only applies to narrow scope or specific stories.
+- **Update as needed** — Edit manually when patterns change, or re-generate after significant architecture changes.
+- Works for Quick Flow and full BMad Method projects alike.
+:::
+
+## Next Steps
+
+- [**Project Context Explanation**](../explanation/project-context.md) — Learn more about how it works
+- [**Workflow Map**](../reference/workflow-map.md) — See which workflows load project context
+</document>
+
+<document path="how-to/quick-fixes.md">
+Use **Quick Dev** for bug fixes, refactorings, or small targeted changes that don't require the full BMad Method.
+
+## When to Use This
+
+- Bug fixes with a clear, known cause
+- Small refactorings (rename, extract, restructure) contained within a few files
+- Minor feature tweaks or configuration changes
+- Dependency updates
+
+:::note[Prerequisites]
+- BMad Method installed (`npx bmad-method install`)
+- An AI-powered IDE (Claude Code, Cursor, or similar)
+:::
+
+## Steps
+
+### 1. Start a Fresh Chat
+
+Open a **fresh chat session** in your AI IDE. Reusing a session from a previous workflow can cause context conflicts.
+
+### 2. Give It Your Intent
+
+Quick Dev accepts free-form intent — before, with, or after the invocation. Examples:
+
+```text
+run quick-dev — Fix the login validation bug that allows empty passwords.
+```
+
+```text
+run quick-dev — fix https://github.com/org/repo/issues/42
+```
+
+```text
+run quick-dev — implement the intent in _bmad-output/implementation-artifacts/my-intent.md
+```
+
+```text
+I think the problem is in the auth middleware, it's not checking token expiry.
+Let me look at it... yeah, src/auth/middleware.ts line 47 skips
+the exp check entirely. run quick-dev
+```
+
+```text
+run quick-dev
+> What would you like to do?
+Refactor UserService to use async/await instead of callbacks.
+```
+
+Plain text, file paths, GitHub issue URLs, bug tracker links — anything the LLM can resolve to a concrete intent.
+
+### 3. Answer Questions and Approve
+
+Quick Dev may ask clarifying questions or present a short spec for your approval before implementing. Answer its questions and approve when you're satisfied with the plan.
+
+### 4. Review and Push
+
+Quick Dev implements the change, reviews its own work, patches issues, and commits locally. When it's done, it opens the affected files in your editor.
+
+- Skim the diff to confirm the change matches your intent
+- If something looks off, tell the agent what to fix — it can iterate in the same session
+
+Once satisfied, push the commit. Quick Dev will offer to push and create a PR for you.
+
+:::caution[If Something Breaks]
+If a pushed change causes unexpected issues, use `git revert HEAD` to undo the last commit cleanly. Then start a fresh chat and run Quick Dev again to try a different approach.
+:::
+
+## What You Get
+
+- Modified source files with the fix or refactoring applied
+- Passing tests (if your project has a test suite)
+- A ready-to-push commit with a conventional commit message
+
+## Deferred Work
+
+Quick Dev keeps each run focused on a single goal. If your request contains multiple independent goals, or if the review surfaces pre-existing issues unrelated to your change, Quick Dev defers them to a file (`deferred-work.md` in your implementation artifacts directory) rather than trying to tackle everything at once.
+
+Check this file after a run — it's your backlog of things to come back to. Each deferred item can be fed into a fresh Quick Dev run later.
+
+## When to Upgrade to Formal Planning
+
+Consider using the full BMad Method when:
+
+- The change affects multiple systems or requires coordinated updates across many files
+- You are unsure about the scope and need requirements discovery first
+- You need documentation or architectural decisions recorded for the team
+
+See [Quick Dev](../explanation/quick-dev.md) for more on how Quick Dev fits into the BMad Method.
+</document>
+
+<document path="how-to/shard-large-documents.md">
+Use the `bmad-shard-doc` tool if you need to split large markdown files into smaller, organized files for better context management.
+
+:::caution[Deprecated]
+This is no longer recommended, and soon with updated workflows and most major LLMs and tools supporting subprocesses this will be unnecessary.
+:::
+
+## When to Use This
+
+Only use this if you notice your chosen tool / model combination is failing to load and read all the documents as input when needed.
+
+## What is Document Sharding?
+
+Document sharding splits large markdown files into smaller, organized files based on level 2 headings (`## Heading`).
+
+### Architecture
+
+```text
+Before Sharding:
+_bmad-output/planning-artifacts/
+└── PRD.md (large 50k token file)
+
+After Sharding:
+_bmad-output/planning-artifacts/
+└── prd/
+    ├── index.md                    # Table of contents with descriptions
+    ├── overview.md                 # Section 1
+    ├── user-requirements.md        # Section 2
+    ├── technical-requirements.md   # Section 3
+    └── ...                         # Additional sections
+```
+
+## Steps
+
+### 1. Run the Shard-Doc Tool
+
+```bash
+/bmad-shard-doc
+```
+
+### 2. Follow the Interactive Process
+
+```text
+Agent: Which document would you like to shard?
+User: docs/PRD.md
+
+Agent: Default destination: docs/prd/
+       Accept default? [y/n]
+User: y
+
+Agent: Sharding PRD.md...
+       ✓ Created 12 section files
+       ✓ Generated index.md
+       ✓ Complete!
+```
+
+## How Workflow Discovery Works
+
+BMad workflows use a **dual discovery system**:
+
+1. **Try whole document first** - Look for `document-name.md`
+2. **Check for sharded version** - Look for `document-name/index.md`
+3. **Priority rule** - Whole document takes precedence if both exist - remove the whole document if you want the sharded to be used instead
+
+## Workflow Support
+
+All BMM workflows support both formats:
+
+- Whole documents
+- Sharded documents
+- Automatic detection
+- Transparent to user
+</document>
+
+<document path="how-to/upgrade-to-v6.md">
+Use the BMad installer to upgrade from v4 to v6, which includes automatic detection of legacy installations and migration assistance.
+
+## When to Use This
+
+- You have BMad v4 installed (`.bmad-method` folder)
+- You want to migrate to the new v6 architecture
+- You have existing planning artifacts to preserve
+
+:::note[Prerequisites]
+- Node.js 20+
+- Existing BMad v4 installation
+:::
+
+## Steps
+
+### 1. Run the Installer
+
+Follow the [Installer Instructions](./install-bmad.md).
+
+### 2. Handle Legacy Installation
+
+When v4 is detected, you can:
+
+- Allow the installer to back up and remove `.bmad-method`
+- Exit and handle cleanup manually
+
+If you named your bmad method folder something else - you will need to manually remove the folder yourself.
+
+### 3. Clean Up IDE Skills
+
+Manually remove legacy v4 IDE commands/skills - for example if you have Claude Code, look for any nested folders that start with bmad and remove them:
+
+- `.claude/commands/`
+
+The new v6 skills are installed to:
+
+- `.claude/skills/`
+
+### 4. Migrate Planning Artifacts
+
+**If you have planning documents (Brief/PRD/UX/Architecture):**
+
+Move them to `_bmad-output/planning-artifacts/` with descriptive names:
+
+- Include `PRD` in filename for PRD documents
+- Include `brief`, `architecture`, or `ux-design` accordingly
+- Sharded documents can be in named subfolders
+
+**If you're mid-planning:** Consider restarting with v6 workflows. Use your existing documents as inputs—the new progressive discovery workflows with web search and IDE plan mode produce better results.
+
+### 5. Migrate In-Progress Development
+
+If you have stories created or implemented:
+
+1. Complete the v6 installation
+2. Place `epics.md` or `epics/epic*.md` in `_bmad-output/planning-artifacts/`
+3. Run the Scrum Master's `bmad-sprint-planning` workflow
+4. Tell the SM which epics/stories are already complete
+
+## What You Get
+
+**v6 unified structure:**
+
+```text
+your-project/
+├── _bmad/               # Single installation folder
+│   ├── _config/         # Your customizations
+│   │   └── agents/      # Agent customization files
+│   ├── core/            # Universal core framework
+│   ├── bmm/             # BMad Method module
+│   ├── bmb/             # BMad Builder
+│   └── cis/             # Creative Intelligence Suite
+└── _bmad-output/        # Output folder (was doc folder in v4)
+```
+
+## Module Migration
+
+| v4 Module                     | v6 Status                                 |
+| ----------------------------- | ----------------------------------------- |
+| `.bmad-2d-phaser-game-dev`    | Integrated into BMGD Module               |
+| `.bmad-2d-unity-game-dev`     | Integrated into BMGD Module               |
+| `.bmad-godot-game-dev`        | Integrated into BMGD Module               |
+| `.bmad-infrastructure-devops` | Deprecated — new DevOps agent coming soon |
+| `.bmad-creative-writing`      | Not adapted — new v6 module coming soon   |
+
+## Key Changes
+
+| Concept       | v4                                    | v6                                   |
+| ------------- | ------------------------------------- | ------------------------------------ |
+| **Core**      | `_bmad-core` was actually BMad Method | `_bmad/core/` is universal framework |
+| **Method**    | `_bmad-method`                        | `_bmad/bmm/`                         |
+| **Config**    | Modified files directly               | `config.yaml` per module             |
+| **Documents** | Sharded or unsharded required setup   | Fully flexible, auto-scanned         |
+</document>
+
+<document path="explanation/advanced-elicitation.md">
+Make the LLM reconsider what it just generated. You pick a reasoning method, it applies that method to its own output, you decide whether to keep the improvements.
+
+## What is Advanced Elicitation?
+
+A structured second pass. Instead of asking the AI to "try again" or "make it better," you select a specific reasoning method and the AI re-examines its own output through that lens.
+
+The difference matters. Vague requests produce vague revisions. A named method forces a particular angle of attack, surfacing insights that a generic retry would miss.
+
+## When to Use It
+
+- After a workflow generates content and you want alternatives
+- When output seems okay but you suspect there's more depth
+- To stress-test assumptions or find weaknesses
+- For high-stakes content where rethinking helps
+
+Workflows offer advanced elicitation at decision points - after the LLM has generated something, you'll be asked if you want to run it.
+
+## How It Works
+
+1. LLM suggests 5 relevant methods for your content
+2. You pick one (or reshuffle for different options)
+3. Method is applied, improvements shown
+4. Accept or discard, repeat or continue
+
+## Built-in Methods
+
+Dozens of reasoning methods are available. A few examples:
+
+- **Pre-mortem Analysis** - Assume the project already failed, work backward to find why
+- **First Principles Thinking** - Strip away assumptions, rebuild from ground truth
+- **Inversion** - Ask how to guarantee failure, then avoid those things
+- **Red Team vs Blue Team** - Attack your own work, then defend it
+- **Socratic Questioning** - Challenge every claim with "why?" and "how do you know?"
+- **Constraint Removal** - Drop all constraints, see what changes, add them back selectively
+- **Stakeholder Mapping** - Re-evaluate from each stakeholder's perspective
+- **Analogical Reasoning** - Find parallels in other domains and apply their lessons
+
+And many more. The AI picks the most relevant options for your content - you choose which to run.
+
+:::tip[Start Here]
+Pre-mortem Analysis is a good first pick for any spec or plan. It consistently finds gaps that a standard review misses.
+:::
+</document>
+
+<document path="explanation/adversarial-review.md">
+Force deeper analysis by requiring problems to be found.
+
+## What is Adversarial Review?
+
+A review technique where the reviewer *must* find issues. No "looks good" allowed. The reviewer adopts a cynical stance - assume problems exist and find them.
+
+This isn't about being negative. It's about forcing genuine analysis instead of a cursory glance that rubber-stamps whatever was submitted.
+
+**The core rule:** You must find issues. Zero findings triggers a halt - re-analyze or explain why.
+
+## Why It Works
+
+Normal reviews suffer from confirmation bias. You skim the work, nothing jumps out, you approve it. The "find problems" mandate breaks this pattern:
+
+- **Forces thoroughness** - Can't approve until you've looked hard enough to find issues
+- **Catches missing things** - "What's not here?" becomes a natural question
+- **Improves signal quality** - Findings are specific and actionable, not vague concerns
+- **Information asymmetry** - Run reviews with fresh context (no access to original reasoning) so you evaluate the artifact, not the intent
+
+## Where It's Used
+
+Adversarial review appears throughout BMad workflows - code review, implementation readiness checks, spec validation, and others. Sometimes it's a required step, sometimes optional (like advanced elicitation or party mode). The pattern adapts to whatever artifact needs scrutiny.
+
+## Human Filtering Required
+
+Because the AI is *instructed* to find problems, it will find problems - even when they don't exist. Expect false positives: nitpicks dressed as issues, misunderstandings of intent, or outright hallucinated concerns.
+
+**You decide what's real.** Review each finding, dismiss the noise, fix what matters.
+
+## Example
+
+Instead of:
+
+> "The authentication implementation looks reasonable. Approved."
+
+An adversarial review produces:
+
+> 1. **HIGH** - `login.ts:47` - No rate limiting on failed attempts
+> 2. **HIGH** - Session token stored in localStorage (XSS vulnerable)
+> 3. **MEDIUM** - Password validation happens client-side only
+> 4. **MEDIUM** - No audit logging for failed login attempts
+> 5. **LOW** - Magic number `3600` should be `SESSION_TIMEOUT_SECONDS`
+
+The first review might miss a security vulnerability. The second caught four.
+
+## Iteration and Diminishing Returns
+
+After addressing findings, consider running it again. A second pass usually catches more. A third isn't always useless either. But each pass takes time, and eventually you hit diminishing returns - just nitpicks and false findings.
+
+:::tip[Better Reviews]
+Assume problems exist. Look for what's missing, not just what's wrong.
+:::
+</document>
+
+<document path="explanation/brainstorming.md">
+Unlock your creativity through guided exploration.
+
+## What is Brainstorming?
+
+Run `bmad-brainstorming` and you've got a creative facilitator pulling ideas out of you - not generating them for you. The AI acts as coach and guide, using proven techniques to create conditions where your best thinking emerges.
+
+**Good for:**
+
+- Breaking through creative blocks
+- Generating product or feature ideas
+- Exploring problems from new angles
+- Developing raw concepts into action plans
+
+## How It Works
+
+1. **Setup** - Define topic, goals, constraints
+2. **Choose approach** - Pick techniques yourself, get AI recommendations, go random, or follow a progressive flow
+3. **Facilitation** - Work through techniques with probing questions and collaborative coaching
+4. **Organize** - Ideas grouped into themes and prioritized
+5. **Action** - Top ideas get next steps and success metrics
+
+Everything gets captured in a session document you can reference later or share with stakeholders.
+
+:::note[Your Ideas]
+Every idea comes from you. The workflow creates conditions for insight - you're the source.
+:::
+</document>
+
+<document path="explanation/party-mode.md">
+Get all your AI agents in one conversation.
+
+## What is Party Mode?
+
+Run `bmad-party-mode` and you've got your whole AI team in one room - PM, Architect, Dev, UX Designer, whoever you need. BMad Master orchestrates, picking relevant agents per message. Agents respond in character, agree, disagree, and build on each other's ideas.
+
+The conversation continues as long as you want. Ask follow-ups, push back on answers, redirect the discussion - it's a real back-and-forth with your agents until you're done.
+
+**Good for:**
+
+- Big decisions with tradeoffs
+- Brainstorming sessions
+- Post-mortems when things go wrong
+- Sprint retrospectives and planning
+
+## Examples
+
+### Calling Out Bad Architecture
+
+**You:** "Okay team, our last sprint was a disaster. The authentication service went down three times. Who screwed this up?"
+
+**Architect:** "The design was sound - distributed authentication with proper fallbacks. If implementation deviated from the spec..."
+
+**Dev:** "I followed the architecture doc exactly. The spec didn't account for concurrent session invalidation race conditions."
+
+**PM:** "Both of you missed the bigger issue - we didn't validate session management requirements in the PRD. This is on me for not catching it."
+
+**TEA:** "And I should've caught this in integration tests. The test scenarios didn't cover concurrent invalidation."
+
+### Creative Brainstorming
+
+**You:** "How do we make onboarding feel magical instead of boring?"
+
+**UX Designer:** "Start with progressive disclosure - reveal features as users need them, not all at once in a tutorial."
+
+**Storyteller:** "What if onboarding was a story? Each step reveals a character's journey - the user IS the hero."
+
+**Game Designer:** "Building on that - what if the first 'quest' is actually solving a real user problem? They learn by doing something valuable."
+
+### Technical Decision
+
+**You:** "Monolith or microservices for MVP?"
+
+**Architect:** "Start monolith. Microservices add complexity you don't need at 1000 users."
+
+**PM:** "Agree. Time to market matters more than theoretical scalability."
+
+**Dev:** "Monolith with clear module boundaries. We can extract services later if needed."
+
+:::tip[Better Decisions]
+Better decisions through diverse perspectives. Welcome to party mode.
+:::
+</document>
+
+<document path="explanation/preventing-agent-conflicts.md">
+When multiple AI agents implement different parts of a system, they can make conflicting technical decisions. Architecture documentation prevents this by establishing shared standards.
+
+## Common Conflict Types
+
+### API Style Conflicts
+
+Without architecture:
+- Agent A uses REST with `/users/{id}`
+- Agent B uses GraphQL mutations
+- Result: Inconsistent API patterns, confused consumers
+
+With architecture:
+- ADR specifies: "Use GraphQL for all client-server communication"
+- All agents follow the same pattern
+
+### Database Design Conflicts
+
+Without architecture:
+- Agent A uses snake_case column names
+- Agent B uses camelCase column names
+- Result: Inconsistent schema, confusing queries
+
+With architecture:
+- Standards document specifies naming conventions
+- All agents follow the same patterns
+
+### State Management Conflicts
+
+Without architecture:
+- Agent A uses Redux for global state
+- Agent B uses React Context
+- Result: Multiple state management approaches, complexity
+
+With architecture:
+- ADR specifies state management approach
+- All agents implement consistently
+
+## How Architecture Prevents Conflicts
+
+### 1. Explicit Decisions via ADRs
+
+Every significant technology choice is documented with:
+- Context (why this decision matters)
+- Options considered (what alternatives exist)
+- Decision (what we chose)
+- Rationale (why we chose it)
+- Consequences (trade-offs accepted)
+
+### 2. FR/NFR-Specific Guidance
+
+Architecture maps each functional requirement to technical approach:
+- FR-001: User Management → GraphQL mutations
+- FR-002: Mobile App → Optimized queries
+
+### 3. Standards and Conventions
+
+Explicit documentation of:
+- Directory structure
+- Naming conventions
+- Code organization
+- Testing patterns
+
+## Architecture as Shared Context
+
+Think of architecture as the shared context that all agents read before implementing:
+
+```text
+PRD: "What to build"
+     ↓
+Architecture: "How to build it"
+     ↓
+Agent A reads architecture → implements Epic 1
+Agent B reads architecture → implements Epic 2
+Agent C reads architecture → implements Epic 3
+     ↓
+Result: Consistent implementation
+```
+
+## Key ADR Topics
+
+Common decisions that prevent conflicts:
+
+| Topic            | Example Decision                             |
+| ---------------- | -------------------------------------------- |
+| API Style        | GraphQL vs REST vs gRPC                      |
+| Database         | PostgreSQL vs MongoDB                        |
+| Auth             | JWT vs Sessions                              |
+| State Management | Redux vs Context vs Zustand                  |
+| Styling          | CSS Modules vs Tailwind vs Styled Components |
+| Testing          | Jest + Playwright vs Vitest + Cypress        |
+
+## Anti-Patterns to Avoid
+
+:::caution[Common Mistakes]
+- **Implicit Decisions** — "We'll figure out the API style as we go" leads to inconsistency
+- **Over-Documentation** — Documenting every minor choice causes analysis paralysis
+- **Stale Architecture** — Documents written once and never updated cause agents to follow outdated patterns
+:::
+
+:::tip[Correct Approach]
+- Document decisions that cross epic boundaries
+- Focus on conflict-prone areas
+- Update architecture as you learn
+- Use `bmad-correct-course` for significant changes
+:::
+</document>
+
+<document path="explanation/project-context.md">
+The `project-context.md` file is your project's implementation guide for AI agents. Similar to a "constitution" in other development systems, it captures the rules, patterns, and preferences that ensure consistent code generation across all workflows.
+
+## What It Does
+
+AI agents make implementation decisions constantly — which patterns to follow, how to structure code, what conventions to use. Without clear guidance, they may:
+- Follow generic best practices that don't match your codebase
+- Make inconsistent decisions across different stories
+- Miss project-specific requirements or constraints
+
+The `project-context.md` file solves this by documenting what agents need to know in a concise, LLM-optimized format.
+
+## How It Works
+
+Every implementation workflow automatically loads `project-context.md` if it exists. The architect workflow also loads it to respect your technical preferences when designing the architecture.
+
+**Loaded by these workflows:**
+- `bmad-create-architecture` — respects technical preferences during solutioning
+- `bmad-create-story` — informs story creation with project patterns
+- `bmad-dev-story` — guides implementation decisions
+- `bmad-code-review` — validates against project standards
+- `bmad-quick-dev` — applies patterns when implementing specs
+- `bmad-sprint-planning`, `bmad-retrospective`, `bmad-correct-course` — provides project-wide context
+
+## When to Create It
+
+The `project-context.md` file is useful at any stage of a project:
+
+| Scenario | When to Create | Purpose |
+|----------|----------------|---------|
+| **New project, before architecture** | Manually, before `bmad-create-architecture` | Document your technical preferences so the architect respects them |
+| **New project, after architecture** | Via `bmad-generate-project-context` or manually | Capture architecture decisions for implementation agents |
+| **Existing project** | Via `bmad-generate-project-context` | Discover existing patterns so agents follow established conventions |
+| **Quick Flow project** | Before or during `bmad-quick-dev` | Ensure quick implementation respects your patterns |
+
+:::tip[Recommended]
+For new projects, create it manually before architecture if you have strong technical preferences. Otherwise, generate it after architecture to capture those decisions.
+:::
+
+## What Goes In It
+
+The file has two main sections:
+
+### Technology Stack & Versions
+
+Documents the frameworks, languages, and tools your project uses with specific versions:
+
+```markdown
+## Technology Stack & Versions
+
+- Node.js 20.x, TypeScript 5.3, React 18.2
+- State: Zustand (not Redux)
+- Testing: Vitest, Playwright, MSW
+- Styling: Tailwind CSS with custom design tokens
+```
+
+### Critical Implementation Rules
+
+Documents patterns and conventions that agents might otherwise miss:
+
+```markdown
+## Critical Implementation Rules
+
+**TypeScript Configuration:**
+- Strict mode enabled — no `any` types without explicit approval
+- Use `interface` for public APIs, `type` for unions/intersections
+
+**Code Organization:**
+- Components in `/src/components/` with co-located `.test.tsx`
+- Utilities in `/src/lib/` for reusable pure functions
+- API calls use the `apiClient` singleton — never fetch directly
+
+**Testing Patterns:**
+- Unit tests focus on business logic, not implementation details
+- Integration tests use MSW to mock API responses
+- E2E tests cover critical user journeys only
+
+**Framework-Specific:**
+- All async operations use the `handleError` wrapper for consistent error handling
+- Feature flags accessed via `featureFlag()` from `@/lib/flags`
+- New routes follow the file-based routing pattern in `/src/app/`
+```
+
+Focus on what's **unobvious** — things agents might not infer from reading code snippets. Don't document standard practices that apply universally.
+
+## Creating the File
+
+You have three options:
+
+### Manual Creation
+
+Create the file at `_bmad-output/project-context.md` and add your rules:
+
+```bash
+# In your project root
+mkdir -p _bmad-output
+touch _bmad-output/project-context.md
+```
+
+Edit it with your technology stack and implementation rules. The architect and implementation workflows will automatically find and load it.
+
+### Generate After Architecture
+
+Run the `bmad-generate-project-context` workflow after completing your architecture:
+
+```bash
+bmad-generate-project-context
+```
+
+This scans your architecture document and project files to generate a context file capturing the decisions made.
+
+### Generate for Existing Projects
+
+For existing projects, run `bmad-generate-project-context` to discover existing patterns:
+
+```bash
+bmad-generate-project-context
+```
+
+The workflow analyzes your codebase to identify conventions, then generates a context file you can review and refine.
+
+## Why It Matters
+
+Without `project-context.md`, agents make assumptions that may not match your project:
+
+| Without Context | With Context |
+|----------------|--------------|
+| Uses generic patterns | Follows your established conventions |
+| Inconsistent style across stories | Consistent implementation |
+| May miss project-specific constraints | Respects all technical requirements |
+| Each agent decides independently | All agents align with same rules |
+
+This is especially important for:
+- **Quick Flow** — skips PRD and architecture, so context file fills the gap
+- **Team projects** — ensures all agents follow the same standards
+- **Existing projects** — prevents breaking established patterns
+
+## Editing and Updating
+
+The `project-context.md` file is a living document. Update it when:
+
+- Architecture decisions change
+- New conventions are established
+- Patterns evolve during implementation
+- You identify gaps from agent behavior
+
+You can edit it manually at any time, or re-run `bmad-generate-project-context` to update it after significant changes.
+
+:::note[File Location]
+The default location is `_bmad-output/project-context.md`. Workflows search for it there, and also check `**/project-context.md` anywhere in your project.
+:::
+</document>
+
+<document path="explanation/quick-dev.md">
+Intent in, code changes out, with as few human-in-the-loop turns as possible — without sacrificing quality.
+
+It lets the model run longer between checkpoints, then brings the human back only when the task cannot safely continue without human judgment or when it is time to review the end result.
+
+![Quick Dev workflow diagram](/diagrams/quick-dev-diagram.png)
+
+## Why This Exists
+
+Human-in-the-loop turns are necessary and expensive.
+
+Current LLMs still fail in predictable ways: they misread intent, fill gaps with confident guesses, drift into unrelated work, and generate noisy review output. At the same time, constant human intervention limits development velocity. Human attention is the bottleneck.
+
+`bmad-quick-dev` rebalances that tradeoff. It trusts the model to run unsupervised for longer stretches, but only after the workflow has created a strong enough boundary to make that safe.
+
+## The Core Design
+
+### 1. Compress intent first
+
+The workflow starts by having the human and the model compress the request into one coherent goal. The input can begin as a rough expression of intent, but before the workflow runs autonomously it has to become small enough, clear enough, and contradiction-free enough to execute.
+
+Intent can come in many forms: a couple of phrases, a bug tracker link, output from plan mode, text copied from a chat session, or even a story number from BMAD's own `epics.md`. In that last case, the workflow will not understand BMAD story-tracking semantics, but it can still take the story itself and run with it.
+
+This workflow does not eliminate human control. It relocates it to a small number of high-value moments:
+
+- **Intent clarification** - turning a messy request into one coherent goal without hidden contradictions
+- **Spec approval** - confirming that the frozen understanding is the right thing to build
+- **Review of the final product** - the primary checkpoint, where the human decides whether the result is acceptable at the end
+
+### 2. Route to the smallest safe path
+
+Once the goal is clear, the workflow decides whether this is a true one-shot change or whether it needs the fuller path. Small, zero-blast-radius changes can go straight to implementation. Everything else goes through planning so the model has a stronger boundary before it runs longer on its own.
+
+### 3. Run longer with less supervision
+
+After that routing decision, the model can carry more of the work on its own. On the fuller path, the approved spec becomes the boundary the model executes against with less supervision, which is the whole point of the design.
+
+### 4. Diagnose failure at the right layer
+
+If the implementation is wrong because the intent was wrong, patching the code is the wrong fix. If the code is wrong because the spec was weak, patching the diff is also the wrong fix. The workflow is designed to diagnose where the failure entered the system, go back to that layer, and regenerate from there.
+
+Review findings are used to decide whether the problem came from intent, spec generation, or local implementation. Only truly local problems get patched locally.
+
+### 5. Bring the human back only when needed
+
+The intent interview is human-in-the-loop, but it is not the same kind of interruption as a recurring checkpoint. The workflow tries to keep those recurring checkpoints to a minimum. After the initial shaping of intent, the human mainly comes back when the workflow cannot safely continue without judgment and at the end, when it is time to review the result.
+
+- **Intent-gap resolution** - stepping back in when review proves the workflow could not safely infer what was meant
+
+Everything else is a candidate for longer autonomous execution. That tradeoff is deliberate. Older patterns spend more human attention on continuous supervision. Quick Dev spends more trust on the model, but saves human attention for the moments where human reasoning has the highest leverage.
+
+## Why the Review System Matters
+
+The review phase is not just there to find bugs. It is there to route correction without destroying momentum.
+
+This workflow works best on a platform that can spawn subagents, or at least invoke another LLM through the command line and wait for a result. If your platform does not support that natively, you can add a skill to do it. Context-free subagents are a cornerstone of the review design.
+
+Agentic reviews often go wrong in two ways:
+
+- They generate too many findings, forcing the human to sift through noise.
+- They derail the current change by surfacing unrelated issues and turning every run into an ad hoc cleanup project.
+
+Quick Dev addresses both by treating review as triage.
+
+Some findings belong to the current change. Some do not. If a finding is incidental rather than causally tied to the current work, the workflow can defer it instead of forcing the human to handle it immediately. That keeps the run focused and prevents random tangents from consuming the budget of attention.
+
+That triage will sometimes be imperfect. That is acceptable. It is usually better to misjudge some findings than to flood the human with thousands of low-value review comments. The system is optimizing for signal quality, not exhaustive recall.
+</document>
+
+<document path="explanation/why-solutioning-matters.md">
+Phase 3 (Solutioning) translates **what** to build (from Planning) into **how** to build it (technical design). This phase prevents agent conflicts in multi-epic projects by documenting architectural decisions before implementation begins.
+
+## The Problem Without Solutioning
+
+```text
+Agent 1 implements Epic 1 using REST API
+Agent 2 implements Epic 2 using GraphQL
+Result: Inconsistent API design, integration nightmare
+```
+
+When multiple agents implement different parts of a system without shared architectural guidance, they make independent technical decisions that may conflict.
+
+## The Solution With Solutioning
+
+```text
+architecture workflow decides: "Use GraphQL for all APIs"
+All agents follow architecture decisions
+Result: Consistent implementation, no conflicts
+```
+
+By documenting technical decisions explicitly, all agents implement consistently and integration becomes straightforward.
+
+## Solutioning vs Planning
+
+| Aspect   | Planning (Phase 2)      | Solutioning (Phase 3)             |
+| -------- | ----------------------- | --------------------------------- |
+| Question | What and Why?           | How? Then What units of work?     |
+| Output   | FRs/NFRs (Requirements) | Architecture + Epics/Stories      |
+| Agent    | PM                      | Architect → PM                    |
+| Audience | Stakeholders            | Developers                        |
+| Document | PRD (FRs/NFRs)          | Architecture + Epic Files         |
+| Level    | Business logic          | Technical design + Work breakdown |
+
+## Key Principle
+
+**Make technical decisions explicit and documented** so all agents implement consistently.
+
+This prevents:
+- API style conflicts (REST vs GraphQL)
+- Database design inconsistencies
+- State management disagreements
+- Naming convention mismatches
+- Security approach variations
+
+## When Solutioning is Required
+
+| Track | Solutioning Required? |
+|-------|----------------------|
+| Quick Flow | No - skip entirely |
+| BMad Method Simple | Optional |
+| BMad Method Complex | Yes |
+| Enterprise | Yes |
+
+:::tip[Rule of Thumb]
+If you have multiple epics that could be implemented by different agents, you need solutioning.
+:::
+
+## The Cost of Skipping
+
+Skipping solutioning on complex projects leads to:
+
+- **Integration issues** discovered mid-sprint
+- **Rework** due to conflicting implementations
+- **Longer development time** overall
+- **Technical debt** from inconsistent patterns
+
+:::caution[Cost Multiplier]
+Catching alignment issues in solutioning is 10× faster than discovering them during implementation.
+:::
+</document>
+
+<document path="reference/agents.md">
+## Default Agents
+
+This page lists the default BMM (Agile suite) agents that install with BMad Method, along with their skill IDs, menu triggers, and primary workflows. Each agent is invoked as a skill.
+
+## Notes
+
+- Each agent is available as a skill, generated by the installer. The skill ID (e.g., `bmad-dev`) is used to invoke the agent.
+- Triggers are the short menu codes (e.g., `CP`) and fuzzy matches shown in each agent menu.
+- QA (Quinn) is the lightweight test automation agent in BMM. The full Test Architect (TEA) lives in its own module.
+
+| Agent                       | Skill ID             | Triggers                           | Primary workflows                                                                                   |
+| --------------------------- | -------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Analyst (Mary)              | `bmad-analyst`       | `BP`, `RS`, `CB`, `DP`             | Brainstorm Project, Research, Create Brief, Document Project                                        |
+| Product Manager (John)      | `bmad-pm`            | `CP`, `VP`, `EP`, `CE`, `IR`, `CC` | Create/Validate/Edit PRD, Create Epics and Stories, Implementation Readiness, Correct Course        |
+| Architect (Winston)         | `bmad-architect`     | `CA`, `IR`                         | Create Architecture, Implementation Readiness                                                       |
+| Scrum Master (Bob)          | `bmad-sm`            | `SP`, `CS`, `ER`, `CC`             | Sprint Planning, Create Story, Epic Retrospective, Correct Course                                   |
+| Developer (Amelia)          | `bmad-dev`           | `DS`, `CR`                         | Dev Story, Code Review                                                                              |
+| QA Engineer (Quinn)         | `bmad-qa`            | `QA`                               | Automate (generate tests for existing features)                                                     |
+| Quick Flow Solo Dev (Barry) | `bmad-master`        | `QD`, `CR`                          | Quick Dev, Code Review                                                                              |
+| UX Designer (Sally)         | `bmad-ux-designer`   | `CU`                               | Create UX Design                                                                                    |
+| Technical Writer (Paige)    | `bmad-tech-writer`   | `DP`, `WD`, `US`, `MG`, `VD`, `EC` | Document Project, Write Document, Update Standards, Mermaid Generate, Validate Doc, Explain Concept |
+
+## Trigger Types
+
+Agent menu triggers use two different invocation types. Knowing which type a trigger uses helps you provide the right input.
+
+### Workflow triggers (no arguments needed)
+
+Most triggers load a structured workflow file. Type the trigger code and the agent starts the workflow, prompting you for input at each step.
+
+Examples: `CP` (Create PRD), `DS` (Dev Story), `CA` (Create Architecture), `QD` (Quick Dev)
+
+### Conversational triggers (arguments required)
+
+Some triggers start a free-form conversation instead of a structured workflow. These expect you to describe what you need alongside the trigger code.
+
+| Agent | Trigger | What to provide |
+| --- | --- | --- |
+| Technical Writer (Paige) | `WD` | Description of the document to write |
+| Technical Writer (Paige) | `US` | Preferences or conventions to add to standards |
+| Technical Writer (Paige) | `MG` | Diagram description and type (sequence, flowchart, etc.) |
+| Technical Writer (Paige) | `VD` | Document to validate and focus areas |
+| Technical Writer (Paige) | `EC` | Concept name to explain |
+
+**Example:**
+
+```text
+WD Write a deployment guide for our Docker setup
+MG Create a sequence diagram showing the auth flow
+EC Explain how the module system works
+```
+</document>
+
+<document path="reference/commands.md">
+Skills are pre-built prompts that load agents, run workflows, or execute tasks inside your IDE. The BMad installer generates them from your installed modules at install time. If you later add, remove, or change modules, re-run the installer to keep skills in sync (see [Troubleshooting](#troubleshooting)).
+
+## Skills vs. Agent Menu Triggers
+
+BMad offers two ways to start work, and they serve different purposes.
+
+| Mechanism | How you invoke it | What happens |
+| --- | --- | --- |
+| **Skill** | Type the skill name (e.g. `bmad-help`) in your IDE | Directly loads an agent, runs a workflow, or executes a task |
+| **Agent menu trigger** | Load an agent first, then type a short code (e.g. `DS`) | The agent interprets the code and starts the matching workflow while staying in character |
+
+Agent menu triggers require an active agent session. Use skills when you know which workflow you want. Use triggers when you are already working with an agent and want to switch tasks without leaving the conversation.
+
+## How Skills Are Generated
+
+When you run `npx bmad-method install`, the installer reads the manifests for every selected module and writes one skill per agent, workflow, task, and tool. Each skill is a directory containing a `SKILL.md` file that instructs the AI to load the corresponding source file and follow its instructions.
+
+The installer uses templates for each skill type:
+
+| Skill type | What the generated file does |
+| --- | --- |
+| **Agent launcher** | Loads the agent persona file, activates its menu, and stays in character |
+| **Workflow skill** | Loads the workflow config and follows its steps |
+| **Task skill** | Loads a standalone task file and follows its instructions |
+| **Tool skill** | Loads a standalone tool file and follows its instructions |
+
+:::note[Re-running the installer]
+If you add or remove modules, run the installer again. It regenerates all skill files to match your current module selection.
+:::
+
+## Where Skill Files Live
+
+The installer writes skill files into an IDE-specific directory inside your project. The exact path depends on which IDE you selected during installation.
+
+| IDE / CLI | Skills directory |
+| --- | --- |
+| Claude Code | `.claude/skills/` |
+| Cursor | `.cursor/skills/` |
+| Windsurf | `.windsurf/skills/` |
+| Other IDEs | See the installer output for the target path |
+
+Each skill is a directory containing a `SKILL.md` file. For example, a Claude Code installation looks like:
+
+```text
+.claude/skills/
+├── bmad-help/
+│   └── SKILL.md
+├── bmad-create-prd/
+│   └── SKILL.md
+├── bmad-dev/
+│   └── SKILL.md
+└── ...
+```
+
+The directory name determines the skill name in your IDE. For example, the directory `bmad-dev/` registers the skill `bmad-dev`.
+
+## How to Discover Your Skills
+
+Type the skill name in your IDE to invoke it. Some platforms require you to enable skills in settings before they appear.
+
+Run `bmad-help` for context-aware guidance on your next step.
+
+:::tip[Quick discovery]
+The generated skill directories in your project are the canonical list. Open them in your file explorer to see every skill with its description.
+:::
+
+## Skill Categories
+
+### Agent Skills
+
+Agent skills load a specialized AI persona with a defined role, communication style, and menu of workflows. Once loaded, the agent stays in character and responds to menu triggers.
+
+| Example skill | Agent | Role |
+| --- | --- | --- |
+| `bmad-dev` | Amelia (Developer) | Implements stories with strict adherence to specs |
+| `bmad-pm` | John (Product Manager) | Creates and validates PRDs |
+| `bmad-architect` | Winston (Architect) | Designs system architecture |
+| `bmad-sm` | Bob (Scrum Master) | Manages sprints and stories |
+
+See [Agents](./agents.md) for the full list of default agents and their triggers.
+
+### Workflow Skills
+
+Workflow skills run a structured, multi-step process without loading an agent persona first. They load a workflow configuration and follow its steps.
+
+| Example skill | Purpose |
+| --- | --- |
+| `bmad-create-prd` | Create a Product Requirements Document |
+| `bmad-create-architecture` | Design system architecture |
+| `bmad-create-epics-and-stories` | Create epics and stories |
+| `bmad-dev-story` | Implement a story |
+| `bmad-code-review` | Run a code review |
+| `bmad-quick-dev` | Unified quick flow — clarify intent, plan, implement, review, present |
+
+See [Workflow Map](./workflow-map.md) for the complete workflow reference organized by phase.
+
+### Task and Tool Skills
+
+Tasks and tools are standalone operations that do not require an agent or workflow context.
+
+**BMad-Help: Your Intelligent Guide**
+
+`bmad-help` is your primary interface for discovering what to do next. It inspects your project, understands natural language queries, and recommends the next required or optional step based on your installed modules.
+
+:::note[Example]
+```
+bmad-help
+bmad-help I have a SaaS idea and know all the features. Where do I start?
+bmad-help What are my options for UX design?
+```
+:::
+
+**Other Core Tasks and Tools**
+
+The core module includes 11 built-in tools — reviews, compression, brainstorming, document management, and more. See [Core Tools](./core-tools.md) for the complete reference.
+
+## Naming Convention
+
+All skills use the `bmad-` prefix followed by a descriptive name (e.g., `bmad-dev`, `bmad-create-prd`, `bmad-help`). See [Modules](./modules.md) for available modules.
+
+## Troubleshooting
+
+**Skills not appearing after install.** Some platforms require skills to be explicitly enabled in settings. Check your IDE's documentation or ask your AI assistant how to enable skills. You may also need to restart your IDE or reload the window.
+
+**Expected skills are missing.** The installer only generates skills for modules you selected. Run `npx bmad-method install` again and verify your module selection. Check that the skill files exist in the expected directory.
+
+**Skills from a removed module still appear.** The installer does not delete old skill files automatically. Remove the stale directories from your IDE's skills directory, or delete the entire skills directory and re-run the installer for a clean set.
+</document>
+
+<document path="reference/core-tools.md">
+Every BMad installation includes a set of core skills that can be used in conjunction with any anything you are doing — standalone tasks and workflows that work across all projects, all modules, and all phases. These are always available regardless of which optional modules you install.
+
+:::tip[Quick Path]
+Run any core tool by typing its skill name (e.g., `bmad-help`) in your IDE. No agent session required.
+:::
+
+## Overview
+
+| Tool | Type | Purpose |
+| --- | --- | --- |
+| [`bmad-help`](#bmad-help) | Task | Get context-aware guidance on what to do next |
+| [`bmad-brainstorming`](#bmad-brainstorming) | Workflow | Facilitate interactive brainstorming sessions |
+| [`bmad-party-mode`](#bmad-party-mode) | Workflow | Orchestrate multi-agent group discussions |
+| [`bmad-distillator`](#bmad-distillator) | Task | Lossless LLM-optimized compression of documents |
+| [`bmad-advanced-elicitation`](#bmad-advanced-elicitation) | Task | Push LLM output through iterative refinement methods |
+| [`bmad-review-adversarial-general`](#bmad-review-adversarial-general) | Task | Cynical review that finds what's missing and what's wrong |
+| [`bmad-review-edge-case-hunter`](#bmad-review-edge-case-hunter) | Task | Exhaustive branching-path analysis for unhandled edge cases |
+| [`bmad-editorial-review-prose`](#bmad-editorial-review-prose) | Task | Clinical copy-editing for communication clarity |
+| [`bmad-editorial-review-structure`](#bmad-editorial-review-structure) | Task | Structural editing — cuts, merges, and reorganization |
+| [`bmad-shard-doc`](#bmad-shard-doc) | Task | Split large markdown files into organized sections |
+| [`bmad-index-docs`](#bmad-index-docs) | Task | Generate or update an index of all docs in a folder |
+
+## bmad-help
+
+**Your intelligent guide to what comes next.** — Inspects your project state, detects what's been done, and recommends the next required or optional step.
+
+**Use it when:**
+
+- You finished a workflow and want to know what's next
+- You're new to BMad and need orientation
+- You're stuck and want context-aware advice
+- You installed new modules and want to see what's available
+
+**How it works:**
+
+1. Scans your project for existing artifacts (PRD, architecture, stories, etc.)
+2. Detects which modules are installed and their available workflows
+3. Recommends next steps in priority order — required steps first, then optional
+4. Presents each recommendation with the skill command and a brief description
+
+**Input:** Optional query in natural language (e.g., `bmad-help I have a SaaS idea, where do I start?`)
+
+**Output:** Prioritized list of recommended next steps with skill commands
+
+## bmad-brainstorming
+
+**Generate diverse ideas through interactive creative techniques.** — A facilitated brainstorming session that loads proven ideation methods from a technique library and guides you toward 100+ ideas before organizing.
+
+**Use it when:**
+
+- You're starting a new project and need to explore the problem space
+- You're stuck generating ideas and need structured creativity
+- You want to use proven ideation frameworks (SCAMPER, reverse brainstorming, etc.)
+
+**How it works:**
+
+1. Sets up a brainstorming session with your topic
+2. Loads creative techniques from a method library
+3. Guides you through technique after technique, generating ideas
+4. Applies anti-bias protocol — shifts creative domain every 10 ideas to prevent clustering
+5. Produces an append-only session document with all ideas organized by technique
+
+**Input:** Brainstorming topic or problem statement, optional context file
+
+**Output:** `brainstorming-session-{date}.md` with all generated ideas
+
+:::note[Quantity Target]
+The magic happens in ideas 50–100. The workflow encourages generating 100+ ideas before organization.
+:::
+
+## bmad-party-mode
+
+**Orchestrate multi-agent group discussions.** — Loads all installed BMad agents and facilitates a natural conversation where each agent contributes from their unique expertise and personality.
+
+**Use it when:**
+
+- You need multiple expert perspectives on a decision
+- You want agents to challenge each other's assumptions
+- You're exploring a complex topic that spans multiple domains
+
+**How it works:**
+
+1. Loads the agent manifest with all installed agent personalities
+2. Analyzes your topic to select 2–3 most relevant agents
+3. Agents take turns contributing, with natural cross-talk and disagreements
+4. Rotates agent participation to ensure diverse perspectives over time
+5. Exit with `goodbye`, `end party`, or `quit`
+
+**Input:** Discussion topic or question, along with specification of personas you would like to participate (optional)
+
+**Output:** Real-time multi-agent conversation with maintained agent personalities
+
+## bmad-distillator
+
+**Lossless LLM-optimized compression of source documents.** — Produces dense, token-efficient distillates that preserve all information for downstream LLM consumption. Verifiable through round-trip reconstruction.
+
+**Use it when:**
+
+- A document is too large for an LLM's context window
+- You need token-efficient versions of research, specs, or planning artifacts
+- You want to verify no information is lost during compression
+- Agents will need to frequently reference and find information in it
+
+**How it works:**
+
+1. **Analyze** — Reads source documents, identifies information density and structure
+2. **Compress** — Converts prose to dense bullet-point format, strips decorative formatting
+3. **Verify** — Checks completeness to ensure all original information is preserved
+4. **Validate** (optional) — Round-trip reconstruction test proves lossless compression
+
+**Input:**
+
+- `source_documents` (required) — File paths, folder paths, or glob patterns
+- `downstream_consumer` (optional) — What consumes this (e.g., "PRD creation")
+- `token_budget` (optional) — Approximate target size
+- `--validate` (flag) — Run round-trip reconstruction test
+
+**Output:** Distillate markdown file(s) with compression ratio report (e.g., "3.2:1")
+
+## bmad-advanced-elicitation
+
+**Push LLM output through iterative refinement methods.** — Selects from a library of elicitation techniques to systematically improve content through multiple passes.
+
+**Use it when:**
+
+- LLM output feels shallow or generic
+- You want to explore a topic from multiple analytical angles
+- You're refining a critical document and want deeper thinking
+
+**How it works:**
+
+1. Loads method registry with 5+ elicitation techniques
+2. Selects 5 best-fit methods based on content type and complexity
+3. Presents an interactive menu — pick a method, reshuffle, or list all
+4. Applies the selected method to enhance the content
+5. Re-presents options for iterative improvement until you select "Proceed"
+
+**Input:** Content section to enhance
+
+**Output:** Enhanced version of the content with improvements applied
+
+## bmad-review-adversarial-general
+
+**Cynical review that assumes problems exist and searches for them.** — Takes a skeptical, jaded reviewer perspective with zero patience for sloppy work. Looks for what's missing, not just what's wrong.
+
+**Use it when:**
+
+- You need quality assurance before finalizing a deliverable
+- You want to stress-test a spec, story, or document
+- You want to find gaps in coverage that optimistic reviews miss
+
+**How it works:**
+
+1. Reads the content with a cynical, critical perspective
+2. Identifies issues across completeness, correctness, and quality
+3. Searches specifically for what's missing — not just what's present and wrong
+4. Must find a minimum of 10 issues or re-analyzes deeper
+
+**Input:**
+
+- `content` (required) — Diff, spec, story, doc, or any artifact
+- `also_consider` (optional) — Additional areas to keep in mind
+
+**Output:** Markdown list of 10+ findings with descriptions
+
+## bmad-review-edge-case-hunter
+
+**Walk every branching path and boundary condition, report only unhandled cases.** — Pure path-tracing methodology that mechanically derives edge classes. Orthogonal to adversarial review — method-driven, not attitude-driven.
+
+**Use it when:**
+
+- You want exhaustive edge case coverage for code or logic
+- You need a complement to adversarial review (different methodology, different findings)
+- You're reviewing a diff or function for boundary conditions
+
+**How it works:**
+
+1. Enumerates all branching paths in the content
+2. Derives edge classes mechanically: missing else/default, unguarded inputs, off-by-one, arithmetic overflow, implicit type coercion, race conditions, timeout gaps
+3. Tests each path against existing guards
+4. Reports only unhandled paths — silently discards handled ones
+
+**Input:**
+
+- `content` (required) — Diff, full file, or function
+- `also_consider` (optional) — Additional areas to keep in mind
+
+**Output:** JSON array of findings, each with `location`, `trigger_condition`, `guard_snippet`, and `potential_consequence`
+
+:::note[Complementary Reviews]
+Run both `bmad-review-adversarial-general` and `bmad-review-edge-case-hunter` together for orthogonal coverage. The adversarial review catches quality and completeness issues; the edge case hunter catches unhandled paths.
+:::
+
+## bmad-editorial-review-prose
+
+**Clinical copy-editing focused on communication clarity.** — Reviews text for issues that impede comprehension. Applies Microsoft Writing Style Guide baseline. Preserves author voice.
+
+**Use it when:**
+
+- You've drafted a document and want to polish the writing
+- You need to ensure clarity for a specific audience
+- You want communication fixes without style opinion changes
+
+**How it works:**
+
+1. Reads the content, skipping code blocks and frontmatter
+2. Identifies communication issues (not style preferences)
+3. Deduplicates same issues across multiple locations
+4. Produces a three-column fix table
+
+**Input:**
+
+- `content` (required) — Markdown, plain text, or XML
+- `style_guide` (optional) — Project-specific style guide
+- `reader_type` (optional) — `humans` (default) for clarity/flow, or `llm` for precision/consistency
+
+**Output:** Three-column markdown table: Original Text | Revised Text | Changes
+
+## bmad-editorial-review-structure
+
+**Structural editing — proposes cuts, merges, moves, and condensing.** — Reviews document organization and proposes substantive changes to improve clarity and flow before copy editing.
+
+**Use it when:**
+
+- A document was produced from multiple subprocesses and needs structural coherence
+- You want to reduce document length while preserving comprehension
+- You need to identify scope violations or buried critical information
+
+**How it works:**
+
+1. Analyzes document against 5 structure models (Tutorial, Reference, Explanation, Prompt, Strategic)
+2. Identifies redundancies, scope violations, and buried information
+3. Produces prioritized recommendations: CUT, MERGE, MOVE, CONDENSE, QUESTION, PRESERVE
+4. Estimates total reduction in words and percentage
+
+**Input:**
+
+- `content` (required) — Document to review
+- `purpose` (optional) — Intended purpose (e.g., "quickstart tutorial")
+- `target_audience` (optional) — Who reads this
+- `reader_type` (optional) — `humans` or `llm`
+- `length_target` (optional) — Target reduction (e.g., "30% shorter")
+
+**Output:** Document summary, prioritized recommendation list, and estimated reduction
+
+## bmad-shard-doc
+
+**Split large markdown files into organized section files.** — Uses level-2 headers as split points to create a folder of self-contained section files with an index.
+
+**Use it when:**
+
+- A markdown document has grown too large to manage effectively (500+ lines)
+- You want to break a monolithic doc into navigable sections
+- You need separate files for parallel editing or LLM context management
+
+**How it works:**
+
+1. Validates the source file exists and is markdown
+2. Splits on level-2 (`##`) headers into numbered section files
+3. Creates an `index.md` with section manifest and links
+4. Prompts you to delete, archive, or keep the original
+
+**Input:** Source markdown file path, optional destination folder
+
+**Output:** Folder with `index.md` and `01-{section}.md`, `02-{section}.md`, etc.
+
+## bmad-index-docs
+
+**Generate or update an index of all documents in a folder.** — Scans a directory, reads each file to understand its purpose, and produces an organized `index.md` with links and descriptions.
+
+**Use it when:**
+
+- You need a lightweight index for quick LLM scanning of available docs
+- A documentation folder has grown and needs an organized table of contents
+- You want an auto-generated overview that stays current
+
+**How it works:**
+
+1. Scans the target directory for all non-hidden files
+2. Reads each file to understand its actual purpose
+3. Groups files by type, purpose, or subdirectory
+4. Generates concise descriptions (3–10 words each)
+
+**Input:** Target folder path
+
+**Output:** `index.md` with organized file listings, relative links, and brief descriptions
+</document>
+
+<document path="reference/modules.md">
+BMad extends through official modules that you select during installation. These add-on modules provide specialized agents, workflows, and tasks for specific domains beyond the built-in core and BMM (Agile suite).
+
+:::tip[Installing Modules]
+Run `npx bmad-method install` and select the modules you want. The installer handles downloading, configuration, and IDE integration automatically.
+:::
+
+## BMad Builder
+
+Create custom agents, workflows, and domain-specific modules with guided assistance. BMad Builder is the meta-module for extending the framework itself.
+
+- **Code:** `bmb`
+- **npm:** [`bmad-builder`](https://www.npmjs.com/package/bmad-builder)
+- **GitHub:** [bmad-code-org/bmad-builder](https://github.com/bmad-code-org/bmad-builder)
+
+**Provides:**
+
+- Agent Builder -- create specialized AI agents with custom expertise and tool access
+- Workflow Builder -- design structured processes with steps and decision points
+- Module Builder -- package agents and workflows into shareable, publishable modules
+- Interactive setup with YAML configuration and npm publishing support
+
+## Creative Intelligence Suite
+
+AI-powered tools for structured creativity, ideation, and innovation during early-stage development. The suite provides multiple agents that facilitate brainstorming, design thinking, and problem-solving using proven frameworks.
+
+- **Code:** `cis`
+- **npm:** [`bmad-creative-intelligence-suite`](https://www.npmjs.com/package/bmad-creative-intelligence-suite)
+- **GitHub:** [bmad-code-org/bmad-module-creative-intelligence-suite](https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite)
+
+**Provides:**
+
+- Innovation Strategist, Design Thinking Coach, and Brainstorming Coach agents
+- Problem Solver and Creative Problem Solver for systematic and lateral thinking
+- Storyteller and Presentation Master for narratives and pitches
+- Ideation frameworks including SCAMPER, Reverse Brainstorming, and problem reframing
+
+## Game Dev Studio
+
+Structured game development workflows adapted for Unity, Unreal, Godot, and custom engines. Supports rapid prototyping through Quick Flow and full-scale production with epic-driven sprints.
+
+- **Code:** `gds`
+- **npm:** [`bmad-game-dev-studio`](https://www.npmjs.com/package/bmad-game-dev-studio)
+- **GitHub:** [bmad-code-org/bmad-module-game-dev-studio](https://github.com/bmad-code-org/bmad-module-game-dev-studio)
+
+**Provides:**
+
+- Game Design Document (GDD) generation workflow
+- Quick Dev mode for rapid prototyping
+- Narrative design support for characters, dialogue, and world-building
+- Coverage for 21+ game types with engine-specific architecture guidance
+
+## Test Architect (TEA)
+
+Enterprise-grade test strategy, automation guidance, and release gate decisions through an expert agent and nine structured workflows. TEA goes well beyond the built-in QA agent with risk-based prioritization and requirements traceability.
+
+- **Code:** `tea`
+- **npm:** [`bmad-method-test-architecture-enterprise`](https://www.npmjs.com/package/bmad-method-test-architecture-enterprise)
+- **GitHub:** [bmad-code-org/bmad-method-test-architecture-enterprise](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise)
+
+**Provides:**
+
+- Murat agent (Master Test Architect and Quality Advisor)
+- Workflows for test design, ATDD, automation, test review, and traceability
+- NFR assessment, CI setup, and framework scaffolding
+- P0-P3 prioritization with optional Playwright Utils and MCP integrations
+
+## Community Modules
+
+Community modules and a module marketplace are coming. Check the [BMad GitHub organization](https://github.com/bmad-code-org) for updates.
+</document>
+
+<document path="reference/testing.md">
+BMad provides two testing paths: a built-in QA agent for fast test generation and an installable Test Architect module for enterprise-grade test strategy.
+
+## Which Should You Use?
+
+| Factor | Quinn (Built-in QA) | TEA Module |
+| --- | --- | --- |
+| **Best for** | Small-medium projects, quick coverage | Large projects, regulated or complex domains |
+| **Setup** | Nothing to install -- included in BMM | Install separately via `npx bmad-method install` |
+| **Approach** | Generate tests fast, iterate later | Plan first, then generate with traceability |
+| **Test types** | API and E2E tests | API, E2E, ATDD, NFR, and more |
+| **Strategy** | Happy path + critical edge cases | Risk-based prioritization (P0-P3) |
+| **Workflow count** | 1 (Automate) | 9 (design, ATDD, automate, review, trace, and others) |
+
+:::tip[Start with Quinn]
+Most projects should start with Quinn. If you later need test strategy, quality gates, or requirements traceability, install TEA alongside it.
+:::
+
+## Built-in QA Agent (Quinn)
+
+Quinn is the built-in QA agent in the BMM (Agile suite) module. It generates working tests quickly using your project's existing test framework -- no configuration or additional installation required.
+
+**Trigger:** `QA` or `bmad-qa-generate-e2e-tests`
+
+### What Quinn Does
+
+Quinn runs a single workflow (Automate) that walks through five steps:
+
+1. **Detect test framework** -- scans `package.json` and existing test files for your framework (Jest, Vitest, Playwright, Cypress, or any standard runner). If none exists, analyzes the project stack and suggests one.
+2. **Identify features** -- asks what to test or auto-discovers features in the codebase.
+3. **Generate API tests** -- covers status codes, response structure, happy path, and 1-2 error cases.
+4. **Generate E2E tests** -- covers user workflows with semantic locators and visible-outcome assertions.
+5. **Run and verify** -- executes the generated tests and fixes failures immediately.
+
+Quinn produces a test summary saved to your project's implementation artifacts folder.
+
+### Test Patterns
+
+Generated tests follow a "simple and maintainable" philosophy:
+
+- **Standard framework APIs only** -- no external utilities or custom abstractions
+- **Semantic locators** for UI tests (roles, labels, text rather than CSS selectors)
+- **Independent tests** with no order dependencies
+- **No hardcoded waits or sleeps**
+- **Clear descriptions** that read as feature documentation
+
+:::note[Scope]
+Quinn generates tests only. For code review and story validation, use the Code Review workflow (`CR`) instead.
+:::
+
+### When to Use Quinn
+
+- Quick test coverage for a new or existing feature
+- Beginner-friendly test automation without advanced setup
+- Standard test patterns that any developer can read and maintain
+- Small-medium projects where comprehensive test strategy is unnecessary
+
+## Test Architect (TEA) Module
+
+TEA is a standalone module that provides an expert agent (Murat) and nine structured workflows for enterprise-grade testing. It goes beyond test generation into test strategy, risk-based planning, quality gates, and requirements traceability.
+
+- **Documentation:** [TEA Module Docs](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/)
+- **Install:** `npx bmad-method install` and select the TEA module
+- **npm:** [`bmad-method-test-architecture-enterprise`](https://www.npmjs.com/package/bmad-method-test-architecture-enterprise)
+
+### What TEA Provides
+
+| Workflow | Purpose |
+| --- | --- |
+| Test Design | Create a comprehensive test strategy tied to requirements |
+| ATDD | Acceptance-test-driven development with stakeholder criteria |
+| Automate | Generate tests with advanced patterns and utilities |
+| Test Review | Validate test quality and coverage against strategy |
+| Traceability | Map tests back to requirements for audit and compliance |
+| NFR Assessment | Evaluate non-functional requirements (performance, security) |
+| CI Setup | Configure test execution in continuous integration pipelines |
+| Framework Scaffolding | Set up test infrastructure and project structure |
+| Release Gate | Make data-driven go/no-go release decisions |
+
+TEA also supports P0-P3 risk-based prioritization and optional integrations with Playwright Utils and MCP tooling.
+
+### When to Use TEA
+
+- Projects that require requirements traceability or compliance documentation
+- Teams that need risk-based test prioritization across many features
+- Enterprise environments with formal quality gates before release
+- Complex domains where test strategy must be planned before tests are written
+- Projects that have outgrown Quinn's single-workflow approach
+
+## How Testing Fits into Workflows
+
+Quinn's Automate workflow appears in Phase 4 (Implementation) of the BMad Method workflow map. It is designed to run **after a full epic is complete** — once all stories in an epic have been implemented and code-reviewed. A typical sequence:
+
+1. For each story in the epic: implement with Dev (`DS`), then validate with Code Review (`CR`)
+2. After the epic is complete: generate tests with Quinn (`QA`) or TEA's Automate workflow
+3. Run retrospective (`bmad-retrospective`) to capture lessons learned
+
+Quinn works directly from source code without loading planning documents (PRD, architecture). TEA workflows can integrate with upstream planning artifacts for traceability.
+
+For more on where testing fits in the overall process, see the [Workflow Map](./workflow-map.md).
+</document>
+
+<document path="reference/workflow-map.md">
+The BMad Method (BMM) is a module in the BMad Ecosystem, targeted at following the best practices of context engineering and planning. AI agents work best with clear, structured context. The BMM system builds that context progressively across 4 distinct phases - each phase, and multiple workflows optionally within each phase, produce documents that inform the next, so agents always know what to build and why.
+
+The rationale and concepts come from agile methodologies that have been used across the industry with great success as a mental framework.
+
+If at any time you are unsure what to do, the `bmad-help` skill will help you stay on track or know what to do next. You can always refer to this for reference also - but `bmad-help` is fully interactive and much quicker if you have already installed the BMad Method. Additionally, if you are using different modules that have extended the BMad Method or added other complementary non-extension modules - `bmad-help` evolves to know all that is available to give you the best in-the-moment advice.
+
+Final important note: Every workflow below can be run directly with your tool of choice via skill or by loading an agent first and using the entry from the agents menu.
+
+<iframe src="/workflow-map-diagram.html" title="BMad Method Workflow Map Diagram" width="100%" height="100%" style="border-radius: 8px; border: 1px solid #334155; min-height: 900px;"></iframe>
+
+<p style="font-size: 0.8rem; text-align: right; margin-top: -0.5rem; margin-bottom: 1rem;">
+  <a href="/workflow-map-diagram.html" target="_blank" rel="noopener noreferrer">Open diagram in new tab ↗</a>
+</p>
+
+## Phase 1: Analysis (Optional)
+
+Explore the problem space and validate ideas before committing to planning.
+
+| Workflow                        | Purpose                                                                    | Produces                  |
+| ------------------------------- | -------------------------------------------------------------------------- | ------------------------- |
+| `bmad-brainstorming`            | Brainstorm Project Ideas with guided facilitation of a brainstorming coach | `brainstorming-report.md` |
+| `bmad-domain-research`, `bmad-market-research`, `bmad-technical-research` | Validate market, technical, or domain assumptions | Research findings |
+| `bmad-create-product-brief`     | Capture strategic vision                                                   | `product-brief.md`        |
+
+## Phase 2: Planning
+
+Define what to build and for whom.
+
+| Workflow                    | Purpose                                  | Produces     |
+| --------------------------- | ---------------------------------------- | ------------ |
+| `bmad-create-prd`    | Define requirements (FRs/NFRs)           | `PRD.md`     |
+| `bmad-create-ux-design`  | Design user experience (when UX matters) | `ux-spec.md` |
+
+## Phase 3: Solutioning
+
+Decide how to build it and break work into stories.
+
+| Workflow                                  | Purpose                                    | Produces                    |
+| ----------------------------------------- | ------------------------------------------ | --------------------------- |
+| `bmad-create-architecture`            | Make technical decisions explicit          | `architecture.md` with ADRs |
+| `bmad-create-epics-and-stories`       | Break requirements into implementable work | Epic files with stories     |
+| `bmad-check-implementation-readiness` | Gate check before implementation           | PASS/CONCERNS/FAIL decision |
+
+## Phase 4: Implementation
+
+Build it, one story at a time. Coming soon, full phase 4 automation!
+
+| Workflow                   | Purpose                                                                  | Produces                         |
+| -------------------------- | ------------------------------------------------------------------------ | -------------------------------- |
+| `bmad-sprint-planning` | Initialize tracking (once per project to sequence the dev cycle)         | `sprint-status.yaml`          |
+| `bmad-create-story`    | Prepare next story for implementation                                    | `story-[slug].md`             |
+| `bmad-dev-story`       | Implement the story                                                      | Working code + tests          |
+| `bmad-code-review`     | Validate implementation quality                                          | Approved or changes requested |
+| `bmad-correct-course`  | Handle significant mid-sprint changes                                    | Updated plan or re-routing    |
+| `bmad-sprint-status`   | Track sprint progress and story status                                   | Sprint status update          |
+| `bmad-retrospective`   | Review after epic completion                                             | Lessons learned               |
+
+## Quick Flow (Parallel Track)
+
+Skip phases 1-3 for small, well-understood work.
+
+| Workflow           | Purpose                                                                     | Produces               |
+| ------------------ | --------------------------------------------------------------------------- | ---------------------- |
+| `bmad-quick-dev`   | Unified quick flow — clarify intent, plan, implement, review, and present   | `spec-*.md` + code  |
+
+## Context Management
+
+Each document becomes context for the next phase. The PRD tells the architect what constraints matter. The architecture tells the dev agent which patterns to follow. Story files give focused, complete context for implementation. Without this structure, agents make inconsistent decisions.
+
+### Project Context
+
+:::tip[Recommended]
+Create `project-context.md` to ensure AI agents follow your project's rules and preferences. This file works like a constitution for your project — it guides implementation decisions across all workflows. This optional file can be generated at the end of Architecture Creation, or in an existing project it can be generated also to capture whats important to keep aligned with current conventions.
+:::
+
+**How to create it:**
+
+- **Manually** — Create `_bmad-output/project-context.md` with your technology stack and implementation rules
+- **Generate it** — Run `bmad-generate-project-context` to auto-generate from your architecture or codebase
+
+[**Learn more about project-context.md**](../explanation/project-context.md)
+</document>
+
+<document path="404.md">
+The page you're looking for doesn't exist or has been moved.
+
+[Return to Home](./index.md)
+</document>

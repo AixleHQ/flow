@@ -23,7 +23,11 @@ class SessionService
     def finish(session:)
       raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}" unless session.may_finish?
 
-      signal_container_finished(session) if session.temporal_workflow_id.present?
+      if session.temporal_workflow_id.present?
+        signal_container_finished(session)
+      else
+        session.finish!
+      end
     end
 
     def cancel(session:)
@@ -93,12 +97,20 @@ class SessionService
     end
 
     def signal_container_finished(session)
-      # Signal the container workflow to stop. For workflow_step sessions, the execution
-      # workflow is notified by WorkflowStepStrategy#before_cleanup *after* outputs are
-      # collected, to avoid a race with CompleteStepActivity output validation.
-      TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
+      result = TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
+
+      if result.is_a?(Hash) && !result[:ok]
+        error_msg = result[:error].to_s
+        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{error_msg}")
+
+        if error_msg.include?("already completed") || error_msg.include?("not found") || error_msg.include?("disabled")
+          Rails.logger.warn("[SessionService] Temporal workflow gone, finishing session #{session.id} directly")
+          session.finish! if session.may_finish?
+        end
+      end
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
+      session.finish! if session.may_finish?
     end
 
     def cancel_temporal_workflow(session)

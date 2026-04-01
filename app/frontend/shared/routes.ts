@@ -56,6 +56,10 @@ const frontend = {
   companyWorkflowBuilderPath: (workflowId: string) => `/company/workflows/${workflowId}/builder`,
   projectWorkflowBuilderPath: (projectId: string, workflowId: string) =>
     `/company/projects/${projectId}/workflows/${workflowId}/builder`,
+
+  // Palad Builder routes
+  paladBuilderPath: (projectId: string) => `/company/projects/${projectId}/palad-builder`,
+  paladBuilderRunPath: (projectId: string, runId: string) => `/company/projects/${projectId}/palad-builder/${runId}`,
 } as const;
 
 // Combine both types of routes into a single export

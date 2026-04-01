@@ -94,7 +94,7 @@ class SessionContextService
 
       # Step 2: Config files
       measure_step("config_files") { inject_config_files(container_id, session) }
-      context_log.record(:config_files, session.session_config&.dig("config_files")&.map { |f| f["path"] } || [])
+      context_log.record(:config_files, session.config_files.keys)
 
       # Step 3: MCP config
       mcp_content = measure_step("mcp_config") { inject_mcp_config(container_id, session) }
@@ -448,6 +448,8 @@ class SessionContextService
       return if path.blank?
 
       ok = runtime.copy_to(container_id, path, content)
+      # Fallback to tar archive API for large files (exec+base64 has shell arg limits)
+      ok = runtime.store_file(container_id, path, content) unless ok
       return unless ok
 
       owner = uid.to_i

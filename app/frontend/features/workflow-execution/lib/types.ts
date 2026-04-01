@@ -38,6 +38,7 @@ export interface CurrentStepInfo {
   stepName: string;
   stepPosition: number;
   state: string;
+  terminalSessionId: number | null;
 }
 
 export interface WorkflowRun {

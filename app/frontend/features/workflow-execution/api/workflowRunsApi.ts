@@ -74,7 +74,7 @@ export const workflowRunsApi = baseApi.injectEndpoints({
 
     getWorkflowRunAssets: builder.query<WorkflowRunAsset[], { projectId: number; runId: number }>({
       query: ({ projectId, runId }) => ({
-        url: Routes.backend.apiV1CompanyProjectWorkflowRunAssetsPath(projectId, runId),
+        url: Routes.backend.apiV1CompanyProjectWorkflowRunWorkflowRunAssetsPath(projectId, runId),
         method: 'GET',
       }),
       transformResponse: (response: ApiCollectionResponse<WorkflowRunAsset>) => response.items,
@@ -86,7 +86,7 @@ export const workflowRunsApi = baseApi.injectEndpoints({
       { projectId: number; runId: number; assetId: number; folder?: string; tags?: string[] }
     >({
       query: ({ projectId, runId, assetId, ...data }) => ({
-        url: Routes.backend.exportApiV1CompanyProjectWorkflowRunAssetPath(projectId, runId, assetId),
+        url: Routes.backend.exportApiV1CompanyProjectWorkflowRunWorkflowRunAssetPath(projectId, runId, assetId),
         method: 'POST',
         data,
       }),
@@ -96,7 +96,7 @@ export const workflowRunsApi = baseApi.injectEndpoints({
     exportAllAssets: builder.mutation<{ exportedCount: number }, { projectId: number; runId: number; folder?: string }>(
       {
         query: ({ projectId, runId, ...data }) => ({
-          url: Routes.backend.exportAllApiV1CompanyProjectWorkflowRunAssetsPath(projectId, runId),
+          url: Routes.backend.exportAllApiV1CompanyProjectWorkflowRunWorkflowRunAssetsPath(projectId, runId),
           method: 'POST',
           data,
         }),
