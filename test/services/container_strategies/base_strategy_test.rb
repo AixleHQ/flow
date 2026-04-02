@@ -284,8 +284,7 @@ module ContainerStrategies
     test "read_file_from_container returns nil for missing file" do
       strategy = BaseStrategy.new
 
-      @runtime_mock.expects(:read_file).with("container-ref", "/missing/file").returns("")
-      @runtime_mock.expects(:exec).with("container-ref", [ "cat", "/missing/file" ]).returns([ [ "" ], [ "" ], 1 ])
+      @runtime_mock.expects(:read_file).with("container-ref", "/missing/file").returns(nil)
 
       content = strategy.send(:read_file_from_container, "container-ref", "/missing/file")
 

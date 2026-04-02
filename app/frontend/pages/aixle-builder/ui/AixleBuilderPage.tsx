@@ -29,8 +29,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useGetCurrentUserQuery } from 'entities/user/api/currentUserApi';
 import { AVAILABLE_AGENTS, AGENT_COLORS } from 'entities/user/model/agentConstants';
 import type { AgentType } from 'entities/user/model/types';
-import { useGetProjectAssetsQuery } from 'features/assets-management';
 import { useStartAixleBuilderMutation, useGetAixleBuilderSessionsQuery } from 'features/aixle-builder';
+import { useGetProjectAssetsQuery } from 'features/assets-management';
 import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import { Routes } from 'shared/routes';
 

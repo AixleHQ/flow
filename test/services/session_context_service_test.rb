@@ -42,15 +42,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # For settings.json: write_file + chown
-    runtime_mock.expects(:write_file).with("abc123", "/home/claude/.claude/settings.json", '{"permissions":{}}').returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/settings.json" ])
-
-    # For CLAUDE.md: write_file + chown
-    runtime_mock.expects(:write_file).with("abc123", "CLAUDE.md", "# Context").returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 CLAUDE.md" ])
+    written = {}
+    runtime_mock.stubs(:write_file).with { |ctr, path, content, **| written[path] = { ctr: ctr, content: content }; true }.returns(true)
 
     SessionContextService.inject_config_files("abc123", session)
+
+    assert_equal "abc123", written["/home/claude/.claude/settings.json"][:ctr]
+    assert_equal '{"permissions":{}}', written["/home/claude/.claude/settings.json"][:content]
+    assert_equal "# Context", written["CLAUDE.md"][:content]
   end
 
   test "inject_config_files skips when config_files is empty" do
@@ -304,7 +303,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
         JSON.parse(content)["mcpServers"]["tavily"].present?
     end.returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -319,9 +317,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # read_file uses exec cat — returns existing settings
+    # read_file returns existing settings
     existing_settings = { "security" => { "auth" => { "selectedType" => "oauth-personal" } } }
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "cat /home/gemini/.gemini/settings.json" ]).returns([ [ existing_settings.to_json ], [], 0 ])
+    runtime_mock.expects(:read_file).with("abc123", "/home/gemini/.gemini/settings.json").returns(existing_settings.to_json)
 
     # Write merged settings
     runtime_mock.expects(:write_file).with do |ctr, path, content|
@@ -332,7 +330,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     rescue JSON::ParserError
       false
     end.returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/settings.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -347,16 +344,15 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # read_file uses exec cat — returns existing config.toml
+    # read_file returns existing config.toml
     existing_toml = "approval_policy = \"never\"\n"
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "cat /home/codex/.codex/config.toml" ]).returns([ [ existing_toml ], [], 0 ])
+    runtime_mock.expects(:read_file).with("abc123", "/home/codex/.codex/config.toml").returns(existing_toml)
 
     # Write appended config
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "abc123" && path == "/home/codex/.codex/config.toml" &&
         content.include?("approval_policy") && content.include?('[mcp_servers."tavily"]')
     end.returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/config.toml" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -372,7 +368,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "abc123" && path == "/workspace/.mcp.json" &&
         JSON.parse(content).dig("mcpServers", "aixle-tools").present?
     end.returns(true)
-    runtime_mock.expects(:exec).with("abc123", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
     SessionContextService.inject_mcp_config("abc123", session)
   end
@@ -390,8 +385,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    runtime_mock.expects(:write_file).with("ctr1", "/home/claude/.claude/skills/deploy-guide.md", skill.content).returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/deploy-guide.md" ])
+    runtime_mock.expects(:write_file).with { |ctr, path, content, **| ctr == "ctr1" && path == "/home/claude/.claude/skills/deploy-guide.md" && content == skill.content }.returns(true)
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -412,7 +406,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?('"Runs tests"') &&
         content.include?("# Test Runner")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/codex/.codex/skills/test-runner/SKILL.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -426,8 +419,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # read_file uses exec cat — file doesn't exist (exit code 1)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [], [], 1 ])
+    runtime_mock.expects(:read_file).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns(nil)
     # write appended content
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -435,7 +427,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("## Skill: Coding Style") &&
         content.include?("Use 2 spaces")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -449,8 +440,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    # read_file uses exec cat — returns existing content
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "cat /home/gemini/.gemini/GEMINI.md" ]).returns([ [ "# Project Context\nExisting content" ], [], 0 ])
+    runtime_mock.expects(:read_file).with("ctr1", "/home/gemini/.gemini/GEMINI.md").returns("# Project Context\nExisting content")
 
     runtime_mock.expects(:write_file).with do |ctr, path, content|
       ctr == "ctr1" &&
@@ -458,7 +448,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.start_with?("# Project Context\nExisting content") &&
         content.include?("## Skill: Coding Style")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/gemini/.gemini/GEMINI.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -477,7 +466,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         path == "/home/cursor/.cursor/skills/review-guide/SKILL.md" &&
         content.include?("# Review Guide\nCheck these things")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/cursor/.cursor/skills/review-guide/SKILL.md" ])
 
     SessionContextService.inject_skills("ctr1", session)
   end
@@ -492,12 +480,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
 
-    runtime_mock.expects(:write_file).with("ctr1", "/home/claude/.claude/skills/skill-a.md", "Content A").returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/skill-a.md" ])
-    runtime_mock.expects(:write_file).with("ctr1", "/home/claude/.claude/skills/skill-b.md", "Content B").returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/skills/skill-b.md" ])
+    written_paths = []
+    runtime_mock.stubs(:write_file).with { |ctr, path, content, **| written_paths << { path: path, content: content }; true }.returns(true)
 
     SessionContextService.inject_skills("ctr1", session)
+
+    assert_equal 2, written_paths.size
+    assert written_paths.any? { |w| w[:path] == "/home/claude/.claude/skills/skill-a.md" && w[:content] == "Content A" }
+    assert written_paths.any? { |w| w[:path] == "/home/claude/.claude/skills/skill-b.md" && w[:content] == "Content B" }
   end
 
   test "inject_skills skips when no skills associated" do
@@ -663,7 +653,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("<shell-tools") &&
         content.include?("<output-rules")
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
 
     SessionContextService.inject_context_file("ctr1", session)
   end
@@ -705,7 +694,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       runtime_mock.expects(:write_file).with do |_ctr, path, _content|
         path == expected_path
       end.returns(true)
-      runtime_mock.expects(:exec)
 
       SessionContextService.inject_context_file("ctr1", session)
     end
@@ -726,7 +714,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
         content.include?("Code Reviewer") &&
         content.include?("You review code carefully.")
     end.returns(true)
-    runtime_mock.expects(:exec)
 
     SessionContextService.inject_context_file("ctr1", session)
   end
@@ -827,7 +814,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/workspace/.mcp.json"
     end.returns(true).in_sequence(call_order)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ]).in_sequence(call_order)
 
     # Step 4: Skills — no skills, skipped internally
 
@@ -835,7 +821,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true).in_sequence(call_order)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ]).in_sequence(call_order)
 
     # Step 8: Context log
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
@@ -857,13 +842,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/workspace/.mcp.json"
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /workspace/.mcp.json" ])
 
     # Context file — writes XML-tagged content via Constructor
     runtime_mock.expects(:write_file).with do |ctr, path, _content|
       ctr == "ctr1" && path == "/home/claude/.claude/CLAUDE.md"
     end.returns(true)
-    runtime_mock.expects(:exec).with("ctr1", [ "sh", "-c", "chown 1001:1001 /home/claude/.claude/CLAUDE.md" ])
 
     # Context log
     runtime_mock.expects(:write_file).with do |ctr, path, _content|

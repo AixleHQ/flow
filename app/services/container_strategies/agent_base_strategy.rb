@@ -202,6 +202,5 @@ module ContainerStrategies
 
       labels
     end
-
   end
 end

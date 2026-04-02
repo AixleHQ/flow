@@ -94,6 +94,5 @@ module Agents
       trust_path = "/home/cursor/.cursor/projects/workspace/.workspace-trusted"
       assert files.key?(trust_path)
     end
-
   end
 end
