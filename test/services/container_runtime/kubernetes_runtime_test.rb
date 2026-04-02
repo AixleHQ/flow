@@ -79,14 +79,9 @@ module ContainerRuntime
       assert_equal "aixle-project-7/my-pod-xyz", @runtime.container_identifier(handle)
     end
 
-    test "copy_from returns empty string when path blank" do
-      assert_equal "", @runtime.copy_from("id", "")
-      assert_equal "", @runtime.copy_from("id", nil)
-    end
-
-    test "copy_to returns false when path blank" do
-      assert_equal false, @runtime.copy_to("id", "", "content")
-      assert_equal false, @runtime.copy_to("id", nil, "content")
+    test "write_file returns false when path blank" do
+      assert_equal false, @runtime.write_file("id", "", "content")
+      assert_equal false, @runtime.write_file("id", nil, "content")
     end
 
     test "read_file returns nil when path blank" do

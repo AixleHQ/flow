@@ -94,13 +94,5 @@ module Agents
       trust_path = "/home/cursor/.cursor/projects/workspace/.workspace-trusted"
       assert files.key?(trust_path)
     end
-
-    test "tmpfs_paths returns config directories" do
-      paths = @adapter.tmpfs_paths
-
-      assert_includes paths, "/home/cursor/.config/cursor"
-      assert_includes paths, "/home/cursor/.cursor"
-      assert_includes paths, "/home/cursor/.mitmproxy"
-    end
   end
 end

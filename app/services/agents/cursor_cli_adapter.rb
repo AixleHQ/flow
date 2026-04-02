@@ -115,16 +115,6 @@ module Agents
       }
     end
 
-    # Only mount config directories as tmpfs, not entire home
-    # This preserves /home/cursor/.local/bin/agent binary installed in Dockerfile
-    def tmpfs_paths
-      [
-        "#{home_dir}/.config/cursor",  # auth.json location
-        "#{home_dir}/.cursor",         # cli-config.json location
-        "#{home_dir}/.mitmproxy"       # MITM proxy CA certificates
-      ]
-    end
-
     # Fetch available models from Cursor API (Connect protocol, JSON format).
     CURSOR_MODELS_URL = "https://api2.cursor.sh/aiserver.v1.AiService/GetUsableModels"
 

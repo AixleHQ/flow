@@ -147,9 +147,7 @@ class BmadMethodInjector
   end
 
   def write_vscode_settings(json_content)
-    encoded = Base64.strict_encode64(json_content)
-    cmd = "mkdir -p /workspace/.vscode && echo '#{encoded}' | base64 -d > #{VSCODE_SETTINGS_PATH}"
-    runtime.exec(container_id, [ "sh", "-c", cmd ])
+    runtime.write_file(container_id, VSCODE_SETTINGS_PATH, json_content)
   end
 
   def record_install_status(status, error: nil)

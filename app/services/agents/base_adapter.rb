@@ -75,17 +75,9 @@ module Agents
       }
     end
 
-    # Paths to mount as tmpfs (for ephemeral credentials storage)
-    # By default, mounts entire home directory
-    # Override for agents that install binaries in home (e.g., Cursor CLI)
-    # @return [Array<String>]
-    def tmpfs_paths
-      [ home_dir ]
-    end
-
-    # UID for tmpfs mounts (must match container user)
+    # UID of the container user (used for file ownership in tar headers)
     # @return [Integer]
-    def tmpfs_uid
+    def container_uid
       1001
     end
 

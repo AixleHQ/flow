@@ -55,9 +55,9 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
 
     @runtime_mock = mock("runtime")
-    @runtime_mock.stubs(:copy_to).returns(true)
+    @runtime_mock.stubs(:write_file).returns(true)
     @runtime_mock.stubs(:exec).returns([ [], [], 0 ])
-    @runtime_mock.stubs(:copy_from).returns(nil)
+    @runtime_mock.stubs(:read_file).returns(nil)
     ContainerRuntime.stubs(:build).returns(@runtime_mock)
   end
 
@@ -202,6 +202,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       session = create_bmad_session(agent_type)
       runtime = mock("runtime_#{agent_type}")
       runtime.stubs(:exec).returns([ [], [], 0 ])
+      runtime.stubs(:write_file).returns(true)
 
       BmadMethodInjector.new("cid-e2e", session, runtime: runtime).inject!
 
@@ -350,9 +351,9 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       bmad_install_called = false
 
       runtime = mock("runtime_full_#{agent_type}")
-      runtime.stubs(:copy_from).returns(nil)
+      runtime.stubs(:read_file).returns(nil)
 
-      runtime.stubs(:copy_to).with do |_ctr, path, content|
+      runtime.stubs(:write_file).with do |_ctr, path, content|
         context_written = true if path == spec[:context_path] && content.include?("<bmad-method")
         true
       end.returns(true)
@@ -412,17 +413,17 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
   def capture_vscode_settings(session)
     BmadMethodInjector.any_instance.unstub(:hide_bmad_in_vscode)
-    all_calls = []
+    captured_content = nil
     runtime = stub("runtime_vscode")
-    runtime.stubs(:exec).with { |*args| all_calls << args; true }.returns([ [], [], 0 ])
+    runtime.stubs(:exec).returns([ [], [], 0 ])
+    runtime.stubs(:write_file)
+      .with { |_cid, _path, content| captured_content = content; true }
+      .returns(true)
 
     BmadMethodInjector.new("cid-vs", session, runtime: runtime).inject!
 
-    write_call = all_calls.find { |args| args[1].is_a?(Array) && args[1][2].to_s.include?("base64") }
-    assert_not_nil write_call, "Expected VS Code settings write command, got calls: #{all_calls.map { |a| a[1].inspect }.join('; ')}"
-    shell_cmd = write_call[1][2]
-    base64_content = shell_cmd[/echo '([^']+)' \| base64 -d/, 1]
-    JSON.parse(Base64.decode64(base64_content))
+    assert_not_nil captured_content, "Expected VS Code settings via runtime.write_file"
+    JSON.parse(captured_content)
   end
 
   def run_full_pipeline(agent_type)
@@ -464,6 +465,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     success_session = create_bmad_session(agent_type)
     success_runtime = mock("runtime_success_#{agent_type}")
     success_runtime.stubs(:exec).returns([ [], [], 0 ])
+    success_runtime.stubs(:write_file).returns(true)
     BmadMethodInjector.new("cid-ok", success_session, runtime: success_runtime).inject!
     success_session.reload
     assert_equal "success", success_session.context_metadata["bmad_install_status"]

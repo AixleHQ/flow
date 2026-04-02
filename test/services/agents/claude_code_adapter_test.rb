@@ -167,13 +167,6 @@ module Agents
 
     # == Env ==
 
-    test "tmpfs_paths returns claude and mitmproxy dirs" do
-      paths = @adapter.tmpfs_paths
-
-      assert_includes paths, "/home/claude/.claude"
-      assert_includes paths, "/home/claude/.mitmproxy"
-    end
-
     test "default_env_vars includes MITM and OTLP settings" do
       Settings.stubs(:otel).returns(OpenStruct.new(endpoint: "http://otel:4318"))
 

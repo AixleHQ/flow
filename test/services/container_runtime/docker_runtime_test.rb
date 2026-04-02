@@ -124,25 +124,12 @@ module ContainerRuntime
       assert_equal "abcdef123456", @runtime.container_identifier(container)
     end
 
-    test "copy_to executes base64 write via container exec" do
+    test "write_file writes file via tar archive API" do
       container_mock = mock("container")
-      encoded = Base64.strict_encode64("hello")
-      container_mock.expects(:exec).with(
-        [ "/bin/sh", "-c", "mkdir -p /tmp && echo '#{encoded}' | base64 -d > /tmp/file.txt" ]
-      ).returns([ [], [], 0 ])
+      container_mock.expects(:archive_in_stream).with("/", overwrite: true).multiple_yields
       Docker::Container.stubs(:get).with("cid").returns(container_mock)
 
-      assert @runtime.copy_to("cid", "/tmp/file.txt", "hello")
-    end
-
-    test "copy_from delegates to container read_file" do
-      container_mock = mock("container")
-      container_mock.expects(:read_file).with("/path/to/file").returns("file content")
-      Docker::Container.stubs(:get).with("cid").returns(container_mock)
-
-      result = @runtime.copy_from("cid", "/path/to/file")
-
-      assert_equal "file content", result
+      assert @runtime.write_file("cid", "/tmp/file.txt", "hello", uid: 1001, gid: 1001)
     end
 
     test "stop_container delegates to container" do

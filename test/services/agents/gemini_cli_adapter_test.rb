@@ -64,13 +64,6 @@ module Agents
       assert_equal true, settings.dig("tools", "autoAccept")
     end
 
-    test "tmpfs_paths returns gemini directories" do
-      paths = @adapter.tmpfs_paths
-
-      assert_includes paths, "/home/gemini/.gemini"
-      assert_includes paths, "/home/gemini/.mitmproxy"
-    end
-
     test "required_env_fields returns empty array" do
       assert_equal [], @adapter.required_env_fields
     end

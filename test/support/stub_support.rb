@@ -46,6 +46,7 @@ module StubSupport
       content.nil? ? "" : StubSupport.build_tar_for_path(path, content)
     end
     c.define_singleton_method(:archive_in) { |*| true }
+    c.define_singleton_method(:archive_in_stream) { |*, **| true }
     c.define_singleton_method(:archive_out) do |path, &block|
       content = captured_fs[path]
       if content
@@ -55,7 +56,6 @@ module StubSupport
       end
     end
     c.define_singleton_method(:read_file) { |path| captured_fs[path] }
-    c.define_singleton_method(:store_file) { |path, content| captured_fs[path] = content }
     c.define_singleton_method(:logs) { |*, **| "" }
     c.define_singleton_method(:wait) { |*| { "StatusCode" => 0 } }
     c.define_singleton_method(:kill) { |*| true }
@@ -85,11 +85,6 @@ module StubSupport
       StubSupport.route_exec_k8s(cmd, captured_fs)
     end
     ContainerRuntime::KubernetesRuntime.define_method(:wait_for_traefik_route) { |_| true }
-
-    @_k8s_original_copy_from = ContainerRuntime::KubernetesRuntime.instance_method(:copy_from)
-    ContainerRuntime::KubernetesRuntime.define_method(:copy_from) do |_id, path|
-      captured_fs[path]
-    end
 
     @_k8s_original_read_file = ContainerRuntime::KubernetesRuntime.instance_method(:read_file)
     ContainerRuntime::KubernetesRuntime.define_method(:read_file) do |_id, path|
@@ -150,10 +145,6 @@ module StubSupport
       rescue NameError
         nil
       end
-    end
-    if @_k8s_original_copy_from
-      ContainerRuntime::KubernetesRuntime.define_method(:copy_from, @_k8s_original_copy_from)
-      @_k8s_original_copy_from = nil
     end
     if @_k8s_original_read_file
       ContainerRuntime::KubernetesRuntime.define_method(:read_file, @_k8s_original_read_file)

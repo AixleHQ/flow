@@ -60,7 +60,7 @@ module ContainerStrategies
       input[:tool].tool_files.each do |tf|
         content = tf.binary? ? tf.file.download.read : (tf.content || "")
         mode = executable_path?(tf.path) ? 0o755 : 0o644
-        runtime.store_file(container_id, tf.path, content, mode: mode)
+        runtime.write_file(container_id, tf.path, content, mode: mode)
       end
     end
 

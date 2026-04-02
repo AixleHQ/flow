@@ -12,9 +12,9 @@ const ProjectsPage = lazyRouteComponent(() => import('../pages/projects'));
 const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
-const AixleBuilderPage = lazyRouteComponent(() => import('../pages/palad-builder'));
+const AixleBuilderPage = lazyRouteComponent(() => import('../pages/aixle-builder'));
 const AixleBuilderSessionPage = lazyRouteComponent(() =>
-  import('../pages/palad-builder').then((m) => ({ default: m.AixleBuilderSessionPage })),
+  import('../pages/aixle-builder').then((m) => ({ default: m.AixleBuilderSessionPage })),
 );
 const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
 // Company pages

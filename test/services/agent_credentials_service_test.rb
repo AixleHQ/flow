@@ -166,12 +166,10 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     service.instance_variable_set(:@runtime, runtime_mock)
 
-    # Expect exec calls for each config file (mkdir + write)
-    runtime_mock.stubs(:exec)
+    runtime_mock.stubs(:write_file).returns(true)
 
     credentials = { api_key: "test-key", account_id: "user-123" }
 
-    # Should not raise
     service.write_to_container("container123", credentials)
     assert true
   end
@@ -182,7 +180,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     service.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.expects(:exec).raises(StandardError.new("Write failed"))
+    runtime_mock.expects(:write_file).raises(StandardError.new("Write failed"))
 
     assert_raises(StandardError) do
       service.write_to_container("container123", { api_key: "test" })
@@ -237,7 +235,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
       config_data: { api_key: "existing-key", account_id: "user-123" }
     )
 
-    runtime_mock.stubs(:exec)
+    runtime_mock.stubs(:write_file).returns(true)
 
     service.load_credentials_to_container(@user, "container123")
 

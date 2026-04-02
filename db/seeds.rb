@@ -34,7 +34,7 @@ Seeds::PlatformTools.seed!
 require_relative "seeds/internal_skills"
 Seeds::InternalSkills.seed!
 
-require_relative "seeds/palad_builder"
+require_relative "seeds/aixle_builder"
 Seeds::AixleBuilder.seed!
 
 # Stop here in production environment

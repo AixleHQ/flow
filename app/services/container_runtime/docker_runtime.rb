@@ -6,14 +6,15 @@ require "net/http"
 require "uri"
 
 module ContainerRuntime
-  # DockerRuntime
-  # Implements BaseRuntime using docker-api.
+  # Implements BaseRuntime using the docker-api gem.
   class DockerRuntime < BaseRuntime
     HEALTH_CHECK_TIMEOUT = 30
     HEALTH_CHECK_INTERVAL = 1
     PORT_READY_TIMEOUT = 30
     TRAEFIK_ROUTE_TIMEOUT = 30
     TRAEFIK_ROUTE_INTERVAL = 1
+
+    # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
@@ -58,47 +59,27 @@ module ContainerRuntime
       container
     end
 
+    # -- Execution ------------------------------------------------------------
+
     def exec(id, cmd, opts = {})
       container = resolve_container(id)
       container.exec(cmd, opts)
     end
 
-    def copy_from(id, path)
+    # -- File I/O -------------------------------------------------------------
+
+    def write_file(id, path, content, mode: 0o644, uid: 0, gid: 0)
       container = resolve_container(id)
-      container.read_file(path)
-    end
-
-    def copy_to(id, path, content)
-      container = resolve_container(id)
-
-      dir = File.dirname(path)
-      safe_dir = Shellwords.escape(dir)
-      safe_path = Shellwords.escape(path)
-      encoded = Base64.strict_encode64(content.to_s)
-
-      _stdout, _stderr, exit_code = container.exec(
-        [ "/bin/sh", "-c", "mkdir -p #{safe_dir} && echo '#{encoded}' | base64 -d > #{safe_path}" ]
-      )
-
-      exit_code.to_i.zero?
-    end
-
-    # Store file using Docker archive API (works on created/stopped containers)
-    # Unlike copy_to, this does NOT require a running container
-    def store_file(id, path, content, mode: 0o644)
-      container = resolve_container(id)
-      tar_io = build_tar_stream(path, content, mode: mode)
+      tar_io = build_tar_stream(path, content, mode: mode, uid: uid, gid: gid)
       container.archive_in_stream("/", overwrite: true) { tar_io.read(Excon.defaults[:chunk_size]).to_s }
       true
     rescue StandardError => e
-      Rails.logger.warn("[DockerRuntime] store_file failed for #{path}: #{e.message}")
+      Rails.logger.warn("[DockerRuntime] write_file failed for #{path}: #{e.message}")
       false
     ensure
       tar_io&.close
     end
 
-    # Read file using Docker archive API (works on stopped containers)
-    # Unlike exec-based reads, this does NOT require a running container
     def read_file(id, path)
       container = resolve_container(id)
       tar_content = +""
@@ -112,16 +93,14 @@ module ContainerRuntime
       nil
     end
 
-    # Wait for container to exit (blocks until container stops)
-    # Returns Docker wait result: { "StatusCode" => 0 }
+    # -- Introspection --------------------------------------------------------
+
     def wait_container(id, timeout = nil)
       container = resolve_container(id)
       wait_seconds = timeout || 1800
       container.wait(wait_seconds)
     end
 
-    # Get container logs (works on stopped containers)
-    # Returns { stdout: String, stderr: String }
     def container_logs(id, stdout: true, stderr: true)
       container = resolve_container(id)
 

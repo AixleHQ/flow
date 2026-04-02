@@ -19,10 +19,10 @@ import { useNavigate, useParams } from '@tanstack/react-router';
 import { useSnackbar } from 'notistack';
 import { useCallback, useMemo, useState } from 'react';
 
-import { useMetaActivityChannel } from 'features/palad-builder/lib/useMetaActivityChannel';
-import { BoardPreview } from 'features/palad-builder/ui/BoardPreview';
-import { MetaActivityLog } from 'features/palad-builder/ui/MetaActivityLog';
-import { WorkflowPreview } from 'features/palad-builder/ui/WorkflowPreview';
+import { useMetaActivityChannel } from 'features/aixle-builder/lib/useMetaActivityChannel';
+import { BoardPreview } from 'features/aixle-builder/ui/BoardPreview';
+import { MetaActivityLog } from 'features/aixle-builder/ui/MetaActivityLog';
+import { WorkflowPreview } from 'features/aixle-builder/ui/WorkflowPreview';
 import { useGetWorkflowRunQuery } from 'features/workflow-execution';
 import { useFinishSessionMutation } from 'shared/api/terminalSessionApi';
 import { useWorkflowRunChannel } from 'shared/lib/hooks';

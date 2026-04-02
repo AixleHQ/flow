@@ -4,9 +4,33 @@ require "rubygems/package"
 require "tempfile"
 
 module ContainerRuntime
-  # BaseRuntime
-  # Abstract interface for container lifecycle operations.
+  # Abstract interface for container lifecycle and file operations.
+  #
+  # == Lifecycle
+  #   pull_image(image)                          → Hash
+  #   create_container(spec)                     → container handle
+  #   start_container(id)                        → container handle
+  #   wait_for_ready(id, ports=[])               → true
+  #   stop_container(id, timeout=nil)            → void
+  #   remove_container(id, options={})            → void
+  #   remove_image(image)                        → void (no-op by default)
+  #
+  # == Execution
+  #   exec(id, cmd, opts={})                     → [stdout_lines, stderr_lines, exit_code]
+  #
+  # == File I/O (tar-based, works on running containers)
+  #   write_file(id, path, content, mode:, uid:, gid:) → true/false
+  #   read_file(id, path)                              → String | nil
+  #
+  # == Introspection
+  #   resolve_container(id)                      → container handle
+  #   container_identifier(container)            → String
+  #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }
+  #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
+  #
   class BaseRuntime
+    # -- Lifecycle ------------------------------------------------------------
+
     def pull_image(_image)
       raise NotImplementedError, "#{self.class.name} must implement #pull_image"
     end
@@ -19,36 +43,8 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #start_container"
     end
 
-    def exec(_id, _cmd, _opts = {})
-      raise NotImplementedError, "#{self.class.name} must implement #exec"
-    end
-
-    def copy_from(_id, _path)
-      raise NotImplementedError, "#{self.class.name} must implement #copy_from"
-    end
-
-    def copy_to(_id, _path, _content)
-      raise NotImplementedError, "#{self.class.name} must implement #copy_to"
-    end
-
-    # Store file using Docker archive API (works on created/stopped containers)
-    def store_file(_id, _path, _content, mode: 0o644)
-      raise NotImplementedError, "#{self.class.name} must implement #store_file"
-    end
-
-    # Read file using Docker archive API (works on stopped containers)
-    def read_file(_id, _path)
-      raise NotImplementedError, "#{self.class.name} must implement #read_file"
-    end
-
-    # Wait for container to exit, returns Hash with StatusCode
-    def wait_container(_id, _timeout = nil)
-      raise NotImplementedError, "#{self.class.name} must implement #wait_container"
-    end
-
-    # Get container logs (works on stopped containers)
-    def container_logs(_id, _opts = {})
-      raise NotImplementedError, "#{self.class.name} must implement #container_logs"
+    def wait_for_ready(_id, _ports = [])
+      raise NotImplementedError, "#{self.class.name} must implement #wait_for_ready"
     end
 
     def stop_container(_id, _timeout = nil, _options = {})
@@ -60,14 +56,31 @@ module ContainerRuntime
     end
 
     def remove_image(_image)
-      # Optional no-op by default.
+      # No-op by default; overridden in DockerRuntime.
     end
 
-    def wait_for_ready(_id, _ports = [])
-      raise NotImplementedError, "#{self.class.name} must implement #wait_for_ready"
+    # -- Execution ------------------------------------------------------------
+
+    def exec(_id, _cmd, _opts = {})
+      raise NotImplementedError, "#{self.class.name} must implement #exec"
     end
 
-    def resolve_container(container_id)
+    # -- File I/O -------------------------------------------------------------
+
+    # Write a single file into the container via tar stream.
+    # uid/gid are embedded in tar headers — no separate chown needed.
+    def write_file(_id, _path, _content, mode: 0o644, uid: 0, gid: 0)
+      raise NotImplementedError, "#{self.class.name} must implement #write_file"
+    end
+
+    # Read a single file from the container. Returns content string or nil.
+    def read_file(_id, _path)
+      raise NotImplementedError, "#{self.class.name} must implement #read_file"
+    end
+
+    # -- Introspection --------------------------------------------------------
+
+    def resolve_container(_container_id)
       raise NotImplementedError, "#{self.class.name} must implement #resolve_container"
     end
 
@@ -75,9 +88,32 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #container_identifier"
     end
 
+    def wait_container(_id, _timeout = nil)
+      raise NotImplementedError, "#{self.class.name} must implement #wait_container"
+    end
+
+    def container_logs(_id, _opts = {})
+      raise NotImplementedError, "#{self.class.name} must implement #container_logs"
+    end
+
     private
 
-    # Extract a single file from tar archive data
+    # -- Tar helpers (shared by Docker & Kubernetes implementations) ----------
+
+    def build_tar_stream(path, content, mode: 0o644, uid: 0, gid: 0)
+      normalized = normalize_tar_path(path)
+      raise ArgumentError, "path is required" if normalized.blank?
+
+      tar_io = Tempfile.new("aixle-tar")
+      tar_io.binmode
+
+      write_tar_entry(tar_io, normalized, content, mode: mode, uid: uid, gid: gid)
+      write_tar_eof(tar_io)
+
+      tar_io.rewind
+      tar_io
+    end
+
     def extract_from_tar(tar_data, filename)
       io = StringIO.new(tar_data)
       Gem::Package::TarReader.new(io) do |tar|
@@ -91,21 +127,19 @@ module ContainerRuntime
       nil
     end
 
-    def build_tar_stream(path, content, mode: 0o644)
-      normalized = normalize_tar_path(path)
-      raise ArgumentError, "path is required" if normalized.blank?
+    def write_tar_entry(io, name, content, mode: 0o644, uid: 0, gid: 0)
+      header = Gem::Package::TarHeader.new(
+        name: name, mode: mode, size: content.bytesize,
+        prefix: "", uid: uid, gid: gid, typeflag: "0", mtime: Time.now
+      )
+      io.write(header)
+      io.write(content)
+      remainder = (512 - (content.bytesize % 512)) % 512
+      io.write("\0" * remainder) if remainder > 0
+    end
 
-      tar_io = Tempfile.new("aixle-copy-to")
-      tar_io.binmode
-
-      Gem::Package::TarWriter.new(tar_io) do |tar|
-        tar.add_file_simple(normalized, mode, content.bytesize) do |io|
-          io.write(content)
-        end
-      end
-
-      tar_io.rewind
-      tar_io
+    def write_tar_eof(io)
+      io.write("\0" * 1024)
     end
 
     def normalize_tar_path(path)
