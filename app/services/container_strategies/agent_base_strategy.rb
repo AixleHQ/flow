@@ -120,10 +120,7 @@ module ContainerStrategies
     end
 
     def build_host_config
-      agent_service = AgentCredentialsService.for(input[:agent_type])
-      base_host_config.merge(
-        "Tmpfs" => build_tmpfs_mounts(agent_service.adapter.tmpfs_paths, agent_service.adapter.tmpfs_uid)
-      )
+      base_host_config
     end
 
     def build_exposed_ports
@@ -206,10 +203,5 @@ module ContainerStrategies
       labels
     end
 
-    def build_tmpfs_mounts(paths, uid = 1001)
-      paths.each_with_object({}) do |path, hash|
-        hash[path] = "rw,size=50m,mode=0755,uid=#{uid},gid=#{uid}"
-      end
-    end
   end
 end

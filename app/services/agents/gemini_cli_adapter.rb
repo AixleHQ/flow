@@ -161,14 +161,6 @@ module Agents
       :merge_json
     end
 
-    # Directories to mount as tmpfs for credential storage
-    def tmpfs_paths
-      [
-        "#{home_dir}/.gemini",    # Gemini CLI config
-        "#{home_dir}/.mitmproxy"  # MITM proxy CA certificates
-      ]
-    end
-
     def session_log_paths
       super + %w[/var/log/mitm/http.log]
     end

@@ -355,14 +355,14 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
       .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
       .returns([ [], [], 1 ])
 
-    captured_cmd = nil
-    @runtime.expects(:exec)
-      .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && cmd[1] == "-c" && (captured_cmd = cmd[2]) }
-      .returns([ [], [], 0 ])
+    captured_content = nil
+    @runtime.expects(:write_file)
+      .with { |cid, path, content| cid == "cid-1" && path == BmadMethodInjector::VSCODE_SETTINGS_PATH && (captured_content = content) }
+      .returns(true)
 
     injector.send(:hide_bmad_in_vscode)
 
-    settings = decode_written_settings(captured_cmd)
+    settings = JSON.parse(captured_content)
     assert_equal 5, settings["files.exclude"].size
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
       assert_equal true, settings.dig("files.exclude", path), "Expected #{path} to be excluded"
@@ -387,14 +387,14 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
       .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
       .returns([ [ JSON.generate(existing) ], [], 0 ])
 
-    captured_cmd = nil
-    @runtime.expects(:exec)
-      .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && cmd[1] == "-c" && (captured_cmd = cmd[2]) }
-      .returns([ [], [], 0 ])
+    captured_content = nil
+    @runtime.expects(:write_file)
+      .with { |cid, path, content| cid == "cid-1" && path == BmadMethodInjector::VSCODE_SETTINGS_PATH && (captured_content = content) }
+      .returns(true)
 
     injector.send(:hide_bmad_in_vscode)
 
-    settings = decode_written_settings(captured_cmd)
+    settings = JSON.parse(captured_content)
     assert_equal 14, settings["editor.fontSize"]
     assert_equal true, settings.dig("files.exclude", "node_modules")
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
@@ -413,14 +413,14 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
       .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
       .returns([ [ JSON.generate(existing) ], [], 0 ])
 
-    captured_cmd = nil
-    @runtime.expects(:exec)
-      .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([ [], [], 0 ])
+    captured_content = nil
+    @runtime.expects(:write_file)
+      .with { |cid, path, content| cid == "cid-1" && path == BmadMethodInjector::VSCODE_SETTINGS_PATH && (captured_content = content) }
+      .returns(true)
 
     injector.send(:hide_bmad_in_vscode)
 
-    settings = decode_written_settings(captured_cmd)
+    settings = JSON.parse(captured_content)
     assert_equal 2, settings["editor.tabSize"]
     assert_equal 12, settings["terminal.integrated.fontSize"]
     assert_equal 5, settings["files.exclude"].size
@@ -439,22 +439,22 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
       .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
       .returns([ [ "{ invalid json }}}" ], [], 0 ])
 
-    captured_cmd = nil
-    @runtime.expects(:exec)
-      .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([ [], [], 0 ])
+    captured_content = nil
+    @runtime.expects(:write_file)
+      .with { |cid, path, content| cid == "cid-1" && path == BmadMethodInjector::VSCODE_SETTINGS_PATH && (captured_content = content) }
+      .returns(true)
 
     injector.send(:hide_bmad_in_vscode)
 
-    settings = decode_written_settings(captured_cmd)
+    settings = JSON.parse(captured_content)
     assert_equal 5, settings["files.exclude"].size
   end
 
   # ====================================================================
-  # hide_bmad_in_vscode — write uses mkdir -p
+  # hide_bmad_in_vscode — writes via runtime.write_file
   # ====================================================================
 
-  test "hide_bmad_in_vscode write command creates .vscode directory" do
+  test "hide_bmad_in_vscode writes via runtime write_file" do
     session = build_bmad_session(agent_type: "cursor_cli")
     BmadMethodInjector.any_instance.unstub(:hide_bmad_in_vscode)
     injector = BmadMethodInjector.new("cid-1", session, runtime: @runtime)
@@ -463,16 +463,11 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
       .with("cid-1", [ "cat", BmadMethodInjector::VSCODE_SETTINGS_PATH ])
       .returns([ [], [], 1 ])
 
-    captured_cmd = nil
-    @runtime.expects(:exec)
-      .with { |cid, cmd| cid == "cid-1" && cmd[0] == "sh" && (captured_cmd = cmd[2]) }
-      .returns([ [], [], 0 ])
+    @runtime.expects(:write_file)
+      .with("cid-1", BmadMethodInjector::VSCODE_SETTINGS_PATH, anything)
+      .returns(true)
 
     injector.send(:hide_bmad_in_vscode)
-
-    assert_includes captured_cmd, "mkdir -p /workspace/.vscode"
-    assert_includes captured_cmd, "base64 -d"
-    assert_includes captured_cmd, BmadMethodInjector::VSCODE_SETTINGS_PATH
   end
 
   # ====================================================================
@@ -499,11 +494,6 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     @runtime.expects(:exec).with do |cid, cmd|
       cid == "cid-1" && cmd.is_a?(Array) && cmd[2].to_s.include?(substring)
     end.returns([ [], [], 0 ])
-  end
-
-  def decode_written_settings(shell_cmd)
-    base64_content = shell_cmd[/echo '([^']+)' \| base64 -d/, 1]
-    JSON.parse(Base64.decode64(base64_content))
   end
 
   def expect_exec_not_matching(substring)

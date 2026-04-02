@@ -222,15 +222,6 @@ module ContainerStrategies
 
     # == Host Config Tests ==
 
-    test "builds host config with tmpfs mounts" do
-      strategy = build_strategy
-
-      host_config = strategy.build_host_config
-
-      assert host_config.key?("Tmpfs")
-      assert host_config["Tmpfs"].is_a?(Hash)
-    end
-
     test "builds host config with network mode" do
       strategy = build_strategy
 

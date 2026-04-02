@@ -3,7 +3,7 @@
 require "test_helper"
 
 class Api::V1::Company::Projects::AixleBuilderControllerTest < ActionController::TestCase
-  tests Api::V1::Company::Projects::PaladBuilderController
+  tests Api::V1::Company::Projects::AixleBuilderController
 
   setup do
     @company = create(:company)

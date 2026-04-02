@@ -137,15 +137,6 @@ module Agents
       { "/workspace/.mcp.json" => { "mcpServers" => mcp_servers }.to_json }
     end
 
-    # Only mount config directories as tmpfs, not entire home
-    # This preserves ~/.local/bin/claude binary installed by official installer
-    def tmpfs_paths
-      [
-        "#{home_dir}/.claude",    # settings directory
-        "#{home_dir}/.mitmproxy"  # MITM proxy CA certificates
-      ]
-    end
-
     # Fetch available models from Anthropic API.
     # Requires API key auth (OAuth accounts may not have access).
     ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"

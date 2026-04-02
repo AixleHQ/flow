@@ -104,7 +104,7 @@ Rails.application.routes.draw do
             resources :mcp_servers, only: %i[index create update destroy]
             resources :integrations, only: %i[index create destroy]
             resources :skills, only: %i[index create update destroy]
-            resource :aixle_builder, only: [], controller: "palad_builder" do
+            resource :aixle_builder, only: [], controller: "aixle_builder" do
               post :start
               get :status
             end

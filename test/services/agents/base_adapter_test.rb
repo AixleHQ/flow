@@ -93,12 +93,8 @@ module Agents
       assert_equal "test-key", content["api_key"]
     end
 
-    test "tmpfs_paths returns home_dir by default" do
-      assert_equal [ @adapter.home_dir ], @adapter.tmpfs_paths
-    end
-
-    test "tmpfs_uid returns 1001" do
-      assert_equal 1001, @adapter.tmpfs_uid
+    test "container_uid returns 1001" do
+      assert_equal 1001, @adapter.container_uid
     end
 
     # == Environment Variables Tests ==

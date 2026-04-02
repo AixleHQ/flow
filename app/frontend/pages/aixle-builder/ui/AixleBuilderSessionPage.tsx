@@ -7,10 +7,10 @@ import { Box, Button, Chip, CircularProgress, Tab, Tabs, Typography, type SxProp
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
-import { useMetaActivityChannel } from 'features/palad-builder/lib/useMetaActivityChannel';
-import { BoardPreview } from 'features/palad-builder/ui/BoardPreview';
-import { MetaActivityLog, type MetaActivity } from 'features/palad-builder/ui/MetaActivityLog';
-import { WorkflowsListPreview } from 'features/palad-builder/ui/WorkflowsListPreview';
+import { useMetaActivityChannel } from 'features/aixle-builder/lib/useMetaActivityChannel';
+import { BoardPreview } from 'features/aixle-builder/ui/BoardPreview';
+import { MetaActivityLog, type MetaActivity } from 'features/aixle-builder/ui/MetaActivityLog';
+import { WorkflowsListPreview } from 'features/aixle-builder/ui/WorkflowsListPreview';
 import { useTerminalSession } from 'shared/lib';
 import { Routes } from 'shared/routes';
 import { TerminalSessionWidget } from 'widgets/terminal-session';

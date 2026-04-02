@@ -27,7 +27,7 @@ module ContainerStrategies
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
 
       adapter.auth_setup_files.each do |path, content|
-        runtime.copy_to(container, path, content)
+        runtime.write_file(container, path, content)
         Rails.logger.info("[AgentAuth] Wrote auth setup file: #{path}")
       end
 

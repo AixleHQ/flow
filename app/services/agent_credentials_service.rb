@@ -113,16 +113,12 @@ class AgentCredentialsService
   end
 
   def write_container_file(container_id, path, content)
-    dir = File.dirname(path)
-    encoded = Base64.strict_encode64(content)
-    cmd = [
-      "sh",
-      "-c",
-      "mkdir -p #{dir} && echo '#{encoded}' | base64 -d > #{path}"
-    ]
-
-    runtime.exec(container_id, cmd)
-    Rails.logger.info("Wrote #{path} to container #{container_id}")
+    ok = runtime.write_file(container_id, path, content)
+    if ok
+      Rails.logger.info("Wrote #{path} to container #{container_id}")
+    else
+      raise "runtime.write_file returned false for #{path}"
+    end
   rescue StandardError => e
     Rails.logger.error("Failed to write #{path} to container #{container_id}: #{e.message}")
     raise

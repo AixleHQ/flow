@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-require "rubygems/package"
 require "shellwords"
-require "stringio"
 
 # SessionContextService
 # Injects session configuration into agent containers.
@@ -142,7 +140,7 @@ class SessionContextService
 
       files.each do |path, content|
         expanded = expand_path(path, adapter.home_dir)
-        write_file(container_id, expanded, content, adapter.tmpfs_uid)
+        write_file(container_id, expanded, content, adapter.container_uid)
         Rails.logger.info("[SessionContext] Injected config file: #{path} (#{content.bytesize} bytes)")
       end
     end
@@ -189,9 +187,9 @@ class SessionContextService
 
         if adapter.skill_merge_strategy == :append
           existing = read_file(container_id, expanded) || ""
-          write_file(container_id, expanded, existing + content, adapter.tmpfs_uid)
+          write_file(container_id, expanded, existing + content, adapter.container_uid)
         else
-          write_file(container_id, expanded, content, adapter.tmpfs_uid)
+          write_file(container_id, expanded, content, adapter.container_uid)
         end
 
         Rails.logger.info("[SessionContext] Injected skill: #{path} (#{content.bytesize} bytes)")
@@ -216,7 +214,7 @@ class SessionContextService
       return {} if path.blank?
 
       expanded = expand_path(path, adapter.home_dir)
-      write_file(container_id, expanded, content, adapter.tmpfs_uid)
+      write_file(container_id, expanded, content, adapter.container_uid)
 
       merged_metadata = (session.context_metadata || {}).merge(result.to_json_hash)
       session.update_column(:context_metadata, merged_metadata)
@@ -240,7 +238,7 @@ class SessionContextService
 
       config_files.each do |path, content|
         expanded = expand_path(path, adapter.home_dir)
-        write_mcp_file(container_id, expanded, content, adapter.mcp_merge_strategy, adapter.tmpfs_uid)
+        write_mcp_file(container_id, expanded, content, adapter.mcp_merge_strategy, adapter.container_uid)
         Rails.logger.info("[SessionContext] Injected MCP config: #{path} (#{adapter.mcp_merge_strategy})")
       end
 
@@ -276,7 +274,7 @@ class SessionContextService
     CONTEXT_LOG_PATH = "/var/log/context.log"
 
     def write_context_log(container_id, context_log)
-      runtime.copy_to(container_id, CONTEXT_LOG_PATH, context_log.to_s)
+      runtime.write_file(container_id, CONTEXT_LOG_PATH, context_log.to_s)
     rescue => e
       Rails.logger.warn("[SessionContext] Failed to write context log: #{e.message}")
     end
@@ -365,7 +363,7 @@ class SessionContextService
       missing.each { |id| Rails.logger.warn("[SessionContext] Asset #{id} not found, skipping") }
 
       adapter = adapter_for(session)
-      uid = adapter.tmpfs_uid
+      uid = adapter.container_uid
 
       assets.each do |asset|
         version = asset.latest_version
@@ -392,7 +390,7 @@ class SessionContextService
       return if repos.empty?
 
       adapter = adapter_for(session)
-      uid = adapter.tmpfs_uid
+      uid = adapter.container_uid
 
       repos.group_by(&:integration_id).each do |_integration_id, group_repos|
         integration = group_repos.first.integration
@@ -447,15 +445,7 @@ class SessionContextService
     def write_file(container_id, path, content, uid = 1001)
       return if path.blank?
 
-      ok = runtime.copy_to(container_id, path, content)
-      # Fallback to tar archive API for large files (exec+base64 has shell arg limits)
-      ok = runtime.store_file(container_id, path, content) unless ok
-      return unless ok
-
-      owner = uid.to_i
-      safe_path = Shellwords.escape(path.to_s)
-      cmd = [ "sh", "-c", "chown #{owner}:#{owner} #{safe_path}" ]
-      runtime.exec(container_id, cmd)
+      runtime.write_file(container_id, path, content, uid: uid.to_i, gid: uid.to_i)
     end
 
     def download_file_to_container(container_id, url, target_path, uid)
@@ -490,39 +480,10 @@ class SessionContextService
     def read_file(container_id, path)
       return nil if path.blank?
 
-      safe_path = Shellwords.escape(path.to_s)
-      result = runtime.exec(container_id, [ "sh", "-c", "cat #{safe_path}" ])
-      stdout = result[0]
-      exit_code = result[2]
-
-      return nil unless exit_code.to_i.zero?
-
-      stdout.join
+      runtime.read_file(container_id, path)
     rescue StandardError => e
       Rails.logger.debug("[SessionContext] read_file(#{path}) failed: #{e.message}")
       nil
-    end
-
-    def extract_file_from_tar(tar_data, path)
-      normalized = path.to_s.sub(%r{\A/}, "")
-      return nil if normalized.blank?
-
-      # Docker copy_from returns tar with basename only, not full path
-      basename = File.basename(normalized)
-
-      reader = Gem::Package::TarReader.new(StringIO.new(tar_data))
-      contents = nil
-
-      reader.each do |entry|
-        entry_name = entry.full_name.sub(%r{\A\./}, "")
-        if entry_name == normalized || entry_name == basename
-          contents = entry.read
-          break
-        end
-      end
-      contents
-    ensure
-      reader&.close
     end
 
     # == MCP Server Resolution ==

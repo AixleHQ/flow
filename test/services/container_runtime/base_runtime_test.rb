@@ -8,6 +8,8 @@ module ContainerRuntime
       @runtime = BaseRuntime.new
     end
 
+    # -- Lifecycle --
+
     test "pull_image raises NotImplementedError" do
       assert_raises(NotImplementedError) { @runtime.pull_image("alpine:latest") }
     end
@@ -20,32 +22,8 @@ module ContainerRuntime
       assert_raises(NotImplementedError) { @runtime.start_container("id") }
     end
 
-    test "exec raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.exec("id", [ "echo", "hi" ]) }
-    end
-
-    test "copy_from raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.copy_from("id", "/path") }
-    end
-
-    test "copy_to raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.copy_to("id", "/path", "content") }
-    end
-
-    test "store_file raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.store_file("id", "/path", "content") }
-    end
-
-    test "read_file raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.read_file("id", "/path") }
-    end
-
-    test "wait_container raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.wait_container("id") }
-    end
-
-    test "container_logs raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.container_logs("id") }
+    test "wait_for_ready raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.wait_for_ready("id") }
     end
 
     test "stop_container raises NotImplementedError" do
@@ -60,9 +38,23 @@ module ContainerRuntime
       assert_nil @runtime.remove_image("alpine:latest")
     end
 
-    test "wait_for_ready raises NotImplementedError" do
-      assert_raises(NotImplementedError) { @runtime.wait_for_ready("id") }
+    # -- Execution --
+
+    test "exec raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.exec("id", [ "echo", "hi" ]) }
     end
+
+    # -- File I/O --
+
+    test "write_file raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.write_file("id", "/path", "content") }
+    end
+
+    test "read_file raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.read_file("id", "/path") }
+    end
+
+    # -- Introspection --
 
     test "resolve_container raises NotImplementedError" do
       assert_raises(NotImplementedError) { @runtime.resolve_container("id") }
@@ -70,6 +62,14 @@ module ContainerRuntime
 
     test "container_identifier raises NotImplementedError" do
       assert_raises(NotImplementedError) { @runtime.container_identifier("container") }
+    end
+
+    test "wait_container raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.wait_container("id") }
+    end
+
+    test "container_logs raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.container_logs("id") }
     end
   end
 end

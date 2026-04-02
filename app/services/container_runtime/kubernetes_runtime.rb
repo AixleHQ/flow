@@ -11,7 +11,6 @@ require "uri"
 require "websocket-client-simple"
 
 module ContainerRuntime
-  # KubernetesRuntime
   # Implements BaseRuntime using Kubernetes Pods + Services + IngressRoutes.
   class KubernetesRuntime < BaseRuntime
     DEFAULT_SERVICE_PORTS = [ 7681, 4040 ].freeze
@@ -20,6 +19,8 @@ module ContainerRuntime
     DEFAULT_TRAEFIK_PORTS = [ 7681, 4040, 8443 ].freeze
     READY_TIMEOUT = 30
     READY_INTERVAL = 1
+
+    # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
       raise ArgumentError, "image is required" if image.blank?
@@ -54,6 +55,8 @@ module ContainerRuntime
       handle
     end
 
+    # -- Execution ------------------------------------------------------------
+
     def exec(id, cmd, opts = {})
       handle = resolve_handle(id)
       stdout, stderr, exit_code = exec_via_websocket(handle, cmd, opts)
@@ -64,51 +67,13 @@ module ContainerRuntime
       [ stdout_lines, stderr_lines, exit_code ]
     end
 
-    def copy_from(id, path)
-      return "" if path.blank?
+    # -- File I/O -------------------------------------------------------------
 
-      handle = resolve_handle(id)
-      normalized = normalize_tar_path(path)
-      return "" if normalized.blank?
-
-      output = Tempfile.new("aixle-copy-from")
-      output.binmode
-      cmd = [ "/bin/sh", "-c", "tar -cf - -C / #{Shellwords.escape(normalized)}" ]
-      _stdout, _stderr, exit_code = exec_via_websocket(handle, cmd, stdout_io: output, binary: true)
-
-      return "" unless exit_code.to_i.zero?
-
-      output.rewind
-      output.read
-    ensure
-      output&.close!
-    end
-
-    def copy_to(id, path, content)
+    def write_file(id, path, content, mode: 0o644, uid: 0, gid: 0)
       return false if path.blank?
 
       handle = resolve_handle(id)
-      tar_io = build_tar_stream(path, content.to_s)
-      cmd = [ "/bin/sh", "-c", "tar -xf - -C /" ]
-      _stdout, _stderr, exit_code = exec_via_websocket(
-        handle,
-        cmd,
-        stdin_io: tar_io,
-        binary: true,
-        close_on_stdin_eof: true
-      )
-
-      exit_code.to_i.zero?
-    ensure
-      tar_io&.close!
-    end
-
-    # Store file via exec + tar stream. Requires a running pod.
-    def store_file(id, path, content, mode: 0o644)
-      return false if path.blank?
-
-      handle = resolve_handle(id)
-      tar_io = build_tar_stream(path, content.to_s, mode: mode)
+      tar_io = build_tar_stream(path, content.to_s, mode: mode, uid: uid, gid: gid)
       cmd = [ "/bin/sh", "-c", "tar -xf - -C /" ]
       _stdout, _stderr, exit_code = exec_via_websocket(
         handle,
@@ -120,14 +85,12 @@ module ContainerRuntime
 
       exit_code.to_i.zero?
     rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] store_file failed for #{path}: #{e.message}")
+      Rails.logger.warn("[KubernetesRuntime] write_file failed for #{path}: #{e.message}")
       false
     ensure
       tar_io&.close!
     end
 
-    # Read file via exec + tar stream (same mechanism as #copy_from), then extract one entry.
-    # Mirrors DockerRuntime#read_file (archive_out + tar extract); requires a running pod.
     def read_file(id, path)
       return nil if path.blank?
 
@@ -139,6 +102,8 @@ module ContainerRuntime
       Rails.logger.warn("[KubernetesRuntime] read_file failed for #{path}: #{e.message}")
       nil
     end
+
+    # -- Lifecycle (cont.) ----------------------------------------------------
 
     def stop_container(id, _timeout = nil, _options = {})
       handle = resolve_handle(id)
@@ -155,8 +120,7 @@ module ContainerRuntime
     end
 
     def remove_image(_image)
-      # Images are managed by the Kubernetes node runtime.
-      # No-op by default.
+      # No-op — images are managed by the Kubernetes node runtime.
     end
 
     def wait_for_ready(id, ports = [])
@@ -173,6 +137,8 @@ module ContainerRuntime
 
       true
     end
+
+    # -- Introspection --------------------------------------------------------
 
     def resolve_container(container_id)
       resolve_handle(container_id)
@@ -198,6 +164,26 @@ module ContainerRuntime
     end
 
     private
+
+    def copy_from(id, path)
+      return "" if path.blank?
+
+      handle = resolve_handle(id)
+      normalized = normalize_tar_path(path)
+      return "" if normalized.blank?
+
+      output = Tempfile.new("aixle-tar-read")
+      output.binmode
+      cmd = [ "/bin/sh", "-c", "tar -cf - -C / #{Shellwords.escape(normalized)}" ]
+      _stdout, _stderr, exit_code = exec_via_websocket(handle, cmd, stdout_io: output, binary: true)
+
+      return "" unless exit_code.to_i.zero?
+
+      output.rewind
+      output.read
+    ensure
+      output&.close!
+    end
 
     def resolve_handle(id)
       return id if id.respond_to?(:pod_name) && id.respond_to?(:namespace)
@@ -295,8 +281,6 @@ module ContainerRuntime
 
     def build_pod(spec, handle)
       env_vars = build_env_vars(spec[:env_vars])
-      mount_paths = build_mount_paths(spec, env_vars)
-      volumes, volume_mounts = build_volumes(mount_paths)
 
       container = {
         name: handle.container_name,
@@ -305,7 +289,6 @@ module ContainerRuntime
         env: env_vars,
         command: spec[:cmd],
         workingDir: spec[:working_dir],
-        volumeMounts: volume_mounts,
         resources: runtime_container_resources
       }
 
@@ -317,8 +300,7 @@ module ContainerRuntime
         automountServiceAccountToken: false,
         enableServiceLinks: false,
         restartPolicy: "Never",
-        containers: [ container ],
-        volumes: volumes
+        containers: [ container ]
       }
 
       configured_pull_secrets = agents_image_pull_secrets
@@ -652,38 +634,6 @@ module ContainerRuntime
 
         { name: key, value: value.to_s }
       end
-    end
-
-    def build_mount_paths(spec, env_vars)
-      paths = []
-      tmpfs = spec.dig(:host_config, "Tmpfs") || {}
-      paths.concat(tmpfs.keys)
-
-      paths.compact.uniq
-    end
-
-    def build_volumes(paths)
-      volumes = []
-      mounts = []
-
-      paths.each_with_index do |path, index|
-        volume_name = "vol-#{index}"
-        volumes << {
-          name: volume_name,
-          emptyDir: empty_dir_for_path(path)
-        }
-        mounts << {
-          name: volume_name,
-          mountPath: path
-        }
-      end
-
-      [ volumes, mounts ]
-    end
-
-    def empty_dir_for_path(path)
-      tmpfs = path.start_with?("/tmp") || path.include?("/.config")
-      tmpfs ? { medium: "Memory" } : {}
     end
 
     def extract_ports(exposed_ports)
@@ -1383,20 +1333,6 @@ module ContainerRuntime
       end
 
       values.map(&:to_s).map(&:strip).reject(&:blank?).uniq
-    end
-
-    # Extract a single file from tar bytes (aligned with DockerRuntime#extract_from_tar).
-    def extract_from_tar(tar_data, filename)
-      io = StringIO.new(tar_data)
-      Gem::Package::TarReader.new(io) do |tar|
-        tar.each do |entry|
-          return entry.read if entry.file? && File.basename(entry.full_name) == filename
-        end
-      end
-      nil
-    rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] extract_from_tar failed: #{e.message}")
-      nil
     end
 
     def kube_setting(key)

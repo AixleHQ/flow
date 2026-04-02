@@ -55,9 +55,9 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     Thread.current[:session_context_runtime] = nil
 
     @runtime_mock = mock("runtime")
-    @runtime_mock.stubs(:copy_to).returns(true)
+    @runtime_mock.stubs(:write_file).returns(true)
     @runtime_mock.stubs(:exec).returns([ [], [], 0 ])
-    @runtime_mock.stubs(:copy_from).returns(nil)
+    @runtime_mock.stubs(:read_file).returns(nil)
     ContainerRuntime.stubs(:build).returns(@runtime_mock)
   end
 
@@ -350,9 +350,9 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       bmad_install_called = false
 
       runtime = mock("runtime_full_#{agent_type}")
-      runtime.stubs(:copy_from).returns(nil)
+      runtime.stubs(:read_file).returns(nil)
 
-      runtime.stubs(:copy_to).with do |_ctr, path, content|
+      runtime.stubs(:write_file).with do |_ctr, path, content|
         context_written = true if path == spec[:context_path] && content.include?("<bmad-method")
         true
       end.returns(true)

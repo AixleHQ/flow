@@ -4,7 +4,7 @@ module Api
   module V1
     module Company
       module Projects
-        class PaladBuilderController < ApplicationController
+        class AixleBuilderController < ApplicationController
           # POST /api/v1/company/projects/:project_id/aixle_builder/start
           def start
             meta_tool_ids = Tool.where(kind: :workflow, name: aixle_builder_tool_names).pluck(:id)

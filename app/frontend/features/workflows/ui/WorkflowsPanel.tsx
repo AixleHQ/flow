@@ -24,7 +24,7 @@ import { useSnackbar } from 'notistack';
 import { useCallback, useMemo, useState, type FC, type ReactNode } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
-import { AixleBuilderBanner } from 'features/palad-builder';
+import { AixleBuilderBanner } from 'features/aixle-builder';
 import { Routes } from 'shared/routes';
 
 import {

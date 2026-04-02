@@ -4,7 +4,7 @@ module Api
   module V1
     module Company
       module Projects
-        class PaladBuilderPolicy < Api::V1::Company::ApplicationPolicy
+        class AixleBuilderPolicy < Api::V1::Company::ApplicationPolicy
           def start?
             project_accessible?
           end
