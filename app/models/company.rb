@@ -36,7 +36,7 @@ class Company < ApplicationRecord
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
-                           format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, palad.ai)" }
+                           format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
 
   # Callbacks
@@ -63,7 +63,7 @@ class Company < ApplicationRecord
   end
 
   def self.find_by_email_domain(email)
-    domain = email.split("@").last # e.g., "acme.com", "palad.ai"
+    domain = email.split("@").last # e.g., "acme.com", "aixle.com"
     active.find_by(email_domain: domain)
   end
 

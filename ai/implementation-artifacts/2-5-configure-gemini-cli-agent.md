@@ -56,7 +56,7 @@ So that I can use it in future sessions.
   - [ ] 3.1 Review `docker/gemini-cli/Dockerfile`
   - [ ] 3.2 Ensure Gemini CLI is properly installed
   - [ ] 3.3 Ensure entrypoint starts ttyd correctly
-  - [ ] 3.4 Rebuild image: `docker build -t palad/gemini-cli:latest docker/gemini-cli/`
+  - [ ] 3.4 Rebuild image: `docker build -t aixle/gemini-cli:latest docker/gemini-cli/`
 
 - [ ] Task 4: Test auth flow (AC: #1, #2, #3, #4)
   - [ ] 4.1 Navigate to `/terminal-test` page

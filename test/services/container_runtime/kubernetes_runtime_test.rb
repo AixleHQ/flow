@@ -44,17 +44,17 @@ module ContainerRuntime
     end
 
     test "resolve_container builds handle from string id" do
-      result = @runtime.resolve_container("palad-abc123")
+      result = @runtime.resolve_container("aixle-abc123")
 
-      assert_equal "palad-abc123", result.pod_name
+      assert_equal "aixle-abc123", result.pod_name
       assert result.namespace.present?
       assert_equal "main", result.container_name
     end
 
     test "resolve_container preserves namespace from persisted identifier" do
-      result = @runtime.resolve_container("palad-user-42/terminal-abc123")
+      result = @runtime.resolve_container("aixle-user-42/terminal-abc123")
 
-      assert_equal "palad-user-42", result.namespace
+      assert_equal "aixle-user-42", result.namespace
       assert_equal "terminal-abc123", result.pod_name
     end
 
@@ -74,9 +74,9 @@ module ContainerRuntime
     end
 
     test "container_identifier includes namespace when handle has both namespace and pod_name" do
-      handle = OpenStruct.new(namespace: "palad-project-7", pod_name: "my-pod-xyz")
+      handle = OpenStruct.new(namespace: "aixle-project-7", pod_name: "my-pod-xyz")
 
-      assert_equal "palad-project-7/my-pod-xyz", @runtime.container_identifier(handle)
+      assert_equal "aixle-project-7/my-pod-xyz", @runtime.container_identifier(handle)
     end
 
     test "copy_from returns empty string when path blank" do
@@ -147,52 +147,52 @@ module ContainerRuntime
       traefik_mock = mock("traefik_client")
       networking_mock = mock("networking_client")
       secret = Kubeclient::Resource.new(
-        metadata: { name: "ghcr-pull-secret", namespace: "palad" },
+        metadata: { name: "ghcr-pull-secret", namespace: "aixle" },
         type: "kubernetes.io/dockerconfigjson",
         data: { ".dockerconfigjson" => "ZXhhbXBsZQ==" }
       )
 
       @runtime.stubs(:agents_image_pull_secrets).returns([ "ghcr-pull-secret" ])
 
-      core_mock.expects(:get_namespace).with("palad-project-77").raises(StandardError)
+      core_mock.expects(:get_namespace).with("aixle-project-77").raises(StandardError)
       core_mock.expects(:create_namespace).with do |resource|
         resource.kind == "Namespace" &&
-          resource.metadata[:name] == "palad-project-77" &&
-          resource.metadata[:labels]["palad.ai/scope"] == "project"
+          resource.metadata[:name] == "aixle-project-77" &&
+          resource.metadata[:labels]["aixle.com/scope"] == "project"
       end.returns(true)
-      core_mock.expects(:get_secret).with("ghcr-pull-secret", "palad-project-77").raises(StandardError)
-      core_mock.expects(:get_secret).with("ghcr-pull-secret", "palad").returns(secret)
+      core_mock.expects(:get_secret).with("ghcr-pull-secret", "aixle-project-77").raises(StandardError)
+      core_mock.expects(:get_secret).with("ghcr-pull-secret", "aixle").returns(secret)
       core_mock.expects(:create_secret).with do |resource|
         metadata = resource.metadata.respond_to?(:to_h) ? resource.metadata.to_h : resource.metadata
         data = resource.data.respond_to?(:to_h) ? resource.data.to_h : resource.data
 
         resource.kind == "Secret" &&
           (metadata[:name] || metadata["name"]) == "ghcr-pull-secret" &&
-          (metadata[:namespace] || metadata["namespace"]) == "palad-project-77" &&
+          (metadata[:namespace] || metadata["namespace"]) == "aixle-project-77" &&
           resource.type == "kubernetes.io/dockerconfigjson" &&
           (data[:".dockerconfigjson"] || data[".dockerconfigjson"]) == "ZXhhbXBsZQ=="
       end.returns(true)
       core_mock.expects(:create_pod).returns(true)
-      core_mock.expects(:get_resource_quota).with("palad-resource-quota", "palad-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
+      core_mock.expects(:get_resource_quota).with("aixle-resource-quota", "aixle-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
       core_mock.expects(:create_resource_quota).returns(true)
 
-      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "palad-project-77").raises(StandardError)
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-77").raises(StandardError)
       traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
         kind == "Middleware" &&
           resource_type == "middlewares" &&
           resource.kind == "Middleware" &&
-          resource.metadata[:namespace] == "palad-project-77" &&
-          resource.metadata[:labels]["palad.ai/runtime-origin"] == "palad"
+          resource.metadata[:namespace] == "aixle-project-77" &&
+          resource.metadata[:labels]["aixle.com/runtime-origin"] == "aixle"
       end.returns(true)
 
       %w[
         runtime-default-deny
         runtime-allow-traefik-ingress
         runtime-allow-dns-egress
-        runtime-allow-palad-service-egress
+        runtime-allow-aixle-service-egress
         runtime-allow-public-internet-egress
       ].each do |name|
-        networking_mock.expects(:get_entity).with("networkpolicies", name, "palad-project-77").raises(StandardError)
+        networking_mock.expects(:get_entity).with("networkpolicies", name, "aixle-project-77").raises(StandardError)
       end
       5.times do
         networking_mock.expects(:create_entity).with do |kind, resource_type, resource|
@@ -215,7 +215,7 @@ module ContainerRuntime
         namespace_context: { project_id: 77, user_id: 5 }
       )
 
-      assert_equal "palad-project-77", result.namespace
+      assert_equal "aixle-project-77", result.namespace
     end
 
     test "stop_container deletes pod" do
@@ -272,7 +272,7 @@ module ContainerRuntime
           resource_type == "ingressroutes" &&
           ingress.kind == "IngressRoute" &&
           (metadata[:namespace] || metadata["namespace"]) == "default" &&
-          (metadata.dig(:labels, :"palad.ai/runtime-origin") || metadata.dig("labels", "palad.ai/runtime-origin")) == "palad" &&
+          (metadata.dig(:labels, :"aixle.com/runtime-origin") || metadata.dig("labels", "aixle.com/runtime-origin")) == "aixle" &&
           routes.size == 3 &&
           ide_route.present? &&
           normalized_middlewares == [ { name: "terminal-auth" } ] &&
@@ -285,12 +285,12 @@ module ContainerRuntime
     end
 
     test "build_route includes host matcher from settings domain" do
-      Settings.stubs(:domain).returns("palad.ai")
+      Settings.stubs(:domain).returns("aixle.com")
       handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
 
       route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
 
-      assert_equal "Host(`palad.ai`) && PathPrefix(`/t/abc123/tty`)", route[:match]
+      assert_equal "Host(`aixle.com`) && PathPrefix(`/t/abc123/tty`)", route[:match]
     end
 
     test "build_route falls back to path matcher when settings domain blank" do
@@ -303,11 +303,11 @@ module ContainerRuntime
     end
 
     test "resource_labels include runtime origin and namespace when provided" do
-      @runtime.stubs(:runtime_namespace).returns("palad-staging")
-      labels = @runtime.send(:resource_labels, namespace: "palad-staging-project-1")
+      @runtime.stubs(:runtime_namespace).returns("aixle-staging")
+      labels = @runtime.send(:resource_labels, namespace: "aixle-staging-project-1")
 
-      assert_equal "palad-staging", labels["palad.ai/runtime-origin"]
-      assert_equal "palad-staging-project-1", labels["palad.ai/runtime-namespace"]
+      assert_equal "aixle-staging", labels["aixle.com/runtime-origin"]
+      assert_equal "aixle-staging-project-1", labels["aixle.com/runtime-namespace"]
     end
 
     test "build_quota_hard_limits uses settings project_defaults when no db record" do

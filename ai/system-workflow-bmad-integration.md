@@ -13,9 +13,9 @@
 
 The BMAD method (v6) is an aggregate of agents and workflows for the full cycle of product development (analysis → planning → architecture → implementation). Currently BMAD works as a set of prompts in the IDE: each workflow is launched manually via a command, context is lost between sessions, and there is no orchestration between phases.
 
-Palad is already a **persistent BMAD runtime** at the level of individual workflows (one BMAD workflow = one Palad Step). But there is no mechanism that:
+Aixle is already a **persistent BMAD runtime** at the level of individual workflows (one BMAD workflow = one Aixle Step). But there is no mechanism that:
 1. Runs the **full cycle** of the BMAD method as a single managed process
-2. **Maps** BMAD agents and configuration into Palad entities
+2. **Maps** BMAD agents and configuration into Aixle entities
 3. Allows **reuse** of new BMAD modules (bmb, cis, future npm packages)
 4. Differs from ordinary workflows by having **custom mappings**
 
@@ -23,9 +23,9 @@ Palad is already a **persistent BMAD runtime** at the level of individual workfl
 
 Create a **System Workflow** — a special type of workflow that:
 - Orchestrates the BMAD method as a whole (or a subset of it chosen by the user)
-- Automatically maps BMAD artifacts (agents, workflows, config vars) into Palad entities
+- Automatically maps BMAD artifacts (agents, workflows, config vars) into Aixle entities
 - Supports modularity: install a new BMAD module → its workflows become available in the system workflow
-- Is the "single source of truth" for the configuration of the BMAD environment in Palad
+- Serves as the "single source of truth" for the BMAD environment configuration in Aixle
 
 ### 1.3 How a System Workflow differs from an ordinary one
 
@@ -55,10 +55,10 @@ Create a **System Workflow** — a special type of workflow that:
 │  Level 2: BMAD Module Catalog (Registry)                                  │
 │                                                                           │
 │  A catalog of all imported BMAD modules with their agents, workflows.     │
-│  Each workflow from the catalog = a ready-made template for a Palad Step. │
+│  Each workflow from the catalog = a ready-made template for an Aixle Step.             │
 │  The Registry knows the dependencies between workflows (PRD is needed for Architecture).│
 ├───────────────────────────────────────────────────────────────────────────┤
-│  Level 1: Palad Runtime (existing)                                        │
+│  Level 1: Aixle Runtime (existing)                                        │
 │                                                                           │
 │  Workflow → Step → SubStep                                                │
 │  WorkflowRun → StepRun → SubStepRun                                     │
@@ -87,7 +87,7 @@ end
 
 class BmadAgent < ApplicationRecord
   belongs_to :bmad_module
-  belongs_to :palad_agent, class_name: 'Agent', optional: true
+  belongs_to :aixle_agent, class_name: 'Agent', optional: true
 
   # bmad_name: string ("analyst", "architect", "pm")
   # display_name: string ("Mary", "Winston", "John")
@@ -130,11 +130,11 @@ end
 
 ### 2.3 Mapping Engine
 
-Mapping Engine — a service that translates BMAD entities into Palad entities:
+Mapping Engine — a service that translates BMAD entities into Aixle entities:
 
 ```
 ┌─────────────────┐        ┌──────────────────┐        ┌─────────────────┐
-│  BMAD Source     │        │  Mapping Engine   │        │  Palad Entities │
+│  BMAD Source     │        │  Mapping Engine   │        │  Aixle Entities │
 │                  │        │                   │        │                 │
 │ BmadAgent        │───────▶│ AgentMapper       │───────▶│ Agent           │
 │  analyst.md      │        │  - persona → sys  │        │  system_prompt  │
@@ -144,9 +144,9 @@ Mapping Engine — a service that translates BMAD entities into Palad entities:
 ├─────────────────┤        ├──────────────────┤        ├─────────────────┤
 │ BmadWorkflow     │───────▶│ WorkflowMapper    │───────▶│ Workflow        │
 │  create-arch     │        │  - workflow →     │        │  Steps          │
-│  steps/          │        │    Palad Workflow  │        │  SubSteps       │
+│  steps/          │        │    Aixle Workflow  │        │  SubSteps       │
 │  instructions    │        │  - BMAD steps →   │        │  instructions   │
-│                  │        │    Palad SubSteps  │        │  agent_id       │
+│                  │        │    Aixle SubSteps  │        │  agent_id       │
 ├─────────────────┤        ├──────────────────┤        ├─────────────────┤
 │ BmadModule       │───────▶│ ConfigMapper      │───────▶│ WorkflowRun     │
 │  config.yaml     │        │  - config vars → │        │  shared_context  │
@@ -169,10 +169,10 @@ class SystemWorkflowMapping < ApplicationRecord
   #   :config_mapping     — BMAD config var → shared_context key
   #   :artifact_mapping   — BMAD artifact name → WorkflowRunAsset name pattern
   #   :phase_mapping      — BMAD phase → Step group
-  #   :instruction_transform — rules for adapting BMAD instructions to Palad context
+  #   :instruction_transform — rules for adapting BMAD instructions to Aixle context
 
   # source_ref: string (BMAD-side reference, e.g. "bmm:analyst" or "config:output_folder")
-  # target_ref: string (Palad-side reference, e.g. "agent:42" or "shared_context.bmad_output_folder")
+  # target_ref: string (Aixle-side reference, e.g. "agent:42" or "shared_context.bmad_output_folder")
   # transform: jsonb (transformation rules, if any)
   # auto_sync: boolean (re-apply mapping when BMAD module updates)
 end
@@ -180,7 +180,7 @@ end
 
 #### 2.4.1 Agent Mapping
 
-BMAD agents → Palad agents:
+BMAD agents → Aixle agents:
 
 ```ruby
 class BmadAgentMapper
@@ -193,7 +193,7 @@ class BmadAgentMapper
   }
 
   def map(bmad_agent, target_scope:)
-    existing = bmad_agent.palad_agent
+    existing = bmad_agent.aixle_agent
 
     attrs = {
       title: bmad_agent.title,
@@ -211,7 +211,7 @@ class BmadAgentMapper
       existing
     else
       agent = Agent.create!(attrs)
-      bmad_agent.update!(palad_agent: agent)
+      bmad_agent.update!(aixle_agent: agent)
       agent
     end
   end
@@ -237,7 +237,7 @@ end
 
 #### 2.4.2 Config Mapping
 
-BMAD config.yaml → Palad WorkflowRun shared_context:
+BMAD config.yaml → Aixle WorkflowRun shared_context:
 
 ```ruby
 class BmadConfigMapper
@@ -257,12 +257,12 @@ class BmadConfigMapper
     config = bmad_module.config
     context = workflow_run.shared_context || {}
 
-    STANDARD_MAPPINGS.each do |bmad_key, palad_key|
+    STANDARD_MAPPINGS.each do |bmad_key, aixle_key|
       value = config[bmad_key]
       next unless value
 
       value = resolve_path(value, workflow_run.project)
-      deep_set(context, palad_key, value)
+      deep_set(context, aixle_key, value)
     end
 
     workflow_run.update!(shared_context: context)
@@ -280,7 +280,7 @@ end
 
 #### 2.4.3 Instruction Transform
 
-BMAD workflow instructions → Palad Step instructions:
+BMAD workflow instructions → Aixle Step instructions:
 
 ```ruby
 class BmadInstructionTransformer
@@ -290,7 +290,7 @@ class BmadInstructionTransformer
     transformed = original
       .then { |text| strip_bmad_activation(text) }
       .then { |text| replace_path_variables(text) }
-      .then { |text| inject_palad_context_refs(text) }
+      .then { |text| inject_aixle_context_refs(text) }
       .then { |text| adapt_menu_handling(text) }
 
     step.update!(instructions: build_step_instructions(bmad_workflow, transformed))
@@ -300,8 +300,8 @@ class BmadInstructionTransformer
 
   def strip_bmad_activation(text)
     # BMAD agents have <activation> blocks that handle config loading,
-    # greeting, menu display. In Palad, this is handled by SessionContextConstructor.
-    # Strip activation blocks and replace with Palad-native context reference.
+    # greeting, menu display. In Aixle, this is handled by SessionContextConstructor.
+    # Strip activation blocks and replace with Aixle-native context reference.
     text.gsub(/<activation.*?<\/activation>/m, '')
   end
 
@@ -313,23 +313,23 @@ class BmadInstructionTransformer
       .gsub('{implementation_artifacts}', '/workspace/input/implementation')
   end
 
-  def inject_palad_context_refs(text)
-    # Add Palad-specific instructions at the top
-    palad_header = <<~MD
-      ## Palad Integration Notes
+  def inject_aixle_context_refs(text)
+    # Add Aixle-specific instructions at the top
+    aixle_header = <<~MD
+      ## Aixle Integration Notes
       - Your workflow context (previous steps, sub-steps) is in the WORKFLOW CONTEXT section above
       - Use `mark_sub_step` to track progress
       - Save outputs to `/workspace/output/`
       - Previous step outputs are in `/workspace/input/`
 
     MD
-    palad_header + text
+    aixle_header + text
   end
 
   def adapt_menu_handling(text)
     # BMAD workflows in IDE present interactive menus (A/P/C).
-    # In Palad interactive mode, these are preserved as-is (agent presents them in terminal).
-    # In Palad non-interactive mode, default choices are auto-selected.
+    # In Aixle interactive mode, these are preserved as-is (agent presents them in terminal).
+    # In Aixle non-interactive mode, default choices are auto-selected.
     text
   end
 end
@@ -362,7 +362,7 @@ end
 │  │  4. Parse step files (steps/step-*.md)                      │   │
 │  │  5. Extract dependencies (requires/produces)                 │   │
 │  │  6. Create BmadModule + BmadAgents + BmadWorkflows          │   │
-│  │  7. Run AgentMapper → create/update Palad Agents            │   │
+│  │  7. Run AgentMapper → create/update Aixle Agents            │   │
 │  │  8. Build dependency graph between workflows                 │   │
 │  └──────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────┘
@@ -673,7 +673,7 @@ Step 1: "Create Architecture"
     │     6. step-06-project-structure
     │     7. step-07-validation
     │
-    ├─→ Agent: mapped architect → Palad Agent "Winston" (auto-selected via mapping)
+    ├─→ Agent: mapped architect → Aixle Agent "Winston" (auto-selected via mapping)
     │
     ├─→ SessionContextConstructor builds context:
     │     ┌─────────────────────────────────────┐
@@ -688,7 +688,7 @@ Step 1: "Create Architecture"
     │     │  document_output_language: English     │
     │     │                                       │
     │     │  ## Workflow Context                   │
-    │     │  [standard Palad workflow context]     │
+    │     │  [standard Aixle workflow context]     │
     │     │                                       │
     │     │  ## Step Instructions                  │
     │     │  [transformed BMAD instructions]       │
@@ -825,7 +825,7 @@ The user (admin) → Settings → BMAD Modules → "Install Module"
 BmadModuleImporter.import(company: current_company, source_path: path)
     │
     ├─→ Creates BmadModule
-    ├─→ Creates BmadAgents → maps to Palad Agents
+    ├─→ Creates BmadAgents → maps to Aixle Agents
     ├─→ Creates BmadWorkflows → available in System Workflow catalog
     ├─→ Builds dependency graph
     │
@@ -1063,7 +1063,7 @@ end
 
 ---
 
-## 9. BMAD → Palad: Workspace Preparation
+## 9. BMAD → Aixle: Workspace Preparation
 
 ### 9.1 BMAD Files in Workspace
 
@@ -1165,7 +1165,7 @@ These two mechanisms **do not conflict**, but complement each other:
 ### Phase 1: BMAD Module Registry (3-4 days)
 - [ ] Migrations: `bmad_modules`, `bmad_agents`, `bmad_workflows`, `bmad_workflow_steps`
 - [ ] `BmadModuleImporter` with parsers (agent, workflow, step)
-- [ ] `BmadAgentMapper` → creating Palad Agents from BMAD agents
+- [ ] `BmadAgentMapper` → creating Aixle Agents from BMAD agents
 - [ ] `BmadConfigMapper` → injection into shared_context
 - [ ] Seed: import modules from `_bmad/` of the current project
 
@@ -1209,7 +1209,7 @@ These two mechanisms **do not conflict**, but complement each other:
 | 2 | How to handle BMAD workflows with `step-file architecture` (multiple step-*.md files)? | Each step-file → SubStep. The agent receives all files in the workspace and follows them. |
 | 3 | How to handle BMAD config vars in non-interactive mode? Some workflows ask for user_name. | ConfigMapper substitutes from the BMAD config. In non-interactive mode — automatically. |
 | 4 | Is it necessary to support BMAD "teams" (groups of agents)? | Not for now. Teams are just a pre-set for Party Mode and do not affect workflow execution. |
-| 5 | How to map BMAD "menu handlers" (workflow/exec/action)? | Palad has no interactive agent menus. Menu → instructions in step.instructions. |
+| 5 | How to map BMAD "menu handlers" (workflow/exec/action)? | Aixle has no interactive agent menus. Menu → instructions in step.instructions. |
 | 6 | How to handle BMAD validation workflows (validate-prd, validate-agent)? | Separate Steps with `allow_non_interactive: true`. Output = validation report. |
 | 7 | Is a versioned migration of system workflows needed when BMAD is updated? | Yes: on a module update → re-generate phase workflows. Running WorkflowRuns are not affected. |
 
@@ -1221,11 +1221,11 @@ These two mechanisms **do not conflict**, but complement each other:
 |--------|-------------|
 | **System Workflow** | A Workflow with `scope_type: System`, shipped by the platform, containing BMAD mapping configuration |
 | **BMAD Module** | A package (bmm, cis, bmb) with agents, workflows, config — the unit of extension |
-| **BMAD Module Registry** | A catalog of imported modules in Palad (the `bmad_modules` table) |
+| **BMAD Module Registry** | Catalog of imported modules in Aixle (the `bmad_modules` table) |
 | **Phase Workflow** | An auto-generated System Workflow corresponding to one BMAD phase (Analysis, Planning, etc.) |
 | **Composite Workflow** | A user-assembled System Workflow from workflows of different modules |
-| **Mapping** | A rule for translating a BMAD entity into a Palad entity (agent → Agent, config var → shared_context) |
-| **BmadInstructionTransformer** | A service that adapts BMAD workflow instructions for the Palad runtime |
+| **Mapping** | Rule for translating a BMAD entity into an Aixle entity (agent → Agent, config var → shared_context) |
+| **BmadInstructionTransformer** | Service that adapts BMAD workflow instructions for the Aixle runtime |
 
 ---
 

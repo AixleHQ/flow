@@ -34,7 +34,7 @@ so that it's available as a service alongside ttyd for full IDE editing experien
   - [x] 2.3 Add `OPENVSCODE_PID` to cleanup function
   - [x] 2.4 Add PID to `wait -n` call
 - [x] Task 3: Verify all services start correctly (AC: #6)
-  - [x] 3.1 Build image locally: `docker build -t palad/agent-base:test -f docker/base/Dockerfile docker/base/`
+  - [x] 3.1 Build image locally: `docker build -t aixle/agent-base:test -f docker/base/Dockerfile docker/base/`
   - [x] 3.2 Run container and verify all 3 ports respond (7681, 4040, 8443)
   - [x] 3.3 Verify non-root user can access (test with claude-code image)
 
@@ -42,7 +42,7 @@ so that it's available as a service alongside ttyd for full IDE editing experien
 
 ### Docker Image Architecture
 
-The image chain is: `node:22-slim` → `palad/agent-base:latest` (this Dockerfile) → per-agent images. All agent images inherit from base, so installing here makes OpenVSCode Server available everywhere.
+The image chain is: `node:22-slim` → `aixle/agent-base:latest` (this Dockerfile) → per-agent images. All agent images inherit from base, so installing here makes OpenVSCode Server available everywhere.
 
 Per-agent images create non-root users and may change `USER`:
 - `docker/claude-code/Dockerfile` — user `claude` (line 15: `useradd -m -d /home/claude`)

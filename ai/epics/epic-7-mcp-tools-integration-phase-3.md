@@ -70,7 +70,7 @@ So that agents can access additional tools from external providers like Context7
 **MCP Server Types:**
 | Type | Description | Scope |
 |------|-------------|-------|
-| `internal` | System-provided (Palad tools MCP) | Global (automatic) |
+| `internal` | System-provided (Aixle tools MCP) | Global (automatic) |
 | `custom` | User-configured external servers | Company or Project |
 
 **Acceptance Criteria:**
@@ -91,7 +91,7 @@ So that I control what external tools the agent can access.
 
 **Acceptance Criteria:**
 - Session start form shows available MCP servers (company + project merged)
-- Internal "Palad Tools" always included if custom tools selected
+- Internal "Aixle Tools" always included if custom tools selected
 - Can select 0..N custom MCP servers
 - Selected servers saved to `session_mcp_servers` join table
 - MCP config injected into agent container with all selected servers

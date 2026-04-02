@@ -58,10 +58,10 @@ Activity → ContainerExecutionService.execute(
   def resolve_image
     agent_type = input[:agent_type]
     {
-      "claude_code" => "palad/claude-code:latest",
-      "cursor_cli" => "palad/cursor-cli:latest",
-      "codex" => "palad/codex:latest",
-      "gemini_cli" => "palad/gemini-cli:latest"
+      "claude_code" => "aixle/claude-code:latest",
+      "cursor_cli" => "aixle/cursor-cli:latest",
+      "codex" => "aixle/codex:latest",
+      "gemini_cli" => "aixle/gemini-cli:latest"
     }.fetch(agent_type)
   end
   ```
@@ -100,11 +100,11 @@ Activity → ContainerExecutionService.execute(
     router_name = "terminal-#{route_token}"
 
     {
-      "palad.session_type" => "auth_setup",
-      "palad.agent_type" => input[:agent_type],
-      "palad.user_id" => input[:user_id].to_s,
-      "palad.session_id" => input[:session_id].to_s,
-      "palad.ttyd_port" => "7681",
+      "aixle.session_type" => "auth_setup",
+      "aixle.agent_type" => input[:agent_type],
+      "aixle.user_id" => input[:user_id].to_s,
+      "aixle.session_id" => input[:session_id].to_s,
+      "aixle.ttyd_port" => "7681",
 
       # Traefik routing
       "traefik.enable" => "true",
@@ -268,7 +268,7 @@ Activity → ContainerExecutionService.execute(
 - [ ] Override `build_labels` to change session_type:
   ```ruby
   def build_labels
-    super.merge("palad.session_type" => "agent_session")
+    super.merge("aixle.session_type" => "agent_session")
   end
   ```
 

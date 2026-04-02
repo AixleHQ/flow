@@ -44,13 +44,13 @@
 ## Measurable Outcomes
 
 **MVP Success (3 months):**
-- [ ] The team uses Palad for the planning phase of fixed-bid projects
+- [ ] The team uses Aixle for the planning phase of fixed-bid projects
 - [ ] Artifacts are generated with a quality of ≥ 70% acceptance rate
 - [ ] Billing tracking works with an accuracy of ≥ 95%
 - [ ] Zero data loss for artifacts
 
 **Growth Success (12 months):**
-- [ ] Palad — the standard tool for all fixed-bid projects
+- [ ] Aixle is the standard tool for all fixed-bid projects
 - [ ] Planning time has been reduced by 40%
 - [ ] Readiness to open up to external users
 

@@ -57,7 +57,7 @@ module ContainerStrategies
 
       labels = strategy.build_labels
 
-      assert_equal "agent_session", labels["palad.session_type"]
+      assert_equal "agent_session", labels["aixle.session_type"]
     end
 
     # == before_exec Tests ==

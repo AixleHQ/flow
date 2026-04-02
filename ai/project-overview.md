@@ -1,4 +1,4 @@
-# Palad Project Overview
+# Aixle Project Overview
 
 **Updated**: 2026-02-21
 
@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-**Palad** — a SaaS platform for running AI coding agents (Claude Code, Cursor CLI, Codex, Gemini CLI) in isolated containers with full lifecycle orchestration via Temporal.
+**Aixle** — a SaaS platform for launching AI coding agents (Claude Code, Cursor CLI, Codex, Gemini CLI) in isolated containers with full lifecycle orchestration via Temporal.
 
 ### Key capabilities
 

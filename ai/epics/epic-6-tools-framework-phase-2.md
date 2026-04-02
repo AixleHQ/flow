@@ -17,7 +17,7 @@ So that agents can use both platform-provided capabilities and custom extensions
 **Tool Types:**
 | Type | Description | Scope |
 |------|-------------|-------|
-| `internal` | System-provided by Palad (create_workflow, manage_artifacts) | Global (no scope) |
+| `internal` | System-provided by Aixle (create_workflow, manage_artifacts) | Global (no scope) |
 | `custom` | User-created with Docker execution | Company or Project |
 
 **Acceptance Criteria:**

@@ -11,7 +11,7 @@ So that agents can use both platform-provided capabilities and custom extensions
 ## Acceptance Criteria
 
 1. Tool model with `scope_type`: `Internal | Company | Project`
-   - `Internal` — system-provided tools by Palad (read-only, no scope_id)
+   - `Internal` — system-provided tools by Aixle (read-only, no scope_id)
    - `Company` — company-level custom tools
    - `Project` — project-level custom tools
 2. Can create custom tool (Company/Project scope) with:
@@ -99,7 +99,7 @@ So that agents can use both platform-provided capabilities and custom extensions
 ├─────────────────────┼─────────────────────┼─────────────────────────┤
 │ - scope_id: null    │ - scope_id: company │ - scope_id: project     │
 │ - Read-only         │ - Full CRUD         │ - Full CRUD             │
-│ - Seeded by Palad   │ - Company-wide      │ - Project-specific      │
+│ - Seeded by Aixle   │ - Company-wide      │ - Project-specific      │
 │ - Built-in logic    │ - Docker execution  │ - Overrides Company     │
 └─────────────────────┴─────────────────────┴─────────────────────────┘
 ```

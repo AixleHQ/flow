@@ -36,7 +36,7 @@ so that I can include automated quality metrics in code reports.
 - [x] Task 2: Create handler (AC: #1, #2, #4, #5, #8)
   - [x] Create `app/services/internal_tools/code_climate.rb`
   - [x] Resolve repo via `Repository.merged_for_project` + detect by id
-  - [x] Clone to `/tmp/palad-repos/{id}/` using `git clone --depth=1`
+  - [x] Clone to `/tmp/aixle-repos/{id}/` using `git clone --depth=1`
   - [x] Generate `.codeclimate.yml` if missing
   - [x] Execute all ContainerService phases sequentially, return output
 - [x] Task 3: Default config generation (AC: #4)
@@ -80,7 +80,7 @@ module ContainerStrategies
           "CpuQuota" => 100_000
         },
         env_vars: ["CODECLIMATE_CODE=#{input[:repo_path]}"],
-        labels: { "palad.type" => "internal_tool", "palad.tool" => "code_climate" }
+        labels: { "aixle.type" => "internal_tool", "aixle.tool" => "code_climate" }
       }
     end
 
@@ -100,7 +100,7 @@ end
 
 The handler needs the repo on the **host** filesystem (for Docker bind mount). Options:
 1. If repo is already cloned somewhere accessible → reuse path
-2. If not → clone to `/tmp/palad-repos/{repo_id}/` using `Github::TokenService`
+2. If not → clone to `/tmp/aixle-repos/{repo_id}/` using `Github::TokenService`
 3. Clean up temp clone after analysis
 
 ### Docker-in-Docker

@@ -85,7 +85,7 @@ module ContainerStrategies
     end
 
     def build_labels
-      { "palad.type" => "internal_tool", "palad.tool" => defn.name.to_s }
+      { "aixle.type" => "internal_tool", "aixle.tool" => defn.name.to_s }
     end
 
     def build_host_config

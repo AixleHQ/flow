@@ -5,10 +5,10 @@
 **Persona:** Misha, 28 years old, middle developer
 
 **Opening Scene:**
-Misha received a task in Linear — "Implement user authentication API". The task contains a link to a tech design (an artifact from the planning phase). In the morning he opens Palad — it is his main work tool, and he rarely leaves the platform's perimeter.
+Misha got a task in Linear — "Implement user authentication API". The task contains a link to the tech design (an artifact from the planning phase). In the morning he opens Aixle — it is his main work tool, he rarely leaves the platform's perimeter.
 
 **Rising Action:**
-1. Misha sees his tasks from Linear in Palad
+1. Misha sees his tasks from Linear in Aixle
 2. Selects a task → sees the related artifacts (tech design, PRD)
 3. Selects **Interactive mode** — he wants to control every step
 4. Starts a session with the agent (Claude Code / Codex)
@@ -32,10 +32,10 @@ Misha communicates with the agent in the terminal, clarifies details, approves c
 **Persona:** Katya, 35 years old, tech lead on fixed-bid projects
 
 **Opening Scene:**
-A new project — replatforming a legacy Java application. Katya opens Palad to start the planning phase.
+A new project — replatforming a legacy Java application. Katya opens Aixle to start the planning phase.
 
 **Rising Action:**
-1. Katya creates a new Project in Palad
+1. Katya creates a new Project in Aixle
 2. Loads assets: legacy codebase, documentation, call recordings
 3. Selects a ready-made workflow: "Replatforming Planning"
 4. Workflow steps:
@@ -63,7 +63,7 @@ Katya selects Interactive mode — going through the steps as in BMAD. The agent
 Sasha sees 5 tasks in the backlog. All have a tech design, all are clear. He doesn't want to spend time on interactive mode.
 
 **Rising Action:**
-1. Sasha selects tasks in Palad
+1. Sasha selects tasks in Aixle
 2. For each one selects **Non-interactive mode**
 3. Launches — the agents work
 4. Goes to a meeting / other tasks
@@ -83,7 +83,7 @@ The agents work autonomously. Each one creates a PR. Sasha receives notification
 **Persona:** Andrey, co-founder, configuring the platform
 
 **Opening Scene:**
-The team is growing, and Palad needs to be configured for new projects.
+The team is growing, need to configure Aixle for new projects.
 
 **Rising Action:**
 1. Creates new Workflows: "Frontend Feature", "API Endpoint", "Bug Fix"
@@ -105,7 +105,7 @@ The team is growing, and Palad needs to be configured for new projects.
 A fixed-bid project is in full swing. Need to understand the AI spend.
 
 **Rising Action:**
-1. Opens the Dashboard in Palad
+1. Opens the Dashboard in Aixle
 2. Sees: Total cost, breakdown by workflows/users, sessions history
 
 **Resolution:**

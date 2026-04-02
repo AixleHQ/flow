@@ -1,8 +1,8 @@
-# Palad - Epic Breakdown
+# Aixle - Epic Breakdown
 
 ## Table of Contents
 
-- [Palad - Epic Breakdown](#table-of-contents)
+- [Aixle - Epic Breakdown](#table-of-contents)
   - [Overview](./overview.md)
   - [Dependency Graph](./dependency-graph.md)
   - [Epic Summary](./epic-summary.md)

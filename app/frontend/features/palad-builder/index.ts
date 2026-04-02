@@ -1,2 +1,2 @@
-export { PaladBuilderBanner } from './ui/PaladBuilderBanner';
-export { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } from './api/paladBuilderApi';
+export { AixleBuilderBanner } from './ui/PaladBuilderBanner';
+export { useStartAixleBuilderMutation, useGetAixleBuilderSessionsQuery } from './api/paladBuilderApi';

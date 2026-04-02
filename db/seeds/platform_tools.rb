@@ -593,7 +593,7 @@ module Seeds
         )
       end
 
-      # -- Meta-workflow tools: used by Palad Builder to create entities --
+      # -- Meta-workflow tools: used by Aixle Builder to create entities --
       META_WORKFLOW_TOOLS.each do |attrs|
         Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(
           display_name: attrs[:display_name],

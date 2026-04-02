@@ -12,9 +12,9 @@ const ProjectsPage = lazyRouteComponent(() => import('../pages/projects'));
 const ProjectPage = lazyRouteComponent(() => import('../pages/project'));
 const WorkflowRunPage = lazyRouteComponent(() => import('../pages/workflow-run'));
 const WorkflowBuilderPage = lazyRouteComponent(() => import('../pages/workflow-builder'));
-const PaladBuilderPage = lazyRouteComponent(() => import('../pages/palad-builder'));
-const PaladBuilderSessionPage = lazyRouteComponent(() =>
-  import('../pages/palad-builder').then((m) => ({ default: m.PaladBuilderSessionPage })),
+const AixleBuilderPage = lazyRouteComponent(() => import('../pages/palad-builder'));
+const AixleBuilderSessionPage = lazyRouteComponent(() =>
+  import('../pages/palad-builder').then((m) => ({ default: m.AixleBuilderSessionPage })),
 );
 const ProfilePage = lazyRouteComponent(() => import('../pages/profile'));
 // Company pages
@@ -143,17 +143,17 @@ export const projectWorkflowBuilderRoute = createRoute({
   component: WorkflowBuilderPage,
 });
 
-// Palad Builder routes
-export const paladBuilderRoute = createRoute({
+// Aixle Builder routes
+export const aixleBuilderRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: Routes.frontend.paladBuilderPath('$projectId'),
-  component: PaladBuilderPage,
+  path: Routes.frontend.aixleBuilderPath('$projectId'),
+  component: AixleBuilderPage,
 });
 
-export const paladBuilderSessionRoute = createRoute({
+export const aixleBuilderSessionRoute = createRoute({
   getParentRoute: () => authLayoutRoute,
-  path: Routes.frontend.paladBuilderRunPath('$projectId', '$runId'),
-  component: PaladBuilderSessionPage,
+  path: Routes.frontend.aixleBuilderRunPath('$projectId', '$runId'),
+  component: AixleBuilderSessionPage,
 });
 
 // Profile route
@@ -288,8 +288,8 @@ export const routeTree = rootRoute.addChildren([
     workflowRunRoute,
     companyWorkflowBuilderRoute,
     projectWorkflowBuilderRoute,
-    paladBuilderRoute,
-    paladBuilderSessionRoute,
+    aixleBuilderRoute,
+    aixleBuilderSessionRoute,
     profileRoute,
     companyMembersRoute,
     companyConfigItemsRoute,

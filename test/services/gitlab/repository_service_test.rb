@@ -13,7 +13,7 @@ module Gitlab
         OpenStruct.new(endpoint: "https://gitlab.com/api/v4")
       )
       Settings.stubs(:protocol).returns("https")
-      Settings.stubs(:domain).returns("palad.example.com")
+      Settings.stubs(:domain).returns("aixle.example.com")
     end
 
     test "list_available returns repos from GitLab API" do
@@ -108,7 +108,7 @@ module Gitlab
 
       mock_client.expects(:add_project_hook).with(
         "group/app",
-        "https://palad.example.com/webhooks/gitlab",
+        "https://aixle.example.com/webhooks/gitlab",
         token: anything,
         pipeline_events: true
       )
@@ -130,7 +130,7 @@ module Gitlab
       Gitlab::TokenService.expects(:new).with(@integration).returns(mock_token_service)
 
       hooks = [
-        OpenStruct.new(id: 42, url: "https://palad.example.com/webhooks/gitlab"),
+        OpenStruct.new(id: 42, url: "https://aixle.example.com/webhooks/gitlab"),
         OpenStruct.new(id: 99, url: "https://other.example.com/webhooks/other")
       ]
       mock_client.expects(:project_hooks).with("group/app").returns(hooks)

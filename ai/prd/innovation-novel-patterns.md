@@ -23,14 +23,14 @@
 
 ## Market Context & Competitive Landscape
 
-| Competitor | What They Do | Palad Differentiation |
+| Competitor | What They Do | Aixle Differentiation |
 |------------|--------------|----------------------|
-| **Cursor** | Local IDE with AI | Palad = cloud orchestration layer |
-| **Replit Agents** | Cloud coding | Palad = agent-agnostic, workflow-focused |
-| **GitHub Copilot Workspace** | Cloud AI coding | Palad = BMAD-style workflows, multi-agent |
-| **n8n / Zapier** | Workflow automation | Palad = AI agents as workflow steps |
+| **Cursor** | Local IDE with AI | Aixle = cloud orchestration layer |
+| **Replit Agents** | Cloud coding | Aixle = agent-agnostic, workflow-focused |
+| **GitHub Copilot Workspace** | Cloud AI coding | Aixle = BMAD-style workflows, multi-agent |
+| **n8n / Zapier** | Workflow automation | Aixle = AI agents as workflow steps |
 
-**Unique Position:** Palad is not just another AI coding tool, but an **orchestration layer** for existing agents with workflows, sharing, and billing.
+**Unique Position:** Aixle is not yet another AI coding tool, but an **orchestration layer** for existing agents with workflows, sharing, and billing.
 
 ## Validation Approach
 

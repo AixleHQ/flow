@@ -263,19 +263,19 @@ UnifiedContainerWorkflow
     def self.unified_container_workflow
       @unified_container_workflow ||= WorkflowDef.new(
         name: "unified_container_workflow",
-        owner: "palad_ruby",
+        owner: "aixle_ruby",
         activities: ActivitiesCollection.new(
           pull_docker_image_activity: ActivityDef.new(
             name: "pull_docker_image_activity",
-            task_queue: "palad_ruby"
+            task_queue: "aixle_ruby"
           ),
           execute_container_activity: ActivityDef.new(
             name: "execute_container_activity",
-            task_queue: "palad_ruby"
+            task_queue: "aixle_ruby"
           ),
           cleanup_container_activity: ActivityDef.new(
             name: "cleanup_container_activity",
-            task_queue: "palad_ruby"
+            task_queue: "aixle_ruby"
           )
         )
       )
@@ -399,7 +399,7 @@ UnifiedContainerWorkflow
             }
           },
           workflow_id: workflow_id,
-          task_queue: "palad_ruby"
+          task_queue: "aixle_ruby"
         )
       end
 
@@ -420,7 +420,7 @@ UnifiedContainerWorkflow
             }
           },
           workflow_id: workflow_id,
-          task_queue: "palad_ruby"
+          task_queue: "aixle_ruby"
         )
       end
 
@@ -435,10 +435,10 @@ UnifiedContainerWorkflow
 
       def resolve_agent_image(agent_type)
         {
-          "claude_code" => "palad/claude-code:latest",
-          "cursor_cli" => "palad/cursor-cli:latest",
-          "codex" => "palad/codex:latest",
-          "gemini_cli" => "palad/gemini-cli:latest"
+          "claude_code" => "aixle/claude-code:latest",
+          "cursor_cli" => "aixle/cursor-cli:latest",
+          "codex" => "aixle/codex:latest",
+          "gemini_cli" => "aixle/gemini-cli:latest"
         }.fetch(agent_type)
       end
     end

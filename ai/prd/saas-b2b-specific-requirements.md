@@ -2,7 +2,7 @@
 
 ## Project-Type Overview
 
-Palad is a B2B SaaS platform for orchestrating AI agents with a workflow system. The focus is on simplicity and minimal overhead for internal use, with the ability to scale to external clients.
+Aixle is a B2B SaaS platform for orchestration of AI agents with a workflow system. The focus is on simplicity and minimal overhead for internal use, with the ability to scale to external clients.
 
 ## Multi-Tenancy Model
 

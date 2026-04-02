@@ -1,4 +1,4 @@
-# System Meta-Workflow: Palad Builder
+# System Meta-Workflow: Aixle Builder
 
 **Date:** 2026-02-28
 **Status:** Draft
@@ -9,15 +9,15 @@
 
 ## 1. Goal
 
-Create **Palad Builder** — a system meta-workflow that can programmatically create Palad entities: Agents, Tools, MCP Servers, Skills, Workflows, Steps, SubSteps, **Board Columns, Column Workflow Bindings**. The end goal is to quickly build new workflows, configure the project board, and bind automated workflows to columns — all with the help of an agent in interactive mode.
+Create **Aixle Builder** — a system-level meta-workflow that can programmatically create Aixle entities: Agents, Tools, MCP Servers, Skills, Workflows, Steps, SubSteps, **Board Columns, Column Workflow Bindings**. The ultimate goal is to quickly build new workflows, configure the project board, and bind automated workflows to columns — all with the help of an agent in interactive mode.
 
-**Palad Builder is NOT an ordinary workflow in the list.** It does not appear among project/company workflows. Instead, it is accessible through a **separate entry point** on the project's workflows page (see §1.2).
+**Aixle Builder is NOT an ordinary workflow in the list.** It is not displayed among the project/company workflows. Instead, it is accessible through a **separate entry point** on the project workflows page (see §1.2).
 
-The meta-workflow is a **System-level workflow** (available to all companies). It is always interactive: the agent carries on a dialog with the user, clarifies requirements, proposes a structure, and creates entities. The agent receives a **huge, detailed instruction** (§4.2) explaining all Palad entities, how the board is structured, how automation works, and how to correctly build new workflows.
+The meta-workflow is a **System-level workflow** (available to all companies). It is always interactive: the agent holds a dialog with the user, clarifies requirements, proposes a structure, and creates entities. The agent receives a **huge detailed instruction** (§4.2) explaining all Aixle entities, how the board is structured, how automation works, and how to correctly build new workflows.
 
-### 1.2 UI Entry Point: "Build with Palad Builder"
+### 1.2 UI Entry Point: "Build with Aixle Builder"
 
-Palad Builder is launched **not through the standard workflow list**, but through a dedicated entry point on the project's workflows page (`WorkflowsPanel`).
+Aixle Builder is launched **not through the standard workflow list**, but through a dedicated entry point on the project's workflows page (`WorkflowsPanel`).
 
 #### Current page structure
 
@@ -31,7 +31,7 @@ WorkflowsPanel (features/workflows/ui/WorkflowsPanel.tsx)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### With Palad Builder
+#### With Aixle Builder
 
 ```
 WorkflowsPanel
@@ -39,12 +39,12 @@ WorkflowsPanel
 │  Workflows                            [+ New Workflow]      │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────────┐│
-│  │  🤖 Palad Builder                                       ││
+│  │  🤖 Aixle Builder                                       ││
 │  │  Create a new workflow with AI assistance.              ││
 │  │  Describe what you need — the builder will create       ││
 │  │  agents, steps, board columns, and automation for you.  ││
 │  │                                                         ││
-│  │  [Start Palad Builder]                                  ││
+│  │  [Start Aixle Builder]                                  ││
 │  └─────────────────────────────────────────────────────────┘│
 │                                                             │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐                    │
@@ -53,14 +53,14 @@ WorkflowsPanel
 └─────────────────────────────────────────────────────────────┘
 ```
 
-#### Component: PaladBuilderBanner
+#### Component: AixleBuilderBanner
 
 Located **above** the workflows list as a promo banner / CTA card.
 
 ```typescript
-// features/workflows/ui/PaladBuilderBanner.tsx
+// features/workflows/ui/AixleBuilderBanner.tsx
 
-interface PaladBuilderBannerProps {
+interface AixleBuilderBannerProps {
   projectId: number;
   onStart: () => void;  // Opens the Meta-Workflow Run Page
 }
@@ -68,16 +68,16 @@ interface PaladBuilderBannerProps {
 
 **Behavior:**
 - Always visible on the workflows page (above the grid list)
-- "Start Palad Builder" button → launches the System Meta-Workflow for the current project
-- Navigation: `→ /company/projects/{projectId}/palad-builder` (separate page)
+- The "Start Aixle Builder" button → launches the System Meta-Workflow for the current project
+- Navigation: `→ /company/projects/{projectId}/aixle-builder` (separate page)
 - Or, if there is an active builder run: shows "Continue building..." with a link to the current run
 
-**Alternative option:** Palad Builder as an item in the dropdown next to the "New Workflow" button:
+**Alternative option:** Aixle Builder as an item in the dropdown next to the "New Workflow" button:
 
 ```
 [+ New Workflow ▾]
   ├── Blank Workflow        (current behavior — CreateWorkflowDialog)
-  └── 🤖 Palad Builder     (launch meta-workflow)
+  └── 🤖 Aixle Builder     (launch meta-workflow)
 ```
 
 **Recommendation:** banner + dropdown. The banner for discovery (new users), the dropdown for quick access (experienced users).
@@ -86,7 +86,7 @@ interface PaladBuilderBannerProps {
 
 | Regular Workflow | Meta-Workflow |
 |---|---|
-| Works with files in `/workspace/` | Works with the Palad API — creates entities in the DB |
+| Works with files in `/workspace/` | Works with the Aixle API — creates entities in the DB |
 | Tools: `mark_sub_step`, `export_asset` | Tools: `create_agent`, `create_workflow`, `create_step`, `create_tool`, `create_board_column`, `create_column_binding`, etc. |
 | Result — documents/assets | Result — a ready workflow + a configured board with automation |
 | UI shows terminal + sub-steps progress | UI shows terminal + **live workflow builder** + **board preview** + activity log |
@@ -136,7 +136,7 @@ interface PaladBuilderBannerProps {
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Palad Backend                                                   │
+│  Aixle Backend                                                   │
 │  • Creates DB records (Workflow, Step, SubStep, Agent, Tool...)  │
 │  • Broadcasts via ActionCable after each mutation                 │
 │  • Validates consistency (positions, references, scoping)        │
@@ -145,12 +145,12 @@ interface PaladBuilderBannerProps {
 
 ### 2.2 Scope and availability
 
-- Palad Builder has `scope_type: 'System'`
+- Aixle Builder has `scope_type: 'System'`
   (a new value — the current ones are: Company, Project; System is being added)
 - System workflows are **NOT displayed** in the regular workflow list (`WorkflowsPanel`)
 - Standard scopes (`visible_for_project`, `for_company`) **exclude** System workflows
-- Palad Builder is accessible only through a separate entry point (§1.2)
-- When the user launches Palad Builder, the WorkflowRun is created in the context of a specific **Project** (the target project where the entities will be created)
+- Aixle Builder is accessible only through a separate entry point (§1.2)
+- When a user launches Aixle Builder, a WorkflowRun is created in the context of a specific **Project** (the target project where the entities will be created)
 
 **Backend filtering:**
 
@@ -163,15 +163,15 @@ class Workflow < ApplicationRecord
     # System scope intentionally excluded
   }
 
-  # Separate scope for Palad Builder
+  # Separate scope for Aixle Builder
   scope :system_meta, -> { where(scope_type: "System", config: { meta_workflow: true }) }
 end
 ```
 
-**API endpoint for launching Palad Builder:**
+**API endpoint for launching Aixle Builder:**
 
 ```
-POST /api/v1/company/projects/{project_id}/palad_builder/start
+POST /api/v1/company/projects/{project_id}/aixle_builder/start
 → Creates a WorkflowRun for the System meta-workflow in the project context
 → Returns { workflow_run_id, redirect_url }
 ```
@@ -180,7 +180,7 @@ POST /api/v1/company/projects/{project_id}/palad_builder/start
 
 ```
 POST /api/v1/company/projects/{project_id}/workflow_runs
-{ workflow_id: PALAD_BUILDER_WORKFLOW_ID, mode: "interactive" }
+{ workflow_id: AIXLE_BUILDER_WORKFLOW_ID, mode: "interactive" }
 ```
 
 ### 2.3 Permissions
@@ -507,7 +507,7 @@ The meta-workflow itself consists of steps (like any other). The key point: it i
 ### 4.1 Structure
 
 ```
-Meta-Workflow: "Palad Builder"
+Meta-Workflow: "Aixle Builder"
 Mode: interactive (forced)
 Scope: System
 
@@ -561,19 +561,19 @@ A system-level agent, created specifically for the meta-workflow:
 ```yaml
 title: "Workflow Architect"
 scope: system
-description: "Specialized agent for designing and building Palad workflows, board columns, and automation bindings"
+description: "Specialized agent for designing and building Aixle workflows, board columns, and automation bindings"
 system_prompt: |
-  You are a Workflow Architect for the Palad platform. Your job is to help users
+  You are a Workflow Architect for the Aixle platform. Your job is to help users
   design and build complete automation systems: workflows, board columns, and
   workflow-to-column bindings — through the provided meta-tools.
 
   ═══════════════════════════════════════════════════════════════════
-  SECTION 1: PALAD PLATFORM — COMPLETE ENTITY REFERENCE
+  SECTION 1: AIXLE PLATFORM — COMPLETE ENTITY REFERENCE
   ═══════════════════════════════════════════════════════════════════
 
   ## 1.1 Entity Hierarchy Overview
 
-  Palad organizes work around Projects within Companies. Each entity is scoped
+  Aixle organizes work around Projects within Companies. Each entity is scoped
   to either a Company or a Project via polymorphic `scope_type`/`scope_id`.
 
   ```
@@ -866,7 +866,7 @@ system_prompt: |
 
   ## 2.5 Designing Board + Workflow Automation
 
-  The most powerful feature of Palad is connecting board columns to workflows:
+  The most powerful feature of Aixle is connecting board columns to workflows:
 
   **Pattern: "Column as Trigger"**
   When a task reaches a certain stage, a workflow automatically processes it.
@@ -1105,11 +1105,11 @@ system_prompt: |
   SECTION 5: BMAD INTEGRATION
   ═══════════════════════════════════════════════════════════════════
 
-  ## 5.1 BMAD → Palad Mapping
+  ## 5.1 BMAD → Aixle Mapping
 
   When the user provides BMAD artifacts, map them:
 
-  | BMAD Concept | Palad Entity |
+  | BMAD Concept | Aixle Entity |
   |-------------|--------------|
   | BMAD Agent (.agent.yaml) | Agent (persona → system_prompt) |
   | BMAD Workflow (workflow.yaml) | Workflow |
@@ -1143,7 +1143,7 @@ system_prompt: |
   BMAD workflow.yaml defines phases and steps. Each BMAD workflow step file
   (.md) contains instructions, critical actions, and expected outputs.
 
-  Map the workflow structure, but ADAPT the instructions for Palad's execution
+  Map the workflow structure, but ADAPT the instructions for Aixle's execution
   model (terminal-based, tool-calling, asset-producing).
 
   ═══════════════════════════════════════════════════════════════════
@@ -1198,7 +1198,7 @@ system_prompt: |
 BMAD-METHOD defines workflows, agents, and processes in YAML/MD/XML format. The user wants to:
 1. Upload their BMAD artifacts (`.agent.yaml`, `workflow.yaml`, `instructions.md`, step files)
 2. The agent must **read** these artifacts
-3. And **translate** them into Palad entities
+3. And **translate** them into Aixle entities
 
 ### 5.2 Solution: BMAD as Input Assets
 
@@ -1239,7 +1239,7 @@ The agent reads the files and uses the meta_import_bmad tool
 ```json
 {
   "name": "meta_import_bmad",
-  "description": "Parse BMAD artifacts and return a structured mapping to Palad entities. Does NOT create entities — returns a plan for user review.",
+  "description": "Parse BMAD artifacts and return a structured mapping to Aixle entities. Does NOT create entities — returns a plan for user review.",
   "parameters": {
     "path": {
       "type": "string",
@@ -1306,33 +1306,33 @@ Recommendation: **use both approaches**:
 
 ### 6.0 Routing & Pages
 
-Palad Builder has its **own routes**, separate from the regular workflow run pages:
+Aixle Builder has **its own routes**, separate from the regular workflow run pages:
 
 ```typescript
 // shared/routes.ts
-paladBuilderPath: '/company/projects/:projectId/palad-builder',
-paladBuilderRunPath: '/company/projects/:projectId/palad-builder/:runId',
+aixleBuilderPath: '/company/projects/:projectId/aixle-builder',
+aixleBuilderRunPath: '/company/projects/:projectId/aixle-builder/:runId',
 
 // routeTree.tsx
-export const paladBuilderRoute = createRoute({
+export const aixleBuilderRoute = createRoute({
   getParentRoute: () => projectLayoutRoute,
-  path: Routes.frontend.paladBuilderPath,
-  component: PaladBuilderPage,        // Start page / list of past builder runs
+  path: Routes.frontend.aixleBuilderPath,
+  component: AixleBuilderPage,        // Start page / list of past builder runs
 });
 
-export const paladBuilderRunRoute = createRoute({
+export const aixleBuilderRunRoute = createRoute({
   getParentRoute: () => projectLayoutRoute,
-  path: Routes.frontend.paladBuilderRunPath,
-  component: PaladBuilderRunPage,      // Specialized page for a running builder
+  path: Routes.frontend.aixleBuilderRunPath,
+  component: AixleBuilderRunPage,      // Specialized page for a running builder
 });
 ```
 
-**PaladBuilderPage** — the start page:
-- "Start new build" button → POST to launch meta-workflow → redirect to PaladBuilderRunPage
+**AixleBuilderPage** — start page:
+- The "Start new build" button → POST launch of meta-workflow → redirect to AixleBuilderRunPage
 - List of past builder runs (if any) with results (which workflows were created)
 - If there is an active run → show the "Continue building..." banner
 
-**PaladBuilderRunPage** — the page for a running builder (§6.3):
+**AixleBuilderRunPage** — page for a running builder (§6.3):
 - Terminal + Activity Log + Workflow Preview + Board Preview
 - Specialized for the meta-workflow (the regular WorkflowRunPage is not used)
 
@@ -1393,13 +1393,13 @@ onMessage(event) {
 }
 ```
 
-### 6.3 UI Layout: PaladBuilderRunPage
+### 6.3 UI Layout: AixleBuilderRunPage
 
 The page uses a **tabbed layout** — the right panel switches between Workflow Preview and Board Preview.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│  🤖 Palad Builder                                                         │
+│  🤖 Aixle Builder                                                         │
 │  Step 3 of 5: Build Workflow Structure   🔄 Running                      │
 ├──────────────────┬───────────────────┬───────────────────────────────────┤
 │  Terminal Panel   │  Activity Log     │  [Workflow ◉] [Board ○]          │
@@ -1585,9 +1585,9 @@ Meta-tools have limits for safety:
 ### 9.1 User scenario: Build a workflow from BMAD
 
 ```
-1. The user opens a project in Palad
+1. The user opens a project in Aixle
 2. Uploads BMAD artifacts as Assets (archive _bmad/)
-3. Launches Palad Builder
+3. Launches Aixle Builder
 4. On the launch screen:
    - Selects input assets: _bmad/ archive
    - Mode: Interactive (locked, meta-workflow only interactive)
@@ -1742,15 +1742,15 @@ Meta-tools have limits for safety:
 - [ ] Validation: column belongs to project board, workflow visible for project
 
 ### Phase 4: UI — Entry Point & Routing (2-3 days)
-- [ ] Routes: `/company/projects/:projectId/palad-builder` and `palad-builder/:runId`
-- [ ] `PaladBuilderBanner` — CTA banner on `WorkflowsPanel` (above the workflows list)
-- [ ] Dropdown "New Workflow" → "Blank Workflow" / "Palad Builder"
-- [ ] `PaladBuilderPage` — start page (start new / list past runs)
-- [ ] API: `POST /projects/:id/palad_builder/start` (or via workflow_runs with a system workflow_id)
+- [ ] Routes: `/company/projects/:projectId/aixle-builder` and `aixle-builder/:runId`
+- [ ] `AixleBuilderBanner` — CTA banner on `WorkflowsPanel` (above the workflows list)
+- [ ] Dropdown "New Workflow" → "Blank Workflow" / "Aixle Builder"
+- [ ] `AixleBuilderPage` — start page (start new / list past runs)
+- [ ] API: `POST /projects/:id/aixle_builder/start` (or via workflow_runs with system workflow_id)
 - [ ] Filter System workflows out of standard scopes (do not show in WorkflowsPanel)
 
 ### Phase 5: UI — Builder Run Page (3-4 days)
-- [ ] `PaladBuilderRunPage` — specialized page with 3 panels
+- [ ] `AixleBuilderRunPage` — specialized page with 3 panels
 - [ ] `ActivityLog` component for the meta-workflow
 - [ ] `WorkflowPreview` component (read-only live constructor)
 - [ ] `BoardPreview` component (shows board state + bindings)
@@ -1759,7 +1759,7 @@ Meta-tools have limits for safety:
 - [ ] Animations for live updates (new columns, bindings, steps)
 
 ### Phase 6: System Workflow & Agent (1-2 days)
-- [ ] Seed: System meta-workflow "Palad Builder" with 5 steps
+- [ ] Seed: System meta-workflow "Aixle Builder" with 5 steps
 - [ ] Seed: Workflow Architect agent (system-level) with full instructions
 - [ ] Seed: Meta-tools registration (workflow + board tools)
 - [ ] Exclude System workflows from `visible_for_project` / `for_company` scopes
@@ -1795,7 +1795,7 @@ Pros: simpler, no real-time updates needed.
 Cons: no live preview, no incremental discussion, batch import is harder to debug.
 
 ### D. BMAD-compiler (server-side)
-A full-fledged compiler from BMAD YAML → Palad entities, without an agent.
+A full BMAD YAML → Aixle entities compiler, without an agent.
 
 Pros: deterministic, fast.
 Cons: inflexible (the mapping is not always 1:1, interpretation is needed), does not help create workflows from scratch.
@@ -1810,7 +1810,7 @@ Cons: inflexible (the mapping is not always 1:1, interpretation is needed), does
 | 2 | Should meta-tools be able to edit existing workflows? | Yes, via `meta_update_step`. But mutating other users' workflows is forbidden |
 | 3 | How to handle the situation when the agent runtime is unavailable? | Standard error handling — retry or fail depending on the step config |
 | 4 | Do we need the ability to "fork" the meta-workflow to create custom builder workflows? | Not yet — a single System meta-workflow is enough |
-| 5 | How to version the System meta-workflow during Palad updates? | Seed update + migration. Running runs use a snapshot |
+| 5 | How do we version the System meta-workflow on Aixle updates? | Seed update + migration. Running runs use a snapshot |
 | 6 | Do we need a meta_delete_workflow tool? | Not yet — too destructive for automation |
 | 7 | Can a meta-workflow change the board preset (reset to preset) if the board already contains tasks? | No — `meta_setup_board_from_preset` works only if all columns are empty. Otherwise — add columns one by one |
 | 8 | How do we handle a binding conflict — a column is already bound to another workflow? | Show the user the current binding, ask: replace or keep? Do not overwrite automatically |

@@ -20,7 +20,7 @@
 
 1. **Dockerfile.core** — New `docker/base/Dockerfile.core` with only heavy, rarely-changing layers: `node:22-slim`, apt-get system deps, mitmproxy, ttyd, OpenVSCode Server, workspace dirs. No scripts (entrypoint, watcher, auth-check, logger).
 2. **Agent Dockerfiles** — Each agent Dockerfile (`codex`, `claude-code`, `cursor-cli`, `gemini-cli`) restructured:
-   - `FROM palad/agent-base-core:latest`
+   - `FROM aixle/agent-base-core:latest`
    - Agent CLI installation (npm install / curl install) — **cached when only scripts change**
    - Shared scripts block at the end: tmux config, inputrc, vscode-settings, watcher (package.json + npm install + index.js), auth-check, logger, entrypoint
    - Scripts ordered by stability (most stable first, entrypoint last)

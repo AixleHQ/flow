@@ -71,7 +71,7 @@ module ContainerRuntime
       normalized = normalize_tar_path(path)
       return "" if normalized.blank?
 
-      output = Tempfile.new("palad-copy-from")
+      output = Tempfile.new("aixle-copy-from")
       output.binmode
       cmd = [ "/bin/sh", "-c", "tar -cf - -C / #{Shellwords.escape(normalized)}" ]
       _stdout, _stderr, exit_code = exec_via_websocket(handle, cmd, stdout_io: output, binary: true)
@@ -268,7 +268,7 @@ module ContainerRuntime
     def build_handle(spec)
       container_name = spec[:container_name]
       route_token = extract_route_token(container_name)
-      pod_name = sanitize_name(container_name || "palad-#{SecureRandom.hex(6)}")
+      pod_name = sanitize_name(container_name || "aixle-#{SecureRandom.hex(6)}")
       service_ports = extract_ports(spec[:exposed_ports])
       namespace = namespace_for(spec[:namespace_context])
 
@@ -312,7 +312,7 @@ module ContainerRuntime
       ports = handle.service_ports
       container[:ports] = ports.map { |port| { containerPort: port } } if ports.any?
 
-      labels = { "app" => "palad-runtime", "palad-container" => handle.pod_name }
+      labels = { "app" => "aixle-runtime", "aixle-container" => handle.pod_name }
       pod_spec = {
         automountServiceAccountToken: false,
         enableServiceLinks: false,
@@ -339,7 +339,7 @@ module ContainerRuntime
     end
 
     def create_service(handle)
-      labels = { "app" => "palad-runtime", "palad-container" => handle.pod_name }
+      labels = { "app" => "aixle-runtime", "aixle-container" => handle.pod_name }
 
       ports = handle.service_ports.map do |port|
         {
@@ -702,7 +702,7 @@ module ContainerRuntime
     def sanitize_name(name)
       sanitized = name.to_s.downcase.gsub(/[^a-z0-9-]/, "-")
       sanitized = sanitized.gsub(/-+/, "-").gsub(/\A-|-$\z/, "")
-      sanitized = "palad" if sanitized.empty?
+      sanitized = "aixle" if sanitized.empty?
       sanitized[0, 63]
     end
 
@@ -787,8 +787,8 @@ module ContainerRuntime
 
     def resource_labels(namespace:)
       {
-        "palad.ai/runtime-origin" => runtime_namespace,
-        "palad.ai/runtime-namespace" => namespace
+        "aixle.com/runtime-origin" => runtime_namespace,
+        "aixle.com/runtime-namespace" => namespace
       }
     end
 
@@ -980,7 +980,7 @@ module ContainerRuntime
       hard_limits = build_quota_hard_limits(quota_record, scope_type)
       return if hard_limits.empty?
 
-      quota_name = "palad-resource-quota"
+      quota_name = "aixle-resource-quota"
 
       resource = Kubeclient::Resource.new(
         apiVersion: "v1",
@@ -1074,13 +1074,13 @@ module ContainerRuntime
       labels = resource_labels(namespace: namespace)
 
       if context[:project_id].present?
-        labels["palad.ai/scope"] = "project"
-        labels["palad.ai/project-id"] = context[:project_id].to_s
+        labels["aixle.com/scope"] = "project"
+        labels["aixle.com/project-id"] = context[:project_id].to_s
       elsif context[:user_id].present?
-        labels["palad.ai/scope"] = "user"
-        labels["palad.ai/user-id"] = context[:user_id].to_s
+        labels["aixle.com/scope"] = "user"
+        labels["aixle.com/user-id"] = context[:user_id].to_s
       else
-        labels["palad.ai/scope"] = "shared"
+        labels["aixle.com/scope"] = "shared"
       end
 
       labels
@@ -1109,7 +1109,7 @@ module ContainerRuntime
         build_default_deny_network_policy(namespace),
         build_traefik_ingress_network_policy(namespace),
         build_dns_egress_network_policy(namespace),
-        build_palad_service_egress_network_policy(namespace),
+        build_aixle_service_egress_network_policy(namespace),
         build_public_internet_egress_network_policy(namespace)
       ]
     end
@@ -1197,7 +1197,7 @@ module ContainerRuntime
       )
     end
 
-    def build_palad_service_egress_network_policy(namespace)
+    def build_aixle_service_egress_network_policy(namespace)
       services = [
         [ "web", 4000 ],
         [ "mcp", 4002 ],
@@ -1208,7 +1208,7 @@ module ContainerRuntime
         apiVersion: "networking.k8s.io/v1",
         kind: "NetworkPolicy",
         metadata: {
-          name: "runtime-allow-palad-service-egress",
+          name: "runtime-allow-aixle-service-egress",
           namespace: namespace
         },
         spec: {

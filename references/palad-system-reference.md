@@ -1,13 +1,13 @@
-# Palad Platform — System Reference
+# Aixle Platform — System Reference
 
-> Complete reference for AI agents operating within the Palad platform.
+> Complete reference for AI agents operating within the Aixle platform.
 > This document describes all entities, their relationships, and how automation works.
 
 ---
 
 ## 1. Platform Overview
 
-Palad is an AI-powered project management and workflow automation platform. It enables teams to define business processes as **Workflows** that are executed by AI agents, triggered manually or automatically from a project **Board**.
+Aixle is an AI-powered project management and workflow automation platform. It enables teams to define business processes as **Workflows** that are executed by AI agents, triggered manually or automatically from a project **Board**.
 
 ### Core Concepts
 
@@ -269,7 +269,7 @@ Users configure credentials per runtime. Each runtime supports different models.
 - Package it in a Docker image (`docker_image` field on the tool)
 - Define `input_schema` for the parameters the tool accepts
 
-**Important**: Creating custom tools is an advanced operation. The Palad Builder agent should NOT attempt to create tools automatically. Instead, explain to the user what tool is needed, recommend an approach, and let them build it separately. The tool can then be registered via `meta_create_tool` and linked to workflow steps.
+**Important**: Creating custom tools is an advanced operation. The Aixle Builder agent should NOT attempt to create tools automatically. Instead, explain to the user what tool is needed, recommend an approach, and let them build it separately. The tool can then be registered via `meta_create_tool` and linked to workflow steps.
 
 ---
 
@@ -348,7 +348,7 @@ When a workflow step executes, the platform spins up an isolated container with 
 ├── repo/                       ← mounted Git repositories (if mount_repositories: true)
 │   └── <repo_name>/            ← shallow clone, default branch
 │       └── .git/               ← full git access: branch, commit, push
-└── references/                 ← reference docs (Palad Builder sessions only)
+└── references/                 ← reference docs (Aixle Builder sessions only)
 ```
 
 ### Data Sources for Input Assets
@@ -388,7 +388,7 @@ Repository resolution for workflow steps:
 
 MCP servers configured on a Step are resolved and connected to the container at startup:
 
-1. **Internal MCP** (`palad-tools`) — always connected. Provides board_*, workflow progress, and session tools.
+1. **Internal MCP** (`aixle-tools`) — always connected. Provides board_*, workflow progress, and session tools.
 2. **External MCP servers** — resolved from three additive sources:
    - `workflow.config.base_mcp_server_ids` — always active for this workflow
    - `step.mcp_server_ids` — step-specific servers
@@ -451,7 +451,7 @@ Steps in a workflow execute sequentially (or in parallel per DAG). Later steps r
 - `board_manage_tags` — add/remove tags on tasks or comments
 - `board_create_wait` — block auto-trigger until CI/CD completes
 
-### Meta Tools (Palad Builder)
+### Meta Tools (Aixle Builder)
 - `meta_create_workflow`, `meta_delete_workflow`, `meta_create_step`, `meta_create_sub_step`
 - `meta_create_agent`, `meta_create_tool`, `meta_create_skill`, `meta_create_mcp_server`
 - `meta_update_step`, `meta_delete_step`, `meta_reorder_steps`

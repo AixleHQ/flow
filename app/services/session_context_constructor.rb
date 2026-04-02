@@ -3,7 +3,7 @@
 class SessionContextConstructor
   BUILDERS = [
     ContextBuilders::CriticalRules,
-    ContextBuilders::PaladBuilder,
+    ContextBuilders::AixleBuilder,
     ContextBuilders::AgentRole,
     ContextBuilders::SessionInfo,
     ContextBuilders::Workspace,

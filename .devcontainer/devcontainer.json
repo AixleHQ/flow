@@ -1,6 +1,6 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "Palad Devcontainer",
+	"name": "Aixle Devcontainer",
 
 	"build": {
 		"dockerfile": "../Dockerfile",

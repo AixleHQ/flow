@@ -1,6 +1,6 @@
 # AI Planning & Architecture — Directory Index
 
-**Project:** Palad
+**Project:** Aixle
 **Last Updated:** 2026-02-21
 
 ---

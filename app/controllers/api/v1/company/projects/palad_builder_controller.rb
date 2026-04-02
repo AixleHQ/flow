@@ -5,9 +5,9 @@ module Api
     module Company
       module Projects
         class PaladBuilderController < ApplicationController
-          # POST /api/v1/company/projects/:project_id/palad_builder/start
+          # POST /api/v1/company/projects/:project_id/aixle_builder/start
           def start
-            meta_tool_ids = Tool.where(kind: :workflow, name: palad_builder_tool_names).pluck(:id)
+            meta_tool_ids = Tool.where(kind: :workflow, name: aixle_builder_tool_names).pluck(:id)
 
             session = SessionService.create_and_start(
               user: current_user,
@@ -16,10 +16,10 @@ module Api
               agent_type: params[:agent_runtime] || current_user.default_agent_runtime || "claude_code",
               params: {
                 mode: "interactive",
-                initial_prompt: "First read the reference files in /workspace/references/ (palad-system-reference.md and bmad-llms-full.txt) to understand the platform. Then help me build a workflow automation — start by asking what process I want to automate.",
+                initial_prompt: "First read the reference files in /workspace/references/ (aixle-system-reference.md and bmad-llms-full.txt) to understand the platform. Then help me build a workflow automation — start by asking what process I want to automate.",
                 tool_ids: meta_tool_ids,
                 requested_model: params[:preferred_model],
-                metadata: { palad_builder: true },
+                metadata: { aixle_builder: true },
                 input_asset_ids: Array(params[:input_asset_ids]).map(&:to_i),
                 session_config: {
                   "bmad_enabled" => true,
@@ -31,11 +31,11 @@ module Api
             respond_with session, serializer: TerminalSessionSerializer
           end
 
-          # GET /api/v1/company/projects/:project_id/palad_builder/status
+          # GET /api/v1/company/projects/:project_id/aixle_builder/status
           def status
             sessions = current_project.terminal_sessions
                                       .where(user: current_user)
-                                      .where("metadata @> ?", { palad_builder: true }.to_json)
+                                      .where("metadata @> ?", { aixle_builder: true }.to_json)
                                       .order(created_at: :desc)
                                       .limit(20)
 
@@ -44,7 +44,7 @@ module Api
 
           private
 
-          def palad_builder_tool_names
+          def aixle_builder_tool_names
             %w[
               meta_create_workflow meta_create_agent meta_create_step
               meta_create_sub_step meta_get_workflow meta_list_workflows

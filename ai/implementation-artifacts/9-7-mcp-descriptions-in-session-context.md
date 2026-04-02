@@ -22,7 +22,7 @@ so that the AI agent understands what external capabilities are available and ho
 6. **AC6:** Context file uses append strategy — read existing content first (from Story 9.2 config_files injection or 9.6 skills), append new sections
 7. **AC7:** Empty MCP servers / tools / agent — skip those sections gracefully (no empty headings)
 8. **AC8:** Context file injection called in `AgentSessionStrategy.before_exec` as Step 5 (after skills injection)
-9. **AC9:** Internal palad-tools MCP server description always included (it's always present in session)
+9. **AC9:** Internal aixle-tools MCP server description always included (it's always present in session)
 
 ## Tasks / Subtasks
 
@@ -50,7 +50,7 @@ so that the AI agent understands what external capabilities are available and ho
 
 - [x] Task 5: Tests (AC: #1-9)
   - [x] 5.1: Adapter tests: `context_file_path` for all 4 CLIs + base
-  - [x] 5.2: `build_mcp_descriptions` — formats server descriptions, includes palad-tools
+  - [x] 5.2: `build_mcp_descriptions` — formats server descriptions, includes aixle-tools
   - [x] 5.3: `build_tool_descriptions` — formats tool descriptions, handles empty
   - [x] 5.4: `build_agent_persona` — loads Agent, handles missing agent_id
   - [x] 5.5: `inject_context_file` — writes to correct path, appends to existing, skips when empty
@@ -71,8 +71,8 @@ Each context file will contain concatenated sections:
 
 ## Available MCP Servers
 
-### palad-tools
-Internal Palad tools server. Provides project-specific tools configured for this session.
+### aixle-tools
+Internal Aixle tools server. Provides project-specific tools configured for this session.
 
 ### tavily
 Tavily web search API. Provides real-time web search capabilities.
@@ -96,7 +96,7 @@ Parameters: title (string, required), body (string), base_branch (string)
 **MCP Descriptions:**
 ```ruby
 def build_mcp_descriptions(session)
-  servers = build_all_servers(session)  # reuse existing method — includes palad-tools
+  servers = build_all_servers(session)  # reuse existing method — includes aixle-tools
   return "" if servers.empty?
 
   lines = ["## Available MCP Servers\n"]
@@ -217,16 +217,16 @@ def context_file_path
 end
 ```
 
-### Palad-Tools Internal MCP Description
+### Aixle-Tools Internal MCP Description
 
-The internal palad-tools server is always present. Its description should clarify:
+The internal aixle-tools server is always present. Its description should clarify:
 - It provides dynamically configured tools for this session
 - Tools are accessed via MCP tool calls (the agent doesn't need to know the transport details)
 - The tool list is auto-populated from the `tools/list` MCP endpoint
 
 ```ruby
-# In build_mcp_descriptions, special handling for palad-tools:
-if server.name == "palad-tools"
+# In build_mcp_descriptions, special handling for aixle-tools:
+if server.name == "aixle-tools"
   lines << "Internal tools server. Provides project-specific tools configured for this session."
   lines << "Call tools via MCP — use `tools/list` to see available tools."
 end
@@ -316,7 +316,7 @@ Claude claude-4.6-opus
 - Added `inject_context_file` to `SessionContextService` with append strategy (reads existing, adds separator, appends)
 - Added private builders: `build_context_content`, `build_agent_persona`, `build_mcp_descriptions`, `build_tool_descriptions`
 - `build_mcp_descriptions` resolves MCPServer records directly (not via `build_all_servers`) to preserve `display_name`/`description`
-- palad-tools always included with hardcoded description
+- aixle-tools always included with hardcoded description
 - Integrated as Step 5 in `AgentSessionStrategy.before_exec` (after skills injection)
 - 22 new tests covering all ACs: adapter paths, builders, inject_context_file with all 4 CLIs, persona, tools, append
 

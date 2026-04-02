@@ -48,9 +48,9 @@ en:
 
   user_mailer:
     invite:
-      subject: "You're invited to join %{account_name} on Palad"
+      subject: "You're invited to join %{account_name} on Aixle"
     otp:
-      subject: "Your Palad one-time password"
+      subject: "Your Aixle one-time password"
 
   administrate:
     actions:

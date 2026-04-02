@@ -41,9 +41,9 @@ module ContainerStrategies
 
     def build_labels
       tool = input[:tool]
-      { "palad.type" => "tool_execution",
-        "palad.tool_id" => tool.id.to_s,
-        "palad.tool_name" => tool.name }
+      { "aixle.type" => "tool_execution",
+        "aixle.tool_id" => tool.id.to_s,
+        "aixle.tool_name" => tool.name }
     end
 
     def build_host_config = build_host_config_with_limits
@@ -92,8 +92,8 @@ module ContainerStrategies
 
     def inject_project_env(env)
       if (project = input[:project])
-        env["PALAD_PROJECT_ID"] = project.id.to_s
-        env["PALAD_PROJECT_NAME"] = project.name
+        env["AIXLE_PROJECT_ID"] = project.id.to_s
+        env["AIXLE_PROJECT_NAME"] = project.name
       end
     end
   end

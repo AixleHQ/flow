@@ -9,7 +9,7 @@ x-db-environment: &db-environment
   DB_HOST: db
   DB_PORT: 5432
   DB_USERNAME: postgres
-  DB_NAME: palad_development
+  DB_NAME: aixle_development
 
 x-web-environment: &web-environment
   <<: *db-environment
@@ -24,7 +24,7 @@ x-web-environment: &web-environment
   REDIS_URL: redis://redis:6379/1
 
 x-toolbox-environment: &toolbox-environment
-  - PROJECT=palad
+  - PROJECT=aixle
   - APPLICATION=app-web
   - AWS_REGION
   - AWS_DEFAULT_REGION
@@ -152,7 +152,7 @@ services:
     build:
       context: ./docker/otlp-ingest
       dockerfile: Dockerfile
-    image: palad/otlp-ingest:latest
+    image: aixle/otlp-ingest:latest
     ports:
       - '4318:4318'
     attach: false

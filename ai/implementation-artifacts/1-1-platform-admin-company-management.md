@@ -332,7 +332,7 @@ So that companies can access the platform via their subdomain with custom brandi
 
 **Completed Implementation:**
 - ✅ Shrine gem and configuration (copied from web_reference)
-- ✅ `email_domain` field (renamed from subdomain) in companies - now supports full domains (acme.com, palad.ai)
+- ✅ `email_domain` field (renamed from subdomain) in companies - now supports full domains (acme.com, aixle.com)
 - ✅ `auto_accept_users` field in companies
 - ✅ `logo_data` field for Shrine attachment
 - ✅ `onboarding_completed_at`, `position`, `preferred_agent_language`, `configured_agents` fields in users
@@ -703,7 +703,7 @@ N/A - No critical debugging required
 
 ### Completion Notes List
 
-1. **Architecture Change:** Replaced `subdomain` with `email_domain` to support full domains (acme.com, palad.ai)
+1. **Architecture Change:** Replaced `subdomain` with `email_domain` to support full domains (acme.com, aixle.com)
 2. **Initial Admin Creation:** Moved from `Company` model callback to `Admin::CompaniesController#create`
 3. **Onboarding Guard:** Implemented in `AuthLayout` (global) instead of per-page hooks
 4. **State Machines:** Replaced `enumerize` with AASM for `Company` and `User` states

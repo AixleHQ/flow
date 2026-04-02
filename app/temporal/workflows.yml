@@ -1,40 +1,40 @@
 workflows:
   - name: container_workflow
-    owner: palad_ruby
+    owner: aixle_ruby
     activities:
       - name: container_phase_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
 
   - name: stale_session_cleanup_workflow
-    owner: palad_ruby
+    owner: aixle_ruby
     activities:
       - name: session_cleanup_stale_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
 
   - name: dismissed_asset_cleanup_workflow
-    owner: palad_ruby
+    owner: aixle_ruby
     activities:
       - name: asset_cleanup_dismissed_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
 
   - name: workflow_execution_workflow
-    owner: palad_ruby
+    owner: aixle_ruby
     activities:
       - name: workflow_prepare_step_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_complete_step_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_update_workflow_run_status_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_prepare_step_list_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_create_step_run_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_fetch_mode_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_check_skip_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_launch_step_session_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby
       - name: workflow_mark_step_skipped_activity
-        task_queue: palad_ruby
+        task_queue: aixle_ruby

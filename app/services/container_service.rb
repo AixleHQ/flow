@@ -13,7 +13,7 @@
 # @example
 #   service = ContainerService.new(strategy: strategy, state: { session_id: 1 })
 #   result = service.run_phase(:create_container)
-#   # => { image: "palad/...", container_id: "abc123", session_id: 1 }
+#   # => { image: "aixle/...", container_id: "abc123", session_id: 1 }
 #
 class ContainerService
   class ExecutionError < StandardError; end

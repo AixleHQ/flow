@@ -61,8 +61,8 @@ module ContextBuilders
       lines = [ "## Available MCP Servers" ]
       lines << ""
 
-      # Always include palad-tools
-      lines << "### palad-tools"
+      # Always include aixle-tools
+      lines << "### aixle-tools"
       lines << "Internal tools server. Provides project-specific tools configured for this session."
       lines << "Call tools via MCP — use `tools/list` to see available tools."
       lines << ""
@@ -83,7 +83,7 @@ module ContextBuilders
 
       lines = [ "## Available Tools" ]
       lines << ""
-      lines << "These tools are provided via the **palad-tools** MCP server. Call them through MCP."
+      lines << "These tools are provided via the **aixle-tools** MCP server. Call them through MCP."
       lines << ""
 
       if has_container
@@ -138,7 +138,7 @@ module ContextBuilders
     end
 
     def mcp_servers
-      @mcp_servers ||= [ "palad-tools" ] + external_servers.map(&:name)
+      @mcp_servers ||= [ "aixle-tools" ] + external_servers.map(&:name)
     end
 
     def external_servers

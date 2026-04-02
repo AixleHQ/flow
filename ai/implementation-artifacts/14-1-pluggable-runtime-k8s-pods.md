@@ -37,7 +37,7 @@ So that execution can run locally via Docker or via Kubernetes without changing 
 
 ### Task 1: Run Application in Cluster (PoC)
 
-- [x] Create `palad` namespace
+- [x] Create `aixle` namespace
 - [x] Deploy Postgres, Redis, Temporal, Temporal UI
 - [x] Deploy Rails app (`web`) with Service
 - [x] Deploy `worker-ruby` with ServiceAccount

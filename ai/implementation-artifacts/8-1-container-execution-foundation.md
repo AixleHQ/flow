@@ -266,7 +266,7 @@ end
   input: { ... },
 
   # Populated by before_create
-  image: "palad/claude-code:latest",
+  image: "aixle/claude-code:latest",
   env_vars: ["USER_ID=1", ...],
   labels: { ... },
   host_config: { ... },

@@ -8,13 +8,13 @@ end
 
 OasRails.configure do |config|
   # Basic Information about the API
-  config.info.title = "Palad app API"
+  config.info.title = "Aixle API"
   config.info.version = "1.0.0"
-  config.info.summary = "Palad Application JSON API"
+  config.info.summary = "Aixle Application JSON API"
   config.info.description = <<~HEREDOC
-    # Palad Application API Documentation
+    # Aixle Application API Documentation
 
-    This documentation provides details about all available API endpoints for the Palad application.
+    This documentation provides details about all available API endpoints for the Aixle application.
 
     ## Authentication
 
@@ -39,17 +39,17 @@ OasRails.configure do |config|
 
     API requests are subject to rate limiting. Excessive requests will be rejected with a 429 status code.
   HEREDOC
-  config.info.contact.name = "Palad Support"
-  config.info.contact.email = "support@palad.com"
-  config.info.contact.url = "https://palad.com/support"
+  config.info.contact.name = "Aixle Support"
+  config.info.contact.email = "support@aixle.com"
+  config.info.contact.url = "https://aixle.com/support"
 
   # Servers Information
   config.servers = [
-    # { url: 'https://api.palad.com', description: 'Production' },
-    # { url: 'https://staging-api.palad.com', description: 'Staging' },
-    { url: "http://localhost:4000", description: "Palad Development" },
-    { url: "https://qa.new.palad.com", description: "Palad QA" },
-    { url: "https://new.palad.com", description: "Palad Production" }
+    # { url: 'https://api.aixle.com', description: 'Production' },
+    # { url: 'https://staging-api.aixle.com', description: 'Staging' },
+    { url: "http://localhost:4000", description: "Aixle Development" },
+    { url: "https://qa.aixle.com", description: "Aixle QA" },
+    { url: "https://aixle.com", description: "Aixle Production" }
   ]
 
   # Tag Information
@@ -80,7 +80,7 @@ OasRails.configure do |config|
   config.security_schemas = {
     session_cookie: {
       type: "apiKey",
-      name: "_palad_session",
+      name: "_aixle_session",
       in: "cookie",
       description: "Session cookie for authentication"
     }

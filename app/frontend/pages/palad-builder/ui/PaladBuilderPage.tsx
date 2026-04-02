@@ -30,7 +30,7 @@ import { useGetCurrentUserQuery } from 'entities/user/api/currentUserApi';
 import { AVAILABLE_AGENTS, AGENT_COLORS } from 'entities/user/model/agentConstants';
 import type { AgentType } from 'entities/user/model/types';
 import { useGetProjectAssetsQuery } from 'features/assets-management';
-import { useStartPaladBuilderMutation, useGetPaladBuilderSessionsQuery } from 'features/palad-builder';
+import { useStartAixleBuilderMutation, useGetAixleBuilderSessionsQuery } from 'features/palad-builder';
 import { useLazyGetAgentModelsQuery } from 'shared/api/agentModelsApi';
 import { Routes } from 'shared/routes';
 
@@ -73,12 +73,12 @@ const stateColors: Record<string, 'success' | 'warning' | 'error' | 'info' | 'de
   not_started: 'default',
 };
 
-const PaladBuilderPage = () => {
+const AixleBuilderPage = () => {
   const { projectId } = useParams({ strict: false }) as { projectId: string };
   const navigate = useNavigate();
   const { enqueueSnackbar } = useSnackbar();
-  const [startBuilder, { isLoading: isStarting }] = useStartPaladBuilderMutation();
-  const { data: sessions, isLoading } = useGetPaladBuilderSessionsQuery(Number(projectId));
+  const [startBuilder, { isLoading: isStarting }] = useStartAixleBuilderMutation();
+  const { data: sessions, isLoading } = useGetAixleBuilderSessionsQuery(Number(projectId));
   const { data: currentUser } = useGetCurrentUserQuery();
 
   const configuredAgents = useMemo(
@@ -122,7 +122,7 @@ const PaladBuilderPage = () => {
 
   const handleStart = async () => {
     if (activeSession) {
-      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(activeSession.id)) });
+      navigate({ to: Routes.frontend.aixleBuilderRunPath(projectId, String(activeSession.id)) });
       return;
     }
     if (!agentRuntime) {
@@ -136,9 +136,9 @@ const PaladBuilderPage = () => {
         preferredModel: selectedModel || undefined,
         inputAssetIds: selectedAssetIds.length > 0 ? selectedAssetIds : undefined,
       }).unwrap();
-      navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(session.id)) });
+      navigate({ to: Routes.frontend.aixleBuilderRunPath(projectId, String(session.id)) });
     } catch {
-      enqueueSnackbar('Failed to start Palad Builder', { variant: 'error' });
+      enqueueSnackbar('Failed to start Aixle Builder', { variant: 'error' });
     }
   };
 
@@ -146,7 +146,7 @@ const PaladBuilderPage = () => {
     <Box sx={styles.root}>
       <Box sx={styles.hero}>
         <AutoFixHighIcon sx={styles.heroIcon} />
-        <Typography sx={styles.heroTitle}>Palad Builder</Typography>
+        <Typography sx={styles.heroTitle}>Aixle Builder</Typography>
         <Typography sx={styles.heroSubtitle}>
           Build workflows with AI. Describe what you need — the builder creates agents, steps, board columns, and
           automation for you.
@@ -265,7 +265,7 @@ const PaladBuilderPage = () => {
                     key={s.id}
                     hover
                     sx={{ cursor: 'pointer' }}
-                    onClick={() => navigate({ to: Routes.frontend.paladBuilderRunPath(projectId, String(s.id)) })}
+                    onClick={() => navigate({ to: Routes.frontend.aixleBuilderRunPath(projectId, String(s.id)) })}
                   >
                     <TableCell>#{s.id}</TableCell>
                     <TableCell>
@@ -289,4 +289,4 @@ const PaladBuilderPage = () => {
   );
 };
 
-export default PaladBuilderPage;
+export default AixleBuilderPage;

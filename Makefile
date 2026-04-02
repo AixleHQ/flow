@@ -110,44 +110,44 @@ shell:
 
 # Login to AWS account with AWS-Vault
 login_aws:
-	aws-vault login $(PROFILE) -t $(shell op item get "terraform palad" --otp)
+	aws-vault login $(PROFILE) -t $(shell op item get "terraform aixle" --otp)
 
 # Execute into QA web container
 qa-web-exec:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make exec_qa_web
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make exec_qa_web
 
 # Show logs from QA web container
 qa-web-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make qa_web_logs
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make qa_web_logs
 
 # Watch logs from QA web container
 qa-web-watch-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make watch_qa_web_logs
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make watch_qa_web_logs
 
 # Execute into prod web container
 prod-web-exec:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make exec_prod_web
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make exec_prod_web
 
 # Show logs from prod web container
 prod-web-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make prod_web_logs
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make prod_web_logs
 
 # Watch logs from prod web container
 prod-web-watch-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make watch_prod_web_logs
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make watch_prod_web_logs
 
 # Database dump operations
 dump-qa:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make dump_qa
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make dump_qa
 
 dump-prod:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make dump_prod
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make dump_prod
 
 fetch-qa-dump:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make fetch_qa_dump
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make fetch_qa_dump
 
 fetch-prod-dump:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform palad" --otp) -- docker-compose run --rm remote make fetch_prod_dump
+	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make fetch_prod_dump
 
 restore-dump:
 	docker-compose run --rm web make db_restore
@@ -164,11 +164,11 @@ build-otlp-ingest:
 
 # Build agent images (core first, then agents in parallel)
 build-agents:
-	docker build -t palad/agent-base-core:latest -f docker/base/Dockerfile docker/base
-	docker build -t palad/claude-code:latest -f docker/claude-code/Dockerfile docker/ & \
-	docker build -t palad/cursor-cli:latest -f docker/cursor-cli/Dockerfile docker/ & \
-	docker build -t palad/codex:latest -f docker/codex/Dockerfile docker/ & \
-	docker build -t palad/gemini-cli:latest -f docker/gemini-cli/Dockerfile docker/ & \
+	docker build -t aixle/agent-base-core:latest -f docker/base/Dockerfile docker/base
+	docker build -t aixle/claude-code:latest -f docker/claude-code/Dockerfile docker/ & \
+	docker build -t aixle/cursor-cli:latest -f docker/cursor-cli/Dockerfile docker/ & \
+	docker build -t aixle/codex:latest -f docker/codex/Dockerfile docker/ & \
+	docker build -t aixle/gemini-cli:latest -f docker/gemini-cli/Dockerfile docker/ & \
 	wait
 
 # Help command

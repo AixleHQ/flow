@@ -6,7 +6,7 @@ Status: review
 
 As a user,
 I want to create a board for my project,
-so that I have a dedicated task management space integrated with PALAD workflows.
+so that I have a dedicated task management space integrated with AIXLE workflows.
 
 ## Acceptance Criteria
 

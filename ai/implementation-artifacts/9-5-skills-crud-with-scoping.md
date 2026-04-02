@@ -223,7 +223,7 @@ Stories 9-1 through 9-4 established:
 - Per-CLI adapter pattern: each adapter knows its own config format
 - `permit!` was replaced with explicit key whitelist + `to_unsafe_h.slice()`
 - `session_tools` table dropped — `tool_ids` in JSONB is source of truth
-- MCP env vars removed — internal Palad MCP injected via adapter config files
+- MCP env vars removed — internal Aixle MCP injected via adapter config files
 - Rubocop enforces `Layout/SpaceInsideArrayLiteralBrackets`
 
 ### References

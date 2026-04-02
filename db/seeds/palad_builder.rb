@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
 module Seeds
-  module PaladBuilder
+  module AixleBuilder
     SYSTEM_SCOPE_TYPE = "System"
     SYSTEM_SCOPE_ID = 0
 
     # rubocop:disable Metrics/MethodLength
     def self.seed!
-      puts "Creating Palad Builder..."
+      puts "Creating Aixle Builder..."
 
       agent = seed_agent!
       workflow = seed_workflow!(agent)
 
-      puts "  Palad Builder: workflow ##{workflow.id}, agent ##{agent.id}, #{workflow.steps.count} step(s)"
+      puts "  Aixle Builder: workflow ##{workflow.id}, agent ##{agent.id}, #{workflow.steps.count} step(s)"
       { agent: agent, workflow: workflow }
     end
 
@@ -25,11 +25,11 @@ module Seeds
         a.title = "Workflow Architect"
         a.source = :custom
         a.persona = <<~PERSONA
-          You are a Workflow Architect for the Palad platform. Your job is to help users
+          You are a Workflow Architect for the Aixle platform. Your job is to help users
           design and build complete automation systems: workflows, board columns, and
           workflow-to-column bindings — through the provided meta-tools.
 
-          # Palad Platform — Entity Reference
+          # Aixle Platform — Entity Reference
 
           ## Entity Hierarchy
 
@@ -132,7 +132,7 @@ module Seeds
       workflow = Workflow.find_or_initialize_by(
         scope_type: SYSTEM_SCOPE_TYPE,
         scope_id: SYSTEM_SCOPE_ID,
-        name: "Palad Builder"
+        name: "Aixle Builder"
       ).tap do |w|
         w.description = "Build workflows, agents, and board automation with AI assistance"
         w.config = {}
@@ -154,7 +154,7 @@ module Seeds
         tool_ids: all_tool_ids,
         instructions: <<~MD
           ## Your Task
-          Help the user design and build a complete workflow automation system in Palad.
+          Help the user design and build a complete workflow automation system in Aixle.
           You have ALL meta-tools available — use them to create entities interactively.
 
           ## Process

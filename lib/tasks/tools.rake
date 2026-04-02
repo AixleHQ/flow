@@ -3,7 +3,7 @@
 namespace :tools do
   desc "Run a tool by name through Temporal container workflow. " \
        "Usage: rake tools:run NAME=slack_history PARAMS='channel:projectx-eng,SLACK_RANGE:7d' " \
-       "[COMPANY=dualboot] [PROJECT=palad-mvp] [TIMEOUT=300] [SYNC=true]"
+       "[COMPANY=dualboot] [PROJECT=aixle-mvp] [TIMEOUT=300] [SYNC=true]"
   task run: :environment do
     name       = ENV.fetch("NAME") { abort "NAME is required" }
     company_slug = ENV["COMPANY"] || "dualboot"

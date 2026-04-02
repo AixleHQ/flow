@@ -44,16 +44,16 @@ class ContainerStrategies::CustomToolStrategyTest < ActiveSupport::TestCase
   test "build_env_vars includes project env" do
     strategy = build_strategy(project: @project)
     env = strategy.build_env_vars
-    assert env.any? { |e| e.start_with?("PALAD_PROJECT_ID=") }
-    assert env.any? { |e| e.start_with?("PALAD_PROJECT_NAME=") }
+    assert env.any? { |e| e.start_with?("AIXLE_PROJECT_ID=") }
+    assert env.any? { |e| e.start_with?("AIXLE_PROJECT_NAME=") }
   end
 
   test "build_labels contains tool metadata" do
     strategy = build_strategy
     labels = strategy.build_labels
-    assert_equal "tool_execution", labels["palad.type"]
-    assert_equal @tool.id.to_s, labels["palad.tool_id"]
-    assert_equal @tool.name, labels["palad.tool_name"]
+    assert_equal "tool_execution", labels["aixle.type"]
+    assert_equal @tool.id.to_s, labels["aixle.tool_id"]
+    assert_equal @tool.name, labels["aixle.tool_name"]
   end
 
   test "build_host_config applies resource limits" do

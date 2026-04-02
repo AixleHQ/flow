@@ -412,14 +412,14 @@ export function apiV1CompanyProjectSkillPath(project_id: ScalarType, id: ScalarT
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "skills" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
-/** /api/v1/company/projects/:project_id/palad_builder/start(.:format) */
-export function startApiV1CompanyProjectPaladBuilderPath(project_id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "palad_builder" + "/" + "start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+/** /api/v1/company/projects/:project_id/aixle_builder/start(.:format) */
+export function startApiV1CompanyProjectAixleBuilderPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "aixle_builder" + "/" + "start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
-/** /api/v1/company/projects/:project_id/palad_builder/status(.:format) */
-export function statusApiV1CompanyProjectPaladBuilderPath(project_id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "palad_builder" + "/" + "status" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+/** /api/v1/company/projects/:project_id/aixle_builder/status(.:format) */
+export function statusApiV1CompanyProjectAixleBuilderPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "aixle_builder" + "/" + "status" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/company/projects/:project_id/workflows/:id/duplicate(.:format) */

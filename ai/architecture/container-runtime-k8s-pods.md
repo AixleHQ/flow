@@ -184,7 +184,7 @@ The application must keep the same URL structure as today.
 2. Traefik calls the ForwardAuth endpoint:
   - `GET /api/v1/internal/ws_auth`
   - Headers include `X-Forwarded-Uri` with the original path.
-  - Cookies include the Rails session cookie (`_palad_session`).
+  - Cookies include the Rails session cookie (`_aixle_session`).
 3. `WsAuthController` validates:
   - User is authenticated
   - User owns the terminal session for `route_token`
@@ -210,7 +210,7 @@ The application must keep the same URL structure as today.
 ## Run the Full Application in Cluster (PoC Steps)
 
 1. **Create namespace**
-  - `palad` namespace for all services.
+  - `aixle` namespace for all services.
 
 2. **Deploy core services**
   - Postgres

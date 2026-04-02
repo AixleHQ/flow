@@ -3,7 +3,7 @@ authorization:
 
 temporal:
   enabled: true
-  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.qa.palad.com' %>
+  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.qa.aixle.com' %>
 
 redis:
-  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.qa.palad.com' %>
+  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.qa.aixle.com' %>

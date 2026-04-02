@@ -1,7 +1,7 @@
 common: &common
   adapter: redis
   url: <%= Settings.redis.url %>
-  channel_prefix: <%= "palad_" + Rails.env %>
+  channel_prefix: <%= "aixle_" + Rails.env %>
 
 development:
   <<: *common

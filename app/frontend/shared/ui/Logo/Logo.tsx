@@ -18,7 +18,7 @@ export const Logo = ({ width, height, variant = 'full', colorScheme = 'dark', sx
     <Box
       component="img"
       src="/logo.svg"
-      alt="Palad"
+      alt="Aixle"
       sx={{
         width: width || defaultWidth,
         height: height || defaultHeight,

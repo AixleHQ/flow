@@ -1,4 +1,4 @@
-# Motion Design & Animation Catalog — Palad
+# Motion Design & Animation Catalog — Aixle
 
 **Author:** Artem_petrov
 **Date:** 2026-02-22
@@ -9,9 +9,9 @@
 
 ## Context
 
-This document catalogs visual effects, animations, and motion design patterns that can elevate Palad's user experience. Inspiration is drawn primarily from Factory.ai (GSAP 3.13 + Three.js r182 + Rive + Canvas 2D + 26 CSS keyframes), with additional references from Linear, Vercel, and GitHub.
+This document catalogs visual effects, animations, and motion design patterns that can elevate Aixle's user experience. Inspiration is drawn primarily from Factory.ai (GSAP 3.13 + Three.js r182 + Rive + Canvas 2D + 26 CSS keyframes), with additional references from Linear, Vercel, and GitHub.
 
-Palad is a **working SaaS product** (not a marketing site), so every animation must serve productivity and clarity. The catalog is organized into tiers by implementation complexity and impact.
+Aixle is a **working SaaS product** (not a marketing site), so every animation must serve productivity and clarity. The catalog is organized into tiers by implementation complexity and impact.
 
 ### Technology Stack Reference (Current)
 
@@ -588,7 +588,7 @@ Tech: GSAP timeline + SVG paths. Each step is an SVG node, connectors are animat
 
 When Step 2 completes, a glowing dot travels along the path to Step 3.
 
-**Impact:** Very High — transforms workflow from static list to living visualization. This is Palad's unique differentiator.
+**Impact:** Very High — transforms workflow from static list to living visualization. This is Aixle's unique differentiator.
 **Reduced-motion:** Static stepper with colors only.
 
 ---
@@ -627,7 +627,7 @@ Tech: GSAP `to` with custom number formatter, or Framer Motion `useSpring`.
 
 Tech: GSAP ScrollTrigger + pinning.
 
-Palad adaptation: showcase agent types (Claude Code → Cursor CLI → Codex → Gemini CLI) with each card showing the agent's unique interface.
+Aixle adaptation: showcase agent types (Claude Code → Cursor CLI → Codex → Gemini CLI) with each card showing the agent's unique interface.
 
 **Impact:** Medium (for onboarding) — wow-factor for new users.
 **Reduced-motion:** Simple stacked cards without scroll-pinning.
@@ -672,7 +672,7 @@ Tech: Staged typewriter effect + real WebSocket status events from backend.
 ### T3-07: Rive Interactive Mascot/Logo
 
 **Where:** Loading states, Onboarding, Error pages, Empty states
-**What:** Interactive animated Palad logo (Palladium shield/anchor concept) that reacts to cursor movement, loading progress, or application state. Different states: idle (gentle float), loading (spinning/pulsing), error (shake), success (celebration).
+**What:** Interactive animated Aixle logo (Palladium shield/anchor concept) that reacts to cursor movement, loading progress, or application state. Different states: idle (gentle float), loading (spinning/pulsing), error (shake), success (celebration).
 **Reference:** Factory.ai snowflake logo animation.
 
 Tech: Rive with state machine. One `.riv` file with multiple animation states. React component switches states based on app state.
@@ -733,7 +733,7 @@ Tech: SVG + GSAP timeline.
 [Workflow: PRD Creation] ──> [Step 3: Draft] ──> [Agent: Claude Code] ──> [Session #42] ──> 📄 prd.md
 ```
 
-**Impact:** High — provenance is Palad's differentiator. Making it animated and interactive elevates it from "metadata" to "experience".
+**Impact:** High — provenance is Aixle's differentiator. Making it animated and interactive elevates it from "metadata" to "experience".
 **Reduced-motion:** Static breadcrumb path.
 
 ---
@@ -942,7 +942,7 @@ Tech: Framer Motion `AnimatePresence` + `layout` on results list.
 
 Tech: ActionCable (already in stack) + Framer Motion for avatar enter/exit.
 
-**Impact:** Medium-High — collaborative awareness is a Palad differentiator.
+**Impact:** Medium-High — collaborative awareness is a Aixle differentiator.
 **Reduced-motion:** Static avatar list.
 
 ---
@@ -995,7 +995,7 @@ All T1 items (P0). Zero dependencies, pure CSS. Immediately elevates perceived q
 Add Framer Motion. Implement T2-01, T2-02, T2-03, T2-05, T2-07, T2-09. Plus T3-06 (Terminal Boot) and T3-14 (Status Transitions). Implement T5-01 (Optimistic UI) and T5-03 (Loading Waterfall).
 
 **Phase 2 — Differentiators (2-3 weeks):**
-T3-01 (Pipeline Visualization), T3-11 (Provenance Path), T5-06 (Command Palette), T5-07 (Presence). These are Palad's unique animations.
+T3-01 (Pipeline Visualization), T3-11 (Provenance Path), T5-06 (Command Palette), T5-07 (Presence). These are Aixle's unique animations.
 
 **Phase 3 — Polish (ongoing):**
 Remaining T2/T3 items as time allows. T1-06 through T1-14.

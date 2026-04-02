@@ -95,7 +95,7 @@ module ContainerRuntime
       normalized = normalize_tar_path(path)
       raise ArgumentError, "path is required" if normalized.blank?
 
-      tar_io = Tempfile.new("palad-copy-to")
+      tar_io = Tempfile.new("aixle-copy-to")
       tar_io.binmode
 
       Gem::Package::TarWriter.new(tar_io) do |tar|

@@ -14,7 +14,7 @@
 
 ## Problem
 
-PALAD has workflows and agent sessions but no task management. Users track tasks in external tools (Linear, Jira) — disconnected from the AI execution pipeline. Board & Tasks creates a native task board where column transitions trigger workflows.
+AIXLE has workflows and agent sessions but no task management. Users track tasks in external tools (Linear, Jira) — disconnected from the AI execution pipeline. Board & Tasks creates a native task board where column transitions trigger workflows.
 
 This epic establishes the data foundation: Board, Column models with presets and the `purpose` field that makes the board self-documenting for agents.
 
@@ -26,7 +26,7 @@ This epic establishes the data foundation: Board, Column models with presets and
 
 **As a** user,
 **I want** to create a board for my project,
-**So that** I have a dedicated task management space integrated with PALAD workflows.
+**So that** I have a dedicated task management space integrated with AIXLE workflows.
 
 **Acceptance Criteria:**
 - Migration creates `boards` table: `id`, `project_id` (references, not null, unique), `name` (string, not null), `preset_origin` (string, nullable), `timestamps`

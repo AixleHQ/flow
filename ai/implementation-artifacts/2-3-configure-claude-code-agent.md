@@ -352,10 +352,10 @@ So that I can use it in future sessions.
     - Agent CLI is already authenticated
 - [ ] Build images:
   ```bash
-  docker build -t palad/claude-code:latest docker/claude-code
-  docker build -t palad/cursor-cli:latest docker/cursor-cli
-  docker build -t palad/codex:latest docker/codex
-  docker build -t palad/gemini-cli:latest docker/gemini-cli
+  docker build -t aixle/claude-code:latest docker/claude-code
+  docker build -t aixle/cursor-cli:latest docker/cursor-cli
+  docker build -t aixle/codex:latest docker/codex
+  docker build -t aixle/gemini-cli:latest docker/gemini-cli
   ```
 - [ ] Optionally add to `docker-compose.yml` for local development (pre-built images)
 
@@ -459,10 +459,10 @@ So that I can use it in future sessions.
 - PostgreSQL runs in `db` container
 - Temporal server runs separately (or use Temporal Cloud)
 - **4 Agent Images (not separate auth images):**
-  - `palad/claude-code:latest` - Claude Code agent
-  - `palad/cursor-cli:latest` - Cursor CLI agent
-  - `palad/codex:latest` - OpenAI Codex agent
-  - `palad/gemini-cli:latest` - Gemini CLI agent
+  - `aixle/claude-code:latest` - Claude Code agent
+  - `aixle/cursor-cli:latest` - Cursor CLI agent
+  - `aixle/codex:latest` - OpenAI Codex agent
+  - `aixle/gemini-cli:latest` - Gemini CLI agent
 - **Single Image, Multiple Use Cases:**
   - Same image used for both `auth_setup` and `agent_session` session types
   - Difference is in volume mounts:
@@ -491,14 +491,14 @@ So that I can use it in future sessions.
 - **auth_setup session (Story 2.3):**
   ```ruby
   ContainerService.start_auth_container(user_id, 'claude_code')
-  # → Starts palad/claude-code:latest with empty home directory
+  # → Starts aixle/claude-code:latest with empty home directory
   # → User authenticates → creates ~/.claude/config
   # → Artifacts collected → saved to AgentCredential
   ```
 - **agent_session (Future Epic 4):**
   ```ruby
   ContainerService.start_agent_container(user_id, 'claude_code', project_id, credentials)
-  # → Starts palad/claude-code:latest
+  # → Starts aixle/claude-code:latest
   # → Pre-mounts credentials via AgentCredential.mount_to_container
   # → Agent CLI is already authenticated
   # → User can immediately start coding

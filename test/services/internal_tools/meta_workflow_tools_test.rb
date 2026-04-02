@@ -8,7 +8,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
 
-    # Create a "builder" workflow context (simulating Palad Builder running)
+    # Create a "builder" workflow context (simulating Aixle Builder running)
     builder_workflow = create(:workflow, scope: @company)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)

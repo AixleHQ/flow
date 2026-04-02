@@ -3,7 +3,7 @@
 # McpServer — MCP (Model Context Protocol) server configuration
 #
 # kind: internal | custom
-# - internal: system-provided by Palad (e.g., palad-tools), no scope
+# - internal: system-provided by Aixle (e.g., aixle-tools), no scope
 # - custom: user-configured servers (Context7, Tavily, etc.) with Company/Project scope
 #
 # scope: Company | Project (polymorphic, null for internal)
