@@ -180,6 +180,7 @@ Rails.application.routes.draw do
             end
           end
           get "aixle_builder", to: "aixle_builder#show", as: :aixle_builder
+          post "aixle_builder/start", to: "aixle_builder#start", as: :aixle_builder_start
           get "aixle_builder/:id/session", to: "aixle_builder#session", as: :aixle_builder_session
           resources :assets, only: %i[index create destroy] do
             member do
