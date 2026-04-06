@@ -740,13 +740,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
     adapter = Agents::CodexAdapter.new
-    assert_equal "codex --skip-git-repo-check --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
   end
 
   test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex --skip-git-repo-check --yolo", result
+    assert_equal "codex --yolo", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do

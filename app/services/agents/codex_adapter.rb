@@ -72,12 +72,11 @@ module Agents
       { "#{home_dir}/.codex/config.toml" => generate_config_toml({}) }
     end
 
-    # Session command: always codex --skip-git-repo-check --yolo
-    # --skip-git-repo-check: containers have no git repo context
+    # Session command: always codex --yolo
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file.
     def session_command(mode:, prompt: nil, model: nil)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
-      "codex --skip-git-repo-check#{model_flag} --yolo"
+      "codex#{model_flag} --yolo"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)

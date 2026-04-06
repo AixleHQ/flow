@@ -104,14 +104,14 @@ module Agents
     end
 
     test "session_command returns codex --yolo for any mode" do
-      assert_equal "codex --skip-git-repo-check --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "codex --skip-git-repo-check --yolo", @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+      assert_equal "codex --yolo", @adapter.session_command(mode: "interactive")
+      assert_equal "codex --yolo", @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
     end
 
     test "session_command includes model flag when model provided" do
       result = @adapter.session_command(mode: "interactive", model: "gpt-5.3-codex")
 
-      assert_equal "codex --skip-git-repo-check --model gpt-5.3-codex --yolo", result
+      assert_equal "codex --model gpt-5.3-codex --yolo", result
     end
   end
 end
