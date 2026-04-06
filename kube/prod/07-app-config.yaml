@@ -50,6 +50,7 @@ data:
   K8S_IMAGE_PULL_POLICY: Always
   K8S_EKS_VPC_CIDR: "10.10.0.0/16"
   K8S_AGENTS_IMAGE_PULL_SECRETS: ghcr-pull-secret
+  K8S_READY_TIMEOUT: "300"
   MCP_SERVER_URL: "http://mcp.palad.svc.cluster.local:4002/action_mcp"
   MCP_PORT: "4002"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otlp-ingest.palad.svc.cluster.local:4318"
