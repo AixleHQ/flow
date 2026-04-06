@@ -737,8 +737,8 @@ module ContainerRuntime
 
     def resource_labels(namespace:)
       {
-        "aixle.com/runtime-origin" => runtime_namespace,
-        "aixle.com/runtime-namespace" => namespace
+        "palad.ai/runtime-origin" => runtime_namespace,
+        "palad.ai/runtime-namespace" => namespace
       }
     end
 
