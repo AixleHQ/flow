@@ -63,3 +63,7 @@ data:
   GITLAB_APP_ID: "get_from_1password"
   K8S_RUNTIME_LIMITS_MEMORY: 3Gi
   GOOGLE_CLIENT_ID: 517277132860-t98k8t78dl7l597ut5moric15dsr09ch.apps.googleusercontent.com
+  AGENT_IMAGE_CLAUDE_CODE: ghcr.io/palad-ai/palad-app-claude-code
+  AGENT_IMAGE_CURSOR_CLI: ghcr.io/palad-ai/palad-app-cursor-cli
+  AGENT_IMAGE_CODEX: ghcr.io/palad-ai/palad-app-codex
+  AGENT_IMAGE_GEMINI_CLI: ghcr.io/palad-ai/palad-app-gemini-cli
