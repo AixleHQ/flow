@@ -1,5 +1,6 @@
 locals {
   assets_cloudfront_origin_id = "palad-static-assets-origin"
+  assets_cloudfront_aliases   = concat([var.assets_cloudfront_domain_name], var.assets_cloudfront_additional_aliases)
 }
 
 data "aws_cloudfront_cache_policy" "managed_caching_optimized" {
@@ -22,6 +23,7 @@ resource "aws_acm_certificate" "static_assets" {
   provider = aws.us_east_1
 
   domain_name       = var.assets_cloudfront_domain_name
+  subject_alternative_names = var.assets_cloudfront_additional_aliases
   validation_method = "DNS"
 
   lifecycle {
@@ -43,7 +45,7 @@ resource "aws_route53_record" "static_assets_cert_validation" {
     }
   } : {}
 
-  zone_id         = aws_route53_zone.palad_ai.zone_id
+  zone_id         = endswith(each.key, ".palad.ai") ? aws_route53_zone.palad_ai.zone_id : aws_route53_zone.aixle_com.zone_id
   allow_overwrite = true
   name            = each.value.name
   type            = each.value.type
@@ -64,8 +66,8 @@ resource "aws_cloudfront_distribution" "static_assets" {
 
   enabled         = true
   is_ipv6_enabled = true
-  comment         = "CloudFront for static assets used by palad.ai web app"
-  aliases         = [var.assets_cloudfront_domain_name]
+  comment         = "CloudFront for static assets used by dev.aixle.com web app"
+  aliases         = local.assets_cloudfront_aliases
   price_class     = var.assets_cloudfront_price_class
 
   origin {
@@ -183,6 +185,32 @@ resource "aws_route53_record" "palad_ai_static_assets_ipv6" {
   count   = var.create_assets_cloudfront_distribution ? 1 : 0
   zone_id = aws_route53_zone.palad_ai.zone_id
   name    = var.assets_cloudfront_domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.static_assets[0].domain_name
+    zone_id                = aws_cloudfront_distribution.static_assets[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "aixle_com_static_assets" {
+  count   = var.create_assets_cloudfront_distribution && length(var.assets_cloudfront_additional_aliases) > 0 ? 1 : 0
+  zone_id = aws_route53_zone.aixle_com.zone_id
+  name    = var.assets_cloudfront_additional_aliases[0]
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.static_assets[0].domain_name
+    zone_id                = aws_cloudfront_distribution.static_assets[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "aixle_com_static_assets_ipv6" {
+  count   = var.create_assets_cloudfront_distribution && length(var.assets_cloudfront_additional_aliases) > 0 ? 1 : 0
+  zone_id = aws_route53_zone.aixle_com.zone_id
+  name    = var.assets_cloudfront_additional_aliases[0]
   type    = "AAAA"
 
   alias {

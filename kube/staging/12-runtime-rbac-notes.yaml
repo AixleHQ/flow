@@ -49,8 +49,8 @@ data:
     - Push to the staging branch; GitHub Actions handles migration and rollout.
 
     DNS:
-    - staging.palad.ai and *.staging.palad.ai must point to the staging Traefik NLB.
-    - The wildcard record covers traefik.staging.palad.ai and temporal.staging.palad.ai.
+    - staging.aixle.com and *.staging.aixle.com must point to the staging Traefik NLB.
+    - The wildcard record covers traefik.staging.aixle.com and temporal.staging.aixle.com.
 
     Access control:
     - External access is restricted to the current external prod-agent egress IP

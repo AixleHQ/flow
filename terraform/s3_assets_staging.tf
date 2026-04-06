@@ -61,7 +61,7 @@ resource "aws_s3_bucket_cors_configuration" "assets_staging" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "POST", "PUT", "DELETE", "HEAD"]
-    allowed_origins = ["https://staging.palad.ai"]
+    allowed_origins = ["https://staging.aixle.com"]
     expose_headers  = ["ETag", "Location"]
     max_age_seconds = 3000
   }

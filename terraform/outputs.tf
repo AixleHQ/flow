@@ -39,13 +39,23 @@ output "cloudfront_static_assets_domain_name" {
 }
 
 output "cloudfront_static_assets_alias_domain_name" {
-  description = "Custom DNS hostname for static Rails/Vite assets"
+  description = "Legacy custom DNS hostname for static Rails/Vite assets"
   value       = try(aws_route53_record.palad_ai_static_assets[0].fqdn, null)
 }
 
 output "cloudfront_static_assets_url" {
-  description = "HTTPS URL base for static Rails/Vite assets"
+  description = "Legacy HTTPS URL base for static Rails/Vite assets"
   value       = try("https://${trim(aws_route53_record.palad_ai_static_assets[0].fqdn, ".")}", null)
+}
+
+output "cloudfront_static_assets_aixle_alias_domain_name" {
+  description = "New aixle.com custom DNS hostname for static Rails/Vite assets"
+  value       = try(aws_route53_record.aixle_com_static_assets[0].fqdn, null)
+}
+
+output "cloudfront_static_assets_aixle_url" {
+  description = "New aixle.com HTTPS URL base for static Rails/Vite assets"
+  value       = try("https://${trim(aws_route53_record.aixle_com_static_assets[0].fqdn, ".")}", null)
 }
 
 output "eks_assets_irsa_role_arn" {
@@ -54,14 +64,24 @@ output "eks_assets_irsa_role_arn" {
 }
 
 # Route53 outputs
-output "route53_zone_id" {
+output "route53_palad_ai_zone_id" {
   description = "Route53 hosted zone ID for palad.ai"
   value       = aws_route53_zone.palad_ai.zone_id
 }
 
-output "route53_zone_nameservers" {
+output "route53_palad_ai_zone_nameservers" {
   description = "Name servers for palad.ai zone"
   value       = aws_route53_zone.palad_ai.name_servers
+}
+
+output "route53_zone_id" {
+  description = "Route53 hosted zone ID for aixle.com"
+  value       = aws_route53_zone.aixle_com.zone_id
+}
+
+output "route53_zone_nameservers" {
+  description = "Name servers for aixle.com zone"
+  value       = aws_route53_zone.aixle_com.name_servers
 }
 
 output "eks_ingress_nlb_dns_name" {
@@ -117,6 +137,46 @@ output "palad_ai_grafana_admin_dns_record" {
 output "palad_ai_headlamp_admin_dns_record" {
   description = "Route53 A record for headlamp.palad.ai pointing to restricted EKS admin ingress NLB"
   value       = try(aws_route53_record.palad_ai_headlamp_admin[0].fqdn, null)
+}
+
+output "aixle_com_dns_record" {
+  description = "Route53 A record for dev.aixle.com pointing to EKS ingress NLB"
+  value       = try(aws_route53_record.aixle_com_root[0].fqdn, null)
+}
+
+output "aixle_com_wildcard_dns_record" {
+  description = "Route53 wildcard A record for *.dev.aixle.com pointing to EKS ingress NLB"
+  value       = try(aws_route53_record.aixle_com_wildcard[0].fqdn, null)
+}
+
+output "aixle_com_staging_dns_record" {
+  description = "Route53 A record for staging.aixle.com pointing to the staging EKS ingress NLB"
+  value       = try(aws_route53_record.aixle_com_staging_root[0].fqdn, null)
+}
+
+output "aixle_com_staging_wildcard_dns_record" {
+  description = "Route53 wildcard A record for *.staging.aixle.com pointing to the staging EKS ingress NLB"
+  value       = try(aws_route53_record.aixle_com_staging_wildcard[0].fqdn, null)
+}
+
+output "aixle_com_traefik_admin_dns_record" {
+  description = "Route53 A record for traefik.aixle.com pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.aixle_com_traefik_admin[0].fqdn, null)
+}
+
+output "aixle_com_temporal_admin_dns_record" {
+  description = "Route53 A record for temporal.aixle.com pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.aixle_com_temporal_admin[0].fqdn, null)
+}
+
+output "aixle_com_grafana_admin_dns_record" {
+  description = "Route53 A record for grafana.aixle.com pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.aixle_com_grafana_admin[0].fqdn, null)
+}
+
+output "aixle_com_headlamp_admin_dns_record" {
+  description = "Route53 A record for headlamp.aixle.com pointing to restricted EKS admin ingress NLB"
+  value       = try(aws_route53_record.aixle_com_headlamp_admin[0].fqdn, null)
 }
 
 # EKS outputs

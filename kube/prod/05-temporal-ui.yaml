@@ -55,7 +55,7 @@ spec:
   entryPoints:
     - adminwebsecure
   routes:
-    - match: Host(`temporal.palad.ai`)
+    - match: Host(`temporal.aixle.com`)
       kind: Rule
       middlewares:
         - name: admin-basic-auth
@@ -66,8 +66,8 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: palad.ai
+      - main: dev.aixle.com
         sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai
+          - www.dev.aixle.com
+          - traefik.aixle.com
+          - temporal.aixle.com

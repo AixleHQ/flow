@@ -9,7 +9,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: (Host(`palad.ai`) || Host(`www.palad.ai`)) && PathPrefix(`/`)
+    - match: (Host(`dev.aixle.com`) || Host(`www.dev.aixle.com`)) && PathPrefix(`/`)
       kind: Rule
       services:
         - name: web
@@ -17,8 +17,8 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: palad.ai
+      - main: dev.aixle.com
         sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai
+          - www.dev.aixle.com
+          - traefik.aixle.com
+          - temporal.aixle.com

@@ -32,14 +32,14 @@ create_eks_staging_dns_records = true
 eks_staging_ingress_namespace  = "palad-staging"
 eks_staging_ingress_service_name = "traefik"
 
-# Dedicated admin DNS record (overrides wildcard for traefik.palad.ai)
+# Dedicated admin DNS record (overrides wildcard for traefik.aixle.com)
 create_eks_admin_dns_record   = true
 eks_admin_ingress_namespace   = "palad"
 eks_admin_ingress_service_name = "traefik-admin"
-eks_admin_dns_name            = "traefik.palad.ai"
-eks_admin_temporal_dns_name   = "temporal.palad.ai"
-eks_admin_grafana_dns_name    = "grafana.palad.ai"
-eks_admin_headlamp_dns_name   = "headlamp.palad.ai"
+eks_admin_dns_name            = "traefik.aixle.com"
+eks_admin_temporal_dns_name   = "temporal.aixle.com"
+eks_admin_grafana_dns_name    = "grafana.aixle.com"
+eks_admin_headlamp_dns_name   = "headlamp.aixle.com"
 
 # Traefik IRSA identity for Route53 DNS challenge
 eks_traefik_namespace            = "palad"
@@ -64,7 +64,7 @@ create_assets_bucket               = true
 assets_bucket_name                 = "palad-assets-prod"
 assets_bucket_force_destroy        = false
 assets_bucket_versioning_enabled   = true
-assets_bucket_cors_allowed_origins = ["https://palad.ai"]
+assets_bucket_cors_allowed_origins = ["https://dev.aixle.com"]
 
 # IRSA role for workloads that upload/read assets from S3
 create_assets_irsa               = true
@@ -74,7 +74,8 @@ assets_irsa_service_account_names = ["palad-web", "palad-worker"]
 # CloudFront distribution for static Rails/Vite assets
 create_assets_cloudfront_distribution = true
 assets_cloudfront_domain_name         = "static.palad.ai"
-assets_cloudfront_origin_domain_name  = "palad.ai"
+assets_cloudfront_additional_aliases  = ["static.aixle.com"]
+assets_cloudfront_origin_domain_name  = "dev.aixle.com"
 assets_cloudfront_price_class         = "PriceClass_100"
 
 # RDS PostgreSQL for Rails app

@@ -9,7 +9,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: (Host(`staging.palad.ai`) || Host(`www.staging.palad.ai`)) && PathPrefix(`/`)
+    - match: (Host(`staging.aixle.com`) || Host(`www.staging.aixle.com`)) && PathPrefix(`/`)
       kind: Rule
       middlewares:
         - name: staging-basic-auth
@@ -19,8 +19,8 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: staging.palad.ai
+      - main: staging.aixle.com
         sans:
-          - www.staging.palad.ai
-          - traefik.staging.palad.ai
-          - temporal.staging.palad.ai
+          - www.staging.aixle.com
+          - traefik.staging.aixle.com
+          - temporal.staging.aixle.com

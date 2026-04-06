@@ -14,9 +14,9 @@ data:
   DB_PORT: "5432"
   DB_USERNAME: postgres
   DB_NAME: palad_staging
-  DOMAIN: staging.palad.ai
+  DOMAIN: staging.aixle.com
   # Staging serves compiled web assets directly from the application domain.
-  ASSET_HOST: "https://staging.palad.ai"
+  ASSET_HOST: "https://staging.aixle.com"
   AWS_S3_BUCKET: "palad-assets-staging"
   AWS_DEFAULT_REGION: "us-east-1"
   AWS_REGION: "us-east-1"
@@ -29,7 +29,7 @@ data:
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
   TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD: "900"
-  TEMPORAL_UI_URL: https://temporal.staging.palad.ai
+  TEMPORAL_UI_URL: https://temporal.staging.aixle.com
   # Temporal uses the same in-cluster PostgreSQL.
   TEMPORAL_DB_HOST: db
   TEMPORAL_DB_PORT: "5432"
@@ -40,10 +40,10 @@ data:
   TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION: "false"
   TEMPORAL_SQL_TLS: "false"
   TEMPORAL_SQL_HOST_VERIFICATION: "false"
-  TRAEFIK_WS_BASE: wss://staging.palad.ai
-  TRAEFIK_HTTP_BASE: https://staging.palad.ai
-  TRAEFIK_DASHBOARD_URL: https://traefik.staging.palad.ai
-  TRAEFIK_CORS_ORIGINS: https://staging.palad.ai
+  TRAEFIK_WS_BASE: wss://staging.aixle.com
+  TRAEFIK_HTTP_BASE: https://staging.aixle.com
+  TRAEFIK_DASHBOARD_URL: https://traefik.staging.aixle.com
+  TRAEFIK_CORS_ORIGINS: https://staging.aixle.com
   # Uploaded files remain in S3; container-side URLs should continue to target S3 directly.
   CONTAINER_ASSET_HOST: "https://palad-assets-staging.s3.amazonaws.com"
   CONTAINER_RUNTIME: k8s

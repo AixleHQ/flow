@@ -1,7 +1,7 @@
 # Traefik IngressRoutes for the observability UIs.
 # These supplement the Helm charts, which do not generate Traefik CRD resources.
 # Both routes sit behind admin-basic-auth and share the existing Let's Encrypt
-# certificate that already covers grafana.palad.ai and headlamp.palad.ai.
+# certificate that already covers grafana.aixle.com and headlamp.aixle.com.
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -14,7 +14,7 @@ spec:
   entryPoints:
     - adminwebsecure
   routes:
-    - match: Host(`grafana.palad.ai`)
+    - match: Host(`grafana.aixle.com`)
       kind: Rule
       middlewares:
         - name: admin-basic-auth
@@ -26,13 +26,13 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: palad.ai
+      - main: dev.aixle.com
         sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai
-          - grafana.palad.ai
-          - headlamp.palad.ai
+          - www.dev.aixle.com
+          - traefik.aixle.com
+          - temporal.aixle.com
+          - grafana.aixle.com
+          - headlamp.aixle.com
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -45,7 +45,7 @@ spec:
   entryPoints:
     - adminwebsecure
   routes:
-    - match: Host(`headlamp.palad.ai`)
+    - match: Host(`headlamp.aixle.com`)
       kind: Rule
       # middlewares:
       #   - name: admin-basic-auth
@@ -57,10 +57,10 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: palad.ai
+      - main: dev.aixle.com
         sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai
-          - grafana.palad.ai
-          - headlamp.palad.ai
+          - www.dev.aixle.com
+          - traefik.aixle.com
+          - temporal.aixle.com
+          - grafana.aixle.com
+          - headlamp.aixle.com

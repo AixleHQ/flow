@@ -7,8 +7,8 @@ This directory contains the Terraform configuration for managing AWS infrastruct
 The current configuration sets up:
 - **S3 Bucket for State Storage**: An AWS S3 bucket (`palad-tfstate`) to store Terraform state files
 - **S3 Bucket for Application Assets** with CORS, encryption, lifecycle, and TLS-only policy
-- **CloudFront CDN for Static Rails/Vite Assets** on `static.palad.ai`
-- **Route53 Hosted Zone and DNS Records** for `palad.ai`
+- **CloudFront CDN for Static Rails/Vite Assets** on `static.aixle.com`
+- **Route53 Hosted Zone and DNS Records** for `aixle.com`
 - **EKS Cluster + Networking** for production workloads
 - **Optional EC2 GitHub Actions Self-Hosted Runner** for CI workloads
   - supports a fixed-size pool via `ci_runner_count`
@@ -113,7 +113,7 @@ terraform output  # Display output values
   - `REDIS_URL` from `terraform output redis_url_database_1`
   - `AWS_S3_BUCKET` from `terraform output assets_bucket_name`
   - `AWS_DEFAULT_REGION` / `AWS_REGION` from `terraform output assets_bucket_region`
-  - `ASSET_HOST` from `terraform output cloudfront_static_assets_url` (for example `https://static.palad.ai`)
+  - `ASSET_HOST` from `terraform output cloudfront_static_assets_aixle_url` (for example `https://static.aixle.com`)
   - `K8S_EKS_VPC_CIDR` should match `eks_vpc_cidr` (runtime network policy blocks private/VPC egress while allowing public internet)
 - `kube/prod/06-rbac-runtime.yaml`:
   - `eks.amazonaws.com/role-arn` for `palad-web` and `palad-worker` from `terraform output eks_assets_irsa_role_arn`

@@ -36,7 +36,7 @@ grafana:
     GF_SECURITY_ADMIN_USER: admin
   grafana.ini:
     server:
-      root_url: "https://grafana.palad.ai"
+      root_url: "https://grafana.aixle.com"
   persistence:
     enabled: true
     storageClassName: gp3

@@ -90,7 +90,7 @@ spec:
             - "--entrypoints.web.address=:80"
             - "--entrypoints.websecure.address=:443"
             - "--entrypoints.adminwebsecure.address=:8443"
-            - "--certificatesresolvers.letsencrypt.acme.email=admin@palad.ai"
+            - "--certificatesresolvers.letsencrypt.acme.email=admin@aixle.com"
             - "--certificatesresolvers.letsencrypt.acme.storage=/data/acme.json"
             - "--certificatesresolvers.letsencrypt.acme.dnschallenge=true"
             - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=route53"
@@ -186,7 +186,7 @@ spec:
   entryPoints:
     - adminwebsecure
   routes:
-    - match: Host(`traefik.palad.ai`)
+    - match: Host(`traefik.aixle.com`)
       kind: Rule
       middlewares:
         - name: admin-basic-auth
@@ -198,11 +198,11 @@ spec:
   tls:
     certResolver: letsencrypt
     domains:
-      - main: palad.ai
+      - main: dev.aixle.com
         sans:
-          - www.palad.ai
-          - traefik.palad.ai
-          - temporal.palad.ai
+          - www.dev.aixle.com
+          - traefik.aixle.com
+          - temporal.aixle.com
 
 ---
 apiVersion: traefik.io/v1alpha1

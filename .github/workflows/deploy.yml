@@ -1,4 +1,4 @@
-name: Deploy palad.ai
+name: Deploy aixle domains
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
 
           if [ "${GITHUB_REF}" = "refs/heads/staging" ]; then
-            echo "asset_host=https://staging.palad.ai" >> "$GITHUB_OUTPUT"
+            echo "asset_host=https://staging.aixle.com" >> "$GITHUB_OUTPUT"
             echo "raw_tag=staging" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=staging-" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image-staging" >> "$GITHUB_OUTPUT"
@@ -44,7 +44,7 @@ jobs:
             echo "job_prefix=db-migrate-staging" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=staging-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            echo "asset_host=https://static.palad.ai" >> "$GITHUB_OUTPUT"
+            echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
             echo "raw_tag=main" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
@@ -53,7 +53,7 @@ jobs:
             echo "job_prefix=db-migrate" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           else
-            echo "asset_host=https://static.palad.ai" >> "$GITHUB_OUTPUT"
+            echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
             echo "raw_tag=latest" >> "$GITHUB_OUTPUT"
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"

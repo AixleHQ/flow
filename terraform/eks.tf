@@ -610,7 +610,8 @@ data "aws_iam_policy_document" "eks_traefik_dns" {
       "route53:ListResourceRecordSets"
     ]
     resources = [
-      aws_route53_zone.palad_ai.arn
+      aws_route53_zone.palad_ai.arn,
+      aws_route53_zone.aixle_com.arn
     ]
   }
 

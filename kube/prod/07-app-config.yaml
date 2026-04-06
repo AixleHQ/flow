@@ -11,9 +11,9 @@ data:
   # Set from Terraform output: rds_endpoint
   DB_HOST: "palad-app-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"
   DB_PORT: "5432"
-  DOMAIN: palad.ai
+  DOMAIN: dev.aixle.com
   # Set from Terraform output: cloudfront_static_assets_url
-  ASSET_HOST: "https://static.palad.ai"
+  ASSET_HOST: "https://static.aixle.com"
   # Set from Terraform output: assets_bucket_name
   AWS_S3_BUCKET: "palad-assets-prod"
   AWS_DEFAULT_REGION: "us-east-1"
@@ -29,7 +29,7 @@ data:
   TEMPORAL_NAMESPACE: default
   TEMPORAL_TASK_QUEUE: palad_ruby
   TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD: "900"
-  TEMPORAL_UI_URL: https://temporal.palad.ai
+  TEMPORAL_UI_URL: https://temporal.aixle.com
   # Set from Terraform output: temporal_rds_endpoint
   TEMPORAL_DB_HOST: "palad-temporal-prod.ci58qgcoa7rm.us-east-1.rds.amazonaws.com"
   TEMPORAL_DB_PORT: "5432"
@@ -40,10 +40,10 @@ data:
   TEMPORAL_POSTGRES_TLS_DISABLE_HOST_VERIFICATION: "true"
   TEMPORAL_SQL_TLS: "true"
   TEMPORAL_SQL_HOST_VERIFICATION: "false"
-  TRAEFIK_WS_BASE: wss://palad.ai
-  TRAEFIK_HTTP_BASE: https://palad.ai
-  TRAEFIK_DASHBOARD_URL: https://traefik.palad.ai
-  TRAEFIK_CORS_ORIGINS: https://palad.ai
+  TRAEFIK_WS_BASE: wss://dev.aixle.com
+  TRAEFIK_HTTP_BASE: https://dev.aixle.com
+  TRAEFIK_DASHBOARD_URL: https://traefik.aixle.com
+  TRAEFIK_CORS_ORIGINS: https://dev.aixle.com
   CONTAINER_ASSET_HOST: "https://palad-assets-prod.s3.amazonaws.com"
   CONTAINER_RUNTIME: k8s
   K8S_NAMESPACE: palad
