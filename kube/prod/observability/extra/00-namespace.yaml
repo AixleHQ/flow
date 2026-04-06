@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   name: monitoring
   labels:
-    palad.ai/env: prod
+    aixle.com/env: prod
 ---
 # Allow all pods within the monitoring namespace to communicate
 apiVersion: networking.k8s.io/v1

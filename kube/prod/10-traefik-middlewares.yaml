@@ -4,7 +4,7 @@ metadata:
   name: terminal-auth
   namespace: palad
   labels:
-    palad.ai/runtime-origin: palad
+    aixle.com/runtime-origin: palad
 spec:
   forwardAuth:
     address: http://web.palad.svc.cluster.local:4000/api/v1/internal/ws_auth
@@ -17,7 +17,7 @@ metadata:
   name: admin-basic-auth
   namespace: palad
   labels:
-    palad.ai/runtime-origin: palad
+    aixle.com/runtime-origin: palad
 spec:
   basicAuth:
     secret: traefik-basic-auth

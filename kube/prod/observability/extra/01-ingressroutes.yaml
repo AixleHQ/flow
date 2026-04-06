@@ -9,7 +9,7 @@ metadata:
   name: grafana
   namespace: monitoring
   labels:
-    palad.ai/runtime-origin: palad
+    aixle.com/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure
@@ -40,7 +40,7 @@ metadata:
   name: headlamp
   namespace: monitoring
   labels:
-    palad.ai/runtime-origin: palad
+    aixle.com/runtime-origin: palad
 spec:
   entryPoints:
     - adminwebsecure

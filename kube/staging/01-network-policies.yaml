@@ -53,7 +53,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-staging
+              aixle.com/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4000
@@ -73,7 +73,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-staging
+              aixle.com/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4002
@@ -93,7 +93,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              palad.ai/runtime-origin: palad-staging
+              aixle.com/runtime-origin: palad-staging
       ports:
         - protocol: TCP
           port: 4318

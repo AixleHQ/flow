@@ -69,7 +69,7 @@ spec:
             - "--api.insecure=true"
             - "--providers.kubernetescrd=true"
             - "--providers.kubernetescrd.allowCrossNamespace=true"
-            - "--providers.kubernetescrd.labelselector=palad.ai/runtime-origin=palad-staging"
+            - "--providers.kubernetescrd.labelselector=aixle.com/runtime-origin=palad-staging"
             - "--providers.kubernetesingress=true"
             - "--providers.kubernetesingress.namespaces=palad-staging"
             - "--entrypoints.traefik.http.tls=true"
@@ -150,7 +150,7 @@ metadata:
   name: traefik-dashboard
   namespace: palad-staging
   labels:
-    palad.ai/runtime-origin: palad-staging
+    aixle.com/runtime-origin: palad-staging
 spec:
   entryPoints:
     - websecure
@@ -178,7 +178,7 @@ metadata:
   name: traefik-dashboard-redirect
   namespace: palad-staging
   labels:
-    palad.ai/runtime-origin: palad-staging
+    aixle.com/runtime-origin: palad-staging
 spec:
   redirectRegex:
     regex: "^(https?://[^/]+)/?$"
