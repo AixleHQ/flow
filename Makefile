@@ -1,10 +1,7 @@
-# AI Engine Docker Management
-.PHONY: setup lint test run shell-web shell-ai-engine login_aws qa-web-exec qa-web-logs qa-web-watch-logs prod-web-exec prod-web-logs prod-web-watch-logs dump-qa dump-prod fetch-qa-dump fetch-prod-dump restore-dump restore-qa-db restore-prod-db build-agents setup-kube kube-help kube-apply kube-apply-dev kube-apply-prod kube-secrets-apply kube-secrets-apply-dev kube-secrets-apply-prod kube-secret-edit kube-web-rollout kube-rm kube-rm-prod terraform-help help
+# Application Management
+.PHONY: deps db-prepare db-reset check be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 TODAY = $$(date +"%d.%m.%Y")
-
-include kube/Makefile
-include terraform/Makefile
 
 # Setup dependencies
 deps:
@@ -108,53 +105,9 @@ worker:
 shell:
 	docker-compose run --rm web bash
 
-# Login to AWS account with AWS-Vault
-login_aws:
-	aws-vault login $(PROFILE) -t $(shell op item get "terraform aixle" --otp)
-
-# Execute into QA web container
-qa-web-exec:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make exec_qa_web
-
-# Show logs from QA web container
-qa-web-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make qa_web_logs
-
-# Watch logs from QA web container
-qa-web-watch-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make watch_qa_web_logs
-
-# Execute into prod web container
-prod-web-exec:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make exec_prod_web
-
-# Show logs from prod web container
-prod-web-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make prod_web_logs
-
-# Watch logs from prod web container
-prod-web-watch-logs:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make watch_prod_web_logs
-
-# Database dump operations
-dump-qa:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make dump_qa
-
-dump-prod:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make dump_prod
-
-fetch-qa-dump:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make fetch_qa_dump
-
-fetch-prod-dump:
-	aws-vault exec $(PROFILE) -t $(shell op item get "terraform aixle" --otp) -- docker-compose run --rm remote make fetch_prod_dump
-
+# Restore a locally available database dump
 restore-dump:
 	docker-compose run --rm web make db_restore
-
-restore-qa-db: dump-qa fetch-qa-dump restore-dump
-
-restore-prod-db: dump-prod fetch-prod-dump restore-dump
 
 build-web:
 	docker build -f Dockerfile -t web .
@@ -191,31 +144,11 @@ help:
 	@echo "  make typescript             - Run TypeScript compiler check"
 	@echo "  make brakeman               - Run Brakeman security analysis"
 	@echo "  make db_restore_remote      - Restore database remotely"
+	@echo "  make restore-dump           - Restore a locally available database dump"
 	@echo "  make default                - Same as 'check'"
 	@echo "  make help                   - Show this help message"
-	@echo "  make kube-help              - Show Kubernetes-related commands"
-	@echo "  make terraform-help         - Show Terraform/EKS-related commands"
 	@echo "  make up                     - Run all main services"
 	@echo "  make worker                 - Run worker (in a separate terminal)"
-	@echo ""
-	@echo "AWS Operations (require PROFILE=profile_name):"
-	@echo "  make login_aws              - Login to AWS account with AWS-Vault"
-	@echo "  make qa-web-exec            - Execute into QA web container"
-	@echo "  make qa-web-logs            - Show logs from QA web container"
-	@echo "  make qa-web-watch-logs      - Watch logs from QA web container in real-time"
-	@echo "  make prod-web-exec          - Execute into Production web container"
-	@echo "  make prod-web-logs          - Show logs from Production web container"
-	@echo "  make prod-web-watch-logs    - Watch logs from Production web container in real-time"
-	@echo ""
-	@echo "Database Operations (require PROFILE=profile_name):"
-	@echo "  make dump-qa                - Create database dump on QA environment and upload to S3"
-	@echo "  make dump-prod              - Create database dump on Production environment and upload to S3"
-	@echo "  make fetch-qa-dump          - Download latest QA database dump from S3"
-	@echo "  make fetch-prod-dump        - Download latest Production database dump from S3"
-	@echo "  make restore-dump           - Restore database dump locally"
-	@echo "  make restore-qa-db          - Full cycle: dump QA DB, fetch it, and restore locally"
-	@echo "  make restore-prod-db        - Full cycle: dump Production DB, fetch it, and restore locally"
-	@echo ""
 	@echo ""
 	@echo "Agent Docker Images:"
 	@echo "  make build-agents           - Build all agent images (core + 4 agents in parallel)"
