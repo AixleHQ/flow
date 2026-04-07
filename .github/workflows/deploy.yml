@@ -18,10 +18,8 @@ jobs:
     name: Build Web
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     outputs:
-      deploy_environment: ${{ steps.web_config.outputs.deploy_environment }}
-      kube_namespace: ${{ steps.web_config.outputs.kube_namespace }}
-      job_prefix: ${{ steps.web_config.outputs.job_prefix }}
       web_image_tag: ${{ steps.web_config.outputs.web_image_tag }}
+      deploy_environment: ${{ steps.web_config.outputs.deploy_environment }}
     env:
       IMAGE_NAME: ${{ github.repository }}-web
 
@@ -40,8 +38,6 @@ jobs:
             echo "sha_prefix=staging-" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image-staging" >> "$GITHUB_OUTPUT"
             echo "deploy_environment=staging" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad-staging" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate-staging" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=staging-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
@@ -49,8 +45,6 @@ jobs:
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
             echo "deploy_environment=production" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           else
             echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
@@ -58,8 +52,6 @@ jobs:
             echo "sha_prefix=" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
             echo "deploy_environment=development" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad-dev" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate-dev" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           fi
 
@@ -158,13 +150,11 @@ jobs:
     secrets: inherit
 
   # ---------------------------------------------------------------------------
-  # Deploy
+  # Post-deploy: upload source maps to Sentry
   # ---------------------------------------------------------------------------
-  db-migrate:
-    name: DB Migrate
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
-    environment: ${{ needs.build-web.outputs.deploy_environment }}
+  sentry-sourcemaps:
+    name: Sentry Source Maps
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     needs:
       - build-web
       - be-test
@@ -173,128 +163,6 @@ jobs:
       - fe-lint
       - fe-typecheck
       - fe-fsd
-    env:
-      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
-
-    steps:
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Create migration job
-        id: migrate_job
-        run: |
-          JOB_PREFIX="${{ needs.build-web.outputs.job_prefix }}"
-          WEB_IMAGE_TAG="${{ needs.build-web.outputs.web_image_tag }}"
-          JOB_NAME="${JOB_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
-
-          cat <<EOF | kubectl -n "$KUBE_NAMESPACE" apply -f -
-          apiVersion: batch/v1
-          kind: Job
-          metadata:
-            name: ${JOB_NAME}
-          spec:
-            ttlSecondsAfterFinished: 3600
-            backoffLimit: 0
-            template:
-              spec:
-                serviceAccountName: palad-web
-                restartPolicy: Never
-                containers:
-                  - name: migrate
-                    image: ${WEB_IMAGE}
-                    imagePullPolicy: Always
-                    command: ["bundle", "exec", "rails", "db:migrate"]
-                    envFrom:
-                      - configMapRef:
-                          name: palad-app-config
-                      - secretRef:
-                          name: palad-app-secrets
-          EOF
-
-          echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Wait for migration completion
-        run: |
-          JOB_NAME="${{ steps.migrate_job.outputs.job_name }}"
-          TIMEOUT_SECONDS=$((5 * 60))
-
-          while true; do
-            SUCCEEDED="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.succeeded}' 2>/dev/null || true)"
-            FAILED="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.failed}' 2>/dev/null || true)"
-            ACTIVE="$(kubectl -n "$KUBE_NAMESPACE" get job "$JOB_NAME" -o jsonpath='{.status.active}' 2>/dev/null || true)"
-
-            SUCCEEDED="${SUCCEEDED:-0}"
-            FAILED="${FAILED:-0}"
-            ACTIVE="${ACTIVE:-0}"
-
-            echo "Migration job status: active=${ACTIVE} succeeded=${SUCCEEDED} failed=${FAILED} elapsed=${SECONDS}s"
-
-            if [ "$SUCCEEDED" -gt 0 ]; then
-              echo "Migration job completed successfully"
-              exit 0
-            fi
-
-            if [ "$FAILED" -gt 0 ]; then
-              echo "Migration job failed"
-              kubectl -n "$KUBE_NAMESPACE" describe job "$JOB_NAME" || true
-              exit 1
-            fi
-
-            if [ "$SECONDS" -ge "$TIMEOUT_SECONDS" ]; then
-              echo "Timed out waiting for migration job completion"
-              kubectl -n "$KUBE_NAMESPACE" describe job "$JOB_NAME" || true
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-      - name: Migration logs
-        if: always()
-        run: |
-          kubectl -n "$KUBE_NAMESPACE" logs "job/${{ steps.migrate_job.outputs.job_name }}" --all-containers=true --tail=-1 || true
-
-      - name: Cleanup migration job
-        if: always()
-        run: |
-          kubectl -n "$KUBE_NAMESPACE" delete "job/${{ steps.migrate_job.outputs.job_name }}" --ignore-not-found=true
-
-  deploy:
-    name: Deploy
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
-    environment: ${{ needs.build-web.outputs.deploy_environment }}
-    permissions:
-      contents: read
-      id-token: write
-    needs:
-      - build-web
-      - db-migrate
-    env:
-      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
-
-    steps:
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Restart deployments
-        run: |
-          kubectl -n "$KUBE_NAMESPACE" rollout restart deployment/web deployment/worker-ruby deployment/mcp
-
-      - name: Wait for rollout
-        run: |
-          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/web --timeout=10m
-          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/worker-ruby --timeout=10m
-          kubectl -n "$KUBE_NAMESPACE" rollout status deployment/mcp --timeout=10m
-
-  # ---------------------------------------------------------------------------
-  # Post-deploy: upload source maps to Sentry
-  # ---------------------------------------------------------------------------
-  sentry-sourcemaps:
-    name: Sentry Source Maps
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    needs: deploy
     if: github.ref_name == 'main'
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
