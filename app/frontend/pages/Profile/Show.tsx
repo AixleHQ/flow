@@ -26,10 +26,10 @@ import { z } from 'zod';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { apiV1TerminalSessionPath, apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { apiV1TerminalSessionPath, apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
 import { type AgentCredential, type AgentType, type SharedUser, type UserRole } from 'shared/ui';
 
 import classes from './Show.module.css';

@@ -31,13 +31,13 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { apiFetch } from 'shared/lib/apiFetch';
+import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
-import { apiFetch } from 'shared/lib/apiFetch';
-import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 

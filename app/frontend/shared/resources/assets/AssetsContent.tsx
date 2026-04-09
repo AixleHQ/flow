@@ -23,8 +23,8 @@ import Uppy from '@uppy/core';
 import type { Body, Meta } from '@uppy/core';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 import { apiFetch } from 'shared/lib/apiFetch';
+import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
 

@@ -22,9 +22,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 
 import classes from './OnboardingPage.module.css';

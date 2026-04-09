@@ -37,6 +37,7 @@ import {
 import { useCallback, useMemo, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 import {
   apiV1ProjectWorkflowPath,
   apiV1ProjectWorkflowStepsPath,
@@ -47,7 +48,6 @@ import {
   apiV1WorkflowStepPath,
   reorderApiV1WorkflowStepsPath,
 } from 'shared/routes';
-import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 

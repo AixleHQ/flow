@@ -91,6 +91,9 @@ import {
 import remarkGfm from 'remark-gfm';
 import { z } from 'zod';
 
+import { apiFetch } from 'shared/lib/apiFetch';
+import { formatDateTime } from 'shared/lib/formatDate';
+import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -109,9 +112,6 @@ import {
   apiV1ProjectViewPresetPath,
   apiV1ProjectColumnWorkflowBindingPath,
 } from 'shared/routes';
-import { apiFetch } from 'shared/lib/apiFetch';
-import { formatDateTime } from 'shared/lib/formatDate';
-import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
