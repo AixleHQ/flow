@@ -12,7 +12,13 @@ class ColumnWorkflowBinding < ApplicationRecord
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
   validate :workflow_accessible_from_project
 
+  after_commit :touch_board
+
   private
+
+  def touch_board
+    board_column.board.touch
+  end
 
   def workflow_accessible_from_project
     return unless workflow && board_column

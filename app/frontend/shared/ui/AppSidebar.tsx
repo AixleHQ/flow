@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { Box, Divider, Drawer, NavLink, ScrollArea, Tooltip, UnstyledButton } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
@@ -66,7 +66,12 @@ interface AppSidebarProps {
   currentTab?: string;
 }
 
-function SidebarNav({ projectId, currentTab, collapsed, onNavigate }: {
+function SidebarNav({
+  projectId,
+  currentTab,
+  collapsed,
+  onNavigate,
+}: {
   projectId: string;
   currentTab: string;
   collapsed: boolean;
@@ -87,7 +92,9 @@ function SidebarNav({ projectId, currentTab, collapsed, onNavigate }: {
               return (
                 <Tooltip key={item.tab} label={item.label} position="right" withArrow>
                   <NavLink
-                    onClick={() => { router.visit(to); onNavigate?.(); }}
+                    component={Link}
+                    href={to}
+                    onClick={onNavigate}
                     active={isActive}
                     leftSection={item.icon}
                     className={classes.navLinkCollapsed}
@@ -99,7 +106,9 @@ function SidebarNav({ projectId, currentTab, collapsed, onNavigate }: {
             return (
               <NavLink
                 key={item.tab}
-                onClick={() => { router.visit(to); onNavigate?.(); }}
+                component={Link}
+                href={to}
+                onClick={onNavigate}
                 label={item.label}
                 active={isActive}
                 leftSection={item.icon}
@@ -136,11 +145,7 @@ export const AppSidebar = ({ projectId, currentTab = '' }: AppSidebarProps) => {
   if (isMobile) {
     return (
       <>
-        <UnstyledButton
-          onClick={openDrawer}
-          className={classes.mobileToggle}
-          aria-label="Open navigation"
-        >
+        <UnstyledButton onClick={openDrawer} className={classes.mobileToggle} aria-label="Open navigation">
           <IconMenu2 size={20} />
         </UnstyledButton>
         <Drawer
@@ -160,11 +165,7 @@ export const AppSidebar = ({ projectId, currentTab = '' }: AppSidebarProps) => {
   }
 
   return (
-    <Box
-      component="nav"
-      className={classes.root}
-      style={{ width, minWidth: width }}
-    >
+    <Box component="nav" className={classes.root} style={{ width, minWidth: width }}>
       <ScrollArea className={classes.scrollArea} type="never">
         <SidebarNav projectId={projectId} currentTab={currentTab} collapsed={collapsed} />
       </ScrollArea>

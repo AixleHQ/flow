@@ -148,15 +148,6 @@ jobs:
       image-tag: ${{ needs.build-web.outputs.web_image_tag }}
     secrets: inherit
 
-  fe-fsd:
-    name: Frontend FSD
-    needs: build-web
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: fsd
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
-    secrets: inherit
-
   # ---------------------------------------------------------------------------
   # Deploy
   # ---------------------------------------------------------------------------
@@ -172,7 +163,6 @@ jobs:
       - be-security
       - fe-lint
       - fe-typecheck
-      - fe-fsd
     env:
       KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
 

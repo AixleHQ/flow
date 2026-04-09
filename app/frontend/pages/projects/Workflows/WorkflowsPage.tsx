@@ -16,7 +16,6 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDebouncedValue } from '@mantine/hooks';
-import { zodResolver } from 'mantine-form-zod-resolver';
 import {
   IconCopy,
   IconEdit,
@@ -27,38 +26,43 @@ import {
   IconSettings,
   IconSparkles,
   IconTrash,
+  IconWand,
 } from '@tabler/icons-react';
+import { zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 
-import { persistentProjectLayout } from '../ProjectLayout';
+import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
-interface NamedItem { id: number; name: string }
+interface NamedItem {
+  id: number;
+  name: string;
+}
 
 interface WorkflowStep {
   id: number;
   name: string;
   position: number;
-  allow_non_interactive: boolean;
-  depends_on_step_ids: number[];
+  allowNonInteractive: boolean;
+  dependsOnStepIds: number[];
 }
 
 interface Workflow {
   id: number;
   name: string;
   description: string | null;
-  scope_type: string;
-  scope_id: number;
-  scope_indicator: 'company' | 'project' | 'overrides_company';
-  steps_count: number;
-  last_run_at: string | null;
-  last_run_status: string | null;
-  has_active_runs: boolean;
-  description_excerpt: string | null;
-  created_at: string;
-  updated_at: string;
+  scopeType: string;
+  scopeId: number;
+  scopeIndicator: 'company' | 'project' | 'overrides_company';
+  stepsCount: number;
+  lastRunAt: string | null;
+  lastRunStatus: string | null;
+  hasActiveRuns: boolean;
+  descriptionExcerpt: string | null;
+  createdAt: string;
+  updatedAt: string;
   steps: WorkflowStep[];
 }
 
@@ -67,12 +71,18 @@ interface Project {
   name: string;
 }
 
+interface AgentModelsEntry {
+  agentType: string;
+  models: { modelId: string; displayName: string }[];
+}
+
 interface Props {
   project: Project;
   workflows: Workflow[];
-  assets: NamedItem[];
-  repositories: NamedItem[];
-  configured_agents: string[];
+  assets?: NamedItem[];
+  repositories?: NamedItem[];
+  configuredAgents: string[];
+  agentModels?: AgentModelsEntry[];
 }
 
 const workflowSchema = z.object({
@@ -83,7 +93,16 @@ const workflowSchema = z.object({
 type WorkflowFormValues = z.infer<typeof workflowSchema>;
 
 const WorkflowsPage = () => {
-  const { project, workflows, assets, repositories, configured_agents } = usePage<{ props: Props }>().props as unknown as Props;
+  const {
+    project,
+    workflows,
+    assets: rawAssets,
+    repositories: rawRepositories,
+    configuredAgents,
+    agentModels,
+  } = usePage<{ props: Props }>().props as unknown as Props;
+  const assets = rawAssets ?? [];
+  const repositories = rawRepositories ?? [];
   const basePath = `/company/projects/${project.id}/workflows`;
 
   const [search, setSearch] = useState('');
@@ -114,27 +133,35 @@ const WorkflowsPage = () => {
 
   const handleCreate = (values: WorkflowFormValues) => {
     setLoading(true);
-    router.post(basePath, { workflow: values }, {
-      preserveScroll: true,
-      onFinish: () => setLoading(false),
-      onSuccess: () => {
-        setCreateOpen(false);
-        createForm.reset();
+    router.post(
+      basePath,
+      { workflow: values },
+      {
+        preserveScroll: true,
+        onFinish: () => setLoading(false),
+        onSuccess: () => {
+          setCreateOpen(false);
+          createForm.reset();
+        },
       },
-    });
+    );
   };
 
   const handleEdit = (values: WorkflowFormValues) => {
     if (!editWorkflow) return;
     setLoading(true);
-    router.patch(`${basePath}/${editWorkflow.id}`, { workflow: values }, {
-      preserveScroll: true,
-      onFinish: () => setLoading(false),
-      onSuccess: () => {
-        setEditWorkflow(null);
-        editForm.reset();
+    router.patch(
+      `${basePath}/${editWorkflow.id}`,
+      { workflow: values },
+      {
+        preserveScroll: true,
+        onFinish: () => setLoading(false),
+        onSuccess: () => {
+          setEditWorkflow(null);
+          editForm.reset();
+        },
       },
-    });
+    );
   };
 
   const handleDelete = () => {
@@ -192,9 +219,7 @@ const WorkflowsPage = () => {
           borderRadius: '50%',
           backgroundColor: color,
           flexShrink: 0,
-          ...(pulse
-            ? { animation: 'pulse-dot 1.4s ease-in-out infinite' }
-            : {}),
+          ...(pulse ? { animation: 'pulse-dot 1.4s ease-in-out infinite' } : {}),
         }}
       />
     );
@@ -221,28 +246,22 @@ const WorkflowsPage = () => {
       >
         <Group justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
-            <IconSparkles size={24} style={{ color: 'var(--mantine-color-blue-5)', flexShrink: 0 }} />
+            <IconWand size={24} style={{ color: 'var(--mantine-color-blue-5)', flexShrink: 0 }} />
             <Box>
               <Text fw={600} size="sm">
-                Workflow Builder
+                Aixle Builder
               </Text>
               <Text size="xs" c="dimmed">
-                Build and manage workflows — configure steps, agents, and automations
+                Build workflows with AI — agents, steps, board automation
               </Text>
             </Box>
           </Group>
           <Button
             size="sm"
-            leftSection={<IconSettings size={14} />}
-            onClick={() => {
-              const firstWorkflow = workflows[0];
-              if (firstWorkflow) {
-                router.visit(`/company/projects/${project.id}/workflows/${firstWorkflow.id}/builder`);
-              }
-            }}
-            disabled={workflows.length === 0}
+            leftSection={<IconSparkles size={14} />}
+            onClick={() => router.visit(`/company/projects/${project.id}/aixle_builder`)}
           >
-            Configure
+            Open Builder
           </Button>
         </Group>
       </Card>
@@ -276,7 +295,9 @@ const WorkflowsPage = () => {
       {filtered.length === 0 ? (
         <Box py={60} ta="center" style={{ border: '1px solid var(--mantine-color-dark-4)', borderRadius: 8 }}>
           <Text size="xl">&#128736;</Text>
-          <Text c="dimmed" mt="sm">{search ? 'No workflows match your search' : 'No workflows yet'}</Text>
+          <Text c="dimmed" mt="sm">
+            {search ? 'No workflows match your search' : 'No workflows yet'}
+          </Text>
           {!search && (
             <Button variant="outline" mt="md" onClick={() => setCreateOpen(true)}>
               Create your first workflow
@@ -286,21 +307,29 @@ const WorkflowsPage = () => {
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
           {filtered.map((wf) => {
-            const isInherited = wf.scope_indicator === 'company';
+            const isInherited = wf.scopeIndicator === 'company';
 
             return (
               <Card key={wf.id} padding="md" withBorder style={{ display: 'flex', flexDirection: 'column' }}>
                 <Group gap="xs" mb={4}>
-                  {getStatusDot(wf.last_run_status)}
-                  <Text fw={500} size="md" truncate style={{ flex: 1 }}>{wf.name}</Text>
-                  {isInherited && <Badge size="xs" variant="outline" color="blue">company</Badge>}
+                  {getStatusDot(wf.lastRunStatus)}
+                  <Text fw={500} size="md" truncate style={{ flex: 1 }}>
+                    {wf.name}
+                  </Text>
+                  {isInherited && (
+                    <Badge size="xs" variant="outline" color="blue">
+                      company
+                    </Badge>
+                  )}
                 </Group>
-                {wf.description_excerpt && (
-                  <Text size="sm" c="dimmed" truncate>{wf.description_excerpt}</Text>
+                {wf.descriptionExcerpt && (
+                  <Text size="sm" c="dimmed" truncate>
+                    {wf.descriptionExcerpt}
+                  </Text>
                 )}
                 <Text size="xs" c="dimmed" mt={4}>
-                  {wf.steps_count} steps
-                  {wf.last_run_at && <> &middot; Last run {new Date(wf.last_run_at).toLocaleDateString()}</>}
+                  {wf.stepsCount} steps
+                  {wf.lastRunAt && <> &middot; Last run {new Date(wf.lastRunAt).toLocaleDateString()}</>}
                 </Text>
 
                 <Group justify="space-between" mt="auto" pt="sm">
@@ -370,8 +399,12 @@ const WorkflowsPage = () => {
             <TextInput label="Name" required {...createForm.getInputProps('name')} />
             <Textarea label="Description" autosize minRows={2} {...createForm.getInputProps('description')} />
             <Group justify="flex-end">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-              <Button type="submit" loading={loading}>Create</Button>
+              <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={loading}>
+                Create
+              </Button>
             </Group>
           </Stack>
         </form>
@@ -384,8 +417,12 @@ const WorkflowsPage = () => {
             <TextInput label="Name" required {...editForm.getInputProps('name')} />
             <Textarea label="Description" autosize minRows={2} {...editForm.getInputProps('description')} />
             <Group justify="flex-end">
-              <Button variant="outline" onClick={() => setEditWorkflow(null)}>Cancel</Button>
-              <Button type="submit" loading={loading}>Save</Button>
+              <Button variant="outline" onClick={() => setEditWorkflow(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={loading}>
+                Save
+              </Button>
             </Group>
           </Stack>
         </form>
@@ -395,13 +432,17 @@ const WorkflowsPage = () => {
       <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Delete Workflow" centered>
         <Text size="sm" mb="md">
           Are you sure you want to delete <strong>{deleteWorkflow?.name}</strong>?
-          {deleteWorkflow?.has_active_runs && (
-            <Text c="red" size="sm" mt="xs">This workflow has active runs. Stop them first.</Text>
+          {deleteWorkflow?.hasActiveRuns && (
+            <Text c="red" size="sm" mt="xs">
+              This workflow has active runs. Stop them first.
+            </Text>
           )}
         </Text>
         <Group justify="flex-end">
-          <Button variant="outline" onClick={() => setDeleteWorkflow(null)}>Cancel</Button>
-          <Button color="red" onClick={handleDelete} loading={loading} disabled={deleteWorkflow?.has_active_runs}>
+          <Button variant="outline" onClick={() => setDeleteWorkflow(null)}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={handleDelete} loading={loading} disabled={deleteWorkflow?.hasActiveRuns}>
             Delete
           </Button>
         </Group>
@@ -415,7 +456,8 @@ const WorkflowsPage = () => {
           workflowName={runWorkflow.name}
           steps={runWorkflow.steps}
           projectId={project.id}
-          configuredAgents={configured_agents}
+          configuredAgents={configuredAgents}
+          agentModels={agentModels}
           repositories={repositories}
           assets={assets}
         />
@@ -424,6 +466,6 @@ const WorkflowsPage = () => {
   );
 };
 
-(WorkflowsPage as any).layout = persistentProjectLayout;
+setPageLayout(WorkflowsPage, persistentProjectLayout);
 
 export default WorkflowsPage;

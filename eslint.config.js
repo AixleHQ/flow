@@ -1,5 +1,4 @@
 import eslintJs from '@eslint/js';
-import pluginRouter from '@tanstack/eslint-plugin-router';
 import eslintParserTypescript from '@typescript-eslint/parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
@@ -15,7 +14,6 @@ export default typescriptEslint.config(
   eslintJs.configs.recommended,
   typescriptEslint.configs.recommended,
   eslintPluginImport.flatConfigs.recommended,
-  pluginRouter.configs['flat/recommended'],
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
   },

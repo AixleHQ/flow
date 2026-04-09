@@ -61,6 +61,8 @@ class TaskService
           board_task: task, from_column: from_column, to_column: to_column,
           actor: actor, actor_type: actor_type
         )
+        record_activity(task.board, :task_moved, actor, task: task,
+          metadata: { from_column: from_column.name, to_column: to_column.name })
         check_auto_trigger(task: task, column: to_column, actor: actor)
       end
 
@@ -138,6 +140,7 @@ class TaskService
       binding = column.column_workflow_binding
       return unless binding&.trigger_mode&.to_sym == :auto
       return if task.task_waits.pending.exists?
+      return if task.workflow_runs.where(state: %w[pending running paused]).exists?
 
       WorkflowService.start(
         workflow: binding.workflow,
@@ -153,15 +156,11 @@ class TaskService
     private
 
     def record_activity(board, event_type, actor, task: nil, metadata: {})
-      activity = BoardActivity.create!(
+      BoardActivity.create!(
         board: board, board_task: task, event_type: event_type,
         actor: actor, actor_type: :human, metadata: metadata
       )
-      BoardChannel.broadcast_event(
-        board, "board_activity.created",
-        { id: activity.id, board_id: board.id },
-        actor_id: actor.id
-      )
+      board.touch
     rescue StandardError => e
       Rails.logger.warn("[TaskService] Failed to record activity #{event_type}: #{e.message}")
     end

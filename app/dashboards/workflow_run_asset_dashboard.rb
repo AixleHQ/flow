@@ -3,10 +3,13 @@
 require "administrate/base_dashboard"
 
 class WorkflowRunAssetDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :workflow_run
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     workflow_run: Field::BelongsTo,
-    produced_by_step_run: Field::BelongsTo.with_options(class_name: "StepRun", optional: true),
+    produced_by_step_run: Field::BelongsTo.with_options(optional: true),
     name: Field::String,
     content_type: Field::String,
     file_size: Field::Number,

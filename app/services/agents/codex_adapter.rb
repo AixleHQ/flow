@@ -84,17 +84,8 @@ module Agents
       "/workspace/AGENTS.md"
     end
 
-    # Skill files: ~/.codex/skills/<name>/SKILL.md with YAML front matter (user-scoped)
-    def skill_files(skills)
-      files = {}
-      skills.each do |skill|
-        next if skill.content.blank?
-
-        description = (skill.description || skill.title || skill.name).to_s
-        front_matter = "---\nname: #{skill.name}\ndescription: #{description.to_json}\n---\n\n"
-        files["#{home_dir}/.codex/skills/#{skill.name}/SKILL.md"] = front_matter + skill.content
-      end
-      files
+    def skills_agent_name
+      "codex"
     end
 
     # MCP config: appended to ~/.codex/config.toml
@@ -133,18 +124,24 @@ module Agents
     end
 
     # Fetch available models from Codex API.
+    # When an AgentCredential record is passed via `credential:`, expired
+    # access tokens are automatically refreshed using the stored refresh_token.
     CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
     CODEX_CLIENT_VERSION = "0.116.0"
 
-    def fetch_available_models(credentials)
+    def fetch_available_models(credentials, credential: nil)
       access_token = credentials.dig("tokens", "access_token")
       return [] if access_token.blank?
 
-      uri = URI("#{CODEX_MODELS_URL}?client_version=#{CODEX_CLIENT_VERSION}")
-      req = Net::HTTP::Get.new(uri)
-      req["Authorization"] = "Bearer #{access_token}"
+      response = request_models(access_token)
 
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      if response.code == "401" && credential
+        new_token = refresh_access_token!(credential)
+        return [] unless new_token
+
+        response = request_models(new_token)
+      end
+
       return [] unless response.is_a?(Net::HTTPSuccess)
 
       data = JSON.parse(response.body)
@@ -158,12 +155,57 @@ module Agents
       []
     end
 
+    # Refresh an expired access token using the stored refresh_token.
+    # Persists new tokens back to the AgentCredential record.
+    # Returns the new access_token on success, nil on failure.
+    OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
+    OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+
+    def refresh_access_token!(credential)
+      refresh_token = credential.config_data.dig("tokens", "refresh_token")
+      return nil if refresh_token.blank?
+
+      uri = URI(OAUTH_TOKEN_URL)
+      body = URI.encode_www_form(
+        grant_type: "refresh_token",
+        client_id: OAUTH_CLIENT_ID,
+        refresh_token: refresh_token
+      )
+      req = Net::HTTP::Post.new(uri)
+      req["Content-Type"] = "application/x-www-form-urlencoded"
+      req.body = body
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+
+      unless response.is_a?(Net::HTTPSuccess)
+        Rails.logger.warn("[CodexAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
+        return nil
+      end
+
+      data = JSON.parse(response.body)
+      new_tokens = credential.config_data["tokens"].merge(
+        "access_token" => data["access_token"],
+        "refresh_token" => data["refresh_token"],
+        "id_token" => data["id_token"]
+      ).compact
+
+      new_config = credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601)
+      credential.update!(config_data: new_config)
+      Rails.logger.info("[CodexAdapter] Access token refreshed for credential #{credential.id}")
+
+      data["access_token"]
+    rescue StandardError => e
+      Rails.logger.warn("[CodexAdapter] Token refresh error: #{e.class}: #{e.message}")
+      nil
+    end
+
     # Default environment variables for Codex CLI runtime.
     # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
-    def default_env_vars(_session)
+    def default_env_vars(session)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "chatgpt.com"
+        "MITM_TRACKED_DOMAINS" => "chatgpt.com",
+        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
       }
     end
 
@@ -172,29 +214,68 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
-    # Collect usage from MITM log at session cleanup.
+    # OTLP log event names emitted by Codex CLI with token counts.
+    LOG_SSE_EVENT = "codex.sse_event"
+
+    # Parse OTLP payload (logs) and persist usage statistics incrementally.
+    # Called by UsageStatisticsService on each incoming OTLP batch.
+    def ingest_usage(payload, terminal_session)
+      new_events = extract_events_from_otlp_logs(payload, terminal_session.route_token)
+      return :accepted if new_events.empty?
+
+      UsageStatistic.transaction do
+        stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic(
+          tokens: 0, cost_cents: 0, input_tokens: 0, output_tokens: 0,
+          cache_write_tokens: 0, cache_read_tokens: 0, source: "otlp",
+          events_count: 0, events_data: []
+        )
+
+        all_events = (stat.events_data || []) + new_events
+        totals = aggregate_events(all_events)
+        models = all_events.filter_map { |e| e["model"] }.uniq
+
+        stat.assign_attributes(
+          input_tokens: totals[:input_tokens],
+          output_tokens: totals[:output_tokens],
+          cache_write_tokens: totals[:cache_write_tokens],
+          cache_read_tokens: totals[:cache_read_tokens],
+          total_cents_precise: totals[:total_cents],
+          cost_cents: totals[:total_cents].ceil,
+          models: models,
+          source: "otlp",
+          events_count: all_events.size,
+          events_data: all_events
+        )
+        stat.save!
+      end
+
+      :ok
+    end
+
+    # Collect usage from MITM log at session cleanup (fallback).
+    # Skipped if real-time OTLP ingest already populated usage.
     #
-    # Flow:
-    #   1. Parse MITM log for chatgpt.com/backend-api/codex/responses responses
-    #   2. Extract `response.completed` SSE events from each response body tail
-    #   3. Build normalized events with token breakdown from OpenAI `usage` object
-    #   4. Persist as UsageStatistic
+    # Fallback strategies (tried in order):
+    #   1. OTLP metrics captured by MITM: Codex sends `codex.turn.token_usage`
+    #      histograms to ab.chatgpt.com — extracted from MITM request bodies.
+    #   2. HTTP response body (legacy): parse /codex/responses 200 responses for
+    #      `response.completed` JSON with `usage` object (pre-WebSocket protocol).
     def collect_usage(terminal_session, artifacts = {})
+      if terminal_session.usage_statistic.present?
+        Rails.logger.info("[CodexAdapter] Session #{terminal_session.id}: usage already collected via OTLP ingest, skipping MITM fallback")
+        return
+      end
+
       mitm_log = artifacts["logs/http.log"]
 
       log_lines = (mitm_log || "").lines.size
       Rails.logger.info("[CodexAdapter] Session #{terminal_session.id}: MITM log #{mitm_log.present? ? "#{mitm_log.bytesize}B, #{log_lines} lines" : 'EMPTY'}")
 
-      if mitm_log.present?
-        mitm_log.each_line.first(20).each_with_index do |line, i|
-          entry = JSON.parse(line.strip) rescue nil
-          next unless entry
+      events = extract_events_from_otlp_metrics(mitm_log)
 
-          Rails.logger.info("[CodexAdapter] line #{i}: dir=#{entry['direction']} host=#{entry['host']} path=#{entry['path']} status=#{entry['status_code']} body_enc=#{entry['body_encoding']} body_len=#{entry['body']&.length}")
-        end
+      if events.empty?
+        events = extract_events_from_mitm(mitm_log)
       end
-
-      events = extract_events_from_mitm(mitm_log)
 
       if events.empty?
         Rails.logger.warn("[CodexAdapter] No usage events in MITM log for session #{terminal_session.id}")
@@ -206,17 +287,185 @@ module Agents
 
     private
 
+    def request_models(access_token)
+      uri = URI("#{CODEX_MODELS_URL}?client_version=#{CODEX_CLIENT_VERSION}")
+      req = Net::HTTP::Get.new(uri)
+      req["Authorization"] = "Bearer #{access_token}"
+      Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+    end
+
     CODEX_RESPONSES_PATH = "/backend-api/codex/responses"
+    OTLP_METRICS_PATH = "/otlp/v1/metrics"
+    TOKEN_USAGE_METRIC = "codex.turn.token_usage"
 
     # =========================================================================
-    # MITM Log Parsing → Normalized Events
+    # OTLP Metrics Extraction (primary — Codex CLI ≥ 0.116)
     # =========================================================================
 
-    # Parse MITM log and extract usage from /codex/responses response bodies.
-    #
-    # Codex uses OpenAI Responses API with chunked NDJSON (not SSE).
-    # The final chunk is a large response.completed JSON with `usage` at the end.
-    # Our tail buffer may only capture the end — so we regex-extract usage directly.
+    # Codex CLI emits `codex.turn.token_usage` histograms via OTLP to ab.chatgpt.com.
+    # MITM proxy captures these as request entries with JSON OTLP payloads.
+    # aggregationTemporality=1 (DELTA) → sum across all batches per token_type.
+    def extract_events_from_otlp_metrics(log_content)
+      return [] if log_content.blank?
+
+      totals = Hash.new(0.0)
+      model = nil
+      timestamp = nil
+      batches_found = 0
+
+      log_content.each_line do |line|
+        entry = JSON.parse(line.strip)
+        next unless entry["direction"] == "request"
+        next unless entry["path"]&.include?("otlp/v1/metrics")
+
+        body_text = decode_body(entry)
+        next if body_text.blank?
+
+        payload = JSON.parse(body_text)
+        found = extract_otlp_token_totals(payload, totals)
+        if found
+          batches_found += 1
+          timestamp ||= entry["ts"]
+          model ||= extract_otlp_model(payload)
+        end
+      rescue JSON::ParserError
+        next
+      end
+
+      return [] if batches_found.zero?
+
+      Rails.logger.info(
+        "[CodexAdapter] OTLP metrics: #{batches_found} batches, " \
+        "in=#{totals["input"].to_i} out=#{totals["output"].to_i} " \
+        "cached=#{totals["cached_input"].to_i} reasoning=#{totals["reasoning_output"].to_i} " \
+        "model=#{model}"
+      )
+
+      [ {
+        "model" => model,
+        "timestamp" => timestamp,
+        "tokenUsage" => {
+          "inputTokens" => totals["input"].to_i,
+          "outputTokens" => totals["output"].to_i,
+          "cacheReadTokens" => totals["cached_input"].to_i,
+          "cacheWriteTokens" => 0,
+          "reasoningTokens" => totals["reasoning_output"].to_i,
+          "totalCents" => 0.0
+        },
+        "source" => "otlp_metrics"
+      } ]
+    end
+
+    # Sum histogram dataPoint sums for codex.turn.token_usage.
+    # Returns true if any token_usage data points were found.
+    def extract_otlp_token_totals(payload, totals)
+      found = false
+      (payload["resourceMetrics"] || []).each do |rm|
+        (rm["scopeMetrics"] || []).each do |sm|
+          (sm["metrics"] || []).each do |m|
+            next unless m["name"] == TOKEN_USAGE_METRIC
+            (m.dig("histogram", "dataPoints") || []).each do |dp|
+              token_type = otlp_attr(dp["attributes"], "token_type")
+              next unless token_type
+              totals[token_type] += dp["sum"].to_f
+              found = true
+            end
+          end
+        end
+      end
+      found
+    end
+
+    def extract_otlp_model(payload)
+      (payload["resourceMetrics"] || []).each do |rm|
+        (rm["scopeMetrics"] || []).each do |sm|
+          (sm["metrics"] || []).each do |m|
+            next unless m["name"] == TOKEN_USAGE_METRIC
+            (m.dig("histogram", "dataPoints") || []).each do |dp|
+              model = otlp_attr(dp["attributes"], "model")
+              return model if model.present?
+            end
+          end
+        end
+      end
+      nil
+    end
+
+    def otlp_attr(attrs, key)
+      (attrs || []).each do |a|
+        return a.dig("value", "stringValue") if a["key"] == key
+      end
+      nil
+    end
+
+    def otlp_number(attrs, key)
+      (attrs || []).each do |a|
+        next unless a["key"] == key
+        v = a["value"] || {}
+        return v["intValue"].to_f if v.key?("intValue")
+        return v["doubleValue"].to_f if v.key?("doubleValue")
+        return v["stringValue"].to_f if v.key?("stringValue")
+      end
+      nil
+    end
+
+    # =========================================================================
+    # OTLP Log Events (real-time — Codex OTEL exporter → otlp-ingest)
+    # =========================================================================
+
+    # Extract usage events from OTLP log payloads sent by Codex CLI.
+    # Codex emits `codex.sse_event` logs with token counts per completion.
+    def extract_events_from_otlp_logs(payload, terminal_session_token)
+      events = []
+      return events if terminal_session_token.blank?
+
+      (payload["resourceLogs"] || []).each do |rl|
+        resource_attrs = rl.dig("resource", "attributes") || []
+        (rl["scopeLogs"] || []).each do |sl|
+          (sl["logRecords"] || []).each do |lr|
+            attrs = lr["attributes"] || []
+
+            token = otlp_attr(attrs, "terminal_session_token") ||
+                    otlp_attr(resource_attrs, "terminal_session_token")
+            next if token != terminal_session_token
+
+            event_name = otlp_attr(attrs, "event.name") || lr["severityText"]
+            next unless event_name == LOG_SSE_EVENT
+
+            input_tokens = otlp_number(attrs, "input_token_count").to_i
+            output_tokens = otlp_number(attrs, "output_token_count").to_i
+            cached_tokens = otlp_number(attrs, "cached_token_count").to_i
+            reasoning_tokens = otlp_number(attrs, "reasoning_token_count").to_i
+            model = otlp_attr(attrs, "model")
+
+            next if input_tokens.zero? && output_tokens.zero?
+
+            events << {
+              "model" => model,
+              "timestamp" => lr["timeUnixNano"] ? (lr["timeUnixNano"].to_i / 1_000_000).to_s : nil,
+              "tokenUsage" => {
+                "inputTokens" => input_tokens,
+                "outputTokens" => output_tokens,
+                "cacheReadTokens" => cached_tokens,
+                "cacheWriteTokens" => 0,
+                "reasoningTokens" => reasoning_tokens,
+                "totalCents" => 0.0
+              },
+              "source" => "otlp"
+            }
+          end
+        end
+      end
+
+      events
+    end
+
+    # =========================================================================
+    # HTTP Response Body Parsing (legacy — pre-WebSocket protocol)
+    # =========================================================================
+
+    # Parse MITM log and extract usage from /codex/responses HTTP 200 response bodies.
+    # This was the primary method when Codex used chunked NDJSON over HTTP.
     def extract_events_from_mitm(log_content)
       events = []
 
@@ -229,11 +478,7 @@ module Agents
         text = decode_body(entry)
         next if text.blank?
 
-        Rails.logger.info("[CodexAdapter] Response body (#{text.bytesize}B): first 500 chars: #{text[0..499].inspect}")
-        Rails.logger.info("[CodexAdapter] Response body last 500 chars: #{text[-500..].inspect}")
-
         event = extract_usage_from_response_body(text, entry["ts"])
-        Rails.logger.info("[CodexAdapter] Usage extracted: #{event ? 'YES' : 'NO'}")
         events << event if event
       rescue JSON::ParserError
         next
@@ -302,6 +547,7 @@ module Agents
     def persist_usage_statistic(terminal_session, events)
       totals = aggregate_events(events)
       models = events.filter_map { |e| e["model"] }.uniq
+      source = events.any? { |e| e["source"] == "otlp_metrics" } ? "otlp_metrics" : "mitm"
 
       stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic
       stat.assign_attributes(
@@ -312,7 +558,7 @@ module Agents
         total_cents_precise: totals[:total_cents],
         cost_cents: totals[:total_cents].ceil,
         models: models,
-        source: "mitm",
+        source: source,
         events_count: events.size,
         events_data: events
       )
@@ -367,11 +613,20 @@ module Agents
         hide_full_access_warning = true
         hide_rate_limit_model_nudge = true
       TOML
-      # Suppress model upgrade prompt: model_migrations[user_model] = latest_target
       if model.present?
         toml << "\n[notice.model_migrations]\n"
         toml << "\"#{model}\" = \"#{LATEST_TARGET_MODEL}\"\n"
       end
+
+      otel_endpoint = Settings.otel.endpoint
+      if otel_endpoint.present?
+        toml << <<~TOML
+
+          [otel]
+          exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/logs", protocol = "binary" } }
+        TOML
+      end
+
       toml
     end
   end

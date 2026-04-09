@@ -10,17 +10,22 @@ class TemporalService
     end
 
     def worker
-      @worker ||= Temporalio::Worker.new(
-        client: client,
-        task_queue: Settings.temporal.task_queue,
-        activities: activities,
-        workflows: workflows,
-        interceptors: interceptors,
-        graceful_shutdown_period: worker_graceful_shutdown_period,
-        tuner: Temporalio::Worker::Tuner.create_fixed(
-          activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
-        ),
-      )
+      @worker ||= begin
+        wfs = workflows
+        eager_load_workflow_registries!(wfs)
+
+        Temporalio::Worker.new(
+          client: client,
+          task_queue: Settings.temporal.task_queue,
+          activities: activities,
+          workflows: wfs,
+          interceptors: interceptors,
+          graceful_shutdown_period: worker_graceful_shutdown_period,
+          tuner: Temporalio::Worker::Tuner.create_fixed(
+            activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
+          ),
+        )
+      end
     end
 
     def address
@@ -189,6 +194,13 @@ class TemporalService
     end
 
     private
+
+    # Pre-resolve TemporalWorkflowRegistry lookups so workflows
+    # never trigger autoloading inside the Temporal sandbox.
+    def eager_load_workflow_registries!(workflow_classes)
+      TemporalWorkflowRegistry.workflows
+      workflow_classes.each(&:preload_activities!)
+    end
 
     def with_test_environment_handling(&block)
       if Rails.env.test?

@@ -1,0 +1,248 @@
+/* ── Aixle Builder Session Page ────────────────── */
+
+.root {
+  height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Header ─────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--app-border-default);
+  background: var(--app-bg-paper);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Body: Main Split Layout ─────────────────────── */
+
+.body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Terminal / IDE Panel ────────────────────────── */
+
+.mainPanel {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.panelContainer {
+  width: 100%;
+  height: 100%;
+}
+
+.panelFrame {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.panelFrame iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  position: relative;
+  z-index: 1;
+}
+
+.terminalFrame {
+  background-color: #000;
+}
+
+.editorFrame {
+  background-color: var(--app-bg-deep);
+}
+
+.loadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* ── Resize Handle ──────────────────────────────── */
+
+.resizeHandle {
+  width: 6px;
+  background: var(--app-border-default);
+  cursor: col-resize;
+  transition: background 150ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.resizeHandle:hover,
+.resizeHandle[data-resize-handle-active] {
+  background: var(--mantine-color-blue-6);
+}
+
+.collapseBtn {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.resizeHandle:hover .collapseBtn {
+  opacity: 1;
+}
+
+.collapseStrip {
+  display: flex;
+  align-items: center;
+  background: var(--app-bg-elevated);
+  border-right: 1px solid var(--app-border-default);
+}
+
+/* ── Side Panel (Activity / Workflows / Board) ──── */
+
+.sidePanel {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--app-border-default);
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ── Activity List ──────────────────────────────── */
+
+.activityItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--app-border-subtle);
+}
+
+.activityItem:last-child {
+  border-bottom: none;
+}
+
+.activityIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+  background: var(--mantine-color-dark-5);
+  color: var(--mantine-color-blue-4);
+}
+
+/* ── Workflow / Board Preview Items ─────────────── */
+
+.previewCard {
+  padding: 10px 12px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  transition: border-color 150ms;
+}
+
+.previewCard:hover {
+  border-color: var(--mantine-color-blue-6);
+}
+
+.boardColumn {
+  padding: 8px 12px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  transition: border-color 150ms;
+}
+
+.boardColumn:hover {
+  border-color: var(--mantine-color-blue-6);
+}
+
+/* ── Ended State ────────────────────────────────── */
+
+.centeredState {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 32px;
+}
+
+/* ── Live dot ───────────────────────────────────── */
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mantine-color-green-5);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Elapsed Timer ──────────────────────────────── */
+
+.elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Stopping Overlay ───────────────────────────── */
+
+.stoppingOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Empty state ────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  padding: 32px 16px;
+}

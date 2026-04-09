@@ -113,5 +113,253 @@ module Agents
 
       assert_equal "codex --model gpt-5.3-codex --yolo", result
     end
+
+    # =========================================================================
+    # collect_usage — OTLP metrics extraction
+    # =========================================================================
+
+    test "collect_usage extracts tokens from OTLP metrics in MITM log" do
+      session = create_terminal_session(agent_type: "codex")
+      mitm_log = build_otlp_mitm_log(
+        token_data: { "input" => 1000, "output" => 200, "cached_input" => 800, "reasoning_output" => 50 },
+        model: "gpt-5.1-codex-mini"
+      )
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert stat, "UsageStatistic should be created"
+      assert_equal 1000, stat.input_tokens
+      assert_equal 200, stat.output_tokens
+      assert_equal 800, stat.cache_read_tokens
+      assert_equal "otlp_metrics", stat.source
+      assert_equal [ "gpt-5.1-codex-mini" ], stat.models
+    end
+
+    test "collect_usage sums delta OTLP batches" do
+      session = create_terminal_session(agent_type: "codex")
+      batch1 = build_otlp_metrics_json(
+        token_data: { "input" => 500, "output" => 100 }, model: "gpt-5.1-codex-mini"
+      )
+      batch2 = build_otlp_metrics_json(
+        token_data: { "input" => 700, "output" => 300 }, model: "gpt-5.1-codex-mini"
+      )
+      mitm_log = [
+        mitm_request_line("/otlp/v1/metrics", batch1),
+        mitm_response_line("/otlp/v1/metrics", 202),
+        mitm_request_line("/otlp/v1/metrics", batch2),
+        mitm_response_line("/otlp/v1/metrics", 202)
+      ].join("\n") + "\n"
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert_equal 1200, stat.input_tokens
+      assert_equal 400, stat.output_tokens
+    end
+
+    test "collect_usage falls back to legacy HTTP parsing when no OTLP data" do
+      session = create_terminal_session(agent_type: "codex")
+      response_body = '{"model":"gpt-4o","usage":{"input_tokens":500,"output_tokens":100,"total_tokens":600}}'
+      mitm_log = [
+        mitm_response_line("/backend-api/codex/responses", 200, response_body)
+      ].join("\n") + "\n"
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert stat, "UsageStatistic should be created via legacy path"
+      assert_equal 500, stat.input_tokens
+      assert_equal 100, stat.output_tokens
+      assert_equal "mitm", stat.source
+    end
+
+    test "collect_usage handles empty MITM log gracefully" do
+      session = create_terminal_session(agent_type: "codex")
+      @adapter.collect_usage(session, { "logs/http.log" => "" })
+      assert_nil session.reload.usage_statistic
+    end
+
+    test "collect_usage handles missing MITM log gracefully" do
+      session = create_terminal_session(agent_type: "codex")
+      @adapter.collect_usage(session, {})
+      assert_nil session.reload.usage_statistic
+    end
+
+    test "collect_usage skips when OTLP ingest already populated usage" do
+      session = create_terminal_session(agent_type: "codex")
+      session.create_usage_statistic!(
+        input_tokens: 500, output_tokens: 100, source: "otlp",
+        events_count: 1, events_data: [], cost_cents: 0
+      )
+
+      mitm_log = build_otlp_mitm_log(
+        token_data: { "input" => 9999, "output" => 9999 },
+        model: "gpt-5.1-codex-mini"
+      )
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert_equal 500, stat.input_tokens, "Should not overwrite existing OTLP usage"
+    end
+
+    # =========================================================================
+    # ingest_usage — real-time OTLP log processing
+    # =========================================================================
+
+    test "ingest_usage creates usage from OTLP log events" do
+      session = create_terminal_session(agent_type: "codex")
+      payload = build_otlp_log_payload(
+        token: session.route_token,
+        input_tokens: 1000, output_tokens: 200,
+        cached_tokens: 800, reasoning_tokens: 50,
+        model: "gpt-5.1-codex-mini"
+      )
+
+      result = @adapter.ingest_usage(payload, session)
+
+      assert_equal :ok, result
+      stat = session.reload.usage_statistic
+      assert stat, "UsageStatistic should be created"
+      assert_equal 1000, stat.input_tokens
+      assert_equal 200, stat.output_tokens
+      assert_equal 800, stat.cache_read_tokens
+      assert_equal "otlp", stat.source
+      assert_equal [ "gpt-5.1-codex-mini" ], stat.models
+    end
+
+    test "ingest_usage accumulates across multiple batches" do
+      session = create_terminal_session(agent_type: "codex")
+      payload1 = build_otlp_log_payload(
+        token: session.route_token,
+        input_tokens: 500, output_tokens: 100, model: "gpt-5.1-codex-mini"
+      )
+      payload2 = build_otlp_log_payload(
+        token: session.route_token,
+        input_tokens: 700, output_tokens: 300, model: "gpt-5.1-codex-mini"
+      )
+
+      @adapter.ingest_usage(payload1, session)
+      @adapter.ingest_usage(payload2, session)
+
+      stat = session.reload.usage_statistic
+      assert_equal 1200, stat.input_tokens
+      assert_equal 400, stat.output_tokens
+      assert_equal 2, stat.events_count
+    end
+
+    test "ingest_usage returns accepted when no matching events" do
+      session = create_terminal_session(agent_type: "codex")
+      payload = { "resourceLogs" => [] }
+
+      result = @adapter.ingest_usage(payload, session)
+      assert_equal :accepted, result
+      assert_nil session.reload.usage_statistic
+    end
+
+    test "ingest_usage ignores events for different session tokens" do
+      session = create_terminal_session(agent_type: "codex")
+      payload = build_otlp_log_payload(
+        token: "wrong-token",
+        input_tokens: 999, output_tokens: 999, model: "gpt-5.1-codex-mini"
+      )
+
+      result = @adapter.ingest_usage(payload, session)
+      assert_equal :accepted, result
+      assert_nil session.reload.usage_statistic
+    end
+
+    private
+
+    def create_terminal_session(agent_type:)
+      company = create(:company)
+      user = create(:user, company: company)
+      create(:terminal_session, agent_type: agent_type, state: "finished", user: user)
+    end
+
+    def build_otlp_mitm_log(token_data:, model:)
+      body = build_otlp_metrics_json(token_data: token_data, model: model)
+      mitm_request_line("/otlp/v1/metrics", body) + "\n" +
+        mitm_response_line("/otlp/v1/metrics", 202) + "\n"
+    end
+
+    def build_otlp_metrics_json(token_data:, model:)
+      data_points = token_data.map do |token_type, value|
+        {
+          "attributes" => [
+            { "key" => "model", "value" => { "stringValue" => model } },
+            { "key" => "token_type", "value" => { "stringValue" => token_type } }
+          ],
+          "sum" => value.to_f,
+          "count" => 1
+        }
+      end
+
+      {
+        "resourceMetrics" => [ {
+          "resource" => { "attributes" => [] },
+          "scopeMetrics" => [ {
+            "metrics" => [ {
+              "name" => "codex.turn.token_usage",
+              "histogram" => {
+                "dataPoints" => data_points,
+                "aggregationTemporality" => 1
+              }
+            } ]
+          } ]
+        } ]
+      }.to_json
+    end
+
+    def build_otlp_log_payload(token:, input_tokens:, output_tokens:, cached_tokens: 0, reasoning_tokens: 0, model: nil)
+      attrs = [
+        { "key" => "event.name", "value" => { "stringValue" => "codex.sse_event" } },
+        { "key" => "input_token_count", "value" => { "intValue" => input_tokens } },
+        { "key" => "output_token_count", "value" => { "intValue" => output_tokens } },
+        { "key" => "cached_token_count", "value" => { "intValue" => cached_tokens } },
+        { "key" => "reasoning_token_count", "value" => { "intValue" => reasoning_tokens } }
+      ]
+      attrs << { "key" => "model", "value" => { "stringValue" => model } } if model
+
+      {
+        "resourceLogs" => [ {
+          "resource" => {
+            "attributes" => [
+              { "key" => "terminal_session_token", "value" => { "stringValue" => token } }
+            ]
+          },
+          "scopeLogs" => [ {
+            "logRecords" => [ {
+              "timeUnixNano" => (Time.current.to_f * 1_000_000_000).to_i.to_s,
+              "attributes" => attrs
+            } ]
+          } ]
+        } ]
+      }
+    end
+
+    def mitm_request_line(path, body_json)
+      {
+        "direction" => "request",
+        "host" => "ab.chatgpt.com",
+        "path" => path,
+        "body_encoding" => "text",
+        "body" => body_json,
+        "ts" => Time.current.iso8601
+      }.to_json
+    end
+
+    def mitm_response_line(path, status, body = "")
+      {
+        "direction" => "response",
+        "host" => "chatgpt.com",
+        "path" => path,
+        "status_code" => status,
+        "body_encoding" => "text",
+        "body" => body,
+        "ts" => Time.current.iso8601
+      }.to_json
+    end
   end
 end

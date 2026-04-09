@@ -29,10 +29,7 @@ module InternalTools
         file_data: uploaded_file.to_json
       )
 
-      BoardChannel.broadcast_event(board, "task_changed", {
-        action: "updated",
-        task: BoardTaskSerializer.new(task.reload).serializable_hash
-      })
+      board.touch
 
       success({ id: asset.id, name: asset.name }.to_json)
     end

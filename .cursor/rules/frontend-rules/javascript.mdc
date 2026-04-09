@@ -1,8 +1,0 @@
----
-description: 
-globs: *.ts,*.tsx
-alwaysApply: false
----
-# Javascript Best Practices
-
-- Use arrow functions for function declarations

@@ -3,7 +3,7 @@
 class StepRun < ApplicationRecord
   extend Enumerize
 
-  belongs_to :workflow_run
+  belongs_to :workflow_run, counter_cache: true
   belongs_to :step
   belongs_to :terminal_session, optional: true
 
@@ -14,36 +14,32 @@ class StepRun < ApplicationRecord
   enumerize :state, in: %i[pending running waiting_input completed failed skipped cancelled], default: :pending,
                     predicates: true, scope: true
 
+  broadcasts_to :workflow_run, on: :update
+
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
 
   def mark_running!
     update!(state: :running, started_at: Time.current, error_message: nil)
-    broadcast_update!
   end
 
   def mark_waiting!
     update!(state: :waiting_input)
-    broadcast_update!
   end
 
   def mark_completed!
     update!(state: :completed, completed_at: Time.current)
-    broadcast_update!
   end
 
   def mark_failed!(message = nil)
     update!(state: :failed, completed_at: Time.current, error_message: message)
-    broadcast_update!
   end
 
   def mark_skipped!(reason = nil)
     update!(state: :skipped, completed_at: Time.current, skip_reason: reason)
-    broadcast_update!
   end
 
   def mark_cancelled!
     update!(state: :cancelled, completed_at: Time.current)
-    broadcast_update!
   end
 
   def create_sub_step_runs!
@@ -60,11 +56,5 @@ class StepRun < ApplicationRecord
 
   def retry_count
     self[:retry_count].to_i
-  end
-
-  def broadcast_update!
-    WorkflowRunChannel.broadcast_step_update(workflow_run, self)
-  rescue StandardError => e
-    Rails.logger.warn("[StepRun#broadcast_update!] #{e.message}")
   end
 end

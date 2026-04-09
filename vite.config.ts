@@ -1,3 +1,4 @@
+import inertia from '@inertiajs/vite';
 import reactSwc from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
 import ViteRuby from 'vite-plugin-ruby';
@@ -7,7 +8,7 @@ export default defineConfig({
   build: {
     sourcemap: 'hidden',
   },
-  plugins: [ViteRuby(), tsconfigPaths(), reactSwc()],
+  plugins: [ViteRuby(), tsconfigPaths(), reactSwc(), inertia()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx'],
   },

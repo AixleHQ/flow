@@ -1,4 +1,4 @@
-# generated: 2026-02-28 (updated: added Session Config Cascade epics 29-31)
+# generated: 2026-02-28 (updated: added Policies/Tests/AixleBuilder epics 36-38)
 # project: app
 # project_key: app
 # tracking_system: file-system
@@ -33,6 +33,7 @@
 # Phase 17: Session Config Cascade (Epic 29, 30, 31)
 # Phase 18: Service Layer Pyramid (Epic 32)
 # Phase 19: BMAD Method Integration (Epic 33, 34, 35)
+# Phase 20: Inertia Web Layer Hardening (Epic 36, 37, 38)
 
 # STATUS DEFINITIONS:
 # ==================
@@ -491,3 +492,60 @@ development_status:
   35-3-parallel-bmad-installation: done  # Concurrent install with other assemble steps (Thread.new)
   35-4-e2e-testing-all-agent-runtimes: done  # Integration tests: cursor_cli, claude_code, codex, gemini_cli
   epic-35-retrospective: optional
+
+  # ============================================
+  # PHASE 20: INERTIA WEB LAYER HARDENING
+  # ============================================
+  # Order: E36 (Policies) → E37 (Tests) → E38 (Aixle Builder)
+  # Rationale:
+  #   - Policies first: foundation that tests will verify
+  #   - Tests second: cover policies + all controllers
+  #   - Aixle Builder last: fix + E2E as capstone
+  #
+  # IMPLEMENTATION ARTIFACTS:
+  #   - E36: ai/implementation-artifacts/epic-36-policies-dynamic-authorize.md
+  #   - E37: ai/implementation-artifacts/epic-37-web-controller-integration-tests.md
+  #   - E38: ai/implementation-artifacts/epic-38-aixle-builder-fix-e2e.md
+
+  # ── Epic 36: Policies via dynamic_authorize! ──────────────────────
+  epic-36: done
+  36-1-add-policies-and-contexts-for-web-controllers: done
+  36-2-company-controllers-before-action: done
+  36-3-project-controllers-before-action: done
+  36-4-frontend-permission-props: done
+  epic-36-retrospective: optional
+
+  # ── Epic 37: Web Controller Integration Tests ────────────────────
+  epic-37: backlog
+  37-1-extend-company-crud-tests: ready-for-dev
+  37-2-extend-project-crud-tests: ready-for-dev
+  37-3-new-top-level-controller-tests: ready-for-dev
+  37-4-new-board-task-nested-tests: ready-for-dev
+  37-5-new-workflow-steps-tests: ready-for-dev
+  37-6-new-aixle-builder-tests: ready-for-dev
+  epic-37-retrospective: optional
+
+  # ── Epic 38: Aixle Builder Fix & E2E ─────────────────────────────
+  epic-38: in-progress
+  38-1-debug-fix-session-start-flow: review
+  38-2-verify-meta-tools-seeded: review
+  38-3-e2e-playwright-verification: review
+  epic-38-retrospective: optional
+
+# EXECUTION SEQUENCE (Phase 20):
+# ==================================
+# Phase 20a — Foundation (Policies):
+#   36-1 → 36-2 → 36-3 → 36-4
+#
+# Phase 20b — Test Coverage:
+#   37-1 + 37-2 (parallel) → 37-3 → 37-4 + 37-5 (parallel) → 37-6
+#
+# Phase 20c — Aixle Builder:
+#   38-1 → 38-2 → 38-3
+#
+# DEPENDENCIES:
+#   - 36-2 depends on 36-1 (policies must exist first)
+#   - 36-3 depends on 36-1
+#   - 37-* should run after 36-* (tests verify policies work)
+#   - 37-6 should run after 38-1 (Aixle Builder must work before testing it)
+#   - 38-3 depends on 38-1 + 38-2 (feature must work before E2E)

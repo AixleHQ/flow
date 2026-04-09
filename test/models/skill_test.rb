@@ -11,23 +11,18 @@ class SkillTest < ActiveSupport::TestCase
 
   # ====== Validations ======
 
-  test "valid custom skill with company scope" do
+  test "valid skill with company scope" do
     skill = build(:skill, scope: @company)
     assert { skill.valid? }
   end
 
-  test "valid custom skill with project scope" do
+  test "valid skill with project scope" do
     skill = build(:skill, scope: @project)
     assert { skill.valid? }
   end
 
-  test "valid internal skill without scope" do
-    skill = build(:skill, :internal, name: "internal-skill")
-    assert { skill.valid? }
-  end
-
   test "name must be present" do
-    skill = Skill.new(name: nil, kind: "custom", scope: @company, title: "T", content: "C")
+    skill = Skill.new(name: nil, scope: @company, title: "T", content: "C", package: "x/y@z", source: "x/y")
     assert { !skill.valid? }
     assert { skill.errors[:name].present? }
   end
@@ -45,6 +40,11 @@ class SkillTest < ActiveSupport::TestCase
 
   test "name allows underscores" do
     skill = build(:skill, name: "my_skill", scope: @company)
+    assert { skill.valid? }
+  end
+
+  test "name allows colons" do
+    skill = build(:skill, name: "react:components", scope: @company)
     assert { skill.valid? }
   end
 
@@ -72,44 +72,28 @@ class SkillTest < ActiveSupport::TestCase
     assert { skill.valid? }
   end
 
-  test "custom skill requires scope_type" do
+  test "requires scope" do
     skill = build(:skill, scope: nil)
     assert { !skill.valid? }
     assert { skill.errors[:scope_type].present? }
   end
 
-  test "custom skill requires scope_id" do
-    skill = Skill.new(name: "test", kind: "custom", scope_type: "Company", scope_id: nil, title: "T", content: "C")
+  test "requires package" do
+    skill = build(:skill, package: nil, scope: @company)
     assert { !skill.valid? }
-    assert { skill.errors[:scope_id].present? }
+    assert { skill.errors[:package].present? }
   end
 
-  test "custom skill requires title" do
-    skill = build(:skill, title: nil, scope: @company)
+  test "requires source" do
+    skill = build(:skill, source: nil, scope: @company)
     assert { !skill.valid? }
-    assert { skill.errors[:title].present? }
+    assert { skill.errors[:source].present? }
   end
 
-  test "custom skill requires content" do
+  test "requires content" do
     skill = build(:skill, content: nil, scope: @company)
     assert { !skill.valid? }
     assert { skill.errors[:content].present? }
-  end
-
-  test "internal skill does not require title" do
-    skill = build(:skill, :internal, name: "i-skill")
-    assert { skill.valid? }
-  end
-
-  test "internal skill does not require content" do
-    skill = build(:skill, :internal, name: "i-skill-2")
-    assert { skill.valid? }
-  end
-
-  test "internal skill does not require scope" do
-    skill = build(:skill, :internal, name: "i-skill-3")
-    assert { skill.scope.nil? }
-    assert { skill.valid? }
   end
 
   # ====== Name Normalization ======
@@ -132,43 +116,19 @@ class SkillTest < ActiveSupport::TestCase
     assert { skill.name == "my-skill" }
   end
 
+  test "name= preserves colons" do
+    skill = Skill.new
+    skill.name = "react:components"
+    assert { skill.name == "react:components" }
+  end
+
   test "name= handles nil" do
     skill = Skill.new
     skill.name = nil
     assert { skill.name.nil? }
   end
 
-  # ====== Kind Helpers ======
-
-  test "#internal? returns true for internal kind" do
-    skill = build(:skill, :internal, name: "i-test")
-    assert { skill.internal? }
-  end
-
-  test "#custom? returns true for custom kind" do
-    skill = build(:skill, scope: @company)
-    assert { skill.custom? }
-  end
-
   # ====== Scopes ======
-
-  test ".internal_skills returns only internal" do
-    create(:skill, :internal, name: "internal-a")
-    create(:skill, name: "custom-a", scope: @company)
-
-    result = Skill.internal_skills
-    assert { result.all?(&:internal?) }
-    assert { result.count == 1 }
-  end
-
-  test ".custom_skills returns only custom" do
-    create(:skill, :internal, name: "internal-b")
-    create(:skill, name: "custom-b", scope: @company)
-
-    result = Skill.custom_skills
-    assert { result.all?(&:custom?) }
-    assert { result.count == 1 }
-  end
 
   test ".for_company returns company-scoped skills" do
     create(:skill, name: "company-skill", scope: @company)
@@ -190,15 +150,13 @@ class SkillTest < ActiveSupport::TestCase
 
   # ====== visible_for_company ======
 
-  test ".visible_for_company includes internal and company skills" do
-    create(:skill, :internal, name: "a-internal")
+  test ".visible_for_company includes only company skills" do
     create(:skill, name: "b-company", scope: @company)
     create(:skill, name: "c-project", scope: @project)
 
     result = Skill.visible_for_company(@company)
     names = result.pluck(:name)
 
-    assert_includes names, "a-internal"
     assert_includes names, "b-company"
     refute_includes names, "c-project"
   end
@@ -222,15 +180,13 @@ class SkillTest < ActiveSupport::TestCase
 
   # ====== visible_for_project ======
 
-  test ".visible_for_project includes internal, company, and project skills" do
-    create(:skill, :internal, name: "a-internal")
+  test ".visible_for_project includes company and project skills" do
     create(:skill, name: "b-company", scope: @company)
     create(:skill, name: "c-project", scope: @project)
 
     result = Skill.visible_for_project(@project)
     names = result.pluck(:name)
 
-    assert_includes names, "a-internal"
     assert_includes names, "b-company"
     assert_includes names, "c-project"
   end
@@ -257,11 +213,6 @@ class SkillTest < ActiveSupport::TestCase
 
   # ====== scope_indicator ======
 
-  test "#scope_indicator returns 'internal' for internal skill" do
-    skill = build(:skill, :internal, name: "i-skill")
-    assert_equal "internal", skill.scope_indicator
-  end
-
   test "#scope_indicator returns 'company' for company skill" do
     skill = build(:skill, name: "c-skill", scope: @company)
     assert_equal "company", skill.scope_indicator
@@ -270,6 +221,13 @@ class SkillTest < ActiveSupport::TestCase
   test "#scope_indicator returns 'project' for project skill" do
     skill = build(:skill, name: "p-skill", scope: @project)
     assert_equal "project", skill.scope_indicator
+  end
+
+  # ====== Registry helpers ======
+
+  test "#registry_url returns skills.sh URL" do
+    skill = build(:skill, name: "mantine-form", source: "mantinedev/skills", scope: @company)
+    assert_equal "https://skills.sh/mantinedev/skills/mantine-form", skill.registry_url
   end
 
   # ====== Associations ======

@@ -1,17 +1,37 @@
 ---
-description: 
-globs: *.ts,*.tsx
+description: Data loading via Inertia props, mutations via apiFetch with auto CSRF.
+globs: "**/*.tsx,**/*.ts"
 alwaysApply: false
 ---
-- Use api backend routes from shared/routes object
-- Use @reduxjs/toolkit approach for state management
-- Use baseApi.injectEndpoints instead of createApi
-- Set QueryTag for different provided tags with names that repeat the entity
-- Use providesListTag fabric for generating cache tags
-- Use descriptive query names: workspaces instead of getWorkspaces
-- Show snackbar notifications for success mutations
-- Show snackbar notifications for errors in mutations and queries
-- Use types from shared/api: ApiResponse for single entities, ApiCollectionResponse for collections and ApiError types
-- Use isLoading state for queries and show LinearProgress during loading
-- Use isLoading state for mutations and disable form buttons or connected controls
-- Use RTKQuery hook destructuring for extracting values
+
+# API Integration
+
+## Data Loading — Inertia Props Only
+
+All data comes from Rails controllers as Inertia props. Never fetch data client-side.
+
+```tsx
+// ✅ GOOD — data from props, real-time via cable
+const { sessions, cableStream } = usePage().props;
+useInertiaCableStream(cableStream, { only: ['sessions'] });
+
+// ❌ BAD — client-side fetch duplicates server truth
+const [data, setData] = useState(null);
+useEffect(() => { fetch('/api/...').then(...) }, []);
+```
+
+## Mutations — apiFetch
+
+Use `shared/lib/apiFetch` for POST/PATCH/DELETE. It auto-injects CSRF token, credentials, and Accept header.
+
+```tsx
+import { apiFetch } from 'shared/lib/apiFetch';
+
+await apiFetch('/terminal_sessions', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ terminalSession: { ... } }),
+});
+```
+
+Never read CSRF tokens manually — `apiFetch` handles it.

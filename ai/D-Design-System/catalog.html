@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aixle Design System</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    :root {
+      --app-bg-default: #0D0D0D;
+      --app-bg-paper: #141414;
+      --app-bg-elevated: #1A1A1A;
+      --app-bg-deep: #0A0A0A;
+      --app-border-default: #2A2A2A;
+      --app-border-subtle: #1F1F1F;
+      --app-border-strong: #3A3A3A;
+      --app-text-primary: #FFFFFF;
+      --app-text-secondary: #A0A0A0;
+      --app-text-muted: #666666;
+      --app-action-hover: rgba(255, 255, 255, 0.08);
+      --app-action-selected: rgba(59, 130, 246, 0.16);
+
+      --blue-4: #3B82F6;
+      --green-4: #22C55E;
+      --red-4: #EF4444;
+      --amber-4: #F59E0B;
+      --purple: #7C3AED;
+
+      --font-heading: 'Poppins', sans-serif;
+      --font-body: 'Inter', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 16px;
+      --radius-xl: 32px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--app-bg-default);
+      color: var(--app-text-primary);
+      line-height: 1.6;
+    }
+
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 260px;
+      background: var(--app-bg-paper);
+      border-right: 1px solid var(--app-border-default);
+      overflow-y: auto;
+      z-index: 50;
+      padding: 24px 16px;
+    }
+
+    .sidebar-logo {
+      font-family: var(--font-heading);
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .sidebar-sub {
+      font-size: 12px;
+      color: var(--app-text-muted);
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--app-border-subtle);
+    }
+
+    .nav-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--app-text-muted);
+      margin: 20px 0 8px;
+    }
+
+    .nav-link {
+      display: block;
+      padding: 6px 12px;
+      color: var(--app-text-secondary);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+
+    .nav-link:hover {
+      background: var(--app-action-hover);
+      color: var(--app-text-primary);
+    }
+
+    .nav-link.active {
+      background: var(--app-action-selected);
+      color: var(--blue-4);
+      font-weight: 500;
+    }
+
+    .main {
+      margin-left: 260px;
+      padding: 40px 48px;
+      max-width: 1200px;
+    }
+
+    section {
+      margin-bottom: 64px;
+      scroll-margin-top: 24px;
+    }
+
+    h1 {
+      font-family: var(--font-heading);
+      font-size: 36px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    h2 {
+      font-family: var(--font-heading);
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--app-border-subtle);
+    }
+
+    h3 {
+      font-family: var(--font-heading);
+      font-size: 16px;
+      font-weight: 600;
+      margin: 20px 0 12px;
+      color: var(--app-text-secondary);
+    }
+
+    .subtitle {
+      font-size: 18px;
+      color: var(--app-text-secondary);
+      margin-bottom: 32px;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+    }
+
+    .stat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .stat-badge.blue {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--blue-4);
+    }
+
+    .stat-badge.green {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green-4);
+    }
+
+    .stat-badge.purple {
+      background: rgba(124, 58, 237, 0.15);
+      color: var(--purple);
+    }
+
+    .stat-badge.amber {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--amber-4);
+    }
+
+    .card {
+      background: var(--app-bg-paper);
+      border: 1px solid var(--app-border-default);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+
+    .card p {
+      color: var(--app-text-secondary);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .preview-box {
+      background: var(--app-bg-elevated);
+      border: 1px solid var(--app-border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin: 16px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    /* Buttons */
+    .btn {
+      font-family: var(--font-heading);
+      font-weight: 600;
+      font-size: 14px;
+      padding: 8px 18px;
+      border-radius: var(--radius-md);
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-filled {
+      background: var(--blue-4);
+      color: #fff;
+    }
+
+    .btn-filled:hover {
+      background: #2570e4;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--blue-4);
+      border: 1px solid var(--blue-4);
+    }
+
+    .btn-outline:hover {
+      background: rgba(59, 130, 246, 0.1);
+    }
+
+    .btn-subtle {
+      background: transparent;
+      color: var(--app-text-secondary);
+    }
+
+    .btn-subtle:hover {
+      background: var(--app-action-hover);
+      color: var(--app-text-primary);
+    }
+
+    .btn-light {
+      background: rgba(59, 130, 246, 0.1);
+      color: var(--blue-4);
+    }
+
+    .btn-danger {
+      background: var(--red-4);
+      color: #fff;
+    }
+
+    .btn-disabled {
+      background: #2A2A2A;
+      color: #555;
+      cursor: not-allowed;
+    }
+
+    .btn-sm {
+      font-size: 13px;
+      padding: 6px 14px;
+    }
+
+    .btn-xs {
+      font-size: 12px;
+      padding: 4px 10px;
+    }
+
+    .action-icon {
+      width: 32px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--radius-sm);
+      border: none;
+      background: transparent;
+      color: var(--app-text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      font-size: 16px;
+    }
+
+    .action-icon:hover {
+      background: var(--app-action-hover);
+      color: var(--app-text-primary);
+    }
+
+    .action-icon.danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--red-4);
+    }
+
+    /* Inputs */
+    .input-field {
+      font-family: var(--font-body);
+      font-size: 14px;
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid #373A40;
+      border-radius: var(--radius-md);
+      color: var(--app-text-primary);
+      width: 240px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-field:focus {
+      border-color: var(--blue-4);
+    }
+
+    .input-field::placeholder {
+      color: var(--app-text-muted);
+    }
+
+    .input-field.error {
+      border-color: var(--red-4);
+    }
+
+    .input-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--app-text-primary);
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-filled-blue {
+      background: var(--blue-4);
+      color: #fff;
+    }
+
+    .badge-filled-green {
+      background: var(--green-4);
+      color: #fff;
+    }
+
+    .badge-filled-red {
+      background: var(--red-4);
+      color: #fff;
+    }
+
+    .badge-filled-amber {
+      background: var(--amber-4);
+      color: #000;
+    }
+
+    .badge-outline-blue {
+      background: transparent;
+      color: var(--blue-4);
+      border: 1px solid var(--blue-4);
+    }
+
+    .badge-light-blue {
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--blue-4);
+    }
+
+    .badge-light-green {
+      background: rgba(34, 197, 94, 0.12);
+      color: var(--green-4);
+    }
+
+    .badge-dot {
+      padding-left: 16px;
+      position: relative;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--app-text-secondary);
+    }
+
+    .badge-dot::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .badge-dot.running::before {
+      background: var(--blue-4);
+    }
+
+    .badge-dot.completed::before {
+      background: var(--green-4);
+    }
+
+    .badge-dot.error::before {
+      background: var(--red-4);
+    }
+
+    /* Card variants */
+    .card-interactive {
+      background: var(--app-bg-paper);
+      border: 1px solid var(--app-border-default);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .card-interactive:hover {
+      border-color: var(--blue-4);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Avatar */
+    .avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .avatar-blue {
+      background: var(--blue-4);
+    }
+
+    .avatar-green {
+      background: var(--green-4);
+    }
+
+    .avatar-purple {
+      background: var(--purple);
+    }
+
+    .avatar-sm {
+      width: 24px;
+      height: 24px;
+      font-size: 11px;
+    }
+
+    .avatar-lg {
+      width: 48px;
+      height: 48px;
+      font-size: 18px;
+    }
+
+    /* Table */
+    .ds-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .ds-table th {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--app-border-default);
+      color: var(--app-text-muted);
+      font-weight: 500;
+      font-size: 13px;
+    }
+
+    .ds-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--app-border-subtle);
+      color: var(--app-text-secondary);
+    }
+
+    .ds-table tr:hover td {
+      background: var(--app-action-hover);
+    }
+
+    /* Colors */
+    .color-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .color-swatch {
+      border-radius: var(--radius-md);
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 8px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      border: 1px solid var(--app-border-subtle);
+    }
+
+    .color-swatch span {
+      display: block;
+    }
+
+    .color-swatch .name {
+      font-weight: 600;
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    /* Typography preview */
+    .type-sample {
+      margin: 8px 0;
+    }
+
+    .type-meta {
+      color: var(--app-text-muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      margin-left: 12px;
+    }
+
+    /* Spacing */
+    .spacing-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin: 8px 0;
+    }
+
+    .spacing-bar {
+      height: 24px;
+      background: rgba(59, 130, 246, 0.2);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: 4px;
+    }
+
+    .spacing-label {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--app-text-muted);
+      min-width: 60px;
+    }
+
+    .spacing-value {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--app-text-secondary);
+      min-width: 60px;
+    }
+
+    /* Tooltip preview */
+    .tooltip-demo {
+      position: relative;
+      display: inline-block;
+    }
+
+    .tooltip-box {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--app-bg-elevated);
+      border: 1px solid var(--app-border-default);
+      color: var(--app-text-primary);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      white-space: nowrap;
+      opacity: 0;
+      transition: opacity 0.15s;
+      pointer-events: none;
+    }
+
+    .tooltip-demo:hover .tooltip-box {
+      opacity: 1;
+    }
+
+    /* Modal preview */
+    .modal-preview {
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: var(--radius-md);
+      padding: 40px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .modal-box {
+      background: var(--app-bg-paper);
+      border: 1px solid var(--app-border-default);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      width: 400px;
+    }
+
+    .modal-box h4 {
+      font-family: var(--font-heading);
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    /* Code block */
+    .code-block {
+      background: #111;
+      border: 1px solid var(--app-border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: #e5e7eb;
+      overflow-x: auto;
+      margin: 12px 0;
+      white-space: pre;
+    }
+
+    /* Nav demo */
+    .nav-demo {
+      background: var(--app-bg-elevated);
+      border: 1px solid var(--app-border-default);
+      border-radius: var(--radius-md);
+      padding: 12px 8px;
+      width: 220px;
+    }
+
+    .nav-demo-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--app-text-secondary);
+      font-size: 13px;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+
+    .nav-demo-link:hover {
+      background: var(--app-action-hover);
+      color: var(--app-text-primary);
+    }
+
+    .nav-demo-link.active {
+      background: var(--app-action-selected);
+      color: var(--blue-4);
+      font-weight: 600;
+    }
+
+    .nav-demo-icon {
+      width: 18px;
+      text-align: center;
+    }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 6px;
+      background: #2A2A2A;
+      border-radius: 3px;
+      overflow: hidden;
+      width: 200px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    .progress-fill.blue {
+      background: var(--blue-4);
+    }
+
+    .progress-fill.green {
+      background: var(--green-4);
+    }
+
+    /* Search */
+    #search {
+      width: 100%;
+      padding: 8px 12px 8px 32px;
+      border: 1px solid var(--app-border-default);
+      border-radius: var(--radius-md);
+      background: var(--app-bg-elevated);
+      color: var(--app-text-primary);
+      font-size: 13px;
+      outline: none;
+      margin-bottom: 16px;
+    }
+
+    #search:focus {
+      border-color: var(--blue-4);
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-wrap::before {
+      content: '⌕';
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--app-text-muted);
+      font-size: 14px;
+    }
+
+    /* Segmented Control */
+    .segmented {
+      display: inline-flex;
+      background: var(--app-bg-elevated);
+      border-radius: var(--radius-md);
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .segmented-item {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--app-text-secondary);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      background: transparent;
+      font-family: var(--font-body);
+    }
+
+    .segmented-item.active {
+      background: var(--app-bg-paper);
+      color: var(--app-text-primary);
+      font-weight: 500;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Switch */
+    .switch-track {
+      width: 38px;
+      height: 20px;
+      border-radius: 10px;
+      background: #373A40;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: inline-block;
+    }
+
+    .switch-track.on {
+      background: var(--blue-4);
+    }
+
+    .switch-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: white;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+
+    .switch-track.on .switch-thumb {
+      transform: translateX(18px);
+    }
+
+    /* Checkbox */
+    .checkbox-demo {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 2px solid #373A40;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .checkbox-demo.checked {
+      background: var(--blue-4);
+      border-color: var(--blue-4);
+      color: #fff;
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        display: none;
+      }
+
+      .main {
+        margin-left: 0;
+        padding: 24px 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">Aixle</div>
+    <div class="sidebar-sub">Design System • Mantine v9</div>
+
+    <div class="search-wrap">
+      <input type="text" id="search" placeholder="Search components...">
+    </div>
+
+    <div class="nav-group-title">Overview</div>
+    <a href="#introduction" class="nav-link active">Introduction</a>
+    <a href="#getting-started" class="nav-link">Getting Started</a>
+
+    <div class="nav-group-title">Foundation</div>
+    <a href="#colors" class="nav-link">Colors</a>
+    <a href="#typography" class="nav-link">Typography</a>
+    <a href="#spacing" class="nav-link">Spacing</a>
+    <a href="#shadows" class="nav-link">Shadows & Radius</a>
+
+    <div class="nav-group-title">Components</div>
+    <a href="#buttons" class="nav-link">Buttons</a>
+    <a href="#inputs" class="nav-link">Inputs</a>
+    <a href="#surfaces" class="nav-link">Cards & Surfaces</a>
+    <a href="#badges" class="nav-link">Badges</a>
+    <a href="#tables" class="nav-link">Tables</a>
+    <a href="#avatars" class="nav-link">Avatars</a>
+    <a href="#navigation" class="nav-link">Navigation</a>
+    <a href="#modals" class="nav-link">Modals & Overlays</a>
+    <a href="#feedback" class="nav-link">Feedback</a>
+    <a href="#toggles" class="nav-link">Toggles & Controls</a>
+
+    <div class="nav-group-title">Patterns</div>
+    <a href="#form-patterns" class="nav-link">Form Patterns</a>
+    <a href="#layout-patterns" class="nav-link">Layout Patterns</a>
+
+    <div class="nav-group-title">Resources</div>
+    <a href="#icons" class="nav-link">Icons (68)</a>
+    <a href="#changelog" class="nav-link">Changelog</a>
+  </aside>
+
+  <div class="main">
+
+    <!-- Introduction -->
+    <section id="introduction">
+      <h1>Aixle Design System</h1>
+      <p class="subtitle">Living design system extracted from the Inertia + Mantine frontend</p>
+
+      <div class="stat-row">
+        <span class="stat-badge blue">38 Components</span>
+        <span class="stat-badge green">Mantine v9</span>
+        <span class="stat-badge purple">Dark Theme</span>
+        <span class="stat-badge amber">68 Icons</span>
+      </div>
+
+      <div class="card">
+        <p>This design system documents the visual language and component patterns used in the Aixle application.
+          All tokens are extracted from the live codebase (<code>mantineTheme.ts</code>) and reflect the current
+          implementation.</p>
+        <p style="margin-top:12px"><strong>Font stack:</strong> Poppins (headings/UI) + Inter (body) + JetBrains Mono
+          (code)</p>
+        <p><strong>Color scheme:</strong> Dark mode default with custom semantic variables</p>
+        <p><strong>Created:</strong> 2026-04-03</p>
+      </div>
+    </section>
+
+    <!-- Getting Started -->
+    <section id="getting-started">
+      <h2>Getting Started</h2>
+      <div class="card">
+        <h3>Theme Source</h3>
+        <div class="code-block">// app/frontend/shared/theme/mantineTheme.ts
+
+          import { createTheme, type CSSVariablesResolver } from '@mantine/core';
+
+          export const mantineTheme = createTheme({
+          primaryColor: 'blue',
+          fontFamily: 'Poppins, sans-serif',
+          defaultRadius: 'md',
+          // ... full config in source
+          });
+
+          export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
+          variables: {
+          '--app-font-body': theme.other.fontFamily.body,
+          '--app-bg-default': theme.other.background.default,
+          '--app-bg-paper': theme.other.background.paper,
+          // ... 13 custom CSS variables
+          },
+          });</div>
+      </div>
+    </section>
+
+    <!-- Colors -->
+    <section id="colors">
+      <h2>Colors</h2>
+
+      <h3>Blue (Primary)</h3>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#e7f0ff"><span class="name" style="color:#333">0</span><span
+            style="color:#333">#e7f0ff</span></div>
+        <div class="color-swatch" style="background:#cddcfb"><span class="name" style="color:#333">1</span><span
+            style="color:#333">#cddcfb</span></div>
+        <div class="color-swatch" style="background:#9bb6f3"><span class="name" style="color:#333">2</span><span
+            style="color:#333">#9bb6f3</span></div>
+        <div class="color-swatch" style="background:#6590ec"><span class="name" style="color:#fff">3</span><span
+            style="color:#fff">#6590ec</span></div>
+        <div class="color-swatch" style="background:#3B82F6;border:2px solid #fff"><span class="name"
+            style="color:#fff">4 ★</span><span style="color:#fff">#3B82F6</span></div>
+        <div class="color-swatch" style="background:#2570e4"><span class="name" style="color:#fff">5</span><span
+            style="color:#fff">#2570e4</span></div>
+        <div class="color-swatch" style="background:#1d66dc"><span class="name" style="color:#fff">6</span><span
+            style="color:#fff">#1d66dc</span></div>
+        <div class="color-swatch" style="background:#1255c4"><span class="name" style="color:#fff">7</span><span
+            style="color:#fff">#1255c4</span></div>
+        <div class="color-swatch" style="background:#064bb0"><span class="name" style="color:#fff">8</span><span
+            style="color:#fff">#064bb0</span></div>
+        <div class="color-swatch" style="background:#003f9b"><span class="name" style="color:#fff">9</span><span
+            style="color:#fff">#003f9b</span></div>
+      </div>
+
+      <h3>Green (Success)</h3>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#e5fbed"><span class="name" style="color:#333">0</span><span
+            style="color:#333">#e5fbed</span></div>
+        <div class="color-swatch" style="background:#cef5da"><span class="name" style="color:#333">1</span><span
+            style="color:#333">#cef5da</span></div>
+        <div class="color-swatch" style="background:#9eeab5"><span class="name" style="color:#333">2</span><span
+            style="color:#333">#9eeab5</span></div>
+        <div class="color-swatch" style="background:#6bdf8c"><span class="name" style="color:#333">3</span><span
+            style="color:#333">#6bdf8c</span></div>
+        <div class="color-swatch" style="background:#22C55E;border:2px solid #fff"><span class="name"
+            style="color:#fff">4 ★</span><span style="color:#fff">#22C55E</span></div>
+        <div class="color-swatch" style="background:#2db854"><span class="name" style="color:#fff">5</span><span
+            style="color:#fff">#2db854</span></div>
+        <div class="color-swatch" style="background:#26a94a"><span class="name" style="color:#fff">6</span><span
+            style="color:#fff">#26a94a</span></div>
+        <div class="color-swatch" style="background:#1a953d"><span class="name" style="color:#fff">7</span><span
+            style="color:#fff">#1a953d</span></div>
+        <div class="color-swatch" style="background:#0d8534"><span class="name" style="color:#fff">8</span><span
+            style="color:#fff">#0d8534</span></div>
+        <div class="color-swatch" style="background:#007327"><span class="name" style="color:#fff">9</span><span
+            style="color:#fff">#007327</span></div>
+      </div>
+
+      <h3>Red (Error)</h3>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#ffe7e7"><span class="name" style="color:#333">0</span><span
+            style="color:#333">#ffe7e7</span></div>
+        <div class="color-swatch" style="background:#fecece"><span class="name" style="color:#333">1</span><span
+            style="color:#333">#fecece</span></div>
+        <div class="color-swatch" style="background:#f99c9c"><span class="name" style="color:#333">2</span><span
+            style="color:#333">#f99c9c</span></div>
+        <div class="color-swatch" style="background:#f46565"><span class="name" style="color:#fff">3</span><span
+            style="color:#fff">#f46565</span></div>
+        <div class="color-swatch" style="background:#EF4444;border:2px solid #fff"><span class="name"
+            style="color:#fff">4 ★</span><span style="color:#fff">#EF4444</span></div>
+        <div class="color-swatch" style="background:#ec2525"><span class="name" style="color:#fff">5</span><span
+            style="color:#fff">#ec2525</span></div>
+        <div class="color-swatch" style="background:#eb1414"><span class="name" style="color:#fff">6</span><span
+            style="color:#fff">#eb1414</span></div>
+        <div class="color-swatch" style="background:#d20707"><span class="name" style="color:#fff">7</span><span
+            style="color:#fff">#d20707</span></div>
+        <div class="color-swatch" style="background:#bc0003"><span class="name" style="color:#fff">8</span><span
+            style="color:#fff">#bc0003</span></div>
+        <div class="color-swatch" style="background:#a40000"><span class="name" style="color:#fff">9</span><span
+            style="color:#fff">#a40000</span></div>
+      </div>
+
+      <h3>Amber (Warning)</h3>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#fff8e1"><span class="name" style="color:#333">0</span><span
+            style="color:#333">#fff8e1</span></div>
+        <div class="color-swatch" style="background:#ffefcb"><span class="name" style="color:#333">1</span><span
+            style="color:#333">#ffefcb</span></div>
+        <div class="color-swatch" style="background:#ffdd9a"><span class="name" style="color:#333">2</span><span
+            style="color:#333">#ffdd9a</span></div>
+        <div class="color-swatch" style="background:#ffcb64"><span class="name" style="color:#333">3</span><span
+            style="color:#333">#ffcb64</span></div>
+        <div class="color-swatch" style="background:#F59E0B;border:2px solid #fff"><span class="name"
+            style="color:#333">4 ★</span><span style="color:#333">#F59E0B</span></div>
+        <div class="color-swatch" style="background:#f0a700"><span class="name" style="color:#fff">5</span><span
+            style="color:#fff">#f0a700</span></div>
+        <div class="color-swatch" style="background:#db9800"><span class="name" style="color:#fff">6</span><span
+            style="color:#fff">#db9800</span></div>
+        <div class="color-swatch" style="background:#c08400"><span class="name" style="color:#fff">7</span><span
+            style="color:#fff">#c08400</span></div>
+        <div class="color-swatch" style="background:#aa7500"><span class="name" style="color:#fff">8</span><span
+            style="color:#fff">#aa7500</span></div>
+        <div class="color-swatch" style="background:#906200"><span class="name" style="color:#fff">9</span><span
+            style="color:#fff">#906200</span></div>
+      </div>
+
+      <h3>Dark (UI Chrome)</h3>
+      <div class="color-grid">
+        <div class="color-swatch" style="background:#C1C2C5"><span class="name" style="color:#333">0</span><span
+            style="color:#333">#C1C2C5</span></div>
+        <div class="color-swatch" style="background:#A6A7AB"><span class="name" style="color:#333">1</span><span
+            style="color:#333">#A6A7AB</span></div>
+        <div class="color-swatch" style="background:#909296"><span class="name" style="color:#333">2</span><span
+            style="color:#333">#909296</span></div>
+        <div class="color-swatch" style="background:#5C5F66"><span class="name" style="color:#fff">3</span><span
+            style="color:#fff">#5C5F66</span></div>
+        <div class="color-swatch" style="background:#373A40"><span class="name" style="color:#fff">4</span><span
+            style="color:#fff">#373A40</span></div>
+        <div class="color-swatch" style="background:#2C2E33"><span class="name" style="color:#fff">5</span><span
+            style="color:#fff">#2C2E33</span></div>
+        <div class="color-swatch" style="background:#1A1A1A;border:2px solid #333"><span class="name"
+            style="color:#fff">6 elevated</span><span style="color:#888">#1A1A1A</span></div>
+        <div class="color-swatch" style="background:#141414;border:2px solid #333"><span class="name"
+            style="color:#fff">7 paper</span><span style="color:#888">#141414</span></div>
+        <div class="color-swatch" style="background:#0D0D0D;border:2px solid #333"><span class="name"
+            style="color:#fff">8 default</span><span style="color:#888">#0D0D0D</span></div>
+        <div class="color-swatch" style="background:#0A0A0A;border:2px solid #333"><span class="name"
+            style="color:#fff">9 deep</span><span style="color:#888">#0A0A0A</span></div>
+      </div>
+
+      <h3>Semantic</h3>
+      <div class="preview-box">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div
+            style="padding:8px 16px;border-radius:8px;background:var(--app-bg-default);border:1px solid var(--app-border-default)">
+            bg-default</div>
+          <div
+            style="padding:8px 16px;border-radius:8px;background:var(--app-bg-paper);border:1px solid var(--app-border-default)">
+            bg-paper</div>
+          <div
+            style="padding:8px 16px;border-radius:8px;background:var(--app-bg-elevated);border:1px solid var(--app-border-default)">
+            bg-elevated</div>
+          <div
+            style="padding:8px 16px;border-radius:8px;background:var(--app-bg-deep);border:1px solid var(--app-border-default)">
+            bg-deep</div>
+        </div>
+      </div>
+
+      <h3>Status Colors</h3>
+      <div class="preview-box">
+        <span class="badge badge-filled-green">Completed</span>
+        <span class="badge badge-filled-blue">Running</span>
+        <span class="badge badge-filled-amber">Running (other)</span>
+        <span class="badge" style="background:#666;color:#fff">Pending</span>
+        <span class="badge badge-filled-red">Error</span>
+      </div>
+
+      <h3>Agent Colors</h3>
+      <div class="preview-box">
+        <span class="badge" style="background:#10A37F;color:#fff">Codex</span>
+        <span class="badge" style="background:#7C3AED;color:#fff">Cursor CLI</span>
+        <span class="badge" style="background:#3B82F6;color:#fff">Gemini CLI</span>
+        <span class="badge" style="background:#D97706;color:#fff">Claude Code</span>
+      </div>
+    </section>
+
+    <!-- Typography -->
+    <section id="typography">
+      <h2>Typography</h2>
+
+      <h3>Font Families</h3>
+      <div class="card">
+        <div class="type-sample" style="font-family:var(--font-heading);font-size:24px;font-weight:700">Poppins —
+          Headings & UI Chrome<span class="type-meta">700</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:16px;margin-top:12px">Inter — Body text,
+          forms, and labels<span class="type-meta">400</span></div>
+        <div class="type-sample"
+          style="font-family:var(--font-mono);font-size:14px;margin-top:12px;color:var(--green-4)">JetBrains Mono — Code
+          blocks<span class="type-meta">400</span></div>
+      </div>
+
+      <h3>Scale</h3>
+      <div class="card">
+        <div class="type-sample" style="font-family:var(--font-heading);font-size:36px;font-weight:800">Page Title <span
+            class="type-meta">36px / 800</span></div>
+        <div class="type-sample" style="font-family:var(--font-heading);font-size:24px;font-weight:700">Section Heading
+          <span class="type-meta">24px / 700</span></div>
+        <div class="type-sample" style="font-family:var(--font-heading);font-size:20px;font-weight:600">Card Title <span
+            class="type-meta">20px / 600</span></div>
+        <div class="type-sample" style="font-family:var(--font-heading);font-size:18px;font-weight:600">Subsection <span
+            class="type-meta">18px / 600</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:16px">Body text (md) <span
+            class="type-meta">16px / 400</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:14px">Body text (sm) <span
+            class="type-meta">14px / 400</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:14px;font-weight:500">Label text <span
+            class="type-meta">14px / 500</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:13px;color:var(--app-text-secondary)">Nav
+          / sidebar text <span class="type-meta">13px / 400</span></div>
+        <div class="type-sample" style="font-family:var(--font-body);font-size:12px;color:var(--app-text-muted)">Caption
+          / hint <span class="type-meta">12px / 400</span></div>
+      </div>
+    </section>
+
+    <!-- Spacing -->
+    <section id="spacing">
+      <h2>Spacing</h2>
+
+      <h3>Mantine Scale</h3>
+      <div class="card">
+        <div class="spacing-row"><span class="spacing-label">xs</span>
+          <div class="spacing-bar" style="width:40px"></div><span class="spacing-value">10px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">sm</span>
+          <div class="spacing-bar" style="width:48px"></div><span class="spacing-value">12px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">md</span>
+          <div class="spacing-bar" style="width:64px"></div><span class="spacing-value">16px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">lg</span>
+          <div class="spacing-bar" style="width:80px"></div><span class="spacing-value">20px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">xl</span>
+          <div class="spacing-bar" style="width:96px"></div><span class="spacing-value">24px</span>
+        </div>
+      </div>
+
+      <h3>Layout</h3>
+      <div class="card">
+        <div class="spacing-row"><span class="spacing-label">Header H</span>
+          <div class="spacing-bar" style="width:64px"></div><span class="spacing-value">16px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">Main V</span>
+          <div class="spacing-bar" style="width:96px"></div><span class="spacing-value">24px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">Main H</span>
+          <div class="spacing-bar" style="width:128px"></div><span class="spacing-value">32px</span>
+        </div>
+        <div class="spacing-row"><span class="spacing-label">Card pad</span>
+          <div class="spacing-bar" style="width:128px"></div><span class="spacing-value">32px</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Shadows & Radius -->
+    <section id="shadows">
+      <h2>Shadows & Radius</h2>
+
+      <h3>Border Radius</h3>
+      <div class="preview-box">
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          xs 2px</div>
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          sm 4px</div>
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          md 8px</div>
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          custom 12px</div>
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          lg 16px</div>
+        <div
+          style="width:60px;height:60px;background:var(--app-bg-paper);border:1px solid var(--app-border-strong);border-radius:30px;display:flex;align-items:center;justify-content:center;font-size:11px">
+          xl 32px</div>
+      </div>
+
+      <h3>Shadows</h3>
+      <div class="preview-box" style="gap:24px">
+        <div
+          style="width:100px;height:80px;background:var(--app-bg-paper);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);display:flex;align-items:center;justify-content:center;font-size:11px">
+          xs</div>
+        <div
+          style="width:100px;height:80px;background:var(--app-bg-paper);border-radius:8px;box-shadow:0 4px 6px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:11px">
+          md</div>
+        <div
+          style="width:100px;height:80px;background:var(--app-bg-paper);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;font-size:11px">
+          project hover</div>
+        <div
+          style="width:100px;height:80px;background:var(--app-bg-paper);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;font-size:11px">
+          login card</div>
+      </div>
+    </section>
+
+    <!-- Buttons -->
+    <section id="buttons">
+      <h2>Buttons</h2>
+
+      <h3>Variants</h3>
+      <div class="preview-box">
+        <button class="btn btn-filled">Filled</button>
+        <button class="btn btn-outline">Outline</button>
+        <button class="btn btn-subtle">Subtle</button>
+        <button class="btn btn-light">Light</button>
+        <button class="btn btn-danger">Danger</button>
+        <button class="btn btn-disabled">Disabled</button>
+      </div>
+
+      <h3>Sizes</h3>
+      <div class="preview-box">
+        <button class="btn btn-filled btn-xs">Extra Small</button>
+        <button class="btn btn-filled btn-sm">Small</button>
+        <button class="btn btn-filled">Medium (default)</button>
+      </div>
+
+      <h3>ActionIcon</h3>
+      <div class="preview-box">
+        <div class="tooltip-demo">
+          <button class="action-icon">✏️</button>
+          <div class="tooltip-box">Edit</div>
+        </div>
+        <div class="tooltip-demo">
+          <button class="action-icon danger">🗑️</button>
+          <div class="tooltip-box">Delete</div>
+        </div>
+        <div class="tooltip-demo">
+          <button class="action-icon">🔄</button>
+          <div class="tooltip-box">Refresh</div>
+        </div>
+        <div class="tooltip-demo">
+          <button class="action-icon">➕</button>
+          <div class="tooltip-box">Add</div>
+        </div>
+      </div>
+
+      <h3>Button + Icon</h3>
+      <div class="preview-box">
+        <button class="btn btn-filled">➕ Create Project</button>
+        <button class="btn btn-outline">← Back</button>
+        <button class="btn btn-filled btn-sm" style="background:var(--green-4)">▶ Run Workflow</button>
+      </div>
+    </section>
+
+    <!-- Inputs -->
+    <section id="inputs">
+      <h2>Inputs</h2>
+
+      <h3>TextInput</h3>
+      <div class="preview-box" style="flex-direction:column;align-items:flex-start">
+        <div>
+          <label class="input-label">Project Name</label>
+          <input class="input-field" type="text" placeholder="Enter project name...">
+        </div>
+        <div>
+          <label class="input-label">Search</label>
+          <input class="input-field" type="text" placeholder="🔍 Search workflows..." style="padding-left:32px">
+        </div>
+        <div>
+          <label class="input-label">With Error</label>
+          <input class="input-field error" type="text" value="invalid">
+          <div style="color:var(--red-4);font-size:12px;margin-top:4px">This field is required</div>
+        </div>
+      </div>
+
+      <h3>Select</h3>
+      <div class="preview-box">
+        <div>
+          <label class="input-label">Role</label>
+          <select class="input-field" style="cursor:pointer">
+            <option>Admin</option>
+            <option>Member</option>
+            <option>Viewer</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- Surfaces -->
+    <section id="surfaces">
+      <h2>Cards & Surfaces</h2>
+
+      <h3>Standard Card</h3>
+      <div class="card">
+        <h4 style="font-family:var(--font-heading);font-size:16px;font-weight:600;margin-bottom:8px">Card Title</h4>
+        <p>Standard card with <code>var(--app-bg-paper)</code> background and default border.</p>
+      </div>
+
+      <h3>Interactive Project Card</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0">
+        <div class="card-interactive">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div class="avatar avatar-blue">A</div>
+            <div>
+              <div style="font-weight:600;font-family:var(--font-heading)">Aixle Platform</div>
+              <div style="font-size:12px;color:var(--app-text-muted)">3 members</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <span class="badge badge-light-blue">12 workflows</span>
+            <span class="badge badge-light-green">5 running</span>
+          </div>
+        </div>
+        <div class="card-interactive">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div class="avatar avatar-purple">D</div>
+            <div>
+              <div style="font-weight:600;font-family:var(--font-heading)">Demo Project</div>
+              <div style="font-size:12px;color:var(--app-text-muted)">1 member</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <span class="badge badge-light-blue">3 workflows</span>
+          </div>
+        </div>
+      </div>
+
+      <h3>Paper (Login example)</h3>
+      <div class="modal-preview" style="background: radial-gradient(ellipse at top, #1a1a2e 0%, #0D0D0D 100%)">
+        <div
+          style="background:var(--app-bg-paper);border-radius:var(--radius-md);padding:32px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+          <div style="text-align:center;margin-bottom:24px">
+            <div style="font-family:var(--font-heading);font-size:24px;font-weight:700">Welcome back</div>
+            <div style="color:var(--app-text-secondary);font-size:14px;margin-top:4px">Sign in to continue</div>
+          </div>
+          <div style="margin-bottom:16px">
+            <label class="input-label">Email</label>
+            <input class="input-field" type="email" placeholder="your@email.com" style="width:100%">
+          </div>
+          <div style="margin-bottom:20px">
+            <label class="input-label">Password</label>
+            <input class="input-field" type="password" placeholder="••••••••" style="width:100%">
+          </div>
+          <button class="btn btn-filled" style="width:100%;justify-content:center">Sign In</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Badges -->
+    <section id="badges">
+      <h2>Badges</h2>
+
+      <h3>Filled</h3>
+      <div class="preview-box">
+        <span class="badge badge-filled-blue">Running</span>
+        <span class="badge badge-filled-green">Completed</span>
+        <span class="badge badge-filled-red">Error</span>
+        <span class="badge badge-filled-amber">Warning</span>
+      </div>
+
+      <h3>Light</h3>
+      <div class="preview-box">
+        <span class="badge badge-light-blue">12 workflows</span>
+        <span class="badge badge-light-green">Active</span>
+      </div>
+
+      <h3>Outline</h3>
+      <div class="preview-box">
+        <span class="badge badge-outline-blue">v2.1.0</span>
+      </div>
+
+      <h3>Dot</h3>
+      <div class="preview-box">
+        <span class="badge badge-dot running">Running</span>
+        <span class="badge badge-dot completed">Completed</span>
+        <span class="badge badge-dot error">Failed</span>
+      </div>
+    </section>
+
+    <!-- Tables -->
+    <section id="tables">
+      <h2>Tables</h2>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="ds-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th style="text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--app-text-primary);font-weight:500">Deploy Pipeline</td>
+              <td><span class="badge badge-filled-green" style="font-size:11px">Completed</span></td>
+              <td>2m 34s</td>
+              <td style="text-align:right">
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">👁</button>
+                  <div class="tooltip-box">View</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">✏️</button>
+                  <div class="tooltip-box">Edit</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon danger"
+                    style="width:28px;height:28px">🗑️</button>
+                  <div class="tooltip-box">Delete</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:var(--app-text-primary);font-weight:500">Code Review Bot</td>
+              <td><span class="badge badge-filled-blue" style="font-size:11px">Running</span></td>
+              <td>1m 12s</td>
+              <td style="text-align:right">
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">👁</button>
+                  <div class="tooltip-box">View</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">✏️</button>
+                  <div class="tooltip-box">Edit</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon danger"
+                    style="width:28px;height:28px">🗑️</button>
+                  <div class="tooltip-box">Delete</div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="color:var(--app-text-primary);font-weight:500">Test Suite</td>
+              <td><span class="badge badge-filled-red" style="font-size:11px">Error</span></td>
+              <td>45s</td>
+              <td style="text-align:right">
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">👁</button>
+                  <div class="tooltip-box">View</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon"
+                    style="width:28px;height:28px">✏️</button>
+                  <div class="tooltip-box">Edit</div>
+                </div>
+                <div class="tooltip-demo" style="display:inline-block"><button class="action-icon danger"
+                    style="width:28px;height:28px">🗑️</button>
+                  <div class="tooltip-box">Delete</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Avatars -->
+    <section id="avatars">
+      <h2>Avatars</h2>
+
+      <div class="preview-box">
+        <div class="avatar avatar-sm avatar-blue">A</div>
+        <div class="avatar avatar-blue">AP</div>
+        <div class="avatar avatar-lg avatar-blue">AP</div>
+
+        <div class="avatar avatar-green">JD</div>
+        <div class="avatar avatar-purple">MK</div>
+        <div class="avatar" style="background:#D97706">CC</div>
+      </div>
+    </section>
+
+    <!-- Navigation -->
+    <section id="navigation">
+      <h2>Navigation</h2>
+
+      <h3>Sidebar NavLinks</h3>
+      <div class="preview-box">
+        <div class="nav-demo">
+          <div class="nav-demo-link"><span class="nav-demo-icon">📊</span> Overview</div>
+          <div class="nav-demo-link active"><span class="nav-demo-icon">📋</span> Board</div>
+          <div class="nav-demo-link"><span class="nav-demo-icon">⚡</span> Workflows</div>
+          <div class="nav-demo-link"><span class="nav-demo-icon">💬</span> Sessions</div>
+          <div class="nav-demo-link"><span class="nav-demo-icon">📈</span> Analytics</div>
+          <div style="border-top:1px solid var(--app-border-subtle);margin:8px 0"></div>
+          <div class="nav-demo-link"><span class="nav-demo-icon">⚙️</span> Settings</div>
+        </div>
+      </div>
+
+      <h3>SegmentedControl</h3>
+      <div class="preview-box">
+        <div class="segmented">
+          <button class="segmented-item active">Day</button>
+          <button class="segmented-item">Week</button>
+          <button class="segmented-item">Month</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Modals -->
+    <section id="modals">
+      <h2>Modals & Overlays</h2>
+
+      <h3>Modal (md)</h3>
+      <div class="modal-preview">
+        <div class="modal-box">
+          <h4>Create Project</h4>
+          <div style="margin-bottom:16px">
+            <label class="input-label">Project Name</label>
+            <input class="input-field" type="text" placeholder="My Project" style="width:100%">
+          </div>
+          <div style="margin-bottom:16px">
+            <label class="input-label">Description</label>
+            <textarea class="input-field" placeholder="Optional description..."
+              style="width:100%;height:80px;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-outline btn-sm">Cancel</button>
+            <button class="btn btn-filled btn-sm">Create</button>
+          </div>
+        </div>
+      </div>
+
+      <h3>Delete Confirmation (sm)</h3>
+      <div class="modal-preview">
+        <div class="modal-box" style="width:320px">
+          <h4>Delete Agent?</h4>
+          <p style="color:var(--app-text-secondary);font-size:14px;margin-bottom:20px">This action cannot be undone. The
+            agent and all associated data will be permanently deleted.</p>
+          <div style="display:flex;justify-content:flex-end;gap:8px">
+            <button class="btn btn-outline btn-sm">Cancel</button>
+            <button class="btn btn-danger btn-sm">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <h3>Tooltip</h3>
+      <div class="preview-box">
+        <div class="tooltip-demo">
+          <button class="action-icon">✏️</button>
+          <div class="tooltip-box">Edit workflow</div>
+        </div>
+        <div class="tooltip-demo">
+          <button class="action-icon danger">🗑️</button>
+          <div class="tooltip-box">Delete item</div>
+        </div>
+        <div class="tooltip-demo">
+          <button class="btn btn-subtle btn-sm">⟳ Refresh</button>
+          <div class="tooltip-box">Reload data</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feedback -->
+    <section id="feedback">
+      <h2>Feedback</h2>
+
+      <h3>Progress Bars</h3>
+      <div class="preview-box" style="flex-direction:column;align-items:flex-start;gap:16px">
+        <div>
+          <div style="font-size:13px;margin-bottom:4px;color:var(--app-text-secondary)">Route transition (2px)</div>
+          <div style="height:2px;background:#2A2A2A;border-radius:1px;width:300px;overflow:hidden">
+            <div
+              style="height:100%;width:60%;background:var(--blue-4);border-radius:1px;animation: progress-animate 1.5s ease infinite">
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:13px;margin-bottom:4px;color:var(--app-text-secondary)">Upload progress</div>
+          <div class="progress-bar" style="width:300px">
+            <div class="progress-fill blue" style="width:73%"></div>
+          </div>
+          <div style="font-size:12px;color:var(--app-text-muted);margin-top:2px">73%</div>
+        </div>
+        <div>
+          <div style="font-size:13px;margin-bottom:4px;color:var(--app-text-secondary)">Completion</div>
+          <div class="progress-bar" style="width:300px">
+            <div class="progress-fill green" style="width:100%"></div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Loading States</h3>
+      <div class="preview-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div
+            style="width:16px;height:16px;border:2px solid var(--blue-4);border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite">
+          </div>
+          <span style="font-size:13px;color:var(--app-text-secondary)">Loading...</span>
+        </div>
+        <button class="btn btn-filled btn-disabled" style="cursor:wait">
+          <div
+            style="width:14px;height:14px;border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:spin 0.8s linear infinite;display:inline-block">
+          </div>
+          Saving...
+        </button>
+      </div>
+    </section>
+
+    <!-- Toggles -->
+    <section id="toggles">
+      <h2>Toggles & Controls</h2>
+
+      <h3>Switch</h3>
+      <div class="preview-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="switch-track on" onclick="this.classList.toggle('on')">
+            <div class="switch-thumb"></div>
+          </div>
+          <span style="font-size:14px">Enabled</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="switch-track" onclick="this.classList.toggle('on')">
+            <div class="switch-thumb"></div>
+          </div>
+          <span style="font-size:14px;color:var(--app-text-muted)">Disabled</span>
+        </div>
+      </div>
+
+      <h3>Checkbox</h3>
+      <div class="preview-box">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="checkbox-demo checked"
+            onclick="this.classList.toggle('checked');this.innerHTML=this.classList.contains('checked')?'✓':''">✓</div>
+          <span style="font-size:14px">Selected option</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="checkbox-demo"
+            onclick="this.classList.toggle('checked');this.innerHTML=this.classList.contains('checked')?'✓':''"></div>
+          <span style="font-size:14px">Unselected option</span>
+        </div>
+      </div>
+
+      <h3>SegmentedControl</h3>
+      <div class="preview-box">
+        <div class="segmented">
+          <button class="segmented-item active"
+            onclick="this.parentElement.querySelectorAll('.segmented-item').forEach(e=>e.classList.remove('active'));this.classList.add('active')">All</button>
+          <button class="segmented-item"
+            onclick="this.parentElement.querySelectorAll('.segmented-item').forEach(e=>e.classList.remove('active'));this.classList.add('active')">Active</button>
+          <button class="segmented-item"
+            onclick="this.parentElement.querySelectorAll('.segmented-item').forEach(e=>e.classList.remove('active'));this.classList.add('active')">Completed</button>
+          <button class="segmented-item"
+            onclick="this.parentElement.querySelectorAll('.segmented-item').forEach(e=>e.classList.remove('active'));this.classList.add('active')">Failed</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Form Patterns -->
+    <section id="form-patterns">
+      <h2>Form Patterns</h2>
+
+      <h3>Pattern A: Inertia useForm + Zod</h3>
+      <div class="card">
+        <p>Used in server-rendered forms (Login, Profile, Settings). Validation runs client-side via Zod, submission via
+          Inertia <code>post()</code>/<code>patch()</code>.</p>
+        <div class="code-block">const { data, setData, post, processing, errors } = useForm({ name: '', email: '' });
+          const schema = z.object({ name: z.string().min(1), email: z.string().email() });
+
+          // On submit
+          const result = schema.safeParse(data);
+          if (!result.success) { /* setError(...) */ return; }
+          post('/profile', { onSuccess: () => notifications.show({ ... }) });</div>
+      </div>
+
+      <h3>Pattern B: @mantine/form + zodResolver</h3>
+      <div class="card">
+        <p>Used in client-side modals and complex forms (Workflows, Board, Resource modals). Full Mantine form
+          integration with Zod schemas.</p>
+        <div class="code-block">const form = useForm({
+          initialValues: { name: '', type: 'default' },
+          validate: zodResolver(z.object({ name: z.string().min(1), type: z.string() })),
+          });
+
+          // In JSX
+          &lt;form onSubmit={form.onSubmit(handleSubmit)}&gt;
+          &lt;TextInput label="Name" {...form.getInputProps('name')} /&gt;
+          &lt;Select label="Type" data={types} {...form.getInputProps('type')} /&gt;
+          &lt;/form&gt;</div>
+      </div>
+    </section>
+
+    <!-- Layout Patterns -->
+    <section id="layout-patterns">
+      <h2>Layout Patterns</h2>
+
+      <h3>Application Shell</h3>
+      <div class="card">
+        <div style="border:1px solid var(--app-border-default);border-radius:8px;overflow:hidden">
+          <div
+            style="height:36px;background:var(--app-bg-paper);border-bottom:1px solid var(--app-border-default);display:flex;align-items:center;padding:0 12px;gap:8px;font-size:12px">
+            <span style="font-weight:700;font-family:var(--font-heading)">Aixle</span>
+            <span style="color:var(--app-text-muted)">|</span>
+            <span style="color:var(--app-text-secondary)">Projects</span>
+            <span style="color:var(--app-text-muted)">Home</span>
+            <span style="margin-left:auto">
+              <div class="avatar avatar-sm avatar-blue" style="font-size:9px">AP</div>
+            </span>
+          </div>
+          <div style="display:flex;min-height:200px">
+            <div
+              style="width:160px;background:var(--app-bg-elevated);border-right:1px solid var(--app-border-default);padding:8px 6px;font-size:11px">
+              <div
+                style="padding:4px 8px;border-radius:3px;background:var(--app-action-selected);color:var(--blue-4);font-weight:600;margin-bottom:2px">
+                📋 Board</div>
+              <div style="padding:4px 8px;color:var(--app-text-secondary);margin-bottom:2px">⚡ Workflows</div>
+              <div style="padding:4px 8px;color:var(--app-text-secondary);margin-bottom:2px">💬 Sessions</div>
+              <div style="padding:4px 8px;color:var(--app-text-secondary)">📈 Analytics</div>
+            </div>
+            <div style="flex:1;padding:16px;background:var(--app-bg-default)">
+              <div style="font-family:var(--font-heading);font-weight:600;margin-bottom:8px;font-size:14px">Page Content
+              </div>
+              <div style="color:var(--app-text-muted);font-size:12px">24px × 32px padding</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>Modal Layout</h3>
+      <div class="card">
+        <p>All modals follow: <code>centered</code> + <code>Stack gap="md"</code> + action buttons right-aligned.</p>
+        <div class="code-block">&lt;Modal centered title="Title" size="md"&gt;
+          &lt;Stack gap="md"&gt;
+          {/* Fields */}
+          &lt;Group justify="flex-end" mt="md"&gt;
+          &lt;Button variant="outline"&gt;Cancel&lt;/Button&gt;
+          &lt;Button&gt;Submit&lt;/Button&gt;
+          &lt;/Group&gt;
+          &lt;/Stack&gt;
+          &lt;/Modal&gt;</div>
+      </div>
+    </section>
+
+    <!-- Icons -->
+    <section id="icons">
+      <h2>Icons</h2>
+
+      <div class="card">
+        <p><strong>Library:</strong> @tabler/icons-react</p>
+        <p><strong>Total in use:</strong> 68 icons</p>
+        <p style="margin-top:12px"><strong>Sizing convention:</strong></p>
+        <div style="margin-top:8px;display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+          <span>14px — badges, inline</span>
+          <span>16px — ActionIcon, tables</span>
+          <span>18px — NavLink</span>
+          <span>20px — feature cards</span>
+          <span>24px — ThemeIcon, hero</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Frequently Used</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">
+          <span class="badge badge-light-blue">IconPlus</span>
+          <span class="badge badge-light-blue">IconEdit</span>
+          <span class="badge badge-light-blue">IconTrash</span>
+          <span class="badge badge-light-blue">IconSearch</span>
+          <span class="badge badge-light-blue">IconCheck</span>
+          <span class="badge badge-light-blue">IconX</span>
+          <span class="badge badge-light-blue">IconRefresh</span>
+          <span class="badge badge-light-blue">IconSettings</span>
+          <span class="badge badge-light-blue">IconChevronDown</span>
+          <span class="badge badge-light-blue">IconChevronRight</span>
+          <span class="badge badge-light-blue">IconPlayerPlay</span>
+          <span class="badge badge-light-blue">IconDeviceFloppy</span>
+          <span class="badge badge-light-blue">IconEye</span>
+          <span class="badge badge-light-blue">IconInfoCircle</span>
+          <span class="badge badge-light-blue">IconDownload</span>
+          <span class="badge badge-light-blue">IconUpload</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Full List (68)</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;font-size:12px">
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">AlertCircle</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ArrowRight</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ArrowsMaximize</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ArrowsMinimize</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Bolt</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">BrandGithub</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Briefcase</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Building</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ChartBar</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Check</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ChevronDown</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ChevronLeft</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ChevronRight</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ChevronUp</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">CircleFilled</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Clock</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Coin</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Crown</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">DeviceDesktopAnalytics</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">DeviceFloppy</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">DotsVertical</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Download</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Edit</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ExternalLink</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Eye</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">File</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">FileText</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Folder</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">GitBranch</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">GripVertical</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">History</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">InfoCircle</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Key</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">LayoutKanban</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">LetterCase</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Link</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">ListDetails</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Loader</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Lock</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Logout</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Message</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">PlayerPlay</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">PlayerStop</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Plug</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Plus</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Refresh</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Rocket</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Route</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Search</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Send</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Server</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Settings</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">SourceCode</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Sparkles</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Star</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Subtask</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Terminal2</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Tool</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Trash</span>
+          <span class="badge"
+            style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">TrendingUp</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Upload</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">User</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">UserCheck</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">UserOff</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Users</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">Wand</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">World</span>
+          <span class="badge" style="background:rgba(255,255,255,0.05);color:var(--app-text-secondary)">X</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Changelog -->
+    <section id="changelog">
+      <h2>Changelog</h2>
+      <div class="card">
+        <h3 style="margin-top:0">2026-04-03 — Initial Release</h3>
+        <ul style="color:var(--app-text-secondary);font-size:14px;padding-left:20px;margin-top:8px">
+          <li>Design system extracted from live Inertia + Mantine codebase</li>
+          <li>38 components documented with variants, states, and tokens</li>
+          <li>94 design tokens catalogued (colors, typography, spacing, effects)</li>
+          <li>68 Tabler icons inventoried</li>
+          <li>2 form validation patterns documented</li>
+          <li>Application shell layout documented</li>
+        </ul>
+      </div>
+    </section>
+
+  </div>
+
+  <style>
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes progress-animate {
+      0% {
+        transform: translateX(-100%);
+      }
+
+      100% {
+        transform: translateX(200%);
+      }
+    }
+  </style>
+
+  <script>
+    document.querySelectorAll('.nav-link').forEach(link => {
+      link.addEventListener('click', function (e) {
+        e.preventDefault();
+        const id = this.getAttribute('href').substring(1);
+        const el = document.getElementById(id);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth' });
+          document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+          this.classList.add('active');
+        }
+      });
+    });
+
+    const sections = document.querySelectorAll('section[id]');
+    window.addEventListener('scroll', () => {
+      let current = '';
+      sections.forEach(s => {
+        if (window.pageYOffset >= s.offsetTop - 100) current = s.id;
+      });
+      document.querySelectorAll('.nav-link').forEach(l => {
+        l.classList.remove('active');
+        if (l.getAttribute('href') === `#${current}`) l.classList.add('active');
+      });
+    });
+
+    document.getElementById('search').addEventListener('input', function () {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('.main section').forEach(s => {
+        const text = s.textContent.toLowerCase();
+        s.style.display = !q || text.includes(q) ? '' : 'none';
+      });
+      document.querySelectorAll('.nav-link').forEach(link => {
+        const href = link.getAttribute('href');
+        if (!href) return;
+        const section = document.querySelector(href);
+        if (section) link.style.display = section.style.display;
+      });
+    });
+  </script>
+
+</body>
+
+</html>

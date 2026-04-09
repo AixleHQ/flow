@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class ColumnWorkflowBindingDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :workflow
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     board_column: Field::BelongsTo,

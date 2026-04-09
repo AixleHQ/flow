@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class SessionLogDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :terminal_session
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     terminal_session: Field::BelongsTo,

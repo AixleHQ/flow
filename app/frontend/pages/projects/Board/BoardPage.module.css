@@ -1,0 +1,124 @@
+.boardRoot {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 140px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.boardArea {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  align-items: stretch;
+  background-color: var(--mantine-color-dark-7);
+  border-radius: 12px;
+}
+
+.commentMd p {
+  margin: 0 0 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mantine-color-text);
+}
+
+.commentMd p:last-child {
+  margin-bottom: 0;
+}
+
+.commentMd strong {
+  font-weight: 600;
+}
+
+.commentMd em {
+  font-style: italic;
+}
+
+.commentMd code {
+  background-color: var(--mantine-color-dark-5);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.commentMd pre {
+  background-color: var(--mantine-color-dark-5);
+  padding: 8px 12px;
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  line-height: 1.5;
+  margin: 4px 0;
+}
+
+.commentMd pre code {
+  background-color: transparent;
+  padding: 0;
+}
+
+.commentMd ul,
+.commentMd ol {
+  margin-left: 20px;
+  margin-bottom: 4px;
+  margin-top: 2px;
+}
+
+.commentMd li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mantine-color-text);
+}
+
+.commentMd a {
+  color: var(--mantine-color-blue-5);
+  text-decoration: underline;
+}
+
+.commentMd blockquote {
+  border-left: 3px solid var(--mantine-color-dark-4);
+  padding-left: 8px;
+  margin: 4px 0;
+  color: var(--mantine-color-dimmed);
+  font-style: italic;
+}
+
+.commentMd table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 4px 0;
+}
+
+.commentMd th,
+.commentMd td {
+  border: 1px solid var(--mantine-color-dark-4);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.commentMd th {
+  background-color: var(--mantine-color-dark-5);
+  font-weight: 600;
+}
+
+@keyframes workflowPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.workflowDotActive {
+  animation: workflowPulse 1.5s ease-in-out infinite;
+}
+
+.childTaskRow:hover {
+  background-color: var(--mantine-color-dark-5);
+}
+
+:global(@keyframes priorityBarPulse) {
+  0%, 100% { opacity: 1; transform: scaleY(1); }
+  50% { opacity: 0.5; transform: scaleY(1.15); }
+}

@@ -6,10 +6,11 @@ FactoryBot.define do
     title { "Skill #{name&.titleize}" }
     content { "Skill content for #{name}" }
     description { "Description for #{name}" }
-    kind { :custom }
-    scope { nil }  # Default: no scope (requires explicit scope:)
-
-    # == Association Traits ==
+    package { |s| "test-org/skills@#{s.name}" }
+    source { "test-org/skills" }
+    source_url { "https://github.com/test-org/skills" }
+    install_count { 0 }
+    scope { nil }
 
     trait :with_company_scope do
       association :scope, factory: :company
@@ -17,15 +18,6 @@ FactoryBot.define do
 
     trait :with_project_scope do
       association :scope, factory: :project
-    end
-
-    # == Kind Traits ==
-
-    trait :internal do
-      kind { :internal }
-      scope { nil }
-      title { nil }
-      content { nil }
     end
   end
 end

@@ -3,32 +3,18 @@
 module Api
   module V1
     class TerminalSessionsController < ApplicationController
-      before_action :set_terminal_session, only: %i[show update destroy finish]
+      skip_before_action :authenticate_user!, only: []
 
-      # GET /api/v1/terminal_sessions
-      # User-scoped sessions (for auth/onboarding/profile).
-      # Company/project-wide history → /api/v1/company/terminal_sessions
-      def index
-        scope = current_user.terminal_sessions
-                            .includes(:project)
-                            .order(created_at: :desc)
-
-        respond_with paginate(scope), each_serializer: TerminalSessionSerializer
-      end
-
-      # GET /api/v1/terminal_sessions/:id
-      # Get single terminal session
       def show
-        respond_with @session, serializer: TerminalSessionSerializer
+        session = find_session(params[:id])
+        render json: TerminalSessionResource.new(session).to_h
       end
 
-      # POST /api/v1/terminal_sessions
-      # Create and start new terminal session
       def create
         project = session_params[:project_id] ? current_user.company.projects.find(session_params[:project_id]) : nil
         agent = session_params[:configured_agent_id] ? find_accessible_agent(session_params[:configured_agent_id], project) : nil
 
-        @session = SessionService.create_and_start(
+        session = SessionService.create_and_start(
           user: current_user,
           project: project,
           session_type: session_params[:session_type],
@@ -37,92 +23,49 @@ module Api
           params: session_params.except(:project_id, :session_type, :agent_type, :configured_agent_id)
         )
 
-        respond_with @session, serializer: TerminalSessionSerializer
+        render json: TerminalSessionResource.new(session).to_h, status: :created
       end
 
-      # PATCH /api/v1/terminal_sessions/:id
-      # Update session metadata (e.g., user preferences)
-      def update
-        @session.update(update_params)
-        respond_with @session, serializer: TerminalSessionSerializer
+      def destroy
+        session = find_session(params[:id])
+        unless session.state.in?(%w[not_started finished failed])
+          render json: { error: "Cannot delete active session" }, status: :bad_request
+          return
+        end
+        session.destroy
+        head :ok
       end
 
-      # POST /api/v1/terminal_sessions/:id/finish
-      # Gracefully finish session — stop, collect artifacts, collect usage.
       def finish
-        SessionService.finish(session: @session)
-
-        render json: {
-          data: TerminalSessionSerializer.new(@session).attributes,
-          message: "Session finishing, collecting artifacts..."
-        }
+        session = current_user.terminal_sessions.find(params[:id])
+        SessionService.finish(session: session)
+        render json: TerminalSessionResource.new(session).to_h
       rescue TerminalSession::InvalidStateError => e
         render json: { error: e.message }, status: :bad_request
       end
 
-
-      # DELETE /api/v1/terminal_sessions/:id
-      # Delete a terminal session (only if not active)
-      def destroy
-        unless @session.state.in?(%w[not_started finished failed])
-          return render json: { error: "Cannot delete active session. Cancel it first." }, status: :bad_request
-        end
-
-        @session.destroy
-        head :ok
-      end
-
       private
 
-      def set_terminal_session
-        # Find by ID (numeric) or route_token (hex string)
-        @session = if params[:id].to_s.match?(/^\d+$/)
-                     current_user.terminal_sessions.find_by(id: params[:id])
-        else
-                     current_user.terminal_sessions.find_by(route_token: params[:id])
-        end
-
-        render json: { error: "Terminal session not found" }, status: :not_found unless @session
-      end
-
       def session_params
-        permitted = params.require(:terminal_session).permit(
-          :session_type,
-          :agent_type,
-          :project_id,
-          :configured_agent_id,
-          :mode,
-          :initial_prompt,
-          :requested_model,
-          metadata: {},
-          tool_ids: [],
-          skill_ids: [],
-          mcp_server_ids: [],
-          input_asset_ids: [],
-          repository_ids: [],
-          session_config: {}
+        params.require(:terminal_session).permit(
+          :project_id, :session_type, :agent_type, :configured_agent_id, :mode,
+          :initial_prompt, :requested_model,
+          tool_ids: [], skill_ids: [], mcp_server_ids: [],
+          input_asset_ids: [], repository_ids: []
         )
-
-        if params.dig(:terminal_session, :session_config).present?
-          raw = params[:terminal_session][:session_config]
-          config = raw.to_unsafe_h.slice("config_files", "env_vars", "bmad_enabled", "bmad_modules")
-          config["bmad_enabled"] = ActiveModel::Type::Boolean.new.cast(config["bmad_enabled"]) if config.key?("bmad_enabled")
-          permitted[:session_config] = config
-        end
-
-        permitted
       end
 
-      def update_params
-        params.require(:terminal_session).permit(metadata: {})
-      end
-
-      def find_accessible_agent(agent_id, project)
-        if project
-          Agent.visible_for_project(project).find(agent_id)
+      def find_session(id)
+        if id.to_s.match?(/^\d+$/)
+          current_user.terminal_sessions.find(id)
         else
-          Agent.for_company(current_user.company).find(agent_id)
+          current_user.terminal_sessions.find_by!(route_token: id)
         end
+      end
+
+      def find_accessible_agent(id, project)
+        scope = project ? Agent.visible_for_project(project) : Agent.belonging_to_company(current_user.company)
+        scope.find(id)
       end
     end
   end

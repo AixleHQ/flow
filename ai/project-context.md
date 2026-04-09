@@ -1,6 +1,6 @@
 ---
 project_name: 'aixle'
-date: '2026-02-21'
+date: '2026-04-09'
 status: 'complete'
 optimized_for_llm: true
 ---
@@ -14,29 +14,102 @@ _Critical rules and patterns for implementing code in this project._
 ## Technology Stack
 
 **Core:**
-- **Backend:** Ruby on Rails 8.1.2, Ruby 3.4.0
-- **Frontend:** React 19.0.0, TypeScript 5.9.3
-- **Database:** PostgreSQL 15.3
-- **Cache:** Redis 7.2
+- **Backend:** Ruby on Rails 8.1, Ruby 3.4
+- **Frontend:** React 19.0, TypeScript 5.9
+- **Bridge:** Inertia.js 3.0 (inertia_rails 3.19 + @inertiajs/react 3.0.1)
+- **UI:** Mantine 9.0 (core, dates, form, hooks, modals, notifications) + Tabler Icons
+- **Database:** PostgreSQL 15 (citext, plpgsql)
+- **Cache:** Redis
 - **Orchestration:** Temporal (temporalio gem)
-- **Build:** Vite 7.3.1
-- **UI:** Material UI 6.x
+- **Build:** Vite 7.3 + vite-plugin-ruby 5.1
 
 **Key Dependencies:**
-- **Routing:** TanStack Router
-- **State:** Redux Toolkit (global) + Zustand (local)
-- **Forms:** React Hook Form + Zod
-- **Auth:** OmniAuth (Google) + Pundit
-- **Storage:** Shrine 3.6 + AWS S3
+- **Serialization:** Alba 3.10 + Typelizer 0.12 (auto-generated TS types)
+- **Forms:** @mantine/form + Zod + mantine-form-zod-resolver; Inertia useForm for simple cases
+- **Real-time:** Inertia Cable (@inertia-cable/react + inertia_cable gem) + ActionCable transport
+- **Tables:** @tanstack/react-table 8.21
+- **DnD:** @dnd-kit/core 6.3 + @dnd-kit/sortable 10.0
+- **Auth:** OmniAuth (Google) + Pundit + has_secure_password (no Devise)
+- **Storage:** Shrine 3.6 + AWS S3 + Uppy (frontend uploads)
 - **Container (Docker):** docker-api 2.3
 - **Container (K8s):** kubeclient 4.13 + websocket-client-simple
 - **MCP:** actionmcp 0.100, solid_mcp
 - **Enums:** enumerize gem (NOT ActiveRecord enums)
 - **State machines:** aasm gem
+- **Pagination:** Pagy
+- **Search/Filter:** Ransack
+- **Monitoring:** Sentry (sentry-ruby, sentry-rails, @sentry/react)
+- **Code editor:** CodeMirror (@uiw/react-codemirror)
+- **Terminal:** xterm.js 6.0
+- **Charts:** Recharts 3.8
+- **Route helpers:** ts_routes gem → auto-generated `shared/api/routes.ts`
 
 ---
 
 ## Architecture Patterns
+
+### Inertia Monolith (Server-Driven)
+
+Rails controllers render React pages via Inertia. No client-side router — all navigation is server-routed.
+
+```
+Browser → Inertia Request → Rails Controller → render inertia: "Page", props: { ... } → React Page
+```
+
+### camelCase Conversion Pipeline
+
+Frontend sends camelCase → Rails receives snake_case → Alba responds in camelCase.
+
+| Layer | Mechanism | Direction |
+|---|---|---|
+| **Incoming params** | `ApplicationController#underscore_params` (`deep_transform_keys!(&:underscore)`) | camelCase → snake_case |
+| **Inertia props** | `InertiaRails.config.prop_transformer` (`camelize(:lower)`) | snake_case → camelCase |
+| **Alba resources** | `ApplicationResource` has `transform_keys :lower_camel` | snake_case → camelCase |
+| **Typelizer types** | `properties_transformer` (`camelize(:lower)`) | snake_case → camelCase |
+
+**CRITICAL:** `wrap_parameters false` is set on `Web::ApplicationController`. Without it, Rails `ParamsWrapper` auto-adds an empty wrapper key that collides with the underscored camelCase key.
+
+### Controller Hierarchy
+
+```
+ApplicationController (underscore_params, gon_settings)
+├── Web::ApplicationController (AuthConcern, wrap_parameters false, inertia_share: current_user, projects, flash)
+│   ├── Web::Company::ApplicationController (Pundit, AuthorizationConcern, layout "inertia", require_auth)
+│   │   └── Web::Company::Projects::ApplicationController (set_project, inertia_share: project)
+│   │       └── Feature controllers (boards, workflows, sessions, etc.)
+│   ├── Web::SessionsController (login/logout)
+│   ├── Web::ProfileController
+│   └── Web::OnboardingController
+├── Api::V1::ApplicationController (JSON, Pundit, PaginationConcern, skip CSRF, authenticate_user!)
+│   ├── Api::V1::Internal:: (ws_auth, usage_statistics)
+│   └── Api::V1::AssetsController (presign, upload)
+├── Admin::ApplicationController (Administrate, authenticate_admin!)
+└── Webhooks:: (GitHub, GitLab — HMAC/secret verification)
+```
+
+### Serialization: Alba Resources Only (for Inertia)
+
+All Inertia props go through Alba resources (`ApplicationResource` subclasses). AMS (`ActiveModel::Serializers`) is legacy — only used in some workflow/step JSON endpoints.
+
+```ruby
+# ✅ Inertia page
+render inertia: "Sessions/ShowPage", props: {
+  session: -> { TerminalSessionResource.new(session).to_h }
+}
+
+# ✅ JSON API (same resource)
+render json: TerminalSessionResource.new(session).to_h
+
+# ❌ NEVER for Inertia — bypass type generation, keys not transformed
+render inertia: "Page", props: { session: { id: session.id } }
+```
+
+### Shared Props (Auto-Injected)
+
+`Web::ApplicationController` injects `current_user`, `projects`, `flash` via `inertia_share`.
+`Web::Company::Projects::ApplicationController` adds `project`.
+
+Frontend reads these via `usePage().props` or typed `SharedProps`.
 
 ### Container Execution Framework
 
@@ -77,8 +150,6 @@ not_started → running → ready → finished
 
 Events: `start!`, `mark_ready!`, `finish!`, `fail!`
 
-`session.strategy` returns the correct Strategy instance based on `session_type`.
-
 ---
 
 ## Implementation Rules
@@ -92,19 +163,113 @@ Events: `start!`, `mark_ready!`, `finish!`, `fail!`
 - Mocks via `mocha`
 - WebMock for HTTP stubs in tests
 - Multi-tenancy: always filter by `company_id`
-- API responses: wrap lists in `items`, single resources in `data`
-- Authorization: Pundit policies for all resources
-- Serializers: ActiveModelSerializers
+- Authorization: Pundit policies for all resources, `BaseContext` as policy context
+- Serialization: Alba resources for all Inertia props and new JSON endpoints
+
+### Inertia Rendering
+
+```ruby
+render inertia: "Projects/Board/BoardPage", props: {
+  board: -> { BoardResource.new(board).to_h },
+  heavy: InertiaRails.defer { expensive_query },
+  cable_stream: -> { inertia_cable_stream(board) },
+}
+```
+
+**CRITICAL: Lambda Wrapper Rule** — when a page has ANY `InertiaRails.defer` prop, ALL eager Hash/Array props MUST be wrapped in `-> { ... }`. Plain Hash values get corrupted during partial reloads (scalars filtered out, arrays leak through).
+
+| Prop type | How to declare | Why |
+|---|---|---|
+| Eager data (Hash/Array) | `-> { Resource.new(r).to_h }` | Atomic filtering on partial reload |
+| Deferred data | `InertiaRails.defer { ... }` | Already a Proc internally |
+| Simple scalar (string/nil) | Plain value OK | Not recursively traversed |
+| Always-included | `InertiaRails.always { ... }` | Already a Proc internally |
+
+### Inertia Drawer/Sidebar Pattern
+
+URL is the single source of truth for selected record. `router.get` (not `router.reload`) to open/close drawers — updates browser URL. Server returns `nil` when no record selected.
+
+```tsx
+// Open: router.get updates URL, server includes selected record in props
+router.get(boardUrl, { task: task.id }, { preserveState: true, preserveScroll: true });
+
+// Close: URL drops param, server returns nil
+router.get(boardUrl, {}, { preserveState: true, preserveScroll: true });
+```
+
+### Real-Time: Inertia Cable Only
+
+All real-time updates use `inertia_cable` gem via `broadcast_refresh_to`. No custom ActionCable channels.
+
+**Backend:** Model broadcasts → `broadcast_refresh_to(self)` on `after_commit`.
+**Controller:** Pass `cable_stream: -> { inertia_cable_stream(record) }` prop.
+**Frontend:** `useInertiaCableStream(cableStream, { only: ['tasks', 'columns'], enabled: !!board })`.
+
+### Data Loading: Props First
+
+Always prefer Inertia props over client-side `fetch()`. Data flows from controller through props. Exception: mutations (POST/PATCH/DELETE) use `apiFetch` + `router.reload` after success.
+
+### Frontend: TypeScript/React
+
+- Strict mode always enabled
+- Base URL: `./app/frontend`, path alias `@/*`
+- Mantine 9 for all UI components — never raw HTML elements for buttons, inputs, layout
+- CSS Modules (`.module.css`) for custom styles, Mantine CSS variables for theming
+- `usePage<PageProps>().props` to read Inertia props
+- Persistent layouts via `(Page as any).layout = persistentProjectLayout`
+- Forms: `@mantine/form` + `zodResolver` + `router.patch/post` for submission
+- Inertia `useForm` for simple login-style forms
+- `apiFetch` (shared/lib/apiFetch.ts) for JSON mutations — sets CSRF, Accept: json, credentials: include
+- Typelizer-generated types in `types/generated/` — run `rails typelizer:generate` after changing Alba resources
+- Tabler Icons (`@tabler/icons-react`) — not Mantine icons
+
+### Frontend: Component Structure (FSD-style segments)
+
+Every non-trivial component lives in its own folder with explicit segments:
+
+```
+ComponentName/
+  index.ts              # Public API — re-exports component (and types if needed)
+  ComponentName.tsx     # Component implementation
+  ComponentName.module.css  # Scoped styles (CSS Modules)
+```
+
+Rules:
+- **One component = one folder.** Never put multiple components in a single file.
+- **`index.ts` is the barrel** — external code imports from the folder, never from the `.tsx` file directly.
+- **CSS Modules co-located** — styles live next to the component, named `ComponentName.module.css`.
+- **Pages follow the same pattern** — `pages/Projects/Board/BoardPage.tsx` + `BoardPage.module.css` in the same folder.
+- Shared components: `shared/components/ComponentName/index.ts` + `ComponentName.tsx` + `ComponentName.module.css`.
+- Feature-local components: co-located inside the page folder (e.g. `pages/Projects/Board/TaskCard/`).
+- **Private sub-components** live in a `components/` folder inside the parent:
+
+```
+BoardPage/
+  index.ts
+  BoardPage.tsx
+  BoardPage.module.css
+  components/                       # Private to BoardPage — not imported from outside
+    TaskCard/
+      index.ts
+      TaskCard.tsx
+      TaskCard.module.css
+    ColumnHeader/
+      index.ts
+      ColumnHeader.tsx
+      ColumnHeader.module.css
+```
+
+- If a sub-component starts being used outside its parent, promote it to `shared/components/`.
 
 ### Container Strategy Pattern
 
 When adding a new strategy:
 1. Inherit from `BaseStrategy` (or `AgentBaseStrategy` for agents)
 2. Implement `resolve_image`, `before_create_container`
-3. Override phase methods as needed (`start_container`, `exec`, `before_cleanup`)
+3. Override phase methods as needed
 4. Register in `PhaseActivity#resolve_strategy` if new trigger type
 
-When adding a new agent:
+When adding a new agent adapter:
 1. Create adapter in `app/services/agents/`
 2. Implement: `config_path`, `home_dir`, `auth_required_keys`, `generate_config`, `extract_credentials`
 3. Register in `AgentCredentialsService::ADAPTERS`
@@ -112,46 +277,46 @@ When adding a new agent:
 
 ### Container Runtime
 
-Runtime is selected by `Settings.container_runtime` ("docker" or "kubernetes").
-
-Docker: uses `Docker::Image`, `Docker::Container` from docker-api gem.
-Kubernetes: uses `Kubeclient::Client` for core API + Traefik CRDs, `WebSocket::Client::Simple` for exec.
+Runtime selected by `Settings.container_runtime` ("docker" or "kubernetes").
 
 Key difference: Docker exec returns `[[stdout], [stderr], exit_code]`, K8s exec returns `[stdout, stderr, exit_code]`.
 
-### Testing
-
-**Backend (Minitest):**
-- Tests in `test/` directory
-- `test/support/stub_support.rb` — reusable stubs for Docker/K8s runtimes
-- Integration tests: `test/integration/container_workflow_integration_test.rb` — 36 combinatorial tests
-- Use `docker exec app-web-1 bundle exec rails test` to run inside container
-
-**Frontend (Vitest):**
-- Co-located tests `*.test.tsx`
-- Mock API calls and external deps
-
-### TypeScript/Frontend
-
-- Strict mode always enabled
-- Base URL: `./app/frontend`
-- Import order: builtin → external → internal → parent → sibling
-- `camelcaseKeys`/`decamelizeKeys` for API request/response
-- Feature-Sliced Design: app → pages → features → entities → shared
-- Redux Toolkit for API cache + global state, Zustand for local component state
-- React Hook Form + Zod validation (on blur + on submit)
-
 ---
+
+## Testing
+
+### Backend (Minitest)
+
+- Tests in `test/` directory
+- `require "inertia_rails/minitest"` for Inertia assertions
+- **Integration tests** (Inertia pages): inherit `WebTestCase < ActionDispatch::IntegrationTest`
+  - `create_authenticated_user` → returns `[company, user]` with `:onboarding_completed` trait
+  - `web_sign_in(user)` → `post login_path` with password
+  - Assert: `assert_inertia_component "Projects/Board/BoardPage"`
+- **Controller tests** (API): `ActionController::TestCase` defaults to `format: :json`
+  - `sign_in(user)` → sets `session[:user_id]`
+  - JSON body: `response.parsed_body` or `Hashie::Mash.new(JSON.parse(response.body))`
+- **Admin tests:** `Admin::ActionControllerTestCase` defaults to `format: :html`
+- `test/support/stub_support.rb` — reusable stubs for Docker/K8s runtimes
+- `test/support/auth_helper.rb` — `sign_in`, `sign_out`, `sign_in_as`
+- Integration container tests: `test/integration/container_workflow_integration_test.rb`
 
 ## Anti-Patterns
 
 - **Never write `encrypted_config_data` directly** — always use `config_data=` setter
-- **Never mix naming conventions** — snake_case in Ruby, camelCase in TypeScript
-- **Never forget `company_id` filter** in multi-tenant queries
+- **Never use plain Hash/Array props when defer props exist on the same page** — wrap in `-> { }`
 - **Never use ActiveRecord enums** — use `enumerize`
 - **Never use fixtures** — use factory_bot factories
-- **Never stub Mocha `.returns` with a block for dynamic responses** — use `define_singleton_method` on Object.new instead
+- **Never use custom ActionCable channels** — use Inertia Cable (`broadcast_refresh_to`)
+- **Never use client-side fetch for data that should be Inertia props** — data flows from controller
+- **Never use `router.reload` for drawer open/close** — use `router.get` (updates URL)
+- **Never use `update_column` without explicit `broadcast_refresh_to`** — bypasses after_commit
+- **Never use Material UI, Redux, TanStack Router, or React Hook Form** — removed from stack
+- **Never use AMS for Inertia props** — use Alba resources with Typelizer
+- **Never use `as_json` or inline hashes for Inertia props** — bypass type generation
+- **Never forget `company_id` filter** in multi-tenant queries
 - **Never skip `frozen_string_literal: true`** in Ruby files
+- **Never use `new Date()` on Alba-serialized dates** — use `shared/lib/formatDate` helpers
 - **Container exec format differs between runtimes** — Docker: `[[stdout], [stderr], exit_code]`, K8s: `[stdout, stderr, exit_code]`
 
 ---
@@ -160,36 +325,87 @@ Key difference: Docker exec returns `[[stdout], [stderr], exit_code]`, K8s exec 
 
 ```
 app/
-  models/                              # ActiveRecord models
-  services/
-    agents/                            # Agent adapters (per-agent logic)
-    container_strategies/              # Strategy pattern (auth, session, tool)
-    container_runtime/                 # Runtime implementations (docker, k8s)
-    container_runtime.rb               # Runtime factory
-    container_service.rb               # Phase runner
-    agent_credentials_service.rb       # Agent credential facade
-    session_context_service.rb         # Session config injection
-    temporal_service.rb                # Temporal client
-  temporal/
-    workflows/                         # Temporal workflows
-    activities/                        # Temporal activities
   controllers/
-    api/v1/                            # Public API
-    api/v1/company/                    # Company-scoped API
-    api/v1/company/projects/           # Project-scoped API
-    api/v1/internal/                   # Internal endpoints (ws_auth, usage)
-    admin/                             # Administrate panel
-  channels/                            # ActionCable (TerminalSessionChannel)
+    web/                                # Inertia HTML app
+      company/                          # Company-scoped (Pundit, auth required)
+        projects/                       # Project-scoped (set_project, inertia_share project)
+          boards_controller.rb          # Kanban board
+          workflows_controller.rb       # Workflow CRUD
+          sessions_controller.rb        # Terminal sessions
+    api/v1/                             # JSON API
+      internal/                         # ws_auth, usage_statistics
+    admin/                              # Administrate panel
+    webhooks/                           # GitHub, GitLab webhooks
+    concerns/                           # auth, authorization, pagination, steps_actions
+  models/                               # ActiveRecord models
+  resources/                            # Alba serializers (ApplicationResource subclasses)
+    application_resource.rb             # Base: Alba::Resource + Typelizer::DSL + transform_keys :lower_camel
+  serializers/                          # Legacy AMS (workflow/step JSON only)
+  services/
+    agents/                             # Agent adapters (per-agent logic)
+    container_strategies/               # Strategy pattern (auth, session, tool)
+    container_runtime/                  # Runtime implementations (docker, k8s)
+    container_runtime.rb                # Runtime factory
+    container_service.rb                # Phase runner
+    agent_credentials_service.rb        # Agent credential facade
+    session_context_service.rb          # Session config injection
+    temporal_service.rb                 # Temporal client
+    internal_tools/                     # Board/meta tools
+    context_builders/                   # Context assembly
+  contexts/                             # Pundit policy contexts (BaseContext)
+  policies/                             # Pundit policies
+  temporal/
+    workflows/                          # Temporal workflows
+    activities/                         # Temporal activities
+  frontend/
+    entrypoints/
+      application.tsx                   # createInertiaApp + MantineProvider + Sentry
+    pages/                              # Route-mapped screens (slice-by-feature)
+      Projects/                         # Board, Workflows, Sessions, Settings, etc.
+      Company/                          # Members, Integrations, Agents, etc.
+      Auth/                             # Login
+      Profile/                          # User profile
+      Onboarding/                       # Onboarding flow
+    layouts/
+      AuthLayout.tsx                    # Signed-in shell (sidebar, header, flash)
+      GuestLayout.tsx                   # Unauthenticated shell
+    shared/
+      api/routes.ts                     # Auto-generated by ts_routes gem
+      ui/                               # App chrome (AppSidebar, AppHeader, PageShell)
+      ui/types.ts                       # SharedProps, SharedUser, SharedProject
+      components/                       # Cross-feature components
+      resources/                        # Resource-centric UI (agents/, tools/, etc.)
+      lib/
+        apiFetch.ts                     # Fetch wrapper (CSRF, JSON, credentials)
+        hooks/useInertiaCableStream.ts  # Cable stream hook
+        sentry.ts                       # Sentry init
+        formatDate.ts                   # Date formatting helpers
+      theme/mantineTheme.ts             # Mantine theme config
+    types/generated/                    # Typelizer output (auto-generated TS interfaces)
+
+config/
+  initializers/typelizer.rb             # Typelizer config (output_dir, camelCase)
 
 test/
-  support/stub_support.rb             # Reusable runtime stubs
-  integration/                         # Integration tests
-  factories/                           # FactoryBot factories
+  integration/
+    web_test_case.rb                    # Base for Inertia integration tests
+    web/company/                        # Company controller tests
+    web/company/projects/               # Project controller tests
+  controllers/                          # API/Admin controller tests
+  support/
+    auth_helper.rb                      # sign_in, sign_out, sign_in_as
+    stub_support.rb                     # Reusable runtime stubs
+    upload_support.rb                   # File upload test helpers
+  helpers/
+    temporal_helper.rb                  # Temporal test helpers
+  factories/                            # FactoryBot factories
+  playwright/                           # E2E test helpers
 
-ai/                                    # AI planning & architecture docs
-  architecture/                        # Architecture decisions
-  epics/                               # Epic definitions
-  prd/                                 # Product requirements
+ai/                                     # AI planning & architecture docs
+  architecture/                         # Architecture decisions
+  epics/                                # Epic definitions
+  prd/                                  # Product requirements
+  implementation-artifacts/             # Sprint plans, status
 ```
 
 ---
@@ -198,11 +414,14 @@ ai/                                    # AI planning & architecture docs
 
 | Term | Meaning | DB column | Examples |
 |------|---------|-----------|----------|
-| **Agent Runtime** | Which AI agent CLI to use for execution | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli` |
-| **Container Runtime** | Infrastructure that runs agent containers | `ContainerRuntime.build` (code-level) | Docker (local), Kubernetes (cluster) |
-| **Internal Tool** | System-provided tool, runs in-process (no Docker) | `tools.kind = 'internal'` | `code_climate`, `list_sub_steps` |
-| **Workflow Tool** | Internal tool requiring workflow context (`step_run`), auto-injected into `workflow_step` sessions | `tools.workflow_only = true` | `list_sub_steps`, `mark_sub_step`, `write_step_note` |
-| **Custom Tool** | User-created tool that runs in a Docker container | `tools.kind = 'custom'` | Company or project scoped |
+| **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli` |
+| **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local), Kubernetes (cluster) |
+| **Internal Tool** | System-provided tool, runs in-process | `tools.kind = 'internal'` | `code_climate`, `list_sub_steps` |
+| **Workflow Tool** | Internal tool requiring workflow context, auto-injected | `tools.workflow_only = true` | `list_sub_steps`, `mark_sub_step`, `write_step_note` |
+| **Custom Tool** | User-created tool in Docker container | `tools.kind = 'custom'` | Company or project scoped |
+| **Alba Resource** | Serializer for Inertia props + JSON | `app/resources/` | `BoardTaskResource`, `ProjectResource` |
+| **Inertia Cable** | Real-time prop refresh via ActionCable | `broadcast_refresh_to` | Board live updates |
+| **Shared Props** | Auto-injected Inertia props | `inertia_share` | `current_user`, `projects`, `flash`, `project` |
 
 ### Tool visibility rules
 - **Workflow-only tools** (`workflow_only: true`) are auto-injected into `workflow_step` sessions only
@@ -211,4 +430,4 @@ ai/                                    # AI planning & architecture docs
 
 ---
 
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-04-09

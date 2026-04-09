@@ -57,8 +57,8 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
    - Go to "APIs & Services" → "Credentials"
    - Click "Create Credentials" → "OAuth 2.0 Client ID"
    - Application type: "Web application"
-   - Add Authorized redirect URI: `http://localhost:4000/api/v1/auth/google/callback`
-   - For production, add: `https://yourdomain.com/api/v1/auth/google/callback`
+   - Add Authorized redirect URI: `http://localhost:4000/auth/google/callback`
+   - For production, add: `https://yourdomain.com/auth/google/callback`
 
 4. **Set Environment Variables:**
    Add to `.env.development` in the project root:
@@ -72,7 +72,7 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
    docker-compose restart web
    ```
 
-**Note:** Without Google OAuth configuration, the Google login button will redirect to `/api/v1/auth/failure`. Password-based login will still work.
+**Note:** Without Google OAuth configuration, the Google login button will redirect to `/auth/failure`. Password-based login will still work.
 
 ## Development Commands
 

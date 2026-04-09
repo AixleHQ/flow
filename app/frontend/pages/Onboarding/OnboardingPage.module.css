@@ -1,0 +1,108 @@
+/* ── Welcome card ──────────────────────────── */
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcomeCard {
+  animation: fadeSlideUp 0.3s ease-out both;
+}
+
+/* ── Step content transition ───────────────── */
+
+.stepContent {
+  animation: fadeSlideUp 0.2s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcomeCard,
+  .stepContent {
+    animation: none;
+  }
+
+  .agentCard,
+  .summaryCard {
+    transition: none;
+  }
+}
+
+/* ── Agent cards (Step 2) ──────────────────── */
+
+.agentCard {
+  cursor: pointer;
+  border-left-width: 4px !important;
+  border-left-style: solid !important;
+  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.agentCard:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* ── Agent summary cards (Step 4) ──────────── */
+
+.summaryCard {
+  transition: transform 150ms ease;
+}
+
+.summaryCard:hover {
+  transform: translateY(-1px);
+}
+
+/* ── Company logo ──────────────────────────── */
+
+.companyLogo {
+  height: 48px;
+  max-width: 200px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
+
+/* ── Subtitle text ─────────────────────────── */
+
+.subtitle {
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+}
+
+/* ── Confetti (Step 4) ────────────────────── */
+
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(-20px) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(420px) rotate(720deg);
+  }
+}
+
+.confettiContainer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.confettiPiece {
+  position: absolute;
+  top: -10px;
+  border-radius: 2px;
+  animation: confettiFall linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confettiPiece {
+    animation: none;
+    display: none;
+  }
+}

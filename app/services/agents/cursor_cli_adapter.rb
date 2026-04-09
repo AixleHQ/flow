@@ -73,20 +73,8 @@ module Agents
       "/workspace/AGENTS.md"
     end
 
-    # Skills as standard Cursor Agent Skills: ~/.cursor/skills/<name>/SKILL.md
-    # Cursor auto-discovers and applies them based on description relevance.
-    # Adds YAML frontmatter (name, description) if not already present.
-    # See: https://cursor.com/docs/context/skills
-    def skill_files(skills)
-      files = {}
-      skills.each do |skill|
-        next if skill.content.blank?
-
-        slug = skill.name.parameterize
-        content = ensure_skill_frontmatter(skill)
-        files["#{home_dir}/.cursor/skills/#{slug}/SKILL.md"] = content
-      end
-      files
+    def skills_agent_name
+      "cursor"
     end
 
     # MCP config: /workspace/.cursor/mcp.json + pre-approved mcp-approvals.json
@@ -117,23 +105,26 @@ module Agents
 
     # Fetch available models from Cursor API (Connect protocol, JSON format).
     CURSOR_MODELS_URL = "https://api2.cursor.sh/aiserver.v1.AiService/GetUsableModels"
+    CURSOR_AUTH_URL = "https://authenticator.cursor.sh/oauth/token"
+    CURSOR_CLIENT_ID = "cursor-cli"
 
-    def fetch_available_models(credentials)
+    def fetch_available_models(credentials, credential: nil)
       access_token = credentials["accessToken"]
       return [] if access_token.blank?
 
-      uri = URI(CURSOR_MODELS_URL)
-      req = Net::HTTP::Post.new(uri)
-      req["Authorization"] = "Bearer #{access_token}"
-      req["Content-Type"] = "application/json"
-      req["Connect-Protocol-Version"] = "1"
-      req.body = "{}"
+      response = request_models(access_token)
 
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      if response_unauthorized?(response) && credential
+        new_token = refresh_cursor_token!(credential)
+        return [] unless new_token
+
+        response = request_models(new_token)
+      end
+
       return [] unless response.is_a?(Net::HTTPSuccess)
 
       data = JSON.parse(response.body)
-      return [] if data["code"].present? # Connect error response
+      return [] if data["code"].present?
 
       parse_models_json(data)
     rescue StandardError => e
@@ -203,6 +194,58 @@ module Agents
     end
 
     private
+
+    def request_models(access_token)
+      uri = URI(CURSOR_MODELS_URL)
+      req = Net::HTTP::Post.new(uri)
+      req["Authorization"] = "Bearer #{access_token}"
+      req["Content-Type"] = "application/json"
+      req["Connect-Protocol-Version"] = "1"
+      req.body = "{}"
+      Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+    end
+
+    def response_unauthorized?(response)
+      response.code == "401" || response.code == "403"
+    end
+
+    def refresh_cursor_token!(credential)
+      refresh_token = credential.config_data["refreshToken"]
+      return nil if refresh_token.blank?
+
+      uri = URI(CURSOR_AUTH_URL)
+      body = URI.encode_www_form(
+        grant_type: "refresh_token",
+        client_id: CURSOR_CLIENT_ID,
+        refresh_token: refresh_token
+      )
+      req = Net::HTTP::Post.new(uri)
+      req["Content-Type"] = "application/x-www-form-urlencoded"
+      req.body = body
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+
+      unless response.is_a?(Net::HTTPSuccess)
+        Rails.logger.warn("[CursorCliAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
+        return nil
+      end
+
+      data = JSON.parse(response.body)
+      new_access = data["access_token"]
+      return nil if new_access.blank?
+
+      updated = credential.config_data.merge(
+        "accessToken" => new_access,
+        "refreshToken" => data["refresh_token"] || refresh_token
+      )
+      credential.update!(config_data: updated)
+      Rails.logger.info("[CursorCliAdapter] Token refreshed for credential #{credential.id}")
+
+      new_access
+    rescue StandardError => e
+      Rails.logger.warn("[CursorCliAdapter] Token refresh error: #{e.message}")
+      nil
+    end
 
     CURSOR_API_BASE = "https://api2.cursor.sh"
     FILTERED_USAGE_ENDPOINT = "/aiserver.v1.DashboardService/GetFilteredUsageEvents"
@@ -410,23 +453,6 @@ module Agents
     # =========================================================================
     # OTLP payload helpers
     # =========================================================================
-
-    # Extract spans from OTLP traces JSON payload
-    # Ensure SKILL.md has YAML frontmatter with name and description.
-    # Skips if content already starts with ---.
-    def ensure_skill_frontmatter(skill)
-      content = skill.content.strip
-      return content if content.start_with?("---")
-
-      frontmatter = [
-        "---",
-        "name: #{skill.name.parameterize}",
-        "description: #{(skill.description.presence || skill.title.presence || skill.name).to_s.gsub('"', '\\"')}",
-        "---"
-      ].join("\n")
-
-      "#{frontmatter}\n\n#{content}"
-    end
 
     def generate_cli_config(workflow_config)
       {

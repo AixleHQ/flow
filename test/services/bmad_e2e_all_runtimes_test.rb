@@ -302,32 +302,6 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
-  # Cross-runtime: skill files target correct directories per adapter
-  # ====================================================================
-
-  test "E2E: skill_files produce correct paths for all runtimes" do
-    skill = OpenStruct.new(name: "test-skill", content: "# Test", title: "Test Skill",
-                           description: "A test skill")
-
-    expected_paths = {
-      "cursor_cli" => "/home/cursor/.cursor/skills/test-skill/SKILL.md",
-      "claude_code" => "/home/claude/.claude/skills/test-skill.md",
-      "codex" => "/home/codex/.codex/skills/test-skill/SKILL.md",
-      "gemini_cli" => "/home/gemini/.gemini/GEMINI.md"
-    }
-
-    expected_paths.each do |agent_type, expected_path|
-      adapter = AgentCredentialsService.for(agent_type).adapter
-      files = adapter.skill_files([ skill ])
-
-      assert files.key?(expected_path),
-        "#{agent_type}: Expected skill at #{expected_path}, got #{files.keys.inspect}"
-      assert files[expected_path].present?,
-        "#{agent_type}: Expected non-empty skill content at #{expected_path}"
-    end
-  end
-
-  # ====================================================================
   # Cross-runtime: context file written to correct path per adapter
   # ====================================================================
 

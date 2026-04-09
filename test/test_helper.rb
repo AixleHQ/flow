@@ -3,7 +3,6 @@ ENV["RAILS_ENV"] = "test"
 require "simplecov"
 
 SimpleCov.start("rails") do
-  enable_coverage :branch
   primary_coverage :line
 end
 
@@ -13,6 +12,7 @@ require "minitest/autorun"
 require "minitest/power_assert"
 require "webmock/minitest"
 require "mocha/minitest"
+require "inertia_rails/minitest"
 
 # Load shared test helpers and support files
 Dir[File.expand_path("../helpers/**/*.rb", __FILE__)].sort.each { |file| require file }
@@ -61,6 +61,13 @@ end
 class Admin::ActionControllerTestCase < ActionController::TestCase
   def process(action, **args)
     super(action, format: :html, **args)
+  end
+end
+
+class ActionDispatch::IntegrationTest
+  def assert_inertia_page(component)
+    assert_response :success
+    assert_inertia_component component
   end
 end
 

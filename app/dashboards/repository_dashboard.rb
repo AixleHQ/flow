@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class RepositoryDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :integration
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     full_name: Field::String,

@@ -18,7 +18,9 @@ class InternalToolExecutor
     rescue InternalTools::WorkflowContextError => e
       { exit_code: 1, stdout: "", stderr: e.message }
     rescue StandardError => e
-      Rails.logger.error("[InternalToolExecutor] #{tool.name} failed: #{e.class} — #{e.message}")
+      unless Rails.env.test?
+        Rails.logger.error("[InternalToolExecutor] #{tool.name} failed: #{e.class} — #{e.message}")
+      end
       { exit_code: 1, stdout: "", stderr: "Internal tool error: #{e.message}" }
     end
 

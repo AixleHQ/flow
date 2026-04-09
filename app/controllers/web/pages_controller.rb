@@ -1,4 +1,6 @@
 class Web::PagesController < Web::ApplicationController
+  skip_before_action :enforce_onboarding
+
   def privacy_policy
     render layout: "web/legal"
   end

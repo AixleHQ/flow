@@ -2,7 +2,7 @@
 
 class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::ApplicationController
   def show
-    sessions = @project.terminal_sessions
+    sessions = current_project.terminal_sessions
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)
                        .includes(:user)
@@ -12,11 +12,11 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     active_session = sessions.find { |s| %w[not_started running ready].include?(s.state) }
 
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
-      project: project_props,
-      sessions: sessions.map { |s| TerminalSessionResource.new(s).to_h },
-      active_session_id: active_session&.id,
-      configured_agents: current_user.configured_agents,
-      assets: @project.assets.active.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } }
+      sessions: -> { sessions.map { |s| TerminalSessionResource.new(s).to_h } },
+      active_session_id: -> { active_session&.id },
+      configured_agents: -> { current_user.configured_agents },
+      assets: -> { Asset.accessible_from_project(current_project).map { |a| PickerResource.new(a).to_h } },
+      agent_models: InertiaRails.defer { current_user.agent_models_for_props }
     }
   end
 
@@ -25,7 +25,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
 
     session = SessionService.create_and_start(
       user: current_user,
-      project: @project,
+      project: current_project,
       session_type: "agent_session",
       agent_type: params[:agent_runtime] || current_user.default_agent_runtime || "claude_code",
       params: {
@@ -42,34 +42,63 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       }
     )
 
-    redirect_to "/company/projects/#{@project.id}/aixle_builder/#{session.id}/session"
-  end
-
-  def session
-    ts = @project.terminal_sessions
-                 .where(user: current_user)
-                 .where("metadata @> ?", { aixle_builder: true }.to_json)
-                 .find(params[:id])
-
-    session_props = TerminalSessionResource.new(ts).to_h
-
-    if ts.route_token.present?
-      ws_base = Settings.traefik.ws_base
-      http_base = Settings.traefik.http_base
-      session_props[:websocket_url] = "#{ws_base}/t/#{ts.route_token}/tty/ws"
-
-      unless ts.mode == "non_interactive"
-        ide_url = "#{http_base}/t/#{ts.route_token}/ide/?folder=/workspace"
-        token = ts.metadata&.dig("vscode_token")
-        ide_url += "&tkn=#{token}" if token.present?
-        session_props[:ide_url] = ide_url
-      end
+    unless session.persisted?
+      redirect_to company_project_aixle_builder_path(current_project), alert: session.errors.full_messages.to_sentence.presence || "Failed to create session"
+      return
     end
 
+    redirect_to company_project_aixle_builder_session_path(current_project, session)
+  end
+
+  def show_session
+    ts = current_project.terminal_sessions
+                 .where(user: current_user)
+                 .where("metadata @> ?", { aixle_builder: true }.to_json)
+                 .find_by(id: params[:id])
+    return head :not_found unless ts
+
     render inertia: "Projects/AixleBuilder/SessionPage", props: {
-      project: project_props,
-      session: session_props
+      session: -> { TerminalSessionResource.new(ts).to_h },
+      cable_stream: -> { inertia_cable_stream(ts) },
+      builder_activities: InertiaRails.defer {
+        ts.reload
+        activities = ts.metadata&.dig("builder_activities") || []
+        Rails.logger.info("[AixleBuilder] builder_activities count=#{activities.size} for session=#{ts.id}")
+        activities.last(100).reverse.map do |a|
+          a.transform_keys { |k| k.to_s.camelize(:lower) }
+        end
+      },
+      workflows: InertiaRails.defer {
+        Workflow.visible_for_project(current_project)
+                .includes(:steps, :runs)
+                .order(:name)
+                .map { |w| WorkflowResource.new(w).to_h }
+      },
+      board_columns: InertiaRails.defer {
+        board = current_project.board
+        if board
+          board.board_columns
+               .includes(column_workflow_binding: :workflow)
+               .order(:position)
+               .map { |c| BoardColumnResource.new(c).to_h }
+        else
+          []
+        end
+      }
     }
+  end
+
+  def finish
+    ts = current_project.terminal_sessions
+                 .where(user: current_user)
+                 .where("metadata @> ?", { aixle_builder: true }.to_json)
+                 .find_by(id: params[:id])
+    return head :not_found unless ts
+
+    SessionService.finish(session: ts)
+    redirect_to company_project_aixle_builder_session_path(current_project, ts)
+  rescue TerminalSession::InvalidStateError => e
+    redirect_to company_project_aixle_builder_session_path(current_project, ts), alert: e.message
   end
 
   private
@@ -79,8 +108,8 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       meta_create_workflow meta_create_agent meta_create_step
       meta_create_sub_step meta_get_workflow meta_list_workflows
       meta_finalize_workflow meta_update_step meta_delete_step
-      meta_reorder_steps meta_create_tool meta_create_skill
-      meta_create_mcp_server meta_link_resource_to_step
+      meta_reorder_steps meta_create_tool meta_install_skill
+      meta_search_skills meta_create_mcp_server meta_link_resource_to_step
       meta_list_agents meta_list_tools meta_list_skills
       meta_get_board meta_create_board_column meta_update_board_column
       meta_delete_board_column meta_reorder_board_columns

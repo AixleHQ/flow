@@ -60,8 +60,9 @@ class RepositoryTest < ActiveSupport::TestCase
   end
 
   test "clone_url must be present" do
-    repo = build(:repository, clone_url: nil, scope: @company, integration: @integration)
+    repo = build(:repository, clone_url: nil, full_name: nil, scope: @company, integration: @integration)
     assert { !repo.valid? }
+    assert { repo.errors[:clone_url].present? }
   end
 
   test "scope_type must be Company or Project" do

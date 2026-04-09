@@ -38,8 +38,6 @@ module WorkflowRunStateMachine
         transitions from: %i[pending running paused], to: :cancelled, after: :on_cancelled
       end
     end
-
-    after_commit :broadcast_run_update!, on: :update
   end
 
   private
@@ -54,11 +52,5 @@ module WorkflowRunStateMachine
 
   def on_cancelled
     update_column(:completed_at, Time.current)
-  end
-
-  def broadcast_run_update!
-    WorkflowRunChannel.broadcast_update(id)
-  rescue StandardError => e
-    Rails.logger.warn("[WorkflowRunStateMachine#broadcast] #{e.message}")
   end
 end

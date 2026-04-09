@@ -37,7 +37,7 @@ module Api
           result = UsageStatisticsService::Result.new(status: :bad_request, error: "Invalid JSON")
           UsageStatisticsService.stubs(:process).returns(result)
 
-          post :create, body: "invalid", as: :json
+          post :create, body: '{"bad":true}', as: :json
 
           assert_response :bad_request
           json = response.parsed_body

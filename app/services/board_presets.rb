@@ -48,9 +48,11 @@ class BoardPresets
     }
   }.freeze
 
+  Entry = Struct.new(:key, :display_name, :columns, keyword_init: true)
+
   def self.all
     PRESETS.map do |key, data|
-      { key: key, display_name: data[:display_name], columns: data[:columns].map { |c| c[:name] } }
+      Entry.new(key: key, display_name: data[:display_name], columns: data[:columns].map { |c| c[:name] })
     end
   end
 

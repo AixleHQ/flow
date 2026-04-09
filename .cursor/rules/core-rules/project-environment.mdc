@@ -1,0 +1,43 @@
+---
+description: Project runs in Docker. All Rails/Ruby/DB commands must run inside the web container.
+alwaysApply: true
+---
+
+# Project Environment
+
+This is a **Dockerized Rails + Inertia + React** project. Nothing runs on the host except the IDE.
+
+## Running Commands
+
+Main service: `web` (Rails app, port 4000).
+
+```bash
+# ✅ Correct — run inside container
+docker compose exec web bundle exec rails test
+docker compose exec web bundle exec rake ts:routes
+docker compose exec web bundle exec rubocop -a
+
+# ✅ Frontend tools run on host (Node is local)
+yarn tsc
+yarn lint
+
+# ❌ NEVER — Ruby/Rails/Bundler are not installed on host
+bundle exec rails test
+rails console
+rake db:migrate
+```
+
+## Key Services
+
+| Service | Purpose |
+|---------|---------|
+| `web` | Rails app (build: `./Dockerfile`) |
+| `worker` | Sidekiq background jobs |
+| `db` | PostgreSQL |
+| `redis` | Redis |
+| `traefik` | Reverse proxy / routing |
+| `temporal` | Workflow orchestration |
+
+## Makefile
+
+Common tasks are in `Makefile`. Targets like `rails-test`, `rubocop-fix` expect to run inside the container. Use `docker compose exec web make <target>` or run individual commands directly.

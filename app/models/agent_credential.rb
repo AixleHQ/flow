@@ -18,6 +18,8 @@ class AgentCredential < ApplicationRecord
   after_create :set_as_user_default
   before_destroy :reassign_user_default
 
+  broadcasts_to :user
+
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :active, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }

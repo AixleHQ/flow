@@ -16,6 +16,8 @@ class WorkflowRun < ApplicationRecord
 
   validates :mode, presence: true
 
+  broadcasts_to ->(run) { run }, on: :update
+
   scope :active, -> { where(state: %w[pending running paused]) }
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
   scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }
@@ -45,6 +47,6 @@ class WorkflowRun < ApplicationRecord
 
   # Latest failed step the user may retry via API (current_step_run excludes failed — that caused 404 on retry).
   def latest_failed_step_run
-    step_runs.failed.order(updated_at: :desc).first
+    step_runs.where(state: :failed).order(updated_at: :desc).first
   end
 end

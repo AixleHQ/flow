@@ -14,7 +14,7 @@ class Asset < ApplicationRecord
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
   validates :status, presence: true, inclusion: { in: %w[active pending_review dismissed] }
-  validates :folder, format: { with: /\A[a-z0-9_-]+\z/, message: "only lowercase letters, numbers, hyphens, underscores" },
+  validates :folder, format: { with: /\A[a-zA-Z0-9_-]+\z/, message: "must only contain letters, digits, hyphens, or underscores" },
                      allow_blank: true
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
@@ -48,6 +48,10 @@ class Asset < ApplicationRecord
           .or(active.where(scope_type: "Company", scope_id: project.company_id))
   }
   scope :visible_for_company, ->(company) { for_company(company) }
+
+  def picker_name
+    folder.present? ? "#{folder}/#{name}" : name
+  end
 
   def scope_indicator
     scope_type == "Company" ? "company" : "project"

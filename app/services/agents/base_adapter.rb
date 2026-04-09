@@ -106,30 +106,22 @@ module Agents
     end
 
     # =================================================================
-    # Skill File Generation
-    # Each CLI has different skill format and file path
+    # Skill Installation (via npx skills add)
+    # Skills are installed globally using the skills.sh CLI tool.
     # =================================================================
 
     # Whether skills are embedded directly into the context file (AGENTS.md).
-    # When true, skill_files returns empty and skills are merged into context.
+    # When true, npx skills add is skipped and skills are merged into context.
     # @return [Boolean]
     def includes_skills_in_context?
       false
     end
 
-    # Generate skill files for this CLI.
-    # @param skills [Array<Skill>] resolved Skill records
-    # @return [Hash<String, String>] { path => content }
-    def skill_files(skills)
-      {}
-    end
-
-    # How to handle writing skill files.
-    # :fresh   — write new files (Claude, Codex, Cursor)
-    # :append  — append to existing file (Gemini)
-    # @return [Symbol]
-    def skill_merge_strategy
-      :fresh
+    # Agent name for `npx skills add --agent <name>`.
+    # Maps to the skills.sh ecosystem agent identifiers.
+    # @return [String]
+    def skills_agent_name
+      raise NotImplementedError, "#{self.class} must implement #skills_agent_name"
     end
 
     # =================================================================
@@ -211,9 +203,16 @@ module Agents
 
     # Fetch available models from the provider API using user credentials.
     # @param credentials [Hash] decrypted credential data from AgentCredential
+    # @param credential [AgentCredential, nil] optional record for token refresh
     # @return [Array<Hash>] normalized models: [{ model_id:, display_name:, description: }]
-    def fetch_available_models(_credentials)
+    def fetch_available_models(_credentials, credential: nil)
       []
+    end
+
+    # Fetch models with source indicator for cache decisions.
+    # @return [Hash{ models: Array<Hash>, source: Symbol }] source is :api or :fallback
+    def fetch_available_models_with_source(credentials, credential: nil)
+      { models: fetch_available_models(credentials, credential: credential), source: :api }
     end
 
     # =================================================================

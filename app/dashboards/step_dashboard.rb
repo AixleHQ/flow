@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class StepDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :workflow
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     workflow: Field::BelongsTo,

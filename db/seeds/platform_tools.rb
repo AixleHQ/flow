@@ -2,6 +2,7 @@
 
 module Seeds
   module PlatformTools
+    unless const_defined?(:BOARD_WORKFLOW_TOOLS, false)
     BOARD_WORKFLOW_TOOLS = [
       {
         name: "board_get_board_info",
@@ -372,19 +373,29 @@ module Seeds
         }
       },
       {
-        name: "meta_create_skill",
-        display_name: "Meta Create Skill",
-        description: "Create a custom skill (reusable instruction block).",
+        name: "meta_install_skill",
+        display_name: "Meta Install Skill",
+        description: "Install a skill from the skills.sh registry. Search first with meta_search_skills.",
         input_schema: {
           type: "object",
           properties: {
-            name: { type: "string" }, title: { type: "string" },
-            content: { type: "string", description: "Skill content (instructions/knowledge)" },
-            description: { type: "string" },
+            skill_id: { type: "string", description: "Registry skill ID (e.g. mantinedev/skills/mantine-form)" },
             scope_type: { type: "string", enum: %w[Project Company] },
             scope_id: { type: "integer" }
           },
-          required: %w[name title content]
+          required: %w[skill_id scope_type scope_id]
+        }
+      },
+      {
+        name: "meta_search_skills",
+        display_name: "Meta Search Skills",
+        description: "Search the skills.sh registry for available agent skills.",
+        input_schema: {
+          type: "object",
+          properties: {
+            query: { type: "string", description: "Search query (e.g. mantine, react, testing)" }
+          },
+          required: %w[query]
         }
       },
       {
@@ -435,7 +446,7 @@ module Seeds
       {
         name: "meta_list_skills",
         display_name: "Meta List Skills",
-        description: "List skills available for the project.",
+        description: "List installed skills (from skills.sh registry) available for the project.",
         input_schema: { type: "object", properties: {}, required: [] }
       },
       # --- Board tools ---
@@ -553,9 +564,10 @@ module Seeds
         }
       }
     ].freeze
+    end
 
     def self.seed!
-      puts "Creating platform tools..."
+      puts "Creating platform tools..." unless Rails.env.test?
 
       # Cleanup deprecated tools
       Tool.where(name: "write_step_note", kind: :workflow).destroy_all
@@ -603,9 +615,6 @@ module Seeds
         )
       end
 
-      # Cleanup renamed tools
-      Tool.where(name: %w[finish_step fail_step]).destroy_all
-
       # -- Internal tools: invisible, auto-injected --
       Tool.find_or_initialize_by(name: "finish_session", kind: :internal).update!(
         display_name: "Finish Session",
@@ -650,8 +659,6 @@ module Seeds
         },
         execution_mode: :app
       )
-
-      puts "  Platform tools: #{Tool.system_tools.count} system, #{Tool.internal_tools.count} internal, #{Tool.workflow_tools.count} workflow"
     end
   end
 end

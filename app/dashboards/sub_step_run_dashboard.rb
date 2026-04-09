@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class SubStepRunDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :step_run
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     step_run: Field::BelongsTo,

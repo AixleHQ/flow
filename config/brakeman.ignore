@@ -1,14 +1,5 @@
 {
-  "ignored_warnings": [
-    {
-      "fingerprint": "1a58d3cd4d85509818d497647ee1862781987c6576a87129712926b99aeaa116",
-      "warning_type": "Redirect",
-      "check_name": "Redirect",
-      "message": "Possible unprotected redirect",
-      "file": "app/controllers/api/v1/company/projects/assets_controller.rb",
-      "note": "Redirect to Shrine-generated file URL (S3 presigned URL) for asset downloads. The URL is generated server-side from a trusted source, not from user input."
-    }
-  ],
-  "updated": "2026-03-15",
+  "ignored_warnings": [],
+  "updated": "2026-04-09",
   "brakeman_version": "7.0.0"
 }

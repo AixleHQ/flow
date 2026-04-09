@@ -11,7 +11,7 @@ end
 
 # Protect from CSRF attacks
 OmniAuth.config.allowed_request_methods = [ :post, :get ]
-OmniAuth.config.path_prefix = "/api/v1/auth"
+OmniAuth.config.path_prefix = "/auth"
 
 # Set failure path
 OmniAuth.config.on_failure = Proc.new { |env|

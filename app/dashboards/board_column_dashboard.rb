@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class BoardColumnDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :board
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     board: Field::BelongsTo,

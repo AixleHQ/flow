@@ -133,21 +133,6 @@ module Agents
       assert_includes tools, "mcp__tavily"
     end
 
-    # == Skills ==
-
-    test "skill_files returns path to content mapping" do
-      skills = [
-        OpenStruct.new(name: "skill1", content: "# Skill 1"),
-        OpenStruct.new(name: "skill2", content: "")
-      ]
-
-      files = @adapter.skill_files(skills)
-
-      assert_equal 1, files.size
-      assert_equal "# Skill 1", files["/home/claude/.claude/skills/skill1.md"]
-      refute files.key?("/home/claude/.claude/skills/skill2.md")
-    end
-
     # == MCP ==
 
     test "mcp_config builds mcpServers json" do

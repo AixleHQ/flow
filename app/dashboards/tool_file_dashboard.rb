@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class ToolFileDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :tool
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     tool: Field::BelongsTo,

@@ -46,6 +46,8 @@ class SessionService
                 workflow_run.user.agent_credentials.order(created_at: :desc).first&.agent_type ||
                 "cursor_cli"
 
+      run_model = workflow_run.shared_context&.dig("requested_model")
+
       session = TerminalSession.create!(
         user: workflow_run.user,
         project: workflow_run.project,
@@ -54,6 +56,7 @@ class SessionService
         configured_agent: step.agent,
         mode: "interactive",
         initial_prompt: prompt,
+        requested_model: step.preferred_model.presence || run_model,
         metadata: {
           "workflow_run_id" => workflow_run.id,
           "step_run_id" => step_run.id,
@@ -62,9 +65,6 @@ class SessionService
       )
 
       step_run.update!(terminal_session: session)
-      # Notify workflow run subscribers as soon as the step is linked, so the UI can open
-      # TerminalSessionChannel before resolver / Temporal (which can take a long time).
-      step_run.broadcast_update!
 
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])

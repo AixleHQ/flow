@@ -67,6 +67,10 @@ class MCPServer < ApplicationRecord
     parsed_command.drop(1)
   end
 
+  def picker_name
+    display_name.presence || name
+  end
+
   def scope_indicator
     return "internal" if internal?
     scope_type == "Company" ? "company" : "project"

@@ -10,6 +10,8 @@ class Board < ApplicationRecord
   validates :name, presence: true
   validates :project_id, uniqueness: true
 
+  after_commit :broadcast_updates, on: :update
+
   def self.create_from_preset(project:, preset_key:, name: nil)
     preset = BoardPresets.find(preset_key)
     raise ActiveRecord::RecordNotFound, "Invalid preset: #{preset_key}" unless preset
@@ -30,5 +32,11 @@ class Board < ApplicationRecord
 
   def self.ransackable_associations(_auth_object = nil)
     %w[project board_columns]
+  end
+
+  private
+
+  def broadcast_updates
+    broadcast_refresh_to(self)
   end
 end
