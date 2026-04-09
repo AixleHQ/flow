@@ -1,6 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { apiV1ProjectAssetsPath } from 'shared/api/routes';
+import { apiV1ProjectAssetsPath } from 'shared/routes';
 import { AssetsContent, type Asset, type AssetVersion } from 'shared/resources/assets/AssetsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';

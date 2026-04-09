@@ -2,7 +2,7 @@ import { usePage } from '@inertiajs/react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { apiV1CompanyAssetsPath } from 'shared/api/routes';
+import { apiV1CompanyAssetsPath } from 'shared/routes';
 import { AssetsContent, type Asset, type AssetVersion } from 'shared/resources/assets/AssetsContent';
 
 interface Props {

@@ -18,7 +18,7 @@ export default typescriptEslint.config(
     files: ['**/*.{js,jsx,ts,tsx}'],
   },
   {
-    ignores: ['dist/*', 'node_modules/*', 'app/frontend/shared/api/routes.ts'],
+    ignores: ['dist/*', 'node_modules/*', 'app/frontend/shared/routes.ts'],
   },
   {
     languageOptions: {

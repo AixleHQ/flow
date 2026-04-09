@@ -8,9 +8,9 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultL
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { finishApiV1TerminalSessionPath } from 'shared/api/routes';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { finishApiV1TerminalSessionPath } from 'shared/routes';
 
 import classes from './SessionShowContent.module.css';
 

@@ -108,7 +108,7 @@ import {
   apiV1ProjectViewPresetsPath,
   apiV1ProjectViewPresetPath,
   apiV1ProjectColumnWorkflowBindingPath,
-} from 'shared/api/routes';
+} from 'shared/routes';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';

@@ -46,7 +46,7 @@ import {
   apiV1WorkflowStepsPath,
   apiV1WorkflowStepPath,
   reorderApiV1WorkflowStepsPath,
-} from 'shared/api/routes';
+} from 'shared/routes';
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';

@@ -13,7 +13,7 @@ Output: `app/frontend/shared/api/routes.ts`
 
 ```tsx
 // ✅ GOOD — typed, refactor-safe, compile-time checked
-import Routes from 'shared/api/routes'
+import Routes from 'shared/routes'
 
 <Link href={Routes.companySessionPath(session.id)}>View</Link>
 router.visit(Routes.companyProjectPath(project.id))

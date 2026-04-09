@@ -19,7 +19,7 @@ import {
 import { IconCheck, IconPlayerPlay, IconRobot } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { apiV1TerminalSessionsPath } from 'shared/api/routes';
+import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { apiFetch } from 'shared/lib/apiFetch';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
