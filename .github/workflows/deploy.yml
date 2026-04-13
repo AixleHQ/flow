@@ -254,7 +254,7 @@ jobs:
                   - name: migrate
                     image: ${WEB_IMAGE}
                     imagePullPolicy: Always
-                    command: ["bundle", "exec", "rails", "db:migrate"]
+                    command: ["bundle", "exec", "rails", "db:migrate", "db:seed"]
                     envFrom:
                       - configMapRef:
                           name: ${CONFIGMAP_NAME}
