@@ -93,6 +93,7 @@ import { z } from 'zod';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
+import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   apiV1ProjectTasksPath,
@@ -498,7 +499,21 @@ function BoardColumn({
     const priorityIndicators = tasks.slice(0, 5).map((t) => {
       const color = t.priority ? (PRIORITY_COLORS[t.priority] ?? '#9e9e9e') : '#9e9e9e';
       const hasActiveRun = t.recentWorkflowRuns?.some((r) => WORKFLOW_ACTIVE_STATES.has(r.state));
-      return { id: t.id, color, hasActiveRun };
+      const latestRun = t.recentWorkflowRuns?.[0];
+      const hasPendingWaits = (t.pendingWaits?.length ?? 0) > 0;
+      const tooltipParts: string[] = [t.title];
+      if (latestRun) {
+        if (latestRun.state === 'running' && latestRun.createdAt) {
+          tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
+        } else {
+          tooltipParts.push(`Status: ${latestRun.state}`);
+        }
+      }
+      if (hasPendingWaits) {
+        const oldestWait = t.pendingWaits.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+        tooltipParts.push(`Waiting — ${formatElapsedTime(oldestWait.createdAt)}`);
+      }
+      return { id: t.id, color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
     });
 
     return (
@@ -535,16 +550,17 @@ function BoardColumn({
         {priorityIndicators.length > 0 && (
           <Box style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
             {priorityIndicators.map((ind) => (
-              <Box
-                key={ind.id}
-                style={{
-                  width: 4,
-                  height: 20,
-                  borderRadius: 2,
-                  backgroundColor: ind.color,
-                  animation: ind.hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
-                }}
-              />
+              <Tooltip key={ind.id} label={ind.tooltipLabel} position="right" withArrow>
+                <Box
+                  style={{
+                    width: 4,
+                    height: 20,
+                    borderRadius: 2,
+                    backgroundColor: ind.color,
+                    animation: ind.hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
+                  }}
+                />
+              </Tooltip>
             ))}
           </Box>
         )}
