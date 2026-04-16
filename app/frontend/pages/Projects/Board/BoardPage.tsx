@@ -1132,9 +1132,15 @@ function TaskDetailSidebar({
                   }}
                   style={{ cursor: 'pointer', minHeight: 40 }}
                 >
-                  <Text size="sm" style={{ whiteSpace: 'pre-wrap' }} c={task.description ? undefined : 'dimmed'}>
-                    {task.description || 'Click to add description...'}
-                  </Text>
+                  {task.description ? (
+                    <Box className={styles.commentMd}>
+                      <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
+                    </Box>
+                  ) : (
+                    <Text size="sm" c="dimmed">
+                      Click to add description...
+                    </Text>
+                  )}
                 </Box>
               )}
             </Box>
