@@ -2663,7 +2663,20 @@ const BoardPage = () => {
   const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
+  const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(() => {
+    if (!collapsedColumnsStorageKey) return new Set();
+    try {
+      const stored = localStorage.getItem(collapsedColumnsStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored) as number[];
+        if (Array.isArray(parsed)) return new Set(parsed);
+      }
+    } catch {
+      // ignore invalid stored value
+    }
+    return new Set();
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -2923,6 +2936,15 @@ const BoardPage = () => {
     const allIds = columns.map((c) => c.id);
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   }, [columns]);
+
+  useEffect(() => {
+    if (!collapsedColumnsStorageKey) return;
+    try {
+      localStorage.setItem(collapsedColumnsStorageKey, JSON.stringify([...collapsedColumns]));
+    } catch {
+      // ignore storage errors (e.g. private mode quota)
+    }
+  }, [collapsedColumns, collapsedColumnsStorageKey]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
