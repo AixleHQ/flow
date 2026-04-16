@@ -1,3 +1,52 @@
 class Web::ApplicationController < ApplicationController
   include AuthConcern
+  include PaginationConcern
+
+  wrap_parameters false
+
+  before_action :negotiate_format
+  before_action :redirect_super_admin_to_admin_panel
+  before_action :enforce_onboarding
+
+  inertia_share do
+    shared = {
+      flash: flash.to_hash,
+      settings: {
+        env: Rails.env,
+        domain: Settings.domain,
+        github_app_slug: Settings.github.app_slug,
+        sentry_frontend_dsn: Settings.sentry.frontend_dsn,
+        app_version: Settings.app.version
+      }
+    }
+
+    if signed_in?
+      shared.merge(
+        current_user: InertiaRails.always { CurrentUserResource.new(current_user).to_h },
+        projects: InertiaRails.always { current_user.company.projects.with_state(:active).order(:name).map { |p| ProjectResource.new(p).to_h } }
+      )
+    else
+      shared
+    end
+  end
+
+  private
+
+  def negotiate_format
+    return if request.headers["X-Inertia"].present?
+    return unless request.content_type&.include?("json")
+
+    request.format = :json
+  end
+
+  def redirect_super_admin_to_admin_panel
+    redirect_to admin_root_path if signed_in? && current_user.super_admin?
+  end
+
+  def enforce_onboarding
+    return unless signed_in?
+    return if current_user.onboarding_state == "completed"
+
+    redirect_to onboarding_path unless request.path == onboarding_path
+  end
 end

@@ -1,19 +1,49 @@
+import { createInertiaApp } from '@inertiajs/react';
+import { MantineProvider } from '@mantine/core';
+import { ModalsProvider } from '@mantine/modals';
+import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
-import * as React from 'react';
-import { createRoot } from 'react-dom/client';
-
-import App from 'app/App.tsx';
 
 import { initSentry } from 'shared/lib/sentry';
+import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
+import { InertiaRouteIndicator } from 'shared/ui';
 
-initSentry();
+import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
+import '@mantine/dates/styles.css';
 
-createRoot(document.getElementById('root')!, {
-  onUncaughtError: Sentry.reactErrorHandler(),
-  onCaughtError: Sentry.reactErrorHandler(),
-  onRecoverableError: Sentry.reactErrorHandler(),
-}).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-);
+const appEl = document.getElementById('app');
+if (appEl?.dataset.page) {
+  try {
+    const page = JSON.parse(appEl.dataset.page);
+    if (page.props?.settings) {
+      initSentry(page.props.settings);
+    }
+  } catch {
+    // Sentry init will be skipped if page data is malformed
+  }
+}
+
+createInertiaApp({
+  strictMode: true,
+
+  pages: {
+    path: '../pages',
+    extension: '.tsx',
+    lazy: true,
+  },
+
+  withApp(app: React.ReactNode) {
+    return (
+      <Sentry.ErrorBoundary showDialog>
+        <MantineProvider theme={mantineTheme} defaultColorScheme="dark" cssVariablesResolver={cssVariablesResolver}>
+          <ModalsProvider>
+            <Notifications position="top-right" />
+            <InertiaRouteIndicator />
+            {app}
+          </ModalsProvider>
+        </MantineProvider>
+      </Sentry.ErrorBoundary>
+    );
+  },
+});

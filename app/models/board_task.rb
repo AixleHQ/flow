@@ -28,19 +28,11 @@ class BoardTask < ApplicationRecord
   validate :assignee_is_project_member, if: -> { assignee_id.present? }
 
   before_validation :assign_next_position, on: :create
-  after_commit :broadcast_created, on: :create
-  after_commit :broadcast_updated, on: :update
-  after_commit :broadcast_destroyed, on: :destroy
+  after_commit :touch_board
 
   scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
-
-  def broadcast_change(action)
-    BoardChannel.broadcast_event(board, "board_task.#{action}", { id: id })
-  rescue StandardError => e
-    Rails.logger.warn("[BoardTask#broadcast_change] #{action}: #{e.message}")
-  end
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
@@ -52,9 +44,9 @@ class BoardTask < ApplicationRecord
 
   private
 
-  def broadcast_created = broadcast_change("created")
-  def broadcast_updated = broadcast_change("updated")
-  def broadcast_destroyed = broadcast_change("destroyed")
+  def touch_board
+    board.touch if board&.persisted?
+  end
 
   def assign_next_position
     return if position.present?

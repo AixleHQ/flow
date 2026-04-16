@@ -2,7 +2,7 @@
 
 class WorkflowService
   class << self
-    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil)
+    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil)
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
@@ -11,7 +11,8 @@ class WorkflowService
         step_overrides: overrides,
         input_asset_ids: input_asset_ids,
         repository_ids: repository_ids,
-        agent_runtime: agent_runtime.presence
+        agent_runtime: agent_runtime.presence,
+        shared_context: { "requested_model" => requested_model.presence }.compact
       )
 
       validate_mode!(run, workflow, overrides)
@@ -25,6 +26,7 @@ class WorkflowService
 
       TemporalWorkflowRegistry.start_workflow_execution(run)
       record_activity(run, :workflow_started)
+      broadcast_task_updated(run)
 
       run
     rescue StandardError => e
@@ -37,16 +39,19 @@ class WorkflowService
       cancel_active_step_runs(run)
       run.cancel! if run.may_cancel?
       record_activity(run, :workflow_cancelled)
+      broadcast_task_updated(run)
     end
 
     def complete(run:)
       run.complete! if run.may_complete?
       record_activity(run, :workflow_completed)
+      broadcast_task_updated(run)
     end
 
     def fail(run:)
       run.fail! if run.may_fail?
       record_activity(run, :workflow_failed)
+      broadcast_task_updated(run)
     end
 
     def approve_step(step_run:)
@@ -110,20 +115,24 @@ class WorkflowService
       end
     end
 
+    def broadcast_task_updated(run)
+      return unless run.board_task_id.present?
+
+      run.board_task.board.touch
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] Failed to broadcast task update for run ##{run.id}: #{e.message}")
+    end
+
     def record_activity(run, event_type)
       return unless run.board_task_id.present?
 
       board = run.board_task.board
-      activity = BoardActivity.create!(
+      BoardActivity.create!(
         board: board, board_task: run.board_task, event_type: event_type,
         actor: run.user, actor_type: :system,
         metadata: { workflow_name: run.workflow.name, workflow_run_id: run.id }
       )
-      BoardChannel.broadcast_event(
-        board, "board_activity.created",
-        { id: activity.id, board_id: board.id },
-        actor_id: run.user.id
-      )
+      board.touch
     rescue StandardError => e
       Rails.logger.warn("[WorkflowService] Failed to record activity for run ##{run.id}: #{e.message}")
     end

@@ -1,5 +1,5 @@
 namespace :ts do
-  TS_ROUTES_FILENAME = "app/frontend/shared/api/routes.ts"
+  TS_ROUTES_FILENAME = "app/frontend/shared/routes.ts"
 
   desc "Generate #{TS_ROUTES_FILENAME}"
   task routes: :environment do

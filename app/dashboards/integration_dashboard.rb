@@ -15,7 +15,7 @@ class IntegrationDashboard < Administrate::BaseDashboard
       collection: %w[active inactive error]
     ),
     company: Field::BelongsTo,
-    connected_by: Field::BelongsTo.with_options(class_name: "User"),
+    connected_by: Field::BelongsTo,
     settings: Field::JSONB,
     repositories: Field::HasMany,
     created_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),

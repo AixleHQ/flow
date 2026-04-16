@@ -1,0 +1,93 @@
+/* ── Card ───────────────────────────────────────── */
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.formCard {
+  background-color: var(--mantine-color-dark-7);
+  border: 1px solid var(--mantine-color-dark-4);
+  animation: fadeSlideUp 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .formCard {
+    animation: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .formCard {
+    padding: var(--mantine-spacing-lg);
+  }
+}
+
+/* ── Labels & Text ──────────────────────────────── */
+
+.label {
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+}
+
+.subtitle {
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+}
+
+/* ── Inputs ─────────────────────────────────────── */
+
+.input {
+  background-color: var(--mantine-color-dark-8);
+  border-color: var(--mantine-color-dark-4);
+  color: var(--mantine-color-gray-1);
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-size: 14px;
+  padding: 12px 16px;
+  height: auto;
+}
+
+.input::placeholder {
+  color: var(--mantine-color-dark-2);
+}
+
+.input:focus {
+  border-color: var(--mantine-color-blue-5);
+}
+
+.visibilityToggle {
+  color: var(--mantine-color-dark-2);
+}
+
+.visibilityToggle:hover {
+  color: var(--mantine-color-gray-3);
+}
+
+/* ── Submit ─────────────────────────────────────── */
+
+.submitButton {
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ── Google Button ──────────────────────────────── */
+
+.googleButton {
+  background-color: var(--mantine-color-dark-6);
+  color: var(--mantine-color-gray-1);
+  border-color: var(--mantine-color-dark-4);
+  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.googleButton:hover {
+  background-color: var(--mantine-color-dark-5);
+  border-color: var(--mantine-color-dark-3);
+}

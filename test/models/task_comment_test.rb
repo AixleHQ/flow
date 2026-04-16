@@ -80,11 +80,11 @@ class TaskCommentTest < ActiveSupport::TestCase
     end
   end
 
-  test "board_task_serializer returns correct comments_count" do
+  test "board_task_resource returns correct comments_count" do
     TaskComment.create!(body: "A", board_task: @task, author: @owner)
     TaskComment.create!(body: "B", board_task: @task, author: @owner)
 
-    serializer = BoardTaskSerializer.new(@task.reload)
-    assert_equal 2, serializer.comments_count
+    result = BoardTaskResource.new(@task.reload).to_h
+    assert_equal 2, result["commentsCount"]
   end
 end

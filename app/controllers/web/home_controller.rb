@@ -1,4 +1,6 @@
 class Web::HomeController < Web::ApplicationController
+  skip_before_action :enforce_onboarding
+
   def show
     if request.path == "/"
       render html: "", layout: "web/landing"

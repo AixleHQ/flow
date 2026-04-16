@@ -1,12 +1,34 @@
 ---
-description: 
-globs: *.ts,*.tsx
+description: Form handling patterns for Inertia Rails + Mantine
+globs: "**/*.tsx,**/*.ts"
 alwaysApply: false
 ---
+
 # Forms
-- Use react-hook-form package for form management
-- Use FormProvider for form context
-- Use zod resolver for validation
-- Store zod schemas in lib segment's folder
-- Use control components from MaterialUI theme without custom styles
-- Use Typography with variant labelLarge above TextField instead of labels
+
+## Inertia useForm — for server-submitted forms
+
+Use `@inertiajs/react` `useForm` for forms that POST/PATCH/DELETE to Rails controllers.
+
+```tsx
+import { useForm } from '@inertiajs/react';
+
+const { data, setData, patch, processing, errors } = useForm({
+  profile: { name: profile.name, language: profile.preferredAgentLanguage },
+});
+
+const handleSubmit = (e: React.FormEvent) => {
+  e.preventDefault();
+  patch('/profile', { preserveScroll: true });
+};
+```
+
+**CRITICAL:** `setData` queues a React state update. Never call `patch`/`post` synchronously after `setData` — the old data will be sent. Use `router.patch` with explicit data instead for immediate saves.
+
+## Mantine useForm — for client-only validation
+
+Use `@mantine/form` `useForm` when you need complex client-side validation without server submission (e.g., multi-step wizards, config builders).
+
+## Mantine Components
+
+Use Mantine form controls: `TextInput`, `Select`, `MultiSelect`, `Textarea`, `Switch`, `Checkbox`, `SegmentedControl`. Never use MUI or react-hook-form.

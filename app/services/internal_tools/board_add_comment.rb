@@ -20,10 +20,7 @@ module InternalTools
         tags: params[:tags] || []
       )
 
-      BoardChannel.broadcast_event(board, "task_changed", {
-        action: "updated",
-        task: BoardTaskSerializer.new(task.reload).serializable_hash
-      })
+      board.touch
 
       success({
         id: comment.id,

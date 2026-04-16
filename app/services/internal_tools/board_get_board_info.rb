@@ -7,7 +7,7 @@ module InternalTools
       board = BoardContextResolver.resolve(session)
       return error("No board available in current context") unless board
 
-      result = BoardSerializer.new(board, include_associations: true).as_json
+      result = BoardResource.new(board, params: { include_columns: true }).to_h
       success(result.to_json)
     end
   end

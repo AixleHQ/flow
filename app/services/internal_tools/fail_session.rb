@@ -28,7 +28,6 @@ module InternalTools
       existing = step_run.step_note
       new_note = existing.present? ? "#{existing}\n---\n#{text}" : text
       step_run.update!(step_note: new_note)
-      step_run.broadcast_update!
     end
   end
 end

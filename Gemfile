@@ -13,15 +13,13 @@ gem "puma", ">= 5.0"
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 gem "bcrypt", "~> 3.1.7"
 
-gem "gon"
-
 # Authentication
 gem "omniauth"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
 
 gem "aasm"
-gem "active_model_serializers", "~> 0.10.13"
+
 gem "administrate"
 gem "administrate-field-shrine"
 gem "administrate-field-jsonb"
@@ -69,6 +67,16 @@ gem "csv" # Required for CSV parsing
 gem "thruster", require: false
 gem "vite_rails", "~> 3.0"
 gem "oas_rails"
+
+# Inertia.js - modern monolith (server-side routing + React components)
+gem "inertia_rails"
+gem "inertia_cable"
+
+# Alba - fast serializer with Typelizer support
+gem "alba"
+
+# Typelizer - auto-generate TypeScript interfaces from Alba resources
+gem "typelizer"
 
 # gem "image_processing", "~> 1.2"
 

@@ -7,7 +7,7 @@ class BoardActivityDashboard < Administrate::BaseDashboard
     id: Field::Number.with_options(searchable: true),
     board: Field::BelongsTo,
     board_task: Field::BelongsTo.with_options(optional: true),
-    actor: Field::BelongsTo.with_options(class_name: "User"),
+    actor: Field::BelongsTo.with_options,
     event_type: Field::Select.with_options(
       include_blank: false,
       collection: %w[

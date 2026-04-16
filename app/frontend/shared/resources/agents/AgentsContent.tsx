@@ -1,0 +1,253 @@
+import { ActionIcon, Badge, Box, Button, Center, Group, Table, Text, TextInput, Tooltip } from '@mantine/core';
+import { IconCopy, IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { useMemo, useState } from 'react';
+
+import { AgentFormModal } from './AgentFormModal';
+import { DeleteAgentModal } from './DeleteAgentModal';
+
+export interface Agent {
+  id: number;
+  name: string;
+  title: string;
+  icon: string | null;
+  persona: string;
+  communicationStyle: string | null;
+  principles: string | null;
+  source: string;
+  scopeType: string;
+  scopeId: number;
+  scopeIndicator: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface AgentsContentProps {
+  agents: Agent[];
+  basePath: string;
+  title: string;
+  subtitle: string;
+}
+
+const SCOPE_COLORS: Record<string, string> = {
+  company: 'gray',
+  project: 'green',
+};
+
+export function AgentsContent({ agents, basePath, title, subtitle }: AgentsContentProps) {
+  const [search, setSearch] = useState('');
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  const [editAgent, setEditAgent] = useState<Agent | null>(null);
+  const [duplicateAgent, setDuplicateAgent] = useState<Agent | null>(null);
+  const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
+
+  const isProjectContext = basePath.includes('projects');
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return agents;
+    const q = search.toLowerCase();
+    return agents.filter((a) => a.name.toLowerCase().includes(q) || a.title.toLowerCase().includes(q));
+  }, [agents, search]);
+
+  const isReadOnly = (agent: Agent) => isProjectContext && agent.scopeIndicator === 'company';
+
+  const handleEdit = (agent: Agent) => {
+    setEditAgent(agent);
+    setDuplicateAgent(null);
+    setFormModalOpen(true);
+  };
+
+  const handleDuplicate = (agent: Agent) => {
+    setEditAgent(null);
+    setDuplicateAgent(agent);
+    setFormModalOpen(true);
+  };
+
+  const handleFormClose = () => {
+    setFormModalOpen(false);
+    setEditAgent(null);
+    setDuplicateAgent(null);
+  };
+
+  return (
+    <Box>
+      <Group justify="space-between" mb="lg">
+        <Box>
+          <Text fz={24} fw={600} c="white">
+            {title}
+          </Text>
+          <Text fz={14} c="dimmed" mt={4}>
+            {subtitle}
+          </Text>
+        </Box>
+        <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+          Add Agent
+        </Button>
+      </Group>
+
+      <TextInput
+        placeholder="Search by name or title..."
+        leftSection={<IconSearch size={16} />}
+        value={search}
+        onChange={(e) => setSearch(e.currentTarget.value)}
+        mb="lg"
+        maw={300}
+      />
+
+      {filtered.length === 0 ? (
+        <Center
+          mih={300}
+          style={{
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 'var(--mantine-radius-md)',
+            backgroundColor: 'var(--app-bg-paper)',
+            flexDirection: 'column',
+          }}
+        >
+          <Text fz={48}>🤖</Text>
+          <Text fz={16} c="dimmed" mt="sm">
+            {search ? 'No agents match your search' : 'No agents yet'}
+          </Text>
+          {!search && (
+            <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
+              Add your first agent
+            </Button>
+          )}
+        </Center>
+      ) : (
+        <Box
+          style={{
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 'var(--mantine-radius-md)',
+            overflow: 'hidden',
+          }}
+        >
+          <Table highlightOnHover>
+            <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+              <Table.Tr>
+                <Table.Th>
+                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                    Agent
+                  </Text>
+                </Table.Th>
+                <Table.Th>
+                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                    Persona
+                  </Text>
+                </Table.Th>
+                {isProjectContext && (
+                  <Table.Th>
+                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                      Scope
+                    </Text>
+                  </Table.Th>
+                )}
+                <Table.Th w={120}>
+                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
+                    Actions
+                  </Text>
+                </Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filtered.map((agent) => (
+                <Table.Tr key={agent.id}>
+                  <Table.Td>
+                    <Group gap="sm">
+                      <Center
+                        w={36}
+                        h={36}
+                        style={{
+                          backgroundColor: 'var(--app-bg-deep)',
+                          borderRadius: 'var(--mantine-radius-sm)',
+                          fontSize: 24,
+                        }}
+                      >
+                        {agent.icon || '🤖'}
+                      </Center>
+                      <Box>
+                        <Text fz={14} fw={500} c="white">
+                          {agent.title}
+                        </Text>
+                        <Text fz={13} fw={500} c="dimmed" ff="JetBrains Mono, monospace">
+                          {agent.name}
+                        </Text>
+                      </Box>
+                    </Group>
+                  </Table.Td>
+                  <Table.Td>
+                    <Tooltip label={agent.persona} position="top" multiline maw={400}>
+                      <Text
+                        fz={13}
+                        c="dimmed"
+                        maw={400}
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {agent.persona}
+                      </Text>
+                    </Tooltip>
+                  </Table.Td>
+                  {isProjectContext && (
+                    <Table.Td>
+                      <Badge color={SCOPE_COLORS[agent.scopeIndicator] ?? 'gray'} size="sm" variant="light">
+                        {agent.scopeIndicator}
+                      </Badge>
+                    </Table.Td>
+                  )}
+                  <Table.Td>
+                    <Group gap={4} justify="flex-end">
+                      <Tooltip label="Duplicate">
+                        <ActionIcon variant="subtle" size="sm" onClick={() => handleDuplicate(agent)}>
+                          <IconCopy size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          disabled={isReadOnly(agent)}
+                          onClick={() => handleEdit(agent)}
+                        >
+                          <IconEdit size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          color="red"
+                          disabled={isReadOnly(agent)}
+                          onClick={() => setDeleteAgent(agent)}
+                        >
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Box>
+      )}
+
+      <AgentFormModal
+        opened={formModalOpen}
+        onClose={handleFormClose}
+        editAgent={editAgent}
+        duplicateAgent={duplicateAgent}
+        basePath={basePath}
+      />
+
+      <DeleteAgentModal
+        opened={!!deleteAgent}
+        onClose={() => setDeleteAgent(null)}
+        agent={deleteAgent}
+        basePath={basePath}
+      />
+    </Box>
+  );
+}

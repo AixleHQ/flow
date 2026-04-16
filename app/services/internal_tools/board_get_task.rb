@@ -13,7 +13,7 @@ module InternalTools
       task = board.board_tasks.find_by(id: task_id)
       return error("Task not found on this board") unless task
 
-      success(BoardTaskSerializer.new(task).as_json.to_json)
+      success(BoardTaskResource.new(task).to_h.to_json)
     end
   end
 end

@@ -3,12 +3,15 @@
 require "administrate/base_dashboard"
 
 class BoardTaskDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :board, :board_column
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     board: Field::BelongsTo,
     board_column: Field::BelongsTo,
-    assignee: Field::BelongsTo.with_options(class_name: "User", optional: true),
-    parent_task: Field::BelongsTo.with_options(class_name: "BoardTask", optional: true),
+    assignee: Field::BelongsTo.with_options(optional: true),
+    parent_task: Field::BelongsTo.with_options(optional: true),
     title: Field::String,
     description: Field::Text.with_options(truncate: 80),
     task_type: Field::Select.with_options(
@@ -21,7 +24,7 @@ class BoardTaskDashboard < Administrate::BaseDashboard
     ),
     position: Field::Number,
     tags: Field::String,
-    child_tasks: Field::HasMany.with_options(class_name: "BoardTask"),
+    child_tasks: Field::HasMany,
     task_comments: Field::HasMany,
     task_assets: Field::HasMany,
     workflow_runs: Field::HasMany,

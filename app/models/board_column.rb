@@ -11,6 +11,7 @@ class BoardColumn < ApplicationRecord
   before_validation :assign_next_position, on: :create
   after_save :detach_preset
   after_destroy :detach_preset
+  after_commit :touch_board
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[name position purpose created_at updated_at]
@@ -22,6 +23,10 @@ class BoardColumn < ApplicationRecord
 
   private
 
+  def touch_board
+    board.touch if board&.persisted?
+  end
+
   def assign_next_position
     return if position.present?
 
@@ -29,6 +34,6 @@ class BoardColumn < ApplicationRecord
   end
 
   def detach_preset
-    board.update_column(:preset_origin, nil) if board.preset_origin.present?
+    board.update_column(:preset_origin, nil) if board&.persisted? && board.preset_origin.present?
   end
 end

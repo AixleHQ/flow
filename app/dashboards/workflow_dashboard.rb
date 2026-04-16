@@ -12,7 +12,7 @@ class WorkflowDashboard < Administrate::BaseDashboard
     config: Field::JSONB,
     deleted_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),
     steps: Field::HasMany,
-    runs: Field::HasMany.with_options(class_name: "WorkflowRun"),
+    runs: Field::HasMany,
     column_workflow_bindings: Field::HasMany,
     created_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),
     updated_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M")

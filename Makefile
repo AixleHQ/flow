@@ -23,25 +23,21 @@ check: be_check fe_check
 be_check: rails-test rubocop-fix brakeman
 
 # Run frontend checks
-fe_check: eslint-fix fsd typescript
+fe_check: eslint-fix typescript
 
 # Run all linters
-lint: fsd eslint-fix rubocop-fix makebrakeman typescript
+lint: eslint-fix rubocop-fix brakeman typescript
 
 # Run TypeScript compiler check
 typescript:
 	yarn tsc
 
 # Run all tests
-test: rails-test fe-test
+test: rails-test
 
 # Run Rails tests
 rails-test:
 	bundle exec rails test
-
-# Run frontend tests
-fe-test:
-	yarn test
 
 # Run Rubocop
 rubocop:
@@ -58,12 +54,6 @@ eslint:
 # Run ESLint with auto-correction
 eslint-fix:
 	yarn lint:fix
-
-fsd:
-	yarn run steiger app/frontend
-
-fsd-fix:
-	yarn run steiger app/frontend --fix
 
 db_dump:
 	pg_dump --no-owner --no-privileges -c "postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}" | gzip > ${TODAY}.sql.gz

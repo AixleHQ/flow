@@ -26,7 +26,9 @@ class TerminalSession < ApplicationRecord
   # Callbacks
   before_create :generate_route_token
   before_create :generate_mcp_key
-  after_update :broadcast_update
+
+  broadcasts_to ->(s) { s }, on: :update
+  broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
 
   # Validations
   validates :session_type, presence: true, inclusion: {
@@ -195,9 +197,5 @@ class TerminalSession < ApplicationRecord
 
   def generate_mcp_key
     self.mcp_key ||= SecureRandom.urlsafe_base64(32)
-  end
-
-  def broadcast_update
-    TerminalSessionChannel.broadcast_update(self)
   end
 end

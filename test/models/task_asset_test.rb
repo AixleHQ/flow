@@ -58,11 +58,11 @@ class TaskAssetTest < ActiveSupport::TestCase
     end
   end
 
-  test "board_task_serializer returns correct assets_count" do
+  test "board_task_resource returns correct assets_count" do
     TaskAsset.create!(name: "a.pdf", board_task: @task, author: @owner)
     TaskAsset.create!(name: "b.pdf", board_task: @task, author: @owner)
 
-    serializer = BoardTaskSerializer.new(@task.reload)
-    assert_equal 2, serializer.assets_count
+    result = BoardTaskResource.new(@task.reload).to_h
+    assert_equal 2, result["assetsCount"]
   end
 end

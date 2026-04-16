@@ -7,6 +7,20 @@ class Workflows::Base < Temporalio::Workflow::Definition
       workflow_name = subclass.name.split("::")[1..-1].join("_").underscore
       subclass.workflow_name(workflow_name) unless subclass.instance_variable_get(:@workflow_name)
     end
+
+    # Pre-resolve activities at class level (before Temporal sandbox).
+    # Called from TemporalService.eager_load_workflow_registries!
+    def preload_activities!
+      wf_name = instance_variable_get(:@workflow_name)
+      return unless wf_name
+
+      registry_entry = TemporalWorkflowRegistry.send(wf_name)
+      @_preloaded_activities = registry_entry&.activities
+    rescue StandardError => e
+      Rails.logger.warn("[Temporal] Failed to preload activities for #{wf_name}: #{e.message}")
+    end
+
+    attr_reader :_preloaded_activities
   end
 
   def name
@@ -32,7 +46,7 @@ class Workflows::Base < Temporalio::Workflow::Definition
   private
 
   def activities
-    @activities ||= TemporalWorkflowRegistry.send(name).activities
+    self.class._preloaded_activities
   end
 
   def extract_error_message(activity_error)

@@ -93,8 +93,9 @@ module ContextBuilders
         next if skill.content.blank?
 
         title = skill.title.presence || skill.name
+        source = skill.source.present? ? " (#{skill.source})" : ""
         desc = skill.description.presence
-        lines << "- **#{title}**#{desc ? ": #{desc}" : ""}"
+        lines << "- **#{title}**#{source}#{desc ? ": #{desc}" : ""}"
       end
       lines.join("\n")
     end

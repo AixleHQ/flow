@@ -358,7 +358,7 @@ Hexlet is a Rails application, similar in scale. Their path `HAML → Inertia.js
 | `axios` | Inertia v3 built-in HTTP client + `useHttp` |
 | `gon` | No longer needed — Inertia passes data as props |
 | `active_model_serializers` | Replaced by Alba + Typelizer |
-| `ts_routes` | Replaced by JsRoutes (or not needed at all) |
+| `ts_routes` | **Keep** — typed routes, works with Inertia `<Link>` |
 | `notistack` | `@mantine/notifications` |
 | `react-hook-form` + `@hookform/resolvers` | `@mantine/form` (or keep — a matter of preference) |
 
@@ -731,17 +731,16 @@ One controller works both for a regular page and for a modal. No modal state, no
 
 ---
 
-### Navigation: JsRoutes instead of ts_routes
+### Navigation: ts_routes (keep)
 
-Evil Martians recommend [JsRoutes](https://github.com/railsware/js-routes) for generating Rails route helpers in JS:
+Evil Martians recommend [JsRoutes](https://github.com/railsware/js-routes), but we already have `ts_routes`, which generates **typed** helpers. This is better — TypeScript checks route arguments at compile time. We keep `ts_routes`.
 
 ```tsx
-import { postPath } from "@/routes"
+import { Routes } from 'shared/routes'
+import { Link } from '@inertiajs/react'
 
-<Link href={postPath(post.id)}>Show post</Link>
+<Link href={Routes.companyProjectPath(project.id)}>Project</Link>
 ```
-
-Instead of hardcoding URLs or our current `ts_routes`.
 
 ---
 
@@ -759,7 +758,7 @@ Instead of hardcoding URLs or our current `ts_routes`.
 ### Typing
 - [Typelizer — TypeScript from Rails serializers](https://github.com/skryukov/typelizer)
 - [Alba — serializer](https://github.com/okuramasafumi/alba)
-- [JsRoutes — Rails routes in JS](https://github.com/railsware/js-routes)
+- [ts_routes — typed Rails routes in TS](https://github.com/bitjourney/ts_routes-rails) (keep)
 
 ### UI libraries
 - [Mantine](https://mantine.dev/)

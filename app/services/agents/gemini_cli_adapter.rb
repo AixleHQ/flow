@@ -123,20 +123,8 @@ module Agents
       "#{home_dir}/.gemini/GEMINI.md"
     end
 
-    # Skill files: appended as sections to ~/.gemini/GEMINI.md (user-scoped, not in workspace)
-    def skill_files(skills)
-      sections = skills.filter_map do |skill|
-        next if skill.content.blank?
-
-        "## Skill: #{skill.title || skill.name}\n\n#{skill.content}"
-      end
-      return {} if sections.empty?
-
-      { "#{home_dir}/.gemini/GEMINI.md" => "\n\n" + sections.join("\n\n---\n\n") + "\n" }
-    end
-
-    def skill_merge_strategy
-      :append
+    def skills_agent_name
+      "gemini-cli"
     end
 
     # MCP config: merged into ~/.gemini/settings.json
@@ -172,7 +160,19 @@ module Agents
     # Fetch available models from Google Generative Language API.
     GEMINI_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
-    def fetch_available_models(credentials)
+    FALLBACK_GEMINI_MODELS = [
+      { model_id: "gemini-2.5-pro", display_name: "Gemini 2.5 Pro", description: "Most capable Gemini model" },
+      { model_id: "gemini-2.5-flash", display_name: "Gemini 2.5 Flash", description: "Fast multimodal model, up to 1M tokens" },
+      { model_id: "gemini-2.5-flash-lite", display_name: "Gemini 2.5 Flash-Lite", description: "Lightweight and fast" },
+      { model_id: "gemini-2.0-flash", display_name: "Gemini 2.0 Flash", description: "Previous generation Flash model" },
+      { model_id: "gemini-3.1-pro-preview", display_name: "Gemini 3.1 Pro Preview", description: "Latest preview model" }
+    ].freeze
+
+    def fetch_available_models(credentials, credential: nil)
+      fetch_available_models_with_source(credentials, credential: credential)[:models]
+    end
+
+    def fetch_available_models_with_source(credentials, credential: nil)
       api_key = credentials["api_key"]
       access_token = credentials["access_token"]
 
@@ -187,28 +187,35 @@ module Agents
         req = Net::HTTP::Get.new(uri)
         req["Authorization"] = "Bearer #{access_token}"
       else
-        return []
+        return { models: FALLBACK_GEMINI_MODELS, source: :fallback }
       end
 
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
-      return [] unless response.is_a?(Net::HTTPSuccess)
+      unless response.is_a?(Net::HTTPSuccess)
+        return { models: FALLBACK_GEMINI_MODELS, source: :fallback }
+      end
 
       data = JSON.parse(response.body)
-      (data["models"] || []).filter_map do |m|
+      models = (data["models"] || []).filter_map do |m|
         methods = m["supportedGenerationMethods"] || []
         next unless methods.include?("generateContent")
 
         model_id = m["name"].to_s.sub("models/", "")
         display_name = m["displayName"] || model_id
 
-        # Only keep models that support caching (reliable indicator of full text/agent capability)
         next unless methods.include?("createCachedContent")
 
         { model_id: model_id, display_name: display_name, description: m["description"].to_s.truncate(120) }
       end
+
+      if models.present?
+        { models: models, source: :api }
+      else
+        { models: FALLBACK_GEMINI_MODELS, source: :fallback }
+      end
     rescue StandardError => e
       Rails.logger.warn("[GeminiCliAdapter] fetch_available_models failed: #{e.message}")
-      []
+      { models: FALLBACK_GEMINI_MODELS, source: :fallback }
     end
 
 

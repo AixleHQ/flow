@@ -31,7 +31,7 @@ module Api
       end
 
       def upload
-        status, headers, body = AssetFileUploader.upload_response(:cache, request.env)
+        _status, headers, body = AssetFileUploader.upload_response(:cache, request.env)
         uploaded_file = Hashie::Mash.new(JSON.parse(body.first))
         updated_headers = headers.merge({
           Location: uploaded_file.url,

@@ -46,6 +46,8 @@ class User < ApplicationRecord
   validate :cannot_demote_last_admin, on: :update
   validate :default_agent_credential_belongs_to_user
 
+  broadcasts_to ->(user) { user }, on: :update
+
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
   scope :invited, -> { where.not(invited_by_id: nil) }
@@ -81,11 +83,35 @@ class User < ApplicationRecord
            .or(Project.where(id: collaborated_projects.select(:id)))
   end
 
-  # Guard for state machine: check if user can complete onboarding (all requirements met)
+  def has_configured_agents?
+    agent_credentials.exists?
+  end
+
+  def agent_models_by_type
+    agent_credentials.each_with_object({}) do |cred, hash|
+      cache_key = "agent_models/#{cred.agent_type}"
+      models = Rails.cache.fetch(cache_key, expires_in: 1.day) do
+        adapter = AgentCredentialsService.for(cred.agent_type).adapter
+        result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
+        result[:models]
+      end || []
+
+      hash[cred.agent_type] = models.map do |m|
+        { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"] }
+      end
+    end
+  end
+
+  def agent_models_for_props
+    agent_models_by_type.map do |agent_type, models|
+      { agent_type: agent_type, models: models }
+    end
+  end
+
   def can_complete_onboarding?
     position.present? &&
       preferred_agent_language.present? &&
-      agent_credentials.exists?
+      has_configured_agents?
   end
 
   # Setter for invitation flow - sets invited_by and invited_at
@@ -98,7 +124,6 @@ class User < ApplicationRecord
 
   private
 
-  # Callback for state machine: set timestamp when onboarding completes
   def set_onboarding_completed_at
     self.onboarding_completed_at = Time.current
   end

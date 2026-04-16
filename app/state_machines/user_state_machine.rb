@@ -40,7 +40,7 @@ module UserStateMachine
       event :go_next do
         transitions from: :step1, to: :step2
         transitions from: :step2, to: :step3
-        transitions from: :step3, to: :step4
+        transitions from: :step3, to: :step4, guard: :has_configured_agents?
       end
 
       event :go_previous do

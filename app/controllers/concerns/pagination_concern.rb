@@ -12,37 +12,20 @@ module PaginationConcern
     include Pagy::Backend
   end
 
+  # JSON API pagination: returns [pagy, records]
+  def paginate(relation, limit: per_page)
+    pagy(relation, limit: limit)
+  end
+
+  # Inertia infinite scroll: returns an InertiaRails.scroll prop.
+  # Reads params[:per_page] automatically; override with limit: kwarg.
+  def inertia_scroll(scope, limit: per_page, &block)
+    pagy_obj, records = pagy(scope, limit: limit)
+    InertiaRails.scroll(pagy_obj) { block ? block.call(records) : records }
+  end
+
   def per_page
-    per = params[:per_page] || DEFAULT_PER_PAGE
-    [ per.to_i, MAX_PER_PAGE ].min
-  end
-
-  def paginate(relation)
-    pagy(relation, limit: per_page)
-  end
-
-  def paginated_response(resource, options = {})
-    pagy, collection = resource
-    serialized_items = if options[:each_serializer] || ActiveModel::Serializer.serializer_for(collection.first)
-      ActiveModel::Serializer::CollectionSerializer.new(collection, options).as_json
-    else
-      collection
-    end
-    { meta: build_meta(pagy), items: serialized_items }
-  end
-
-  def paginated_resource?(resource)
-    return false unless resource.is_a?(Array)
-    page_object, _ = resource
-    page_object.is_a?(Pagy)
-  end
-
-  def build_meta(pagy)
-    {
-      page: pagy.page,
-      per_page: pagy.limit,
-      total_pages: pagy.pages,
-      total_count: pagy.count
-    }
+    per = (params[:per_page] || DEFAULT_PER_PAGE).to_i
+    per.clamp(1, MAX_PER_PAGE)
   end
 end

@@ -9,13 +9,5 @@ class SubStepRun < ApplicationRecord
   enumerize :state, in: %i[pending in_progress completed skipped], default: :pending,
                     predicates: true, scope: true
 
-  after_save :broadcast_update!, if: :saved_change_to_state?
-
-  private
-
-  def broadcast_update!
-    step_run.broadcast_update!
-  rescue StandardError => e
-    Rails.logger.warn("[SubStepRun#broadcast_update!] #{e.message}")
-  end
+  broadcasts_to ->(ssr) { ssr.step_run.workflow_run }, on: [ :create, :update ]
 end

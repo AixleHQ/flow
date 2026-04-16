@@ -42,6 +42,10 @@ class Agent < ApplicationRecord
       .or(where(scope_type: "Project", scope_id: company.project_ids))
   }
 
+  def picker_name
+    title.presence || name
+  end
+
   def scope_indicator
     return "system" if scope_type == "System"
 

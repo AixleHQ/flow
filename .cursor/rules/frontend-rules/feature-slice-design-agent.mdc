@@ -1,211 +1,53 @@
 ---
-description: This rule governs the architecture and organization of frontend components using Feature-Slice Design methodology. It should be applied whenever: (1) Creating new frontend components, (2) Refactoring existing components, (3) Planning feature implementation, (4) Discussing component architecture, or (5) Reviewing frontend code structure. The rule ensures consistent component organization, proper separation of concerns, and maintainable code structure. It's particularly important when determining where to place new components, how to organize types and models, and how to structure the relationships between different parts of the frontend application. This rule helps maintain a scalable and maintainable frontend architecture by providing clear guidelines on component placement, naming conventions, and responsibility boundaries.
+description: Frontend directory structure and component organization for Inertia Rails + Mantine. Apply when creating pages, shared components, or deciding where to place new code.
 globs: 
 alwaysApply: false
 ---
-# Feature slice desogn
+
+# Frontend Architecture
 
 ## Directory Structure
 
-### Layer Organization
 ```
 app/frontend/
-├── app/          # Application initialization, global styles and global providers
-├── entities/     # Business entities (User, Project, etc.)
-├── features/     # Reused implementations of entire product features, i.e. actions that bring business value to the user.
-├── widgets/      # Composite components combining entities and features
-├── pages/        # full pages or large parts of a page in nested routing
-└── shared/       # Shared code (API, UI kit, utilities)
+├── entrypoints/       # Vite entry points
+├── layouts/           # Persistent layouts (AuthLayout, ProjectLayout)
+├── pages/             # Inertia page components — mirror Rails controller paths
+│   ├── Auth/
+│   ├── Company/
+│   │   └── Sessions/  # Index.tsx, New.tsx, Show.tsx
+│   ├── Onboarding/
+│   ├── Profile/
+│   └── Projects/
+│       ├── Sessions/
+│       ├── Workflows/
+│       └── ...
+├── shared/
+│   ├── components/    # Reusable form/UI components (SessionNewForm, etc.)
+│   ├── resources/     # Domain CRUD panels (assets, skills, tools, repos)
+│   ├── lib/           # Utilities (apiFetch, actionCableConsumer, hooks)
+│   ├── ui/            # Shell, sidebar, header, shared types
+│   ├── config/        # App configuration
+│   └── theme/         # Mantine theme overrides
+└── types/
+    └── generated/     # Auto-generated TS types from Alba resources (Typelizer)
 ```
 
-### Segment Organization
-Each layer should organize code into segments:
+## Key Rules
+
+- **Pages** map 1:1 to Rails controller actions: `Company/Sessions/Index.tsx` → `Web::Company::SessionsController#index`
+- **Shared components** go in `shared/components/` when used by multiple pages
+- **Resource panels** (CRUD for a model) go in `shared/resources/<model>/`
+- **Generated types** in `types/generated/` are auto-generated — never edit manually
+- **Co-locate** CSS modules with their component: `Show.tsx` + `Show.module.css`
+- Page props interfaces are defined in the page file, not in a separate types file
+
+## Imports
+
+```tsx
+import { AuthLayout } from 'layouts/AuthLayout';
+import { apiFetch } from 'shared/lib/apiFetch';
+import { SessionNewForm } from 'shared/components/SessionNewForm';
+import type { AgentType, SharedProps } from 'shared/ui/types';
+import type { TerminalSession } from 'types/generated';
 ```
-layer/
-├── model/       # the data model: schemas, interfaces, stores, and business logic.
-├── ui/          # everything related to UI display
-├── api/         # backend interactions: request functions, data types, mappers, etc.
-├── lib/         # library code that other modules on this slice need.
-└── types/       # Type definitions (if not in model)
-```
-
-## Component Organization
-
-### Simple Components
-Single file components go directly in the ui/ folder:
-```
-features/auth/ui/LoginForm.tsx
-```
-
-### Complex Components
-Components with multiple files use model segment for types:
-```
-features/auth/
-├── model/
-│   └── types.ts    # All feature types
-└── ui/
-    └── LoginForm.tsx
-```
-
-## Type Organization
-
-### Business Types
-Define in `model/types.ts` and export through layer's public API:
-```typescript
-// entities/project/model/types.ts
-export interface IProject {
-  id: number;
-  name: string;
-  status: ProjectStatus;
-}
-```
-
-### Component Props
-Define inside Component file:
-```typescript
-// features/auth/ui/LoginForm.tsx
-interface ILoginFormProps {
-  onSuccess?: () => void;
-}
-```
-
-## Public API
-
-### Layer Exports
-Each layer must have index.ts that exports only what's needed by other layers:
-```typescript
-// entities/project/index.ts
-export type { IProject } from './model/types';
-export { ProjectCard } from './ui/ProjectCard';
-export { useProject } from './api/project';
-```
-
-## Import Rules
-
-### Allowed Dependencies
-```mermaid
-graph TD
-    shared[shared] --> none[no dependencies]
-    entities[entities] --> shared
-    features[features] --> entities & shared
-    widgets[widgets] --> features & entities & shared
-    pages[pages] --> widgets & features & entities & shared
-    app[app] --> all[all layers]
-```
-
-### Import Style
-```typescript
-// Import from layer's public API
-import { Button } from 'shared/ui/button';
-import { Project } from 'entities/project';
-import { LoginForm } from 'features/auth';
-```
-
-## File Naming
-
-### Component Files
-- Use PascalCase for component files
-- Examples:
-  - `LoginForm.tsx`
-  - `ProjectCard.tsx`
-
-### Non-Component Files
-- Use camelCase for utility files
-- Examples:
-  - `types.ts`
-  - `constants.ts`
-  - `queries.ts`
-
-### Index Files
-- Always name `index.ts`
-- Use for public API exports only
-- Keep them minimal and focused
-
-## Code Style
-
-### Component Structure
-```typescript
-import { dependencies } from 'external';
-import { internal } from './internal';
-
-interface IProps {
-  prop1: string;
-  prop2: number;
-}
-
-// MaterialUI sx props styles
-const styles = {
-  …
-} satisfies SxProps;
-
-export const Component = (props: IProps) => {
-  // destructuring props
-  const { prop1, prop2 } = props;
-
-  // hooks first
-  const state = useState();
-
-  // handlers second
-  const handleClick = () => {};
-
-  // render last
-  return <div />;
-};
-```
-
-### Type Exports
-```typescript
-// Use type-only exports for type definitions
-export type { Thing } from './types';
-```
-
-## Testing
-
-### Test File Location
-Place test files next to the code they test:
-```
-feature/
-├── ui/
-│   ├── Component.tsx
-│   └── Component.test.tsx
-└── model/
-    ├── utils.ts
-    └── utils.test.ts
-```
-
-### Test Naming
-- Use `.test.ts(x)` suffix for unit tests
-- Use `.spec.ts(x)` suffix for integration tests
-
-## State Management
-
-### Local State
-- Use React's useState/useReducer for component-local state
-- Keep in component file
-
-### Feature State
-- Place in feature's model segment
-- Export through feature's public API
-```
-features/auth/
-├── model/
-│   ├── store.ts
-│   └── types.ts
-└── index.ts
-```
-
-### Global State
-- Place in app layer or relevant feature
-- Document dependencies and usage
-
-## Error Handling
-
-### API Errors
-- Handle in api segment
-- Transform to domain errors
-- Provide typed error responses
-
-### UI Errors
-- Handle at appropriate level
-- Show user-friendly messages
-- Log technical details when needed

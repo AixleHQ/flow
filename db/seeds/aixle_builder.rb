@@ -207,8 +207,8 @@ module Seeds
         meta_create_workflow meta_create_agent meta_create_step
         meta_create_sub_step meta_get_workflow meta_list_workflows
         meta_finalize_workflow meta_update_step meta_delete_step
-        meta_reorder_steps meta_create_tool meta_create_skill
-        meta_create_mcp_server meta_link_resource_to_step
+        meta_reorder_steps meta_create_tool meta_install_skill
+        meta_search_skills meta_create_mcp_server meta_link_resource_to_step
         meta_list_agents meta_list_tools meta_list_skills
         meta_get_board meta_create_board_column meta_update_board_column
         meta_delete_board_column meta_reorder_board_columns

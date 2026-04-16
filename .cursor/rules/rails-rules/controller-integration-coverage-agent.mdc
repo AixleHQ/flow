@@ -1,0 +1,37 @@
+---
+description: Integration tests for Web and API controllers — coverage discipline (lean tests, no policy/field micromanagement).
+globs: test/integration/**/*.rb
+alwaysApply: false
+---
+
+# Controller integration test coverage
+
+Use when adding or extending **Web** (`ActionDispatch::IntegrationTest`) or **API** JSON controller tests to raise SimpleCov coverage. Aligns with the idea that **tests have cost** ([DHH on "TSA-style" over-testing](https://habr.com/ru/articles/143616/)): prefer a **small number of high-value integration hits** over exhaustive permutations.
+
+## Philosophy (from TSA article)
+
+- **Tests are not free** — every line must earn its keep vs maintenance and CI time.
+- **Do not chase 100%** as a goal in itself; use coverage to find **untouched controller code**, then add **one cheap success-path test per action**.
+- **Avoid theatre** — redundant tests for framework behavior (raw ActiveRecord validations/scopes, trivial delegations) add noise; **controller integration** is about "does this HTTP entry point run the happy path without blowing up?".
+
+## Hard rules (this project)
+
+1. **Integration tests only** — use `ActionDispatch::IntegrationTest` subclasses (`WebTestCase`, `ApiIntegrationTestCase`, admin equivalents). Do **not** add `ActionController::TestCase` for new Web/API coverage unless an existing file already uses it for a special reason.
+2. **One simple test per controller action**, **success path only** (2xx/3xx as appropriate). No duplicate scenarios for the same action.
+3. **Do not assert Pundit / policy behavior** in these tests (no forbidden-user cases here).
+4. **Web (Inertia)**: for GET requests that render an Inertia page, assert the root component with `assert_inertia_page "Component/Name"` (or `assert_inertia_component`) from inertia_rails/minitest — see `WebTestCase`. **Exception**: non-Inertia HTML (landing, legal layouts, etc.) — `assert_response` only.
+5. **Do not assert every JSON field** in API tests — `assert_response` / minimal checks only.
+6. **`index` actions**: create **multiple records** with `create_list` (or several `create` calls) so **Bullet** can catch N+1 / unused eager loading in realistic lists.
+7. **Stub external orchestration** when needed for a success path (e.g. Temporal / workflow execution) using existing test helpers (`TemporalHelper`, etc.) — still keep the test as an **HTTP integration** through the router.
+
+## File placement
+
+- Web Inertia: `test/integration/web/...`
+- API JSON: `test/integration/api/v1/...`
+- Admin (HTML): `test/integration/admin/...`
+
+Match naming to the controller: `members_controller_test.rb` for `Web::Company::MembersController`.
+
+## References
+
+- [Testing in the TSA style (translation of DHH)](https://habr.com/ru/articles/143616/)

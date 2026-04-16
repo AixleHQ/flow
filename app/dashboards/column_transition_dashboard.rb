@@ -6,9 +6,9 @@ class ColumnTransitionDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     board_task: Field::BelongsTo,
-    from_column: Field::BelongsTo.with_options(class_name: "BoardColumn", optional: true),
-    to_column: Field::BelongsTo.with_options(class_name: "BoardColumn"),
-    actor: Field::BelongsTo.with_options(class_name: "User"),
+    from_column: Field::BelongsTo.with_options(optional: true),
+    to_column: Field::BelongsTo,
+    actor: Field::BelongsTo,
     workflow_run: Field::BelongsTo.with_options(optional: true),
     actor_type: Field::Select.with_options(
       include_blank: false,

@@ -43,6 +43,11 @@ FactoryBot.define do
       session_type { "agent_session" }
     end
 
+    trait :aixle_builder do
+      session_type { "agent_session" }
+      metadata { { "aixle_builder" => true } }
+    end
+
     trait :with_session_config do
       session_config do
         {

@@ -4,6 +4,8 @@ require "administrate/base_dashboard"
 
 class UserDashboard < Administrate::BaseDashboard
   include DashboardConcern
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :company
 
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),

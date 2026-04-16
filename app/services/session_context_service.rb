@@ -171,31 +171,39 @@ class SessionContextService
 
     # == Story 9.6: Skill Injection ==
 
-    # Inject skill files into container based on session_config["skill_ids"].
-    # Each CLI has different skill format and path (adapter.skill_files).
-    # Handles append strategy for Gemini (skills appended to GEMINI.md).
+    # Install skills into container via `npx skills add`.
+    # Each skill is installed globally (`-g`) for the target agent runtime,
+    # so skill files land in the agent's home dir (not /workspace).
     def inject_skills(container_id, session)
       skills = resolve_skills(session)
       return {} if skills.empty?
 
       adapter = adapter_for(session)
-      files = adapter.skill_files(skills)
-      return {} if files.blank?
+      return {} if adapter.includes_skills_in_context?
 
-      files.each do |path, content|
-        expanded = expand_path(path, adapter.home_dir)
+      agent_name = adapter.skills_agent_name
+      installed = {}
 
-        if adapter.skill_merge_strategy == :append
-          existing = read_file(container_id, expanded) || ""
-          write_file(container_id, expanded, existing + content, adapter.container_uid)
+      skills.each do |skill|
+        cmd = [
+          "npx", "-y", "skills", "add", skill.source,
+          "--skill", skill.name,
+          "-a", agent_name,
+          "-g", "--copy", "-y"
+        ]
+
+        stdout, stderr, status = runtime.exec(container_id, cmd, timeout: 30)
+
+        if status.zero?
+          Rails.logger.info("[SessionContext] Installed skill via npx: #{skill.package} -> #{agent_name}")
+          installed[skill.package] = "ok"
         else
-          write_file(container_id, expanded, content, adapter.container_uid)
+          Rails.logger.warn("[SessionContext] Failed to install skill #{skill.package}: #{stderr}")
+          installed[skill.package] = "error: #{stderr.to_s.truncate(200)}"
         end
-
-        Rails.logger.info("[SessionContext] Injected skill: #{path} (#{content.bytesize} bytes)")
       end
 
-      files
+      installed
     end
 
     # == Story 9.7 → 25.7: Context File Injection (via Constructor) ==
@@ -400,20 +408,31 @@ class SessionContextService
         end
 
         begin
-          repo_names = group_repos.map(&:repo_name)
-          token = Github::TokenService.new(integration).generate_installation_token(repositories: repo_names)
+          token = generate_clone_token(integration, group_repos)
         rescue => e
           Rails.logger.error("[SessionContext] Failed to generate token for integration #{integration.id}: #{e.message}")
           group_repos.each { |r| record_failed_repo(session, r, "Token generation failed: #{e.message}") }
           next
         end
 
-        group_repos.each { |repo| clone_repository(container_id, repo, token, uid, session) }
+        group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session) }
       end
     end
 
-    def clone_repository(container_id, repo, token, uid, session)
-      clone_url = "https://x-access-token:#{token}@github.com/#{repo.full_name}.git"
+    def generate_clone_token(integration, group_repos)
+      case integration.provider.to_s
+      when "github"
+        repo_names = group_repos.map(&:repo_name)
+        Github::TokenService.new(integration).generate_installation_token(repositories: repo_names)
+      when "gitlab"
+        integration.credentials_data["personal_access_token"]
+      else
+        raise "Unsupported provider: #{integration.provider}"
+      end
+    end
+
+    def clone_repository(container_id, repo, integration, token, uid, session)
+      clone_url = build_clone_url(repo, integration, token)
       target_path = "/workspace/repo/#{repo.repo_name}"
       branch = Shellwords.escape(repo.source_branch)
 
@@ -431,6 +450,17 @@ class SessionContextService
     rescue => e
       Rails.logger.error("[SessionContext] Failed to clone #{repo.full_name}: #{e.message}")
       record_failed_repo(session, repo, e.message)
+    end
+
+    def build_clone_url(repo, integration, token)
+      case integration.provider.to_s
+      when "github"
+        "https://x-access-token:#{token}@github.com/#{repo.full_name}.git"
+      when "gitlab"
+        "https://oauth2:#{token}@gitlab.com/#{repo.full_name}.git"
+      else
+        repo.clone_url
+      end
     end
 
     def record_failed_repo(session, repo, error)

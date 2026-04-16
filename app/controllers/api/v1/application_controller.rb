@@ -3,6 +3,7 @@
 module Api
   module V1
     class ApplicationController < ::ApplicationController
+      wrap_parameters false
       include Pundit::Authorization
       include AuthorizationConcern
       include PaginationConcern

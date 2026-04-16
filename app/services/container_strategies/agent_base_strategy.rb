@@ -139,7 +139,7 @@ module ContainerStrategies
 
     def mark_session_ready(container_id)
       session = TerminalSession.find(input[:session_id])
-      session.update!(container_id: container_id)
+      session.container_id = container_id
       session.mark_ready! if session.may_mark_ready?
     rescue StandardError => e
       Rails.logger.warn("[#{strategy_name}] Failed to mark session ready: #{e.message}")

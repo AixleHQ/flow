@@ -106,15 +106,8 @@ module Agents
       "#{home_dir}/.claude/CLAUDE.md"
     end
 
-    # Skill files: ~/.claude/skills/<name>.md (user-scoped, not in workspace)
-    def skill_files(skills)
-      files = {}
-      skills.each do |skill|
-        next if skill.content.blank?
-
-        files["#{home_dir}/.claude/skills/#{skill.name}.md"] = skill.content
-      end
-      files
+    def skills_agent_name
+      "claude-code"
     end
 
     # MCP config: /workspace/.mcp.json
@@ -141,29 +134,35 @@ module Agents
     # Requires API key auth (OAuth accounts may not have access).
     ANTHROPIC_MODELS_URL = "https://api.anthropic.com/v1/models"
 
-    def fetch_available_models(credentials)
+    def fetch_available_models(credentials, credential: nil)
+      fetch_available_models_with_source(credentials, credential: credential)[:models]
+    end
+
+    def fetch_available_models_with_source(credentials, credential: nil)
       api_key = credentials["primaryApiKey"]
-      return [] if api_key.blank?
 
-      uri = URI(ANTHROPIC_MODELS_URL)
-      uri.query = URI.encode_www_form(limit: 100)
-      req = Net::HTTP::Get.new(uri)
-      req["x-api-key"] = api_key
-      req["anthropic-version"] = "2023-06-01"
-
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
-      return [] unless response.is_a?(Net::HTTPSuccess)
-
-      data = JSON.parse(response.body)
-      (data["data"] || []).filter_map do |m|
-        next unless m["id"].to_s.include?("claude")
-
-        { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens" }
+      if api_key.present?
+        models = fetch_models_via_api(api_key)
+        if models != FALLBACK_CLAUDE_MODELS
+          { models: models, source: :api }
+        else
+          { models: models, source: :fallback }
+        end
+      else
+        { models: FALLBACK_CLAUDE_MODELS, source: :fallback }
       end
     rescue StandardError => e
       Rails.logger.warn("[ClaudeCodeAdapter] fetch_available_models failed: #{e.message}")
-      []
+      { models: FALLBACK_CLAUDE_MODELS, source: :fallback }
     end
+
+    FALLBACK_CLAUDE_MODELS = [
+      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6", description: "Best balance of speed and intelligence" },
+      { model_id: "claude-opus-4-6", display_name: "Claude Opus 4.6", description: "Most capable model" },
+      { model_id: "claude-sonnet-4-5-20250929", display_name: "Claude Sonnet 4.5", description: "Fast and capable" },
+      { model_id: "claude-opus-4-5-20251101", display_name: "Claude Opus 4.5", description: "Advanced reasoning" },
+      { model_id: "claude-haiku-4-5-20251001", display_name: "Claude Haiku 4.5", description: "Fastest model" }
+    ].freeze
 
     # Default environment variables for Claude Code runtime.
     def default_env_vars(session)
@@ -220,6 +219,25 @@ module Agents
     end
 
     private
+
+    def fetch_models_via_api(api_key)
+      uri = URI(ANTHROPIC_MODELS_URL)
+      uri.query = URI.encode_www_form(limit: 100)
+      req = Net::HTTP::Get.new(uri)
+      req["x-api-key"] = api_key
+      req["anthropic-version"] = "2023-06-01"
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+      return FALLBACK_CLAUDE_MODELS unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response.body)
+      models = (data["data"] || []).filter_map do |m|
+        next unless m["id"].to_s.include?("claude")
+
+        { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens" }
+      end
+      models.presence || FALLBACK_CLAUDE_MODELS
+    end
 
     # Build normalized events from OTLP payload (same format as Cursor API events).
     def extract_events_from_otlp(payload, terminal_session_token)

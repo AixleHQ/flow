@@ -15,8 +15,6 @@ module Activities
         when :paused    then workflow_run.pause!    if workflow_run.may_pause?
         end
 
-        WorkflowRunChannel.broadcast_update(workflow_run)
-
         { "workflow_run_id" => workflow_run.id, "state" => workflow_run.state }
       end
     end

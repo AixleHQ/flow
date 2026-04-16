@@ -1,0 +1,103 @@
+.root {
+  display: flex;
+  gap: 0;
+  height: calc(100vh - 60px);
+  margin: -24px -32px;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--mantine-color-dark-4);
+  background-color: var(--mantine-color-dark-7);
+}
+
+.sidebarHeader {
+  padding: 16px;
+  border-bottom: 1px solid var(--mantine-color-dark-4);
+  flex-shrink: 0;
+}
+
+.stepsList {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.sidebarFooter {
+  padding: 8px;
+  border-top: 1px solid var(--mantine-color-dark-4);
+  flex-shrink: 0;
+}
+
+.sidebarBase {
+  padding: 8px;
+  border-top: 1px solid var(--mantine-color-dark-4);
+  flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 40%;
+}
+
+.stepCard {
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.stepCard:hover {
+  background-color: var(--mantine-color-dark-5);
+}
+
+.stepCardSelected {
+  background-color: var(--mantine-color-dark-5);
+  border-left-color: var(--mantine-color-blue-6);
+}
+
+.mainArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.mainHeader {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--mantine-color-dark-4);
+  flex-shrink: 0;
+}
+
+.mainContent {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.detailPanel {
+  max-width: 800px;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 8px;
+  padding: 64px 32px;
+}
+
+.assetSpecRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}

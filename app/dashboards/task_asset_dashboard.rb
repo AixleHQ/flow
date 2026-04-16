@@ -3,10 +3,13 @@
 require "administrate/base_dashboard"
 
 class TaskAssetDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :board_task
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     board_task: Field::BelongsTo,
-    author: Field::BelongsTo.with_options(class_name: "User"),
+    author: Field::BelongsTo,
     author_type: Field::String,
     name: Field::String,
     file: Field::Shrine.with_options(url_only: true),

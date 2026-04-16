@@ -7,10 +7,10 @@ class SkillDashboard < Administrate::BaseDashboard
     id: Field::Number.with_options(searchable: true),
     name: Field::String,
     title: Field::String,
-    kind: Field::Select.with_options(
-      include_blank: false,
-      collection: %w[internal custom]
-    ),
+    package: Field::String,
+    source: Field::String,
+    source_url: Field::String,
+    install_count: Field::Number,
     description: Field::Text.with_options(truncate: 80),
     content: Field::Text.with_options(truncate: 80),
     scope_type: Field::String,
@@ -22,8 +22,8 @@ class SkillDashboard < Administrate::BaseDashboard
   COLLECTION_ATTRIBUTES = %i[
     id
     name
-    title
-    kind
+    package
+    source
     scope_type
     created_at
   ].freeze
@@ -32,7 +32,10 @@ class SkillDashboard < Administrate::BaseDashboard
     id
     name
     title
-    kind
+    package
+    source
+    source_url
+    install_count
     description
     content
     scope_type
@@ -43,10 +46,7 @@ class SkillDashboard < Administrate::BaseDashboard
 
   FORM_ATTRIBUTES = %i[].freeze
 
-  COLLECTION_FILTERS = {
-    internal: ->(resources) { resources.internal_skills },
-    custom: ->(resources) { resources.custom_skills }
-  }.freeze
+  COLLECTION_FILTERS = {}.freeze
 
   def display_resource(skill)
     skill.title.presence || skill.name

@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "baseUrl": "./app/frontend",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "target": "ES2023",
     "useDefineForClassFields": true,
     "lib": [

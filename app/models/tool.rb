@@ -61,6 +61,10 @@ class Tool < ApplicationRecord
            .or(enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
+  def picker_name
+    display_name.presence || name
+  end
+
   def scope_indicator
     return "system" if platform_tool?
     scope_type == "Company" ? "company" : "project"

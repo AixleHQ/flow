@@ -3,6 +3,9 @@
 require "administrate/base_dashboard"
 
 class AssetVersionDashboard < Administrate::BaseDashboard
+  include SkipAdministrateCollectionIncludes
+  skip_administrate_collection_includes :asset
+
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     asset: Field::BelongsTo,

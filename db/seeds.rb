@@ -31,8 +31,6 @@ puts "Test company created: #{test_company.name} (#{test_company.email_domain})"
 require_relative "seeds/platform_tools"
 Seeds::PlatformTools.seed!
 
-require_relative "seeds/internal_skills"
-Seeds::InternalSkills.seed!
 
 require_relative "seeds/aixle_builder"
 Seeds::AixleBuilder.seed!
@@ -133,8 +131,6 @@ research_project.add_collaborator(alex)
 puts "Project created: #{research_project.name} (owner: #{research_project.owner.name}, collaborators: #{research_project.collaborators.count})"
 
 # Agents are seeded per-workflow in db/seeds/ files
-
-# Skills are seeded per-workflow in db/seeds/ files when needed
 
 # ===========================================================================
 # MCP Servers

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_01_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_09_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -459,13 +459,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_01_160000) do
     t.text "content"
     t.datetime "created_at", null: false
     t.text "description"
-    t.string "kind", default: "custom", null: false
+    t.integer "install_count", default: 0
     t.string "name", null: false
+    t.string "package"
+    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
+    t.string "source"
+    t.string "source_url"
     t.string "title"
     t.datetime "updated_at", null: false
-    t.index ["kind"], name: "index_skills_on_kind"
+    t.index ["package"], name: "index_skills_on_package"
     t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
   end
@@ -780,6 +784,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_01_160000) do
     t.datetime "started_at"
     t.string "state", default: "pending", null: false
     t.jsonb "step_overrides", default: {}, null: false
+    t.integer "step_runs_count", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.bigint "workflow_id", null: false

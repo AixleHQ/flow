@@ -10,10 +10,9 @@ module InternalTools
       proj = target_project
       return error("No target project available") unless proj
 
-      skills = Skill.where(scope_type: [ "Company", "Project" ], scope_id: [ proj.company_id, proj.id ])
-                    .or(Skill.where(kind: :internal))
+      skills = Skill.visible_for_project(proj)
                     .map do |s|
-        { id: s.id, name: s.name, title: s.title, kind: s.kind, scope_type: s.scope_type }
+        { id: s.id, name: s.name, title: s.title, package: s.package, source: s.source, scope_type: s.scope_type }
       end
 
       success({ skills_count: skills.size, skills: skills }.to_json)

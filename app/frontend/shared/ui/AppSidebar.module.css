@@ -1,0 +1,104 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--app-border-default);
+  background-color: var(--app-bg-paper);
+  transition: width 0.2s ease, min-width 0.2s ease;
+  overflow-x: hidden;
+}
+
+.scrollArea {
+  flex: 1;
+  padding-top: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.navLink {
+  min-height: 36px;
+  padding: 0 12px;
+  margin: 0 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.navLink:hover {
+  background-color: var(--app-action-hover);
+}
+
+.navLinkActive {
+  background-color: var(--app-action-selected);
+  color: var(--app-text-primary);
+  font-weight: 600;
+}
+
+.navLinkActive .navIcon {
+  color: var(--mantine-color-blue-4);
+}
+
+.navIcon {
+  color: var(--app-text-secondary);
+  flex-shrink: 0;
+}
+
+.navLinkCollapsed {
+  min-height: 36px;
+  padding: 0 8px;
+  margin: 0 4px;
+  border-radius: 4px;
+  justify-content: center;
+}
+
+.divider {
+  margin: 4px 12px;
+  border-color: var(--app-border-default);
+}
+
+.toggleContainer {
+  display: flex;
+  padding: 8px;
+  border-top: 1px solid var(--app-border-default);
+}
+
+.toggleButton {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border-default);
+  border-radius: 4px;
+  color: var(--app-text-secondary);
+}
+
+.toggleButton:hover {
+  background-color: var(--app-action-hover);
+  border-color: var(--app-border-strong);
+}
+
+.mobileToggle {
+  position: fixed;
+  bottom: 16px;
+  left: 16px;
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--app-bg-paper);
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  color: var(--app-text-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.mobileToggle:hover {
+  background-color: var(--app-action-hover);
+}

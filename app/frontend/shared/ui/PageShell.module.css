@@ -1,0 +1,46 @@
+.root {
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    var(--mantine-color-dark-7) 0%,
+    var(--mantine-color-dark-9) 70%
+  );
+}
+
+.fullPage {
+  min-height: 100vh;
+}
+
+.content {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ── Variants ─────────────────────────────────── */
+
+.default > .content {
+  max-width: 100%;
+}
+
+.centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.centered > .content {
+  max-width: 420px;
+}
+
+.narrow > .content {
+  max-width: 800px;
+}
+
+/* ── Responsive ───────────────────────────────── */
+
+@media (max-width: 640px) {
+  .centered {
+    padding: 16px;
+  }
+}
