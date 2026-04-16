@@ -46,6 +46,7 @@ class WorkflowService
       run.complete! if run.may_complete?
       record_activity(run, :workflow_completed)
       broadcast_task_updated(run)
+      trigger_next_column_workflow(run)
     end
 
     def fail(run:)
@@ -121,6 +122,15 @@ class WorkflowService
       run.board_task.board.touch
     rescue StandardError => e
       Rails.logger.warn("[WorkflowService] Failed to broadcast task update for run ##{run.id}: #{e.message}")
+    end
+
+    def trigger_next_column_workflow(run)
+      return unless run.board_task_id.present?
+
+      task = run.board_task
+      TaskService.check_auto_trigger(task: task, column: task.board_column, actor: run.user)
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] Failed to check auto-trigger after run ##{run.id} completed: #{e.message}")
     end
 
     def record_activity(run, event_type)
