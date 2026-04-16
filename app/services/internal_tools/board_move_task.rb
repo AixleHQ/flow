@@ -13,6 +13,7 @@ module InternalTools
       target_column = board.board_columns.find_by(name: params[:column_name])
       return error("Column '#{params[:column_name]}' not found") unless target_column
 
+      from_column_name = task.board_column.name
       actor = resolve_actor(task)
       TaskService.move(
         task: task,
@@ -24,7 +25,7 @@ module InternalTools
       success({
         id: task.id,
         title: task.title,
-        from_column: task.board_column.name,
+        from_column: from_column_name,
         to_column: target_column.name
       }.to_json)
     end
