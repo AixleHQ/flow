@@ -110,7 +110,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.move(task: task, to_column: new_column, actor: @user)
   end
 
-  test "move to column with auto binding does not trigger when active run exists" do
+  test "move to column with auto binding triggers workflow even when active run exists" do
     prior_workflow = create(:workflow, scope: @company)
     auto_workflow = create(:workflow, scope: @company)
     new_column = create(:board_column, board: @board)
@@ -119,7 +119,9 @@ class TaskServiceTest < ActiveSupport::TestCase
     task = create(:board_task, board: @board, board_column: @column, position: 1)
     create(:workflow_run, workflow: prior_workflow, project: @project, user: @user, board_task: task, state: "running")
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: auto_workflow, task: task, mode: :non_interactive)
+    ).once
 
     TaskService.move(task: task, to_column: new_column, actor: @user)
   end

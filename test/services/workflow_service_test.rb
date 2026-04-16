@@ -76,52 +76,6 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_not run.persisted?
   end
 
-  # == complete ==
-
-  test "complete fires auto-trigger for task's current column after run finishes" do
-    board = create(:board, project: @project)
-    col_analysis = create(:board_column, board: board, name: "Analysis")
-    col_in_progress = create(:board_column, board: board, name: "In Progress")
-
-    impl_workflow = create(:workflow, scope: @company)
-    ColumnWorkflowBinding.create!(
-      board_column: col_in_progress, workflow: impl_workflow,
-      trigger_mode: :auto, cooldown_seconds: 0
-    )
-
-    # Task is already in In Progress (moved there by the running workflow)
-    task = create(:board_task, board: board, board_column: col_in_progress)
-    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
-                 board_task: task, state: "running")
-
-    WorkflowService.expects(:start).with(
-      has_entries(workflow: impl_workflow, task: task, mode: :non_interactive)
-    ).once
-
-    WorkflowService.complete(run: run)
-  end
-
-  test "complete does not fire auto-trigger when task has no column binding" do
-    board = create(:board, project: @project)
-    col = create(:board_column, board: board, name: "Done")
-
-    task = create(:board_task, board: board, board_column: col)
-    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
-                 board_task: task, state: "running")
-
-    WorkflowService.expects(:start).never
-
-    WorkflowService.complete(run: run)
-  end
-
-  test "complete does not fire auto-trigger when run has no task" do
-    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
-
-    WorkflowService.expects(:start).never
-
-    WorkflowService.complete(run: run)
-  end
-
   # == cancel ==
 
   test "cancel sends signal and cancels active step runs" do
