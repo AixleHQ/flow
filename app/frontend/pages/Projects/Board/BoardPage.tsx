@@ -94,7 +94,7 @@ import { z } from 'zod';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
-import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
+import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -2683,14 +2683,9 @@ const BoardPage = () => {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
-  const [collapsedColumns, setCollapsedColumns] = useLocalStorage<Set<number>>(
+  const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(
     collapsedColumnsStorageKey,
     new Set(),
-    (set) => JSON.stringify([...set]),
-    (raw) => {
-      const parsed = JSON.parse(raw) as unknown;
-      return Array.isArray(parsed) ? new Set(parsed as number[]) : new Set();
-    },
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);

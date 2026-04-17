@@ -45,3 +45,24 @@ export function useLocalStorage<T>(
 
   return [value, setValue];
 }
+
+/**
+ * Persists a `Set<T>` in localStorage, handling all JSON serialization internally.
+ *
+ * @param key - localStorage key, or null to disable persistence
+ * @param defaultValue - value to use when no stored entry exists (defaults to an empty Set)
+ */
+export function useLocalStorageSet<T>(
+  key: string | null,
+  defaultValue: Set<T> = new Set(),
+): [Set<T>, Dispatch<SetStateAction<Set<T>>>] {
+  return useLocalStorage<Set<T>>(
+    key,
+    defaultValue,
+    (set) => JSON.stringify([...set]),
+    (raw) => {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? new Set(parsed as T[]) : new Set();
+    },
+  );
+}
