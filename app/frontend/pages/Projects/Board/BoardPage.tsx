@@ -95,6 +95,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -2702,7 +2703,8 @@ const BoardPage = () => {
   const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(new Set());
+  const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
+  const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(collapsedColumnsStorageKey, new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
