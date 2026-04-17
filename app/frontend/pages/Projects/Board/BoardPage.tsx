@@ -913,7 +913,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { title: titleValue.trim() } }),
     });
-    router.reload();
+    router.reload({ only: ['selectedTask'] });
     setEditingTitle(false);
   };
 
@@ -925,7 +925,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { description: descValue } }),
     });
-    router.reload();
+    router.reload({ only: ['selectedTask'] });
   };
 
   const saveField = async (field: string, value: string | string[] | null) => {
@@ -935,7 +935,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { [field]: value } }),
     });
-    router.reload();
+    router.reload({ only: ['selectedTask'] });
   };
 
   const moveToColumn = async (columnId: string) => {
@@ -945,7 +945,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ columnId: Number(columnId) }),
     });
-    router.reload();
+    router.reload({ only: ['tasks', 'selectedTask'] });
   };
 
   const handleSubmitComment = async () => {
@@ -965,7 +965,7 @@ function TaskDetailSidebar({
         method: 'POST',
         headers: jsonHeaders,
       });
-      router.reload();
+      router.reload({ only: ['selectedTask'] });
     } catch {
       /* ignore */
     }
@@ -977,7 +977,7 @@ function TaskDetailSidebar({
       if (!task) return;
       setDeletingWaitId(waitId);
       await deleteTaskWait(projectId, task.id, waitId);
-      router.reload();
+      router.reload({ only: ['selectedTask'] });
       setDeletingWaitId(null);
     },
     [projectId, task],
@@ -1148,9 +1148,15 @@ function TaskDetailSidebar({
                   }}
                   style={{ cursor: 'pointer', minHeight: 40 }}
                 >
-                  <Text size="sm" style={{ whiteSpace: 'pre-wrap' }} c={task.description ? undefined : 'dimmed'}>
-                    {task.description || 'Click to add description...'}
-                  </Text>
+                  {task.description ? (
+                    <Box className={styles.commentMd}>
+                      <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
+                    </Box>
+                  ) : (
+                    <Text size="sm" c="dimmed">
+                      Click to add description...
+                    </Text>
+                  )}
                 </Box>
               )}
             </Box>
@@ -2667,6 +2673,18 @@ const BoardPage = () => {
 
   const selectedTask = selectedTaskProp ? normalizeTask(selectedTaskProp) : null;
 
+  // Sync the updated selectedTask into localTasks after partial reloads that only refresh
+  // the selected task (e.g. editing fields, triggering a workflow, removing a wait).
+  // Without this, task cards in the board columns would show stale data until the next
+  // full-tasks reload.
+  useEffect(() => {
+    if (!selectedTaskProp) return;
+
+    const nextTask = normalizeTask(selectedTaskProp);
+
+    setLocalTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)));
+  }, [selectedTaskProp]);
+
   const boardUrl = `/company/projects/${project.id}/board`;
 
   useInertiaCableStream(cableStream, {
@@ -2771,7 +2789,7 @@ const BoardPage = () => {
         if (res.ok) {
           setCreateOpen(false);
           form.reset();
-          router.reload();
+          router.reload({ only: ['tasks'] });
         }
       } catch {
         /* ignore */
@@ -2913,7 +2931,7 @@ const BoardPage = () => {
           headers: jsonHeaders,
           body: JSON.stringify({ columnId: targetColumnId, position }),
         });
-        router.reload();
+        router.reload({ only: ['tasks'] });
       } catch {
         setLocalTasks(preDragSnapshotRef.current);
       }
