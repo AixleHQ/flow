@@ -139,15 +139,11 @@ module Seeds
         w.save!
       end
 
-      # Soft-delete old steps and shift positions to avoid unique constraint conflicts
-      workflow.steps.where(deleted_at: nil).each_with_index do |s, idx|
-        s.update_columns(deleted_at: Time.current, position: 10_000 + idx)
-      end
+      archive_replaced_steps!(workflow, keep_names: [ "Build Workflow" ])
 
       all_tool_ids = Tool.where(kind: :workflow, name: tool_names).pluck(:id)
 
-      workflow.steps.create!(
-        name: "Build Workflow",
+      workflow.steps.find_or_initialize_by(name: "Build Workflow").update!(
         position: 1,
         agent: agent,
         allow_non_interactive: false,
@@ -200,6 +196,15 @@ module Seeds
       )
 
       workflow
+    end
+
+    def self.archive_replaced_steps!(workflow, keep_names:)
+      next_position = workflow.steps.unscope(:order).maximum(:position).to_i + 1
+
+      workflow.steps.not_deleted.where.not(name: keep_names).find_each do |step|
+        step.update_columns(deleted_at: Time.current, position: next_position)
+        next_position += 1
+      end
     end
 
     def self.tool_names
