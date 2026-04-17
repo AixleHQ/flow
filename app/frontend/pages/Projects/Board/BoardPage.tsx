@@ -94,6 +94,7 @@ import { z } from 'zod';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { useLocalStorage } from 'shared/lib/hooks/useLocalStorage';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -2682,19 +2683,15 @@ const BoardPage = () => {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
-  const [collapsedColumns, setCollapsedColumns] = useState<Set<number>>(() => {
-    if (!collapsedColumnsStorageKey) return new Set();
-    try {
-      const stored = localStorage.getItem(collapsedColumnsStorageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored) as number[];
-        if (Array.isArray(parsed)) return new Set(parsed);
-      }
-    } catch {
-      // ignore invalid stored value
-    }
-    return new Set();
-  });
+  const [collapsedColumns, setCollapsedColumns] = useLocalStorage<Set<number>>(
+    collapsedColumnsStorageKey,
+    new Set(),
+    (set) => JSON.stringify([...set]),
+    (raw) => {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed) ? new Set(parsed as number[]) : new Set();
+    },
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -2954,15 +2951,6 @@ const BoardPage = () => {
     const allIds = columns.map((c) => c.id);
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   }, [columns]);
-
-  useEffect(() => {
-    if (!collapsedColumnsStorageKey) return;
-    try {
-      localStorage.setItem(collapsedColumnsStorageKey, JSON.stringify([...collapsedColumns]));
-    } catch {
-      // ignore storage errors (e.g. private mode quota)
-    }
-  }, [collapsedColumns, collapsedColumnsStorageKey]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
