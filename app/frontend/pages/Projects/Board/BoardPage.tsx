@@ -513,7 +513,7 @@ function BoardColumn({
         const oldestWait = t.pendingWaits.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
         tooltipParts.push(`Waiting — ${formatElapsedTime(oldestWait.createdAt)}`);
       }
-      return { id: t.id, color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
+      return { id: t.id, task: t, color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
     });
 
     return (
@@ -550,13 +550,15 @@ function BoardColumn({
         {priorityIndicators.length > 0 && (
           <Box style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
             {priorityIndicators.map((ind) => (
-              <Tooltip key={ind.id} label={ind.tooltipLabel} position="right" withArrow>
+              <Tooltip key={ind.id} label={ind.tooltipLabel} position="right" withArrow color="dark">
                 <Box
+                  onClick={(e) => { e.stopPropagation(); onTaskClick(ind.task); }}
                   style={{
                     width: 4,
                     height: 20,
                     borderRadius: 2,
                     backgroundColor: ind.color,
+                    cursor: 'pointer',
                     animation: ind.hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
                   }}
                 />
