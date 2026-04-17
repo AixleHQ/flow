@@ -2662,9 +2662,12 @@ const BoardPage = () => {
   // Without this, task cards in the board columns would show stale data until the next
   // full-tasks reload.
   useEffect(() => {
-    if (!selectedTask) return;
-    setLocalTasks((prev) => prev.map((t) => (t.id === selectedTask.id ? normalizeTask(selectedTask) : t)));
-  }, [selectedTask]);
+    if (!selectedTaskProp) return;
+
+    const nextTask = normalizeTask(selectedTaskProp);
+
+    setLocalTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)));
+  }, [selectedTaskProp]);
 
   const boardUrl = `/company/projects/${project.id}/board`;
 
