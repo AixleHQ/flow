@@ -552,7 +552,10 @@ function BoardColumn({
             {priorityIndicators.map((ind) => (
               <Tooltip key={ind.id} label={ind.tooltipLabel} position="right" withArrow color="dark">
                 <Box
-                  onClick={(e) => { e.stopPropagation(); onTaskClick(ind.task); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTaskClick(ind.task);
+                  }}
                   style={{
                     width: 4,
                     height: 20,
