@@ -2683,10 +2683,7 @@ const BoardPage = () => {
   const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
-  const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(
-    collapsedColumnsStorageKey,
-    new Set(),
-  );
+  const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(collapsedColumnsStorageKey, new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
