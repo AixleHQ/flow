@@ -11,7 +11,7 @@ module Api
       def update
         workflow = Workflow.for_company(current_company).active.find(params[:id])
 
-        if workflow.update(workflow_params)
+        if workflow.update(merged_workflow_params(workflow))
           render json: WorkflowResource.new(workflow).to_h
         else
           render json: { errors: workflow.errors.full_messages }, status: :unprocessable_entity
@@ -37,7 +37,16 @@ module Api
       end
 
       def workflow_params
-        params.require(:workflow).permit(:name, :description, config: {})
+        params.require(:workflow).permit(:name, :description, :inherit_all_project_resources, config: {})
+      end
+
+      def merged_workflow_params(workflow)
+        permitted = workflow_params
+        config_updates = {}
+        config_updates["inherit_all_project_resources"] = permitted.delete(:inherit_all_project_resources) if permitted.key?(:inherit_all_project_resources)
+        return permitted if config_updates.empty?
+
+        permitted.merge(config: (workflow.config || {}).merge(config_updates))
       end
     end
   end
