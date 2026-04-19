@@ -40,7 +40,10 @@ module Api
         def merged_workflow_params(workflow)
           permitted = workflow_params
           config_updates = {}
-          config_updates["inherit_all_project_resources"] = permitted.delete(:inherit_all_project_resources) if permitted.key?(:inherit_all_project_resources)
+          if permitted.key?(:inherit_all_project_resources)
+            raw = permitted.delete(:inherit_all_project_resources)
+            config_updates["inherit_all_project_resources"] = ActiveModel::Type::Boolean.new.cast(raw)
+          end
           return permitted if config_updates.empty?
 
           permitted.merge(config: (workflow.config || {}).merge(config_updates))
