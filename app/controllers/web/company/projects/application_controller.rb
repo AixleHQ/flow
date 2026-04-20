@@ -10,7 +10,6 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
   def current_project
     @current_project ||= Project.for_user(current_user)
                                 .with_computed_counts
-                                .includes(:project_collaborators)
                                 .find(params[:project_id])
   end
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class BoardTaskResource < ApplicationResource
-  attributes :id, :title, :task_type, :priority,
+  attributes :id, :title, :description, :task_type, :priority,
              :assignee_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 
@@ -15,6 +15,10 @@ class BoardTaskResource < ApplicationResource
 
   attribute :children_count do |task|
     task.has_attribute?(:children_count) ? task[:children_count].to_i : task.child_tasks.size
+  end
+
+  attribute :assets_count do |task|
+    task.task_assets.size
   end
 
   attribute :recent_workflow_runs do |task|

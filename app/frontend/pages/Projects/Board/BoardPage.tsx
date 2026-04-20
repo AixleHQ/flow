@@ -690,7 +690,7 @@ async function addTaskComment(projectId: number, taskId: number, body: string, t
     headers: jsonHeaders,
     body: JSON.stringify({ taskComment: { body, tags } }),
   });
-  router.reload({ only: ['task_comments', 'task_activities'], preserveScroll: true });
+  router.reload({ only: ['task_comments', 'task_activities'] });
 }
 
 interface TaskAsset {
@@ -712,7 +712,7 @@ async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
       method: 'POST',
       body: formData,
     });
-    router.reload({ only: ['task_assets', 'task_activities'], preserveScroll: true });
+    router.reload({ only: ['task_assets', 'task_activities'] });
   } catch {
     /* ignore */
   }
@@ -723,7 +723,7 @@ async function deleteTaskAsset(projectId: number, taskId: number, assetId: numbe
     await apiFetch(apiV1ProjectTaskAssetPath(projectId, taskId, assetId), {
       method: 'DELETE',
     });
-    router.reload({ only: ['task_assets', 'task_activities'], preserveScroll: true });
+    router.reload({ only: ['task_assets', 'task_activities'] });
   } catch {
     /* ignore */
   }
@@ -953,7 +953,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { [field]: value } }),
     });
-    router.reload({ only: ['selected_task'], preserveScroll: true });
+    router.reload({ only: ['selected_task'] });
   };
 
   const moveToColumn = async (columnId: string) => {
@@ -963,7 +963,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ columnId: Number(columnId) }),
     });
-    router.reload({ only: ['tasks', 'selected_task'], preserveScroll: true });
+    router.reload({ only: ['tasks', 'selected_task'] });
   };
 
   const handleSubmitComment = async () => {
@@ -983,7 +983,7 @@ function TaskDetailSidebar({
         method: 'POST',
         headers: jsonHeaders,
       });
-      router.reload({ only: ['selected_task', 'task_workflow_runs', 'task_activities'], preserveScroll: true });
+      router.reload({ only: ['selected_task', 'task_workflow_runs', 'task_activities'] });
     } catch {
       /* ignore */
     }
@@ -995,7 +995,7 @@ function TaskDetailSidebar({
       if (!task) return;
       setDeletingWaitId(waitId);
       await deleteTaskWait(projectId, task.id, waitId);
-      router.reload({ only: ['selected_task'], preserveScroll: true });
+      router.reload({ only: ['selected_task'] });
       setDeletingWaitId(null);
     },
     [projectId, task],
@@ -2534,7 +2534,7 @@ function ViewPresetMenu({
           boardViewPreset: { name: saveName.trim(), shared: saveShared, filters: filtersToJson() },
         }),
       });
-      router.reload({ only: ['view_presets'], preserveScroll: true });
+      router.reload({ only: ['view_presets'] });
       setSaveOpen(false);
       setSaveName('');
       setSaveShared(false);
@@ -2547,7 +2547,7 @@ function ViewPresetMenu({
   const handleDelete = async (presetId: number) => {
     try {
       await apiFetch(apiV1ProjectViewPresetPath(projectId, presetId), { method: 'DELETE' });
-      router.reload({ only: ['view_presets'], preserveScroll: true });
+      router.reload({ only: ['view_presets'] });
     } catch {
       /* ignore */
     }
@@ -2712,7 +2712,7 @@ const BoardPage = () => {
     enabled: !!board,
   });
 
-  useInertiaCableStream(taskCableStream, {
+  useInertiaCableStream(taskCableStream ?? undefined, {
     only: ['selected_task', 'task_comments', 'task_assets', 'task_activities', 'task_workflow_runs', 'task_statistics'],
     enabled: !!selectedTaskProp,
   });
