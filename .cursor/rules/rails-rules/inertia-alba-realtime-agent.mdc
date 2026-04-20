@@ -114,6 +114,62 @@ setSessionState(data.state);
 setCableStream(data.cableStream);
 ```
 
+## Resource Layering: Lean List vs Full Detail
+
+When the same model appears both in a list (board cards) and a detail view (sidebar), use two resources:
+
+```ruby
+# BoardTaskResource — lean, for board card list
+class BoardTaskResource < ApplicationResource
+  attributes :id, :title, :task_type, :priority, :assignee_id, :board_column_id,
+             :position, :parent_task_id, :tags, :created_at, :updated_at
+
+  attribute :assignee_name do |task|
+    task.assignee&.name
+  end
+
+  # Read SQL-precomputed count virtual attributes (avoids N+1 + Bullet warnings)
+  attribute :comments_count do |task|
+    task.has_attribute?(:comments_count) ? task[:comments_count].to_i : task.task_comments.size
+  end
+
+  attribute :children_count do |task|
+    task.has_attribute?(:children_count) ? task[:children_count].to_i : task.child_tasks.size
+  end
+
+  # Sort in-memory using includes-loaded association — never call .order on it (triggers new query)
+  attribute :recent_workflow_runs do |task|
+    task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
+      { id: run.id, state: run.state, created_at: run.created_at.iso8601 }
+    end
+  end
+end
+
+# TaskDetailResource — extends with sidebar-only fields
+class TaskDetailResource < BoardTaskResource
+  attribute :description do |task|
+    task.description
+  end
+
+  attribute :assets_count do |task|
+    task.task_assets.size
+  end
+end
+```
+
+In the controller, inject count subqueries into `select` so the list query doesn't load full associations just to count them:
+
+```ruby
+board.board_tasks
+     .select(Arel.sql(<<~SQL))
+       board_tasks.*,
+       (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
+       (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count
+     SQL
+     .includes(:assignee, :workflow_runs, :pending_task_waits)
+     .order(:position).map { |t| BoardTaskResource.new(t).to_h }
+```
+
 ## Real-Time: Inertia Cable Only
 
 All real-time updates use `inertia_cable` gem. **No custom ActionCable channels.**
@@ -134,6 +190,8 @@ For child → parent propagation, use `touch`:
 after_commit :touch_parent, on: :update
 def touch_parent = parent.touch  # triggers parent's after_commit → broadcast_refresh_to
 ```
+
+**Board cable scope:** the cable subscribes to the **Board** object (not individual tasks). Any task mutation calls `board.touch` → `Board#after_commit` → `broadcast_refresh_to(board)`. The cable `only` list should include **only board-level props**: `['tasks', 'columns', 'recent_activities']`. Sidebar detail props (`selectedTask`, `taskComments`, `taskAssets`, etc.) are **not** refreshed via cable — they are refreshed by explicit `router.reload({ only: [...] })` after mutations.
 
 ### Backend: Controller
 

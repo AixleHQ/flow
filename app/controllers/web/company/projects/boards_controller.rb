@@ -24,7 +24,12 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       tasks: -> {
         board.board_tasks
-             .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_task_waits)
+             .select(Arel.sql(<<~SQL))
+               board_tasks.*,
+               (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
+               (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count
+             SQL
+             .includes(:assignee, :workflow_runs, :pending_task_waits)
              .order(:position).map { |t| BoardTaskResource.new(t).to_h }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
@@ -35,12 +40,13 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       current_user_id: -> { current_user.id },
       cable_stream: -> { inertia_cable_stream(board) },
+      task_cable_stream: -> { task ? inertia_cable_stream(task) : nil },
       recent_activities: InertiaRails.defer {
         board.board_activities.includes(:actor, :board_task)
              .order(created_at: :desc).limit(20)
              .map { |a| BoardActivityResource.new(a).to_h }
       },
-      selected_task: -> { task ? BoardTaskResource.new(task).to_h : nil },
+      selected_task: -> { task ? TaskDetailResource.new(task).to_h : nil },
       task_comments: -> {
         next [] unless task
         task.task_comments.includes(:author).order(created_at: :desc)
@@ -91,5 +97,6 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
     board.board_tasks
          .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_task_waits)
          .find_by(id: params[:task])
+    # note: task_assets included here so TaskDetailResource.assets_count avoids N+1
   end
 end

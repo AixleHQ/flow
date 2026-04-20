@@ -23,7 +23,7 @@ class Web::ApplicationController < ApplicationController
     if signed_in?
       shared.merge(
         current_user: InertiaRails.always { CurrentUserResource.new(current_user).to_h },
-        projects: InertiaRails.always { current_user.company.projects.with_state(:active).order(:name).map { |p| ProjectResource.new(p).to_h } }
+        projects: InertiaRails.always { Project.for_user(current_user).with_state(:active).order(:name).map { |p| ProjectResource.new(p).to_h } }
       )
     else
       shared

@@ -4,8 +4,17 @@ class StepResource < ApplicationResource
   attributes :id, :name, :description, :instructions, :position,
              :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
              :mount_repositories, :bmad_enabled, :preferred_model,
-             :depends_on_step_ids, :input_asset_specs, :output_asset_specs,
-             :created_at, :updated_at
+             :depends_on_step_ids, :created_at, :updated_at
+
+  attribute :input_asset_specs do |step|
+    val = step.input_asset_specs
+    val.is_a?(String) ? JSON.parse(val) : (val || [])
+  end
+
+  attribute :output_asset_specs do |step|
+    val = step.output_asset_specs
+    val.is_a?(String) ? JSON.parse(val) : (val || [])
+  end
 
   attribute :agent_id do |step|
     step.agent_id

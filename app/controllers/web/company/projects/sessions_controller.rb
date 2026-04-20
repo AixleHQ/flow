@@ -29,7 +29,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     tools = Tool.visible_for_project(current_project)
     skills = Skill.visible_for_project(current_project)
     mcp_servers = MCPServer.visible_for_project(current_project)
-    assets = current_project.assets.active.includes(:versions)
+    assets = Asset.accessible_from_project(current_project).includes(:versions)
     repositories = Repository.visible_for_project(current_project)
 
     render inertia: "Projects/Sessions/NewPage", props: {

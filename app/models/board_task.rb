@@ -29,6 +29,7 @@ class BoardTask < ApplicationRecord
 
   before_validation :assign_next_position, on: :create
   after_commit :touch_board
+  after_commit :broadcast_task_updates
 
   scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
@@ -46,6 +47,10 @@ class BoardTask < ApplicationRecord
 
   def touch_board
     board.touch if board&.persisted?
+  end
+
+  def broadcast_task_updates
+    broadcast_refresh_to(self)
   end
 
   def assign_next_position

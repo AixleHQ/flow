@@ -4,7 +4,7 @@ class TaskAsset < ApplicationRecord
   extend Enumerize
   include TaskAssetUploader::Attachment(:file)
 
-  belongs_to :board_task
+  belongs_to :board_task, touch: true
   belongs_to :author, class_name: "User"
 
   enumerize :author_type, in: %i[human agent system], default: :human

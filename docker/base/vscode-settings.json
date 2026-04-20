@@ -2,6 +2,7 @@
   "security.workspace.trust.enabled": false,
   "workbench.colorTheme": "Default Dark Modern",
   "workbench.startupEditor": "none",
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
   "window.restoreWindows": "none",
   "files.hotExit": "off",
   "workbench.welcomePage.walkthroughs.openOnInstall": false,
@@ -21,6 +22,7 @@
   "extensions.ignoreRecommendations": true,
   "terminal.integrated.fontSize": 13,
   "chat.enabled": false,
+  "chat.disableAIFeatures": true,
   "window.commandCenter": false,
   "files.watcherExclude": {
     "**/node_modules/**": true,

@@ -7,7 +7,8 @@ require "set"
 module Agents
   # Cursor CLI adapter for credential handling
   # Config files:
-  #   - ~/.config/cursor/auth.json (tokens)
+  #   - ~/.config/cursor/auth.json (tokens, Linux XDG path — primary)
+  #   - ~/.cursor/auth.json (tokens, alternative path — newer CLI builds)
   #   - ~/.cursor/cli-config.json (settings)
   # Auth: OAuth via Cursor (agent login)
   class CursorCliAdapter < BaseAdapter
@@ -16,12 +17,27 @@ module Agents
     end
 
     def config_path
-      # Primary auth file
+      # Primary auth file (XDG: $XDG_CONFIG_HOME/cursor/auth.json)
       "#{home_dir}/.config/cursor/auth.json"
+    end
+
+    # Alternative auth path used by newer Cursor CLI builds
+    def config_path_alt
+      "#{home_dir}/.cursor/auth.json"
     end
 
     def home_dir
       "/home/cursor"
+    end
+
+    # Comma-separated — watcher checks both paths, accepts whichever has the token
+    def auth_watch_path
+      "#{config_path},#{config_path_alt}"
+    end
+
+    # Both candidate paths for extraction at session cleanup
+    def auth_file_paths
+      [ config_path, config_path_alt ]
     end
 
     # Keys that indicate auth is complete
@@ -51,9 +67,11 @@ module Agents
     # Override to write multiple config files
     def config_files(credentials, workflow_config = {})
       workspace = workflow_config[:workspace] || "/workspace"
+      auth_json = generate_config(credentials, workflow_config).to_json
       {
-        # Auth tokens
-        config_path => generate_config(credentials, workflow_config).to_json,
+        # Auth tokens — write to both paths so any CLI version picks them up
+        config_path => auth_json,
+        config_path_alt => auth_json,
         # CLI settings with full permissions
         "#{home_dir}/.cursor/cli-config.json" => generate_cli_config(workflow_config).to_json,
         # Workspace trust (skip trust dialog)

@@ -62,15 +62,32 @@ module Agents
       refute config.key?("refreshToken")
     end
 
+    test "config_path_alt returns alternative cursor auth.json path" do
+      assert_equal "/home/cursor/.cursor/auth.json", @adapter.config_path_alt
+    end
+
+    test "auth_watch_path returns comma-separated paths" do
+      assert_equal "/home/cursor/.config/cursor/auth.json,/home/cursor/.cursor/auth.json", @adapter.auth_watch_path
+    end
+
+    test "auth_file_paths returns both auth paths" do
+      assert_equal ["/home/cursor/.config/cursor/auth.json", "/home/cursor/.cursor/auth.json"], @adapter.auth_file_paths
+    end
+
     test "config_files returns auth, cli-config, and workspace-trust files" do
       credentials = { "accessToken" => "access", "refreshToken" => "refresh" }
 
       files = @adapter.config_files(credentials, { workspace: "/project" })
 
-      # Auth file
+      # Primary auth file (XDG path)
       assert files.key?("/home/cursor/.config/cursor/auth.json")
       auth = JSON.parse(files["/home/cursor/.config/cursor/auth.json"])
       assert_equal "access", auth["accessToken"]
+
+      # Alternative auth file
+      assert files.key?("/home/cursor/.cursor/auth.json")
+      auth_alt = JSON.parse(files["/home/cursor/.cursor/auth.json"])
+      assert_equal "access", auth_alt["accessToken"]
 
       # CLI config
       assert files.key?("/home/cursor/.cursor/cli-config.json")

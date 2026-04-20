@@ -45,6 +45,6 @@ type TerminalSession = {
   projectName?: string;
   pendingArtifactsCount: number;
   sessionLogsCount: number;
-};
+}
 
 export default TerminalSession;

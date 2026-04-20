@@ -61,6 +61,7 @@ export function useInertiaCableStream(signedStreamName: string | undefined, opti
                 router.reload({
                   ...(opts.only ? { only: opts.only } : {}),
                   ...(opts.except ? { except: opts.except } : {}),
+                  preserveScroll: true,
                 });
               }, debounceMs);
             }

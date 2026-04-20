@@ -163,7 +163,7 @@ interface TaskWait {
 interface Task {
   id: number;
   title: string;
-  description: string | null;
+  description?: string | null;
   taskType: string;
   priority: string | null;
   assigneeId: number | null;
@@ -174,7 +174,7 @@ interface Task {
   tags: string[];
   commentsCount: number;
   childrenCount: number;
-  assetsCount: number;
+  assetsCount?: number;
   recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string }>;
   pendingWaits: TaskWait[];
   createdAt: string;
@@ -211,6 +211,7 @@ interface Props {
   viewPresets?: ViewPreset[];
   currentUserId?: number;
   cableStream?: string;
+  taskCableStream?: string | null;
   recentActivities?: ActivityItem[];
   selectedTask?: Task | null;
   taskComments?: Comment[];
@@ -689,7 +690,7 @@ async function addTaskComment(projectId: number, taskId: number, body: string, t
     headers: jsonHeaders,
     body: JSON.stringify({ taskComment: { body, tags } }),
   });
-  router.reload({ only: ['selectedTask', 'taskComments'] });
+  router.reload({ only: ['task_comments', 'task_activities'], preserveScroll: true });
 }
 
 interface TaskAsset {
@@ -711,7 +712,7 @@ async function uploadTaskAsset(projectId: number, taskId: number, file: File) {
       method: 'POST',
       body: formData,
     });
-    router.reload({ only: ['selectedTask', 'taskAssets'] });
+    router.reload({ only: ['task_assets', 'task_activities'], preserveScroll: true });
   } catch {
     /* ignore */
   }
@@ -722,7 +723,7 @@ async function deleteTaskAsset(projectId: number, taskId: number, assetId: numbe
     await apiFetch(apiV1ProjectTaskAssetPath(projectId, taskId, assetId), {
       method: 'DELETE',
     });
-    router.reload({ only: ['selectedTask', 'taskAssets'] });
+    router.reload({ only: ['task_assets', 'task_activities'], preserveScroll: true });
   } catch {
     /* ignore */
   }
@@ -839,8 +840,10 @@ function TaskDetailSidebar({
   const [tab, setTab] = useState<string | null>('details');
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const [editingDesc, setEditingDesc] = useState(false);
   const [descValue, setDescValue] = useState('');
+  const [pendingDesc, setPendingDesc] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [wide, setWide] = useState(false);
   const [commentBody, setCommentBody] = useState('');
@@ -853,6 +856,12 @@ function TaskDetailSidebar({
   const [deletingWaitId, setDeletingWaitId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Clear optimistic overrides when cable brings fresh task data
+  useEffect(() => {
+    setPendingTitle(null);
+    setPendingDesc(null);
+  }, [task?.updatedAt]);
 
   const filteredComments = useMemo(() => {
     return comments.filter((c) => {
@@ -914,24 +923,27 @@ function TaskDetailSidebar({
       setEditingTitle(false);
       return;
     }
+    const saved = titleValue.trim();
+    setPendingTitle(saved);
+    setEditingTitle(false);
     await apiFetch(apiV1ProjectTaskPath(projectId, task.id), {
       method: 'PATCH',
       headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: { title: titleValue.trim() } }),
+      body: JSON.stringify({ boardTask: { title: saved } }),
     });
-    router.reload({ only: ['selectedTask'] });
-    setEditingTitle(false);
+    // cable will refresh selectedTask and clear pendingTitle via useEffect below
   };
 
   const saveDescription = async () => {
     setEditingDesc(false);
     if (!task || descValue === (task.description ?? '')) return;
+    const saved = descValue;
+    setPendingDesc(saved);
     await apiFetch(apiV1ProjectTaskPath(projectId, task.id), {
       method: 'PATCH',
       headers: jsonHeaders,
-      body: JSON.stringify({ boardTask: { description: descValue } }),
+      body: JSON.stringify({ boardTask: { description: saved } }),
     });
-    router.reload({ only: ['selectedTask'] });
   };
 
   const saveField = async (field: string, value: string | string[] | null) => {
@@ -941,7 +953,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ boardTask: { [field]: value } }),
     });
-    router.reload({ only: ['selectedTask'] });
+    router.reload({ only: ['selected_task'], preserveScroll: true });
   };
 
   const moveToColumn = async (columnId: string) => {
@@ -951,7 +963,7 @@ function TaskDetailSidebar({
       headers: jsonHeaders,
       body: JSON.stringify({ columnId: Number(columnId) }),
     });
-    router.reload({ only: ['tasks', 'selectedTask'] });
+    router.reload({ only: ['tasks', 'selected_task'], preserveScroll: true });
   };
 
   const handleSubmitComment = async () => {
@@ -971,7 +983,7 @@ function TaskDetailSidebar({
         method: 'POST',
         headers: jsonHeaders,
       });
-      router.reload({ only: ['selectedTask'] });
+      router.reload({ only: ['selected_task', 'task_workflow_runs', 'task_activities'], preserveScroll: true });
     } catch {
       /* ignore */
     }
@@ -983,7 +995,7 @@ function TaskDetailSidebar({
       if (!task) return;
       setDeletingWaitId(waitId);
       await deleteTaskWait(projectId, task.id, waitId);
-      router.reload({ only: ['selectedTask'] });
+      router.reload({ only: ['selected_task'], preserveScroll: true });
       setDeletingWaitId(null);
     },
     [projectId, task],
@@ -1095,7 +1107,7 @@ function TaskDetailSidebar({
           />
         ) : (
           <Text size="lg" fw={700} onClick={() => setEditingTitle(true)} style={{ cursor: 'pointer' }}>
-            {task.title}
+            {pendingTitle ?? task.title}
           </Text>
         )}
       </Box>
@@ -1154,9 +1166,9 @@ function TaskDetailSidebar({
                   }}
                   style={{ cursor: 'pointer', minHeight: 40 }}
                 >
-                  {task.description ? (
+                  {(pendingDesc ?? task.description) ? (
                     <Box className={styles.commentMd}>
-                      <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
+                      <Markdown remarkPlugins={[remarkGfm]}>{pendingDesc ?? task.description ?? ''}</Markdown>
                     </Box>
                   ) : (
                     <Text size="sm" c="dimmed">
@@ -2083,6 +2095,7 @@ function BoardSettingsDialog({
 
   useEffect(() => {
     if (opened) {
+      router.reload({ only: ['workflows'] });
       setCols(
         initialColumns.map((c) => ({
           id: c.id,
@@ -2228,7 +2241,7 @@ function BoardSettingsDialog({
 
     setSaving(false);
     onClose();
-    router.reload();
+    router.reload({ only: ['columns', 'tasks', 'workflows'] });
   };
 
   return (
@@ -2521,7 +2534,7 @@ function ViewPresetMenu({
           boardViewPreset: { name: saveName.trim(), shared: saveShared, filters: filtersToJson() },
         }),
       });
-      router.reload({ only: ['viewPresets'] });
+      router.reload({ only: ['view_presets'], preserveScroll: true });
       setSaveOpen(false);
       setSaveName('');
       setSaveShared(false);
@@ -2534,7 +2547,7 @@ function ViewPresetMenu({
   const handleDelete = async (presetId: number) => {
     try {
       await apiFetch(apiV1ProjectViewPresetPath(projectId, presetId), { method: 'DELETE' });
-      router.reload({ only: ['viewPresets'] });
+      router.reload({ only: ['view_presets'], preserveScroll: true });
     } catch {
       /* ignore */
     }
@@ -2663,6 +2676,7 @@ const BoardPage = () => {
     viewPresets,
     currentUserId,
     cableStream,
+    taskCableStream,
     recentActivities,
     selectedTask: selectedTaskProp,
     taskComments,
@@ -2696,6 +2710,11 @@ const BoardPage = () => {
   useInertiaCableStream(cableStream, {
     only: ['tasks', 'columns', 'recent_activities'],
     enabled: !!board,
+  });
+
+  useInertiaCableStream(taskCableStream, {
+    only: ['selected_task', 'task_comments', 'task_assets', 'task_activities', 'task_workflow_runs', 'task_statistics'],
+    enabled: !!selectedTaskProp,
   });
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -2797,9 +2816,11 @@ const BoardPage = () => {
           }),
         });
         if (res.ok) {
+          const created = await res.json();
           setCreateOpen(false);
           form.reset();
-          router.reload({ only: ['tasks'] });
+          setLocalTasks((prev) => [...prev, normalizeTask(created)]);
+          // cable will confirm with authoritative server state
         }
       } catch {
         /* ignore */
@@ -2941,7 +2962,7 @@ const BoardPage = () => {
           headers: jsonHeaders,
           body: JSON.stringify({ columnId: targetColumnId, position }),
         });
-        router.reload({ only: ['tasks'] });
+        // cable confirms via board.touch → broadcast_refresh_to(board) → only: ['tasks', 'columns', 'recent_activities']
       } catch {
         setLocalTasks(preDragSnapshotRef.current);
       }
