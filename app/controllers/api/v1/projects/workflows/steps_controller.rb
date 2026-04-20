@@ -25,6 +25,8 @@ module Api
             step = current_workflow.steps.not_deleted.find(params[:id])
             step.update!(step_params)
             render json: StepResource.new(step).to_h
+          rescue ActiveRecord::RecordInvalid => e
+            render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           end
 
           def destroy
