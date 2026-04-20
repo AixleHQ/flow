@@ -22,7 +22,7 @@ class BoardTaskResource < ApplicationResource
   end
 
   attribute :recent_workflow_runs do |task|
-    task.workflow_runs.order(created_at: :desc).limit(5).map do |run|
+    task.workflow_runs.sort_by { |r| r.created_at }.last(5).reverse.map do |run|
       { id: run.id, state: run.state, created_at: run.created_at.iso8601 }
     end
   end

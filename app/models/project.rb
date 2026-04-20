@@ -38,6 +38,15 @@ class Project < ApplicationRecord
   before_validation :generate_slug, on: :create
 
   # Scopes
+  scope :with_computed_counts, -> {
+    select(
+      "projects.*",
+      "(SELECT COUNT(*) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_sessions_count",
+      "(SELECT MAX(terminal_sessions.started_at) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_last_activity_at",
+      "(SELECT COUNT(*) FROM workflows WHERE workflows.scope_id = projects.id AND workflows.scope_type = 'Project' AND workflows.deleted_at IS NULL) AS cached_workflows_count",
+      "(SELECT COUNT(*) FROM board_tasks INNER JOIN boards ON boards.id = board_tasks.board_id WHERE boards.project_id = projects.id) AS cached_board_tasks_count"
+    )
+  }
   scope :for_company, ->(company) { where(company: company) }
   scope :for_user, ->(user) {
     if user.admin?

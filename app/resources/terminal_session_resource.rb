@@ -94,6 +94,10 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :number
   attribute :session_logs_count do |session|
-    session.session_logs.size
+    if session.respond_to?(:cached_session_logs_count)
+      session.cached_session_logs_count.to_i
+    else
+      session.session_logs.size
+    end
   end
 end
