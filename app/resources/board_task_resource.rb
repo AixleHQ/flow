@@ -10,11 +10,11 @@ class BoardTaskResource < ApplicationResource
   end
 
   attribute :comments_count do |task|
-    task.task_comments.size
+    task.has_attribute?(:comments_count) ? task[:comments_count].to_i : task.task_comments.size
   end
 
   attribute :children_count do |task|
-    task.child_tasks.size
+    task.has_attribute?(:children_count) ? task[:children_count].to_i : task.child_tasks.size
   end
 
   attribute :assets_count do |task|
@@ -22,7 +22,7 @@ class BoardTaskResource < ApplicationResource
   end
 
   attribute :recent_workflow_runs do |task|
-    task.workflow_runs.order(created_at: :desc).limit(5).map do |run|
+    task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
       { id: run.id, state: run.state, created_at: run.created_at.iso8601 }
     end
   end

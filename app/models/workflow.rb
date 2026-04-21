@@ -7,6 +7,7 @@ class Workflow < ApplicationRecord
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
   has_many :column_workflow_bindings
 
+  before_destroy :purge_steps, prepend: true
   before_destroy :check_column_bindings
 
   ALLOWED_CONFIG_KEYS = %w[
@@ -106,6 +107,17 @@ class Workflow < ApplicationRecord
 
     unknown = config.keys - ALLOWED_CONFIG_KEYS
     errors.add(:config, "contains unknown keys: #{unknown.join(', ')}") if unknown.any?
+  end
+
+  def purge_steps
+    step_ids = steps.pluck(:id)
+    return if step_ids.empty?
+
+    sub_step_ids = SubStep.where(step_id: step_ids).pluck(:id)
+    SubStepRun.where(sub_step_id: sub_step_ids).delete_all if sub_step_ids.any?
+    SubStep.where(step_id: step_ids).delete_all
+    StepRun.where(step_id: step_ids).delete_all
+    Step.where(id: step_ids).delete_all
   end
 
   def check_column_bindings

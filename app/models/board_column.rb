@@ -4,6 +4,8 @@ class BoardColumn < ApplicationRecord
   belongs_to :board
   has_one :column_workflow_binding, dependent: :destroy
   has_many :board_tasks, dependent: :restrict_with_error
+  has_many :from_column_transitions, class_name: "ColumnTransition", foreign_key: :from_column_id, dependent: :destroy, inverse_of: :from_column
+  has_many :to_column_transitions, class_name: "ColumnTransition", foreign_key: :to_column_id, dependent: :destroy, inverse_of: :to_column
 
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :board_id }

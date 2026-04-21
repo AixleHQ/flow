@@ -36,7 +36,12 @@ const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
 // Auth watcher configuration (from ContainerService)
 // Only used for auth_setup session type
 const SESSION_TYPE = process.env.SESSION_TYPE || null;
-const AUTH_WATCH_PATH = process.env.AUTH_WATCH_PATH || null;
+// Supports comma-separated list of paths — checks each in order, returns true if any has required keys
+const AUTH_WATCH_PATHS = (process.env.AUTH_WATCH_PATH || '')
+  .split(',')
+  .map((p) => p.trim())
+  .filter(Boolean);
+const AUTH_WATCH_PATH = AUTH_WATCH_PATHS[0] || null; // kept for logging compat
 const AGENT_TYPE = process.env.AGENT_TYPE || 'unknown';
 // Comma-separated list of JSON keys to check for auth completion
 // e.g. "oauthAccount,primaryApiKey" - auth is complete if ANY of these exist
@@ -304,6 +309,91 @@ function handleRequest(req, res) {
     return;
   }
 
+  // Preload page: patches VS Code IndexedDB then redirects to VS Code.
+  // Served at the same traefik origin as VS Code so IndexedDB is shared.
+  if (url.pathname === '/preload') {
+    const to = url.searchParams.get('to');
+    if (!to || (!to.startsWith('/') && !to.startsWith('http'))) {
+      res.writeHead(400);
+      res.end('Missing or invalid ?to= parameter');
+      return;
+    }
+
+    const emptyEditorState = JSON.stringify({
+      'editorpart.state': {
+        serializedGrid: {
+          root: {
+            type: 'branch',
+            data: [{ type: 'leaf', data: { id: 0, editors: [], mru: [], preview: -1 }, size: 863 }],
+            size: 883,
+          },
+          orientation: 0,
+          width: 883,
+          height: 863,
+        },
+        activeGroup: 0,
+        mostRecentActiveGroups: [0],
+      },
+    });
+
+    const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Loading editor...</title>
+<style>body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;color:#ccc;font-family:sans-serif;font-size:14px}</style>
+</head>
+<body>
+<span>Loading editor...</span>
+<script>
+(async () => {
+  const emptyEditorState = ${JSON.stringify(emptyEditorState)};
+  const patch = (name) => new Promise((resolve) => {
+    const req = indexedDB.open(name, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
+    req.onsuccess = () => {
+      const db = req.result;
+      const store = db.objectStoreNames.contains('ItemTable') ? 'ItemTable' : db.objectStoreNames[0];
+      if (!store) { db.close(); resolve(); return; }
+      const tx = db.transaction(store, 'readwrite');
+      const s = tx.objectStore(store);
+      s.put(emptyEditorState, 'memento/workbench.parts.editor');
+      s.put('true', 'workbench.auxiliaryBar.hidden');
+      s.put('true', 'workbench.auxiliaryBar.empty');
+      s.put('true', 'workbench.activityBar.hidden');
+      s.put(JSON.stringify([{id:'workbench.panel.chat',pinned:true,visible:false,order:1},{id:'workbench.viewContainer.agentSessions',pinned:true,visible:false,order:6}]), 'workbench.auxiliarybar.pinnedPanels');
+      s.put(JSON.stringify([{id:'workbench.panel.chat',visible:false},{id:'workbench.viewContainer.agentSessions',visible:false}]), 'workbench.auxiliarybar.viewContainersWorkspaceState');
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); resolve(); };
+    };
+    req.onerror = () => resolve();
+  });
+
+  try {
+    // Compute the workspace-specific DB name using VS Code's own hash algorithm:
+    // hash = stringHash("vscode-remote://{hostname}/workspace", 0).toString(16)
+    function numberHash(val, h) { return (((h << 5) - h) + val) | 0; }
+    function stringHash(s, h) {
+      h = numberHash(149417, h);
+      for (let i = 0; i < s.length; i++) h = numberHash(s.charCodeAt(i), h);
+      return h;
+    }
+    const folderUri = 'vscode-remote://' + window.location.hostname + '/workspace';
+    const workspaceDbName = 'vscode-web-state-db-' + stringHash(folderUri, 0).toString(16);
+
+    await Promise.all(['vscode-web-state-db-global', workspaceDbName].map(patch));
+  } catch(e) {}
+
+  window.location.replace(${JSON.stringify(to)});
+})();
+</script>
+</body>
+</html>`;
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.writeHead(200);
+    res.end(html);
+    return;
+  }
+
   switch (url.pathname) {
     case '/tree':
       res.setHeader('Content-Type', 'application/json');
@@ -330,14 +420,19 @@ function handleRequest(req, res) {
       // Simple response: just authenticated true/false
       let authenticated = false;
 
-      if (SESSION_TYPE === 'auth_setup' && AUTH_WATCH_PATH) {
-        try {
-          if (fs.existsSync(AUTH_WATCH_PATH)) {
-            const content = fs.readFileSync(AUTH_WATCH_PATH, 'utf-8');
-            authenticated = checkAuthComplete(content);
+      if (SESSION_TYPE === 'auth_setup' && AUTH_WATCH_PATHS.length > 0) {
+        for (const watchPath of AUTH_WATCH_PATHS) {
+          try {
+            if (fs.existsSync(watchPath)) {
+              const content = fs.readFileSync(watchPath, 'utf-8');
+              if (checkAuthComplete(content)) {
+                authenticated = true;
+                break;
+              }
+            }
+          } catch (e) {
+            log.error(`Error checking auth status at ${watchPath}: ${e.message}`);
           }
-        } catch (e) {
-          log.error(`Error checking auth status: ${e.message}`);
         }
       }
 

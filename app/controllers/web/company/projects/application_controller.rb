@@ -8,7 +8,9 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
   private
 
   def current_project
-    @current_project ||= Project.for_user(current_user).find(params[:project_id])
+    @current_project ||= Project.for_user(current_user)
+                                .with_computed_counts
+                                .find(params[:project_id])
   end
 
   def policy_context

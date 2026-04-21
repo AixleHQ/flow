@@ -197,40 +197,56 @@ function AssetSpecsEditor({
 
   return (
     <Stack gap="xs">
+      {specs.length > 0 && (
+        <div className={classes.assetSpecRow}>
+          <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+            Path
+          </Text>
+          {showNamePattern && (
+            <Text size="xs" c="dimmed" w={120}>
+              Match pattern
+            </Text>
+          )}
+          <Text size="xs" c="dimmed" w={40}>
+            Req
+          </Text>
+          {!disabled && <Box w={22} />}
+        </div>
+      )}
       {specs.map((spec, idx) => (
         <div key={idx} className={classes.assetSpecRow}>
           <TextInput
             size="xs"
-            placeholder="Name"
+            placeholder="e.g. tasks/report.md"
             value={spec.name}
             onChange={(e) => updateSpec(idx, 'name', e.currentTarget.value)}
             style={{ flex: 1 }}
             disabled={disabled}
           />
-          <TextInput
-            size="xs"
-            placeholder="Type"
-            value={spec.assetType}
-            onChange={(e) => updateSpec(idx, 'assetType', e.currentTarget.value)}
-            w={100}
-            disabled={disabled}
-          />
           {showNamePattern && (
-            <TextInput
-              size="xs"
-              placeholder="Pattern"
-              value={spec.namePattern ?? ''}
-              onChange={(e) => updateSpec(idx, 'namePattern', e.currentTarget.value || null)}
-              w={100}
-              disabled={disabled}
-            />
+            <Tooltip
+              label="Regexp matched anywhere in the file path. Partial match works — e.g. 'summary' matches tasks/summary-final.md. Leave empty to use Path as an exact match."
+              withArrow
+              multiline
+              w={260}
+              position="top"
+            >
+              <TextInput
+                size="xs"
+                placeholder="e.g. report"
+                value={spec.namePattern ?? ''}
+                onChange={(e) => updateSpec(idx, 'namePattern', e.currentTarget.value || null)}
+                w={120}
+                disabled={disabled}
+              />
+            </Tooltip>
           )}
           <Switch
             size="xs"
-            label="Req"
             checked={spec.required}
             onChange={(e) => updateSpec(idx, 'required', e.currentTarget.checked)}
             disabled={disabled}
+            w={40}
           />
           {!disabled && (
             <ActionIcon size="xs" color="red" variant="subtle" onClick={() => removeSpec(idx)}>

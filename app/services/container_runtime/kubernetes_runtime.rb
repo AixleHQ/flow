@@ -129,9 +129,9 @@ module ContainerRuntime
 
       verify_resources(handle, ports)
 
-      return true if ports.blank?
-
-      ports.all? { |port| port_open?(handle, port) }
+      if ports.present?
+        wait_for_ports(handle, ports)
+      end
 
       wait_for_traefik_route(handle) if handle.route_token.present?
 
@@ -1276,6 +1276,23 @@ module ContainerRuntime
       raise "IngressRoute not ready: #{handle.ingress_name} (#{e.message})"
     end
 
+    def wait_for_ports(handle, ports)
+      start_time = Time.current
+      timeout = ready_timeout
+
+      loop do
+        return true if ports.all? { |port| port_open?(handle, port) }
+
+        elapsed = Time.current - start_time
+        if elapsed > timeout
+          Rails.logger.warn("[KubernetesRuntime] Ports #{ports.inspect} not open after #{elapsed.round(1)}s, proceeding")
+          return true
+        end
+
+        sleep ready_interval
+      end
+    end
+
     def wait_for_traefik_route(handle)
       traefik_url = "#{traefik_probe_base_url}/t/#{handle.route_token}/tty/"
       uri = URI(traefik_url)
@@ -1293,17 +1310,22 @@ module ContainerRuntime
           open_timeout: 2, read_timeout: 2
         ) { |http| http.request(request) }
 
-        if response.code.to_i != 404
-          Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{response.code})")
+        code = response.code.to_i
+        # 200/401/403 = route exists and backend is up (auth middleware responded)
+        # 404 = route not registered yet; 502/503 = backend not ready yet
+        if [ 200, 401, 403 ].include?(code)
+          Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{code})")
           return true
         end
+
+        Rails.logger.debug("[KubernetesRuntime] Traefik route not ready for #{handle.route_token}: #{code}")
       rescue StandardError => e
         Rails.logger.debug("[KubernetesRuntime] Traefik route not ready: #{e.class} #{e.message}")
       ensure
         elapsed = Time.current - start_time
         if elapsed > timeout
           Rails.logger.warn("[KubernetesRuntime] Traefik route timeout after #{elapsed.round(1)}s for #{handle.route_token}")
-          return true # Don't block — let the frontend retry
+          return true
         end
         sleep ready_interval
       end

@@ -57,6 +57,7 @@ class RecentActivityService
       .where(session_type: "agent_session")
       .order(created_at: :desc)
       .limit(SESSION_FETCH_LIMIT)
+      .preload(:user)
 
     scope = if project
       scope.where(project_id: project.id)
@@ -69,10 +70,11 @@ class RecentActivityService
 
   def workflow_items
     scope = WorkflowRun
-      .joins(:project, :workflow)
+      .joins(:project)
       .joins(:user)
       .order(created_at: :desc)
       .limit(WORKFLOW_FETCH_LIMIT)
+      .preload(:workflow, :user)
 
     scope = if project
       scope.where(project_id: project.id)
