@@ -71,7 +71,7 @@ module Agents
     end
 
     test "auth_file_paths returns both auth paths" do
-      assert_equal ["/home/cursor/.config/cursor/auth.json", "/home/cursor/.cursor/auth.json"], @adapter.auth_file_paths
+      assert_equal [ "/home/cursor/.config/cursor/auth.json", "/home/cursor/.cursor/auth.json" ], @adapter.auth_file_paths
     end
 
     test "config_files returns auth, cli-config, and workspace-trust files" do

@@ -199,9 +199,17 @@ function AssetSpecsEditor({
     <Stack gap="xs">
       {specs.length > 0 && (
         <div className={classes.assetSpecRow}>
-          <Text size="xs" c="dimmed" style={{ flex: 1 }}>Path</Text>
-          {showNamePattern && <Text size="xs" c="dimmed" w={120}>Match pattern</Text>}
-          <Text size="xs" c="dimmed" w={40}>Req</Text>
+          <Text size="xs" c="dimmed" style={{ flex: 1 }}>
+            Path
+          </Text>
+          {showNamePattern && (
+            <Text size="xs" c="dimmed" w={120}>
+              Match pattern
+            </Text>
+          )}
+          <Text size="xs" c="dimmed" w={40}>
+            Req
+          </Text>
           {!disabled && <Box w={22} />}
         </div>
       )}

@@ -17,6 +17,6 @@ type Skill = {
   updatedAt: string;
   scopeIndicator: unknown;
   registryUrl: unknown;
-}
+};
 
 export default Skill;
