@@ -87,6 +87,10 @@ class Workflow < ApplicationRecord
     config&.dig("inherit_all_project_resources") || false
   end
 
+  def inherit_all_project_resources=(value)
+    self.config = (config || {}).merge("inherit_all_project_resources" => ActiveModel::Type::Boolean.new.cast(value))
+  end
+
   def merge_config!(updates)
     self.config = (config || {}).merge(updates.stringify_keys)
     save!
