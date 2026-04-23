@@ -37,7 +37,7 @@ module Api
       end
 
       def workflow_params
-        params.require(:workflow).permit(:name, :description, :inherit_all_project_resources, config: {})
+        params.require(:workflow).permit(:name, :description, config: {})
       end
     end
   end

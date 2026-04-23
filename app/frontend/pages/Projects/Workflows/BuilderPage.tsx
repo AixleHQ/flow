@@ -328,14 +328,20 @@ const BuilderPage = () => {
 
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
 
+  // Fields that are stored in the workflow's config JSON and must be sent nested under `config`.
+  const CONFIG_FIELDS = new Set(['inheritAllProjectResources']);
+
   // --- Workflow autosave ---
   const saveWorkflow = useDebouncedCallback(async (field: string, value: unknown) => {
     setSaving(true);
+    const payload = CONFIG_FIELDS.has(field)
+      ? { workflow: { config: { [field]: value } } }
+      : { workflow: { [field]: value } };
     await fetch(workflowApi(projectId, workflow.id), {
       method: 'PATCH',
       headers: jsonHeaders,
       ...fetchOpts,
-      body: JSON.stringify({ workflow: { [field]: value } }),
+      body: JSON.stringify(payload),
     });
     setSaving(false);
   }, 500);
