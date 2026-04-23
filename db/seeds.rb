@@ -164,9 +164,6 @@ end
 
 puts "Creating config items for MCP server authentication..."
 
-require_relative "seeds/slack_history_go"
-Seeds::SlackHistoryGo.seed!(test_company)
-
 require_relative "seeds/semgrep"
 Seeds::Semgrep.seed!(test_company)
 
