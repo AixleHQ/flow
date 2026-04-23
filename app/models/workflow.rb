@@ -9,11 +9,15 @@ class Workflow < ApplicationRecord
 
   before_destroy :purge_steps, prepend: true
   before_destroy :check_column_bindings
+  before_save :cast_config_values
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
     base_asset_ids inherit_all_project_resources
   ].freeze
+
+  BOOLEAN_CONFIG_KEYS = %w[inherit_all_project_resources].freeze
+  INTEGER_ARRAY_CONFIG_KEYS = %w[base_tool_ids base_skill_ids base_mcp_server_ids base_asset_ids].freeze
 
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
@@ -107,6 +111,25 @@ class Workflow < ApplicationRecord
 
     unknown = config.keys - ALLOWED_CONFIG_KEYS
     errors.add(:config, "contains unknown keys: #{unknown.join(', ')}") if unknown.any?
+  end
+
+  def cast_config_values
+    return if config.blank?
+
+    boolean_caster = ActiveModel::Type::Boolean.new
+    integer_caster = ActiveModel::Type::Integer.new
+
+    BOOLEAN_CONFIG_KEYS.each do |key|
+      next unless config.key?(key)
+
+      config[key] = boolean_caster.cast(config[key])
+    end
+
+    INTEGER_ARRAY_CONFIG_KEYS.each do |key|
+      next unless config.key?(key)
+
+      config[key] = Array(config[key]).map { |v| integer_caster.cast(v) }
+    end
   end
 
   def purge_steps
