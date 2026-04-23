@@ -4,7 +4,7 @@
 # Build context: docker/ (parent dir, for access to base/ scripts)
 # Build command: docker build -f codex/Dockerfile -t palad/codex:latest .
 # =============================================================================
-ARG BASE_IMAGE=palad/agent-base-core:latest
+ARG BASE_IMAGE=aixle/agent-base-core:latest
 FROM ${BASE_IMAGE}
 
 # =============================================================================
