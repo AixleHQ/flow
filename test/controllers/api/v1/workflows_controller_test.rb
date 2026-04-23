@@ -25,7 +25,7 @@ module Api
       end
 
       test "update persists inherit_all_project_resources into config" do
-        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true } } }
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true } } }, as: :json
 
         assert_response :success
         @workflow.reload
@@ -35,7 +35,7 @@ module Api
       test "update can disable inherit_all_project_resources" do
         @workflow.update!(config: { "inherit_all_project_resources" => true })
 
-        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: false } } }
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: false } } }, as: :json
 
         assert_response :success
         @workflow.reload
@@ -43,7 +43,7 @@ module Api
       end
 
       test "update persists multiple config keys together" do
-        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true, base_tool_ids: [ 1, 2 ] } } }
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true, base_tool_ids: [ 1, 2 ] } } }, as: :json
 
         assert_response :success
         @workflow.reload

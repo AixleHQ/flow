@@ -35,7 +35,7 @@ module Api
             project_id: @project.id,
             id: @workflow.id,
             workflow: { config: { inheritAllProjectResources: true } }
-          }
+          }, as: :json
 
           assert_response :success
           @workflow.reload
@@ -49,7 +49,7 @@ module Api
             project_id: @project.id,
             id: @workflow.id,
             workflow: { config: { inheritAllProjectResources: false } }
-          }
+          }, as: :json
 
           assert_response :success
           @workflow.reload
@@ -61,7 +61,7 @@ module Api
             project_id: @project.id,
             id: @workflow.id,
             workflow: { config: { inheritAllProjectResources: true, base_tool_ids: [ 1, 2 ] } }
-          }
+          }, as: :json
 
           assert_response :success
           @workflow.reload
