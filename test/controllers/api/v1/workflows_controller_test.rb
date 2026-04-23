@@ -24,6 +24,44 @@ module Api
         assert_response :success
       end
 
+      test "update persists inherit_all_project_resources into config" do
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true } } }, as: :json
+
+        assert_response :success
+        @workflow.reload
+        assert_equal true, @workflow.config["inherit_all_project_resources"]
+      end
+
+      test "update can disable inherit_all_project_resources" do
+        @workflow.update!(config: { "inherit_all_project_resources" => true })
+
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: false } } }, as: :json
+
+        assert_response :success
+        @workflow.reload
+        assert_equal false, @workflow.config["inherit_all_project_resources"]
+      end
+
+      test "update persists multiple config keys together" do
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true, base_tool_ids: [ 1, 2 ] } } }, as: :json
+
+        assert_response :success
+        @workflow.reload
+        assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
+        assert_equal true, @workflow.config["inherit_all_project_resources"]
+      end
+
+      test "update preserves pre-existing config keys when only one config key is updated" do
+        @workflow.update!(config: { "base_tool_ids" => [ 1, 2 ] })
+
+        patch :update, params: { id: @workflow.id, workflow: { config: { inheritAllProjectResources: true } } }, as: :json
+
+        assert_response :success
+        @workflow.reload
+        assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
+        assert_equal true, @workflow.config["inherit_all_project_resources"]
+      end
+
       test "destroy soft-deletes workflow" do
         delete :destroy, params: { id: @workflow.id }
 

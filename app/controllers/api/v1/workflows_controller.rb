@@ -11,7 +11,7 @@ module Api
       def update
         workflow = Workflow.for_company(current_company).active.find(params[:id])
 
-        if workflow.update(workflow_params)
+        if WorkflowService.update(workflow: workflow, params: workflow_params)
           render json: WorkflowResource.new(workflow).to_h
         else
           render json: { errors: workflow.errors.full_messages }, status: :unprocessable_entity

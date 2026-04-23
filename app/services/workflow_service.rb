@@ -2,6 +2,16 @@
 
 class WorkflowService
   class << self
+    def update(workflow:, params:)
+      attrs = params.to_h
+      if (incoming_config = attrs.delete("config")).present?
+        workflow.merge_config!(incoming_config)
+      end
+      attrs.any? ? workflow.update(attrs) : workflow.errors.none?
+    rescue ActiveRecord::RecordInvalid
+      false
+    end
+
     def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil)
       run = project.workflow_runs.new(
         workflow: workflow,
