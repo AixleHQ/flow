@@ -22,6 +22,10 @@ jobs:
       kube_namespace: ${{ steps.web_config.outputs.kube_namespace }}
       job_prefix: ${{ steps.web_config.outputs.job_prefix }}
       web_image_tag: ${{ steps.web_config.outputs.web_image_tag }}
+      deploy_runner: ${{ steps.web_config.outputs.deploy_runner }}
+      service_account: ${{ steps.web_config.outputs.service_account }}
+      configmap_name: ${{ steps.web_config.outputs.configmap_name }}
+      secret_name: ${{ steps.web_config.outputs.secret_name }}
     env:
       IMAGE_NAME: ${{ github.repository }}-web
 
@@ -31,6 +35,8 @@ jobs:
 
       - name: Compute Web Build Config
         id: web_config
+        env:
+          PROD_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
 
@@ -40,9 +46,13 @@ jobs:
             echo "sha_prefix=staging-" >> "$GITHUB_OUTPUT"
             echo "cache_scope=web-image-staging" >> "$GITHUB_OUTPUT"
             echo "deploy_environment=staging" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad-staging" >> "$GITHUB_OUTPUT"
+            echo "kube_namespace=aixle-staging" >> "$GITHUB_OUTPUT"
             echo "job_prefix=db-migrate-staging" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=staging-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "deploy_runner=aixle-staging-runner" >> "$GITHUB_OUTPUT"
+            echo "service_account=aixel-web" >> "$GITHUB_OUTPUT"
+            echo "configmap_name=aixle-app-config" >> "$GITHUB_OUTPUT"
+            echo "secret_name=aixle-app-secrets" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
             echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
             echo "raw_tag=main" >> "$GITHUB_OUTPUT"
@@ -52,6 +62,10 @@ jobs:
             echo "kube_namespace=palad" >> "$GITHUB_OUTPUT"
             echo "job_prefix=db-migrate" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "deploy_runner=${PROD_DEPLOY_RUNNER}" >> "$GITHUB_OUTPUT"
+            echo "service_account=palad-web" >> "$GITHUB_OUTPUT"
+            echo "configmap_name=palad-app-config" >> "$GITHUB_OUTPUT"
+            echo "secret_name=palad-app-secrets" >> "$GITHUB_OUTPUT"
           else
             echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
             echo "raw_tag=latest" >> "$GITHUB_OUTPUT"
@@ -61,6 +75,10 @@ jobs:
             echo "kube_namespace=palad-dev" >> "$GITHUB_OUTPUT"
             echo "job_prefix=db-migrate-dev" >> "$GITHUB_OUTPUT"
             echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "deploy_runner=${PROD_DEPLOY_RUNNER}" >> "$GITHUB_OUTPUT"
+            echo "service_account=palad-web" >> "$GITHUB_OUTPUT"
+            echo "configmap_name=palad-app-config" >> "$GITHUB_OUTPUT"
+            echo "secret_name=palad-app-secrets" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Docker Buildx
@@ -154,7 +172,7 @@ jobs:
   db-migrate:
     name: DB Migrate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
+    runs-on: ${{ needs.build-web.outputs.deploy_runner }}
     environment: ${{ needs.build-web.outputs.deploy_environment }}
     needs:
       - build-web
@@ -165,6 +183,9 @@ jobs:
       - fe-typecheck
     env:
       KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
+      SERVICE_ACCOUNT: ${{ needs.build-web.outputs.service_account }}
+      CONFIGMAP_NAME: ${{ needs.build-web.outputs.configmap_name }}
+      SECRET_NAME: ${{ needs.build-web.outputs.secret_name }}
 
     steps:
       - name: Setup kubectl
@@ -188,7 +209,7 @@ jobs:
             backoffLimit: 0
             template:
               spec:
-                serviceAccountName: palad-web
+                serviceAccountName: ${SERVICE_ACCOUNT}
                 restartPolicy: Never
                 containers:
                   - name: migrate
@@ -197,9 +218,9 @@ jobs:
                     command: ["bundle", "exec", "rails", "db:migrate"]
                     envFrom:
                       - configMapRef:
-                          name: palad-app-config
+                          name: ${CONFIGMAP_NAME}
                       - secretRef:
-                          name: palad-app-secrets
+                          name: ${SECRET_NAME}
           EOF
 
           echo "job_name=${JOB_NAME}" >> "$GITHUB_OUTPUT"
@@ -253,7 +274,7 @@ jobs:
   deploy:
     name: Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
+    runs-on: ${{ needs.build-web.outputs.deploy_runner }}
     environment: ${{ needs.build-web.outputs.deploy_environment }}
     permissions:
       contents: read
