@@ -167,6 +167,9 @@ const stepApi = (projectId: number | null, workflowId: number, stepId: number) =
 const stepsReorderApi = (projectId: number | null, workflowId: number) =>
   projectId ? reorderApiV1ProjectWorkflowStepsPath(projectId, workflowId) : reorderApiV1WorkflowStepsPath(workflowId);
 
+// Fields stored in the workflow's config JSON — must be sent nested under `config` in PATCH requests.
+const CONFIG_FIELDS = new Set(['inheritAllProjectResources']);
+
 const jsonHeaders = { 'Content-Type': 'application/json' };
 const fetchOpts = { credentials: 'include' as const };
 
@@ -327,9 +330,6 @@ const BuilderPage = () => {
   const selectedStep = useMemo(() => steps.find((s) => s.id === selectedStepId) ?? null, [steps, selectedStepId]);
 
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
-
-  // Fields that are stored in the workflow's config JSON and must be sent nested under `config`.
-  const CONFIG_FIELDS = new Set(['inheritAllProjectResources']);
 
   // --- Workflow autosave ---
   const saveWorkflow = useDebouncedCallback(async (field: string, value: unknown) => {

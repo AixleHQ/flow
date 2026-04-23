@@ -2,6 +2,14 @@
 
 class WorkflowService
   class << self
+    def update(workflow:, params:)
+      attrs = params.to_h
+      if (incoming_config = attrs["config"]).present?
+        attrs["config"] = (workflow.config || {}).merge(incoming_config)
+      end
+      workflow.update(attrs)
+    end
+
     def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil)
       run = project.workflow_runs.new(
         workflow: workflow,
