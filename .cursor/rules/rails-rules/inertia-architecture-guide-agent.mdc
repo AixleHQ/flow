@@ -85,19 +85,34 @@ end
 
 When a page has a detail drawer, the URL query param drives what's loaded. No param → lambda returns nil/[].
 
+Use two separate resources: a lean one for the list (no heavy fields) and a detail one for the open drawer.
+
 ```ruby
 def show
   board = @project.board
-  tasks = board.board_tasks.order(:position)
   task = params[:task].present? ? board.board_tasks.find(params[:task]) : nil
 
   render inertia: "Projects/Board/BoardPage", props: {
     board: -> { BoardResource.new(board).to_h },
-    tasks: -> { tasks.map { |t| BoardTaskResource.new(t).to_h } },
+    # BoardTaskResource — lean, no description/assets, counts via SQL subqueries
+    tasks: -> {
+      board.board_tasks
+           .select(Arel.sql(<<~SQL))
+             board_tasks.*,
+             (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
+             (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count
+           SQL
+           .includes(:assignee, :workflow_runs, :pending_task_waits)
+           .order(:position).map { |t| BoardTaskResource.new(t).to_h }
+    },
     cable_stream: -> { inertia_cable_stream(board) },
-    selected_task: -> { task ? BoardTaskResource.new(task).to_h : nil },
-    task_comments: -> { task ? task.task_comments.includes(:author)
-        .order(created_at: :desc).map { |c| TaskCommentResource.new(c).to_h } : [] },
+    # TaskDetailResource — extends BoardTaskResource with description + assets_count (sidebar only)
+    selected_task: -> { task ? TaskDetailResource.new(task).to_h : nil },
+    task_comments: -> {
+      next [] unless task
+      task.task_comments.includes(:author).order(created_at: :desc)
+          .map { |c| TaskCommentResource.new(c).to_h }
+    },
     recent_activities: InertiaRails.defer {
       board.board_activities.order(created_at: :desc).limit(20)
            .map { |a| BoardActivityResource.new(a).to_h }
@@ -105,6 +120,12 @@ def show
   }
 end
 ```
+
+**Two-resource pattern:**
+- `BoardTaskResource` — lean card data (title, assignee, counts). Counts use SQL subqueries, not eager-loaded associations (avoids Bullet N+1 warnings).
+- `TaskDetailResource < BoardTaskResource` — adds `description`, `assets_count`, and other sidebar-only fields. Used for `selected_task` prop only.
+
+**Cable stream scope:** subscribes to the **Board** object, not individual tasks. Any task mutation calls `board.touch` → `after_commit :broadcast_refresh_to(board)`. Cable reloads only board-level props: `['tasks', 'columns', 'recent_activities']`. Sidebar props (`selectedTask`, `taskComments`, `taskAssets`) are refreshed via explicit `router.reload({ only: [...] })` after mutations, not via cable.
 
 ### 2d. Real-time — cable stream prop
 
@@ -181,6 +202,16 @@ const closeTask = useCallback(() => {
 
 ### 4d. Mutations with `apiFetch` + prop reload
 
+**CRITICAL:** `router.reload({ only: [...] })` sends the list as-is in `X-Inertia-Partial-Data`. The server compares it against the **original snake_case prop keys** (before `prop_transformer` runs). Always use **snake_case** in `only` arrays.
+
+```tsx
+// ✅ snake_case matches server-side prop key :task_comments
+router.reload({ only: ['task_comments'], preserveScroll: true });
+
+// ❌ camelCase never matches — server returns empty response, nothing updates
+router.reload({ only: ['taskComments'], preserveScroll: true });
+```
+
 ```tsx
 const addComment = async (body: string) => {
   await apiFetch(Routes.companyProjectBoardTaskCommentsPath(projectId, taskId), {
@@ -188,7 +219,7 @@ const addComment = async (body: string) => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ taskComment: { body } }),
   });
-  router.reload({ only: ['taskComments'], preserveScroll: true });
+  router.reload({ only: ['task_comments'], preserveScroll: true });
 };
 ```
 
@@ -199,6 +230,45 @@ useInertiaCableStream(cableStream, {
   only: ['run', 'assets'],
   enabled: run.state !== 'completed',
 });
+```
+
+**Board-specific:** cable subscribes to the Board object and reloads only board-level props. Sidebar props are NOT included in cable `only`.
+
+```tsx
+// ✅ Board cable — board-level props only
+useInertiaCableStream(cableStream, {
+  only: ['tasks', 'columns', 'recent_activities'],
+});
+
+// ❌ WRONG — sidebar detail props do NOT belong in cable only list
+useInertiaCableStream(cableStream, {
+  only: ['tasks', 'columns', 'recent_activities', 'selectedTask', 'taskComments'],
+});
+```
+
+### 4f. Optimistic state for instant sidebar feedback
+
+For fields that require an HTTP round-trip (title, description), use local pending state for instant display while the server saves. Clear the pending state when cable confirms the update via `task?.updatedAt`.
+
+```tsx
+const [pendingTitle, setPendingTitle] = useState<string | null>(null);
+const [pendingDesc, setPendingDesc] = useState<string | null>(null);
+
+useEffect(() => {
+  setPendingTitle(null);
+  setPendingDesc(null);
+}, [task?.updatedAt]);  // cable refresh brings new updatedAt → clears pending state
+
+const saveTitle = async (value: string) => {
+  const saved = value.trim();
+  setPendingTitle(saved);       // instant UI update
+  setEditingTitle(false);
+  await apiFetch(/* PATCH */);  // cable will confirm and clear pendingTitle
+};
+
+// In display:
+<h2>{pendingTitle ?? task.title}</h2>
+<p>{pendingDesc ?? task.description ?? ''}</p>
 ```
 
 ### 4f. Forms with Inertia `useForm`
@@ -253,6 +323,7 @@ JSON is **NOT** appropriate for:
 |---|---|
 | Plain Hash/Array prop alongside `InertiaRails.defer` | Wrap in `-> { ... }` (lambda) |
 | `router.reload` for drawer open/close | `router.get` with `preserveState: true` |
+| camelCase in `only` array (`['taskComments']`) | snake_case matching server prop key (`['task_comments']`) |
 | `dismissed` state to fake instant close | `router.get` — URL drives drawer state directly |
 | `useState` + `useEffect` + `fetch` for page data | Inertia props from controller |
 | `respond_to` + `format.json` for read data | Single `render inertia:` with all needed props |
@@ -264,7 +335,11 @@ JSON is **NOT** appropriate for:
 | `react-hook-form` | Inertia `useForm` or Mantine `useForm` |
 | `redirect_to` for external URLs | `inertia_location(url)` |
 | Manual CSRF token | `apiFetch` (auto-injects CSRF) |
-| Including task detail props in cable stream `only` | Cable stream reloads board-level props only |
+| Including task detail props in cable stream `only` | Cable stream reloads board-level props only (`tasks`, `columns`, `recent_activities`) |
+| Eager-loading associations only to call `.size` | SQL subquery in `select(Arel.sql(...))` + read virtual attribute in resource |
+| `task.assoc.order(...).limit(n)` on includes-loaded assoc | Sort in-memory: `task.assoc.sort_by(&:created_at).last(n).reverse` |
+| Using `BoardTaskResource` for sidebar detail | Use `TaskDetailResource < BoardTaskResource` for `selected_task` prop |
+| Optimistic update with double reload (save → reload → cable reload) | Set `pendingTitle`/`pendingDesc` locally; cable confirms via `task?.updatedAt` |
 
 <example>
 **Migrating a JSON endpoint to Inertia props:**

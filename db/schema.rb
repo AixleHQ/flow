@@ -462,7 +462,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_09_120000) do
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "package"
-    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"

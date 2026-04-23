@@ -3,7 +3,13 @@
 class Web::Company::Projects::SessionsController < Web::Company::Projects::ApplicationController
   def index
     scope = current_project.terminal_sessions
-                           .includes(:user, :project, :output_assets)
+                           .select(
+                             "terminal_sessions.*",
+                             "(SELECT COUNT(*) FROM session_logs WHERE session_logs.terminal_session_id = terminal_sessions.id) AS cached_session_logs_count"
+                           )
+                           .includes(:user, :project, :output_assets,
+                                     :tools, :skills, :mcp_servers,
+                                     :input_assets, :repositories)
                            .where.not(session_type: "auth_setup")
                            .ransack(q_params)
                            .result
@@ -23,7 +29,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     tools = Tool.visible_for_project(current_project)
     skills = Skill.visible_for_project(current_project)
     mcp_servers = MCPServer.visible_for_project(current_project)
-    assets = current_project.assets.active.includes(:versions)
+    assets = Asset.accessible_from_project(current_project).includes(:versions)
     repositories = Repository.visible_for_project(current_project)
 
     render inertia: "Projects/Sessions/NewPage", props: {

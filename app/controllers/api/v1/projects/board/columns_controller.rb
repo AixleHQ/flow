@@ -31,6 +31,8 @@ module Api
             column.destroy!
             compact_positions(current_board)
             head :no_content
+          rescue ActiveRecord::RecordNotDestroyed => e
+            render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           end
 
           def reorder

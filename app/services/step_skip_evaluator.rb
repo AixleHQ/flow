@@ -36,7 +36,8 @@ class StepSkipEvaluator
     specs.select { |s| s["required"] }.all? do |spec|
       pattern = spec["name_pattern"]
       if pattern.present?
-        existing_names.any? { |name| File.fnmatch?(pattern, name) }
+        regexp = Regexp.new(pattern) rescue nil
+        regexp ? existing_names.any? { |name| regexp.match?(name) } : false
       else
         existing_names.include?(spec["name"])
       end

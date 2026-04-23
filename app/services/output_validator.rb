@@ -44,13 +44,16 @@ class OutputValidator
   def find_matching_assets(pattern, name)
     @collected_assets.select do |asset|
       if pattern.present?
-        File.fnmatch?(pattern, asset.name)
+        Regexp.new(pattern).match?(asset.name)
       elsif name.present?
         asset.name == name
       else
         false
       end
     end
+  rescue RegexpError => e
+    Rails.logger.warn("[OutputValidator] Invalid regexp '#{pattern}': #{e.message}")
+    []
   end
 
   def validate_size(asset, min_size)

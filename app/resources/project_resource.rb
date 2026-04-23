@@ -4,11 +4,19 @@ class ProjectResource < ApplicationResource
   attributes :id, :name, :description, :slug, :state, :created_at, :updated_at
 
   attribute :collaborators_count do |project|
-    project.project_collaborators.size
+    if project.respond_to?(:cached_collaborators_count)
+      project.cached_collaborators_count.to_i
+    else
+      project.project_collaborators.size
+    end
   end
 
   attribute :members_count do |project|
-    project.project_collaborators.size + 1
+    if project.respond_to?(:cached_collaborators_count)
+      project.cached_collaborators_count.to_i + 1
+    else
+      project.project_collaborators.size + 1
+    end
   end
 
   attribute :last_activity_at do |project|

@@ -33,11 +33,13 @@ class TerminalSessionResource < ApplicationResource
     next nil unless session.route_token.present?
     next nil if session.mode == "non_interactive"
 
-    base_url = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/"
-    url_params = { folder: "/workspace" }
+    vscode_params = { folder: "/workspace", skipWelcome: "true" }
     token = session.metadata&.dig("vscode_token")
-    url_params[:tkn] = token if token.present?
-    "#{base_url}?#{url_params.to_query}"
+    vscode_params[:tkn] = token if token.present?
+    vscode_url = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/?#{vscode_params.to_query}"
+
+    preload_base = "#{Settings.traefik.http_base}/t/#{session.route_token}/fs/preload"
+    "#{preload_base}?#{{ to: vscode_url }.to_query}"
   end
 
   typelize :string?
@@ -94,6 +96,10 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :number
   attribute :session_logs_count do |session|
-    session.session_logs.size
+    if session.respond_to?(:cached_session_logs_count)
+      session.cached_session_logs_count.to_i
+    else
+      session.session_logs.size
+    end
   end
 end

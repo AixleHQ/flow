@@ -45,10 +45,12 @@ class StepRunResource < ApplicationResource
     next nil if ts.mode == "non_interactive"
 
     http_base = params.dig(:traefik, :http_base)
-    url = "#{http_base}/t/#{ts.route_token}/ide/?folder=/workspace"
+    vscode_params = { folder: "/workspace", skipWelcome: "true" }
     token = ts.metadata&.dig("vscode_token")
-    url += "&tkn=#{token}" if token.present?
-    url
+    vscode_params[:tkn] = token if token.present?
+    vscode_url = "#{http_base}/t/#{ts.route_token}/ide/?#{vscode_params.to_query}"
+
+    "#{http_base}/t/#{ts.route_token}/fs/preload?#{{ to: vscode_url }.to_query}"
   end
 
   attribute :sub_step_runs do |sr|
