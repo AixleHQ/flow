@@ -1104,6 +1104,18 @@ module ContainerRuntime
                       "app" => "traefik"
                     }
                   }
+                },
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      "kubernetes.io/metadata.name" => runtime_namespace
+                    }
+                  },
+                  podSelector: {
+                    matchLabels: {
+                      "app.kubernetes.io/name" => "traefik"
+                    }
+                  }
                 }
               ],
               ports: DEFAULT_TRAEFIK_PORTS.map do |port|
