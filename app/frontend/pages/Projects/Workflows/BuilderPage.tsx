@@ -168,7 +168,13 @@ const stepsReorderApi = (projectId: number | null, workflowId: number) =>
   projectId ? reorderApiV1ProjectWorkflowStepsPath(projectId, workflowId) : reorderApiV1WorkflowStepsPath(workflowId);
 
 // Fields stored in the workflow's config JSON — must be sent nested under `config` in PATCH requests.
-const CONFIG_FIELDS = new Set(['inheritAllProjectResources']);
+const CONFIG_FIELDS = new Set([
+  'inheritAllProjectResources',
+  'baseToolIds',
+  'baseSkillIds',
+  'baseMCPServerIds',
+  'baseAssetIds',
+]);
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
 const fetchOpts = { credentials: 'include' as const };
