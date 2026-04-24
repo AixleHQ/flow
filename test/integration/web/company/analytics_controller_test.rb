@@ -25,8 +25,7 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
   test "index declares all analytics props as deferred" do
     get company_analytics_path
 
-    assert_inertia_deferred_props :summary, :agent_activity, :sources,
-                                  :duration, :cost_token, :workflow_costs,
+    assert_inertia_deferred_props :summary, :agent_activity, :sources, :cost_token,
                                   group: "analytics"
   end
 

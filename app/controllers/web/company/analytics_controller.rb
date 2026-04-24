@@ -44,10 +44,6 @@ class Web::Company::AnalyticsController < Web::Company::ApplicationController
         result = CompanySessionSourceBreakdownService.new(**filter_opts).call
         { sources: result.sources.map { |s| { sessionType: s.session_type, label: s.label, count: s.count } } }
       },
-      duration: InertiaRails.defer(group: "analytics") {
-        result = CompanySessionDurationDistributionService.new(**filter_opts).call
-        { buckets: result.buckets.map { |b| { range: b.range, count: b.count } } }
-      },
       cost_token: InertiaRails.defer(group: "analytics") {
         result = CompanySessionCostTokenUsageService.new(**filter_opts).call
         {
@@ -56,29 +52,6 @@ class Web::Company::AnalyticsController < Web::Company::ApplicationController
             totalCostCents: result.totals.total_cost_cents,
             totalTokens: result.totals.total_tokens,
             avgCostCentsPerSession: result.totals.avg_cost_cents_per_session
-          }
-        }
-      },
-      workflow_costs: InertiaRails.defer(group: "analytics") {
-        result = CompanyWorkflowCostAnalyticsService.new(**filter_opts).call
-        {
-          workflows: result.workflows.map { |w|
-            { workflowId: w.workflow_id, workflowName: w.workflow_name,
-              totalCostCents: w.total_cost_cents, inputTokens: w.input_tokens,
-              outputTokens: w.output_tokens, totalTokens: w.total_tokens,
-              runCount: w.run_count, totalDurationSeconds: w.total_duration_seconds,
-              avgDurationSeconds: w.avg_duration_seconds }
-          },
-          timeSeries: result.time_series.map { |p|
-            { date: p.date, costCents: p.cost_cents, totalTokens: p.total_tokens }
-          },
-          totals: {
-            totalCostCents: result.totals[:total_cost_cents],
-            inputTokens: result.totals[:input_tokens],
-            outputTokens: result.totals[:output_tokens],
-            totalTokens: result.totals[:total_tokens],
-            workflowCount: result.totals[:workflow_count],
-            avgCostCentsPerWorkflow: result.totals[:avg_cost_cents_per_workflow]
           }
         }
       }

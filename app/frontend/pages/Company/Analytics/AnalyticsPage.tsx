@@ -5,8 +5,6 @@ import { useMemo } from 'react';
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -66,14 +64,6 @@ interface SourceData {
   sources: SourceRow[];
 }
 
-interface DurationBucket {
-  range: string;
-  count: number;
-}
-interface DurationData {
-  buckets: DurationBucket[];
-}
-
 interface CostTokenPoint {
   date: string;
   costCents: number;
@@ -84,40 +74,13 @@ interface CostTokenData {
   totals: { totalCostCents: number; totalTokens: number; avgCostCentsPerSession: number };
 }
 
-interface WorkflowCostRow {
-  workflowId: number;
-  workflowName: string;
-  totalCostCents: number;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  runCount: number;
-  totalDurationSeconds: number;
-  avgDurationSeconds: number;
-}
-interface WorkflowCostTotals {
-  totalCostCents: number;
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-  workflowCount: number;
-  avgCostCentsPerWorkflow: number;
-}
-interface WorkflowCostData {
-  workflows: WorkflowCostRow[];
-  timeSeries: { date: string; costCents: number; totalTokens: number }[];
-  totals: WorkflowCostTotals;
-}
-
 interface Props {
   scope: Scope;
   period: Period;
   summary?: SummaryData;
   agentActivity?: AgentActivityData;
   sources?: SourceData;
-  duration?: DurationData;
   costToken?: CostTokenData;
-  workflowCosts?: WorkflowCostData;
 }
 
 const AGENT_COLORS = ['#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#00bcd4', '#f44336', '#795548'];
@@ -134,7 +97,6 @@ const PROJECT_COLORS = [
   '#8bc34a',
   '#ffc107',
 ];
-const WORKFLOW_COLORS = PROJECT_COLORS;
 const getAgentColor = (i: number) => AGENT_COLORS[i % AGENT_COLORS.length];
 
 const PERIOD_OPTIONS = [
@@ -163,16 +125,6 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return '0s';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
 }
 
 function buildActivityChartData(data: AgentActivityData): Record<string, string | number>[] {
@@ -211,23 +163,6 @@ function SummarySkeletons() {
 
 function ChartSkeleton({ height = 240 }: { height?: number }) {
   return <Skeleton height={height} radius="sm" />;
-}
-
-function WorkflowCostSkeletons() {
-  return (
-    <>
-      <SimpleGrid cols={{ base: 2, sm: 4, md: 7 }} mb="xl" spacing="md">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <Paper key={i} withBorder p="lg" radius="md">
-            <Skeleton height={14} width={90} mb={10} />
-            <Skeleton height={30} width={70} />
-          </Paper>
-        ))}
-      </SimpleGrid>
-      <Skeleton height={220} radius="sm" mb="xl" />
-      <Skeleton height={220} radius="sm" mb="xl" />
-    </>
-  );
 }
 
 // --- Data panels ---
@@ -601,303 +536,6 @@ function SourcesPanel() {
   );
 }
 
-function DurationPanel() {
-  const { duration } = usePage<{ props: Props }>().props as unknown as Props;
-  if (!duration) return null;
-
-  return (
-    <Paper withBorder p="md" radius="md" mb="xl">
-      <Text size="sm" fw={600} mb="md">
-        Session Duration Histogram
-      </Text>
-      <ResponsiveContainer width="100%" height={220}>
-        <BarChart data={duration.buckets} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-          <XAxis dataKey="range" tick={{ fontSize: 12 }} />
-          <YAxis tick={{ fontSize: 12 }} />
-          <RechartsTooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${Number(v)} sessions`]} />
-          <Bar dataKey="count" name="Sessions" fill="#9c27b0" radius={[4, 4, 0, 0]}>
-            {duration.buckets.map((_, idx) => (
-              <Cell key={idx} fill={`hsl(${280 - idx * 8}, 60%, ${55 - idx * 3}%)`} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </Paper>
-  );
-}
-
-function WorkflowCostsPanel() {
-  const { workflowCosts } = usePage<{ props: Props }>().props as unknown as Props;
-  if (!workflowCosts) return null;
-
-  const { totals: wfTotals, workflows: wfWorkflows, timeSeries: wfTimeSeries } = workflowCosts;
-  const wfMaxCost = wfWorkflows.length > 0 ? Math.max(...wfWorkflows.map((w) => w.totalCostCents)) : 1;
-  const wfTickInterval = wfTimeSeries.length <= 14 ? 0 : wfTimeSeries.length <= 30 ? 4 : 8;
-  const totalRuns = wfWorkflows.reduce((sum, w) => sum + w.runCount, 0);
-  const totalSecs = wfWorkflows.reduce((sum, w) => sum + w.totalDurationSeconds, 0);
-  const avgTimePerWf = totalRuns > 0 ? Math.round(totalSecs / totalRuns) : 0;
-
-  const wfStatBlocks = [
-    { label: 'Total Cost', value: formatCostCents(wfTotals.totalCostCents) },
-    { label: 'Total Tokens', value: formatTokens(wfTotals.totalTokens) },
-    { label: 'Input Tokens', value: formatTokens(wfTotals.inputTokens) },
-    { label: 'Output Tokens', value: formatTokens(wfTotals.outputTokens) },
-    { label: 'Workflows', value: wfTotals.workflowCount.toLocaleString() },
-    { label: 'Avg Cost / Workflow', value: formatCostCents(wfTotals.avgCostCentsPerWorkflow) },
-    { label: 'Avg Time / Workflow', value: formatDuration(avgTimePerWf) },
-  ];
-
-  return (
-    <>
-      <SimpleGrid cols={{ base: 2, sm: 4, md: 7 }} mb="xl" spacing="md">
-        {wfStatBlocks.map((s) => (
-          <Paper key={s.label} withBorder p="lg" radius="md">
-            <Text size="xs" c="dimmed" tt="uppercase" mb={10} style={{ letterSpacing: 0.5 }}>
-              {s.label}
-            </Text>
-            <Text fw={700} lh={1.1} style={{ fontSize: 28 }}>
-              {s.value}
-            </Text>
-          </Paper>
-        ))}
-      </SimpleGrid>
-
-      <Grid mb="xl" gap="md">
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Paper withBorder p="md" radius="md">
-            <Text size="sm" fw={600} mb="md">
-              Cost Over Time
-            </Text>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={wfTimeSeries} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-                <defs>
-                  <linearGradient id="cmp-grad-wf-cost" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ff9800" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={wfTickInterval} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 100).toFixed(0)}`} />
-                <RechartsTooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatCostCents(Number(v)), 'Cost']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="costCents"
-                  name="Cost"
-                  stroke="#ff9800"
-                  fill="url(#cmp-grad-wf-cost)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Paper withBorder p="md" radius="md">
-            <Text size="sm" fw={600} mb="md">
-              Token Consumption Over Time
-            </Text>
-            <ResponsiveContainer width="100%" height={220}>
-              <AreaChart data={wfTimeSeries} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                <defs>
-                  <linearGradient id="cmp-grad-wf-tokens" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00bcd4" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={wfTickInterval} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
-                <RechartsTooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatTokens(Number(v)), 'Tokens']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="totalTokens"
-                  name="Tokens"
-                  stroke="#00bcd4"
-                  fill="url(#cmp-grad-wf-tokens)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid.Col>
-      </Grid>
-
-      <Grid mb="xl" gap="md">
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Paper withBorder p="md" radius="md">
-            <Text size="sm" fw={600} mb="md">
-              Cost per Workflow
-            </Text>
-            <ResponsiveContainer width="100%" height={Math.max(220, wfWorkflows.length * 36)}>
-              <BarChart
-                data={wfWorkflows.map((w, i) => ({
-                  name: w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
-                  costCents: w.totalCostCents,
-                  color: WORKFLOW_COLORS[i % WORKFLOW_COLORS.length],
-                }))}
-                layout="vertical"
-                margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 11 }}
-                  tickFormatter={(v: number) => `$${(v / 100).toFixed(0)}`}
-                />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                <RechartsTooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v) => [formatCostCents(Number(v)), 'Cost']}
-                />
-                <Bar dataKey="costCents" name="Cost" radius={[0, 4, 4, 0]}>
-                  {wfWorkflows.map((_, i) => (
-                    <Cell key={i} fill={WORKFLOW_COLORS[i % WORKFLOW_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 6 }}>
-          <Paper withBorder p="md" radius="md">
-            <Text size="sm" fw={600} mb="md">
-              Tokens per Workflow
-            </Text>
-            <ResponsiveContainer width="100%" height={Math.max(220, wfWorkflows.length * 36)}>
-              <BarChart
-                data={wfWorkflows.map((w) => ({
-                  name: w.workflowName.length > 18 ? w.workflowName.slice(0, 16) + '…' : w.workflowName,
-                  inputTokens: w.inputTokens,
-                  outputTokens: w.outputTokens,
-                }))}
-                layout="vertical"
-                margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                <RechartsTooltip
-                  contentStyle={chartTooltipStyle}
-                  formatter={(v, name) => [formatTokens(Number(v)), name as string]}
-                />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="inputTokens" name="Input" stackId="tokens" fill="#2196f3" />
-                <Bar dataKey="outputTokens" name="Output" stackId="tokens" fill="#9c27b0" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Paper>
-        </Grid.Col>
-      </Grid>
-
-      <Paper withBorder p="md" radius="md" mb="xl">
-        <Text size="sm" fw={600} mb="md">
-          Workflow Breakdown
-        </Text>
-        {wfWorkflows.length === 0 ? (
-          <Text size="sm" c="dimmed" ta="center" py="md">
-            No workflow runs in the selected period.
-          </Text>
-        ) : (
-          <>
-            <Box
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 120px 100px 100px 100px 80px 90px 90px',
-                gap: 8,
-                padding: '8px 0',
-                borderBottom: '1px solid var(--mantine-color-dark-4)',
-              }}
-            >
-              {[
-                'Workflow',
-                'Total Cost',
-                'Input Tokens',
-                'Output Tokens',
-                'Total Tokens',
-                'Runs',
-                'Avg Time',
-                'Total Time',
-              ].map((h) => (
-                <Text key={h} size="xs" c="dimmed" tt="uppercase" style={{ letterSpacing: 0.4 }}>
-                  {h}
-                </Text>
-              ))}
-            </Box>
-            {wfWorkflows.map((w, i) => {
-              const color = WORKFLOW_COLORS[i % WORKFLOW_COLORS.length];
-              const pct = wfMaxCost > 0 ? (w.totalCostCents / wfMaxCost) * 100 : 0;
-              return (
-                <Box
-                  key={w.workflowId}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 120px 100px 100px 100px 80px 90px 90px',
-                    gap: 8,
-                    alignItems: 'center',
-                    padding: '12px 0',
-                    borderBottom: i < wfWorkflows.length - 1 ? '1px solid var(--mantine-color-dark-4)' : undefined,
-                  }}
-                >
-                  <Box>
-                    <Group gap={8}>
-                      <Box w={10} h={10} style={{ borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
-                      <Text size="sm" fw={500}>
-                        {w.workflowName}
-                      </Text>
-                    </Group>
-                    <Box
-                      mt={4}
-                      style={{
-                        width: '80%',
-                        height: 4,
-                        borderRadius: 2,
-                        backgroundColor: 'var(--mantine-color-dark-5)',
-                      }}
-                    >
-                      <Box style={{ height: 4, borderRadius: 2, backgroundColor: color, width: `${pct}%` }} />
-                    </Box>
-                  </Box>
-                  <Text size="sm" fw={600}>
-                    {formatCostCents(w.totalCostCents)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {formatTokens(w.inputTokens)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {formatTokens(w.outputTokens)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {formatTokens(w.totalTokens)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {w.runCount}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {formatDuration(w.avgDurationSeconds)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    {formatDuration(w.totalDurationSeconds)}
-                  </Text>
-                </Box>
-              );
-            })}
-          </>
-        )}
-      </Paper>
-    </>
-  );
-}
-
 // --- Main page ---
 
 const AnalyticsPage = () => {
@@ -991,21 +629,6 @@ const AnalyticsPage = () => {
         <SourcesPanel />
       </Deferred>
 
-      {/* Session Duration Distribution */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Session Duration Distribution
-      </Text>
-      <Deferred data="duration" fallback={<ChartSkeleton height={220} />}>
-        <DurationPanel />
-      </Deferred>
-
-      {/* Workflow Costs */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Workflow Costs
-      </Text>
-      <Deferred data="workflowCosts" fallback={<WorkflowCostSkeletons />}>
-        <WorkflowCostsPanel />
-      </Deferred>
     </AuthLayout>
   );
 };
