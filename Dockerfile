@@ -37,6 +37,7 @@ ENV VITE_RUBY_ASSET_HOST=${ASSET_HOST}
 
 RUN RAILS_SECRET_KEY_BASE=secret \
     RAILS_ENV=production \
+    AWS_EC2_METADATA_DISABLED=true \
     ASSET_HOST="${ASSET_HOST}" \
     VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
     rails assets:precompile
