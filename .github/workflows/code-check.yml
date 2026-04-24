@@ -48,7 +48,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.ECR_ROLE_ARN }}
-          role-session-name: palad-app-code-check
+          role-session-name: aixle-app-code-check
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
