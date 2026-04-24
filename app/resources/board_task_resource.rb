@@ -18,7 +18,7 @@ class BoardTaskResource < ApplicationResource
   end
 
   attribute :assets_count do |task|
-    task.task_assets.size
+    task.has_attribute?(:assets_count) ? task[:assets_count].to_i : task.task_assets.size
   end
 
   attribute :recent_workflow_runs do |task|
