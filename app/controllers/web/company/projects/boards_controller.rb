@@ -27,7 +27,8 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .select(Arel.sql(<<~SQL))
                board_tasks.*,
                (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,
-               (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count
+               (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
+               (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
              SQL
              .includes(:assignee, :workflow_runs, :pending_task_waits)
              .order(:position).map { |t| BoardTaskResource.new(t).to_h }

@@ -499,10 +499,18 @@ function BoardColumn({
 
   if (collapsed) {
     const priorityIndicators = tasks.slice(0, 5).map((t) => {
-      const color = t.priority ? (PRIORITY_COLORS[t.priority] ?? '#9e9e9e') : '#9e9e9e';
-      const hasActiveRun = t.recentWorkflowRuns?.some((r) => WORKFLOW_ACTIVE_STATES.has(r.state));
       const latestRun = t.recentWorkflowRuns?.[0];
       const hasPendingWaits = (t.pendingWaits?.length ?? 0) > 0;
+      let color = '#9e9e9e';
+      let hasActiveRun = false;
+      if (latestRun) {
+        color = workflowStatusColor(latestRun.state);
+        hasActiveRun = WORKFLOW_ACTIVE_STATES.has(latestRun.state);
+      }
+      if (hasPendingWaits) {
+        color = '#eab308';
+        hasActiveRun = false;
+      }
       const tooltipParts: string[] = [t.title];
       if (latestRun) {
         if (latestRun.state === 'running' && latestRun.createdAt) {
