@@ -123,8 +123,16 @@ interface Props {
 const AGENT_COLORS = ['#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#00bcd4', '#f44336', '#795548'];
 const SOURCE_COLORS = ['#2196f3', '#4caf50', '#ff9800', '#9c27b0', '#00bcd4', '#f44336'];
 const PROJECT_COLORS = [
-  '#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#e91e63',
-  '#00bcd4', '#ff5722', '#3f51b5', '#8bc34a', '#ffc107',
+  '#2196f3',
+  '#9c27b0',
+  '#4caf50',
+  '#ff9800',
+  '#e91e63',
+  '#00bcd4',
+  '#ff5722',
+  '#3f51b5',
+  '#8bc34a',
+  '#ffc107',
 ];
 const WORKFLOW_COLORS = PROJECT_COLORS;
 const getAgentColor = (i: number) => AGENT_COLORS[i % AGENT_COLORS.length];
