@@ -14,72 +14,95 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  prepare-config:
+    name: Prepare Config
+    runs-on: ubuntu-latest
+    outputs:
+      asset_host: ${{ steps.config.outputs.asset_host }}
+      raw_tag: ${{ steps.config.outputs.raw_tag }}
+      sha_prefix: ${{ steps.config.outputs.sha_prefix }}
+      cache_scope: ${{ steps.config.outputs.cache_scope }}
+      ci_runner: ${{ steps.config.outputs.ci_runner }}
+      deploy_environment: ${{ steps.config.outputs.deploy_environment }}
+      kube_namespace: ${{ steps.config.outputs.kube_namespace }}
+      job_prefix: ${{ steps.config.outputs.job_prefix }}
+      web_image_tag: ${{ steps.config.outputs.web_image_tag }}
+      deploy_runner: ${{ steps.config.outputs.deploy_runner }}
+      service_account: ${{ steps.config.outputs.service_account }}
+      configmap_name: ${{ steps.config.outputs.configmap_name }}
+      secret_name: ${{ steps.config.outputs.secret_name }}
+    steps:
+      - name: Compute Workflow Config
+        id: config
+        env:
+          DEFAULT_CI_RUNNER: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+          DEFAULT_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          asset_host="https://static.aixle.com"
+          raw_tag="latest"
+          sha_prefix=""
+          cache_scope="web-image"
+          ci_runner="$DEFAULT_CI_RUNNER"
+          deploy_environment="development"
+          kube_namespace="palad-dev"
+          job_prefix="db-migrate-dev"
+          web_image_tag="${SHORT_SHA}"
+          deploy_runner="$DEFAULT_DEPLOY_RUNNER"
+          service_account="palad-web"
+          configmap_name="palad-app-config"
+          secret_name="palad-app-secrets"
+
+          case "${GITHUB_REF}" in
+            refs/heads/staging)
+              asset_host="https://staging.aixle.com"
+              raw_tag="staging"
+              sha_prefix="staging-"
+              cache_scope="web-image-staging"
+              ci_runner="aixle-staging-ci-runner"
+              deploy_environment="staging"
+              kube_namespace="aixle-staging"
+              job_prefix="db-migrate-staging"
+              web_image_tag="staging-${SHORT_SHA}"
+              deploy_runner="aixle-staging-runner"
+              service_account="aixel-web"
+              configmap_name="aixle-app-config"
+              secret_name="aixle-app-secrets"
+              ;;
+            refs/heads/main)
+              raw_tag="main"
+              deploy_environment="production"
+              kube_namespace="palad"
+              job_prefix="db-migrate"
+              ;;
+          esac
+
+          cat <<EOF >> "$GITHUB_OUTPUT"
+          asset_host=${asset_host}
+          raw_tag=${raw_tag}
+          sha_prefix=${sha_prefix}
+          cache_scope=${cache_scope}
+          ci_runner=${ci_runner}
+          deploy_environment=${deploy_environment}
+          kube_namespace=${kube_namespace}
+          job_prefix=${job_prefix}
+          web_image_tag=${web_image_tag}
+          deploy_runner=${deploy_runner}
+          service_account=${service_account}
+          configmap_name=${configmap_name}
+          secret_name=${secret_name}
+          EOF
+
   build-web:
     name: Build Web
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    outputs:
-      deploy_environment: ${{ steps.web_config.outputs.deploy_environment }}
-      kube_namespace: ${{ steps.web_config.outputs.kube_namespace }}
-      job_prefix: ${{ steps.web_config.outputs.job_prefix }}
-      web_image_tag: ${{ steps.web_config.outputs.web_image_tag }}
-      deploy_runner: ${{ steps.web_config.outputs.deploy_runner }}
-      service_account: ${{ steps.web_config.outputs.service_account }}
-      configmap_name: ${{ steps.web_config.outputs.configmap_name }}
-      secret_name: ${{ steps.web_config.outputs.secret_name }}
+    needs: prepare-config
+    runs-on: ${{ needs.prepare-config.outputs.ci_runner }}
     env:
       IMAGE_NAME: ${{ github.repository }}-web
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Compute Web Build Config
-        id: web_config
-        env:
-          PROD_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
-        run: |
-          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
-
-          if [ "${GITHUB_REF}" = "refs/heads/staging" ]; then
-            echo "asset_host=https://staging.aixle.com" >> "$GITHUB_OUTPUT"
-            echo "raw_tag=staging" >> "$GITHUB_OUTPUT"
-            echo "sha_prefix=staging-" >> "$GITHUB_OUTPUT"
-            echo "cache_scope=web-image-staging" >> "$GITHUB_OUTPUT"
-            echo "deploy_environment=staging" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=aixle-staging" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate-staging" >> "$GITHUB_OUTPUT"
-            echo "web_image_tag=staging-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "deploy_runner=aixle-staging-runner" >> "$GITHUB_OUTPUT"
-            echo "service_account=aixel-web" >> "$GITHUB_OUTPUT"
-            echo "configmap_name=aixle-app-config" >> "$GITHUB_OUTPUT"
-            echo "secret_name=aixle-app-secrets" >> "$GITHUB_OUTPUT"
-          elif [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
-            echo "raw_tag=main" >> "$GITHUB_OUTPUT"
-            echo "sha_prefix=" >> "$GITHUB_OUTPUT"
-            echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
-            echo "deploy_environment=production" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate" >> "$GITHUB_OUTPUT"
-            echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "deploy_runner=${PROD_DEPLOY_RUNNER}" >> "$GITHUB_OUTPUT"
-            echo "service_account=palad-web" >> "$GITHUB_OUTPUT"
-            echo "configmap_name=palad-app-config" >> "$GITHUB_OUTPUT"
-            echo "secret_name=palad-app-secrets" >> "$GITHUB_OUTPUT"
-          else
-            echo "asset_host=https://static.aixle.com" >> "$GITHUB_OUTPUT"
-            echo "raw_tag=latest" >> "$GITHUB_OUTPUT"
-            echo "sha_prefix=" >> "$GITHUB_OUTPUT"
-            echo "cache_scope=web-image" >> "$GITHUB_OUTPUT"
-            echo "deploy_environment=development" >> "$GITHUB_OUTPUT"
-            echo "kube_namespace=palad-dev" >> "$GITHUB_OUTPUT"
-            echo "job_prefix=db-migrate-dev" >> "$GITHUB_OUTPUT"
-            echo "web_image_tag=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-            echo "deploy_runner=${PROD_DEPLOY_RUNNER}" >> "$GITHUB_OUTPUT"
-            echo "service_account=palad-web" >> "$GITHUB_OUTPUT"
-            echo "configmap_name=palad-app-config" >> "$GITHUB_OUTPUT"
-            echo "secret_name=palad-app-secrets" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -97,8 +120,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=${{ steps.web_config.outputs.raw_tag }}
-            type=sha,format=short,prefix=${{ steps.web_config.outputs.sha_prefix }}
+            type=raw,value=${{ needs.prepare-config.outputs.raw_tag }}
+            type=sha,format=short,prefix=${{ needs.prepare-config.outputs.sha_prefix }}
 
       - name: Build And Push Web Image
         uses: docker/build-push-action@v6
@@ -112,58 +135,73 @@ jobs:
             APP_VERSION=${{ github.sha }}
             AUTHOR_NAME=${{ github.actor }}
             AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
-            ASSET_HOST=${{ steps.web_config.outputs.asset_host }}
-          cache-from: type=gha,scope=${{ steps.web_config.outputs.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ steps.web_config.outputs.cache_scope }}
+            ASSET_HOST=${{ needs.prepare-config.outputs.asset_host }}
+          cache-from: type=gha,scope=${{ needs.prepare-config.outputs.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ needs.prepare-config.outputs.cache_scope }}
 
   # ---------------------------------------------------------------------------
   # Checks (parallel, via reusable workflow)
   # ---------------------------------------------------------------------------
   be-test:
     name: Backend Tests
-    needs: build-web
+    needs:
+      - prepare-config
+      - build-web
     uses: ./.github/workflows/code-check.yml
     with:
       command: rails-test
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
       needs-db: true
       timeout: 20
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
   be-lint:
     name: Backend Lint
-    needs: build-web
+    needs:
+      - prepare-config
+      - build-web
     uses: ./.github/workflows/code-check.yml
     with:
       command: rubocop
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
   be-security:
     name: Backend Security
-    needs: build-web
+    needs:
+      - prepare-config
+      - build-web
     uses: ./.github/workflows/code-check.yml
     with:
       command: brakeman
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
   fe-lint:
     name: Frontend Lint
-    needs: build-web
+    needs:
+      - prepare-config
+      - build-web
     uses: ./.github/workflows/code-check.yml
     with:
       command: eslint
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
   fe-typecheck:
     name: Frontend Typecheck
-    needs: build-web
+    needs:
+      - prepare-config
+      - build-web
     uses: ./.github/workflows/code-check.yml
     with:
       command: typescript
-      image-tag: ${{ needs.build-web.outputs.web_image_tag }}
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
   # ---------------------------------------------------------------------------
@@ -172,9 +210,10 @@ jobs:
   db-migrate:
     name: DB Migrate
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ needs.build-web.outputs.deploy_runner }}
-    environment: ${{ needs.build-web.outputs.deploy_environment }}
+    runs-on: ${{ needs.prepare-config.outputs.deploy_runner }}
+    environment: ${{ needs.prepare-config.outputs.deploy_environment }}
     needs:
+      - prepare-config
       - build-web
       - be-test
       - be-lint
@@ -182,10 +221,10 @@ jobs:
       - fe-lint
       - fe-typecheck
     env:
-      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
-      SERVICE_ACCOUNT: ${{ needs.build-web.outputs.service_account }}
-      CONFIGMAP_NAME: ${{ needs.build-web.outputs.configmap_name }}
-      SECRET_NAME: ${{ needs.build-web.outputs.secret_name }}
+      KUBE_NAMESPACE: ${{ needs.prepare-config.outputs.kube_namespace }}
+      SERVICE_ACCOUNT: ${{ needs.prepare-config.outputs.service_account }}
+      CONFIGMAP_NAME: ${{ needs.prepare-config.outputs.configmap_name }}
+      SECRET_NAME: ${{ needs.prepare-config.outputs.secret_name }}
 
     steps:
       - name: Setup kubectl
@@ -194,8 +233,8 @@ jobs:
       - name: Create migration job
         id: migrate_job
         run: |
-          JOB_PREFIX="${{ needs.build-web.outputs.job_prefix }}"
-          WEB_IMAGE_TAG="${{ needs.build-web.outputs.web_image_tag }}"
+          JOB_PREFIX="${{ needs.prepare-config.outputs.job_prefix }}"
+          WEB_IMAGE_TAG="${{ needs.prepare-config.outputs.web_image_tag }}"
           JOB_NAME="${JOB_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
 
@@ -274,16 +313,17 @@ jobs:
   deploy:
     name: Deploy
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ${{ needs.build-web.outputs.deploy_runner }}
-    environment: ${{ needs.build-web.outputs.deploy_environment }}
+    runs-on: ${{ needs.prepare-config.outputs.deploy_runner }}
+    environment: ${{ needs.prepare-config.outputs.deploy_environment }}
     permissions:
       contents: read
       id-token: write
     needs:
+      - prepare-config
       - build-web
       - db-migrate
     env:
-      KUBE_NAMESPACE: ${{ needs.build-web.outputs.kube_namespace }}
+      KUBE_NAMESPACE: ${{ needs.prepare-config.outputs.kube_namespace }}
 
     steps:
       - name: Setup kubectl
@@ -304,8 +344,10 @@ jobs:
   # ---------------------------------------------------------------------------
   sentry-sourcemaps:
     name: Sentry Source Maps
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    needs: deploy
+    runs-on: ${{ needs.prepare-config.outputs.ci_runner }}
+    needs:
+      - prepare-config
+      - deploy
     if: github.ref_name == 'main'
     env:
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -320,9 +362,9 @@ jobs:
 
       - name: Extract source maps from image
         run: |
-          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
-          docker pull "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}"
-          CONTAINER_ID=$(docker create "${REGISTRY}/${GITHUB_REPOSITORY}-web:${SHORT_SHA}")
+          WEB_IMAGE_TAG="${{ needs.prepare-config.outputs.web_image_tag }}"
+          docker pull "${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
+          CONTAINER_ID=$(docker create "${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}")
           mkdir -p sourcemaps
           docker cp "$CONTAINER_ID:/app/public/vite/" ./sourcemaps/ || true
           docker rm "$CONTAINER_ID"

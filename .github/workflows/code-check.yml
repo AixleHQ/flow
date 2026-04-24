@@ -6,6 +6,10 @@ on:
       command:
         required: true
         type: string
+      runner:
+        required: false
+        type: string
+        default: ""
       needs-db:
         required: false
         type: boolean
@@ -27,7 +31,7 @@ env:
 jobs:
   check:
     name: Run
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner != '' && inputs.runner || vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: ${{ inputs.timeout }}
     env:
       RAILS_ENV: test

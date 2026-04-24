@@ -15,7 +15,7 @@ env:
 jobs:
   build-otlp:
     name: Build OTLP Ingest
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER || 'aixle-staging-ci-runner' }}
     env:
       IMAGE_NAME: ${{ github.repository }}-otlp-ingest
 
@@ -55,7 +55,7 @@ jobs:
 
   build-agent-base:
     name: Build Agent Base
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER || 'aixle-staging-ci-runner' }}
     env:
       BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
 
@@ -95,7 +95,7 @@ jobs:
 
   build-agent-images:
     name: Build ${{ matrix.image_name }}
-    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    runs-on: ${{ vars.CI_RUNNER || 'aixle-staging-ci-runner' }}
     needs: build-agent-base
     strategy:
       matrix:
