@@ -61,7 +61,6 @@ jobs:
               raw_tag="staging"
               sha_prefix="staging-"
               cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-staging"
-              ci_runner="aixle-staging-ci-runner"
               deploy_environment="staging"
               kube_namespace="aixle-staging"
               job_prefix="db-migrate-staging"
@@ -73,7 +72,6 @@ jobs:
               ;;
             refs/heads/main)
               cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-main"
-              ci_runner="aixle-staging-ci-runner"
               raw_tag="main"
               deploy_environment="production"
               kube_namespace="palad"
