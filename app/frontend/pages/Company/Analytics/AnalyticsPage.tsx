@@ -628,7 +628,6 @@ const AnalyticsPage = () => {
       <Deferred data="sources" fallback={<ChartSkeleton height={200} />}>
         <SourcesPanel />
       </Deferred>
-
     </AuthLayout>
   );
 };
