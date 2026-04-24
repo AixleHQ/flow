@@ -56,8 +56,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=otlp-ingest-image
-          cache-to: type=gha,mode=max,scope=otlp-ingest-image
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
 
   build-agent-base:
     name: Build Agent Base
@@ -100,8 +100,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=agent-base-core-image
-          cache-to: type=gha,mode=max,scope=agent-base-core-image
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
 
   build-agent-images:
     name: Build ${{ matrix.image_name }}
@@ -113,19 +113,15 @@ jobs:
           - image_name: Claude Code
             image_suffix: claude-code
             dockerfile: ./docker/claude-code/Dockerfile
-            cache_scope: claude-code-image
           - image_name: Cursor CLI
             image_suffix: cursor-cli
             dockerfile: ./docker/cursor-cli/Dockerfile
-            cache_scope: cursor-cli-image
           - image_name: Codex
             image_suffix: codex
             dockerfile: ./docker/codex/Dockerfile
-            cache_scope: codex-image
           - image_name: Gemini CLI
             image_suffix: gemini-cli
             dockerfile: ./docker/gemini-cli/Dockerfile
-            cache_scope: gemini-cli-image
 
     steps:
       - name: Checkout
@@ -168,5 +164,5 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.ECR_REGISTRY }}/aixle-app-agent-base-core:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=${{ matrix.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/aixle-app-${{ matrix.image_suffix }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/aixle-app-${{ matrix.image_suffix }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true

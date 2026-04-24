@@ -23,7 +23,7 @@ jobs:
       asset_host: ${{ steps.config.outputs.asset_host }}
       raw_tag: ${{ steps.config.outputs.raw_tag }}
       sha_prefix: ${{ steps.config.outputs.sha_prefix }}
-      cache_scope: ${{ steps.config.outputs.cache_scope }}
+      cache_ref: ${{ steps.config.outputs.cache_ref }}
       ci_runner: ${{ steps.config.outputs.ci_runner }}
       deploy_environment: ${{ steps.config.outputs.deploy_environment }}
       kube_namespace: ${{ steps.config.outputs.kube_namespace }}
@@ -41,10 +41,10 @@ jobs:
           DEFAULT_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-dev"
           asset_host="https://static.aixle.com"
           raw_tag="latest"
           sha_prefix=""
-          cache_scope="web-image"
           ci_runner="$DEFAULT_CI_RUNNER"
           deploy_environment="development"
           kube_namespace="palad-dev"
@@ -60,7 +60,7 @@ jobs:
               asset_host="https://staging.aixle.com"
               raw_tag="staging"
               sha_prefix="staging-"
-              cache_scope="web-image-staging"
+              cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-staging"
               ci_runner="aixle-staging-ci-runner"
               deploy_environment="staging"
               kube_namespace="aixle-staging"
@@ -72,6 +72,7 @@ jobs:
               secret_name="aixle-app-secrets"
               ;;
             refs/heads/main)
+              cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-main"
               raw_tag="main"
               deploy_environment="production"
               kube_namespace="palad"
@@ -83,7 +84,7 @@ jobs:
           asset_host=${asset_host}
           raw_tag=${raw_tag}
           sha_prefix=${sha_prefix}
-          cache_scope=${cache_scope}
+          cache_ref=${cache_ref}
           ci_runner=${ci_runner}
           deploy_environment=${deploy_environment}
           kube_namespace=${kube_namespace}
@@ -142,8 +143,8 @@ jobs:
             AUTHOR_NAME=${{ github.actor }}
             AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
             ASSET_HOST=${{ needs.prepare-config.outputs.asset_host }}
-          cache-from: type=gha,scope=${{ needs.prepare-config.outputs.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ needs.prepare-config.outputs.cache_scope }}
+          cache-from: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }}
+          cache-to: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }},mode=max,image-manifest=true,oci-mediatypes=true
 
   # ---------------------------------------------------------------------------
   # Checks (parallel, via reusable workflow)
