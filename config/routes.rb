@@ -241,6 +241,7 @@ Rails.application.routes.draw do
           get :builder
         end
       end
+      resources :analytics, only: :index
       resources :assets, only: %i[index]
       resources :sessions, only: %i[index new show] do
         scope module: :sessions do
