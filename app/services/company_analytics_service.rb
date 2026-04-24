@@ -25,10 +25,11 @@ class CompanyAnalyticsService
 
   def call
     sessions = base_sessions
+    stats = usage_stats_for(sessions)
 
     total_sessions = sessions.count
-    total_cost_cents = sessions.sum(:cost_cents)
-    total_tokens = sessions.sum(:total_tokens)
+    total_cost_cents = stats[:cost_cents]
+    total_tokens = stats[:tokens]
     avg_cost = total_sessions.positive? ? (total_cost_cents.to_f / total_sessions).round : 0
 
     project_breakdowns = build_project_breakdowns(sessions)
@@ -56,6 +57,16 @@ class CompanyAnalyticsService
     scope == "user" ? base.where(user:) : base
   end
 
+  def usage_stats_for(sessions)
+    row = UsageStatistic
+      .where(terminal_session_id: sessions.select(:id))
+      .pick(
+        Arel.sql("COALESCE(SUM(cost_cents), 0)"),
+        Arel.sql("COALESCE(NULLIF(SUM(input_tokens + output_tokens + cache_write_tokens + cache_read_tokens), 0), SUM(tokens), 0)")
+      )
+    { cost_cents: row[0].to_i, tokens: row[1].to_i }
+  end
+
   def base_workflow_runs
     runs = WorkflowRun.joins(:project).where(projects: { company_id: company.id }, created_at: since..)
     scope == "user" ? runs.where(user:) : runs
@@ -64,14 +75,15 @@ class CompanyAnalyticsService
   def build_project_breakdowns(sessions)
     rows = sessions
       .joins(:project)
+      .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
       .group("projects.id", "projects.name")
-      .order(Arel.sql("SUM(terminal_sessions.cost_cents) DESC"))
+      .order(Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0) DESC"))
       .pluck(
         "projects.id",
         "projects.name",
         Arel.sql("COUNT(terminal_sessions.id)"),
-        Arel.sql("COALESCE(SUM(terminal_sessions.cost_cents), 0)"),
-        Arel.sql("COALESCE(SUM(terminal_sessions.total_tokens), 0)")
+        Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
+        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
       )
       .map do |(project_id, project_name, sess_count, cost, tokens)|
         ProjectBreakdown.new(

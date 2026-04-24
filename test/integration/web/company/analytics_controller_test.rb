@@ -49,12 +49,21 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
     session = build(:terminal_session, project: @project, user: @user,
                     session_type: "agent_session", agent_type: "coding")
     session.save!(validate: false)
+    UsageStatistic.create!(
+      terminal_session: session,
+      cost_cents: 150,
+      input_tokens: 1000, output_tokens: 500,
+      cache_write_tokens: 0, cache_read_tokens: 0,
+      tokens: 1500
+    )
 
     get company_analytics_path
     inertia_load_deferred_props("analytics")
 
     assert_inertia_props do |props|
       props[:summary][:totalSessions] == 1 &&
+        props[:summary][:totalCostCents] == 150 &&
+        props[:summary][:totalTokens] == 1500 &&
         props[:summary][:projectBreakdowns].length == 1 &&
         props[:summary][:projectBreakdowns].first[:projectName] == @project.name
     end
