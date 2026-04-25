@@ -29,6 +29,7 @@ import {
   IconStar,
   IconTerminal2,
   IconTool,
+  IconTrendingUp,
   IconUser,
   IconUsers,
 } from '@tabler/icons-react';
@@ -235,6 +236,24 @@ export const AppHeader = ({ currentProjectId: propProjectId }: AppHeaderProps) =
         </Menu>
 
         <Divider orientation="vertical" mx={4} style={{ borderColor: 'var(--app-border-default)' }} />
+
+        {/* Analytics direct link */}
+        {(() => {
+          const analyticsPath = '/company/analytics';
+          const isActive = currentPath === analyticsPath || currentPath.startsWith(analyticsPath + '/');
+          return (
+            <Button
+              component={Link}
+              href={analyticsPath}
+              variant="subtle"
+              size="compact-md"
+              leftSection={<IconTrendingUp size={14} />}
+              styles={navButtonStyles(isActive)}
+            >
+              Analytics
+            </Button>
+          );
+        })()}
 
         {/* Dropdown menus */}
         {dropdownMenus.map((menu) => {
