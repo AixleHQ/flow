@@ -34,12 +34,13 @@ class CompanySessionCostTokenUsageService
     trunc_sql = Arel.sql("DATE_TRUNC('#{trunc}', terminal_sessions.created_at)")
 
     points = sessions
+      .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
       .group(trunc_sql)
       .order(trunc_sql)
       .pluck(
         trunc_sql,
-        Arel.sql("COALESCE(SUM(terminal_sessions.cost_cents), 0)"),
-        Arel.sql("COALESCE(SUM(terminal_sessions.total_tokens), 0)")
+        Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
+        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
       )
       .map do |(date, cost, tokens)|
         TimeSeriesPoint.new(

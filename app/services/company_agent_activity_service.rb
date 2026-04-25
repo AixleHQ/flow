@@ -25,12 +25,13 @@ class CompanyAgentActivityService
 
     sessions_by_agent = sessions
       .where.not(agent_type: nil)
+      .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
       .group(:agent_type)
       .pluck(
         :agent_type,
-        Arel.sql("COUNT(*)"),
-        Arel.sql("COALESCE(SUM(terminal_sessions.cost_cents), 0)"),
-        Arel.sql("COALESCE(SUM(terminal_sessions.total_tokens), 0)")
+        Arel.sql("COUNT(terminal_sessions.id)"),
+        Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
+        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), SUM(usage_statistics.tokens), 0)")
       )
       .map do |(agent_type, count, cost, tokens)|
         AgentBreakdown.new(
