@@ -23,10 +23,16 @@ on:
         type: string
         default: ""
 
+permissions:
+  contents: read
+  id-token: write
+
 env:
-  REGISTRY: ghcr.io
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 541894707537.dkr.ecr.us-east-1.amazonaws.com
+  ECR_ROLE_ARN: arn:aws:iam::541894707537:role/aixle-staging-gha-runner-image-push-role
   COMPOSE_FILE: docker-compose.ci.yml
-  IMAGE: ghcr.io/${{ github.repository }}-web
+  IMAGE: 541894707537.dkr.ecr.us-east-1.amazonaws.com/aixle-app-web
 
 jobs:
   check:
@@ -38,11 +44,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: aixle-app-code-check
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Pull image
         run: |

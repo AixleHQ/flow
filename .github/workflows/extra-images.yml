@@ -7,17 +7,19 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write
 
 env:
-  REGISTRY: ghcr.io
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 541894707537.dkr.ecr.us-east-1.amazonaws.com
+  ECR_ROLE_ARN: arn:aws:iam::541894707537:role/aixle-staging-gha-runner-image-push-role
 
 jobs:
   build-otlp:
     name: Build OTLP Ingest
     runs-on: ${{ vars.CI_RUNNER || 'aixle-staging-ci-runner' }}
     env:
-      IMAGE_NAME: ${{ github.repository }}-otlp-ingest
+      IMAGE_NAME: aixle-app-otlp-ingest
 
     steps:
       - name: Checkout
@@ -26,18 +28,22 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login To GHCR
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: aixle-app-otlp-ingest-build
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
             type=sha,format=short,prefix=
@@ -50,14 +56,14 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=otlp-ingest-image
-          cache-to: type=gha,mode=max,scope=otlp-ingest-image
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
 
   build-agent-base:
     name: Build Agent Base
     runs-on: ${{ vars.CI_RUNNER || 'aixle-staging-ci-runner' }}
     env:
-      BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
+      IMAGE_NAME: aixle-app-agent-base-core
 
     steps:
       - name: Checkout
@@ -66,18 +72,22 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login To GHCR
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: aixle-app-agent-base-build
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Extract Base Docker Metadata
-        id: meta_base
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Extract Docker Metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}
+          images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
             type=sha,format=short,prefix=
@@ -88,10 +98,10 @@ jobs:
           context: ./docker/base
           file: ./docker/base/Dockerfile
           push: true
-          tags: ${{ steps.meta_base.outputs.tags }}
-          labels: ${{ steps.meta_base.outputs.labels }}
-          cache-from: type=gha,scope=agent-base-core-image
-          cache-to: type=gha,mode=max,scope=agent-base-core-image
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
 
   build-agent-images:
     name: Build ${{ matrix.image_name }}
@@ -103,21 +113,15 @@ jobs:
           - image_name: Claude Code
             image_suffix: claude-code
             dockerfile: ./docker/claude-code/Dockerfile
-            cache_scope: claude-code-image
           - image_name: Cursor CLI
             image_suffix: cursor-cli
             dockerfile: ./docker/cursor-cli/Dockerfile
-            cache_scope: cursor-cli-image
           - image_name: Codex
             image_suffix: codex
             dockerfile: ./docker/codex/Dockerfile
-            cache_scope: codex-image
           - image_name: Gemini CLI
             image_suffix: gemini-cli
             dockerfile: ./docker/gemini-cli/Dockerfile
-            cache_scope: gemini-cli-image
-    env:
-      BASE_IMAGE_NAME: ${{ github.repository }}-agent-base-core
 
     steps:
       - name: Checkout
@@ -130,18 +134,22 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login To GHCR
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: aixle-app-${{ matrix.image_suffix }}-build
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.image_suffix }}
+          images: ${{ env.ECR_REGISTRY }}/aixle-app-${{ matrix.image_suffix }}
           tags: |
             type=raw,value=latest
             type=sha,format=short,prefix=
@@ -155,6 +163,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ steps.vars.outputs.short_sha }}
-          cache-from: type=gha,scope=${{ matrix.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+            BASE_IMAGE=${{ env.ECR_REGISTRY }}/aixle-app-agent-base-core:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=registry,ref=${{ env.ECR_REGISTRY }}/aixle-app-${{ matrix.image_suffix }}:buildcache
+          cache-to: type=registry,ref=${{ env.ECR_REGISTRY }}/aixle-app-${{ matrix.image_suffix }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true

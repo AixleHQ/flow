@@ -8,10 +8,12 @@ on:
 
 permissions:
   contents: read
-  packages: write
+  id-token: write
 
 env:
-  REGISTRY: ghcr.io
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: 541894707537.dkr.ecr.us-east-1.amazonaws.com
+  ECR_ROLE_ARN: arn:aws:iam::541894707537:role/aixle-staging-gha-runner-image-push-role
 
 jobs:
   prepare-config:
@@ -21,7 +23,7 @@ jobs:
       asset_host: ${{ steps.config.outputs.asset_host }}
       raw_tag: ${{ steps.config.outputs.raw_tag }}
       sha_prefix: ${{ steps.config.outputs.sha_prefix }}
-      cache_scope: ${{ steps.config.outputs.cache_scope }}
+      cache_ref: ${{ steps.config.outputs.cache_ref }}
       ci_runner: ${{ steps.config.outputs.ci_runner }}
       deploy_environment: ${{ steps.config.outputs.deploy_environment }}
       kube_namespace: ${{ steps.config.outputs.kube_namespace }}
@@ -39,10 +41,10 @@ jobs:
           DEFAULT_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
+          cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-dev"
           asset_host="https://static.aixle.com"
           raw_tag="latest"
           sha_prefix=""
-          cache_scope="web-image"
           ci_runner="$DEFAULT_CI_RUNNER"
           deploy_environment="development"
           kube_namespace="palad-dev"
@@ -58,8 +60,7 @@ jobs:
               asset_host="https://staging.aixle.com"
               raw_tag="staging"
               sha_prefix="staging-"
-              cache_scope="web-image-staging"
-              ci_runner="aixle-staging-ci-runner"
+              cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-staging"
               deploy_environment="staging"
               kube_namespace="aixle-staging"
               job_prefix="db-migrate-staging"
@@ -70,6 +71,7 @@ jobs:
               secret_name="aixle-app-secrets"
               ;;
             refs/heads/main)
+              cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-main"
               raw_tag="main"
               deploy_environment="production"
               kube_namespace="palad"
@@ -81,7 +83,7 @@ jobs:
           asset_host=${asset_host}
           raw_tag=${raw_tag}
           sha_prefix=${sha_prefix}
-          cache_scope=${cache_scope}
+          cache_ref=${cache_ref}
           ci_runner=${ci_runner}
           deploy_environment=${deploy_environment}
           kube_namespace=${kube_namespace}
@@ -98,7 +100,7 @@ jobs:
     needs: prepare-config
     runs-on: ${{ needs.prepare-config.outputs.ci_runner }}
     env:
-      IMAGE_NAME: ${{ github.repository }}-web
+      IMAGE_NAME: aixle-app-web
 
     steps:
       - name: Checkout
@@ -107,18 +109,22 @@ jobs:
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login To GHCR
-        uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: aixle-app-web-build
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login_ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Extract Docker Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ needs.prepare-config.outputs.raw_tag }}
             type=sha,format=short,prefix=${{ needs.prepare-config.outputs.sha_prefix }}
@@ -136,8 +142,8 @@ jobs:
             AUTHOR_NAME=${{ github.actor }}
             AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
             ASSET_HOST=${{ needs.prepare-config.outputs.asset_host }}
-          cache-from: type=gha,scope=${{ needs.prepare-config.outputs.cache_scope }}
-          cache-to: type=gha,mode=max,scope=${{ needs.prepare-config.outputs.cache_scope }}
+          cache-from: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }}
+          cache-to: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }},mode=max,image-manifest=true,oci-mediatypes=true
 
   # ---------------------------------------------------------------------------
   # Checks (parallel, via reusable workflow)
@@ -236,7 +242,7 @@ jobs:
           JOB_PREFIX="${{ needs.prepare-config.outputs.job_prefix }}"
           WEB_IMAGE_TAG="${{ needs.prepare-config.outputs.web_image_tag }}"
           JOB_NAME="${JOB_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          WEB_IMAGE="${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
+          WEB_IMAGE="${ECR_REGISTRY}/aixle-app-web:${WEB_IMAGE_TAG}"
 
           cat <<EOF | kubectl -n "$KUBE_NAMESPACE" apply -f -
           apiVersion: batch/v1
@@ -354,17 +360,21 @@ jobs:
       SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
       SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
     steps:
-      - uses: docker/login-action@v3
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          role-to-assume: ${{ env.ECR_ROLE_ARN }}
+          role-session-name: palad-app-sentry-sourcemaps
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Extract source maps from image
         run: |
           WEB_IMAGE_TAG="${{ needs.prepare-config.outputs.web_image_tag }}"
-          docker pull "${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}"
-          CONTAINER_ID=$(docker create "${REGISTRY}/${GITHUB_REPOSITORY}-web:${WEB_IMAGE_TAG}")
+          docker pull "${ECR_REGISTRY}/aixle-app-web:${WEB_IMAGE_TAG}"
+          CONTAINER_ID=$(docker create "${ECR_REGISTRY}/aixle-app-web:${WEB_IMAGE_TAG}")
           mkdir -p sourcemaps
           docker cp "$CONTAINER_ID:/app/public/vite/" ./sourcemaps/ || true
           docker rm "$CONTAINER_ID"
