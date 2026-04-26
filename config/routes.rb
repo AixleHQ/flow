@@ -201,7 +201,15 @@ Rails.application.routes.draw do
         scope module: :projects do
           resources :overview, only: :index
           resource :board, only: %i[show]
-          resources :sessions, only: %i[index new show]
+          resources :sessions, only: %i[index new show] do
+            scope module: :sessions do
+              resources :artifacts, only: :index do
+                collection do
+                  post :review
+                end
+              end
+            end
+          end
           resources :workflows, only: %i[index create destroy] do
             member do
               get :builder

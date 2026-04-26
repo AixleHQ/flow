@@ -932,6 +932,16 @@ export function companyProjectSessionsPath(project_id: ScalarType, options?: obj
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /company/projects/:project_id/sessions/:session_id/artifacts/review(.:format) */
+export function reviewCompanyProjectSessionArtifactsPath(project_id: ScalarType, session_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + session_id + "/" + "artifacts" + "/" + "review" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","session_id","format"]);
+}
+
+/** /company/projects/:project_id/sessions/:session_id/artifacts(.:format) */
+export function companyProjectSessionArtifactsPath(project_id: ScalarType, session_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + session_id + "/" + "artifacts" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","session_id","format"]);
+}
+
 /** /company/projects/:project_id/sessions/new(.:format) */
 export function newCompanyProjectSessionPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
