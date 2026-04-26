@@ -38,7 +38,7 @@ jobs:
         id: config
         env:
           DEFAULT_CI_RUNNER: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-          DEFAULT_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'palad-deploy-runner' }}
+          DEFAULT_DEPLOY_RUNNER: ${{ vars.DEPLOY_RUNNER || 'ubuntu-latest' }}
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
           cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-dev"
@@ -47,13 +47,13 @@ jobs:
           sha_prefix=""
           ci_runner="$DEFAULT_CI_RUNNER"
           deploy_environment="development"
-          kube_namespace="palad-dev"
+          kube_namespace="aixle-dev"
           job_prefix="db-migrate-dev"
           web_image_tag="${SHORT_SHA}"
           deploy_runner="$DEFAULT_DEPLOY_RUNNER"
-          service_account="palad-web"
-          configmap_name="palad-app-config"
-          secret_name="palad-app-secrets"
+          service_account="aixle-web"
+          configmap_name="aixle-app-config"
+          secret_name="aixle-app-secrets"
 
           case "${GITHUB_REF}" in
             refs/heads/staging)
@@ -66,16 +66,13 @@ jobs:
               job_prefix="db-migrate-staging"
               web_image_tag="staging-${SHORT_SHA}"
               deploy_runner="aixle-staging-runner"
-              service_account="aixel-web"
-              configmap_name="aixle-app-config"
-              secret_name="aixle-app-secrets"
               ;;
             refs/heads/main)
               cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-main"
               raw_tag="main"
               deploy_environment="production"
               deploy_runner="aixle-prod-runner"
-              kube_namespace="palad"
+              kube_namespace="aixle-prod"
               job_prefix="db-migrate"
               ;;
           esac
