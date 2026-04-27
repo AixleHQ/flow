@@ -28,6 +28,12 @@ module Agents
       ]
     end
 
+    # Watch both auth files — primaryApiKey lands in .claude.json (API key path),
+    # claudeAiOauth lands in .claude/.credentials.json (claude.ai OAuth path).
+    def auth_watch_path
+      auth_file_paths.join(",")
+    end
+
     def home_dir
       "/home/claude"
     end
@@ -44,55 +50,69 @@ module Agents
       BUILTIN_TOOLS + mcp_permissions
     end
 
-    # Keys that indicate auth is complete (any one = success)
+    # Keys that indicate auth is complete (watcher uses dot-notation for nested).
+    # Two real-token sources, depending on login method:
+    #   - primaryApiKey                — written to ~/.claude.json after platform.claude.com (API key)
+    #   - claudeAiOauth.accessToken    — written to ~/.claude/.credentials.json after claude.ai (OAuth)
+    # We wait specifically for these because oauthAccount alone is just metadata
+    # and lands before the token, causing a race.
     def auth_required_keys
-      %w[oauthAccount primaryApiKey]
+      %w[primaryApiKey claudeAiOauth.accessToken]
     end
 
-    # Check if OAuth or API key is present
     def auth_complete?(config_content)
       config = parse_json(config_content)
-      config["oauthAccount"].present? || config["primaryApiKey"].present?
+      config["primaryApiKey"].present? || config.dig("claudeAiOauth", "accessToken").present?
     end
 
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
       config.slice(
-        "oauthAccount",      # OAuth account info
-        "primaryApiKey",     # API key
-        "customApiKeyResponses", # approved/rejected API keys
-        "userID"             # user identifier
+        "oauthAccount",          # OAuth account metadata (.claude.json)
+        "primaryApiKey",         # API key (.claude.json, platform.claude.com path)
+        "customApiKeyResponses", # approved/rejected API keys (.claude.json)
+        "userID",                # user identifier (.claude.json)
+        "claudeAiOauth"          # OAuth tokens (.claude/.credentials.json, claude.ai path)
       ).compact
     end
 
-    # Generate full config for a new container
+    # Generate ~/.claude.json content. Excludes claudeAiOauth (lives in .credentials.json).
     def generate_config(credentials, workflow_config = {})
       {
-        # Credentials from database
-        **credentials,
+        # Credentials from database (API-key path fields, OAuth account metadata, userID, etc.)
+        **credentials.except("claudeAiOauth"),
 
         # Fixed values (skip onboarding, etc.)
         "installMethod" => "global",
         "hasCompletedOnboarding" => true,
         "lastOnboardingVersion" => CONFIG_VERSION,
         "numStartups" => 1,
+        "effortCalloutV2Dismissed" => true,
 
         # Project config (generated based on workflow)
         "projects" => generate_projects_config(workflow_config)
       }
     end
 
-    # Override to write multiple config files
+    # Override to write multiple config files. The set depends on which auth path
+    # the user used: claude.ai OAuth credentials live in a separate file.
     def config_files(credentials, workflow_config = {})
       mcp_names = workflow_config[:enabled_mcp_servers] || []
       model = workflow_config[:model]
-      {
-        # Main config with credentials
+      files = {
+        # Main config (includes primaryApiKey for API-key path users)
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings with permissions and optional model override
         "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
       }
+
+      oauth = credentials["claudeAiOauth"]
+      if oauth.is_a?(Hash) && oauth["accessToken"].present?
+        files["#{home_dir}/.claude/.credentials.json"] = { "claudeAiOauth" => oauth }.to_json
+      end
+
+      files
     end
 
     # Session command for agent terminal.

@@ -1316,9 +1316,11 @@ module ContainerRuntime
         request = Net::HTTP::Head.new(uri.request_uri)
         request["Host"] = expected_host if expected_host.present?
 
+        verify_mode = kube_setting(:traefik_skip_tls_verify) ? OpenSSL::SSL::VERIFY_NONE : OpenSSL::SSL::VERIFY_PEER
         response = Net::HTTP.start(
           uri.host, uri.port,
           use_ssl: uri.scheme == "https",
+          verify_mode: verify_mode,
           open_timeout: 2, read_timeout: 2
         ) { |http| http.request(request) }
 

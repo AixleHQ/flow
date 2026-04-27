@@ -115,6 +115,7 @@ kubernetes:
   service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
   traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>
   traefik_auth_middleware: <%= ENV['TRAEFIK_AUTH_MIDDLEWARE'] || 'terminal-auth' %>
+  traefik_skip_tls_verify: <%= ENV['K8S_TRAEFIK_VERIFY_TLS'] != 'true' %>
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>

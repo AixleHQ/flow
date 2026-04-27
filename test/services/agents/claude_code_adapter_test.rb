@@ -32,17 +32,24 @@ module Agents
 
     # == Auth ==
 
-    test "auth_required_keys returns oauth and api key" do
-      assert_equal %w[oauthAccount primaryApiKey], @adapter.auth_required_keys
+    test "auth_required_keys returns the two real-token paths" do
+      assert_equal %w[primaryApiKey claudeAiOauth.accessToken], @adapter.auth_required_keys
     end
 
-    test "auth_complete? returns true with oauthAccount" do
+    test "auth_complete? returns false with only oauthAccount metadata" do
+      # oauthAccount lands before the token — relying on it caused a race that
+      # captured creds before primaryApiKey/claudeAiOauth was written.
       content = { "oauthAccount" => { "id" => "acc-123" } }.to_json
-      assert @adapter.auth_complete?(content)
+      refute @adapter.auth_complete?(content)
     end
 
     test "auth_complete? returns true with primaryApiKey" do
       content = { "primaryApiKey" => "sk-xxx" }.to_json
+      assert @adapter.auth_complete?(content)
+    end
+
+    test "auth_complete? returns true with claudeAiOauth accessToken" do
+      content = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-xxx" } }.to_json
       assert @adapter.auth_complete?(content)
     end
 
@@ -56,6 +63,7 @@ module Agents
         "oauthAccount" => { "id" => "acc" },
         "primaryApiKey" => "sk-key",
         "userID" => "user-1",
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-xxx", "refreshToken" => "sk-ant-ort01-yyy" },
         "ignoredField" => "ignored"
       }.to_json
 
@@ -63,6 +71,7 @@ module Agents
 
       assert_equal "sk-key", creds["primaryApiKey"]
       assert_equal "user-1", creds["userID"]
+      assert_equal "sk-ant-oat01-xxx", creds.dig("claudeAiOauth", "accessToken")
       refute creds.key?("ignoredField")
     end
 
@@ -87,10 +96,42 @@ module Agents
 
       assert files.key?("/home/claude/.claude.json")
       assert files.key?("/home/claude/.claude/settings.json")
+      refute files.key?("/home/claude/.claude/.credentials.json")
       main = JSON.parse(files["/home/claude/.claude.json"])
       assert_equal "sk-xxx", main["primaryApiKey"]
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+    end
+
+    test "config_files writes claudeAiOauth to .credentials.json (OAuth path)" do
+      credentials = {
+        "oauthAccount" => { "emailAddress" => "u@x.com" },
+        "claudeAiOauth" => {
+          "accessToken" => "sk-ant-oat01-xxx",
+          "refreshToken" => "sk-ant-ort01-yyy",
+          "expiresAt" => 1_777_000_000_000
+        }
+      }
+
+      files = @adapter.config_files(credentials)
+
+      assert files.key?("/home/claude/.claude/.credentials.json")
+      creds_file = JSON.parse(files["/home/claude/.claude/.credentials.json"])
+      assert_equal "sk-ant-oat01-xxx", creds_file.dig("claudeAiOauth", "accessToken")
+      assert_equal "sk-ant-ort01-yyy", creds_file.dig("claudeAiOauth", "refreshToken")
+
+      # claudeAiOauth must NOT leak into ~/.claude.json — Claude Code reads it from .credentials.json only
+      main = JSON.parse(files["/home/claude/.claude.json"])
+      refute main.key?("claudeAiOauth")
+      assert_equal "u@x.com", main.dig("oauthAccount", "emailAddress")
+    end
+
+    test "config_files skips .credentials.json when claudeAiOauth has no accessToken" do
+      credentials = { "primaryApiKey" => "sk", "claudeAiOauth" => { "refreshToken" => "only-refresh" } }
+
+      files = @adapter.config_files(credentials)
+
+      refute files.key?("/home/claude/.claude/.credentials.json")
     end
 
     test "config_files includes MCP permissions when enabled_mcp_servers provided" do
