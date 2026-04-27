@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 TODAY = $$(date +"%d.%m.%Y")
 
@@ -18,6 +18,46 @@ db-reset:
 
 # Run all linters and tests
 check: be_check fe_check
+
+# Run all checks in parallel, never short-circuit, summarize at the end.
+# Each check writes its output to tmp/check_results/<name>.log and exit code to <name>.status.
+# Failures are surfaced together (with last 80 log lines each) so you can fix them in one pass.
+CHECK_RESULTS := tmp/check_results
+check_all:
+	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
+	@echo "Running rails-test, rubocop, brakeman, eslint, typescript in parallel..."
+	@( bundle exec rails test                                       > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
+	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
+	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
+	 ( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
+	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
+	 wait
+	@echo ""
+	@echo "=== Summary ==="
+	@fail=0; for f in $(CHECK_RESULTS)/*.status; do \
+	  name=$$(basename $$f .status); \
+	  status=$$(cat $$f); \
+	  if [ "$$status" = "0" ]; then \
+	    printf "  [OK]   %s\n" "$$name"; \
+	  else \
+	    printf "  [FAIL] %s (exit %s)\n" "$$name" "$$status"; \
+	    fail=1; \
+	  fi; \
+	done; \
+	if [ $$fail -ne 0 ]; then \
+	  echo ""; \
+	  echo "=== Failure output (last 80 lines per failed check) ==="; \
+	  for f in $(CHECK_RESULTS)/*.status; do \
+	    name=$$(basename $$f .status); \
+	    status=$$(cat $$f); \
+	    if [ "$$status" != "0" ]; then \
+	      echo ""; \
+	      echo "--- $$name (full log: $(CHECK_RESULTS)/$$name.log) ---"; \
+	      tail -80 $(CHECK_RESULTS)/$$name.log; \
+	    fi; \
+	  done; \
+	  exit 1; \
+	fi
 
 # Run backend checks
 be_check: rails-test rubocop-fix brakeman
@@ -122,7 +162,8 @@ help:
 	@echo "  make deps                   - Setup dependencies"
 	@echo "  make db-prepare             - Prepare database (create, migrate, seed)"
 	@echo "  make db-reset               - Reset database (drop, create, migrate, seed)"
-	@echo "  make check                  - Run all linters and tests"
+	@echo "  make check                  - Run all linters and tests (sequential, stops on first failure)"
+	@echo "  make check_all              - Run all checks in parallel, summarize failures at the end"
 	@echo "  make lint                   - Run all linters (rubocop, eslint, brakeman)"
 	@echo "  make test                   - Run all tests"
 	@echo "  make rails-test             - Run Rails tests"

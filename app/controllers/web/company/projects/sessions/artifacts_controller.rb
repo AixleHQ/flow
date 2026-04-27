@@ -11,9 +11,9 @@ class Web::Company::Projects::Sessions::ArtifactsController < Web::Company::Proj
                        .order(:name)
 
     render inertia: "Projects/Sessions/ArtifactsPage", props: {
-      session: -> { TerminalSessionResource.new(session).to_h },
-      artifacts: -> { artifacts.map { |a| SessionArtifactResource.new(a).to_h } },
-      already_reviewed: -> { session.artifacts_reviewed? }
+      session: TerminalSessionResource.new(session).to_h,
+      artifacts: artifacts.map { |a| SessionArtifactResource.new(a).to_h },
+      already_reviewed: session.artifacts_reviewed?
     }
   end
 

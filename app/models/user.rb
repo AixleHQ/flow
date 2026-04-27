@@ -90,11 +90,14 @@ class User < ApplicationRecord
   def agent_models_by_type
     agent_credentials.each_with_object({}) do |cred, hash|
       cache_key = "agent_models/#{cred.agent_type}"
-      models = Rails.cache.fetch(cache_key, expires_in: 1.day) do
+      models = Rails.cache.read(cache_key)
+
+      if models.nil?
         adapter = AgentCredentialsService.for(cred.agent_type).adapter
         result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
-        result[:models]
-      end || []
+        models = result[:models] || []
+        Rails.cache.write(cache_key, models, expires_in: 1.day) if models.any?
+      end
 
       hash[cred.agent_type] = models.map do |m|
         { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"] }
