@@ -91,7 +91,11 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :number
   attribute :pending_artifacts_count do |session|
-    session.output_assets.count { |a| a.status == "pending_review" }
+    if session.respond_to?(:cached_pending_review_assets_count)
+      session.cached_pending_review_assets_count.to_i
+    else
+      session.output_assets.count { |a| a.status == "pending_review" }
+    end
   end
 
   typelize :number

@@ -2,8 +2,10 @@
 
 class Web::Company::SessionsController < Web::Company::ApplicationController
   def index
-    scope = company_sessions_scope
-              .includes(:user, :project, :output_assets)
+    scope = company_sessions_scope.with_cached_resource_counts
+              .includes(:user, :project,
+                        :tools, :skills, :mcp_servers,
+                        :input_assets, :repositories)
               .where.not(session_type: "auth_setup")
               .ransack(q_params)
               .result
@@ -41,8 +43,10 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   end
 
   def show
-    session = company_sessions_scope
-                .includes(:user, :project, :output_assets)
+    session = company_sessions_scope.with_cached_resource_counts
+                .includes(:user, :project,
+                          :tools, :skills, :mcp_servers,
+                          :input_assets, :repositories)
                 .find(params[:id])
 
     session_props = TerminalSessionResource.new(session).to_h

@@ -3,11 +3,8 @@
 class Web::Company::Projects::SessionsController < Web::Company::Projects::ApplicationController
   def index
     scope = current_project.terminal_sessions
-                           .select(
-                             "terminal_sessions.*",
-                             "(SELECT COUNT(*) FROM session_logs WHERE session_logs.terminal_session_id = terminal_sessions.id) AS cached_session_logs_count"
-                           )
-                           .includes(:user, :project, :output_assets,
+                           .with_cached_resource_counts
+                           .includes(:user, :project,
                                      :tools, :skills, :mcp_servers,
                                      :input_assets, :repositories)
                            .where.not(session_type: "auth_setup")

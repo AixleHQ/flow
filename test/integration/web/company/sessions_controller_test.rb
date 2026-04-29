@@ -14,6 +14,19 @@ class Web::Company::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Company/Sessions/Index"
   end
 
+  test "index loads session list without N+1 queries" do
+    project = create(:project, company: @company, owner: @user)
+    tool = create(:tool, scope: @company)
+    sessions = create_list(:terminal_session, 2, :agent_session, user: @user, project: project)
+    sessions.each do |s|
+      s.tools << tool
+      create(:session_log, terminal_session: s)
+    end
+
+    get company_sessions_path
+    assert_inertia_page "Company/Sessions/Index"
+  end
+
   test "new renders new session page" do
     get new_company_session_path
     assert_inertia_page "Company/Sessions/New"
