@@ -62,6 +62,13 @@ class TerminalSession < ApplicationRecord
   scope :active, -> { where(state: %w[not_started running ready]) }
   scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
+  scope :with_cached_resource_counts, -> {
+    select(
+      "terminal_sessions.*",
+      "(SELECT COUNT(*) FROM session_logs WHERE session_logs.terminal_session_id = terminal_sessions.id) AS cached_session_logs_count",
+      "(SELECT COUNT(*) FROM assets WHERE assets.terminal_session_id = terminal_sessions.id AND assets.status = 'pending_review') AS cached_pending_review_assets_count"
+    )
+  }
 
   def active?
     state.in?(%w[not_started running ready])
