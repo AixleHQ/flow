@@ -40,4 +40,56 @@ class Web::Company::Projects::Sessions::ArtifactsControllerTest < ActionDispatch
     }
     assert_response :redirect
   end
+
+  test "review save activates session artifact when no existing asset" do
+    artifact = create(
+      :asset,
+      name: "output.md",
+      folder: "session-#{@session.id}",
+      scope: @project,
+      created_by: @user,
+      terminal_session: @session,
+      status: "pending_review"
+    )
+
+    post review_company_project_session_artifacts_path(@project, @session), params: {
+      decisions: { artifact.id.to_s => "save" }
+    }
+
+    artifact.reload
+    assert_equal "active", artifact.status
+    assert_nil artifact.folder
+    assert Asset.accessible_from_project(@project).include?(artifact)
+  end
+
+  test "review save activates existing dismissed asset and merges content" do
+    dismissed = create(
+      :asset,
+      name: "output.md",
+      folder: nil,
+      scope: @project,
+      created_by: @user,
+      status: "dismissed"
+    )
+
+    artifact = create(
+      :asset,
+      name: "output.md",
+      folder: "session-#{@session.id}",
+      scope: @project,
+      created_by: @user,
+      terminal_session: @session,
+      status: "pending_review"
+    )
+
+    post review_company_project_session_artifacts_path(@project, @session), params: {
+      decisions: { artifact.id.to_s => "save" }
+    }
+
+    dismissed.reload
+    artifact.reload
+    assert_equal "active", dismissed.status
+    assert_equal "dismissed", artifact.status
+    assert Asset.accessible_from_project(@project).include?(dismissed)
+  end
 end
