@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_04_09_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_02_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -687,6 +687,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_09_120000) do
   create_table "tools", force: :cascade do |t|
     t.text "command"
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.text "description"
     t.string "display_name", null: false
     t.string "docker_image"
@@ -699,8 +700,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_04_09_120000) do
     t.bigint "scope_id"
     t.string "scope_type"
     t.datetime "updated_at", null: false
+    t.index ["deleted_at"], name: "index_tools_on_deleted_at"
     t.index ["kind"], name: "index_tools_on_kind"
-    t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "deleted_at IS NULL"
     t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 

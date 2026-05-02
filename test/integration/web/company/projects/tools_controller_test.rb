@@ -31,10 +31,37 @@ class Web::Company::Projects::ToolsControllerTest < ActionDispatch::IntegrationT
     assert_response :redirect
   end
 
-  test "destroy redirects" do
+  test "destroy soft-deletes the tool and redirects" do
     tool = create(:tool, :with_project_scope, scope: @project)
 
-    delete company_project_tool_path(@project, tool)
+    assert_no_difference "Tool.count" do
+      delete company_project_tool_path(@project, tool)
+    end
+    assert_response :redirect
+    assert tool.reload.deleted?
+  end
+
+  test "destroy soft-deletes tool that has associated tool_results" do
+    tool = create(:tool, :with_project_scope, scope: @project)
+    create(:tool_result, tool: tool)
+
+    assert_no_difference "Tool.count" do
+      delete company_project_tool_path(@project, tool)
+    end
+    assert_response :redirect
+    assert tool.reload.deleted?
+    assert_equal 1, tool.tool_results.count
+  end
+
+  test "create succeeds with the same name as a soft-deleted tool" do
+    tool = create(:tool, :with_project_scope, scope: @project, name: "reused_name")
+    tool.soft_delete!
+
+    assert_difference "Tool.count", 1 do
+      post company_project_tools_path(@project), params: {
+        tool: { name: "reused_name", display_name: "Reused", docker_image: "alpine:latest" }
+      }
+    end
     assert_response :redirect
   end
 end

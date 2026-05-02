@@ -25,7 +25,7 @@ class Web::Company::ToolsController < Web::Company::ApplicationController
   end
 
   def update
-    tool = current_company.tools.find(params[:id])
+    tool = current_company.tools.not_deleted.find(params[:id])
 
     if tool.update(tool_params)
       redirect_to company_tools_path, notice: "Tool updated"
@@ -35,8 +35,8 @@ class Web::Company::ToolsController < Web::Company::ApplicationController
   end
 
   def destroy
-    tool = current_company.tools.find(params[:id])
-    tool.destroy
+    tool = current_company.tools.not_deleted.find(params[:id])
+    tool.soft_delete!
     redirect_to company_tools_path, notice: "Tool deleted"
   end
 
