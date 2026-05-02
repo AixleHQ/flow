@@ -1,3 +1,20 @@
+import {
+  DndContext,
+  DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
   Accordion,
@@ -24,6 +41,7 @@ import {
   IconChevronDown,
   IconChevronLeft,
   IconChevronUp,
+  IconGripVertical,
   IconInfoCircle,
   IconPlayerPlay,
   IconPlus,
@@ -291,6 +309,91 @@ function AccordionLabel({ icon, label }: { icon: React.ReactNode; label: string 
   );
 }
 
+// --- Sortable Sub-step ---
+
+function SortableSubStep({
+  ss,
+  stepId,
+  readOnly,
+  onRemove,
+  onChange,
+}: {
+  ss: SubStep;
+  stepId: number;
+  readOnly: boolean;
+  onRemove: (stepId: number, subStepId: number) => void;
+  onChange: (stepId: number, subStepId: number, field: string, value: unknown) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: ss.id,
+    disabled: readOnly,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Paper ref={setNodeRef} style={style} p="sm" withBorder radius="sm">
+      <Group justify="space-between" mb="xs">
+        <Group gap="xs">
+          {!readOnly && (
+            <Box {...attributes} {...listeners} style={{ cursor: 'grab', touchAction: 'none' }}>
+              <IconGripVertical size={14} color="var(--mantine-color-dimmed)" />
+            </Box>
+          )}
+          <Text size="xs" c="dimmed" fw={700}>
+            #{ss.position}
+          </Text>
+        </Group>
+        <Group gap="xs">
+          <Switch
+            label="Required"
+            size="xs"
+            checked={ss.required}
+            onChange={(e) => onChange(stepId, ss.id, 'required', e.currentTarget.checked)}
+            disabled={readOnly}
+          />
+          {!readOnly && (
+            <ActionIcon size="xs" color="red" variant="subtle" onClick={() => onRemove(stepId, ss.id)}>
+              <IconTrash size={12} />
+            </ActionIcon>
+          )}
+        </Group>
+      </Group>
+      <TextInput
+        placeholder="Name"
+        size="xs"
+        mb="xs"
+        value={ss.name}
+        onChange={(e) => onChange(stepId, ss.id, 'name', e.currentTarget.value)}
+        disabled={readOnly}
+      />
+      <Textarea
+        placeholder="Description"
+        size="xs"
+        mb="xs"
+        value={ss.description ?? ''}
+        onChange={(e) => onChange(stepId, ss.id, 'description', e.currentTarget.value)}
+        autosize
+        minRows={1}
+        disabled={readOnly}
+      />
+      <Textarea
+        placeholder="Instructions"
+        size="xs"
+        value={ss.instructions ?? ''}
+        onChange={(e) => onChange(stepId, ss.id, 'instructions', e.currentTarget.value)}
+        autosize
+        minRows={2}
+        disabled={readOnly}
+      />
+    </Paper>
+  );
+}
+
 // --- Main Page ---
 
 const BuilderPage = () => {
@@ -540,6 +643,57 @@ const BuilderPage = () => {
       updateSubStepField(stepId, subStepId, field, value);
     },
     [updateSubStepField],
+  );
+
+  const reorderSubSteps = useCallback(
+    async (stepId: number, oldIndex: number, newIndex: number) => {
+      const step = steps.find((s) => s.id === stepId);
+      if (!step) return;
+
+      const sorted = [...step.subSteps].sort((a, b) => a.position - b.position);
+      const reordered = arrayMove(sorted, oldIndex, newIndex);
+      const updated = reordered.map((ss, i) => ({ ...ss, position: i + 1 }));
+
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, subSteps: updated } : s)));
+
+      setSaving(true);
+      await fetch(stepApi(projectId, workflow.id, stepId), {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        ...fetchOpts,
+        body: JSON.stringify({
+          step: {
+            subStepsAttributes: updated.map((ss) => ({ id: ss.id, position: ss.position })),
+          },
+        }),
+      });
+      setSaving(false);
+    },
+    [steps, projectId, workflow.id],
+  );
+
+  const handleSubStepDragEnd = useCallback(
+    (stepId: number, event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const step = steps.find((s) => s.id === stepId);
+      if (!step) return;
+
+      const sorted = [...step.subSteps].sort((a, b) => a.position - b.position);
+      const oldIndex = sorted.findIndex((ss) => ss.id === active.id);
+      const newIndex = sorted.findIndex((ss) => ss.id === over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        reorderSubSteps(stepId, oldIndex, newIndex);
+      }
+    },
+    [steps, reorderSubSteps],
+  );
+
+  const subStepSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   // --- Multi-select helpers ---
@@ -1121,71 +1275,33 @@ const BuilderPage = () => {
                     </Accordion.Control>
                     <Accordion.Panel>
                       <Stack gap="sm">
-                        {selectedStep.subSteps
-                          .sort((a, b) => a.position - b.position)
-                          .map((ss) => (
-                            <Paper key={ss.id} p="sm" withBorder radius="sm">
-                              <Group justify="space-between" mb="xs">
-                                <Text size="xs" c="dimmed" fw={700}>
-                                  #{ss.position}
-                                </Text>
-                                <Group gap="xs">
-                                  <Switch
-                                    label="Required"
-                                    size="xs"
-                                    checked={ss.required}
-                                    onChange={(e) =>
-                                      handleSubStepChange(selectedStep.id, ss.id, 'required', e.currentTarget.checked)
-                                    }
-                                    disabled={readOnly}
+                        <DndContext
+                          sensors={subStepSensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={(event) => handleSubStepDragEnd(selectedStep.id, event)}
+                        >
+                          <SortableContext
+                            items={[...selectedStep.subSteps]
+                              .sort((a, b) => a.position - b.position)
+                              .map((ss) => ss.id)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <Stack gap="sm">
+                              {[...selectedStep.subSteps]
+                                .sort((a, b) => a.position - b.position)
+                                .map((ss) => (
+                                  <SortableSubStep
+                                    key={ss.id}
+                                    ss={ss}
+                                    stepId={selectedStep.id}
+                                    readOnly={readOnly}
+                                    onRemove={removeSubStep}
+                                    onChange={handleSubStepChange}
                                   />
-                                  {!readOnly && (
-                                    <ActionIcon
-                                      size="xs"
-                                      color="red"
-                                      variant="subtle"
-                                      onClick={() => removeSubStep(selectedStep.id, ss.id)}
-                                    >
-                                      <IconTrash size={12} />
-                                    </ActionIcon>
-                                  )}
-                                </Group>
-                              </Group>
-                              <TextInput
-                                placeholder="Name"
-                                size="xs"
-                                mb="xs"
-                                value={ss.name}
-                                onChange={(e) =>
-                                  handleSubStepChange(selectedStep.id, ss.id, 'name', e.currentTarget.value)
-                                }
-                                disabled={readOnly}
-                              />
-                              <Textarea
-                                placeholder="Description"
-                                size="xs"
-                                mb="xs"
-                                value={ss.description ?? ''}
-                                onChange={(e) =>
-                                  handleSubStepChange(selectedStep.id, ss.id, 'description', e.currentTarget.value)
-                                }
-                                autosize
-                                minRows={1}
-                                disabled={readOnly}
-                              />
-                              <Textarea
-                                placeholder="Instructions"
-                                size="xs"
-                                value={ss.instructions ?? ''}
-                                onChange={(e) =>
-                                  handleSubStepChange(selectedStep.id, ss.id, 'instructions', e.currentTarget.value)
-                                }
-                                autosize
-                                minRows={2}
-                                disabled={readOnly}
-                              />
-                            </Paper>
-                          ))}
+                                ))}
+                            </Stack>
+                          </SortableContext>
+                        </DndContext>
                         {!readOnly && (
                           <Button
                             size="xs"
