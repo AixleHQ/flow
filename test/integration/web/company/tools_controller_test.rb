@@ -40,6 +40,18 @@ class Web::Company::ToolsControllerTest < ActionDispatch::IntegrationTest
     assert tool.reload.deleted?
   end
 
+  test "destroy soft-deletes tool that has associated tool_results" do
+    tool = create(:tool, :with_company_scope, scope: @company)
+    create(:tool_result, tool: tool)
+
+    assert_no_difference "Tool.count" do
+      delete company_tool_path(tool)
+    end
+    assert_response :redirect
+    assert tool.reload.deleted?
+    assert_equal 1, tool.tool_results.count
+  end
+
   test "create succeeds with the same name as a soft-deleted tool" do
     tool = create(:tool, :with_company_scope, scope: @company, name: "reused_name")
     tool.soft_delete!

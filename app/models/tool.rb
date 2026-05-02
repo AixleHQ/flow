@@ -40,7 +40,7 @@ class Tool < ApplicationRecord
   validates :docker_image, presence: true, if: :custom?
 
   # Scopes
-  scope :active, -> { where(deleted_at: nil) }
+  scope :not_deleted, -> { where(deleted_at: nil) }
   scope :deleted, -> { where.not(deleted_at: nil) }
   scope :custom_tools, -> { where(kind: "custom") }
   scope :system_tools, -> { where(kind: "system") }
@@ -48,20 +48,20 @@ class Tool < ApplicationRecord
   scope :workflow_tools, -> { where(kind: "workflow") }
   scope :session_lifecycle_tools, -> { where(name: %w[finish_session fail_session]).enabled }
 
-  scope :for_company, ->(company) { active.custom_tools.where(scope_type: "Company", scope_id: company.id) }
-  scope :for_project, ->(project) { active.custom_tools.where(scope_type: "Project", scope_id: project.id) }
+  scope :for_company, ->(company) { not_deleted.custom_tools.where(scope_type: "Company", scope_id: company.id) }
+  scope :for_project, ->(project) { not_deleted.custom_tools.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
   # Tools visible in UI management (system + custom, not internal/workflow)
   scope :ui_visible, -> { where(kind: %w[custom system]) }
   scope :visible_for_project, ->(project) {
-    active.enabled.where(kind: %w[system internal workflow])
-          .or(active.enabled.where(scope_type: "Company", scope_id: project.company_id))
-          .or(active.enabled.where(scope_type: "Project", scope_id: project.id))
+    not_deleted.enabled.where(kind: %w[system internal workflow])
+               .or(not_deleted.enabled.where(scope_type: "Company", scope_id: project.company_id))
+               .or(not_deleted.enabled.where(scope_type: "Project", scope_id: project.id))
   }
   scope :visible_for_company, ->(company) {
-    active.enabled.where(kind: %w[system internal workflow])
-          .or(active.enabled.where(scope_type: "Company", scope_id: company.id))
+    not_deleted.enabled.where(kind: %w[system internal workflow])
+               .or(not_deleted.enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
   def picker_name

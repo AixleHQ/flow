@@ -95,7 +95,7 @@ module InternalTools
 
     def validate_linked_resources(step, errors)
       if step.tool_ids.present?
-        missing = step.tool_ids - Tool.where(id: step.tool_ids).pluck(:id)
+        missing = step.tool_ids - Tool.not_deleted.where(id: step.tool_ids).pluck(:id)
         missing.each { |id| errors << "Step '#{step.name}' links non-existent tool_id #{id}" }
       end
 
