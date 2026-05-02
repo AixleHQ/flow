@@ -11,7 +11,7 @@ class AssetExportService
     asset = find_or_create_asset(folder, public)
     version = create_version(asset)
 
-    Rails.logger.info("[AssetExportService] Exported #{@wra.name} → Asset##{asset.id} v#{version.version}")
+    Rails.logger.info("[AssetExportService] Exported #{@wra.name} → Asset##{asset.id} v#{version&.version}")
     { asset: asset, version: version }
   end
 
