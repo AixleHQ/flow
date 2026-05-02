@@ -22,7 +22,7 @@ class Tool < ApplicationRecord
   belongs_to :scope, polymorphic: true, optional: true
 
   has_many :tool_files, dependent: :destroy
-  has_many :tool_results, dependent: :nullify
+  has_many :tool_results, dependent: :destroy
     accepts_nested_attributes_for :tool_files, allow_destroy: true
 
   def name=(val)

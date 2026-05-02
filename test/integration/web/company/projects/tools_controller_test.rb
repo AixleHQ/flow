@@ -37,4 +37,14 @@ class Web::Company::Projects::ToolsControllerTest < ActionDispatch::IntegrationT
     delete company_project_tool_path(@project, tool)
     assert_response :redirect
   end
+
+  test "destroy succeeds when tool has associated tool_results" do
+    tool = create(:tool, :with_project_scope, scope: @project)
+    create(:tool_result, tool: tool)
+
+    assert_difference "Tool.count", -1 do
+      delete company_project_tool_path(@project, tool)
+    end
+    assert_response :redirect
+  end
 end
