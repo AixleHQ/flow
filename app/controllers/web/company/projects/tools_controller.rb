@@ -37,7 +37,7 @@ class Web::Company::Projects::ToolsController < Web::Company::Projects::Applicat
 
   def destroy
     tool = current_project.tools.find(params[:id])
-    tool.destroy
+    tool.soft_delete!
     redirect_to company_project_tools_path(current_project), notice: "Tool deleted"
   end
 

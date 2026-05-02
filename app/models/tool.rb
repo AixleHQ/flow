@@ -32,33 +32,36 @@ class Tool < ApplicationRecord
   # Validations
   validates :name, presence: true,
                    format: { with: /\A[a-z][a-z0-9_]*\z/, message: "must start with letter, use lowercase letters, numbers, underscores" }
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
+                                 message: "already exists in this scope" }
   validates :display_name, presence: true
   validates :kind, presence: true
   validates :scope, presence: true, if: :custom?
   validates :docker_image, presence: true, if: :custom?
 
   # Scopes
+  scope :active, -> { where(deleted_at: nil) }
+  scope :deleted, -> { where.not(deleted_at: nil) }
   scope :custom_tools, -> { where(kind: "custom") }
   scope :system_tools, -> { where(kind: "system") }
   scope :internal_tools, -> { where(kind: "internal") }
   scope :workflow_tools, -> { where(kind: "workflow") }
   scope :session_lifecycle_tools, -> { where(name: %w[finish_session fail_session]).enabled }
 
-  scope :for_company, ->(company) { custom_tools.where(scope_type: "Company", scope_id: company.id) }
-  scope :for_project, ->(project) { custom_tools.where(scope_type: "Project", scope_id: project.id) }
+  scope :for_company, ->(company) { active.custom_tools.where(scope_type: "Company", scope_id: company.id) }
+  scope :for_project, ->(project) { active.custom_tools.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
   # Tools visible in UI management (system + custom, not internal/workflow)
   scope :ui_visible, -> { where(kind: %w[custom system]) }
   scope :visible_for_project, ->(project) {
-    enabled.where(kind: %w[system internal workflow])
-           .or(enabled.where(scope_type: "Company", scope_id: project.company_id))
-           .or(enabled.where(scope_type: "Project", scope_id: project.id))
+    active.enabled.where(kind: %w[system internal workflow])
+          .or(active.enabled.where(scope_type: "Company", scope_id: project.company_id))
+          .or(active.enabled.where(scope_type: "Project", scope_id: project.id))
   }
   scope :visible_for_company, ->(company) {
-    enabled.where(kind: %w[system internal workflow])
-           .or(enabled.where(scope_type: "Company", scope_id: company.id))
+    active.enabled.where(kind: %w[system internal workflow])
+          .or(active.enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
   def picker_name
@@ -93,6 +96,14 @@ class Tool < ApplicationRecord
   # True for kinds not owned by users (system, internal, workflow)
   def platform_tool?
     !custom?
+  end
+
+  def soft_delete!
+    update!(deleted_at: Time.current)
+  end
+
+  def deleted?
+    deleted_at.present?
   end
 
   private
@@ -134,7 +145,7 @@ class Tool < ApplicationRecord
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
-    %w[name display_name kind scope_type enabled created_at updated_at]
+    %w[name display_name kind scope_type enabled deleted_at created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)

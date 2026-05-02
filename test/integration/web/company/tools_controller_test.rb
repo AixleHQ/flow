@@ -30,10 +30,13 @@ class Web::Company::ToolsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
-  test "destroy redirects" do
+  test "destroy soft-deletes the tool and redirects" do
     tool = create(:tool, :with_company_scope, scope: @company)
 
-    delete company_tool_path(tool)
+    assert_no_difference "Tool.count" do
+      delete company_tool_path(tool)
+    end
     assert_response :redirect
+    assert tool.reload.deleted?
   end
 end
