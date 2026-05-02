@@ -31,7 +31,7 @@ class AssetExportServiceTest < ActiveSupport::TestCase
     assert Asset.accessible_from_project(@project).include?(result[:asset])
   end
 
-  test "restores soft-deleted asset and marks it active on promotion" do
+  test "restores soft-deleted asset on promotion" do
     deleted_asset = create(:asset, scope: @project, created_by: @user, name: "report.md", status: "active")
     deleted_asset.soft_delete!
     assert deleted_asset.deleted?
@@ -43,16 +43,7 @@ class AssetExportServiceTest < ActiveSupport::TestCase
     deleted_asset.reload
     assert_equal "active", deleted_asset.status
     assert_nil deleted_asset.deleted_at
-  end
-
-  test "restored soft-deleted asset appears in accessible_from_project scope" do
-    deleted_asset = create(:asset, scope: @project, created_by: @user, name: "report.md", status: "active")
-    deleted_asset.soft_delete!
-
-    service = AssetExportService.new(@wra, project: @project, user: @user)
-    service.export!(folder: nil)
-
-    assert Asset.accessible_from_project(@project).include?(deleted_asset.reload)
+    assert Asset.accessible_from_project(@project).include?(deleted_asset)
   end
 
   test "activates pending_review asset on promotion" do
