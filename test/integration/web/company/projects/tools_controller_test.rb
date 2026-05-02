@@ -52,4 +52,16 @@ class Web::Company::Projects::ToolsControllerTest < ActionDispatch::IntegrationT
     assert tool.reload.deleted?
     assert_equal 1, tool.tool_results.count
   end
+
+  test "create succeeds with the same name as a soft-deleted tool" do
+    tool = create(:tool, :with_project_scope, scope: @project, name: "reused_name")
+    tool.soft_delete!
+
+    assert_difference "Tool.count", 1 do
+      post company_project_tools_path(@project), params: {
+        tool: { name: "reused_name", display_name: "Reused", docker_image: "alpine:latest" }
+      }
+    end
+    assert_response :redirect
+  end
 end
