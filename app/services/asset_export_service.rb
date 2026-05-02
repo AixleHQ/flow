@@ -26,7 +26,7 @@ class AssetExportService
     )
 
     if existing
-      existing.update!(status: "active") if existing.deleted?
+      existing.update!(status: "active", deleted_at: nil) if existing.deleted? || existing.status != "active"
       existing
     else
       Asset.create!(

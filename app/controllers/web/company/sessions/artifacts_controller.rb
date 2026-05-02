@@ -43,6 +43,7 @@ class Web::Company::Sessions::ArtifactsController < Web::Company::ApplicationCon
               next_ver = (existing.latest_version&.version || 0) + 1
               existing.versions.create!(version: next_ver, file: source_version.file, uploaded_by: current_user)
             end
+            existing.update!(status: "active", reviewed_at: Time.current) if existing.status != "active"
             asset.update!(status: "dismissed", reviewed_at: Time.current)
           else
             asset.update!(status: "active", reviewed_at: Time.current, folder: nil)
