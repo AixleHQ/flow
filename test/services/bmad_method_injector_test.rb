@@ -143,7 +143,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
-    assert_includes captured_cmd, "npx bmad-method install"
+    assert_includes captured_cmd, "npx -y bmad-method@#{BmadMethodInjector::BMAD_METHOD_VERSION} install"
     assert_includes captured_cmd, "--tools claude-code"
     assert_includes captured_cmd, "--user-name Maria_Garcia"
     assert_includes captured_cmd, "--communication-language Spanish"
@@ -474,8 +474,8 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   # INSTALL_TIMEOUT constant
   # ====================================================================
 
-  test "INSTALL_TIMEOUT is 60 seconds" do
-    assert_equal 60, BmadMethodInjector::INSTALL_TIMEOUT
+  test "INSTALL_TIMEOUT is 180 seconds" do
+    assert_equal 180, BmadMethodInjector::INSTALL_TIMEOUT
   end
 
   private

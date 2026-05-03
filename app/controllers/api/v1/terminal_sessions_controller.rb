@@ -51,7 +51,8 @@ module Api
           :project_id, :session_type, :agent_type, :configured_agent_id, :mode,
           :initial_prompt, :requested_model,
           tool_ids: [], skill_ids: [], mcp_server_ids: [],
-          input_asset_ids: [], repository_ids: []
+          input_asset_ids: [], repository_ids: [],
+          session_config: [ :bmad_enabled, { bmad_modules: [] } ]
         )
       end
 

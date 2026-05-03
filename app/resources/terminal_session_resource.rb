@@ -50,8 +50,10 @@ class TerminalSessionResource < ApplicationResource
   attribute :session_config do |session|
     {
       "config_files" => session.config_files,
-      "env_vars" => session.env_vars
-    }.compact_blank
+      "env_vars" => session.env_vars,
+      "bmad_enabled" => session.bmad_enabled?,
+      "bmad_modules" => session.bmad_enabled? ? session.bmad_modules : nil
+    }.compact
   end
 
   attribute :tool_ids do |session|

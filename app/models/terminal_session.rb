@@ -6,7 +6,7 @@ class TerminalSession < ApplicationRecord
   include TerminalSessionStateMachine
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
-  BMAD_DEFAULT_MODULES = %w[bmm].freeze
+  BMAD_DEFAULT_MODULES = %w[bmm bmb cis wds].freeze
 
   # Associations
   belongs_to :user

@@ -8,34 +8,34 @@ require "shellwords"
 # Validates the full BMAD pipeline for each of the 4 agent runtimes:
 #   session create → BmadMethodInjector.inject! → context assembly → filesystem verification
 #
-# Agent type → BMAD tool flag → skill directory mapping:
-#   cursor_cli  → --tools cursor      → .cursor/skills/
-#   claude_code → --tools claude-code  → .claude/skills/
-#   codex       → --tools codex        → .agents/skills/
-#   gemini_cli  → --tools gemini       → .gemini/skills/
+# Agent type → BMAD tool flag → skill directory mapping (bmad-method 6.6.0):
+#   cursor_cli  → --tools cursor       → /workspace/.agents/skills/
+#   claude_code → --tools claude-code  → /workspace/.claude/skills/
+#   codex       → --tools codex        → /workspace/.agents/skills/
+#   gemini_cli  → --tools gemini       → /workspace/.agents/skills/
 class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   AGENT_RUNTIMES = {
     "cursor_cli" => {
       tool_flag: "cursor",
-      skill_dir: "/home/cursor/.cursor/skills",
+      skill_dir: "/workspace/.agents/skills",
       context_path: "/workspace/AGENTS.md",
       home_dir: "/home/cursor"
     },
     "claude_code" => {
       tool_flag: "claude-code",
-      skill_dir: "/home/claude/.claude/skills",
+      skill_dir: "/workspace/.claude/skills",
       context_path: "/home/claude/.claude/CLAUDE.md",
       home_dir: "/home/claude"
     },
     "codex" => {
       tool_flag: "codex",
-      skill_dir: "/home/codex/.codex/skills",
+      skill_dir: "/workspace/.agents/skills",
       context_path: "/workspace/AGENTS.md",
       home_dir: "/home/codex"
     },
     "gemini_cli" => {
       tool_flag: "gemini",
-      skill_dir: "/home/gemini/.gemini",
+      skill_dir: "/workspace/.agents/skills",
       context_path: "/home/gemini/.gemini/GEMINI.md",
       home_dir: "/home/gemini"
     }
@@ -335,7 +335,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       runtime.stubs(:exec).with do |_ctr, cmd|
         if cmd.is_a?(Array)
           full = cmd.join(" ")
-          if full.include?("npx bmad-method install")
+          if full.include?("npx -y bmad-method@#{BmadMethodInjector::BMAD_METHOD_VERSION} install")
             bmad_install_called = true
           end
         end
@@ -380,7 +380,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     BmadMethodInjector.any_instance.stubs(:hide_bmad_in_vscode)
     BmadMethodInjector.new("cid-cap", session, runtime: runtime).inject!
 
-    install_call = all_calls.find { |args| args[1].is_a?(Array) && args[1][2].to_s.include?("npx bmad-method install") }
+    install_call = all_calls.find { |args| args[1].is_a?(Array) && args[1][2].to_s.include?("npx -y bmad-method@#{BmadMethodInjector::BMAD_METHOD_VERSION} install") }
     assert_not_nil install_call, "Expected install command to be captured"
     install_call[1][2]
   end
@@ -413,7 +413,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     assert_includes captured_cmd, "--yes"
     assert_includes captured_cmd, "--directory /workspace"
     assert_includes captured_cmd, "--modules bmm"
-    assert_includes captured_cmd, "npx bmad-method install"
+    assert_includes captured_cmd, "npx -y bmad-method@#{BmadMethodInjector::BMAD_METHOD_VERSION} install"
 
     # 2. Verify context contains <bmad-method> section
     result = SessionContextConstructor.build_result(session)
