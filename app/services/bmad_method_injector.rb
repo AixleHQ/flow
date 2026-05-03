@@ -39,7 +39,11 @@ class BmadMethodInjector
 
   DEFAULT_LANGUAGE = "English"
 
-  INSTALL_TIMEOUT = 60
+  # Pinned to match _bmad/_config/manifest.yaml; bumping requires re-validating
+  # skill target directories (cursor/codex/gemini moved to .agents/skills in 6.6.0).
+  BMAD_METHOD_VERSION = "6.6.0"
+
+  INSTALL_TIMEOUT = 180
 
   class InstallError < StandardError; end
 
@@ -90,7 +94,7 @@ class BmadMethodInjector
   end
 
   def build_install_command
-    parts = [ "npx bmad-method install" ]
+    parts = [ "npx -y bmad-method@#{BMAD_METHOD_VERSION} install" ]
     parts << "--directory /workspace"
     parts << "--tools #{resolve_tool}"
     modules = resolve_modules.join(",")
