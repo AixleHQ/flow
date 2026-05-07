@@ -13,6 +13,7 @@ require "uri"
 class SkillsRegistryService
   SEARCH_API = "https://skills.sh/api/search"
   GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
+  GITHUB_API_BASE = "https://api.github.com"
   SEARCH_TIMEOUT = 5
   FETCH_TIMEOUT = 10
 
@@ -85,25 +86,50 @@ class SkillsRegistryService
     )
   end
 
-  # Fetch SKILL.md content from GitHub raw
+  # Fetch SKILL.md content from GitHub raw.
+  # Tries common paths first; falls back to the Trees API for non-standard layouts.
   def self.fetch_skill_content(owner, repo, skill_name)
-    paths = [
-      "skills/#{skill_name}/SKILL.md",
-      "#{skill_name}/SKILL.md",
-      "SKILL.md"
-    ]
-
-    paths.each do |path|
-      url = "#{GITHUB_RAW_BASE}/#{owner}/#{repo}/HEAD/#{path}"
-      uri = URI(url)
+    candidate_paths(skill_name).each do |path|
+      uri = URI("#{GITHUB_RAW_BASE}/#{owner}/#{repo}/HEAD/#{path}")
       response = http_get(uri, timeout: FETCH_TIMEOUT)
       return response.body if response.is_a?(Net::HTTPSuccess) && response.body.present?
     end
 
-    nil
+    dynamic_path = resolve_skill_path(owner, repo, skill_name)
+    return nil if dynamic_path.blank?
+
+    uri = URI("#{GITHUB_RAW_BASE}/#{owner}/#{repo}/HEAD/#{dynamic_path}")
+    response = http_get(uri, timeout: FETCH_TIMEOUT)
+    response.is_a?(Net::HTTPSuccess) ? response.body.presence : nil
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Fetch content failed for #{owner}/#{repo}/#{skill_name}: #{e.message}")
     nil
+  end
+
+  # Locate SKILL.md anywhere in the repo via the GitHub Trees API.
+  # Used as a fallback when the skill lives outside the standard directory layout.
+  def self.resolve_skill_path(owner, repo, skill_name)
+    uri = URI("#{GITHUB_API_BASE}/repos/#{owner}/#{repo}/git/trees/HEAD?recursive=1")
+    response = http_get(uri, timeout: FETCH_TIMEOUT)
+    return nil unless response.is_a?(Net::HTTPSuccess)
+
+    tree = JSON.parse(response.body).fetch("tree", [])
+    entry = tree.find { |item| item["type"] == "blob" && item["path"].end_with?("SKILL.md") && item["path"].include?(skill_name) }
+    entry&.dig("path")
+  rescue StandardError => e
+    Rails.logger.error("[SkillsRegistry] Trees API failed for #{owner}/#{repo}: #{e.message}")
+    nil
+  end
+
+  def self.candidate_paths(skill_name)
+    [
+      "skills/#{skill_name}/SKILL.md",
+      "#{skill_name}/SKILL.md",
+      "src/core-skills/#{skill_name}/SKILL.md",
+      "src/skills/#{skill_name}/SKILL.md",
+      "src/#{skill_name}/SKILL.md",
+      "SKILL.md"
+    ]
   end
 
   # Extract title from SKILL.md frontmatter or first heading
@@ -149,5 +175,5 @@ class SkillsRegistryService
 
     http.request(request)
   end
-  private_class_method :http_get
+  private_class_method :http_get, :candidate_paths, :resolve_skill_path
 end
