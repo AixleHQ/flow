@@ -462,6 +462,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_02_130000) do
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "package"
+    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
@@ -702,7 +703,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_02_130000) do
     t.datetime "updated_at", null: false
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
     t.index ["kind"], name: "index_tools_on_kind"
-    t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "deleted_at IS NULL"
+    t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
