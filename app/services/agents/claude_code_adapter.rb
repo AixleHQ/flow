@@ -404,7 +404,8 @@ module Agents
           "deny" => [],
           "ask" => []
         },
-        "bypassPermissionsWarningAccepted" => true
+        "bypassPermissionsWarningAccepted" => true,
+        "enableAllProjectMcpServers" => true
       }
       settings["model"] = model if model.present?
       settings
