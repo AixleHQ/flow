@@ -40,6 +40,7 @@ export interface Skill {
 
 export interface RegistrySkill {
   id: string;
+  slug: string;
   name: string;
   source: string;
   installs: number;
@@ -269,9 +270,12 @@ function RegistrySearchModal({
   const sortedResults = useMemo(() => [...results].sort((a, b) => b.installs - a.installs), [results]);
 
   const debouncedSearch = useDebouncedCallback((q: string) => {
+    const trimmed = q.trim();
+    if (trimmed.length > 0 && trimmed.length < 2) return;
+
     setSearching(true);
     router.reload({
-      data: { q: q || undefined },
+      data: { q: trimmed || undefined },
       only: ['registryQuery', 'registryResults'],
       onFinish: () => setSearching(false),
     });
@@ -308,11 +312,7 @@ function RegistrySearchModal({
     }
   };
 
-  const packageFromId = (id: string) => {
-    const parts = id.split('/');
-    if (parts.length >= 3) return `${parts[0]}/${parts[1]}@${parts.slice(2).join('/')}`;
-    return id;
-  };
+  const packageFromSkill = (skill: RegistrySkill) => `${skill.source}@${skill.slug}`;
 
   return (
     <Modal
@@ -330,7 +330,7 @@ function RegistrySearchModal({
     >
       <Stack gap="md">
         <TextInput
-          placeholder="Search skills... (e.g. mantine, react, testing, nextjs)"
+          placeholder="Search skills... (min 2 characters, e.g. react, mantine)"
           leftSection={<IconSearch size={16} />}
           rightSection={searching ? <Loader size={14} /> : undefined}
           value={query}
@@ -348,7 +348,7 @@ function RegistrySearchModal({
           >
             <Stack gap="xs">
               {sortedResults.map((skill) => {
-                const pkg = packageFromId(skill.id);
+                const pkg = packageFromSkill(skill);
                 const isInstalled = installedPackages.has(pkg);
 
                 return (
