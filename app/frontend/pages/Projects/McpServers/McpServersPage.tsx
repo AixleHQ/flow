@@ -26,7 +26,8 @@ const McpServersPage = () => {
         configItemNames={configItemNames}
         basePath={`/company/projects/${project.id}/mcp_servers`}
         title="Project MCP Servers"
-        subtitle="Manage project-specific MCP servers."
+        subtitle="Manage project-specific MCP servers. Company servers are read-only here."
+        editableScope="project"
       />
     </>
   );

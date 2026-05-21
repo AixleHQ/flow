@@ -40,15 +40,37 @@ export interface McpServer {
   updatedAt: string;
 }
 
+type EditableScope = 'company' | 'project';
+
 interface McpServersContentProps {
   mcpServers: McpServer[];
   configItemNames: string[];
   basePath: string;
   title: string;
   subtitle: string;
+  editableScope?: EditableScope;
 }
 
-export function McpServersContent({ mcpServers, configItemNames, basePath, title, subtitle }: McpServersContentProps) {
+function canEditServer(server: McpServer, editableScope?: EditableScope): boolean {
+  if (server.kind !== 'custom') return false;
+  if (!editableScope) return true;
+  return server.scopeIndicator === editableScope;
+}
+
+function readOnlyLabel(server: McpServer, editableScope?: EditableScope): string {
+  if (server.internal) return 'System';
+  if (editableScope === 'project' && server.scopeIndicator === 'company') return 'Company';
+  return 'Read-only';
+}
+
+export function McpServersContent({
+  mcpServers,
+  configItemNames,
+  basePath,
+  title,
+  subtitle,
+  editableScope,
+}: McpServersContentProps) {
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('custom');
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -182,7 +204,7 @@ export function McpServersContent({ mcpServers, configItemNames, basePath, title
             </Table.Thead>
             <Table.Tbody>
               {filtered.map((server) => {
-                const canEdit = server.kind === 'custom';
+                const canEdit = canEditServer(server, editableScope);
                 return (
                   <Table.Tr key={server.id}>
                     <Table.Td>
@@ -209,8 +231,22 @@ export function McpServersContent({ mcpServers, configItemNames, basePath, title
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={server.scopeIndicator === 'internal' ? 'violet' : 'blue'} size="sm" variant="light">
-                        {server.scopeIndicator === 'internal' ? 'System' : 'Company'}
+                      <Badge
+                        color={
+                          server.scopeIndicator === 'internal'
+                            ? 'violet'
+                            : server.scopeIndicator === 'project'
+                              ? 'teal'
+                              : 'blue'
+                        }
+                        size="sm"
+                        variant="light"
+                      >
+                        {server.scopeIndicator === 'internal'
+                          ? 'System'
+                          : server.scopeIndicator === 'project'
+                            ? 'Project'
+                            : 'Company'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
@@ -239,9 +275,18 @@ export function McpServersContent({ mcpServers, configItemNames, basePath, title
                             </Tooltip>
                           </>
                         ) : (
-                          <Text fz={12} c="dimmed">
-                            {server.internal ? 'System' : 'Read-only'}
-                          </Text>
+                          <Tooltip
+                            label={
+                              editableScope === 'project' && server.scopeIndicator === 'company'
+                                ? 'Edit in Company MCP Servers'
+                                : undefined
+                            }
+                            disabled={editableScope !== 'project' || server.scopeIndicator !== 'company'}
+                          >
+                            <Text fz={12} c="dimmed">
+                              {readOnlyLabel(server, editableScope)}
+                            </Text>
+                          </Tooltip>
                         )}
                       </Group>
                     </Table.Td>

@@ -3,7 +3,7 @@
 class Web::Company::Projects::MCPServersController < Web::Company::Projects::ApplicationController
   def index
     servers = MCPServer.visible_for_project(current_project).order(kind: :asc, created_at: :desc)
-    config_items = current_company.config_items.pluck(:name)
+    config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
 
     render inertia: "Projects/McpServers/McpServersPage", props: {
       project: project_props,
