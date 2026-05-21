@@ -101,6 +101,7 @@ module Agents
       assert_equal "sk-xxx", main["primaryApiKey"]
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+      assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
     test "config_files writes claudeAiOauth to .credentials.json (OAuth path)" do
@@ -201,6 +202,7 @@ module Agents
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
       assert_equal "api.anthropic.com", env["MITM_TRACKED_DOMAINS"]
       assert_includes env["OTEL_RESOURCE_ATTRIBUTES"], @session.route_token
+      assert_equal "90000", env["MCP_TIMEOUT"]
     end
 
     # == Ingest Usage ==

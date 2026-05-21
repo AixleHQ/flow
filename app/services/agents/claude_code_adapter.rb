@@ -199,7 +199,9 @@ module Agents
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
         "OTEL_METRICS_EXPORTER" => "otlp",
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
-        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes
+        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes,
+        # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
+        "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
       }.compact
     end
 
@@ -405,7 +407,10 @@ module Agents
           "ask" => []
         },
         "bypassPermissionsWarningAccepted" => true,
-        "enableAllProjectMcpServers" => true
+        "enableAllProjectMcpServers" => true,
+        "env" => {
+          "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
+        }
       }
       settings["model"] = model if model.present?
       settings
