@@ -15,7 +15,14 @@ class IntegrationResource < ApplicationResource
     next nil unless integration.github?
 
     iid = integration.installation_id
-    "https://github.com/settings/installations/#{iid}" if iid.present?
+    next nil if iid.blank?
+
+    app_slug = Settings.github.app_slug
+    if app_slug.present?
+      "https://github.com/apps/#{app_slug}/installations/#{iid}"
+    else
+      "https://github.com/settings/installations/#{iid}"
+    end
   end
 
   attribute :connected_by do |integration|
