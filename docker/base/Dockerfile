@@ -11,7 +11,7 @@
 #   - ttyd (web terminal)
 #   - OpenVSCode Server (browser IDE)
 #   - MITM proxy for request/response logging
-#   - Common development tools
+#   - Common development tools (pipx for Python MCP servers, e.g. pipx run analytics-mcp)
 # =============================================================================
 FROM node:22-slim
 
@@ -45,6 +45,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Build tools (for native npm modules)
     python3 \
     python3-pip \
+    pipx \
     make \
     g++
 
