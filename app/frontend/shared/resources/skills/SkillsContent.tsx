@@ -27,7 +27,7 @@ export interface Skill {
   title: string | null;
   description: string | null;
   package: string;
-  source: string;
+  source: string | null;
   sourceUrl: string | null;
   installCount: number;
   scopeType: string | null;
@@ -77,13 +77,14 @@ export function SkillsContent({
     const q = filterSearch.toLowerCase();
     return skills.filter(
       (s) =>
-        s.name.toLowerCase().includes(q) ||
+        (s.name?.toLowerCase().includes(q) ?? false) ||
         (s.title?.toLowerCase().includes(q) ?? false) ||
-        s.source.toLowerCase().includes(q),
+        (s.source?.toLowerCase().includes(q) ?? false),
     );
   }, [skills, filterSearch]);
 
   const installedPackages = useMemo(() => new Set(skills.map((s) => s.package)), [skills]);
+  const isProjectPage = basePath.includes('/projects/');
 
   return (
     <Box>
@@ -160,17 +161,25 @@ export function SkillsContent({
                     {skill.scopeIndicator}
                   </Badge>
                 </Group>
-                <Tooltip label="Remove">
-                  <ActionIcon
-                    variant="subtle"
-                    size="sm"
-                    color="red"
-                    onClick={() => setDeleteSkill(skill)}
-                    style={{ flexShrink: 0 }}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
-                </Tooltip>
+                {isProjectPage && skill.scopeIndicator === 'company' ? (
+                  <Tooltip label="Company skills can only be removed from Company Skills by an admin">
+                    <ActionIcon variant="subtle" size="sm" color="gray" disabled style={{ flexShrink: 0 }}>
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                ) : (
+                  <Tooltip label="Remove">
+                    <ActionIcon
+                      variant="subtle"
+                      size="sm"
+                      color="red"
+                      onClick={() => setDeleteSkill(skill)}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Tooltip>
+                )}
               </Group>
 
               {skill.title && skill.title !== skill.name && (
