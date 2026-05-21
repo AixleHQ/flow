@@ -16,6 +16,7 @@ function McpServersIndex({ mcpServers, configItemNames }: Props) {
         basePath="/company/mcp_servers"
         title="Company MCP Servers"
         subtitle="Manage company-wide MCP servers. Configure external tools like Context7, Tavily, etc."
+        editableScope="company"
       />
     </AuthLayout>
   );
