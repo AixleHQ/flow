@@ -177,7 +177,7 @@ module Agents
       windows = build_rpc_windows(mitm_log)
 
       if windows.empty?
-        Rails.logger.warn("[CursorCliAdapter] No AgentService/Run requests in log for session #{terminal_session.id}")
+        Rails.logger.warn("[CursorCliAdapter] No completed AgentService runs in log for session #{terminal_session.id}")
         return
       end
 
@@ -344,41 +344,77 @@ module Agents
                    matched_count: matched.size } }
     end
 
-    # Build correlation windows from http2-logger entries.
+    AGENT_SERVICE_RUN_PATH = "/agent.v1.AgentService/Run"
+    AGENT_SERVICE_RUN_SSE_PATH = "/agent.v1.AgentService/RunSSE"
+
+    # Build correlation windows from MITM + http2-logger entries.
     #
-    # Pairs request + response entries by x-request-id.
-    # Response timestamp ≈ billing timestamp + ~25ms network latency,
-    # so it's a much better correlation anchor than request timestamp.
+    # HTTP/2 Run (legacy): http2-logger pairs request/response by x-request-id.
+    # HTTP/1 RunSSE (useHttp1ForAgent): mitmproxy logs requests with x-request-id but
+    # streaming responses often omit it — pair those by FIFO order per path.
     def build_rpc_windows(log_content)
-      requests = {}   # request_id → { start_ms:, request_id: }
-      responses = {}  # request_id → response_ms
+      requests = {}        # request_id → { start_ms:, request_id:, path: }
+      responses = {}       # request_id → response_ms
+      pending_by_path = {} # path → [request_id] awaiting a response
 
       (log_content || "").each_line do |line|
         entry = JSON.parse(line.strip)
-        next unless entry["_source"] == "http2-logger"
-        next unless (entry["path"] || "").include?("AgentService")
+        next unless agent_service_run_path?(entry["path"])
 
-        rid = entry.dig("headers", "x-request-id") || ""
+        path = entry["path"]
         ts = parse_iso_to_epoch_ms(entry["ts"])
         next unless ts
+        source = entry["_source"]
+        rid = extract_request_id(entry)
 
         case entry["direction"]
         when "request"
-          requests[rid] = { start_ms: ts, request_id: rid }
+          next if source == "node-http-logger"
+          next if rid.blank?
+
+          requests[rid] = { start_ms: ts, request_id: rid, path: path }
+          (pending_by_path[path] ||= []) << rid
         when "response"
-          responses[rid] = ts
+          if source == "node-http-logger"
+            assign_response_timestamp!(responses, pending_by_path, path, ts)
+            next
+          end
+
+          if rid.present?
+            responses[rid] = ts unless responses.key?(rid)
+            pending_by_path[path]&.delete(rid)
+          else
+            assign_response_timestamp!(responses, pending_by_path, path, ts)
+          end
         end
       rescue JSON::ParserError
         next
       end
 
-      # Merge response timestamps into windows
-      windows = requests.values.map do |w|
-        w[:response_ms] = responses[w[:request_id]]
-        w
-      end
+      requests.values.filter_map do |w|
+        response_ms = responses[w[:request_id]]
+        next unless response_ms
 
-      windows.sort_by { |w| w[:start_ms] }
+        w.merge(response_ms: response_ms)
+      end.sort_by { |w| w[:start_ms] }
+    end
+
+    def assign_response_timestamp!(responses, pending_by_path, path, ts)
+      pending_rid = pending_by_path.dig(path)&.first
+      return if pending_rid.blank?
+      return if responses.key?(pending_rid)
+
+      responses[pending_rid] = ts
+      pending_by_path[path].shift
+    end
+
+    def agent_service_run_path?(path)
+      path == AGENT_SERVICE_RUN_PATH || path == AGENT_SERVICE_RUN_SSE_PATH
+    end
+
+    def extract_request_id(entry)
+      headers = entry["headers"] || {}
+      headers["x-request-id"].presence || headers["X-Request-Id"].presence
     end
 
     # Match API events to RPC windows: [response_ms, response_ms + 500ms].
@@ -506,7 +542,9 @@ module Agents
         # Optional fields
         "hasChangedDefaultModel" => false,
         "network" => {
-          "useHttp1ForAgent" => false  # Better proxy compatibility
+          # HTTP/2 AgentService/Run to api5 bypasses MITM proxy and hangs in interactive mode.
+          # HTTP/1 routes through HTTPS_PROXY so mitmproxy + usage logging work.
+          "useHttp1ForAgent" => true
         },
         "attribution" => {
           "attributeCommitsToAgent" => true,

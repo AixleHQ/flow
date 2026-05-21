@@ -95,6 +95,7 @@ module Agents
       assert_equal 1, cli_config["version"]
       assert cli_config["permissions"]["allow"].include?("Shell(git)")
       assert cli_config["permissions"]["deny"].include?("Shell(sudo)")
+      assert cli_config.dig("network", "useHttp1ForAgent")
 
       # Workspace trust
       trust_path = "/home/cursor/.cursor/projects/project/.workspace-trusted"
@@ -110,6 +111,47 @@ module Agents
 
       trust_path = "/home/cursor/.cursor/projects/workspace/.workspace-trusted"
       assert files.key?(trust_path)
+    end
+
+    test "build_rpc_windows pairs http2 Run request and response by x-request-id" do
+      log = [
+        { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" }
+      ].map(&:to_json).join("\n")
+
+      windows = @adapter.send(:build_rpc_windows, log)
+
+      assert_equal 1, windows.size
+      assert_equal "req-1", windows.first[:request_id]
+      assert windows.first[:response_ms].present?
+    end
+
+    test "build_rpc_windows pairs mitm RunSSE when response omits x-request-id" do
+      log = [
+        { ts: "2026-05-21T19:43:56.338089Z", direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "req-sse-1" } },
+        { ts: "2026-05-21T19:43:57.033Z", direction: "response", status_code: 200,
+          path: "/agent.v1.AgentService/RunSSE", _source: "node-http-logger" },
+        { ts: "2026-05-21T19:44:02.435065Z", direction: "response", status_code: 200,
+          path: "/agent.v1.AgentService/RunSSE", headers: {} }
+      ].map(&:to_json).join("\n")
+
+      windows = @adapter.send(:build_rpc_windows, log)
+
+      assert_equal 1, windows.size
+      assert_equal "req-sse-1", windows.first[:request_id]
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:43:57.033Z"), windows.first[:response_ms]
+    end
+
+    test "build_rpc_windows ignores http2 requests without a matching response" do
+      log = [
+        { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "orphan" }, _source: "http2-logger" }
+      ].map(&:to_json).join("\n")
+
+      assert_empty @adapter.send(:build_rpc_windows, log)
     end
   end
 end
