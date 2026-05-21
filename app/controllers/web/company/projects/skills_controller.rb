@@ -24,7 +24,19 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
   end
 
   def destroy
-    skill = current_project.skills.find(params[:id])
+    skill = Skill.visible_for_project(current_project).find_by(id: params[:id])
+
+    unless skill
+      redirect_to company_project_skills_path(current_project), alert: "Skill not found"
+      return
+    end
+
+    if skill.scope_type == "Company"
+      redirect_to company_project_skills_path(current_project),
+                  alert: "Company skills can only be removed from Company Skills by a company admin"
+      return
+    end
+
     skill.destroy
     redirect_to company_project_skills_path(current_project), notice: "Skill removed"
   end

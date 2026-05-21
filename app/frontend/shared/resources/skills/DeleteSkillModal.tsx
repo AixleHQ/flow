@@ -1,5 +1,6 @@
 import { router } from '@inertiajs/react';
 import { Box, Button, Group, Modal, Text } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { useState, type FC } from 'react';
 
 interface Skill {
@@ -24,8 +25,11 @@ export const DeleteSkillModal: FC<DeleteSkillModalProps> = ({ opened, onClose, s
     setLoading(true);
     router.delete(`${basePath}/${skill.id}`, {
       preserveScroll: true,
-      onFinish: () => setLoading(false),
       onSuccess: () => onClose(),
+      onError: () => {
+        notifications.show({ message: 'Failed to delete skill', color: 'red' });
+      },
+      onFinish: () => setLoading(false),
     });
   };
 
