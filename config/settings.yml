@@ -81,6 +81,9 @@ encryption:
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || "integrations test key" %>
 
+skills_sh:
+  api_key: <%= ENV['SKILLS_SH_API_KEY'] %>
+
 github:
   app_id: <%= ENV['GITHUB_APP_ID'] %>
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
