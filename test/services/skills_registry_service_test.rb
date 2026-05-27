@@ -17,9 +17,55 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_equal [], SkillsRegistryService.search("a")
   end
 
-  test "search returns empty array when api key is missing" do
+  test "search falls back to public endpoint when api key is missing" do
     Settings.skills_sh.api_key = nil
-    assert_equal [], SkillsRegistryService.search("react")
+
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "react", limit: "100" })
+      .to_return(
+        status: 200,
+        body: [
+          { id: "vercel-labs/agent-skills/react", slug: "react", name: "React", source: "vercel-labs/agent-skills", installs: 100 }
+        ].to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    results = SkillsRegistryService.search("react")
+
+    assert_equal 1, results.size
+    assert_equal "vercel-labs/agent-skills/react", results.first[:id]
+    assert_equal "React", results.first[:name]
+  end
+
+  test "search public fallback handles data-wrapped response" do
+    Settings.skills_sh.api_key = nil
+
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "rails", limit: "100" })
+      .to_return(
+        status: 200,
+        body: {
+          data: [
+            { id: "org/skills/rails", slug: "rails", name: "Rails", source: "org/skills", installs: 42 }
+          ]
+        }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    results = SkillsRegistryService.search("rails")
+
+    assert_equal 1, results.size
+    assert_equal "Rails", results.first[:name]
+  end
+
+  test "search public fallback returns empty array on HTTP error" do
+    Settings.skills_sh.api_key = nil
+
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "ruby", limit: "100" })
+      .to_return(status: 503, body: "")
+
+    assert_equal [], SkillsRegistryService.search("ruby")
   end
 
   test "search maps v1 response and filters duplicates" do
