@@ -12,9 +12,11 @@ require "uri"
 # Actual skill files are installed via `npx skills add` inside the container.
 class SkillsRegistryService
   API_BASE = "https://skills.sh/api/v1"
+  PUBLIC_API_BASE = "https://www.skills.sh/api"
   SEARCH_TIMEOUT = 5
   FETCH_TIMEOUT = 10
   SEARCH_LIMIT = 50
+  PUBLIC_SEARCH_LIMIT = 100
   MIN_QUERY_LENGTH = 2
 
   class RegistryError < StandardError; end
@@ -26,7 +28,8 @@ class SkillsRegistryService
   def self.search(query, limit: SEARCH_LIMIT)
     query = query.to_s.strip
     return [] if query.length < MIN_QUERY_LENGTH
-    return [] unless api_key.present?
+
+    return search_public(query) unless api_key.present?
 
     uri = URI("#{API_BASE}/skills/search")
     uri.query = URI.encode_www_form(q: query, limit: limit.clamp(1, 200))
@@ -38,6 +41,23 @@ class SkillsRegistryService
     (data["data"] || []).reject { |s| s["isDuplicate"] }.map { |s| map_search_skill(s) }
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Search failed: #{e.message}")
+    []
+  end
+
+  # Unauthenticated fallback using the public skills.sh search endpoint.
+  # Used when no API key is configured.
+  def self.search_public(query)
+    uri = URI("#{PUBLIC_API_BASE}/search")
+    uri.query = URI.encode_www_form(q: query, limit: PUBLIC_SEARCH_LIMIT)
+
+    response = http_get(uri, timeout: SEARCH_TIMEOUT)
+    return [] unless response.is_a?(Net::HTTPSuccess)
+
+    body = JSON.parse(response.body)
+    items = body.is_a?(Array) ? body : (body["data"] || body["results"] || [])
+    items.map { |s| map_public_search_skill(s) }
+  rescue StandardError => e
+    Rails.logger.error("[SkillsRegistry] Public search failed: #{e.message}")
     []
   end
 
@@ -115,6 +135,16 @@ class SkillsRegistryService
     }
   end
 
+  def self.map_public_search_skill(skill)
+    {
+      id: skill["id"],
+      slug: skill["slug"] || skill["name"],
+      name: skill["name"] || skill["slug"],
+      source: skill["source"],
+      installs: skill["installs"] || skill["install_count"] || 0
+    }
+  end
+
   def self.source_url_for(source)
     if source.match?(%r{\A[\w.-]+/[\w.-]+\z})
       "https://github.com/#{source}"
@@ -177,5 +207,6 @@ class SkillsRegistryService
     http.request(request)
   end
 
-  private_class_method :map_search_skill, :skill_md_content, :source_url_for, :detail_uri, :api_key, :http_get
+  private_class_method :map_search_skill, :map_public_search_skill, :search_public,
+                       :skill_md_content, :source_url_for, :detail_uri, :api_key, :http_get
 end
