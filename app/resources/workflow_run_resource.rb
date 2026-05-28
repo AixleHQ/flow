@@ -3,10 +3,15 @@
 class WorkflowRunResource < ApplicationResource
   attributes :id, :workflow_id, :project_id, :user_id,
              :state, :started_at, :completed_at,
-             :created_at, :updated_at
+             :created_at, :updated_at,
+             :failure_reason, :failed_agent_credential_id
 
   attribute :mode do |run|
     run.mode.to_s
+  end
+
+  attribute :failed_account_name do |run|
+    run.failed_agent_credential&.agent_type
   end
 
   attribute :workflow_name do |run|

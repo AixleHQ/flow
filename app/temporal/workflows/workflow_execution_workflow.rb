@@ -73,6 +73,8 @@ module Workflows
       @step_run_to_step_id = {}
       # step_id -> new_step_run_id, set when a user-initiated retry creates a new step_run
       @retry_overrides = {}
+      # step_run_ids where CompleteStepActivity detected a quota error — must never be retried
+      @quota_error_step_run_ids = {}
     end
 
     def final_status
@@ -276,6 +278,7 @@ module Workflows
 
     def recover_from_step_completion_failure(step_data, step_run_id, failed_outcome)
       return failed_outcome if failed_outcome != :failed
+      return :failed if @quota_error_step_run_ids[step_run_id]
 
       sid = step_data["step_id"]
       @step_failure_counts[sid] = (@step_failure_counts[sid] || 0) + 1
@@ -339,6 +342,7 @@ module Workflows
     def complete_step(step_run_id)
       result = execute_activity(activities.workflow_complete_step_activity,
         { step_run_id: step_run_id }, start_to_close_timeout: 300)
+      @quota_error_step_run_ids[step_run_id] = true if result["quota_error"]
       result["failed"] ? :failed : :completed
     end
 

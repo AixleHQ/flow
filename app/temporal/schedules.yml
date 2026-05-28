@@ -9,3 +9,7 @@ schedules:
   - workflow: dismissed_asset_cleanup_workflow
     cron: "0 3 * * *"
     enabled: true
+
+  - workflow: quota_error_scan_workflow
+    cron: "* * * * *"
+    enabled: true

@@ -277,4 +277,31 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end
+
+  test "check_auto_trigger does not start workflow when last run failed with quota_exceeded" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+    run = create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
+    run.update_columns(failure_reason: "quota_exceeded")
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:start).never
+
+    TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+  end
+
+  test "check_auto_trigger starts workflow when last run has no quota failure" do
+    workflow = create(:workflow, scope: @company)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+    create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+  end
 end

@@ -30,8 +30,9 @@ class StepRun < ApplicationRecord
     update!(state: :completed, completed_at: Time.current)
   end
 
-  def mark_failed!(message = nil)
-    update!(state: :failed, completed_at: Time.current, error_message: message)
+  def mark_failed!(message = nil, error_category: nil)
+    update!(state: :failed, completed_at: Time.current, error_message: message,
+            error_category: error_category&.to_s)
   end
 
   def mark_skipped!(reason = nil)
