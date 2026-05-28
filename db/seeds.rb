@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+# Stop here in production environment
+if Rails.env.production?
+  puts "Skipping all seed data creation in production environment"
+  return
+end
+
 # Create super admin user (platform-level admin)
 puts "Creating super admin user..."
 super_admin_email = Settings.admin.email
@@ -14,10 +20,21 @@ super_admin = User.find_or_create_by!(email: super_admin_email) do |user|
   user.state = :active
 end
 
+require_relative "seeds/platform_tools"
+Seeds::PlatformTools.seed!
+
+
+require_relative "seeds/aixle_builder"
+Seeds::AixleBuilder.seed!
+
+seed_company_slug = ENV.fetch("SEED_COMPANY_SLUG", "demo")
+seed_company_name = ENV.fetch("SEED_COMPANY_NAME", "Demo Company")
+seed_company_email_domain = ENV.fetch("SEED_COMPANY_EMAIL_DOMAIN", "example.com")
+
 puts "Creating test company..."
-test_company = Company.find_or_create_by!(slug: "dualboot") do |company|
-  company.name = "Dualboot Partners"
-  company.email_domain = "dualbootpartners.com"
+test_company = Company.find_or_create_by!(slug: seed_company_slug) do |company|
+  company.name = seed_company_name
+  company.email_domain = seed_company_email_domain
   company.state = :active
   company.auto_accept_users = true
   company.settings = {
@@ -28,25 +45,26 @@ end
 
 puts "Test company created: #{test_company.name} (#{test_company.email_domain})"
 
-require_relative "seeds/platform_tools"
-Seeds::PlatformTools.seed!
-
-
-require_relative "seeds/aixle_builder"
-Seeds::AixleBuilder.seed!
-
-# Stop here in production environment
-if Rails.env.production?
-  puts "Skipping test data creation in production environment"
-  return
-end
-
 puts "Creating test users..."
 test_password = Settings.admin.password
+seed_company_admin_email = ENV.fetch("SEED_COMPANY_ADMIN_EMAIL", "admin@#{seed_company_email_domain}")
+
+company_admin = User.find_or_create_by!(email: seed_company_admin_email) do |user|
+  user.name = "Company Admin"
+  user.password = test_password
+  user.password_confirmation = test_password
+  user.state = :active
+  user.role = :admin
+  user.company = test_company
+  user.position = :pm_po_ba
+  user.preferred_agent_language = "en"
+  user.onboarding_completed_at = Time.current
+end
+puts "User created: #{company_admin.email} (company admin)"
 
 # Company users with onboarding completed
-artem = User.find_or_create_by!(email: "artem@dualbootpartners.com") do |user|
-  user.name = "Artem"
+john = User.find_or_create_by!(email: "john@#{seed_company_email_domain}") do |user|
+  user.name = "John"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
@@ -55,10 +73,10 @@ artem = User.find_or_create_by!(email: "artem@dualbootpartners.com") do |user|
   user.preferred_agent_language = "en"
   user.onboarding_completed_at = Time.current
 end
-puts "User created: #{artem.email}"
+puts "User created: #{john.email}"
 
-andrey = User.find_or_create_by!(email: "andrey@dualbootpartners.com") do |user|
-  user.name = "Andrey"
+joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do |user|
+  user.name = "Joane"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
@@ -67,10 +85,10 @@ andrey = User.find_or_create_by!(email: "andrey@dualbootpartners.com") do |user|
   user.preferred_agent_language = "ru"
   user.onboarding_completed_at = Time.current
 end
-puts "User created: #{andrey.email}"
+puts "User created: #{joane.email}"
 
-alex = User.find_or_create_by!(email: "alex@dualbootpartners.com") do |user|
-  user.name = "Alexander"
+ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |user|
+  user.name = "Ivan"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
@@ -79,63 +97,101 @@ alex = User.find_or_create_by!(email: "alex@dualbootpartners.com") do |user|
   user.preferred_agent_language = "en"
   user.onboarding_completed_at = Time.current
 end
-puts "User created: #{alex.email}"
+puts "User created: #{ivan.email}"
 
 # Create agent credentials for test users
 puts "Creating test agent credentials..."
-AgentCredential.find_or_create_by!(user: artem, agent_type: "claude_code") do |cred|
+AgentCredential.find_or_create_by!(user: john, agent_type: "claude_code") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: artem, agent_type: "cursor_cli") do |cred|
+AgentCredential.find_or_create_by!(user: john, agent_type: "cursor_cli") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: andrey, agent_type: "codex") do |cred|
+AgentCredential.find_or_create_by!(user: joane, agent_type: "codex") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: alex, agent_type: "claude_code") do |cred|
+AgentCredential.find_or_create_by!(user: ivan, agent_type: "claude_code") do |cred|
   cred.config_data = { "test" => "data" }
 end
 puts "Agent credentials created"
 
 puts "Creating test projects..."
 
-# Project 1: Aixle MVP - owned by Artem
-aixle_project = Project.find_or_create_by!(company: test_company, slug: "aixle-mvp") do |project|
-  project.name = "Aixle MVP"
-  project.description = "MVP development of Aixle platform"
+# Project 1: Demo Alpha - owned by John
+primary_project = Project.find_or_create_by!(company: test_company, slug: "demo-alpha") do |project|
+  project.name = "Demo Alpha"
+  project.description = "Primary demo project for onboarding"
   project.state = :active
-  project.owner = artem
+  project.owner = john
   project.settings = {
     linear_team_id: nil,
-    github_repo: "aixle/aixle"
+    github_repo: "demo/demo-alpha"
   }
 end
 
 # Add collaborators
-aixle_project.add_collaborator(andrey)
-aixle_project.add_collaborator(alex)
+primary_project.add_collaborator(joane)
+primary_project.add_collaborator(ivan)
 
-puts "Project created: #{aixle_project.name} (owner: #{aixle_project.owner.name}, collaborators: #{aixle_project.collaborators.count})"
+puts "Project created: #{primary_project.name} (owner: #{primary_project.owner.name}, collaborators: #{primary_project.collaborators.count})"
 
-# Project 2: Agent Research - owned by Andrey
-research_project = Project.find_or_create_by!(company: test_company, slug: "agent-research") do |project|
-  project.name = "Agent Research"
-  project.description = "Research and testing of different AI coding agents"
+# Project 2: Demo Beta - owned by Joane
+research_project = Project.find_or_create_by!(company: test_company, slug: "demo-beta") do |project|
+  project.name = "Demo Beta"
+  project.description = "Secondary demo project for experimentation"
   project.state = :active
-  project.owner = andrey
+  project.owner = joane
   project.settings = {}
 end
 
-research_project.add_collaborator(alex)
+research_project.add_collaborator(ivan)
 
 puts "Project created: #{research_project.name} (owner: #{research_project.owner.name}, collaborators: #{research_project.collaborators.count})"
 
 # Agents are seeded per-workflow in db/seeds/ files
 
 # ===========================================================================
+# Board demo data
+# ===========================================================================
+puts "Creating board demo data..."
+
+demo_board = Board.find_or_create_by!(project: primary_project) do |board|
+  board.name = "Development Board"
+end
+
+board_columns_data = [
+  { name: "Backlog", position: 1, purpose: "Planned work and ideas" },
+  { name: "In Progress", position: 2, purpose: "Tasks currently in delivery" },
+  { name: "Done", position: 3, purpose: "Completed tasks" }
+]
+
+board_columns_data.each do |column_data|
+  column = demo_board.board_columns.find_or_initialize_by(name: column_data[:name])
+  column.update!(
+    position: column_data[:position],
+    purpose: column_data[:purpose]
+  )
+end
+
+backlog_column = demo_board.board_columns.find_by!(name: "Backlog")
+demo_task = demo_board.board_tasks.find_or_initialize_by(title: "Set up project workflows")
+demo_task.update!(
+  board_column: backlog_column,
+  assignee: john,
+  task_type: :story,
+  priority: :medium,
+  description: "Initial workflow setup task created by seeds",
+  tags: [ "seed", "demo" ]
+)
+
+puts "Board seeded: #{demo_board.name} (#{demo_board.board_columns.count} columns, #{demo_board.board_tasks.count} tasks)"
+
+# ===========================================================================
 # MCP Servers
 # ===========================================================================
 puts "Creating MCP servers..."
+context7_api_key = ENV["CONTEXT7_API_KEY"].to_s.strip
+context7_headers = context7_api_key.empty? ? {} : { CONTEXT7_API_KEY: context7_api_key }
 
 # Company-scoped MCP servers
 company_mcp_servers = [
@@ -145,7 +201,7 @@ company_mcp_servers = [
     description: "Library documentation search. Retrieves up-to-date API docs, code examples, and best practices for programming libraries and frameworks.",
     url: "https://mcp.context7.com/mcp",
     transport: :sse,
-    headers: { CONTEXT7_API_KEY: "REDACTED_CONTEXT7_API_KEY" }
+    headers: context7_headers
   }
 ]
 
@@ -162,7 +218,7 @@ company_mcp_servers.each do |server_data|
   puts "  MCP Server created: #{server.display_name} (company)"
 end
 
-puts "Creating config items for MCP server authentication..."
+puts "CONTEXT7_API_KEY is not set. Seeding MCP server without auth headers." if context7_headers.empty?
 
 require_relative "seeds/semgrep"
 Seeds::Semgrep.seed!(test_company)
@@ -176,3 +232,11 @@ puts "Creating workflows..."
 Seeds::CodeReport.seed!(test_company)
 
 puts "Seed data created successfully!"
+puts ""
+puts "========== QUICK START =========="
+puts "App URL: http://localhost:4000"
+puts "Super admin: #{super_admin_email}"
+puts "Company admin: #{company_admin.email}"
+puts "Demo users: #{john.email}, #{joane.email}, #{ivan.email}"
+puts "Password for all seeded users: #{test_password}"
+puts "================================="
