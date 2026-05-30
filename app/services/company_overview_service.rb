@@ -15,10 +15,7 @@ class CompanyOverviewService
   def call
     Result.new(
       sessions_launched: sessions_scope.count,
-      total_spend_cents: UsageStatistic
-        .joins(terminal_session: :user)
-        .merge(sessions_scope)
-        .sum(:cost_cents),
+      total_spend_cents: sessions_scope.sum(:cost_cents),
       workflows_count: workflows_scope.count,
       board_tasks_count: board_tasks_scope.count
     )
