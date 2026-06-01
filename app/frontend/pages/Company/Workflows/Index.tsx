@@ -16,12 +16,25 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDebouncedValue } from '@mantine/hooks';
-import { IconEdit, IconPlus, IconSearch, IconSettings, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconPlus, IconSearch, IconSettings, IconShare, IconTrash } from '@tabler/icons-react';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
 import { AuthLayout } from 'layouts/AuthLayout';
+
+import {
+  PublishWorkflowTemplateModal,
+  type PublishWorkflowTemplateFormValues,
+  type PublishedTemplateMeta,
+} from 'shared/components/PublishWorkflowTemplateModal';
+import {
+  builderCompanyWorkflowPath,
+  companyWorkflowPath,
+  companyWorkflowTemplatesPath,
+  companyWorkflowsPath,
+  publishVersionCompanyWorkflowTemplatePath,
+} from 'shared/routes';
 
 interface Workflow {
   id: number;
@@ -41,6 +54,7 @@ interface Workflow {
 
 interface Props {
   workflows: Workflow[];
+  publishedTemplatesBySource?: Record<number, PublishedTemplateMeta>;
 }
 
 const workflowSchema = z.object({
@@ -49,8 +63,6 @@ const workflowSchema = z.object({
 });
 
 type WorkflowFormValues = z.infer<typeof workflowSchema>;
-
-const basePath = '/company/workflows';
 
 const getStatusDot = (status: string | null) => {
   if (!status) return null;
@@ -87,13 +99,23 @@ const getStatusDot = (status: string | null) => {
 };
 
 const WorkflowsIndex = () => {
-  const { workflows } = usePage<{ props: Props }>().props as unknown as Props;
+  const { workflows, publishedTemplatesBySource = {} } = usePage<{ props: Props }>().props as unknown as Props;
+  const returnTo = companyWorkflowsPath();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [createOpen, setCreateOpen] = useState(false);
   const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
+  const [publishWorkflow, setPublishWorkflow] = useState<Workflow | null>(null);
+  const [publishMode, setPublishMode] = useState<'create' | 'republish'>('create');
+  const [publishInitialValues, setPublishInitialValues] = useState<PublishWorkflowTemplateFormValues>({
+    name: '',
+    description: '',
+    useCase: '',
+    visibility: 'company',
+    changelog: '',
+  });
   const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(() => {
@@ -114,10 +136,12 @@ const WorkflowsIndex = () => {
     initialValues: { name: '', description: '' },
   });
 
+  const existingPublishedTemplate = publishWorkflow ? publishedTemplatesBySource[publishWorkflow.id] : undefined;
+
   const handleCreate = (values: WorkflowFormValues) => {
     setLoading(true);
     router.post(
-      basePath,
+      companyWorkflowsPath(),
       { workflow: values },
       {
         preserveScroll: true,
@@ -134,7 +158,7 @@ const WorkflowsIndex = () => {
     if (!editWorkflow) return;
     setLoading(true);
     router.patch(
-      `${basePath}/${editWorkflow.id}`,
+      companyWorkflowPath(editWorkflow.id),
       { workflow: values },
       {
         preserveScroll: true,
@@ -150,11 +174,58 @@ const WorkflowsIndex = () => {
   const handleDelete = () => {
     if (!deleteWorkflow) return;
     setLoading(true);
-    router.delete(`${basePath}/${deleteWorkflow.id}`, {
+    router.delete(companyWorkflowPath(deleteWorkflow.id), {
       preserveScroll: true,
       onFinish: () => setLoading(false),
       onSuccess: () => setDeleteWorkflow(null),
     });
+  };
+
+  const openPublish = (wf: Workflow) => {
+    const existing = publishedTemplatesBySource[wf.id];
+    setPublishMode(existing ? 'republish' : 'create');
+    setPublishInitialValues({
+      name: existing?.templateName ?? wf.name,
+      description: existing?.description ?? wf.description ?? '',
+      useCase: existing?.useCase ?? '',
+      visibility: (existing?.visibility as 'company' | 'private') ?? 'company',
+      changelog: '',
+    });
+    setPublishWorkflow(wf);
+  };
+
+  const handlePublish = (values: PublishWorkflowTemplateFormValues) => {
+    if (!publishWorkflow) return;
+    setLoading(true);
+
+    const existing = publishedTemplatesBySource[publishWorkflow.id];
+    const onFinish = () => setLoading(false);
+    const onSuccess = () => setPublishWorkflow(null);
+
+    if (existing) {
+      router.post(
+        publishVersionCompanyWorkflowTemplatePath(existing.templateId),
+        {
+          sourceWorkflowId: publishWorkflow.id,
+          changelog: values.changelog,
+          returnTo,
+        },
+        { preserveScroll: true, onFinish, onSuccess },
+      );
+      return;
+    }
+
+    router.post(
+      companyWorkflowTemplatesPath(),
+      {
+        workflowTemplate: {
+          ...values,
+          sourceWorkflowId: publishWorkflow.id,
+          returnTo,
+        },
+      },
+      { preserveScroll: true, onFinish, onSuccess },
+    );
   };
 
   const openEdit = (wf: Workflow) => {
@@ -183,9 +254,19 @@ const WorkflowsIndex = () => {
             size="sm"
           />
         </Group>
-        <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
-          New Workflow
-        </Button>
+        <Group gap="sm">
+          <Button
+            size="sm"
+            variant="light"
+            leftSection={<IconShare size={16} />}
+            onClick={() => router.visit(`${companyWorkflowTemplatesPath()}?return_to=${encodeURIComponent(returnTo)}`)}
+          >
+            Template Catalog
+          </Button>
+          <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
+            New Workflow
+          </Button>
+        </Group>
       </Group>
 
       {filtered.length === 0 ? (
@@ -231,12 +312,17 @@ const WorkflowsIndex = () => {
                     size="xs"
                     variant="outline"
                     leftSection={<IconSettings size={14} />}
-                    onClick={() => router.visit(`${basePath}/${wf.id}/builder`)}
+                    onClick={() => router.visit(builderCompanyWorkflowPath(wf.id))}
                   >
                     Configure
                   </Button>
                 </Tooltip>
                 <Group gap={4}>
+                  <Tooltip label={publishedTemplatesBySource[wf.id] ? 'Publish new version' : 'Publish to catalog'}>
+                    <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => openPublish(wf)}>
+                      <IconShare size={16} />
+                    </ActionIcon>
+                  </Tooltip>
                   <Tooltip label="Edit name & description">
                     <ActionIcon size="sm" variant="subtle" onClick={() => openEdit(wf)}>
                       <IconEdit size={16} />
@@ -254,7 +340,6 @@ const WorkflowsIndex = () => {
         </SimpleGrid>
       )}
 
-      {/* Create Modal */}
       <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow" centered>
         <form onSubmit={createForm.onSubmit(handleCreate)}>
           <Stack gap="md">
@@ -272,7 +357,6 @@ const WorkflowsIndex = () => {
         </form>
       </Modal>
 
-      {/* Edit Modal */}
       <Modal opened={!!editWorkflow} onClose={() => setEditWorkflow(null)} title="Edit Workflow" centered>
         <form onSubmit={editForm.onSubmit(handleEdit)}>
           <Stack gap="md">
@@ -290,7 +374,16 @@ const WorkflowsIndex = () => {
         </form>
       </Modal>
 
-      {/* Delete Confirmation */}
+      <PublishWorkflowTemplateModal
+        opened={!!publishWorkflow}
+        onClose={() => setPublishWorkflow(null)}
+        mode={publishMode}
+        initialValues={publishInitialValues}
+        existingTemplate={existingPublishedTemplate}
+        loading={loading}
+        onSubmit={handlePublish}
+      />
+
       <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Delete Workflow" centered>
         <Text size="sm" mb="md">
           Are you sure you want to delete <strong>{deleteWorkflow?.name}</strong>?

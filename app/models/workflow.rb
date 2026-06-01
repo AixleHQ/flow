@@ -1,9 +1,14 @@
 # frozen_string_literal: true
 
 class Workflow < ApplicationRecord
+  extend Enumerize
+
+  KINDS = %w[standard template_snapshot].freeze
+
   belongs_to :scope, polymorphic: true, optional: true
 
   has_many :steps, dependent: :destroy
+  has_one :workflow_template_version, dependent: :restrict_with_error
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
   has_many :column_workflow_bindings
 
@@ -15,25 +20,33 @@ class Workflow < ApplicationRecord
     base_asset_ids inherit_all_project_resources
   ].freeze
 
+  enumerize :kind, in: KINDS, default: :standard, predicates: true, scope: true
+
   validates :name, presence: true
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
-                                 message: "already exists in this scope" }
+  validates :name, uniqueness: {
+    scope: %i[scope_type scope_id kind],
+    conditions: -> { where(deleted_at: nil) },
+    message: "already exists in this scope"
+  }
   validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
+  validate :template_snapshot_is_immutable, on: :update
 
   scope :active, -> { where(deleted_at: nil) }
+  scope :standard, -> { with_kind(:standard) }
   scope :system, -> { where(scope_type: "System") }
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
-  scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
+  scope :for_company, ->(company) { standard.where(scope_type: "Company", scope_id: company.id) }
+  scope :for_project, ->(project) { standard.where(scope_type: "Project", scope_id: project.id) }
+  scope :template_snapshots, -> { with_kind(:template_snapshot) }
 
   scope :visible_for_project, ->(project) {
-    active.where(scope_type: "Project", scope_id: project.id)
-          .or(active.where(scope_type: "Company", scope_id: project.company_id))
+    active.standard.where(scope_type: "Project", scope_id: project.id)
+          .or(active.standard.where(scope_type: "Company", scope_id: project.company_id))
   }
-  scope :visible_for_company, ->(company) { active.for_company(company) }
+  scope :visible_for_company, ->(company) { active.standard.for_company(company) }
   scope :belonging_to_company, ->(company) {
-    active.where(scope_type: "Company", scope_id: company.id)
-          .or(active.where(scope_type: "Project", scope_id: company.project_ids))
+    active.standard.where(scope_type: "Company", scope_id: company.id)
+          .or(active.standard.where(scope_type: "Project", scope_id: company.project_ids))
   }
 
   def soft_delete!
@@ -107,6 +120,12 @@ class Workflow < ApplicationRecord
 
     unknown = config.keys - ALLOWED_CONFIG_KEYS
     errors.add(:config, "contains unknown keys: #{unknown.join(', ')}") if unknown.any?
+  end
+
+  def template_snapshot_is_immutable
+    return unless template_snapshot?
+
+    errors.add(:base, "Template snapshots cannot be modified")
   end
 
   def purge_steps

@@ -24,6 +24,7 @@ import {
   IconPlug,
   IconServer,
   IconSettings,
+  IconShare,
   IconSlash,
   IconSourceCode,
   IconStar,
@@ -34,6 +35,8 @@ import {
   IconUsers,
 } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
+
+import { companyWorkflowTemplatesPath, companyWorkflowsPath } from 'shared/routes';
 
 import classes from './AppHeader.module.css';
 import type { SharedProps, SharedProject } from './types';
@@ -94,7 +97,8 @@ const dropdownMenus: DropdownMenuConfig[] = [
     icon: <IconBriefcase size={16} />,
     items: [
       { path: '/company/sessions', label: 'Sessions', icon: <IconTerminal2 size={16} /> },
-      { path: '/company/workflows', label: 'Workflows', icon: <IconDeviceDesktopAnalytics size={16} /> },
+      { path: companyWorkflowsPath(), label: 'Workflows', icon: <IconDeviceDesktopAnalytics size={16} /> },
+      { path: companyWorkflowTemplatesPath(), label: 'Templates', icon: <IconShare size={16} /> },
       { path: '/company/assets', label: 'Assets', icon: <IconFileText size={16} />, adminOnly: true },
     ],
   },

@@ -13,6 +13,7 @@ import {
   Textarea,
   Tooltip,
   ActionIcon,
+  Select,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -24,6 +25,7 @@ import {
   IconPlus,
   IconSearch,
   IconSettings,
+  IconShare,
   IconSparkles,
   IconTrash,
   IconWand,
@@ -32,7 +34,17 @@ import { zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
+import {
+  PublishWorkflowTemplateModal,
+  type PublishWorkflowTemplateFormValues,
+  type PublishedTemplateMeta,
+} from 'shared/components/PublishWorkflowTemplateModal';
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
+import {
+  companyWorkflowTemplatesPath,
+  companyProjectWorkflowsPath,
+  publishVersionCompanyWorkflowTemplatePath,
+} from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -76,26 +88,51 @@ interface AgentModelsEntry {
   models: { modelId: string; displayName: string }[];
 }
 
+interface WorkflowTemplateOption {
+  id: number;
+  name: string;
+  description: string | null;
+  useCase: string | null;
+  currentVersionId: number | null;
+  stepsCount: number;
+}
+
 interface Props {
   project: Project;
   workflows: Workflow[];
+  workflowTemplates?: WorkflowTemplateOption[];
+  publishedTemplatesBySource?: Record<number, PublishedTemplateMeta>;
   assets?: NamedItem[];
   repositories?: NamedItem[];
   configuredAgents: string[];
   agentModels?: AgentModelsEntry[];
 }
 
-const workflowSchema = z.object({
+const workflowSchema = z
+  .object({
+    name: z.string().optional(),
+    description: z.string().optional(),
+    workflowTemplateVersionId: z.string().optional(),
+  })
+  .refine((data) => Boolean(data.workflowTemplateVersionId) || Boolean(data.name?.trim()), {
+    message: 'Name is required',
+    path: ['name'],
+  });
+
+const editWorkflowSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   description: z.string().optional(),
 });
 
 type WorkflowFormValues = z.infer<typeof workflowSchema>;
+type EditWorkflowFormValues = z.infer<typeof editWorkflowSchema>;
 
 const WorkflowsPage = () => {
   const {
     project,
     workflows,
+    workflowTemplates = [],
+    publishedTemplatesBySource = {},
     assets: rawAssets,
     repositories: rawRepositories,
     configuredAgents,
@@ -103,7 +140,7 @@ const WorkflowsPage = () => {
   } = usePage<{ props: Props }>().props as unknown as Props;
   const assets = rawAssets ?? [];
   const repositories = rawRepositories ?? [];
-  const basePath = `/company/projects/${project.id}/workflows`;
+  const basePath = companyProjectWorkflowsPath(project.id);
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -111,6 +148,15 @@ const WorkflowsPage = () => {
   const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
   const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
   const [runWorkflow, setRunWorkflow] = useState<Workflow | null>(null);
+  const [publishWorkflow, setPublishWorkflow] = useState<Workflow | null>(null);
+  const [publishMode, setPublishMode] = useState<'create' | 'republish'>('create');
+  const [publishInitialValues, setPublishInitialValues] = useState<PublishWorkflowTemplateFormValues>({
+    name: '',
+    description: '',
+    useCase: '',
+    visibility: 'company',
+    changelog: '',
+  });
   const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(() => {
@@ -123,13 +169,27 @@ const WorkflowsPage = () => {
 
   const createForm = useForm<WorkflowFormValues>({
     validate: zodResolver(workflowSchema),
+    initialValues: { name: '', description: '', workflowTemplateVersionId: '' },
+  });
+
+  const templateOptions = useMemo(
+    () =>
+      workflowTemplates
+        .filter((t) => t.currentVersionId)
+        .map((t) => ({ value: String(t.currentVersionId), label: t.name })),
+    [workflowTemplates],
+  );
+
+  const selectedCreateTemplate = workflowTemplates.find(
+    (t) => String(t.currentVersionId) === String(createForm.values.workflowTemplateVersionId),
+  );
+
+  const editForm = useForm<EditWorkflowFormValues>({
+    validate: zodResolver(editWorkflowSchema),
     initialValues: { name: '', description: '' },
   });
 
-  const editForm = useForm<WorkflowFormValues>({
-    validate: zodResolver(workflowSchema),
-    initialValues: { name: '', description: '' },
-  });
+  const existingPublishedTemplate = publishWorkflow ? publishedTemplatesBySource[publishWorkflow.id] : undefined;
 
   const handleCreate = (values: WorkflowFormValues) => {
     setLoading(true);
@@ -147,7 +207,7 @@ const WorkflowsPage = () => {
     );
   };
 
-  const handleEdit = (values: WorkflowFormValues) => {
+  const handleEdit = (values: EditWorkflowFormValues) => {
     if (!editWorkflow) return;
     setLoading(true);
     router.patch(
@@ -177,12 +237,62 @@ const WorkflowsPage = () => {
   const handleCopyAndConfigure = (wf: Workflow) => {
     setLoading(true);
     router.post(
-      basePath,
-      { workflow: { name: wf.name, description: wf.description } },
+      `${basePath}/${wf.id}/duplicate`,
+      {},
       {
-        preserveScroll: true,
         onFinish: () => setLoading(false),
       },
+    );
+  };
+
+  const openPublish = (wf: Workflow) => {
+    const existing = publishedTemplatesBySource[wf.id];
+    const mode = existing ? 'republish' : 'create';
+    setPublishMode(mode);
+    setPublishInitialValues({
+      name: existing?.templateName ?? wf.name,
+      description: existing?.description ?? wf.description ?? '',
+      useCase: existing?.useCase ?? '',
+      visibility: (existing?.visibility as 'company' | 'private') ?? 'company',
+      changelog: '',
+    });
+    setPublishWorkflow(wf);
+  };
+
+  const handlePublish = (values: PublishWorkflowTemplateFormValues) => {
+    if (!publishWorkflow) return;
+    setLoading(true);
+
+    const existing = publishedTemplatesBySource[publishWorkflow.id];
+    const onFinish = () => setLoading(false);
+    const onSuccess = () => {
+      setPublishWorkflow(null);
+      setPublishMode('create');
+    };
+
+    if (existing) {
+      router.post(
+        publishVersionCompanyWorkflowTemplatePath(existing.templateId),
+        {
+          sourceWorkflowId: publishWorkflow.id,
+          changelog: values.changelog,
+          returnTo: basePath,
+        },
+        { preserveScroll: true, onFinish, onSuccess },
+      );
+      return;
+    }
+
+    router.post(
+      companyWorkflowTemplatesPath(),
+      {
+        workflowTemplate: {
+          ...values,
+          sourceWorkflowId: publishWorkflow.id,
+          returnTo: basePath,
+        },
+      },
+      { preserveScroll: true, onFinish, onSuccess },
     );
   };
 
@@ -281,6 +391,14 @@ const WorkflowsPage = () => {
           <Button
             variant="outline"
             size="sm"
+            leftSection={<IconShare size={16} />}
+            onClick={() => router.visit(`${companyWorkflowTemplatesPath()}?return_to=${encodeURIComponent(basePath)}`)}
+          >
+            Template Catalog
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             leftSection={<IconHistory size={16} />}
             onClick={() => router.visit(`/company/projects/${project.id}/workflow_runs`)}
           >
@@ -359,6 +477,13 @@ const WorkflowsPage = () => {
                     </Tooltip>
                   </Group>
                   <Group gap={4}>
+                    {!isInherited && (
+                      <Tooltip label={publishedTemplatesBySource[wf.id] ? 'Publish new version' : 'Publish to catalog'}>
+                        <ActionIcon size="sm" variant="subtle" color="gray" onClick={() => openPublish(wf)}>
+                          <IconShare size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
                     {isInherited ? (
                       <Tooltip label="Copy & Configure">
                         <ActionIcon
@@ -396,7 +521,38 @@ const WorkflowsPage = () => {
       <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Workflow" centered>
         <form onSubmit={createForm.onSubmit(handleCreate)}>
           <Stack gap="md">
-            <TextInput label="Name" required {...createForm.getInputProps('name')} />
+            {templateOptions.length > 0 && (
+              <>
+                <Select
+                  label="Start from template"
+                  placeholder="Blank workflow"
+                  clearable
+                  data={templateOptions}
+                  {...createForm.getInputProps('workflowTemplateVersionId')}
+                  onChange={(value) => {
+                    createForm.setFieldValue('workflowTemplateVersionId', value ?? '');
+                    if (value) {
+                      const template = workflowTemplates.find((t) => String(t.currentVersionId) === value);
+                      if (template && !createForm.values.name?.trim()) {
+                        createForm.setFieldValue('name', template.name);
+                      }
+                    }
+                  }}
+                />
+                {selectedCreateTemplate && (
+                  <Text size="sm" c="dimmed">
+                    {selectedCreateTemplate.description ||
+                      selectedCreateTemplate.useCase ||
+                      `${selectedCreateTemplate.stepsCount} steps`}
+                  </Text>
+                )}
+              </>
+            )}
+            <TextInput
+              label="Name"
+              required={!createForm.values.workflowTemplateVersionId}
+              {...createForm.getInputProps('name')}
+            />
             <Textarea label="Description" autosize minRows={2} {...createForm.getInputProps('description')} />
             <Group justify="flex-end">
               <Button variant="outline" onClick={() => setCreateOpen(false)}>
@@ -427,6 +583,16 @@ const WorkflowsPage = () => {
           </Stack>
         </form>
       </Modal>
+
+      <PublishWorkflowTemplateModal
+        opened={!!publishWorkflow}
+        onClose={() => setPublishWorkflow(null)}
+        mode={publishMode}
+        initialValues={publishInitialValues}
+        existingTemplate={existingPublishedTemplate}
+        loading={loading}
+        onSubmit={handlePublish}
+      />
 
       {/* Delete Confirmation */}
       <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Delete Workflow" centered>

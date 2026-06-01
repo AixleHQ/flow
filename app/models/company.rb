@@ -19,6 +19,7 @@ class Company < ApplicationRecord
   has_many :integrations, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   has_many :workflows, as: :scope, dependent: :destroy
+  has_many :workflow_templates, dependent: :destroy
   has_many :terminal_sessions, through: :users
 
   # Virtual attributes for initial admin creation (used in admin form)

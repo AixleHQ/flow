@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_01_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -387,11 +387,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.string "slug", null: false
     t.string "state", null: false
     t.datetime "updated_at", null: false
+    t.bigint "workflow_template_version_id"
     t.index ["company_id", "name"], name: "index_projects_on_company_id_and_name", unique: true
     t.index ["company_id", "slug"], name: "index_projects_on_company_id_and_slug", unique: true
     t.index ["company_id"], name: "index_projects_on_company_id"
     t.index ["owner_id"], name: "index_projects_on_owner_id"
     t.index ["state"], name: "index_projects_on_state"
+    t.index ["workflow_template_version_id"], name: "index_projects_on_workflow_template_version_id"
   end
 
   create_table "repositories", force: :cascade do |t|
@@ -798,17 +800,53 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.index ["workflow_id"], name: "index_workflow_runs_on_workflow_id"
   end
 
+  create_table "workflow_template_versions", force: :cascade do |t|
+    t.text "changelog"
+    t.datetime "created_at", null: false
+    t.datetime "published_at", null: false
+    t.bigint "published_by_id", null: false
+    t.bigint "source_workflow_id"
+    t.datetime "updated_at", null: false
+    t.integer "version_number", null: false
+    t.bigint "workflow_id", null: false
+    t.bigint "workflow_template_id", null: false
+    t.index ["published_by_id"], name: "index_workflow_template_versions_on_published_by_id"
+    t.index ["source_workflow_id"], name: "index_workflow_template_versions_on_source_workflow_id"
+    t.index ["workflow_id"], name: "index_workflow_template_versions_on_workflow_id"
+    t.index ["workflow_template_id", "version_number"], name: "index_wf_template_versions_on_template_and_number", unique: true
+    t.index ["workflow_template_id"], name: "index_workflow_template_versions_on_workflow_template_id"
+  end
+
+  create_table "workflow_templates", force: :cascade do |t|
+    t.datetime "archived_at"
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "current_version_id"
+    t.text "description"
+    t.string "name", null: false
+    t.bigint "owner_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "use_case"
+    t.string "visibility", default: "company", null: false
+    t.index ["company_id", "name"], name: "index_workflow_templates_on_company_id_and_name", unique: true
+    t.index ["company_id"], name: "index_workflow_templates_on_company_id"
+    t.index ["current_version_id"], name: "index_workflow_templates_on_current_version_id"
+    t.index ["owner_id"], name: "index_workflow_templates_on_owner_id"
+  end
+
   create_table "workflows", force: :cascade do |t|
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.text "description"
+    t.string "kind", default: "standard", null: false
     t.string "name", null: false
     t.integer "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
-    t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["kind"], name: "index_workflows_on_kind"
+    t.index ["scope_type", "scope_id", "name", "kind"], name: "index_workflows_on_scope_name_and_kind_unique", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
   end
@@ -848,6 +886,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "projects", "workflow_template_versions"
   add_foreign_key "repositories", "integrations"
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
   add_foreign_key "session_input_assets", "terminal_sessions", on_delete: :cascade
@@ -891,4 +930,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   add_foreign_key "workflow_runs", "projects"
   add_foreign_key "workflow_runs", "users"
   add_foreign_key "workflow_runs", "workflows"
+  add_foreign_key "workflow_template_versions", "users", column: "published_by_id"
+  add_foreign_key "workflow_template_versions", "workflow_templates"
+  add_foreign_key "workflow_template_versions", "workflows"
+  add_foreign_key "workflow_template_versions", "workflows", column: "source_workflow_id"
+  add_foreign_key "workflow_templates", "companies"
+  add_foreign_key "workflow_templates", "users", column: "owner_id"
+  add_foreign_key "workflow_templates", "workflow_template_versions", column: "current_version_id"
 end

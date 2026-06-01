@@ -927,11 +927,6 @@ export function companyProjectBoardPath(project_id: ScalarType, options?: object
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "board" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
-/** /company/projects/:project_id/sessions(.:format) */
-export function companyProjectSessionsPath(project_id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
-}
-
 /** /company/projects/:project_id/sessions/:session_id/artifacts/review(.:format) */
 export function reviewCompanyProjectSessionArtifactsPath(project_id: ScalarType, session_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + session_id + "/" + "artifacts" + "/" + "review" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","session_id","format"]);
@@ -940,6 +935,11 @@ export function reviewCompanyProjectSessionArtifactsPath(project_id: ScalarType,
 /** /company/projects/:project_id/sessions/:session_id/artifacts(.:format) */
 export function companyProjectSessionArtifactsPath(project_id: ScalarType, session_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + session_id + "/" + "artifacts" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","session_id","format"]);
+}
+
+/** /company/projects/:project_id/sessions(.:format) */
+export function companyProjectSessionsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/sessions/new(.:format) */
@@ -952,9 +952,19 @@ export function companyProjectSessionPath(project_id: ScalarType, id: ScalarType
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /company/projects/:project_id/workflows/from_template(.:format) */
+export function fromTemplateCompanyProjectWorkflowsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + "from_template" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/workflows/:id/builder(.:format) */
 export function builderCompanyProjectWorkflowPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + id + "/" + "builder" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/workflows/:id/duplicate(.:format) */
+export function duplicateCompanyProjectWorkflowPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + id + "/" + "duplicate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/workflows(.:format) */
@@ -1175,6 +1185,26 @@ export function companyWorkflowsPath(options?: object): string {
 /** /company/workflows/:id(.:format) */
 export function companyWorkflowPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "workflows" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/workflow_templates/:id/publish_version(.:format) */
+export function publishVersionCompanyWorkflowTemplatePath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "workflow_templates" + "/" + id + "/" + "publish_version" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/workflow_templates(.:format) */
+export function companyWorkflowTemplatesPath(options?: object): string {
+  return "/" + "company" + "/" + "workflow_templates" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/workflow_templates/:id(.:format) */
+export function companyWorkflowTemplatePath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "workflow_templates" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/analytics(.:format) */
+export function companyAnalyticsPath(options?: object): string {
+  return "/" + "company" + "/" + "analytics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/assets(.:format) */

@@ -1,21 +1,36 @@
 # frozen_string_literal: true
 
 class WorkflowDuplicator
-  def initialize(source_workflow, target_scope:)
+  def initialize(source_workflow, target_scope:, kind: "standard", name: nil)
     @source = source_workflow
     @target_scope = target_scope
+    @kind = kind
+    @name = name
   end
 
   def duplicate!
     ActiveRecord::Base.transaction do
       new_workflow = @target_scope.workflows.create!(
-        name: unique_name,
+        name: available_name,
         description: @source.description,
-        config: @source.config
+        config: @source.config.deep_dup,
+        kind: @kind
       )
 
+      step_id_map = {}
+      step_pairs = []
+
       @source.steps.not_deleted.order(:position).each do |step|
-        duplicate_step(step, new_workflow)
+        new_step = duplicate_step(step, new_workflow)
+        step_id_map[step.id] = new_step.id
+        step_pairs << [ step, new_step ]
+      end
+
+      step_pairs.each do |source_step, new_step|
+        next if source_step.depends_on_step_ids.blank?
+
+        remapped = source_step.depends_on_step_ids.filter_map { |old_id| step_id_map[old_id] }
+        new_step.update!(depends_on_step_ids: remapped)
       end
 
       new_workflow
@@ -24,9 +39,9 @@ class WorkflowDuplicator
 
   private
 
-  def unique_name
-    base = @source.name
-    existing = @target_scope.workflows.active.where("name LIKE ?", "#{base}%").pluck(:name)
+  def available_name
+    base = @name.presence || @source.name
+    existing = @target_scope.workflows.standard.active.where("name LIKE ?", "#{base}%").pluck(:name)
     return base unless existing.include?(base)
 
     counter = 1
@@ -45,12 +60,16 @@ class WorkflowDuplicator
       skip_policy: step.skip_policy,
       on_failure: step.on_failure,
       max_retries: step.max_retries,
+      preferred_model: step.preferred_model,
+      bmad_enabled: step.bmad_enabled,
+      required_agent_runtime: step.required_agent_runtime,
       input_asset_specs: step.input_asset_specs,
       output_asset_specs: step.output_asset_specs,
       tool_ids: step.tool_ids,
       mcp_server_ids: step.mcp_server_ids,
       skill_ids: step.skill_ids,
-      mount_repositories: step.mount_repositories
+      mount_repositories: step.mount_repositories,
+      depends_on_step_ids: []
     )
 
     step.sub_steps.active.each do |ss|
@@ -62,5 +81,7 @@ class WorkflowDuplicator
         required: ss.required
       )
     end
+
+    new_step
   end
 end
