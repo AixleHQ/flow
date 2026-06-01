@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_02_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -885,7 +885,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_02_130000) do
   add_foreign_key "users", "agent_credentials", column: "default_agent_credential_id"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
-  add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id"
+  add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "workflow_runs"
   add_foreign_key "workflow_runs", "board_tasks"
   add_foreign_key "workflow_runs", "projects"
