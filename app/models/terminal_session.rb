@@ -29,6 +29,7 @@ class TerminalSession < ApplicationRecord
 
   broadcasts_to ->(s) { s }, on: :update
   broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
+  after_commit :broadcast_session_list_update, on: :update
 
   # Validations
   validates :session_type, presence: true, inclusion: {
@@ -204,5 +205,14 @@ class TerminalSession < ApplicationRecord
 
   def generate_mcp_key
     self.mcp_key ||= SecureRandom.urlsafe_base64(32)
+  end
+
+  def broadcast_session_list_update
+    company_id = project&.company_id || user&.company_id
+    return unless company_id
+
+    payload = { type: "session_update", session: TerminalSessionResource.new(self).to_h }
+    ActionCable.server.broadcast("session_list:company:#{company_id}", payload)
+    ActionCable.server.broadcast("session_list:project:#{project_id}", payload) if project_id.present?
   end
 end
