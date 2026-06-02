@@ -32,25 +32,22 @@ export function useSessionListCableUpdates({ projectId, onUpdate }: Options) {
       const consumer = getConsumer();
       const params = projectId != null ? { project_id: projectId } : {};
 
-      sub = consumer.subscriptions.create(
-        { channel: 'SessionListChannel', ...params },
-        {
-          connected() {
-            console.log('[SessionListChannel] connected', { projectId });
-          },
-          disconnected() {
-            console.log('[SessionListChannel] disconnected', { projectId });
-          },
-          rejected() {
-            console.warn('[SessionListChannel] rejected', { projectId });
-          },
-          received(data: { type: string; session: Record<string, unknown> }) {
-            if (data.type === 'session_update') {
-              onUpdateRef.current(data.session);
-            }
-          },
-        } as unknown as Subscription,
-      );
+      sub = consumer.subscriptions.create({ channel: 'SessionListChannel', ...params }, {
+        connected() {
+          console.log('[SessionListChannel] connected', { projectId });
+        },
+        disconnected() {
+          console.log('[SessionListChannel] disconnected', { projectId });
+        },
+        rejected() {
+          console.warn('[SessionListChannel] rejected', { projectId });
+        },
+        received(data: { type: string; session: Record<string, unknown> }) {
+          if (data.type === 'session_update') {
+            onUpdateRef.current(data.session);
+          }
+        },
+      } as unknown as Subscription);
     }, 50);
 
     return () => {

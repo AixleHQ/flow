@@ -4,9 +4,9 @@ import { IconExternalLink, IconPlus } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
-
 import { AuthLayout } from 'layouts/AuthLayout';
+
+import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
 
 interface Session {
   id: number;
