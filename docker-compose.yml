@@ -38,6 +38,18 @@ x-toolbox-environment: &toolbox-environment
   - AWS_ASSUME_ROLE_TTL=24h
 
 services:
+  bootstrap:
+    image: web
+    volumes: *web-volumes
+    environment:
+      <<: *web-environment
+    command: bin/docker-bootstrap check
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    attach: false
+
   temporal:
     image: temporalio/auto-setup:1.29.0
     ports:
@@ -50,7 +62,14 @@ services:
       - POSTGRES_SEEDS=db
       - LOG_LEVEL=error
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/7233' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
     attach: false
 
   temporal-ui:
@@ -75,9 +94,14 @@ services:
       - '4001:4001'
       - '4002:4002'  # MCP server (separate Puma via Procfile.dev)
     depends_on:
-      - db
-      - redis
-      - otlp-ingest
+      bootstrap:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otlp-ingest:
+        condition: service_started
     environment:
       <<: *web-environment
     labels:
@@ -85,9 +109,14 @@ services:
       - "traefik.http.routers.web.rule=PathPrefix(`/api`)"
       - "traefik.http.services.web.loadbalancer.server.port=4000"
     command: dev
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4000/up || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   worker:
-    profiles: [worker]
     image: web
     volumes: *web-volumes
     environment:
@@ -98,8 +127,12 @@ services:
       RAILS_MAX_THREADS: '20'
     command: bin/temporal_worker
     depends_on:
-      - temporal
-      - db
+      bootstrap:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+      db:
+        condition: service_healthy
     stop_grace_period: 20m
     restart: on-failure:5
 
@@ -109,12 +142,22 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     attach: false
 
   redis:
     image: redis:7.2-alpine
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     attach: false
 
   traefik:
