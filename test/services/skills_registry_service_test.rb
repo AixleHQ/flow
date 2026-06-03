@@ -37,7 +37,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_equal "React", results.first[:name]
   end
 
-  test "search public fallback handles data-wrapped response" do
+  test "search public fallback handles skills-wrapped response from live API shape" do
     Settings.skills_sh.api_key = nil
 
     stub_request(:get, "https://www.skills.sh/api/search")
@@ -45,9 +45,18 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
       .to_return(
         status: 200,
         body: {
-          data: [
-            { id: "org/skills/rails", slug: "rails", name: "Rails", source: "org/skills", installs: 42 }
-          ]
+          query: "rails",
+          searchType: "fuzzy",
+          skills: [
+            {
+              id: "org/skills/rails",
+              skillId: "rails",
+              name: "rails",
+              source: "org/skills",
+              installs: 42
+            }
+          ],
+          count: 1
         }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
@@ -55,7 +64,30 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     results = SkillsRegistryService.search("rails")
 
     assert_equal 1, results.size
-    assert_equal "Rails", results.first[:name]
+    assert_equal "org/skills/rails", results.first[:id]
+    assert_equal "rails", results.first[:slug]
+    assert_equal "rails", results.first[:name]
+  end
+
+  test "search public fallback handles data-wrapped response" do
+    Settings.skills_sh.api_key = nil
+
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "mantine", limit: "100" })
+      .to_return(
+        status: 200,
+        body: {
+          data: [
+            { id: "org/skills/mantine", slug: "mantine", name: "Mantine", source: "org/skills", installs: 42 }
+          ]
+        }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    results = SkillsRegistryService.search("mantine")
+
+    assert_equal 1, results.size
+    assert_equal "Mantine", results.first[:name]
   end
 
   test "search public fallback returns empty array on HTTP error" do
@@ -144,14 +176,38 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_equal 24_531, skill.install_count
   end
 
-  test "install raises when api key is missing" do
+  test "install works without api key via github fallback" do
     Settings.skills_sh.api_key = nil
+    skill_id = "vercel-labs/agent-skills/vercel-react-best-practices"
+    skill_md = <<~MD
+      ---
+      name: vercel-react-best-practices
+      description: React best practices
+      ---
 
-    error = assert_raises(SkillsRegistryService::RegistryError) do
-      SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @company)
-    end
+      # React
+    MD
 
-    assert_match(/API key/, error.message)
+    stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/vercel-react-best-practices/SKILL.md")
+      .to_return(status: 404, body: "")
+
+    stub_request(:get, "https://api.github.com/repos/vercel-labs/agent-skills/contents/skills")
+      .to_return(
+        status: 200,
+        body: [ { name: "react-best-practices", type: "dir" } ].to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/react-best-practices/SKILL.md")
+      .to_return(status: 200, body: skill_md)
+
+    skill = SkillsRegistryService.install(skill_id, scope: @company)
+
+    assert_equal "vercel-react-best-practices", skill.name
+    assert_equal "vercel-labs/agent-skills@vercel-react-best-practices", skill.package
+    assert_equal "React best practices", skill.description
+    assert_includes skill.content, "# React"
+    assert_equal 0, skill.install_count
   end
 
   test "install raises when skill is not found" do

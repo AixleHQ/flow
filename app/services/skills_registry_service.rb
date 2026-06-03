@@ -3,18 +3,26 @@
 require "net/http"
 require "json"
 require "uri"
+require "open3"
+require "tmpdir"
+require "timeout"
 
 # SkillsRegistryService
 # Integrates with the skills.sh API (https://www.skills.sh/docs/api).
 #
-# Search: GET /api/v1/skills/search?q=<query>
-# Install: GET /api/v1/skills/{id} — persists SKILL.md metadata in the database.
+# Search: GET /api/v1/skills/search?q=<query> (authenticated)
+#         GET https://www.skills.sh/api/search?q=<query> (public fallback)
+# Install: GET /api/v1/skills/{id} (authenticated)
+#          GitHub raw + skills CLI (public fallback)
 # Actual skill files are installed via `npx skills add` inside the container.
 class SkillsRegistryService
   API_BASE = "https://skills.sh/api/v1"
   PUBLIC_API_BASE = "https://www.skills.sh/api"
+  GITHUB_RAW_BASE = "https://raw.githubusercontent.com"
+  GITHUB_API_BASE = "https://api.github.com"
   SEARCH_TIMEOUT = 5
   FETCH_TIMEOUT = 10
+  CLI_INSTALL_TIMEOUT = 120
   SEARCH_LIMIT = 50
   PUBLIC_SEARCH_LIMIT = 100
   MIN_QUERY_LENGTH = 2
@@ -54,8 +62,12 @@ class SkillsRegistryService
     return [] unless response.is_a?(Net::HTTPSuccess)
 
     body = JSON.parse(response.body)
-    items = body.is_a?(Array) ? body : (body["data"] || body["results"] || [])
-    items.map { |s| map_public_search_skill(s) }
+    items = if body.is_a?(Array)
+      body
+    else
+      body["skills"] || body["data"] || body["results"] || []
+    end
+    items.reject { |s| s["isDuplicate"] }.map { |s| map_public_search_skill(s) }
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Public search failed: #{e.message}")
     []
@@ -71,7 +83,6 @@ class SkillsRegistryService
   def self.install(skill_id, scope:)
     skill_id = skill_id.to_s.strip
     raise RegistryError, "skill_id is required" if skill_id.blank?
-    raise RegistryError, "Skills.sh API key is not configured" if api_key.blank?
 
     detail = fetch_skill_detail(skill_id)
     raise RegistryError, "Skill not found: #{skill_id}" if detail.blank?
@@ -105,8 +116,16 @@ class SkillsRegistryService
     )
   end
 
-  # Fetch full skill detail from GET /api/v1/skills/{id}.
+  # Fetch full skill detail (v1 API or public fallback).
   def self.fetch_skill_detail(skill_id)
+    if api_key.present?
+      fetch_skill_detail_authenticated(skill_id)
+    else
+      fetch_skill_detail_public(skill_id)
+    end
+  end
+
+  def self.fetch_skill_detail_authenticated(skill_id)
     uri = detail_uri(skill_id)
     response = http_get(uri, timeout: FETCH_TIMEOUT)
     return nil unless response.is_a?(Net::HTTPSuccess)
@@ -115,6 +134,158 @@ class SkillsRegistryService
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Detail fetch failed for #{skill_id}: #{e.message}")
     nil
+  end
+
+  # Public install path: resolve SKILL.md from GitHub or the skills CLI.
+  def self.fetch_skill_detail_public(skill_id)
+    parsed = parse_skill_id(skill_id)
+    return nil if parsed.blank?
+
+    source = parsed[:source]
+    slug = parsed[:slug]
+    content = fetch_skill_md_from_github(source, slug) if github_source?(source)
+    content ||= fetch_skill_md_via_cli(source, slug)
+
+    return nil if content.blank?
+
+    {
+      "id" => skill_id,
+      "source" => source,
+      "slug" => slug,
+      "name" => frontmatter_name(content) || slug,
+      "installs" => 0,
+      "files" => [ { "path" => "SKILL.md", "contents" => content } ]
+    }
+  rescue StandardError => e
+    Rails.logger.error("[SkillsRegistry] Public detail fetch failed for #{skill_id}: #{e.message}")
+    nil
+  end
+
+  def self.parse_skill_id(skill_id)
+    parts = skill_id.split("/")
+    return nil if parts.size < 2
+
+    slug = parts.pop
+    source = parts.join("/")
+    return nil if slug.blank? || source.blank?
+
+    { source: source, slug: slug }
+  end
+
+  def self.github_source?(source)
+    source.match?(%r{\A[\w.-]+/[\w.-]+\z})
+  end
+
+  def self.github_skill_path_guesses(slug)
+    guesses = [ slug ]
+    guesses << slug.sub(/\Avercel-/, "") if slug.start_with?("vercel-")
+    guesses.uniq
+  end
+
+  def self.fetch_skill_md_from_github(source, slug)
+    github_skill_path_guesses(slug).each do |dir|
+      content = fetch_raw_skill_md(source, "skills/#{dir}/SKILL.md", slug: slug)
+      return content if content.present?
+    end
+
+    list_github_skill_directories(source).each do |dir|
+      content = fetch_raw_skill_md(source, "skills/#{dir}/SKILL.md", slug: slug)
+      return content if content.present?
+
+      list_github_skill_directories(source, "skills/#{dir}").each do |nested|
+        content = fetch_raw_skill_md(source, "skills/#{dir}/#{nested}/SKILL.md", slug: slug)
+        return content if content.present?
+      end
+    end
+
+    nil
+  rescue StandardError => e
+    Rails.logger.warn("[SkillsRegistry] GitHub fetch failed for #{source}/#{slug}: #{e.message}")
+    nil
+  end
+
+  def self.fetch_raw_skill_md(source, path, slug:)
+    content = fetch_github_raw(source, path)
+    return nil if content.blank?
+    return content if skill_md_matches_slug?(content, slug)
+
+    nil
+  end
+
+  def self.skill_md_matches_slug?(content, slug)
+    name = frontmatter_name(content)
+    return true if name.present? && name == slug
+
+    false
+  end
+
+  def self.fetch_github_raw(source, path)
+    uri = URI("#{GITHUB_RAW_BASE}/#{source}/HEAD/#{path}")
+    response = http_get(uri, timeout: FETCH_TIMEOUT)
+    return nil unless response.is_a?(Net::HTTPSuccess)
+
+    body = response.body
+    return nil if body.blank? || body.start_with?("<!DOCTYPE", "<html")
+
+    body
+  end
+
+  def self.list_github_skill_directories(source, prefix = "skills")
+    uri = URI("#{GITHUB_API_BASE}/repos/#{source}/contents/#{prefix}")
+    response = http_get(uri, timeout: FETCH_TIMEOUT)
+    return [] unless response.is_a?(Net::HTTPSuccess)
+
+    JSON.parse(response.body).filter_map { |entry| entry["name"] if entry["type"] == "dir" }
+  rescue StandardError
+    []
+  end
+
+  def self.fetch_skill_md_via_cli(source, slug)
+    skill_md = nil
+
+    Dir.mktmpdir("skills-registry") do |tmpdir|
+      env = {
+        "HOME" => tmpdir,
+        "DISABLE_TELEMETRY" => "1",
+        "PATH" => ENV.fetch("PATH", "/usr/bin:/bin")
+      }
+
+      _stdout, stderr, status = Timeout.timeout(CLI_INSTALL_TIMEOUT) do
+        Open3.capture3(
+          env,
+          "yarn", "dlx", "skills", "add", source,
+          "--skill", slug,
+          "-g",
+          "-a", "claude-code",
+          "--copy", "-y",
+          chdir: Rails.root.to_s
+        )
+      end
+
+      unless status.success?
+        Rails.logger.warn("[SkillsRegistry] skills CLI install failed: #{stderr.to_s.truncate(300)}")
+        next
+      end
+
+      skill_md = Dir.glob(File.join(tmpdir, ".claude/skills/*/SKILL.md")).first
+      skill_md = File.read(skill_md) if skill_md.present?
+    end
+
+    skill_md.presence
+  rescue StandardError => e
+    Rails.logger.warn("[SkillsRegistry] skills CLI fetch failed: #{e.message}")
+    nil
+  end
+
+  def self.frontmatter_name(content)
+    return nil if content.blank?
+    return nil unless content.start_with?("---")
+
+    parts = content.split("---", 3)
+    return nil if parts.length < 3
+
+    meta = YAML.safe_load(parts[1]) rescue {}
+    meta["name"].presence || meta["title"].presence
   end
 
   def self.skill_md_content(detail)
@@ -136,17 +307,18 @@ class SkillsRegistryService
   end
 
   def self.map_public_search_skill(skill)
+    slug = skill["slug"].presence || skill["skillId"].presence || skill["name"]
     {
       id: skill["id"],
-      slug: skill["slug"] || skill["name"],
-      name: skill["name"] || skill["slug"],
+      slug: slug,
+      name: skill["name"].presence || slug,
       source: skill["source"],
       installs: skill["installs"] || skill["install_count"] || 0
     }
   end
 
   def self.source_url_for(source)
-    if source.match?(%r{\A[\w.-]+/[\w.-]+\z})
+    if github_source?(source)
       "https://github.com/#{source}"
     else
       "https://#{source}"
@@ -162,13 +334,8 @@ class SkillsRegistryService
   def self.extract_title(content, fallback)
     return fallback.tr("-_", " ").titleize if content.blank?
 
-    if content.start_with?("---")
-      parts = content.split("---", 3)
-      if parts.length >= 3
-        meta = YAML.safe_load(parts[1]) rescue {}
-        return meta["name"] || meta["title"] if (meta["name"] || meta["title"]).present?
-      end
-    end
+    name = frontmatter_name(content)
+    return name if name.present?
 
     first_heading = content[/^#\s+(.+)/, 1]
     first_heading || fallback.tr("-_", " ").titleize
@@ -208,5 +375,11 @@ class SkillsRegistryService
   end
 
   private_class_method :map_search_skill, :map_public_search_skill, :search_public,
-                       :skill_md_content, :source_url_for, :detail_uri, :api_key, :http_get
+                       :fetch_skill_detail_authenticated, :fetch_skill_detail_public,
+                       :parse_skill_id, :github_source?, :github_skill_path_guesses,
+                       :fetch_skill_md_from_github,
+                       :fetch_raw_skill_md, :skill_md_matches_slug?, :fetch_github_raw,
+                       :list_github_skill_directories, :fetch_skill_md_via_cli,
+                       :frontmatter_name, :skill_md_content, :source_url_for, :detail_uri,
+                       :api_key, :http_get
 end
