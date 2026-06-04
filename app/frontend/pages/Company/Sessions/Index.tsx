@@ -1,10 +1,12 @@
-import { InfiniteScroll, router, usePoll } from '@inertiajs/react';
+import { InfiniteScroll, router } from '@inertiajs/react';
 import { Badge, Box, Button, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink, IconPlus } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
+
+import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
 
 interface Session {
   id: number;
@@ -99,13 +101,42 @@ const STATE_FILTER_OPTIONS = [
 
 const PER_PAGE_OPTIONS = ['20', '50', '100'];
 
-const ACTIVE_SESSION_STATES = new Set(['not_started', 'running', 'ready']);
-
 const SESSIONS_URL = '/company/sessions';
 
 const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
-  const hasActive = useMemo(() => sessions.some((s) => ACTIVE_SESSION_STATES.has(s.state)), [sessions]);
-  usePoll(15_000, { only: ['sessions'] }, { autoStart: hasActive });
+  // Local map mirrors the InfiniteScroll-accumulated sessions prop.
+  // Cable updates patch individual entries in-place without touching the rest,
+  // so live state changes are visible across all loaded pages simultaneously.
+  const [sessionMap, setSessionMap] = useState<Map<number, Session>>(() => {
+    const map = new Map<number, Session>();
+    for (const s of sessions) map.set(s.id, s);
+    return map;
+  });
+
+  // Sync new pages loaded by InfiniteScroll into the map (append-only: cable
+  // updates take precedence over Inertia prop data for existing entries).
+  useEffect(() => {
+    setSessionMap((prev) => {
+      const newEntries = sessions.filter((s) => !prev.has(s.id));
+      if (newEntries.length === 0) return prev;
+      const map = new Map(prev);
+      for (const s of newEntries) map.set(s.id, s);
+      return map;
+    });
+  }, [sessions]);
+
+  useSessionListCableUpdates({
+    onUpdate: useCallback((updated) => {
+      setSessionMap((prev) => {
+        if (!prev.has(updated.id as number)) return prev;
+        const map = new Map(prev);
+        map.set(updated.id as number, updated as unknown as Session);
+        return map;
+      });
+    }, []),
+  });
+
+  const displaySessions = useMemo(() => [...sessionMap.values()], [sessionMap]);
 
   const navigate = useCallback(
     (q: Filters, newPerPage?: number) => {
@@ -217,7 +248,7 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {sessions.map((s) => (
+                  {displaySessions.map((s) => (
                     <SessionRow key={s.id} session={s} />
                   ))}
                 </Table.Tbody>
