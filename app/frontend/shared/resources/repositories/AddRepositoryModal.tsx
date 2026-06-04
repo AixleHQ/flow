@@ -74,13 +74,6 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     [availableRepos, existingRepoNames],
   );
 
-  useEffect(() => {
-    if (opened && integrationOptions.length === 1 && !form.values.integrationId) {
-      form.setFieldValue('integrationId', integrationOptions[0].value);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opened, integrationOptions]);
-
   const loadRepos = (integrationId: string) => {
     setLoadingRepos(true);
     router.reload({
@@ -123,11 +116,13 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
   };
 
   useEffect(() => {
-    if (opened && integrationOptions.length === 1 && form.values.integrationId) {
-      loadRepos(form.values.integrationId);
+    if (opened && integrationOptions.length === 1 && !form.values.integrationId) {
+      const onlyIntegrationId = integrationOptions[0].value;
+      form.setFieldValue('integrationId', onlyIntegrationId);
+      loadRepos(onlyIntegrationId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opened]);
+  }, [opened, integrationOptions]);
 
   const handleClose = () => {
     form.reset();
