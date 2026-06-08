@@ -184,8 +184,10 @@ module Workflows
         end
 
         step_run_ids[step_id] = sr_id
-        launch_step_session(sr_id)
+        # Initialize the decision slot before launching so any container_finished
+        # signal that arrives during launch is not overwritten by a subsequent nil-init.
         @step_decisions[sr_id] = nil
+        launch_step_session(sr_id)
       end
 
       steps_by_id = {}

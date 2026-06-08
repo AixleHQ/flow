@@ -70,4 +70,36 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     post skip_step_company_project_workflow_run_path(@project, run), params: { reason: "skip" }
     assert_response :redirect
   end
+
+  test "create normalizes camelCase step_overrides keys to snake_case" do
+    create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
+    mock_workflow_execution_start
+
+    post company_project_workflow_runs_path(@project), params: {
+      workflow_run: {
+        workflow_id: @workflow.id,
+        mode: "mixed",
+        step_overrides: { "1" => { "autoRun" => true } }
+      }
+    }, as: :json
+
+    assert_response :redirect
+    assert_equal({ "1" => { "auto_run" => true } }, WorkflowRun.last.step_overrides)
+  end
+
+  test "create passes through already snake_case step_overrides keys unchanged" do
+    create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
+    mock_workflow_execution_start
+
+    post company_project_workflow_runs_path(@project), params: {
+      workflow_run: {
+        workflow_id: @workflow.id,
+        mode: "mixed",
+        step_overrides: { "1" => { "auto_run" => true } }
+      }
+    }, as: :json
+
+    assert_response :redirect
+    assert_equal({ "1" => { "auto_run" => true } }, WorkflowRun.last.step_overrides)
+  end
 end
