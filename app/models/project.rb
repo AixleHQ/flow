@@ -13,7 +13,6 @@ class Project < ApplicationRecord
   belongs_to :owner, class_name: "User", inverse_of: :owned_projects
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborators, through: :project_collaborators, source: :user
-  belongs_to :workflow_template_version, optional: true
   has_many :terminal_sessions, dependent: :nullify
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy
@@ -44,7 +43,7 @@ class Project < ApplicationRecord
       "projects.*",
       "(SELECT COUNT(*) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_sessions_count",
       "(SELECT MAX(terminal_sessions.started_at) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_last_activity_at",
-      "(SELECT COUNT(*) FROM workflows WHERE workflows.scope_id = projects.id AND workflows.scope_type = 'Project' AND workflows.deleted_at IS NULL AND workflows.kind = 'standard') AS cached_workflows_count",
+      "(SELECT COUNT(*) FROM workflows WHERE workflows.scope_id = projects.id AND workflows.scope_type = 'Project' AND workflows.deleted_at IS NULL) AS cached_workflows_count",
       "(SELECT COUNT(*) FROM board_tasks INNER JOIN boards ON boards.id = board_tasks.board_id WHERE boards.project_id = projects.id) AS cached_board_tasks_count",
       "(SELECT COUNT(*) FROM project_collaborators WHERE project_collaborators.project_id = projects.id) AS cached_collaborators_count"
     )

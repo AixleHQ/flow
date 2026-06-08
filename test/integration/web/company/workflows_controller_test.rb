@@ -34,13 +34,4 @@ class Web::Company::WorkflowsControllerTest < ActionDispatch::IntegrationTest
     delete company_workflow_path(wf)
     assert_response :redirect
   end
-
-  test "update renames company workflow" do
-    wf = create(:workflow, scope: @company, name: "Old Name")
-
-    patch company_workflow_path(wf), params: { workflow: { name: "New Name", description: "Updated" } }
-
-    assert_response :redirect
-    assert_equal "New Name", wf.reload.name
-  end
 end

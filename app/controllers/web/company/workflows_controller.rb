@@ -1,21 +1,18 @@
 # frozen_string_literal: true
 
 class Web::Company::WorkflowsController < Web::Company::ApplicationController
-  include Web::Company::WorkflowTemplateSourceLookup
-
   def index
     workflows = Workflow.visible_for_company(current_company)
                         .includes(:steps, :runs)
                         .order(:name)
 
     render inertia: "Company/Workflows/Index", props: {
-      workflows: workflows.map { |w| WorkflowResource.new(w).to_h },
-      published_templates_by_source: -> { published_templates_for_workflows(workflows) }
+      workflows: workflows.map { |w| WorkflowResource.new(w).to_h }
     }
   end
 
   def builder
-    workflow = Workflow.visible_for_company(current_company)
+    workflow = Workflow.for_company(current_company)
                       .includes(steps: :sub_steps)
                       .find(params[:id])
 
@@ -60,18 +57,8 @@ class Web::Company::WorkflowsController < Web::Company::ApplicationController
     end
   end
 
-  def update
-    workflow = Workflow.visible_for_company(current_company).find(params[:id])
-
-    if workflow.update(workflow_params)
-      redirect_to company_workflows_path, notice: "Workflow updated"
-    else
-      redirect_to company_workflows_path, alert: workflow.errors.full_messages.join(", ")
-    end
-  end
-
   def destroy
-    workflow = Workflow.visible_for_company(current_company).find(params[:id])
+    workflow = current_company.workflows.find(params[:id])
     workflow.destroy
     redirect_to company_workflows_path, notice: "Workflow deleted"
   end

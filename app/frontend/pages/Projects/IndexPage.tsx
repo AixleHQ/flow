@@ -25,17 +25,7 @@ interface Project {
 
 interface PageProps {
   projects: Project[];
-  workflowTemplates?: WorkflowTemplateOption[];
   [key: string]: unknown;
-}
-
-interface WorkflowTemplateOption {
-  id: number;
-  name: string;
-  description: string | null;
-  useCase: string | null;
-  currentVersionId: number | null;
-  stepsCount: number;
 }
 
 type SortKey = 'name' | 'last_activity' | 'newest';
@@ -47,7 +37,7 @@ const SORT_OPTIONS = [
 ];
 
 const IndexPage = () => {
-  const { projects, workflowTemplates = [] } = usePage<PageProps>().props;
+  const { projects } = usePage<PageProps>().props;
   const [createOpened, setCreateOpened] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
@@ -155,11 +145,7 @@ const IndexPage = () => {
           </SimpleGrid>
         )}
 
-        <CreateProjectModal
-          opened={createOpened}
-          onClose={() => setCreateOpened(false)}
-          workflowTemplates={workflowTemplates}
-        />
+        <CreateProjectModal opened={createOpened} onClose={() => setCreateOpened(false)} />
       </Box>
     </AuthLayout>
   );

@@ -1,33 +1,16 @@
 import { useForm } from '@inertiajs/react';
-import { Alert, Button, Group, Modal, Select, Stack, Text, TextInput, Textarea } from '@mantine/core';
-
-import { companyProjectsPath } from 'shared/routes';
-
-interface WorkflowTemplateOption {
-  id: number;
-  name: string;
-  description: string | null;
-  useCase: string | null;
-  currentVersionId: number | null;
-  stepsCount: number;
-}
+import { Alert, Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
 
 interface CreateProjectModalProps {
   opened: boolean;
   onClose: () => void;
-  workflowTemplates?: WorkflowTemplateOption[];
 }
 
-export const CreateProjectModal = ({ opened, onClose, workflowTemplates = [] }: CreateProjectModalProps) => {
+export const CreateProjectModal = ({ opened, onClose }: CreateProjectModalProps) => {
   const { data, setData, post, processing, errors, reset, clearErrors, transform } = useForm({
     name: '',
     description: '',
-    workflowTemplateVersionId: '' as string | number,
   });
-
-  const selectedTemplate = workflowTemplates.find(
-    (t) => String(t.currentVersionId) === String(data.workflowTemplateVersionId),
-  );
 
   const handleClose = () => {
     reset();
@@ -37,24 +20,11 @@ export const CreateProjectModal = ({ opened, onClose, workflowTemplates = [] }: 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    transform((d) => ({
-      project: {
-        name: d.name,
-        description: d.description,
-        workflowTemplateVersionId: d.workflowTemplateVersionId || undefined,
-      },
-    }));
-    post(companyProjectsPath(), {
+    transform((d) => ({ project: d }));
+    post('/company/projects', {
       onSuccess: handleClose,
     });
   };
-
-  const templateOptions = workflowTemplates
-    .filter((t) => t.currentVersionId)
-    .map((t) => ({
-      value: String(t.currentVersionId),
-      label: t.name,
-    }));
 
   return (
     <Modal opened={opened} onClose={handleClose} title="Create New Project" size="md">
@@ -83,26 +53,6 @@ export const CreateProjectModal = ({ opened, onClose, workflowTemplates = [] }: 
             maxLength={500}
             minRows={3}
           />
-          {templateOptions.length > 0 && (
-            <>
-              <Select
-                label="Start from template"
-                placeholder="Blank project"
-                clearable
-                data={templateOptions}
-                value={data.workflowTemplateVersionId ? String(data.workflowTemplateVersionId) : null}
-                onChange={(value) => setData('workflowTemplateVersionId', value ?? '')}
-                disabled={processing}
-              />
-              {selectedTemplate && (
-                <Text size="sm" c="dimmed">
-                  {selectedTemplate.description ||
-                    selectedTemplate.useCase ||
-                    `${selectedTemplate.stepsCount} workflow steps`}
-                </Text>
-              )}
-            </>
-          )}
           <Group justify="flex-end">
             <Button variant="subtle" onClick={handleClose} disabled={processing}>
               Cancel

@@ -22,7 +22,6 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
 
     assert_equal "Project", copy.scope_type
     assert_equal @project.id, copy.scope_id
-    assert_equal "standard", copy.kind
     assert_equal 2, copy.steps.not_deleted.count
 
     copied_steps = copy.steps.not_deleted.order(:position).to_a
@@ -42,18 +41,17 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal "Source WF (1)", copy.name
   end
 
+  test "uses explicit name when provided" do
+    copy = WorkflowDuplicator.new(@source, target_scope: @project, name: "Custom Name").duplicate!
+
+    assert_equal "Custom Name", copy.name
+  end
+
   test "generates unique name when explicit name collides" do
     create(:workflow, scope: @project, name: "Custom Name")
 
     copy = WorkflowDuplicator.new(@source, target_scope: @project, name: "Custom Name").duplicate!
 
     assert_equal "Custom Name (1)", copy.name
-  end
-
-  test "supports template_snapshot kind" do
-    copy = WorkflowDuplicator.new(@source, target_scope: @company, kind: "template_snapshot").duplicate!
-
-    assert_equal "template_snapshot", copy.kind
-    assert_equal "Company", copy.scope_type
   end
 end

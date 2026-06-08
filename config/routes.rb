@@ -210,12 +210,11 @@ Rails.application.routes.draw do
               end
             end
           end
-          resources :workflows, only: %i[index create update destroy] do
-            collection do
-              post :from_template
-            end
+          resources :workflows, only: %i[index create destroy] do
             member do
               get :builder
+              post :publish
+              post :unpublish
               post :duplicate
             end
           end
@@ -248,14 +247,14 @@ Rails.application.routes.draw do
       resources :tools, only: %i[index create update destroy]
       resources :skills, only: %i[index create destroy]
       resources :mcp_servers, only: %i[index create update destroy]
-      resources :workflows, only: %i[index create update destroy] do
+      resources :workflows, only: %i[index create destroy] do
         member do
           get :builder
         end
       end
-      resources :workflow_templates, only: %i[index create update] do
+      resources :workflow_catalog, only: :index do
         member do
-          post :publish_version
+          post :duplicate
         end
       end
       resources :analytics, only: :index

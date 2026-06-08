@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 class WorkflowDuplicator
-  def initialize(source_workflow, target_scope:, kind: "standard", name: nil)
+  def initialize(source_workflow, target_scope:, name: nil)
     @source = source_workflow
     @target_scope = target_scope
-    @kind = kind
     @name = name
   end
 
@@ -13,8 +12,7 @@ class WorkflowDuplicator
       new_workflow = @target_scope.workflows.create!(
         name: available_name,
         description: @source.description,
-        config: @source.config.deep_dup,
-        kind: @kind
+        config: @source.config.deep_dup
       )
 
       step_id_map = {}
@@ -41,7 +39,7 @@ class WorkflowDuplicator
 
   def available_name
     base = @name.presence || @source.name
-    existing = @target_scope.workflows.standard.active.where("name LIKE ?", "#{base}%").pluck(:name)
+    existing = @target_scope.workflows.active.where("name LIKE ?", "#{base}%").pluck(:name)
     return base unless existing.include?(base)
 
     counter = 1

@@ -7,11 +7,12 @@ module Web
         def index? = project_accessible?
         def builder? = project_accessible?
         def create? = project_accessible?
-        def from_template? = project_accessible?
-        def duplicate? = project_accessible?
         def show? = project_accessible?
         def update? = project_accessible?
         def destroy? = project_accessible?
+        def publish? = project_accessible?
+        def unpublish? = project_accessible?
+        def duplicate? = project_accessible?
 
         private
 

@@ -34,7 +34,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
              .order(:position).map { |t| BoardTaskResource.new(t).to_h }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
-      workflows: -> { current_project.workflows.standard.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
+      workflows: -> { current_project.workflows.order(:name).map { |w| BoardWorkflowResource.new(w).to_h } },
       view_presets: -> {
         board.board_view_presets.visible_to(current_user).order(:name)
              .map { |p| BoardViewPresetResource.new(p).to_h }
