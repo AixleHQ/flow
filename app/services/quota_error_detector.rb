@@ -10,10 +10,20 @@ class QuotaErrorDetector
       /billing_hard_limit/i,
       /Add funds:.*platform\.claude\.com/i
     ],
+    gemini: [
+      /Usage limit reached/i,
+      /RESOURCE_EXHAUSTED/i,
+      /Resource has been exhausted.*check quota/i,
+      /Quota exceeded for metric:.*generativelanguage/i,
+      /You exceeded your current quota.*generativelanguage/i,
+      /\[API Error: got status: 429/i,
+      /request a quota increase through AI Studio/i
+    ],
     openai: [
       /You exceeded your current quota/i,
       /insufficient_credits/i,
-      /quota_exceeded/i
+      /quota_exceeded/i,
+      /Quota exceeded. Check your plan and billing details/i
     ],
     cursor: [
       /reached your normal usage limit/i,

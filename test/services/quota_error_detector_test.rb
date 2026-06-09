@@ -66,6 +66,20 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal :openai, result.provider
   end
 
+  test "detects openai codex quota exceeded message" do
+    text = <<~TEXT
+      codex --yolo
+      Quota exceeded. Check your plan and billing details.
+      codex@abc123:/workspace$
+    TEXT
+
+    result = QuotaErrorDetector.detect(text)
+
+    assert result.quota_error?
+    assert_equal :openai, result.provider
+    assert_equal "Quota exceeded. Check your plan and billing details.", result.message
+  end
+
   test "detects openai insufficient_credits" do
     result = QuotaErrorDetector.detect("Error: insufficient_credits — add more credits to continue")
     assert result.quota_error?
@@ -76,6 +90,79 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     result = QuotaErrorDetector.detect("error_code: quota_exceeded")
     assert result.quota_error?
     assert_equal :openai, result.provider
+  end
+
+  # --- Gemini patterns ---
+
+  test "detects gemini RESOURCE_EXHAUSTED status" do
+    result = QuotaErrorDetector.detect('{"status":"RESOURCE_EXHAUSTED","message":"Too many requests"}')
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
+  test "detects gemini resource exhausted message" do
+    result = QuotaErrorDetector.detect("Resource has been exhausted (e.g. check quota).")
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
+  test "detects gemini generativelanguage quota metric" do
+    text = "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20"
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+    assert_equal text, result.message
+  end
+
+  test "detects gemini quota message with generativelanguage hint" do
+    text = "You exceeded your current quota, please check your plan and billing details. Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_requests"
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
+  test "detects gemini cli 429 API error format" do
+    text = '[API Error: got status: 429 Too Many Requests. {"error":{"message":"Resource has been exhausted"}}]'
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+  end
+
+  test "detects gemini cli usage limit reached for pro models" do
+    text = <<~TEXT
+      gemini --model gemini-3.1-pro-preview --yolo
+      Usage limit reached for all Pro models.
+      /stats model for usage details
+      /model to switch models.
+    TEXT
+
+    result = QuotaErrorDetector.detect(text)
+
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+    assert_equal "Usage limit reached for all Pro models.", result.message
+  end
+
+  test "detects gemini cli AI Studio quota increase hint" do
+    text = "Please wait and try again later. To increase your limits, request a quota increase through AI Studio, or switch to another /auth method"
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+    assert_equal text, result.message
+  end
+
+  test "extracts gemini quota line from terminal capture" do
+    text = <<~TEXT
+      gemini --yolo
+      ✕ [API Error: got status: 429 Too Many Requests. {"error":{"message":"Resource has been exhausted (e.g. check quota)."}}]
+      gemini@abc123:/workspace$
+    TEXT
+
+    result = QuotaErrorDetector.detect(text)
+
+    assert result.quota_error?
+    assert_equal :gemini, result.provider
+    assert_includes result.message, "429 Too Many Requests"
   end
 
   # --- Cursor patterns ---
