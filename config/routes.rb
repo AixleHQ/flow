@@ -172,8 +172,11 @@ Rails.application.routes.draw do
 
   scope module: :web, defaults: { format: :html } do
     root "home#show"
-    mount OasRails::Engine => "/docs"
+    mount OasRails::Engine => "/api-docs"
     mount(LetterOpenerWeb::Engine, at: "/letter_opener") if Rails.env.development?
+
+    get "docs", to: "docs#show", as: :docs
+    get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
 
     get "login", to: "sessions#new", as: :login
     post "login", to: "sessions#create"
