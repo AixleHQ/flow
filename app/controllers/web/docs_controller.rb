@@ -8,12 +8,12 @@ class Web::DocsController < Web::ApplicationController
 
   def show
     slug = (params[:slug].presence || "what-is-aixle").downcase
-    
+
     unless page_exists?(slug)
       render inertia: "Docs/DocsPage", props: { slug: slug }, status: :not_found
       return
     end
-    
+
     render inertia: "Docs/DocsPage", props: {
       slug: slug
     }
