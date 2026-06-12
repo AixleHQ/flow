@@ -16,6 +16,7 @@ FactoryBot.define do
     metadata { {} }
     session_config { {} }
     started_at { nil }
+    finishing_at { nil }
     finished_at { nil }
     collected_at { nil }
 
@@ -80,6 +81,14 @@ FactoryBot.define do
       started_at { 10.minutes.ago }
       finished_at { 5.minutes.ago }
       collected_at { Time.current }
+    end
+
+    trait :finishing do
+      state { "finishing" }
+      container_id { "container-#{SecureRandom.hex(8)}" }
+      route_token { SecureRandom.hex(16) }
+      started_at { 5.minutes.ago }
+      finishing_at { Time.current }
     end
 
     trait :failed do

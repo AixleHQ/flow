@@ -44,6 +44,7 @@ const STATE_COLORS: Record<string, string> = {
   not_started: 'gray',
   running: 'blue',
   ready: 'green',
+  finishing: 'yellow',
   finished: 'gray',
   failed: 'red',
 };
@@ -85,6 +86,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   const agentColor = AGENT_COLORS[s.agentType ?? ''] ?? 'gray';
   const stateColor = STATE_COLORS[s.state] ?? 'gray';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
+  const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
   const isActive = isReady || s.state === 'running';
 
@@ -189,7 +191,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         )}
       </div>
       <div className={classes.headerRight}>
-        {!isTerminal && (
+        {!isTerminal && !isFinishing && (
           <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={stopping}>
             Finish
           </Button>
@@ -430,12 +432,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
 
   return (
     <div className={classes.root}>
-      {stopping && (
+      {(stopping || isFinishing) && (
         <div className={classes.stoppingOverlay}>
           <Stack align="center" gap="sm">
-            <Loader color="red" size="lg" />
-            <Text fw={600} c="red">
-              Stopping session...
+            <Loader color="yellow" size="lg" />
+            <Text fw={600} c="yellow.8">
+              Finishing session…
             </Text>
           </Stack>
         </div>

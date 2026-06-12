@@ -7,7 +7,7 @@ module InternalTools
         return error("finish_session is only available in non-interactive sessions")
       end
 
-      unless session.may_finish?
+      unless session.may_start_finishing? || session.finishing?
         return error("Session cannot be finished in current state: #{session.state}")
       end
 

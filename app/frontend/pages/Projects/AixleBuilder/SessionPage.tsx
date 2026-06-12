@@ -55,6 +55,7 @@ const STATE_COLORS: Record<string, string> = {
   not_started: 'gray',
   running: 'blue',
   ready: 'green',
+  finishing: 'yellow',
   finished: 'gray',
   failed: 'red',
 };
@@ -144,6 +145,7 @@ const SessionPage = () => {
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   const isActive = ['not_started', 'running', 'ready'].includes(s.state);
+  const isFinishing = s.state === 'finishing';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
   const [finishing, setStopping] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
@@ -373,12 +375,12 @@ const SessionPage = () => {
     <>
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
-        {finishing && (
+        {(finishing || isFinishing) && (
           <div className={classes.stoppingOverlay}>
             <Stack align="center" gap="sm">
-              <Loader color="red" size="lg" />
-              <Text fw={600} c="red">
-                Stopping session...
+              <Loader color="yellow" size="lg" />
+              <Text fw={600} c="yellow.8">
+                Finishing session…
               </Text>
             </Stack>
           </div>

@@ -51,6 +51,7 @@ const STATE_CONFIG: Record<string, { label: string; color: string }> = {
   not_started: { label: 'Pending', color: 'gray' },
   running: { label: 'Starting', color: 'blue' },
   ready: { label: 'Running', color: 'green' },
+  finishing: { label: 'Finishing', color: 'yellow' },
   finished: { label: 'Finished', color: 'gray' },
   failed: { label: 'Failed', color: 'red' },
 };
@@ -102,6 +103,7 @@ const AGENT_FILTER_OPTIONS = [
 const STATE_FILTER_OPTIONS = [
   { value: 'running', label: 'Starting' },
   { value: 'ready', label: 'Running' },
+  { value: 'finishing', label: 'Finishing' },
   { value: 'finished', label: 'Finished' },
   { value: 'failed', label: 'Failed' },
 ];

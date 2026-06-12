@@ -61,12 +61,29 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # == finish ==
 
-  test "finish sends container_finished signal" do
+  test "finish transitions session to finishing and sends container_finished signal" do
     session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-123")
 
     TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
 
     SessionService.finish(session: session)
+
+    session.reload
+    assert_equal "finishing", session.state
+    assert_not_nil session.finishing_at
+  end
+
+  test "finish is idempotent when session already finishing" do
+    session = create(:terminal_session, :finishing, user: @user, temporal_workflow_id: "wf-123")
+    original_finishing_at = session.finishing_at
+
+    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+    SessionService.finish(session: session)
+
+    session.reload
+    assert_equal "finishing", session.state
+    assert_equal original_finishing_at.to_i, session.finishing_at.to_i
   end
 
   test "finish signals container workflow for workflow_step sessions" do
@@ -81,6 +98,9 @@ class SessionServiceTest < ActiveSupport::TestCase
     TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, step_run.id).once
 
     SessionService.finish(session: session)
+
+    session.reload
+    assert_equal "finishing", session.state
   end
 
   test "finish raises InvalidStateError for non-finishable session" do
@@ -89,6 +109,17 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_raises(TerminalSession::InvalidStateError) do
       SessionService.finish(session: session)
     end
+  end
+
+  test "finish without temporal workflow transitions through finishing to finished" do
+    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: nil)
+
+    SessionService.finish(session: session)
+
+    session.reload
+    assert_equal "finished", session.state
+    assert_not_nil session.finishing_at
+    assert_not_nil session.finished_at
   end
 
   # == cancel ==

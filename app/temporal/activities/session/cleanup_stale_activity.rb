@@ -73,6 +73,7 @@ module Activities
         strategy = session.strategy
         strategy.before_cleanup(container_id: session.container_id, session_id: session.id)
         strategy.cleanup(container_id: session.container_id)
+        session.start_finishing! if session.may_start_finishing?
         session.finish! if session.may_finish?
       rescue StandardError => e
         log(:warn, "Full cleanup failed for session #{session.id}: #{e.message}, falling back to fail!")

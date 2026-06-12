@@ -117,6 +117,7 @@ module ContainerStrategies
         session.update(error_message: error)
         session.fail! if session.may_fail?
       else
+        session.start_finishing! if session.may_start_finishing?
         session.finish! if session.may_finish?
       end
       {}
