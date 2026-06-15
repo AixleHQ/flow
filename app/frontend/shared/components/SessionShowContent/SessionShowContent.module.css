@@ -174,9 +174,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Stopping Overlay ───────────────────────────── */
+/* ── Finishing Overlay ──────────────────────────── */
 
-.stoppingOverlay {
+.finishingOverlay {
   position: fixed;
   inset: 0;
   z-index: 400;

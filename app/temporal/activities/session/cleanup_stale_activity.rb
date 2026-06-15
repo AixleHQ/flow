@@ -70,10 +70,14 @@ module Activities
       end
 
       def full_cleanup(session, _container)
+        # Enter `finishing` before cleanup so `finishing_at` marks the start of
+        # finalization (and the UI/scope can observe the state during cleanup),
+        # rather than the moment cleanup happens to finish.
+        session.start_finishing! if session.may_start_finishing?
+
         strategy = session.strategy
         strategy.before_cleanup(container_id: session.container_id, session_id: session.id)
         strategy.cleanup(container_id: session.container_id)
-        session.start_finishing! if session.may_start_finishing?
         session.finish! if session.may_finish?
       rescue StandardError => e
         log(:warn, "Full cleanup failed for session #{session.id}: #{e.message}, falling back to fail!")

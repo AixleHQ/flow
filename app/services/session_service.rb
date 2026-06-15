@@ -25,7 +25,12 @@ class SessionService
         raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
       end
 
-      session.start_finishing! if session.may_start_finishing?
+      # If already finishing, the prior call has already fired the Temporal
+      # signal / direct finish — repeating either would cause a duplicate
+      # container_finished event (or a redundant finish! transition).
+      return unless session.may_start_finishing?
+
+      session.start_finishing!
 
       if session.temporal_workflow_id.present?
         signal_container_finished(session)
@@ -118,8 +123,7 @@ class SessionService
     end
 
     def finalize_finished(session)
-      session.start_finishing! if session.may_start_finishing?
-      session.finish! if session.may_finish?
+      session.complete_finish!
     end
 
     def cancel_temporal_workflow(session)

@@ -73,11 +73,30 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_not_nil session.finishing_at
   end
 
-  test "finish is idempotent when session already finishing" do
+  test "finish is idempotent across repeated calls on a running session" do
+    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-123")
+
+    # A duplicate user click (or simultaneous web + mobile invocations) must
+    # send the container_finished signal exactly once — extra signals would
+    # cause double cleanup on the Temporal worker side.
+    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+    SessionService.finish(session: session)
+    session.reload
+    first_finishing_at = session.finishing_at
+
+    SessionService.finish(session: session)
+    session.reload
+
+    assert_equal "finishing", session.state
+    assert_equal first_finishing_at.to_i, session.finishing_at.to_i
+  end
+
+  test "finish is a no-op when session is already finishing" do
     session = create(:terminal_session, :finishing, user: @user, temporal_workflow_id: "wf-123")
     original_finishing_at = session.finishing_at
 
-    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+    TemporalService.expects(:send_signal).never
 
     SessionService.finish(session: session)
 

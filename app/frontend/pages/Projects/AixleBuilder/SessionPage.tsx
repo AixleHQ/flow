@@ -147,7 +147,7 @@ const SessionPage = () => {
   const isActive = ['not_started', 'running', 'ready'].includes(s.state);
   const isFinishing = s.state === 'finishing';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
-  const [finishing, setStopping] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
   const [termLoaded, setTermLoaded] = useState(false);
 
@@ -169,13 +169,13 @@ const SessionPage = () => {
   const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
 
   const handleFinish = useCallback(() => {
-    setStopping(true);
+    setFinishing(true);
     router.post(
       `${basePath}/aixle_builder/${s.id}/finish`,
       {},
       {
         preserveScroll: true,
-        onFinish: () => setStopping(false),
+        onFinish: () => setFinishing(false),
       },
     );
   }, [s.id, basePath]);
@@ -376,7 +376,7 @@ const SessionPage = () => {
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
         {(finishing || isFinishing) && (
-          <div className={classes.stoppingOverlay}>
+          <div className={classes.finishingOverlay}>
             <Stack align="center" gap="sm">
               <Loader color="yellow" size="lg" />
               <Text fw={600} c="yellow.8">

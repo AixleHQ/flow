@@ -92,7 +92,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
 
   const [ideLoaded, setIdeLoaded] = useState(false);
   const [termLoaded, setTermLoaded] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
   const now = useElapsedTimer(isActive);
@@ -109,12 +109,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   const canShowTerminal = !!ttydUrl;
 
   const handleFinish = useCallback(async () => {
-    setStopping(true);
+    setFinishing(true);
     try {
       await apiFetch(finishApiV1TerminalSessionPath(s.id), { method: 'POST' });
       router.reload();
     } finally {
-      setStopping(false);
+      setFinishing(false);
     }
   }, [s.id]);
 
@@ -192,7 +192,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
       </div>
       <div className={classes.headerRight}>
         {!isTerminal && !isFinishing && (
-          <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={stopping}>
+          <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={finishing}>
             Finish
           </Button>
         )}
@@ -432,8 +432,8 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
 
   return (
     <div className={classes.root}>
-      {(stopping || isFinishing) && (
-        <div className={classes.stoppingOverlay}>
+      {(finishing || isFinishing) && (
+        <div className={classes.finishingOverlay}>
           <Stack align="center" gap="sm">
             <Loader color="yellow" size="lg" />
             <Text fw={600} c="yellow.8">
