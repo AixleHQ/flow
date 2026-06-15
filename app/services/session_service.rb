@@ -25,9 +25,6 @@ class SessionService
         raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
       end
 
-      # If already finishing, the prior call has already fired the Temporal
-      # signal / direct finish — repeating either would cause a duplicate
-      # container_finished event (or a redundant finish! transition).
       return unless session.may_start_finishing?
 
       session.start_finishing!

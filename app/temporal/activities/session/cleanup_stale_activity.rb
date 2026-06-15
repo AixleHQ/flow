@@ -3,9 +3,10 @@
 # Cleanup Stale Sessions Activity
 # Finds terminal sessions stuck in active states and performs proper cleanup.
 #
-# Handles two cases:
+# Handles three cases:
 #   1. Sessions in "running" that never became "ready" (workflow failed silently)
 #   2. Sessions in "ready" that outlived their Temporal workflow (workflow terminated/expired)
+#   3. Sessions in "finishing" that never reached "finished" (cleanup crashed mid-flight)
 #
 # For each stale session:
 #   - If container is still alive: runs full cleanup → finished
@@ -16,31 +17,28 @@ module Activities
     class CleanupStaleActivity < Base
       RUNNING_STALE_THRESHOLD = 30.minutes
       READY_STALE_THRESHOLD = 25.hours
+      FINISHING_STALE_THRESHOLD = 10.minutes
 
       MCP_SESSION_TTL = 7.days
 
       def run(_input = nil)
         cleaned_running = cleanup_stale(:running, RUNNING_STALE_THRESHOLD)
         cleaned_ready = cleanup_stale(:ready, READY_STALE_THRESHOLD)
+        cleaned_finishing = cleanup_stale(:finishing, FINISHING_STALE_THRESHOLD)
         cleaned_mcp = cleanup_stale_mcp_sessions
 
-        { cleaned_running: cleaned_running, cleaned_ready: cleaned_ready, cleaned_mcp: cleaned_mcp }
+        {
+          cleaned_running: cleaned_running,
+          cleaned_ready: cleaned_ready,
+          cleaned_finishing: cleaned_finishing,
+          cleaned_mcp: cleaned_mcp
+        }
       end
 
       private
 
       def cleanup_stale(state, threshold)
-        sessions = TerminalSession
-          .where(state: state.to_s)
-          .where(started_at: ...threshold.ago)
-
-        if state == :running
-          sessions = sessions.or(
-            TerminalSession
-              .where(state: state.to_s, started_at: nil)
-              .where(created_at: ...threshold.ago)
-          )
-        end
+        sessions = stale_sessions_scope(state, threshold)
 
         count = 0
         sessions.find_each do |session|
@@ -52,6 +50,23 @@ module Activities
           log(:warn, "Failed to clean session #{session.id}: #{e.message}")
         end
         count
+      end
+
+      def stale_sessions_scope(state, threshold)
+        scope = TerminalSession.where(state: state.to_s)
+
+        case state
+        when :running
+          scope.where(started_at: ...threshold.ago).or(
+            TerminalSession
+              .where(state: state.to_s, started_at: nil)
+              .where(created_at: ...threshold.ago)
+          )
+        when :finishing
+          scope.where(finishing_at: ...threshold.ago)
+        else
+          scope.where(started_at: ...threshold.ago)
+        end
       end
 
       def cleanup_session(session)
@@ -70,9 +85,6 @@ module Activities
       end
 
       def full_cleanup(session, _container)
-        # Enter `finishing` before cleanup so `finishing_at` marks the start of
-        # finalization (and the UI/scope can observe the state during cleanup),
-        # rather than the moment cleanup happens to finish.
         session.start_finishing! if session.may_start_finishing?
 
         strategy = session.strategy
