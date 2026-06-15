@@ -541,6 +541,13 @@ epic-38-retrospective: optional
 
   epic-39-retrospective: optional
 
+  # ============================================
+  # DOCS CONTENT
+  # ============================================
+
+  # ── Docs content fill (Issue #167 / PR #173) ──────────────────────
+  docs-fill-content: ready-for-dev  # Fill in-app /docs pages with content from PR #173 branch
+
 # EXECUTION SEQUENCE (Phase 20):
 # ==================================
 # Phase 20a — Foundation (Policies):

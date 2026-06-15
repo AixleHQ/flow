@@ -1,86 +1,94 @@
 # Agents
 
-Agents are autonomous workers. Each receives a goal, plans the steps, and executes them without manual intervention.
+An Agent in Aixle Flow is two things layered together:
 
-## How agents work
+- A **persona** — a system-prompt-level definition (who the agent *is*,
+  how it communicates, what principles it follows).
+- A **runtime** — the actual LLM CLI that runs inside the container.
 
-When you define an agent, you give it a trigger and a goal. Aixle handles the rest.
+You can mix and match: the same "Code Reviewer" persona can run on top
+of Claude Code, Cursor CLI, Codex CLI, or Gemini CLI.
 
-| Component | Description |
-|---|---|
-| **Trigger** | What causes the agent to start — a git push, a schedule, or a manual call. |
-| **Goal** | What the agent is trying to achieve, described in plain language or config. |
-| **Tasks** | The steps the agent generates and executes to reach its goal. |
-| **Report** | A summary of what the agent did, what succeeded, and what failed. |
+## Persona fields
 
-> **info** **Agents are isolated.** Each runs in a sandboxed environment with only the access you've granted.
+| Field                  | Description                                                |
+| ---------------------- | ---------------------------------------------------------- |
+| `name`                 | snake_case identifier.                                     |
+| `title`                | Display name in the UI.                                    |
+| `persona`              | Core system prompt — who the agent IS.                     |
+| `communication_style`  | HOW the agent communicates.                                |
+| `principles`           | Guiding constraints — non-negotiable rules.                |
+| `source`               | `custom` or `bmad_import` (BMAD methodology import).       |
 
-## Defining an agent
+The system prompt the LLM actually sees is `persona + communication_style + principles`,
+in that order.
 
-Agents are defined in `aixle.config.ts`. Each agent needs a name, a model, and a trigger.
+## Runtimes
 
-```typescript
-import { defineConfig } from 'aixle'
+The persona runs on top of one of four LLM CLIs — `claude_code`,
+`cursor_cli`, `codex`, or `gemini_cli`. Each runs in its own Docker
+image and needs its own per-user credentials, configured on the
+**Profile** page. The full runtime table, credential requirements, and
+cost-tracking notes live on the dedicated Runtimes page.
 
-export default defineConfig({
-  agents: {
-    reviewer: {
-      model: 'claude-sonnet',
-      trigger: { on: 'pull_request', action: 'opened' },
-      goal: 'Review the PR for bugs, security issues, and style violations',
-      tools: ['read_file', 'search_code', 'post_comment'],
-    },
-    tester: {
-      model: 'gpt-4o',
-      trigger: { on: 'push', branch: 'main' },
-      goal: 'Run the test suite and fix any failures',
-      tools: ['read_file', 'write_file', 'run_tests', 'git_commit'],
-    },
-  }
-})
+## The container the agent runs in
+
+When a step executes, the platform spins up a fresh container with this
+layout:
+
+```
+/workspace/
+├── outputs/            ← agent writes deliverables here
+├── assets/             ← pre-loaded input files (read-only-ish)
+│   ├── <workflow base assets>
+│   ├── <run-time assets>
+│   └── <task assets, if board-triggered>
+├── repo/               ← Git repositories (if mount_repositories: true)
+│   └── <repo_name>/    ← shallow clone, default branch, full .git
+└── references/         ← reference docs (only in Aixle Builder sessions)
 ```
 
-## Agent tools
+If `mount_repositories: true` and a project repository is configured,
+the platform also injects an authenticated GitHub installation token —
+the agent can `git push`, open PRs, and trigger CI.
 
-Tools are the actions an agent can take. You grant tools explicitly — agents cannot use tools you have not listed.
+## How context is built
 
-| Tool | What it does |
-|---|---|
-| `read_file` | Read any file in the repository |
-| `write_file` | Create or overwrite a file |
-| `run_tests` | Execute the project's test command |
-| `search_code` | Semantic search across the codebase |
-| `git_commit` | Stage and commit changes |
-| `post_comment` | Post a comment on a PR or issue |
-| `bash` | Run arbitrary shell commands |
+Every session's context is assembled by an ordered chain of builders:
 
-> **danger** **`bash` is powerful.** Only grant it to agents with a tightly scoped system prompt. An agent with unrestricted `bash` access can modify any file in the repo.
+1. **CriticalRules** — non-negotiable system instructions.
+2. **AgentRole** — persona + communication_style + principles.
+3. **SessionInfo** — session metadata, mode, runtime, model.
+4. **Workspace** — filesystem layout and key locations.
+5. **WorkflowContext** *(workflow runs only)* — step instructions, previous outputs.
+6. **BoardContext** *(board-triggered runs only)* — task details.
+7. **Tools** — available tools with JSON schemas.
+8. **Resources** — skills, MCP servers, repositories.
+9. **BmadMethod** *(if enabled)* — BMAD methodology framework.
+10. **OutputRules** — output formatting expectations.
 
-## Models
+This is why the same persona can produce very different output
+depending on whether it was triggered from a board card vs. a manual
+workflow run — the context layers differ.
 
-Aixle routes tasks to the model you specify. Supported models:
+## Resource resolution (additive merge)
 
-```yaml
-models:
-  - claude-opus-4-5
-  - claude-sonnet-4-5
-  - gpt-4o
-  - gpt-4o-mini
-  - gemini-1.5-pro
-  - gemini-1.5-flash
-```
+For each step, the platform computes the effective set of tools,
+skills, MCP servers, and repositories by **adding** three layers:
 
-You can route different agents to different models based on cost, latency, or capability requirements.
+1. Workflow base resources (`workflow.config.base_*_ids`).
+2. Step-specific resources (`step.*_ids`).
+3. Project-level resources, if `inherit_all_project_resources: true`.
 
-## Monitoring
+Duplicates are deduplicated by ID. There is no subtraction layer —
+build narrowly and add up.
 
-Every agent run produces a full session log — every file read, command executed, and decision made. Logs are accessible in the web UI under **Project → Sessions**.
+## Troubleshooting
 
-<details>
-<summary>Replay and audit sessions</summary>
-<div>
-
-Session replays let you step through every action the agent took. You can see the exact prompt sent to the model, the tool calls made, and the output returned at each step. This makes it straightforward to diagnose unexpected behaviour.
-
-</div>
-</details>
+| Symptom                                                       | Likely cause                                                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Step starts then immediately fails with "no credentials"      | The runtime's credentials aren't configured for the user who triggered the run.             |
+| Agent has no access to the codebase                           | `mount_repositories: true` but no project repository is configured.                         |
+| Agent can't reach an MCP server                               | MCP server credentials missing in **Config Items**, or wrong `transport`.                   |
+| Container hangs in "pulling image"                            | Run `make build-agents` to rebuild the runtime images locally.                              |
+| `cost_cents` is `null` on a finished session                  | The runtime didn't emit usage events. Check the session logs in **Admin → Session Logs**.   |

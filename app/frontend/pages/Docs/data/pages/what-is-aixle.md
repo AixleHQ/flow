@@ -1,59 +1,50 @@
-Aixle lets anyone run developer tasks using AI agents — without touching a terminal. Describe what you want, and agents handle the rest.
+Aixle Flow is a Kanban board where every column can trigger an AI agent workflow. Move a card, a workflow starts, an agent runs in a container, and the results come back to the board.
 
 ## Key concepts
 
-A small set of primitives gives you a complete mental model of how the system works.
+A small set of primitives gives you the complete mental model.
 
 ## How it works
 
-You describe a goal in plain language. Aixle breaks it into tasks, assigns them to agents, and executes them — reporting back at each step.
+A **Company** owns shared resources. Inside it, **Projects** each have
+one **Board**. A Board has ordered **Columns**; each column can be
+**bound to a Workflow**. Drop a card into the column and the workflow
+starts. A Workflow is a DAG of **Steps**; each Step is one **Agent**
+session running in an isolated **container**, producing artifacts and
+optionally pushing PRs. Steps can depend on each other (parallel
+branches are fine), retry on failure, or block on a human approval.
+Every run is tracked with cost, tokens, and a full log.
 
-### For non-developers
+That's the whole product.
 
-Use the web UI to describe what you want in plain English. Aixle handles the rest — no terminal, no config files.
+### The board
 
-> **info** **No code required.** Describe the task, agents run it. Developers can also use the CLI or API for full control.
+Each project has one Kanban board with ordered columns. You can create
+columns manually or start from a preset: `simple_kanban`, `dev_team`,
+or `full_sdlc`. Each column has a **purpose** — a short description
+that the agent receives as context when it runs in that column.
 
-### For developers
+> **info** **Column bindings are the trigger.** Bind a column to a workflow and set `trigger_mode: auto` — the workflow starts as soon as a card enters the column.
 
-Use the CLI or API for full programmatic control. Define agents in config, trigger them on git events, and integrate with your existing workflow.
+### Agents and workflows
 
-> **warning** **Breaking change in v0.4.** The `agent.run()` method signature has changed. See the migration guide for details.
+A **Workflow** is a DAG of Steps. Each Step is one Agent session in one
+container. Steps can run in parallel, depend on each other's outputs,
+and retry on failure. The **Aixle Builder** (project sidebar → "Build
+with AI") generates workflows from a plain-language description.
 
-> **danger** **Never commit API keys.** Use environment variables or the Aixle secrets manager to store credentials.
+An **Agent** is a persona (who it is, how it communicates, what
+principles it follows) running on top of an LLM CLI runtime —
+`claude_code`, `cursor_cli`, `codex`, or `gemini_cli`. The same persona
+can run on any runtime.
 
-> **tip** **Pro tip.** Use `aixle run --dry-run` to preview what an agent would do without executing anything.
+### Containers
 
-## Configuration
+Every step runs in a fresh Docker container. The agent finds:
 
-Aixle is configured via a single `aixle.config.ts` file in your project root.
+- `/workspace/outputs/` — where it writes deliverables.
+- `/workspace/assets/` — pre-loaded input files (task attachments,
+  workflow assets).
+- `/workspace/repo/` — Git repository clone (if `mount_repositories: true`).
 
-<details>
-<summary>Advanced configuration options</summary>
-<div>
-
-Advanced options include custom agent timeouts, retry strategies, environment isolation levels, and notification webhooks. These are covered in the full config reference.
-
-</div>
-</details>
-
-```typescript
-import { defineConfig } from 'aixle'
-
-export default defineConfig({
-  project: 'my-app',
-  agents: {
-    deploy: { trigger: 'on-merge', target: 'production' }
-  }
-})
-```
-
-## How Aixle compares
-
-| Feature | Aixle | GitHub Actions | Jenkins |
-|---|---|---|---|
-| Natural language input | ✓ | ✗ | ✗ |
-| AI agent execution | ✓ | ✗ | ✗ |
-| No-code UI | ✓ | Partial | ✗ |
-| Self-hostable | ✓ | ✗ | ✓ |
-| Open source | ✓ | ✗ | ✓ |
+> **tip** **Open source and self-hosted.** Aixle Flow runs entirely in your own infrastructure via Docker Compose. No cloud dependency, no vendor lock-in.

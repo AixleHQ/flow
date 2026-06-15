@@ -1,6 +1,17 @@
 import agents from './agents.md?raw';
+import apiGuide from './api-guide.md?raw';
+import board from './board.md?raw';
+import cliRef from './cli-ref.md?raw';
+import configSchema from './config-schema.md?raw';
+import configuration from './configuration.md?raw';
+import integrations from './integrations.md?raw';
+import mcp from './mcp.md?raw';
 import quickStart from './quick-start.md?raw';
-import whatIsAixle from './what-is-aixle.md?raw';
+import reference from './reference.md?raw';
+import runtimes from './runtimes.md?raw';
+import tools from './tools.md?raw';
+import userGuide from './user-guide.md?raw';
+import workflows from './workflows.md?raw';
 
 export interface TocItem {
   id: string;
@@ -39,106 +50,90 @@ function slugify(text: string): string {
     .replace(/-+/g, '-');
 }
 
-const STUB_CONTENT = `## Coming soon
-
-This page is under development. Check back soon for more information.`;
-
 export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
-  'what-is-aixle': {
-    title: 'What is Aixle',
-    section: 'Getting started',
-    content: whatIsAixle,
-    toc: extractToc(whatIsAixle),
+  'user-guide': {
+    title: 'User Guide',
+    section: 'User guide',
+    content: userGuide,
+    toc: extractToc(userGuide),
   },
   'quick-start': {
     title: 'Quick start',
-    section: 'Getting started',
+    section: 'User guide',
     content: quickStart,
     toc: extractToc(quickStart),
   },
   agents: {
     title: 'Agents',
-    section: 'Core concepts',
+    section: 'User guide',
     content: agents,
     toc: extractToc(agents),
   },
-  'install-guide': {
-    title: 'Installation guide',
-    section: 'Getting started',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  runtimes: {
+    title: 'Runtimes',
+    section: 'User guide',
+    content: runtimes,
+    toc: extractToc(runtimes),
   },
-  configuration: {
-    title: 'Configuration',
-    section: 'Getting started',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  tools: {
+    title: 'Tools',
+    section: 'User guide',
+    content: tools,
+    toc: extractToc(tools),
   },
-  'self-hosting': {
-    title: 'Self-hosting',
-    section: 'Getting started',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  mcp: {
+    title: 'MCP servers',
+    section: 'User guide',
+    content: mcp,
+    toc: extractToc(mcp),
   },
-  cli: {
-    title: 'CLI setup',
-    section: 'Getting started',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  board: {
+    title: 'Board',
+    section: 'User guide',
+    content: board,
+    toc: extractToc(board),
   },
-  'tasks-overview': {
-    title: 'Tasks',
-    section: 'Core concepts',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
-  },
-  tasks: {
-    title: 'Tasks Overview',
-    section: 'Core concepts',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  workflows: {
+    title: 'Workflows',
+    section: 'User guide',
+    content: workflows,
+    toc: extractToc(workflows),
   },
   integrations: {
     title: 'Integrations',
-    section: 'Core concepts',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+    section: 'User guide',
+    content: integrations,
+    toc: extractToc(integrations),
   },
-  permissions: {
-    title: 'Permissions',
-    section: 'Core concepts',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  configuration: {
+    title: 'Configuration',
+    section: 'User guide',
+    content: configuration,
+    toc: extractToc(configuration),
   },
-  deploy: {
-    title: 'Deploy a repo',
-    section: 'Guides',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
-  },
-  'api-guide': {
-    title: 'Use the API',
-    section: 'Guides',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
-  },
-  advanced: {
-    title: 'Advanced',
-    section: 'Guides',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+  reference: {
+    title: 'Reference',
+    section: 'Reference',
+    content: reference,
+    toc: extractToc(reference),
   },
   'cli-ref': {
     title: 'CLI reference',
-    section: 'Guides',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+    section: 'Reference',
+    content: cliRef,
+    toc: extractToc(cliRef),
+  },
+  'api-guide': {
+    title: 'API',
+    section: 'Reference',
+    content: apiGuide,
+    toc: extractToc(apiGuide),
   },
   'config-schema': {
-    title: 'Config schema',
-    section: 'Guides',
-    content: STUB_CONTENT,
-    toc: extractToc(STUB_CONTENT),
+    title: 'Configuration reference',
+    section: 'Reference',
+    content: configSchema,
+    toc: extractToc(configSchema),
   },
 };
 

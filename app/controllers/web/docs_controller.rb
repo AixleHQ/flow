@@ -7,7 +7,7 @@ class Web::DocsController < Web::ApplicationController
   skip_before_action :enforce_onboarding
 
   def show
-    slug = (params[:slug].presence || "what-is-aixle").downcase
+    slug = (params[:slug].presence || "user-guide").downcase
 
     unless page_exists?(slug)
       render inertia: "Docs/DocsPage", props: { slug: slug }, status: :not_found
@@ -22,7 +22,7 @@ class Web::DocsController < Web::ApplicationController
   private
 
   def page_exists?(slug)
-    %w[what-is-aixle quick-start agents install-guide configuration self-hosting cli
-       tasks-overview tasks integrations permissions deploy api-guide advanced cli-ref config-schema].include?(slug)
+    %w[user-guide quick-start agents runtimes tools mcp board workflows
+       integrations configuration reference cli-ref api-guide config-schema].include?(slug)
   end
 end

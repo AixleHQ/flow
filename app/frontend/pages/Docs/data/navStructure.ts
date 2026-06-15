@@ -12,49 +12,27 @@ export interface NavSection {
 
 export const NAV_STRUCTURE: NavSection[] = [
   {
-    label: 'Getting started',
+    label: 'User guide',
     items: [
-      { slug: 'what-is-aixle', label: 'What is Aixle' },
+      { slug: 'user-guide', label: 'Overview' },
       { slug: 'quick-start', label: 'Quick start' },
-      {
-        slug: 'install-guide',
-        label: 'Installation guide',
-        children: [
-          { slug: 'configuration', label: 'Configuration' },
-          { slug: 'self-hosting', label: 'Self-hosting' },
-          { slug: 'cli', label: 'CLI setup' },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Core concepts',
-    items: [
       { slug: 'agents', label: 'Agents' },
-      {
-        slug: 'tasks-overview',
-        label: 'Tasks',
-        children: [
-          { slug: 'tasks', label: 'Overview' },
-          { slug: 'integrations', label: 'Integrations' },
-          { slug: 'permissions', label: 'Permissions' },
-        ],
-      },
+      { slug: 'runtimes', label: 'Runtimes' },
+      { slug: 'tools', label: 'Tools' },
+      { slug: 'mcp', label: 'MCP servers' },
+      { slug: 'board', label: 'Board' },
+      { slug: 'workflows', label: 'Workflows' },
+      { slug: 'integrations', label: 'Integrations' },
+      { slug: 'configuration', label: 'Configuration' },
     ],
   },
   {
-    label: 'Guides',
+    label: 'Reference',
     items: [
-      { slug: 'deploy', label: 'Deploy a repo', badge: 'New' },
-      { slug: 'api-guide', label: 'Use the API' },
-      {
-        slug: 'advanced',
-        label: 'Advanced',
-        children: [
-          { slug: 'cli-ref', label: 'CLI reference' },
-          { slug: 'config-schema', label: 'Config schema' },
-        ],
-      },
+      { slug: 'reference', label: 'Overview' },
+      { slug: 'cli-ref', label: 'CLI reference' },
+      { slug: 'api-guide', label: 'API' },
+      { slug: 'config-schema', label: 'Configuration reference' },
     ],
   },
 ];

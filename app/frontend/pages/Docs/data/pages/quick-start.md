@@ -1,52 +1,91 @@
-# Quick start
+# Quickstart
 
-Get Aixle running in under 5 minutes. Install the CLI, connect your repo, and run your first agent task.
+Get a working Aixle Flow instance on your machine. Plan for **10–15
+minutes** on first run (most of the time is Docker pulling images and
+building agent containers); subsequent starts are seconds.
 
-## Install
+> **info** **Goal: under 5 minutes.** We're not there yet. The agent image build
+> is the slow step. Tracking it on the public roadmap.
 
-Install the Aixle CLI globally using npm or your package manager of choice.
+## Prerequisites
 
-```bash
-npm install -g aixle
-aixle login
-```
+- **Docker** and **Docker Compose** (Desktop on macOS/Windows, or
+  Docker Engine on Linux). 8 GB of RAM allocated to Docker is enough
+  for a single developer.
+- **git**.
+- That's it. Ruby and Node are *not* required on the host — everything
+  runs in containers.
 
-## Connect your repo
-
-Run `aixle init` in your project root. Aixle will detect your stack and scaffold a config file.
-
-```bash
-cd my-project
-aixle init
-```
-
-> **info** **Node 18+ required.** Run `node -v` to check your version before installing.
-
-## Run your first task
-
-Once connected, describe a task in plain English from the CLI or the web UI.
+## 1. Clone
 
 ```bash
-aixle run "Add input validation to the registration form email field"
+git clone https://github.com/palad-ai/palad-app.git
+cd palad-app
 ```
 
-Aixle will:
-
-1. Analyse your codebase to understand the relevant files
-2. Generate the code change
-3. Run your test suite to verify the result
-4. Open a pull request with a full summary
-
-> **tip** **Use `--dry-run` first.** Run `aixle run --dry-run "..."` to preview what the agent would do before any files are changed.
-
-## Connect GitHub
-
-To let Aixle open pull requests automatically, install the GitHub App and grant it access to your repositories.
+## 2. Configure environment
 
 ```bash
-aixle github connect
+cp .env.example .env.development
 ```
 
-Follow the browser prompt to authorize the app. Once connected, Aixle can read code, write branches, and open PRs on your behalf.
+You can leave most values as-is to boot the app. To enable OAuth sign-in,
+fill in the matching provider section:
 
-> **warning** **Permissions scope.** Aixle requests the minimum GitHub permissions needed — read code, write pull requests, read issues. It does not request write access to repository settings or webhooks.
+| Want to enable…                  | Variables to set                                              |
+| -------------------------------- | ------------------------------------------------------------- |
+| Google sign-in                   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                    |
+| GitHub App integration           | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` |
+| GitLab integration               | a personal access token (added in-app) — set `GITLAB_ENDPOINT` only for self-managed |
+
+See the Integrations page for the provider setup walkthroughs.
+
+## 3. Build and seed
+
+```bash
+make setup
+```
+
+This single command:
+
+- Builds the web, worker, and Temporal images.
+- Installs Ruby gems (Bundler) and JS packages (Yarn) inside the web
+  container.
+- Creates the database, runs migrations, and seeds defaults.
+- Builds the four agent runtime images
+  (`aixle/agent-base-core`, `aixle/claude-code`, `aixle/cursor-cli`,
+  `aixle/codex`, `aixle/gemini-cli`).
+
+## 4. Run
+
+Two terminals required — `make worker` needs to stay attached to a TTY:
+
+```bash
+# terminal 1 — web, db, redis, traefik, temporal
+make up
+
+# terminal 2 — Temporal worker
+make worker
+```
+
+Open **http://localhost:4000** and sign in with the seeded user (or
+register a new one if registration is enabled in your `.env`).
+
+## 5. First workflow run
+
+1. Create a project. Aixle Flow comes with three presets: `simple_kanban`,
+   `dev_team`, `full_sdlc` — pick `dev_team` for a board with workflow
+   bindings already wired up.
+2. Drop a card in the **In Progress** column. The column's binding
+   triggers a workflow run on a containerized agent.
+3. Watch the run unfold in the right-hand pane: each step shows live
+   stdout, token usage, and cost.
+
+If the run fails, see the Agents page (Troubleshooting section).
+
+## Common follow-ups
+
+- **Connect a real Git repo** → see the Integrations page
+- **Customize a workflow** → see the Workflows page
+- **Bring your own agent runtime** → see the Agents page
+- **Configure environment variables** → see the Configuration reference page

@@ -23,12 +23,9 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
         <Link href="/docs" className={`${classes.navLink} ${classes.navLinkActive}`}>
           Docs
         </Link>
-        <span className={classes.navLink}>Guides</span>
         <Link href="/docs/api-guide" className={classes.navLink}>
           API
         </Link>
-        <span className={classes.navLink}>Changelog</span>
-        <span className={classes.navLink}>Community</span>
       </nav>
 
       <div className={classes.navbarRight}>
