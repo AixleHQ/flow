@@ -84,4 +84,27 @@ class WorkflowRunTest < ActiveSupport::TestCase
 
     assert_equal step_run, run.current_step_run
   end
+
+  # --- mark_quota_failed! ---
+
+  test "mark_quota_failed! sets failure_reason and credential FK" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    credential = create(:agent_credential, user: @admin, agent_type: "claude_code")
+
+    run.mark_quota_failed!(credential_id: credential.id)
+    run.reload
+
+    assert_equal "quota_exceeded", run.failure_reason
+    assert_equal credential.id, run.failed_agent_credential_id
+  end
+
+  test "mark_quota_failed! works with nil credential_id" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+
+    run.mark_quota_failed!(credential_id: nil)
+    run.reload
+
+    assert_equal "quota_exceeded", run.failure_reason
+    assert_nil run.failed_agent_credential_id
+  end
 end

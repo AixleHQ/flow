@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class StepRunResource < ApplicationResource
-  attributes :id, :step_id, :state, :step_note, :error_message,
+  attributes :id, :step_id, :state, :step_note, :error_message, :error_category,
              :terminal_session_id, :started_at, :completed_at
 
   attribute :step_name do |sr|

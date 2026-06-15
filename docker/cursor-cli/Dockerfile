@@ -15,11 +15,13 @@ RUN useradd -m -d /home/cursor -s /bin/bash cursor \
 
 USER cursor
 WORKDIR /home/cursor
-RUN curl https://cursor.com/install -fsS | bash
+RUN curl https://cursor.com/install -fsS | bash \
+    && test -x /home/cursor/.local/bin/agent
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 USER root
-RUN ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
+RUN test -x /home/cursor/.local/bin/agent \
+    && ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
     && mkdir -p /home/cursor/.config/cursor /home/cursor/.cursor \
     && chown -R cursor:cursor /home/cursor
 

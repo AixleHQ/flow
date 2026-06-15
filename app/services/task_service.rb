@@ -140,6 +140,7 @@ class TaskService
       binding = column.column_workflow_binding
       return unless binding&.trigger_mode&.to_sym == :auto
       return if task.task_waits.pending.exists?
+      return if quota_block_auto_trigger?(binding, column)
 
       WorkflowService.start(
         workflow: binding.workflow,
@@ -183,6 +184,14 @@ class TaskService
           .where("position >= ? AND position < ?", new_pos, old_pos)
           .update_all("position = position + 1")
       end
+    end
+
+    def quota_block_auto_trigger?(binding, column)
+      last_run = binding.workflow.runs
+        .where(project: column.board.project)
+        .order(created_at: :desc)
+        .first
+      last_run&.failure_reason == "quota_exceeded"
     end
   end
 end

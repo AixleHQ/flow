@@ -17,6 +17,12 @@ workflows:
       - name: asset_cleanup_dismissed_activity
         task_queue: aixle_ruby
 
+  - name: quota_error_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: workflow_scan_quota_errors_activity
+        task_queue: aixle_ruby
+
   - name: workflow_execution_workflow
     owner: aixle_ruby
     activities:

@@ -112,6 +112,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.datetime "expires_at"
     t.datetime "last_used_at"
     t.jsonb "metadata", default: {}
+    t.datetime "quota_error_detected_at"
+    t.string "status"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
@@ -462,7 +464,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "package"
-    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
@@ -487,6 +488,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   create_table "step_runs", force: :cascade do |t|
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.string "error_category"
     t.jsonb "error_history", default: [], null: false
     t.text "error_message"
     t.integer "retry_count", default: 0, null: false
@@ -778,6 +780,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.bigint "board_task_id"
     t.datetime "completed_at"
     t.datetime "created_at", null: false
+    t.bigint "failed_agent_credential_id"
+    t.string "failure_reason"
     t.jsonb "input_asset_ids", default: []
     t.string "mode", default: "interactive", null: false
     t.bigint "project_id", null: false
@@ -791,6 +795,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.bigint "user_id", null: false
     t.bigint "workflow_id", null: false
     t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
+    t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
@@ -887,6 +892,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   add_foreign_key "users", "users", column: "invited_by_id"
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "workflow_runs"
+  add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "board_tasks"
   add_foreign_key "workflow_runs", "projects"
   add_foreign_key "workflow_runs", "users"

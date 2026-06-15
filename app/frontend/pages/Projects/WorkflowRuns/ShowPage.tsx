@@ -1,6 +1,8 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import {
   ActionIcon,
+  Alert,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -17,6 +19,7 @@ import {
   Tooltip,
 } from '@mantine/core';
 import {
+  IconAlertTriangle,
   IconArrowLeft,
   IconArrowRight,
   IconCheck,
@@ -67,6 +70,7 @@ interface StepRun {
   state: string;
   stepNote: string | null;
   errorMessage: string | null;
+  errorCategory: string | null;
   terminalSessionId: number | null;
   terminalSessionState: string | null;
   allowNonInteractive: boolean;
@@ -104,6 +108,8 @@ interface WorkflowRun {
   agentType: string | null;
   userName: string | null;
   costCents: number;
+  failureReason: string | null;
+  failedAccountName: string | null;
 }
 
 interface Project {
@@ -350,6 +356,20 @@ const WorkflowRunShowPage = () => {
       },
     );
   }, [runPath]);
+
+  const handleRerun = useCallback(() => {
+    setActionLoading(true);
+    router.post(
+      `${basePath}/workflow_runs`,
+      {
+        workflowRun: {
+          workflowId: run.workflowId,
+          mode: run.mode,
+        },
+      },
+      { onFinish: () => setActionLoading(false) },
+    );
+  }, [basePath, run.workflowId, run.mode]);
 
   const handleFinishSession = useCallback(async (sessionId: number) => {
     setActionLoading(true);
@@ -919,6 +939,31 @@ const WorkflowRunShowPage = () => {
         {/* ── Progress Bar ───────────────────────── */}
         {isActive && run.stepsTotal > 0 && (
           <Progress value={progressPct} size="xs" color={run.state === 'running' ? 'blue' : 'yellow'} radius={0} />
+        )}
+
+        {/* ── Quota Error Banner ──────────────────── */}
+        {run.failureReason === 'quota_exceeded' && (
+          <Alert
+            icon={<IconAlertTriangle size={16} />}
+            color="orange"
+            title="Workflow stopped: account ran out of credits"
+            radius={0}
+          >
+            <Stack gap="xs">
+              <Text size="sm">
+                <strong>{run.failedAccountName ?? 'A connected account'}</strong> hit its quota limit. Top up the
+                account and re-run, or switch to a different connected account.
+              </Text>
+              <Group gap="xs">
+                <Button size="xs" variant="light" color="orange" onClick={handleRerun} loading={actionLoading}>
+                  Re-run Workflow
+                </Button>
+                <Anchor size="xs" href="/profile">
+                  Manage Accounts
+                </Anchor>
+              </Group>
+            </Stack>
+          </Alert>
         )}
 
         {/* ── Content ────────────────────────────── */}
