@@ -147,7 +147,7 @@ const SessionPage = () => {
   const isActive = ['not_started', 'running', 'ready'].includes(s.state);
   const isFinishing = s.state === 'finishing';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
-  const [finishing, setFinishing] = useState(false);
+  const [finishRequested, setFinishRequested] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
   const [termLoaded, setTermLoaded] = useState(false);
 
@@ -169,13 +169,13 @@ const SessionPage = () => {
   const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
 
   const handleFinish = useCallback(() => {
-    setFinishing(true);
+    setFinishRequested(true);
     router.post(
       `${basePath}/aixle_builder/${s.id}/finish`,
       {},
       {
         preserveScroll: true,
-        onFinish: () => setFinishing(false),
+        onFinish: () => setFinishRequested(false),
       },
     );
   }, [s.id, basePath]);
@@ -375,7 +375,7 @@ const SessionPage = () => {
     <>
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
-        {(finishing || isFinishing) && (
+        {(finishRequested || isFinishing) && (
           <div className={classes.finishingOverlay}>
             <Stack align="center" gap="sm">
               <Loader color="yellow" size="lg" />
@@ -429,7 +429,7 @@ const SessionPage = () => {
                 variant="outline"
                 color="yellow"
                 onClick={handleFinish}
-                loading={finishing}
+                loading={finishRequested}
                 leftSection={<IconPlayerStop size={14} />}
               >
                 Finish Session
