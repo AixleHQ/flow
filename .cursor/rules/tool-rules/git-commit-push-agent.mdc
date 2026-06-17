@@ -5,6 +5,20 @@ alwaysApply: false
 ---
 # Git Commit and Push Conventions
 
+## Branch Naming
+
+Always use the format: `feature/<issue-number>-<short-description>`
+
+- Prefix is always `feature/`
+- Followed by the GitHub issue number (e.g. `209`)
+- Followed by a hyphen and a short kebab-case description of the work
+- Examples:
+  - `feature/209-sidebar-nav-redesign`
+  - `feature/142-session-cost-display`
+  - `feature/301-linear-oauth-integration`
+- If there is no GitHub issue, use a descriptive slug without a number: `feature/refactor-auth-layout`
+- Never use `cursor/`, `fix/`, `chore/` or other prefixes — always `feature/`
+
 ## Critical Rules
 
 - Always run `git add .` from the workspace root to stage changes
