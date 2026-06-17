@@ -22,6 +22,14 @@ on:
         required: false
         type: string
         default: ""
+      artifact-path:
+        required: false
+        type: string
+        default: ""
+      artifact-name:
+        required: false
+        type: string
+        default: "check-artifacts"
 
 permissions:
   contents: read
@@ -79,7 +87,24 @@ jobs:
         run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web bundle exec rails db:create db:migrate
 
       - name: Run check
-        run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make ${{ inputs.command }}
+        run: |
+          ARTIFACT_PATH="${{ inputs.artifact-path }}"
+          if [ -n "$ARTIFACT_PATH" ]; then
+            mkdir -p "$ARTIFACT_PATH"
+            docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
+              -v "$GITHUB_WORKSPACE/$ARTIFACT_PATH:/app/$ARTIFACT_PATH" \
+              web make ${{ inputs.command }}
+          else
+            docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make ${{ inputs.command }}
+          fi
+
+      - name: Upload artifacts
+        if: ${{ inputs.artifact-path != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: ${{ inputs.artifact-path }}
+          retention-days: 30
 
       - name: Tear down
         if: ${{ always() && inputs.needs-db }}
