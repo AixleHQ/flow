@@ -20,7 +20,7 @@ RUN yarn install
 
 COPY . /app
 
-ENV PATH /app/bin:/app/node_modules/.bin:$PATH
+ENV PATH=/app/bin:/app/node_modules/.bin:$PATH
 
 ARG APP_VERSION
 ENV APP_VERSION=${APP_VERSION}
@@ -42,4 +42,4 @@ RUN RAILS_SECRET_KEY_BASE=secret \
     VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
     rails assets:precompile
 
-CMD bash -c "bundle exec puma -C config/puma.rb"
+CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]
