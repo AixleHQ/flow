@@ -5,19 +5,29 @@ alwaysApply: false
 ---
 # Git Commit and Push Conventions
 
-## Branch Naming
+## Branch Naming (git-flow)
 
-Always use the format: `feature/<issue-number>-<short-description>`
+Format: `<type>/<issue-number>-<short-description>`
 
-- Prefix is always `feature/`
-- Followed by the GitHub issue number (e.g. `209`)
-- Followed by a hyphen and a short kebab-case description of the work
+| Type | When to use |
+|---|---|
+| `feature/` | New functionality, UI changes, new pages or components |
+| `bugfix/` | Bug fixes on a non-production branch |
+| `hotfix/` | Critical fixes that must go directly to production |
+| `refactor/` | Code restructuring with no behaviour change |
+| `chore/` | Maintenance, dependency updates, config changes |
+| `docs/` | Documentation-only changes |
+| `release/` | Release preparation branches |
+
+- Always include the GitHub issue number after the prefix when one exists: `feature/209-sidebar-nav-redesign`
+- If there is no GitHub issue, use a descriptive slug only: `refactor/auth-layout-cleanup`
+- Short description is kebab-case, concise (3–5 words max)
 - Examples:
   - `feature/209-sidebar-nav-redesign`
-  - `feature/142-session-cost-display`
-  - `feature/301-linear-oauth-integration`
-- If there is no GitHub issue, use a descriptive slug without a number: `feature/refactor-auth-layout`
-- Never use `cursor/`, `fix/`, `chore/` or other prefixes — always `feature/`
+  - `bugfix/187-session-cost-zero`
+  - `hotfix/214-broken-login-redirect`
+  - `refactor/auth-layout-cleanup`
+  - `chore/bump-mantine-v8`
 
 ## Critical Rules
 
