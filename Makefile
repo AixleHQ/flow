@@ -49,14 +49,14 @@ check_all:
 	done; \
 	if [ $$fail -ne 0 ]; then \
 	  echo ""; \
-	  echo "=== Failure output (last 80 lines per failed check) ==="; \
+	  echo "=== Failure output (full log per failed check) ==="; \
 	  for f in $(CHECK_RESULTS)/*.status; do \
 	    name=$$(basename $$f .status); \
 	    status=$$(cat $$f); \
 	    if [ "$$status" != "0" ]; then \
 	      echo ""; \
-	      echo "--- $$name (full log: $(CHECK_RESULTS)/$$name.log) ---"; \
-	      tail -80 $(CHECK_RESULTS)/$$name.log; \
+	      echo "--- $$name (exit $$status) ---"; \
+	      cat $(CHECK_RESULTS)/$$name.log; \
 	    fi; \
 	  done; \
 	  exit 1; \
