@@ -16,21 +16,12 @@ cd palad-app
 
 2. Set up and start the project:
 ```bash
-make start   # first time: env files, build, deps, start everything
-make up      # every day: start all services
+make setup   # first time: build images, install deps, prepare database
+make up      # start all services
 ```
 
-Or step by step:
-```bash
-make setup   # first time only
-make up      # every day
-```
-
-On first run, env files are created automatically:
-- `.env.development` from `.env.example`
-- `test/playwright/helpers/.env` from its `.env.example`
-
-Fill in secrets from 1Password when you need integrations (OAuth, GitHub App, etc.). `make check-env` prints placeholder warnings without blocking startup.
+On first run, `.env.development` is created automatically from `.env.example`.
+All integrations (OAuth, GitHub App, etc.) are optional — fill in real keys when you need them. The app works locally without them (password login).
 
 `make setup` will:
 - Build Docker images
@@ -39,7 +30,7 @@ Fill in secrets from 1Password when you need integrations (OAuth, GitHub App, et
 - Create and set up the database
 - Build agent Docker images
 
-`make up` starts all services in one terminal: web, worker, db, redis, traefik, temporal, and more. A fast dependency check runs on startup; if you skipped `make setup`, packages will be installed on first start (slower).
+`make up` starts all services in one terminal: web, worker, db, redis, traefik, temporal, and more. On each start, the entrypoint checks dependencies and runs pending migrations automatically.
 
 3. Access the application at `http://localhost:4000`
 
@@ -99,12 +90,10 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 
 ### Docker & Runtime
 - First-time setup and run: `make start`
-- First-time setup only: `make setup`
+- First-time setup: `make setup`
 - Start all services: `make up`
 - Stop all services: `make down`
 - Clean reset (removes volumes): `make reset`
-- Environment diagnostics: `make doctor`
-- Check env placeholders (informational): `make check-env`
 - Build agent images only: `make build-agents`
 - Open shell in web container: `make shell`
 - Show available commands: `make help`

@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default ensure-env check-env setup up start down reset doctor worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 DOCKER_COMPOSE ?= docker compose
 
@@ -134,34 +134,24 @@ license-report: license-report-ruby license-report-js
 default: check
 
 ensure-env:
-	@bin/ensure-env
+	@test -f .env.development || (cp .env.example .env.development && echo "Created .env.development from .env.example")
+	@test -f test/playwright/helpers/.env || (cp test/playwright/helpers/.env.example test/playwright/helpers/.env && echo "Created test/playwright/helpers/.env")
 
-check-env:
-	@bin/check-env
-
-# Cold path: build images and install all dependencies into volumes
-setup: ensure-env check-env
+# First-time setup: build images, install deps, prepare database
+setup: ensure-env
 	$(DOCKER_COMPOSE) build
-	$(DOCKER_COMPOSE) up -d db
-	$(DOCKER_COMPOSE) run --rm --no-deps web bin/docker-bootstrap install
+	$(DOCKER_COMPOSE) run --rm web echo "Setup complete"
 	@make build-agents
 
-# Warm path: start all services with fast dependency check
-up: ensure-env check-env
+# Start all services
+up: ensure-env
 	$(DOCKER_COMPOSE) up
-
-# First-time setup and start in one command
-start: setup up
 
 down:
 	$(DOCKER_COMPOSE) down
 
 reset:
 	$(DOCKER_COMPOSE) down -v
-	rm -f tmp/bootstrap.stamp
-
-doctor:
-	@bin/doctor
 
 # Backward compat alias
 worker:
@@ -194,12 +184,10 @@ build-agents:
 help:
 	@echo "Available commands:"
 	@echo "  make setup                  - Build images and install all dependencies (first-time setup)"
-	@echo "  make start                  - setup + up (full first-time bootstrap and run)"
 	@echo "  make up                     - Start all services (web, worker, db, redis, temporal, ...)"
 	@echo "  make down                   - Stop all containers"
 	@echo "  make reset                  - Stop containers and remove volumes (destructive)"
-	@echo "  make doctor                 - Check local dev environment health"
-	@echo "  make worker                 - Start worker only (backward compat alias)"
+	@echo "  make worker                 - Start worker only"
 	@echo "  make deps                   - Setup dependencies"
 	@echo "  make db-prepare             - Prepare database (create, migrate, seed)"
 	@echo "  make db-reset               - Reset database (drop, create, migrate, seed)"
