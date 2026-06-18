@@ -1,78 +1,34 @@
 <%#
-# Show
+# User Show
 
-This view is the template for the show page.
-It renders the attributes of a resource,
-as well as a link to its edit page.
+Customises Administrate's stock show page for users by adding an
+Impersonate / Stop Impersonate action to the header.
 
-## Local variables:
-
-- `page`:
-  An instance of [Administrate::Page::Show][1].
-  Contains methods for accessing attributes of the associated resource,
-  as well as helpers for describing how each attribute should be displayed.
-
-[1]: http://www.rubydoc.info/gems/administrate/Administrate/Page/Show
+Administrate 1.0 exposes `content_for` slots in its page templates
+(`:header_middle`, `:header_last`, `:before_main`, `:after_main`), so we inject
+our action into one of those slots and render the gem's template instead of
+copying the whole page. This keeps us in sync with future Administrate updates.
 %>
 
-<% content_for(:title) { t("administrate.actions.show_resource", name: page.page_title) } %>
-
-<header class="main-content__header" role="banner">
-  <h1 class="main-content__page-title">
-    <%= content_for(:title) %>
-  </h1>
-
-  <div>
-    <% if accessible_action?(page.resource, :edit) %>
-      <%= link_to(
-        t("administrate.actions.edit_resource", name: page.resource_name),
-        [:edit, namespace, page.resource],
-        class: "button",
+<% content_for(:header_last) do %>
+  <% unless page.resource.super_admin? %>
+    <% if impersonated? && current_user.id == page.resource.id %>
+      <%= button_to(
+        t("administrate.actions.stop_impersonate"),
+        stop_impersonate_admin_user_path(page.resource),
+        method: :post,
+        class: "button button--danger"
+      ) %>
+    <% elsif !impersonated? && current_user.id != page.resource.id %>
+      <%= button_to(
+        t("administrate.actions.impersonate"),
+        impersonate_admin_user_path(page.resource),
+        method: :post,
+        class: "button"
       ) %>
     <% end %>
+  <% end %>
+<% end %>
 
-    <% if accessible_action?(page.resource, :destroy) %>
-      <%= link_to(
-        t("administrate.actions.destroy"),
-        [namespace, page.resource],
-        class: "button button--danger",
-        method: :delete,
-        data: { confirm: t("administrate.actions.confirm") }
-      )  %>
-    <% end %>
-
-    <% if !page.resource.super_admin? %>
-      <% if impersonated? && current_user.id == page.resource.id %>
-        <%= link_to(
-          "Stop Impersonate",
-          stop_impersonate_admin_user_path(page.resource),
-          method: :post,
-          class: "button button--danger"
-        ) %>
-      <% elsif !impersonated? && current_user.id != page.resource.id %>
-        <%= link_to(
-          "Impersonate",
-          impersonate_admin_user_path(page.resource),
-          method: :post,
-          class: "button"
-        ) %>
-      <% end %>
-    <% end %>
-  </div>
-</header>
-
-<section class="main-content__body">
-  <dl>
-    <% page.attributes.each do |attribute| %>
-      <dt class="attribute-label" id="<%= attribute.name %>">
-      <%= t(
-        "helpers.label.#{resource_name}.#{attribute.name}",
-        default: attribute.name.titleize,
-      ) %>
-      </dt>
-
-      <dd class="attribute-data attribute-data--<%=attribute.html_class%>"
-          ><%= render_field attribute, page: page %></dd>
-    <% end %>
-  </dl>
-</section>
+<%# `page` is passed to the show view as a local (namespace/resource_name are helpers), so forward it. %>
+<%= render template: "administrate/application/show", locals: { page: page } %>

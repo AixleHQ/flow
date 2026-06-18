@@ -1,0 +1,43 @@
+<%#
+# User collection item actions
+
+Renders Administrate's stock per-row actions (edit/destroy) and appends an
+Impersonate / Stop Impersonate action on the index page. Overriding this small
+partial (instead of copying the whole `_collection` table) keeps us in sync
+with future Administrate updates. The matching header cell is added in
+`_collection_header_actions`.
+%>
+
+<%= render(
+  partial: "administrate/application/collection_item_actions",
+  locals: {
+    collection_presenter: collection_presenter,
+    collection_field_name: collection_field_name,
+    page: page,
+    namespace: namespace,
+    resource: resource,
+    table_title: table_title
+  }
+) %>
+
+<% if action_name == "index" %>
+  <td class="cell-label--action-button">
+    <% unless resource.super_admin? %>
+      <% if current_user.id == resource.id %>
+        <%= button_to(
+          t("administrate.actions.stop_impersonate"),
+          stop_impersonate_admin_user_path(resource),
+          method: :post,
+          class: "link"
+        ) %>
+      <% else %>
+        <%= button_to(
+          t("administrate.actions.impersonate"),
+          impersonate_admin_user_path(resource),
+          method: :post,
+          class: "link"
+        ) %>
+      <% end %>
+    <% end %>
+  </td>
+<% end %>

@@ -25,6 +25,11 @@ gem "aasm"
 gem "administrate"
 gem "administrate-field-shrine"
 gem "administrate-field-jsonb"
+# Asset pipeline for the Administrate admin UI. Administrate <1.0 pulled in
+# sprockets-rails transitively; 1.0 dropped that and ships precompiled assets,
+# so we now declare a pipeline directly (Propshaft serves the gem's prebuilt
+# CSS/JS without a compile step). See administrate docs/migrating-to-v1.md.
+gem "propshaft"
 gem "audited"
 gem "config"
 gem "enumerize"
