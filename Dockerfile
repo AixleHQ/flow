@@ -7,10 +7,10 @@ RUN apk update && \
 RUN mkdir /app
 WORKDIR /app
 
-COPY Gemfile Gemfile.lock ./
+COPY Gemfile Gemfile.lock .ruby-version ./
 
-RUN gem install bundler -v 2.6.5
-RUN bundle install
+RUN gem install bundler -v 4.0.11
+RUN bundle config set --local frozen true && bundle install
 
 COPY package.json yarn.lock .yarnrc.yml  ./
 COPY .yarn .yarn

@@ -25,10 +25,10 @@
     "sass-embedded": "^1.85.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.50.1",
-    "vite": "^7.3.1",
-    "vite-plugin-ruby": "^5.1.2",
-    "vite-tsconfig-paths": "^6.0.3",
-    "vitest": "^4.0.16"
+    "vite": "^8.0.16",
+    "vite-plugin-ruby": "^5.2.2",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -38,7 +38,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@inertia-cable/react": "^0.2.2",
     "@inertiajs/react": "^3.0.1",
-    "@inertiajs/vite": "^3.0.2",
+    "@inertiajs/vite": "^3.4.0",
     "@mantine/core": "^9.0.0",
     "@mantine/dates": "^9.0.0",
     "@mantine/form": "^9.0.0",
@@ -56,7 +56,7 @@
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
     "@uppy/utils": "^7.2.0",
-    "@vitejs/plugin-react-swc": "^4.2.2",
+    "@vitejs/plugin-react-swc": "^4.3.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",

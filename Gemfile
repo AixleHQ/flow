@@ -1,5 +1,7 @@
 source "https://rubygems.org"
 
+ruby file: ".ruby-version"
+
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.0"
 # Use postgresql as the database for Active Record
@@ -90,7 +92,7 @@ group :development, :test do
   gem "faker"
 
   # Debugging tools
-  gem "debug", platforms: [ :mri, :mingw, :x64_mingw ]
+  gem "debug"
   gem "dotenv-rails", require: false
   gem "bullet"
   gem "byebug"
