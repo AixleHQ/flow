@@ -1,0 +1,12 @@
+/* Global baseline styles — applied on top of Mantine */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+::placeholder {
+  color: var(--app-text-tertiary) !important;
+  opacity: 1; /* Firefox reduces opacity by default */
+}

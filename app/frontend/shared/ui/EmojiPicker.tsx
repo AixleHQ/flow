@@ -45,7 +45,7 @@ export const EmojiPicker: FC<EmojiPickerProps> = ({ value, onChange, disabled })
             <Box
               style={{
                 fontSize: 12,
-                color: 'var(--app-text-muted)',
+                color: 'var(--app-text-tertiary)',
               }}
             >
               Icon

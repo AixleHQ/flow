@@ -1,86 +1,534 @@
+/* ── Root ─────────────────────────────────────────────────────────────────── */
+
 .root {
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--app-border-default);
   background-color: var(--app-bg-paper);
-  transition: width 0.2s ease, min-width 0.2s ease;
-  overflow-x: hidden;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: width 0.2s cubic-bezier(0.2, 0, 0, 1),
+              min-width 0.2s cubic-bezier(0.2, 0, 0, 1);
+  z-index: 20;
 }
+
+.rootCollapsed {
+  /* width/minWidth are set via inline style */
+}
+
+/* ── Scroll area ─────────────────────────────────────────────────────────── */
 
 .scrollArea {
   flex: 1;
-  padding-top: 4px;
   overflow-y: auto;
   overflow-x: hidden;
+  padding: 10px;
+  scrollbar-width: none;
 }
 
-.navLink {
-  min-height: 36px;
-  padding: 0 12px;
-  margin: 0 8px;
-  border-radius: 4px;
-  font-size: 13px;
-  color: var(--app-text-secondary);
+.scrollArea::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Nav group label ─────────────────────────────────────────────────────── */
+
+.navGroupLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  padding: 0 10px;
+  margin: 12px 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.15s, height 0.15s;
+  display: block;
+}
+
+.navGroupLabelCollapsed {
+  opacity: 0;
+  min-height: 4px;
+  height: 4px;
+  margin: 8px 0 2px;
+  overflow: hidden;
+}
+
+/* ── Nav overview item (first "Overview" item) ───────────────────────────── */
+
+.navOverview {
   display: flex;
   align-items: center;
-  gap: 8px;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.navLink:hover {
-  background-color: var(--app-action-hover);
-}
-
-.navLinkActive {
-  background-color: var(--app-action-selected);
-  color: var(--app-text-primary);
-  font-weight: 600;
-}
-
-.navLinkActive .navIcon {
-  color: var(--mantine-color-blue-4);
-}
-
-.navIcon {
+  gap: 9px;
+  font-size: 14px;
   color: var(--app-text-secondary);
+  padding: 7px 10px;
+  border-radius: 5px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  text-decoration: none;
+  width: 100%;
+}
+
+.navOverview:hover {
+  background: var(--app-action-hover);
+  color: var(--app-text-primary);
+}
+
+.navOverviewActive {
+  background: var(--app-action-selected);
+  color: var(--mantine-color-accentBlue-5);
+}
+
+/* ── Nav items ───────────────────────────────────────────────────────────── */
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--app-text-secondary);
+  padding: 6px 10px;
+  border-radius: 5px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+  width: 100%;
+}
+
+.navItem:hover {
+  background: var(--app-action-hover);
+  color: var(--app-text-primary);
+}
+
+.navItemActive {
+  background: var(--app-action-selected);
+  color: var(--mantine-color-accentBlue-5);
+}
+
+.navItemIcon {
+  flex-shrink: 0;
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.navItemLabel {
+  flex: 1;
+  transition: opacity 0.15s, width 0.15s;
+  overflow: hidden;
+}
+
+/* Collapsed nav items */
+
+.navOverviewCollapsed {
+  padding: 5px 0;
+  gap: 0;
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.navItemCollapsed {
+  padding: 5px 0;
+  gap: 0;
+  justify-content: center;
+}
+
+.navItemIconCollapsed {
+  width: var(--sb-col-width, 52px);
+  text-align: center;
+  margin: 0 auto;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.navItemLabelCollapsed {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  flex: none;
+}
+
+/* ── Workspace switcher ──────────────────────────────────────────────────── */
+
+.swArea {
+  padding: 14px 10px 12px;
+  border-bottom: 1px solid var(--app-border-default);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.swAreaCollapsed {
+  padding: 10px 0 8px;
+}
+
+.swBtn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  width: 100%;
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.swBtn:hover,
+.swBtnOpen {
+  background: var(--app-action-hover);
+}
+
+.swBtnCollapsed {
+  gap: 0;
+  padding: 6px 0;
+  justify-content: center;
+}
+
+.swIco {
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  background: var(--app-action-selected);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.22s, color 0.22s;
+}
+
+.swIcoCompany {
+  background: var(--app-action-hover);
+}
+
+.swIcoCollapsed {
+  margin: 0 auto;
+}
+
+.swIcoLetter {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mantine-color-accentBlue-5);
+}
+
+.swText {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  transition: opacity 0.15s, width 0.15s;
+}
+
+.swTextCollapsed {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  flex: none;
+}
+
+.swName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  font-family: Sora, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.swSub {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  margin: 1px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.swCaret {
+  color: var(--app-text-tertiary);
+  flex-shrink: 0;
+  transition: transform 0.2s, opacity 0.15s, width 0.15s;
+}
+
+.swCaretOpen {
+  transform: rotate(180deg);
+}
+
+.swCaretCollapsed {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  flex: none;
+}
+
+/* ── Workspace switcher dropdown ─────────────────────────────────────────── */
+
+.swDropdown {
+  background: var(--app-bg-paper) !important;
+  border: 1px solid var(--app-border-strong) !important;
+  border-radius: 9px !important;
+  padding: 0 !important;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7) !important;
+  width: 216px !important;
+  left: 4px !important;
+}
+
+.swSearch {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.swSearchInput {
+  width: 100%;
+  background: var(--app-bg-default);
+  border: 1px solid var(--app-border-strong);
+  border-radius: 5px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--app-text-secondary);
+  outline: none;
+  box-sizing: border-box;
+}
+
+.swSearchInput:focus {
+  border-color: rgba(122, 162, 200, 0.28);
+}
+
+.swSection {
+  padding: 10px 10px 8px;
+}
+
+.dpLabel {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  padding: 0 6px;
+  margin: 0 0 6px;
+  line-height: 1;
+}
+
+.dpItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  margin-bottom: 2px;
+  width: 100%;
+  transition: background 0.12s;
+}
+
+.dpItem:hover {
+  background: var(--app-action-hover);
+}
+
+.dpItemActive {
+  background: var(--app-action-selected);
+}
+
+.dpItemActiveCo {
+  background: var(--app-action-hover);
+}
+
+.dpIco {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  background: var(--app-action-selected);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.navLinkCollapsed {
-  min-height: 36px;
-  padding: 0 8px;
-  margin: 0 4px;
-  border-radius: 4px;
-  justify-content: center;
+.dpIcoCompany {
+  background: var(--app-action-hover);
 }
 
-.divider {
-  margin: 4px 12px;
-  border-color: var(--app-border-default);
+.dpIcoLetter {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--mantine-color-accentBlue-5);
 }
 
-.toggleContainer {
-  display: flex;
-  padding: 8px;
+.dpName {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  flex: 1;
+  text-align: left;
+  margin: 0;
+  line-height: 1;
+}
+
+.dpCheck {
+  color: var(--mantine-color-accentBlue-5);
+  flex-shrink: 0;
+}
+
+.dpFooter {
+  padding: 8px 10px 12px;
   border-top: 1px solid var(--app-border-default);
 }
 
-.toggleButton {
-  width: 28px;
-  height: 28px;
+.dpNewProject {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  padding: 4px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  transition: color 0.12s, background 0.12s;
+  display: block;
+  user-select: none;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+
+.dpNewProject:hover {
+  color: var(--app-text-secondary);
+  background: var(--app-action-hover);
+}
+
+/* ── Collapse row ────────────────────────────────────────────────────────── */
+
+.collapseRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 10px 8px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.collapseRowCollapsed {
+  justify-content: center;
+  padding: 4px 0 8px;
+}
+
+.collapseBtn {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--app-border-default);
-  border-radius: 4px;
+  color: var(--app-text-tertiary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  user-select: none;
+}
+
+.collapseBtn:hover {
+  background: var(--app-action-hover);
   color: var(--app-text-secondary);
 }
 
-.toggleButton:hover {
-  background-color: var(--app-action-hover);
-  border-color: var(--app-border-strong);
+/* ── User footer ─────────────────────────────────────────────────────────── */
+
+.navFoot {
+  border-top: 1px solid var(--app-border-default);
+  padding: 10px 10px 12px;
+  flex-shrink: 0;
+  overflow: hidden;
 }
+
+.navFootCollapsed {
+  padding: 8px 0 10px;
+}
+
+.userRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  width: 100%;
+  transition: background 0.12s;
+}
+
+.userRowCollapsed {
+  padding: 5px 0;
+  gap: 0;
+}
+
+.userRow:hover {
+  background: var(--app-action-hover);
+}
+
+.userAvatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--app-action-selected);
+  border: 1px solid var(--mantine-color-accentBlue-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.userAvatarCollapsed {
+  margin: 0 auto;
+}
+
+.userAvatarInitials {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mantine-color-accentBlue-5);
+}
+
+.userName {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.15s, width 0.15s;
+}
+
+.userNameCollapsed {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  flex: none;
+}
+
+.userCaret {
+  color: var(--app-text-tertiary);
+  flex-shrink: 0;
+  transition: opacity 0.15s, width 0.15s;
+}
+
+.userCaretCollapsed {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  flex: none;
+}
+
+/* ── Mobile toggle ───────────────────────────────────────────────────────── */
 
 .mobileToggle {
   position: fixed;

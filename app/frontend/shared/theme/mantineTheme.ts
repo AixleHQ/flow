@@ -1,125 +1,68 @@
-import { Card, createTheme, type CSSVariablesResolver, type MantineColorsTuple } from '@mantine/core';
+import { Card, Input, createTheme, type CSSVariablesResolver, type MantineColorsTuple } from '@mantine/core';
 
-const blue: MantineColorsTuple = [
-  '#e7f0ff',
-  '#cddcfb',
-  '#9bb6f3',
-  '#6590ec',
-  '#3B82F6', // [4] = main
-  '#2570e4',
-  '#1d66dc',
-  '#1255c4',
-  '#064bb0',
-  '#003f9b',
-];
-
-const green: MantineColorsTuple = [
-  '#e5fbed',
-  '#cef5da',
-  '#9eeab5',
-  '#6bdf8c',
-  '#22C55E', // [4] = main
-  '#2db854',
-  '#26a94a',
-  '#1a953d',
-  '#0d8534',
-  '#007327',
-];
-
-const red: MantineColorsTuple = [
-  '#ffe7e7',
-  '#fecece',
-  '#f99c9c',
-  '#f46565',
-  '#EF4444', // [4] = main
-  '#ec2525',
-  '#eb1414',
-  '#d20707',
-  '#bc0003',
-  '#a40000',
-];
-
-const amber: MantineColorsTuple = [
-  '#fff8e1',
-  '#ffefcb',
-  '#ffdd9a',
-  '#ffcb64',
-  '#F59E0B', // [4] = main
-  '#f0a700',
-  '#db9800',
-  '#c08400',
-  '#aa7500',
-  '#906200',
+const accentBlue: MantineColorsTuple = [
+  'rgba(122,162,200,0.05)', // 0 — hover
+  'rgba(122,162,200,0.08)', // 1
+  'rgba(122,162,200,0.10)', // 2 — active / dim
+  'rgba(122,162,200,0.16)', // 3 — mid
+  'rgba(122,162,200,0.28)', // 4 — muted border
+  '#7aa2c8', // 5 — base accent ← primaryShade
+  '#6892b8', // 6
+  '#5a82a8', // 7
+  '#3a6288', // 8
+  '#2a4a68', // 9
 ];
 
 const dark: MantineColorsTuple = [
-  '#C1C2C5',
-  '#A6A7AB',
-  '#909296',
-  '#5C5F66',
-  '#373A40',
-  '#2C2E33',
-  '#1A1A1A',
-  '#141414',
-  '#0D0D0D',
-  '#0A0A0A',
+  '#e8edf2', // 0 — text-1
+  '#96a0a8', // 1 — text-2
+  '#586470', // 2 — text-3
+  '#253040', // 3 — border-mid
+  '#1e2c3c', // 4 — border
+  '#1c2838', // 5 — raised cards
+  '#131c24', // 6 — bg-card
+  '#141c26', // 7 — surface / sidebar
+  '#0d1117', // 8 — page bg
+  '#080e14', // 9 — deepest
 ];
 
 export const mantineTheme = createTheme({
-  primaryColor: 'blue',
-  colors: {
-    blue,
-    green,
-    red,
-    amber,
-    dark,
-  },
+  fontFamily: 'Inter, sans-serif',
+  fontFamilyMonospace: 'Geist Mono, monospace',
 
-  fontFamily: 'Poppins, sans-serif',
-  headings: { fontFamily: 'Poppins, sans-serif' },
+  primaryColor: 'accentBlue',
+  primaryShade: { light: 5, dark: 5 },
+  colors: { accentBlue, dark },
+
+  headings: {
+    fontFamily: 'Sora, sans-serif',
+    fontWeight: '700',
+  },
 
   defaultRadius: 'md',
-
-  other: {
-    fontFamily: {
-      body: 'Inter, sans-serif',
-    },
-    background: {
-      default: '#0D0D0D',
-      paper: '#141414',
-      elevated: '#1A1A1A',
-      deep: '#0A0A0A',
-    },
-    border: {
-      default: '#2A2A2A',
-      subtle: '#1F1F1F',
-      strong: '#3A3A3A',
-    },
-    text: {
-      primary: '#FFFFFF',
-      secondary: '#A0A0A0',
-      muted: '#666666',
-    },
-    action: {
-      hover: 'rgba(255, 255, 255, 0.08)',
-      selected: 'rgba(59, 130, 246, 0.16)',
-    },
-    status: {
-      completed: '#22C55E',
-      running: '#3B82F6',
-      runningOther: '#F59E0B',
-      pending: '#666666',
-      error: '#EF4444',
-    },
-    agents: {
-      codex: '#10A37F',
-      cursor_cli: '#7C3AED',
-      gemini_cli: '#3B82F6',
-      claude_code: '#D97706',
-    },
-  },
+  focusRing: 'auto',
+  cursorType: 'pointer',
 
   components: {
+    Button: { defaultProps: { radius: 'md', size: 'sm' } },
+    Input: Input.extend({
+      defaultProps: { radius: 'md', size: 'sm' },
+      styles: {
+        input: {
+          backgroundColor: 'var(--app-bg-default)',
+          borderColor: 'var(--app-border-strong)',
+          color: 'var(--app-text-primary)',
+        },
+      },
+    }),
+    TextInput: { defaultProps: { radius: 'md', size: 'sm' } },
+    Select: { defaultProps: { radius: 'md', size: 'sm' } },
+    Textarea: { defaultProps: { radius: 'md', size: 'sm' } },
+    Badge: { defaultProps: { radius: 'sm', size: 'sm' } },
+    Tooltip: { defaultProps: { radius: 'sm' } },
+    Modal: { defaultProps: { radius: 'lg' } },
+    Menu: { defaultProps: { radius: 'md' } },
+    Tabs: { defaultProps: { radius: 'sm' } },
     Card: Card.extend({
       defaultProps: {
         bg: 'var(--app-bg-paper)',
@@ -128,22 +71,89 @@ export const mantineTheme = createTheme({
   },
 });
 
-export const cssVariablesResolver: CSSVariablesResolver = (theme) => ({
+export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
-    '--app-font-body': theme.other.fontFamily.body,
-    '--app-bg-default': theme.other.background.default,
-    '--app-bg-paper': theme.other.background.paper,
-    '--app-bg-elevated': theme.other.background.elevated,
-    '--app-bg-deep': theme.other.background.deep,
-    '--app-border-default': theme.other.border.default,
-    '--app-border-subtle': theme.other.border.subtle,
-    '--app-border-strong': theme.other.border.strong,
-    '--app-text-primary': theme.other.text.primary,
-    '--app-text-secondary': theme.other.text.secondary,
-    '--app-text-muted': theme.other.text.muted,
-    '--app-action-hover': theme.other.action.hover,
-    '--app-action-selected': theme.other.action.selected,
+    '--app-font-body': 'Inter, sans-serif',
+    '--app-bg-default': '#0d1117',
+    '--app-bg-paper': '#141c26',
+    '--app-bg-elevated': '#131c24',
+    '--app-bg-deep': '#080e14',
+    '--app-border-default': '#1e2c3c',
+    '--app-border-subtle': '#141c26',
+    '--app-border-strong': '#253040',
+    '--app-text-primary': '#e8edf2',
+    '--app-text-secondary': '#96a0a8',
+    '--app-text-tertiary': '#586470',
+    '--app-action-hover': 'rgba(122,162,200,0.05)',
+    '--app-action-selected': 'rgba(122,162,200,0.10)',
   },
   light: {},
-  dark: {},
+  dark: {
+    /* Mantine internal input/form variables */
+    '--mantine-color-default': '#0d1117',
+    '--mantine-color-default-border': '#253040',
+    '--mantine-color-default-hover': '#141c26',
+    '--mantine-color-default-color': '#e8edf2',
+    '--mantine-color-default-color-hover': '#e8edf2',
+    '--mantine-color-placeholder': '#586470',
+    /* Brighter icon color for Select/Input right-section chevrons */
+    '--mantine-color-dimmed': '#96a0a8',
+    /* Fix "light" variant — Mantine's dark-scheme auto-generated tints are near-invisible */
+    '--mantine-color-accentBlue-light': 'rgba(122,162,200,0.15)',
+    '--mantine-color-accentBlue-light-hover': 'rgba(122,162,200,0.22)',
+    '--mantine-color-accentBlue-light-color': '#7aa2c8',
+    '--mantine-color-red-light': 'rgba(255,100,100,0.15)',
+    '--mantine-color-red-light-hover': 'rgba(255,100,100,0.22)',
+    '--mantine-color-red-light-color': '#ff6b6b',
+    '--mantine-color-green-light': 'rgba(82,196,120,0.15)',
+    '--mantine-color-green-light-hover': 'rgba(82,196,120,0.22)',
+    '--mantine-color-green-light-color': '#52c478',
+    '--mantine-color-orange-light': 'rgba(255,160,64,0.15)',
+    '--mantine-color-orange-light-hover': 'rgba(255,160,64,0.22)',
+    '--mantine-color-orange-light-color': '#ffa040',
+    '--mantine-color-yellow-light': 'rgba(255,208,64,0.15)',
+    '--mantine-color-yellow-light-hover': 'rgba(255,208,64,0.22)',
+    '--mantine-color-yellow-light-color': '#ffd040',
+    '--mantine-color-teal-light': 'rgba(56,201,183,0.15)',
+    '--mantine-color-teal-light-hover': 'rgba(56,201,183,0.22)',
+    '--mantine-color-teal-light-color': '#38c9b7',
+    '--mantine-color-gray-light': 'rgba(148,160,172,0.12)',
+    '--mantine-color-gray-light-hover': 'rgba(148,160,172,0.18)',
+    '--mantine-color-gray-light-color': '#94a0ac',
+    '--mantine-color-blue-light': 'rgba(77,171,247,0.15)',
+    '--mantine-color-blue-light-hover': 'rgba(77,171,247,0.22)',
+    '--mantine-color-blue-light-color': '#4dabf7',
+    '--mantine-color-dark-light': 'rgba(37,48,64,0.50)',
+    '--mantine-color-dark-light-hover': 'rgba(37,48,64,0.70)',
+    '--mantine-color-dark-light-color': '#96a0a8',
+    /* Fix "outline" variant — border uses filled color, text matches */
+    '--mantine-color-accentBlue-outline': '#7aa2c8',
+    '--mantine-color-accentBlue-outline-hover': 'rgba(122,162,200,0.08)',
+    '--mantine-color-red-outline': '#ff6b6b',
+    '--mantine-color-red-outline-hover': 'rgba(255,100,100,0.08)',
+    '--mantine-color-green-outline': '#52c478',
+    '--mantine-color-green-outline-hover': 'rgba(82,196,120,0.08)',
+    '--mantine-color-orange-outline': '#ffa040',
+    '--mantine-color-orange-outline-hover': 'rgba(255,160,64,0.08)',
+    '--mantine-color-yellow-outline': '#ffd040',
+    '--mantine-color-yellow-outline-hover': 'rgba(255,208,64,0.08)',
+    '--mantine-color-blue-outline': '#4dabf7',
+    '--mantine-color-blue-outline-hover': 'rgba(77,171,247,0.08)',
+    '--mantine-color-gray-outline': '#94a0ac',
+    '--mantine-color-gray-outline-hover': 'rgba(148,160,172,0.08)',
+    '--mantine-color-grape-outline': '#da77f2',
+    '--mantine-color-grape-outline-hover': 'rgba(218,119,242,0.08)',
+    '--mantine-color-cyan-outline': '#66d9e8',
+    '--mantine-color-cyan-outline-hover': 'rgba(102,217,232,0.08)',
+    /* Fix "subtle" variant — no bg by default, hover shows tint, text = accent color */
+    '--mantine-color-accentBlue-subtle': 'transparent',
+    '--mantine-color-accentBlue-subtle-hover': 'rgba(122,162,200,0.10)',
+    '--mantine-color-accentBlue-subtle-color': '#7aa2c8',
+    '--mantine-color-red-subtle': 'transparent',
+    '--mantine-color-red-subtle-hover': 'rgba(255,100,100,0.10)',
+    '--mantine-color-red-subtle-color': '#ff6b6b',
+    '--mantine-color-gray-subtle': 'transparent',
+    '--mantine-color-gray-subtle-hover': 'rgba(148,160,172,0.10)',
+    '--mantine-color-gray-subtle-color': '#94a0ac',
+  },
 });

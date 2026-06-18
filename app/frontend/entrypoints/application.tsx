@@ -11,6 +11,7 @@ import { InertiaRouteIndicator } from 'shared/ui';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import '@mantine/dates/styles.css';
+import './global.css';
 
 const appEl = document.getElementById('app');
 if (appEl?.dataset.page) {
