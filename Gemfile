@@ -113,6 +113,9 @@ group :development do
 
   # Security tools
   gem "brakeman", require: false
+
+  # Dependency license reports
+  gem "license_finder", require: false
 end
 
 group :test do

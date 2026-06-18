@@ -208,6 +208,21 @@ jobs:
       image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
+  license-report:
+    name: License Reports
+    needs:
+      - prepare-config
+      - build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      command: license-report
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
+      artifact-path: tmp/license-reports
+      artifact-name: license-reports
+      timeout: 15
+    secrets: inherit
+
   # ---------------------------------------------------------------------------
   # Deploy
   # ---------------------------------------------------------------------------

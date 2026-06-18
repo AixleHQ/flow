@@ -1,7 +1,8 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 TODAY = $$(date +"%d.%m.%Y")
+LICENSE_REPORTS_DIR := tmp/license-reports
 
 # Setup dependencies
 deps:
@@ -114,6 +115,19 @@ db_restore_remote:
 brakeman:
 	bundle exec brakeman -q -z --no-pager --skip-files public/
 
+# Generate Ruby gem license report (markdown)
+license-report-ruby:
+	@mkdir -p $(LICENSE_REPORTS_DIR)
+	bundle exec license_finder report --format=markdown --enabled-package-managers=bundler > $(LICENSE_REPORTS_DIR)/gem-licenses.md
+
+# Generate npm production dependency license report (markdown)
+license-report-js:
+	@mkdir -p $(LICENSE_REPORTS_DIR)
+	yarn license-checker-rseidelsohn --markdown --production > $(LICENSE_REPORTS_DIR)/npm-licenses.md
+
+# Generate all dependency license reports
+license-report: license-report-ruby license-report-js
+
 # Default target
 default: check
 
@@ -174,6 +188,9 @@ help:
 	@echo "  make eslint-fix             - Run ESLint with auto-correction"
 	@echo "  make typescript             - Run TypeScript compiler check"
 	@echo "  make brakeman               - Run Brakeman security analysis"
+	@echo "  make license-report         - Generate Ruby and npm license reports"
+	@echo "  make license-report-ruby    - Generate Ruby gem license report"
+	@echo "  make license-report-js      - Generate npm production license report"
 	@echo "  make db_restore_remote      - Restore database remotely"
 	@echo "  make restore-dump           - Restore a locally available database dump"
 	@echo "  make default                - Same as 'check'"
