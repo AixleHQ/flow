@@ -51,7 +51,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@types/recharts": "^2.0.1",
     "@uiw/codemirror-extensions-langs": "^4.25.10",
-    "@uiw/codemirror-theme-vscode": "^4.23.12",
+    "@uiw/codemirror-theme-vscode": "^4.25.10",
     "@uiw/react-codemirror": "^4.23.12",
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
