@@ -3250,18 +3250,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-theme-vscode@npm:^4.23.12":
-  version: 4.25.9
-  resolution: "@uiw/codemirror-theme-vscode@npm:4.25.9"
+"@uiw/codemirror-theme-vscode@npm:^4.25.10":
+  version: 4.25.10
+  resolution: "@uiw/codemirror-theme-vscode@npm:4.25.10"
   dependencies:
-    "@uiw/codemirror-themes": "npm:4.25.9"
-  checksum: 10c0/956c91b1f4da7b858ba39aeae504f8d72565902264bcd9dcdffe41cb6967a2290ad87a4541548f65beb2fc06cdf565f11878283d0ec40edaf1d62309f5409042
+    "@uiw/codemirror-themes": "npm:4.25.10"
+  checksum: 10c0/dd072c3c605453f45fb26144a7f5fc448983496c27c1d9109fd2fcf68f51fd715adb8a73428d57c4fad38af87326408fc42fbfb7ef687bac2354470c8a8dc9a2
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-themes@npm:4.25.9":
-  version: 4.25.9
-  resolution: "@uiw/codemirror-themes@npm:4.25.9"
+"@uiw/codemirror-themes@npm:4.25.10":
+  version: 4.25.10
+  resolution: "@uiw/codemirror-themes@npm:4.25.10"
   dependencies:
     "@codemirror/language": "npm:^6.0.0"
     "@codemirror/state": "npm:^6.0.0"
@@ -3270,7 +3270,7 @@ __metadata:
     "@codemirror/language": ">=6.0.0"
     "@codemirror/state": ">=6.0.0"
     "@codemirror/view": ">=6.0.0"
-  checksum: 10c0/b456ade7749438f0e5d4f817d897942114229ef78ea960034f9ef4a51277722dbb6cd22f882151640c0c66782bfc8fd372d9a5999e983e4004527162f7533a67
+  checksum: 10c0/d6c1056faf110436afaa65b263c3d030f7554a263e232e9c0fdab32b665ef942c446f016715780f4bc91c7e3a42b62df0df460268c1d846b5aa5a3a3e50f2039
   languageName: node
   linkType: hard
 
@@ -9091,7 +9091,7 @@ __metadata:
     "@typescript-eslint/eslint-plugin": "npm:^8.50.1"
     "@typescript-eslint/parser": "npm:^8.50.1"
     "@uiw/codemirror-extensions-langs": "npm:^4.25.10"
-    "@uiw/codemirror-theme-vscode": "npm:^4.23.12"
+    "@uiw/codemirror-theme-vscode": "npm:^4.25.10"
     "@uiw/react-codemirror": "npm:^4.23.12"
     "@uppy/aws-s3": "npm:^5.1.0"
     "@uppy/core": "npm:^5.2.0"
