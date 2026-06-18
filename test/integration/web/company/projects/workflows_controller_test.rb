@@ -35,4 +35,25 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     delete company_project_workflow_path(@project, wf)
     assert_response :redirect
   end
+
+  test "publish sets published_at on project workflow" do
+    wf = create(:workflow, scope: @project)
+
+    post publish_company_project_workflow_path(@project, wf)
+    assert_response :redirect
+
+    wf.reload
+    assert wf.published?
+  end
+
+  test "duplicate creates a copy in same project" do
+    wf = create(:workflow, scope: @project, name: "Original")
+    create(:step, workflow: wf, position: 1)
+
+    assert_difference "Workflow.count", 1 do
+      post duplicate_company_project_workflow_path(@project, wf)
+    end
+
+    assert_response :redirect
+  end
 end

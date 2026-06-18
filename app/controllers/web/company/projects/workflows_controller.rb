@@ -75,6 +75,30 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
     redirect_to company_project_workflows_path(current_project), notice: "Workflow deleted"
   end
 
+  def publish
+    workflow = current_project.workflows.find(params[:id])
+    workflow.publish!(current_user)
+    redirect_to company_project_workflows_path(current_project), notice: "Workflow published to catalog"
+  end
+
+  def unpublish
+    workflow = current_project.workflows.find(params[:id])
+
+    unless current_user.admin? || workflow.published_by_id == current_user.id
+      redirect_to company_project_workflows_path(current_project), alert: "Only the publisher or an admin can unpublish"
+      return
+    end
+
+    workflow.unpublish!
+    redirect_to company_project_workflows_path(current_project), notice: "Workflow removed from catalog"
+  end
+
+  def duplicate
+    source = Workflow.visible_for_project(current_project).find(params[:id])
+    copy = WorkflowDuplicator.new(source, target_scope: current_project).duplicate!
+    redirect_to builder_company_project_workflow_path(current_project, copy)
+  end
+
   private
 
   def workflow_params

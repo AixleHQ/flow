@@ -183,9 +183,14 @@ const WorkflowsIndex = () => {
             size="sm"
           />
         </Group>
-        <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
-          New Workflow
-        </Button>
+        <Group gap="sm">
+          <Button variant="outline" size="sm" onClick={() => router.visit('/company/workflow_catalog')}>
+            Catalog
+          </Button>
+          <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
+            New Workflow
+          </Button>
+        </Group>
       </Group>
 
       {filtered.length === 0 ? (

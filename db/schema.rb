@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_08_135100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -809,10 +809,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
     t.datetime "deleted_at"
     t.text "description"
     t.string "name", null: false
+    t.datetime "published_at"
+    t.bigint "published_by_id"
     t.integer "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
+    t.index ["published_at"], name: "index_workflows_on_published_at", where: "(published_at IS NOT NULL)"
+    t.index ["published_by_id"], name: "index_workflows_on_published_by_id"
     t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_workflows_on_scope_type_and_scope_id"
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
@@ -897,4 +901,5 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_01_053713) do
   add_foreign_key "workflow_runs", "projects"
   add_foreign_key "workflow_runs", "users"
   add_foreign_key "workflow_runs", "workflows"
+  add_foreign_key "workflows", "users", column: "published_by_id"
 end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class WorkflowResource < ApplicationResource
-  attributes :id, :name, :description, :config, :scope_type, :scope_id, :created_at, :updated_at
+  attributes :id, :name, :description, :config, :scope_type, :scope_id, :published_at, :created_at, :updated_at
 
   attribute :scope_indicator do |workflow|
     workflow.scope_indicator

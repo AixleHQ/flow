@@ -2,6 +2,7 @@
 
 class Workflow < ApplicationRecord
   belongs_to :scope, polymorphic: true, optional: true
+  belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
@@ -22,6 +23,8 @@ class Workflow < ApplicationRecord
   validate :config_keys_whitelist
 
   scope :active, -> { where(deleted_at: nil) }
+  scope :published, -> { where.not(published_at: nil) }
+  scope :published_in_company, ->(company) { active.published.belonging_to_company(company) }
   scope :system, -> { where(scope_type: "System") }
   scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
@@ -47,6 +50,18 @@ class Workflow < ApplicationRecord
 
   def deleted?
     deleted_at.present?
+  end
+
+  def published?
+    published_at.present?
+  end
+
+  def publish!(user)
+    update!(published_at: Time.current, published_by: user)
+  end
+
+  def unpublish!
+    update!(published_at: nil, published_by: nil)
   end
 
   def has_active_runs?

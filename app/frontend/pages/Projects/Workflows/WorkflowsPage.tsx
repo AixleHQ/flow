@@ -19,6 +19,8 @@ import { useDebouncedValue } from '@mantine/hooks';
 import {
   IconCopy,
   IconEdit,
+  IconGlobe,
+  IconGlobeOff,
   IconHistory,
   IconPlayerPlay,
   IconPlus,
@@ -61,6 +63,7 @@ interface Workflow {
   lastRunStatus: string | null;
   hasActiveRuns: boolean;
   descriptionExcerpt: string | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
   steps: WorkflowStep[];
@@ -286,6 +289,9 @@ const WorkflowsPage = () => {
           >
             Run History
           </Button>
+          <Button variant="outline" size="sm" onClick={() => router.visit('/company/workflow_catalog')}>
+            Catalog
+          </Button>
           <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
             New Workflow
           </Button>
@@ -372,6 +378,22 @@ const WorkflowsPage = () => {
                       </Tooltip>
                     ) : (
                       <>
+                        <Tooltip label={wf.publishedAt ? 'Unpublish from catalog' : 'Publish to catalog'}>
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color={wf.publishedAt ? 'green' : 'gray'}
+                            onClick={() =>
+                              router.post(
+                                `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
+                                {},
+                                { preserveScroll: true },
+                              )
+                            }
+                          >
+                            {wf.publishedAt ? <IconGlobe size={16} /> : <IconGlobeOff size={16} />}
+                          </ActionIcon>
+                        </Tooltip>
                         <Tooltip label="Edit name & description">
                           <ActionIcon size="sm" variant="subtle" onClick={() => openEdit(wf)}>
                             <IconEdit size={16} />

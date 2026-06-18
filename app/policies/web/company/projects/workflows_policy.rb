@@ -10,6 +10,9 @@ module Web
         def show? = project_accessible?
         def update? = project_accessible?
         def destroy? = project_accessible?
+        def publish? = project_accessible?
+        def unpublish? = project_accessible?
+        def duplicate? = project_accessible?
 
         private
 
