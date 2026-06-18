@@ -14,9 +14,15 @@ module InternalTools
       return error("column_ids is required and must be an array") unless column_ids.is_a?(Array)
 
       ActiveRecord::Base.transaction do
+        # Two-pass write: park positions past the current range first so the
+        # unique (board_id, position) index can't collide mid-reorder, then set
+        # final positions. Mirrors Api::V1::Projects::Board::ColumnsController#reorder.
+        offset = board.board_columns.count + 1
         column_ids.each_with_index do |id, idx|
-          col = board.board_columns.find(id)
-          col.update_column(:position, idx + 1)
+          board.board_columns.find(id).update_column(:position, offset + idx + 1)
+        end
+        column_ids.each_with_index do |id, idx|
+          board.board_columns.find(id).update_column(:position, idx + 1)
         end
       end
 
