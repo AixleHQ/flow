@@ -128,7 +128,7 @@ jobs:
             type=sha,format=short,prefix=${{ needs.prepare-config.outputs.sha_prefix }}
 
       - name: Build And Push Web Image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
