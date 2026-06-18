@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_08_135100) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_18_223142) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -872,7 +872,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_08_135100) do
   add_foreign_key "step_runs", "steps"
   add_foreign_key "step_runs", "terminal_sessions"
   add_foreign_key "step_runs", "workflow_runs"
-  add_foreign_key "steps", "agents"
+  add_foreign_key "steps", "agents", on_delete: :nullify
   add_foreign_key "steps", "workflows"
   add_foreign_key "sub_step_runs", "step_runs"
   add_foreign_key "sub_step_runs", "sub_steps"
@@ -887,7 +887,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_08_135100) do
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools"
-  add_foreign_key "tool_results", "step_runs"
+  add_foreign_key "tool_results", "step_runs", on_delete: :nullify
   add_foreign_key "tool_results", "terminal_sessions"
   add_foreign_key "tool_results", "tools"
   add_foreign_key "usage_statistics", "terminal_sessions"

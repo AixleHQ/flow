@@ -49,7 +49,18 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
       requested_model: workflow_run_params[:requested_model]
     )
 
-    redirect_to company_project_workflow_run_path(current_project, run)
+    if run.persisted?
+      redirect_to company_project_workflow_run_path(current_project, run)
+    else
+      # WorkflowService.start returns an unsaved run when validation/start fails;
+      # redirecting to its (nil-id) path raised UrlGenerationError
+      # (Sentry PALAD-AI-RAILS-1W). Surface the errors and return to the launch page.
+      redirect_back(
+        fallback_location: company_project_workflow_runs_path(current_project),
+        inertia: { errors: run.errors },
+        alert: run.errors.full_messages.to_sentence.presence || "Could not start the workflow run."
+      )
+    end
   end
 
   def cancel
