@@ -55,7 +55,7 @@
     "@uiw/react-codemirror": "^4.23.12",
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
-    "@uppy/utils": "^6.1.3",
+    "@uppy/utils": "^7.2.0",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
