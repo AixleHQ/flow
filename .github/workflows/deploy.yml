@@ -153,65 +153,21 @@ jobs:
   # ---------------------------------------------------------------------------
   # Checks (parallel, via reusable workflow)
   # ---------------------------------------------------------------------------
-  be-test:
-    name: Backend Tests
+  checks:
+    name: Checks
     needs:
       - prepare-config
       - build-web
     uses: ./.github/workflows/code-check.yml
     with:
-      command: rails-test
+      # Runs rails-test, rubocop, brakeman, eslint and typescript in parallel
+      # inside one job (see the `check_all` Makefile target). It never short-
+      # circuits, prints the full log of every failed check, and exits non-zero
+      # if any one of them fails.
+      command: check_all
       runner: ${{ needs.prepare-config.outputs.ci_runner }}
       needs-db: true
-      timeout: 20
-      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
-    secrets: inherit
-
-  be-lint:
-    name: Backend Lint
-    needs:
-      - prepare-config
-      - build-web
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: rubocop
-      runner: ${{ needs.prepare-config.outputs.ci_runner }}
-      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
-    secrets: inherit
-
-  be-security:
-    name: Backend Security
-    needs:
-      - prepare-config
-      - build-web
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: brakeman
-      runner: ${{ needs.prepare-config.outputs.ci_runner }}
-      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
-    secrets: inherit
-
-  fe-lint:
-    name: Frontend Lint
-    needs:
-      - prepare-config
-      - build-web
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: eslint
-      runner: ${{ needs.prepare-config.outputs.ci_runner }}
-      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
-    secrets: inherit
-
-  fe-typecheck:
-    name: Frontend Typecheck
-    needs:
-      - prepare-config
-      - build-web
-    uses: ./.github/workflows/code-check.yml
-    with:
-      command: typescript
-      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      timeout: 25
       image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
@@ -241,11 +197,7 @@ jobs:
     needs:
       - prepare-config
       - build-web
-      - be-test
-      - be-lint
-      - be-security
-      - fe-lint
-      - fe-typecheck
+      - checks
     env:
       KUBE_NAMESPACE: ${{ needs.prepare-config.outputs.kube_namespace }}
       SERVICE_ACCOUNT: ${{ needs.prepare-config.outputs.service_account }}
