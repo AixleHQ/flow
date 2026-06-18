@@ -27,6 +27,13 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          # Pull docker.io base images through Google's mirror to avoid Docker
+          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
+          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -71,6 +78,13 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          # Pull docker.io base images through Google's mirror to avoid Docker
+          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
+          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -133,6 +147,13 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
+        with:
+          # Pull docker.io base images through Google's mirror to avoid Docker
+          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
+          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v6
