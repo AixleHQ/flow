@@ -18,7 +18,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.26",
-    "globals": "^16.0.0",
+    "globals": "^17.6.0",
     "license-checker-rseidelsohn": "^5.0.1",
     "prettier": "^3.7.4",
     "prettier-plugin-packagejson": "^3.0.0",
