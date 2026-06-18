@@ -14,32 +14,34 @@ git clone https://github.com/palad-ai/palad-app.git
 cd palad-app
 ```
 
-2. Copy environment file and fill in secrets from 1Password:
+2. Set up and start the project:
 ```bash
-cp .env.example .env.development
+make start   # first time: env files, build, deps, start everything
+make up      # every day: start all services
 ```
 
-3. Set up the project using Docker:
+Or step by step:
 ```bash
-make setup
+make setup   # first time only
+make up      # every day
 ```
-This command will:
-- Build Docker containers (including worker)
-- Install Ruby dependencies (via Bundler)
-- Install JavaScript dependencies (via Yarn)
+
+On first run, env files are created automatically:
+- `.env.development` from `.env.example`
+- `test/playwright/helpers/.env` from its `.env.example`
+
+Fill in secrets from 1Password when you need integrations (OAuth, GitHub App, etc.). `make check-env` prints placeholder warnings without blocking startup.
+
+`make setup` will:
+- Build Docker images
+- Install Ruby dependencies (via Bundler) into the bundle cache volume
+- Install JavaScript dependencies (via Yarn) into `node_modules`
 - Create and set up the database
 - Build agent Docker images
 
-4. Start the application (two terminals required):
-```bash
-# Terminal 1 — main services (web, db, redis, traefik, temporal)
-make up
+`make up` starts all services in one terminal: web, worker, db, redis, traefik, temporal, and more. A fast dependency check runs on startup; if you skipped `make setup`, packages will be installed on first start (slower).
 
-# Terminal 2 — background worker (Temporal)
-make worker
-```
-
-5. Access the application at `http://localhost:4000`
+3. Access the application at `http://localhost:4000`
 
 ## Google OAuth Configuration
 
@@ -69,7 +71,7 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 
 5. **Restart the application:**
    ```bash
-   docker-compose restart web
+   docker compose restart web
    ```
 
 **Note:** Without Google OAuth configuration, the Google login button will redirect to `/auth/failure`. Password-based login will still work.
@@ -96,9 +98,14 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Fix FSD issues: `make fsd-fix`
 
 ### Docker & Runtime
-- Start main services: `make up`
-- Start worker (separate terminal): `make worker`
-- Build agent images: `make build-agents`
+- First-time setup and run: `make start`
+- First-time setup only: `make setup`
+- Start all services: `make up`
+- Stop all services: `make down`
+- Clean reset (removes volumes): `make reset`
+- Environment diagnostics: `make doctor`
+- Check env placeholders (informational): `make check-env`
+- Build agent images only: `make build-agents`
 - Open shell in web container: `make shell`
 - Show available commands: `make help`
 

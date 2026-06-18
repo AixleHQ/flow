@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+warn=0
+
+warn_line() {
+  echo "  ! $1"
+  warn=1
+}
+
+check_env_file() {
+  local file="$1"
+  local label="$2"
+
+  [ -f "$file" ] || return 0
+
+  echo ""
+  echo "$label ($file):"
+
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    value="${line#*=}"
+    if echo "$value" | grep -qE 'get_from_1password|paste real key here'; then
+      warn_line "$key still uses a placeholder"
+    fi
+  done < <(grep -E '^[A-Z_]+=' "$file" 2>/dev/null || true)
+
+  if grep -q '^GOOGLE_CLIENT_ID=$' "$file" 2>/dev/null || grep -q '^GOOGLE_CLIENT_SECRET=$' "$file" 2>/dev/null; then
+    warn_line "Google OAuth vars are empty (optional — password login still works)"
+  fi
+}
+
+echo "Environment check (informational only):"
+
+if [ ! -f .env.development ]; then
+  warn_line ".env.development missing — run make setup or make up to create it"
+else
+  check_env_file ".env.development" "App secrets"
+  echo ""
+  echo "  Integrations using placeholders won't work until filled from 1Password."
+  echo "  Basic local UI works without them (password login)."
+fi
+
+check_env_file "test/playwright/helpers/.env" "Playwright E2E"
+
+if [ "$warn" -eq 0 ]; then
+  echo ""
+  echo "No placeholder warnings."
+fi
+
+exit 0

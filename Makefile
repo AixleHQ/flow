@@ -1,5 +1,7 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default ensure-env check-env setup up start down reset doctor worker shell build-web build-otlp-ingest build-agents restore-dump help
+
+DOCKER_COMPOSE ?= docker compose
 
 TODAY = $$(date +"%d.%m.%Y")
 LICENSE_REPORTS_DIR := tmp/license-reports
@@ -131,27 +133,47 @@ license-report: license-report-ruby license-report-js
 # Default target
 default: check
 
-# Setup project in one command
-setup:
-	docker-compose --profile worker build
-	docker-compose run --rm web make deps db-prepare
+ensure-env:
+	@bin/ensure-env
+
+check-env:
+	@bin/check-env
+
+# Cold path: build images and install all dependencies into volumes
+setup: ensure-env check-env
+	$(DOCKER_COMPOSE) build
+	$(DOCKER_COMPOSE) up -d db
+	$(DOCKER_COMPOSE) run --rm --no-deps web bin/docker-bootstrap install
 	@make build-agents
 
-# Run all main services
-up:
-	docker-compose up
+# Warm path: start all services with fast dependency check
+up: ensure-env check-env
+	$(DOCKER_COMPOSE) up
 
-# Run worker
+# First-time setup and start in one command
+start: setup up
+
+down:
+	$(DOCKER_COMPOSE) down
+
+reset:
+	$(DOCKER_COMPOSE) down -v
+	rm -f tmp/bootstrap.stamp
+
+doctor:
+	@bin/doctor
+
+# Backward compat alias
 worker:
-	docker-compose --profile worker up --no-deps worker
+	$(DOCKER_COMPOSE) up worker
 
 # Open shell in web container
 shell:
-	docker-compose run --rm web bash
+	$(DOCKER_COMPOSE) run --rm --no-deps web bash
 
 # Restore a locally available database dump
 restore-dump:
-	docker-compose run --rm web make db_restore
+	$(DOCKER_COMPOSE) run --rm --no-deps web make db_restore
 
 build-web:
 	docker build -f Dockerfile -t web .
@@ -171,8 +193,13 @@ build-agents:
 # Help command
 help:
 	@echo "Available commands:"
-	@echo "  make setup                  - Setup project in one command"
-	@echo "  make shell                  - Open shell in web container"
+	@echo "  make setup                  - Build images and install all dependencies (first-time setup)"
+	@echo "  make start                  - setup + up (full first-time bootstrap and run)"
+	@echo "  make up                     - Start all services (web, worker, db, redis, temporal, ...)"
+	@echo "  make down                   - Stop all containers"
+	@echo "  make reset                  - Stop containers and remove volumes (destructive)"
+	@echo "  make doctor                 - Check local dev environment health"
+	@echo "  make worker                 - Start worker only (backward compat alias)"
 	@echo "  make deps                   - Setup dependencies"
 	@echo "  make db-prepare             - Prepare database (create, migrate, seed)"
 	@echo "  make db-reset               - Reset database (drop, create, migrate, seed)"
@@ -195,8 +222,7 @@ help:
 	@echo "  make restore-dump           - Restore a locally available database dump"
 	@echo "  make default                - Same as 'check'"
 	@echo "  make help                   - Show this help message"
-	@echo "  make up                     - Run all main services"
-	@echo "  make worker                 - Run worker (in a separate terminal)"
+	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "Agent Docker Images:"
 	@echo "  make build-agents           - Build all agent images (core + 4 agents in parallel)"
