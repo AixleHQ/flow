@@ -1265,7 +1265,20 @@ module ContainerRuntime
     def ensure_service(handle, ports)
       return if ports.blank? && handle.service_ports.blank?
 
-      core_client.get_service(handle.service_name, handle.namespace)
+      # The Service is created asynchronously; on the container-startup path the
+      # lookup can hit a transient 404 before it becomes visible
+      # (Sentry PALAD-AI-TEMPORAL-G). Retry within the ready window instead of
+      # failing the activity on the first miss.
+      deadline = Time.current + ready_timeout
+      begin
+        core_client.get_service(handle.service_name, handle.namespace)
+      rescue Kubeclient::ResourceNotFoundError
+        if Time.current < deadline
+          sleep ready_interval
+          retry
+        end
+        raise
+      end
     rescue StandardError => e
       raise "Service not ready: #{handle.service_name} (#{e.message})"
     end

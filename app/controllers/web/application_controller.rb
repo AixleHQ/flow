@@ -34,9 +34,15 @@ class Web::ApplicationController < ApplicationController
 
   def negotiate_format
     return if request.headers["X-Inertia"].present?
-    return unless request.content_type&.include?("json")
 
-    request.format = :json
+    if request.content_type&.include?("json")
+      request.format = :json
+    elsif !request.format.html?
+      # Bots/scanners hit paths like /login.jpg, which Rails negotiates to a
+      # non-HTML format and Inertia then 500s on (no .jpeg template — Sentry
+      # PALAD-AI-RAILS-1N). Web pages are HTML-only, so coerce to HTML.
+      request.format = :html
+    end
   end
 
   def redirect_super_admin_to_admin_panel
