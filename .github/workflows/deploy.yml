@@ -247,7 +247,7 @@ jobs:
 
     steps:
       - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Create migration job
         id: migrate_job
@@ -346,7 +346,7 @@ jobs:
 
     steps:
       - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
+        uses: azure/setup-kubectl@v5
 
       - name: Restart deployments
         run: |
