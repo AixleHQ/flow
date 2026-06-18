@@ -74,7 +74,8 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Reset database: `make db-reset`
 
 ### Code Quality and Testing
-- Run all linters and tests: `make check`
+- Run every check the way CI does — `rails-test`, `rubocop`, `brakeman`, `eslint` and `typescript` in parallel; never short-circuits, prints the full log of any failing check, and exits non-zero if any fail: `make check_all`
+- Run all linters and tests sequentially (auto-fixes rubocop/eslint, stops at the first failure): `make check`
 - Run only linters: `make lint`
 - Run only tests: `make test`
 - Run Rubocop (Ruby linter): `make rubocop`
@@ -84,13 +85,8 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Run Brakeman security analysis: `make brakeman`
 - Run Rails tests: `make rails-test`
 
-### Frontend Development
-- Run FSD (Feature-Sliced Design) analysis: `make fsd`
-- Fix FSD issues: `make fsd-fix`
-
 ### Docker & Runtime
-- First-time setup and run: `make start`
-- First-time setup: `make setup`
+- First-time setup (build images, install deps, prepare DB, build agent images): `make setup`
 - Start all services: `make up`
 - Stop all services: `make down`
 - Clean reset (removes volumes): `make reset`
@@ -212,24 +208,11 @@ const response = {
 
 ## Contributing
 
-1. Create a new branch for your feature
+1. Create a new branch from `develop` for your feature
 2. Make your changes
-3. Run `make check` to ensure all tests and linters pass
+3. Run `make check_all` to ensure all tests and linters pass
 4. Submit a pull request
 
 ## AWS Vault Configuration
 
 To configure AWS Vault, run: `aws-vault add {your_aws_vault_profile}`
-
-## Remote Execution
-
-To execute into QA container, run:
-```
-make qa-web-exec PROFILE={your_aws_vault_profile}
-```
-
-## Login to AWS account with AWS-Vault
-
-```
-make login_aws PROFILE={your_aws_vault_profile}
-```
