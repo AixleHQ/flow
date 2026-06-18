@@ -159,9 +159,8 @@ Merge logic: `merged_for_project` combines internal + company + project resource
 ## Quick Start
 
 ```bash
-make start   # First time: env, build, install deps, start all services
+make setup   # First time: build, install deps, prepare database
 make up      # Daily: start all services
-make doctor  # Check environment health
 make test    # Run test suite
 
 # Access
