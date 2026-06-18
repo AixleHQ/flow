@@ -3,7 +3,6 @@ services:
     image: web
     depends_on:
       - db
-      - redis
     environment:
       APP_VERSION: ci
       AUTHOR_NAME: github-actions
@@ -17,12 +16,8 @@ services:
       RAILS_ENV: test
       RAILS_LOG_TO_STDOUT: "true"
       RAILS_SECRET_KEY_BASE: secret
-      REDIS_URL: redis://redis:6379/1
 
   db:
     image: postgres:15.3-alpine
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
-
-  redis:
-    image: redis:7.2-alpine

@@ -75,7 +75,7 @@ jobs:
 
       - name: Start database
         if: ${{ inputs.needs-db }}
-        run: docker compose -f "$COMPOSE_FILE" up -d db redis
+        run: docker compose -f "$COMPOSE_FILE" up -d db
 
       - name: Wait for database
         if: ${{ inputs.needs-db }}
