@@ -8411,10 +8411,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react@npm:^19.0.0":
-  version: 19.2.4
-  resolution: "react@npm:19.2.4"
-  checksum: 10c0/cd2c9ff67a720799cc3b38a516009986f7fc4cb8d3e15716c6211cf098d1357ee3e348ab05ad0600042bbb0fd888530ba92e329198c92eafa0994f5213396596
+"react@npm:^19.2.7":
+  version: 19.2.7
+  resolution: "react@npm:19.2.7"
+  checksum: 10c0/0bd0e2f1bbd4ba97561c6597bf8a5fec05e6476fe61e165c1065598d16668efc6715205599c94d3ddd49d36cb0f21cbf1b9bcc18ee840b805ce222c3e8d558ac
   languageName: node
   linkType: hard
 
@@ -8815,7 +8815,7 @@ __metadata:
     nuqs: "npm:^2.4.3"
     prettier: "npm:^3.7.4"
     prettier-plugin-packagejson: "npm:^3.0.0"
-    react: "npm:^19.0.0"
+    react: "npm:^19.2.7"
     react-dom: "npm:^19.2.7"
     react-markdown: "npm:^10.1.0"
     react-resizable-panels: "npm:^4.4.1"
