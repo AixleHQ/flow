@@ -65,7 +65,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/7233' || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/$(hostname -i)/7233' || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 30
