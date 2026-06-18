@@ -73,7 +73,7 @@ const IndexPage = () => {
 
   return (
     <AuthLayout>
-      <Box mih="100vh" bg="var(--app-bg-default)">
+      <Box>
         <Group justify="space-between" align="flex-start" mb={24}>
           <Box>
             <Text fz={32} fw={600} c="white" mb={8}>

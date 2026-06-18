@@ -537,7 +537,7 @@ development_status:
   # ============================================
 
   epic-39: in-progress  # Sidebar Navigation Redesign (Phase 21) — Consolidate all nav into sidebar, project/company context switcher
-  39-1-redesign-sidebar-navigation-context-switching: ready-for-dev  # Strip nav from header, add workspace switcher to sidebar, dual-context nav
+  39-1-redesign-sidebar-navigation-context-switching: done  # Strip nav from header, add workspace switcher to sidebar, dual-context nav
 
   epic-39-retrospective: optional
 
