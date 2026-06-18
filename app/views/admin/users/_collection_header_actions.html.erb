@@ -1,0 +1,21 @@
+<%#
+# User collection header actions
+
+Renders Administrate's stock action header cells (for edit/destroy) and adds a
+header cell for the Impersonate column on the index page, to match the extra
+cell rendered in `_collection_item_actions`.
+%>
+
+<%= render(
+  partial: "administrate/application/collection_header_actions",
+  locals: {
+    collection_presenter: collection_presenter,
+    page: page,
+    resources: resources,
+    table_title: table_title
+  }
+) %>
+
+<% if action_name == "index" %>
+  <th scope="col" class="cell-label--action-button"></th>
+<% end %>
