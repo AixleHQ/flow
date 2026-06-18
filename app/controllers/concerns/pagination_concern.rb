@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "pagy/extras/overflow"
-
 module PaginationConcern
   extend ActiveSupport::Concern
 
@@ -9,7 +7,10 @@ module PaginationConcern
   MAX_PER_PAGE = 100
 
   included do
-    include Pagy::Backend
+    # Pagy 43 renamed the controller mixin Pagy::Backend -> Pagy::Method and
+    # folded the old `pagy/extras/overflow` behaviour (empty page on overflow)
+    # into the core as the default (it only raises with `raise_range_error: true`).
+    include Pagy::Method
   end
 
   # JSON API pagination: returns [pagy, records]
