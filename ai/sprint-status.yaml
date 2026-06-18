@@ -526,11 +526,11 @@ development_status:
   epic-37-retrospective: optional
 
   # ── Epic 38: Aixle Builder Fix & E2E ─────────────────────────────
-  epic-38: in-progress
-  38-1-debug-fix-session-start-flow: review
-  38-2-verify-meta-tools-seeded: review
-  38-3-e2e-playwright-verification: review
-  epic-38-retrospective: optional
+epic-38: in-progress
+38-1-debug-fix-session-start-flow: done
+38-2-verify-meta-tools-seeded: done
+38-3-e2e-playwright-verification: done
+epic-38-retrospective: optional
 
   # ============================================
   # PHASE 21: UI REDESIGN — SIDEBAR NAVIGATION
@@ -540,6 +540,13 @@ development_status:
   39-1-redesign-sidebar-navigation-context-switching: done  # Strip nav from header, add workspace switcher to sidebar, dual-context nav
 
   epic-39-retrospective: optional
+
+  # ============================================
+  # DOCS CONTENT
+  # ============================================
+
+  # ── Docs content fill (Issue #167 / PR #173) ──────────────────────
+  docs-fill-content: ready-for-dev  # Fill in-app /docs pages with content from PR #173 branch
 
 # EXECUTION SEQUENCE (Phase 20):
 # ==================================
