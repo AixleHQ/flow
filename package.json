@@ -78,7 +78,7 @@
     "remark-extract-toc": "^1.1.0",
     "remark-gfm": "^4.0.1",
     "use-debounce": "^10.1.0",
-    "zod": "^3.24.3",
+    "zod": "^4.4.3",
     "zustand": "^5.0.9"
   },
   "scripts": {
