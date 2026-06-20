@@ -45,12 +45,41 @@ module Coder
     end
 
     def conn
-      @conn ||= Faraday.new(url: coder_url) do |f|
+      @conn ||= build_conn
+    end
+
+    # Build the Faraday connection. When the configured Coder host is in the
+    # trusted-hosts allowlist (split-horizon DNS scenario) the system resolver
+    # may return a private IP that is not reachable from inside the cluster;
+    # in that case fall back to a public DNS lookup and connect to the public
+    # IP directly while preserving the original hostname for the Host header
+    # and TLS SNI.
+    def build_conn
+      uri = URI.parse(coder_url)
+      target_url, sni_hostname, host_header = resolve_target(uri)
+
+      ssl_opts = sni_hostname ? { hostname: sni_hostname } : {}
+      Faraday.new(url: target_url, ssl: ssl_opts) do |f|
         f.options.open_timeout = HTTP_TIMEOUTS[:open]
         f.options.timeout      = HTTP_TIMEOUTS[:read]
         f.headers[SESSION_TOKEN_HEADER] = session_token
         f.headers["Accept"] = "application/json"
+        f.headers["Host"] = host_header if host_header
       end
+    end
+
+    def resolve_target(uri)
+      return [ uri.to_s, nil, nil ] unless UrlSafetyValidator.trusted_host?(uri.host.to_s)
+
+      public_ip = UrlSafetyValidator.resolve_public_ipv4(uri.host)
+      return [ uri.to_s, nil, nil ] if public_ip.nil?
+
+      rewritten = uri.dup
+      rewritten.host = public_ip
+
+      port = uri.port
+      host_header = port == uri.default_port ? uri.host : "#{uri.host}:#{port}"
+      [ rewritten.to_s, uri.host, host_header ]
     end
 
     def coder_url

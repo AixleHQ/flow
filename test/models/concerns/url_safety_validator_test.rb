@@ -141,6 +141,94 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
+  # Trusted hosts allowlist (split-horizon DNS bypass)
+  # ====================================================================
+
+  test "skips DNS-resolution rejection for trusted hostname (split-horizon DNS)" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "coder.staging.aixle.com" ])
+    Resolv.stubs(:getaddresses).with("coder.staging.aixle.com").returns([ "10.0.0.5" ])
+
+    assert_empty UrlSafetyValidator.errors_for("https://coder.staging.aixle.com")
+  end
+
+  test "trusted_host? match is case-insensitive on the submitted host" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "coder.staging.aixle.com" ])
+    Resolv.stubs(:getaddresses).with("coder.staging.aixle.com").returns([ "10.0.0.5" ])
+
+    assert_empty UrlSafetyValidator.errors_for("https://Coder.Staging.Aixle.Com")
+  end
+
+  test "trusted hosts allowlist does not bypass literal private IP" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "10.0.0.5" ])
+
+    errors = UrlSafetyValidator.errors_for("http://10.0.0.5")
+    assert_includes errors, "cannot point to private or internal network addresses"
+  end
+
+  test "trusted hosts allowlist does not bypass BLOCKED_HOSTS" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "localhost" ])
+
+    errors = UrlSafetyValidator.errors_for("https://localhost")
+    assert_includes errors, "cannot point to internal services"
+  end
+
+  test "non-trusted hostname resolving to private is still rejected" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "coder.staging.aixle.com" ])
+    Resolv.stubs(:getaddresses).with("other.example.test").returns([ "10.0.0.5" ])
+
+    errors = UrlSafetyValidator.errors_for("https://other.example.test")
+    assert_includes errors, "cannot point to private or internal network addresses"
+  end
+
+  # ====================================================================
+  # resolve_public_ipv4 (split-horizon outbound resolution)
+  # ====================================================================
+
+  test "resolve_public_ipv4 returns first public A record" do
+    public_a = Resolv::DNS::Resource::IN::A.new("93.184.216.34")
+    private_a = Resolv::DNS::Resource::IN::A.new("10.0.0.5")
+
+    dns = mock("dns")
+    dns.expects(:timeouts=).with(UrlSafetyValidator::PUBLIC_DNS_TIMEOUTS)
+    dns.expects(:getresources).with("public.example.test", Resolv::DNS::Resource::IN::A)
+       .returns([ private_a, public_a ])
+
+    Resolv::DNS.expects(:open)
+               .with(nameserver: UrlSafetyValidator::PUBLIC_DNS_NAMESERVERS)
+               .yields(dns)
+
+    assert_equal "93.184.216.34", UrlSafetyValidator.resolve_public_ipv4("public.example.test")
+  end
+
+  test "resolve_public_ipv4 returns nil when only private addresses are returned" do
+    private_a = Resolv::DNS::Resource::IN::A.new("10.0.0.5")
+
+    dns = mock("dns")
+    dns.expects(:timeouts=).with(UrlSafetyValidator::PUBLIC_DNS_TIMEOUTS)
+    dns.expects(:getresources).with("split.example.test", Resolv::DNS::Resource::IN::A)
+       .returns([ private_a ])
+
+    Resolv::DNS.expects(:open)
+               .with(nameserver: UrlSafetyValidator::PUBLIC_DNS_NAMESERVERS)
+               .yields(dns)
+
+    assert_nil UrlSafetyValidator.resolve_public_ipv4("split.example.test")
+  end
+
+  test "resolve_public_ipv4 swallows resolver errors and returns nil" do
+    Resolv::DNS.expects(:open)
+               .with(nameserver: UrlSafetyValidator::PUBLIC_DNS_NAMESERVERS)
+               .raises(Resolv::ResolvError)
+
+    assert_nil UrlSafetyValidator.resolve_public_ipv4("broken.example.test")
+  end
+
+  test "resolve_public_ipv4 returns nil for blank host" do
+    assert_nil UrlSafetyValidator.resolve_public_ipv4("")
+    assert_nil UrlSafetyValidator.resolve_public_ipv4(nil)
+  end
+
+  # ====================================================================
   # Aggregation
   # ====================================================================
 
