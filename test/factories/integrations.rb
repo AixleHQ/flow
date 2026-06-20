@@ -30,6 +30,22 @@ FactoryBot.define do
       end
     end
 
+    trait :coder do
+      provider { :coder }
+      after(:build) do |integration|
+        integration.credentials_data = {
+          coder_url: "https://coder.example.com",
+          session_token: "coder-test-#{SecureRandom.hex(8)}",
+          user_id: SecureRandom.uuid
+        }
+        integration.settings = {
+          coder_username:   "test-user",
+          coder_user_email: "test@example.com",
+          lock_ttl_minutes: 60
+        }
+      end
+    end
+
     trait :active do
       status { :active }
     end

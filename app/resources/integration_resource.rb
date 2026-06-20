@@ -28,4 +28,20 @@ class IntegrationResource < ApplicationResource
   attribute :connected_by do |integration|
     { id: integration.connected_by.id, name: integration.connected_by.name }
   end
+
+  attribute :coder_url do |integration|
+    integration.coder? ? integration.coder_url : nil
+  end
+
+  attribute :coder_default_template do |integration|
+    integration.coder? ? integration.coder_default_template : nil
+  end
+
+  attribute :coder_machine_prefix do |integration|
+    integration.coder? ? integration.coder_machine_prefix : nil
+  end
+
+  attribute :coder_lock_ttl_minutes do |integration|
+    integration.coder? ? integration.coder_lock_ttl_minutes : nil
+  end
 end

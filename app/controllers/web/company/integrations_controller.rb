@@ -58,18 +58,27 @@ class Web::Company::IntegrationsController < Web::Company::ApplicationController
   def create
     provider = params[:provider].to_s
 
-    if provider == "gitlab"
+    case provider
+    when "gitlab"
       integration = Gitlab::IntegrationService.new(
         company: current_company,
         connected_by: current_user
       ).create(personal_access_token: params[:personal_access_token].to_s)
 
-      if integration.persisted? && integration.active?
-        redirect_to company_integrations_path, notice: "GitLab integration connected"
-      else
-        error_msg = integration.settings&.dig("error") || "Failed to connect GitLab"
-        redirect_to company_integrations_path, alert: error_msg
-      end
+      finish_create(integration, label: "GitLab")
+    when "coder"
+      integration = Coder::IntegrationService.new(
+        company: current_company,
+        connected_by: current_user
+      ).create(
+        coder_url:        params[:coder_url].to_s,
+        session_token:    params[:session_token].to_s,
+        default_template: params[:default_template].presence,
+        machine_prefix:   params[:machine_prefix].presence,
+        lock_ttl_minutes: params[:lock_ttl_minutes].presence
+      )
+
+      finish_create(integration, label: "Coder")
     else
       redirect_to company_integrations_path, alert: "Unsupported provider: #{provider}"
     end
@@ -82,6 +91,15 @@ class Web::Company::IntegrationsController < Web::Company::ApplicationController
   end
 
   private
+
+  def finish_create(integration, label:)
+    if integration.persisted? && integration.active?
+      redirect_to company_integrations_path, notice: "#{label} integration connected"
+    else
+      error_msg = integration.settings&.dig("error") || "Failed to connect #{label}"
+      redirect_to company_integrations_path, alert: error_msg
+    end
+  end
 
   def github_setup_redirect_path(project)
     project ? company_project_integrations_path(project) : company_integrations_path
