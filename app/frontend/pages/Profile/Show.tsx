@@ -469,6 +469,7 @@ function AgentAuthModal({
             <iframe
               src={ttydUrl}
               title={`Authenticate ${agentInfo.name}`}
+              allow="clipboard-read; clipboard-write"
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: '#000' }}
             />
           </Box>

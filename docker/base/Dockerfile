@@ -1,4 +1,33 @@
 # =============================================================================
+# ttyd builder — build from main (pinned SHA), NOT the 1.7.7 release.
+#
+# The 1.7.7 release bundles xterm.js 5.4 with NO clipboard addon, so the web
+# terminal silently ignores OSC 52 and the browser clipboard never receives
+# "c to copy" — which breaks copying the long Claude Code OAuth login URL.
+# The xterm clipboard addon was merged to ttyd main on 2024-11-26 but has never
+# been released. We pin a commit for reproducibility. (Also requires the iframe
+# to carry allow="clipboard-write" and tmux `allow-passthrough on`.)
+# =============================================================================
+FROM node:22-slim AS ttyd-builder
+ARG TTYD_REF=647d55ad865f5ad85ad89ba5e1b28d9b6ac8fd55
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git ca-certificates build-essential cmake \
+        libjson-c-dev libwebsockets-dev libuv1-dev zlib1g-dev libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+RUN git clone https://github.com/tsl0922/ttyd.git /ttyd-src && \
+    cd /ttyd-src && git checkout ${TTYD_REF}
+# Patch the xterm client: copy the FULL url on click, rejoining hard-wrapped rows
+# (xterm.js bug #5412 — WebLinksAddon only stitches soft-wraps; tmux/Claude emit
+# hard newlines). Lets the user just click the login URL to copy it whole.
+COPY patch-ttyd.js /tmp/patch-ttyd.js
+RUN cd /ttyd-src && node /tmp/patch-ttyd.js
+RUN cd /ttyd-src && corepack enable && \
+    (cd html && yarn install --immutable && yarn run build) && \
+    cmake -B build -S . && \
+    cmake --build build -j"$(nproc)" && \
+    strip build/ttyd
+
+# =============================================================================
 # Core Base Image for AI Coding Agents
 #
 # Heavy, rarely-changing dependencies only.
@@ -47,7 +76,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-pip \
     pipx \
     make \
-    g++
+    g++ \
+    # ttyd runtime libs (binary built from main in the ttyd-builder stage).
+    # ttyd uses the libuv event loop, which libwebsockets loads at runtime via a
+    # separate plugin package (libwebsockets-evlib-uv) — without it ttyd dies with
+    # "unable to load evlib plugin evlib_uv / libwebsockets context creation failed".
+    libjson-c5 \
+    libuv1 \
+    libwebsockets17 \
+    libwebsockets-evlib-uv
 
 # -----------------------------------------------------------------------------
 # GitHub CLI (gh)
@@ -84,12 +121,20 @@ RUN cp /opt/mitm/ca/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmp
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
 
 # -----------------------------------------------------------------------------
-# Install ttyd from GitHub releases (not in Debian repos)
+# ttyd — copy the binary built from main in the ttyd-builder stage above.
+# (main, not the 1.7.7 release, for the xterm clipboard addon → OSC 52 copy.)
 # -----------------------------------------------------------------------------
-RUN ARCH=$(dpkg --print-architecture) && \
-    if [ "$ARCH" = "amd64" ]; then TTYD_ARCH="x86_64"; else TTYD_ARCH="aarch64"; fi && \
-    curl -fsSL "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${TTYD_ARCH}" -o /usr/local/bin/ttyd && \
-    chmod +x /usr/local/bin/ttyd
+COPY --from=ttyd-builder /ttyd-src/build/ttyd /usr/local/bin/ttyd
+RUN chmod +x /usr/local/bin/ttyd && ttyd --version
+
+# Helper used by tmux copy bindings: reads the selection on stdin and emits it as
+# an OSC 52 "set clipboard" sequence WRAPPED in a tmux DCS-passthrough envelope,
+# written to the pane tty ($1). tmux's own set-clipboard forwarding doesn't reach
+# ttyd's xterm in this stack, but DCS-passthrough does — so this is how a copy-mode
+# selection (incl. a long OAuth URL on one line in a wide pane) reaches the browser
+# clipboard. allow-passthrough must be on (it is, in tmux.conf).
+RUN printf '#!/bin/sh\nB=$(base64 | tr -d "\\r\\n")\nprintf "\\033Ptmux;\\033\\033]52;c;%%s\\007\\033\\\\\\\\" "$B" > "$1"\n' \
+      > /usr/local/bin/tmux-osc52 && chmod +x /usr/local/bin/tmux-osc52
 
 # -----------------------------------------------------------------------------
 # Install OpenVSCode Server from GitHub releases

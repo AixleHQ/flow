@@ -221,7 +221,12 @@ const SessionPage = () => {
               </Text>
             </div>
           )}
-          <iframe src={ttydUrl!} title="Terminal" onLoad={() => setTermLoaded(true)} />
+          <iframe
+            src={ttydUrl!}
+            title="Terminal"
+            allow="clipboard-read; clipboard-write"
+            onLoad={() => setTermLoaded(true)}
+          />
         </div>
       </div>
     );

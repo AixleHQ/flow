@@ -202,6 +202,7 @@ function AgentAuthTerminal({
           <iframe
             src={ttydUrl}
             title="Agent Authentication Terminal"
+            allow="clipboard-read; clipboard-write"
             style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#000' }}
           />
         </Box>
