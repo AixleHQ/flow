@@ -775,6 +775,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     Thread.current[:session_context_runtime] = nil
     ContainerRuntime.stubs(:build).returns(runtime_mock)
+    SessionContextService.stubs(:sleep)
 
     token_service_mock = mock("token_service")
     token_service_mock.expects(:generate_installation_token).returns("ghs_token")
@@ -784,7 +785,11 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     runtime_mock.expects(:exec).with do |_ctr, cmd|
       cmd[2].include?("acme/bad.git")
-    end.returns([ [], [ "fatal: repo not found" ], 128 ])
+    end.returns([ [], [ "fatal: Authentication failed" ], 128 ])
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("acme/bad.git")
+    end.returns([ [], [ "fatal: Authentication failed" ], 128 ])
 
     runtime_mock.expects(:exec).with do |_ctr, cmd|
       cmd[2].include?("acme/good.git")
@@ -800,6 +805,32 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     repo_ok.reload
     assert_not_nil repo_ok.last_fetched_at
+  end
+
+  test "inject_repositories retries failed clone once after delay" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo = create(:repository, full_name: "acme/retry-me", source_branch: "main",
+                  integration: integration, scope: @company)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.repositories << repo
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    SessionContextService.stubs(:sleep)
+
+    token_service_mock = mock("token_service")
+    token_service_mock.expects(:generate_installation_token).returns("ghs_first")
+    Github::TokenService.expects(:new).with(integration).returns(token_service_mock)
+
+    runtime_mock.expects(:exec).twice.with do |_ctr, cmd|
+      cmd[2].include?("x-access-token:ghs_first@github.com/acme/retry-me.git")
+    end.returns([ [], [ "remote: Repository not found.\n" ], 128 ], [ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    repo.reload
+    assert_not_nil repo.last_fetched_at
   end
 
   test "inject_repositories skips inactive integration" do
