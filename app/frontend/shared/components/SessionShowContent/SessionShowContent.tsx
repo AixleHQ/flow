@@ -112,9 +112,10 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     setFinishRequested(true);
     try {
       await apiFetch(finishApiV1TerminalSessionPath(s.id), { method: 'POST' });
-      router.reload();
-    } finally {
+      router.reload({ onFinish: () => setFinishRequested(false) });
+    } catch (e) {
       setFinishRequested(false);
+      throw e;
     }
   }, [s.id]);
 
