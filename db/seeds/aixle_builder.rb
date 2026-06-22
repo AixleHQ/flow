@@ -91,7 +91,7 @@ module Seeds
           1. Understand the goal and deliverables
           2. Identify stages (each stage = one Step)
           3. Design each step: agent, instructions, sub-steps, resources, dependencies
-          4. Write detailed step instructions (the CORE of each step)
+          4. Write focused step instructions (the CORE of each step) — the task-specific WHAT and OUTPUT only
           5. Configure board integration if applicable
 
           ## Common Patterns
@@ -118,7 +118,7 @@ module Seeds
         a.principles = <<~PRINCIPLES
           1. Each Step = one terminal session = one agent = one major deliverable
           2. SubSteps are trackable work units, NOT interactive menu items
-          3. Instructions should be detailed enough for the agent to work autonomously
+          3. Instructions should be specific and focused — say what to do and what to produce, and omit anything the platform already injects (completion rules, workspace layout, sub-step tracking, tool availability)
           4. Consider both interactive and non-interactive execution modes
           5. Think about input/output asset specs for step validation
           6. Board columns represent STATES, workflows represent ACTIONS
@@ -175,7 +175,7 @@ module Seeds
 
           5. **Create Workflow & Steps** — Build the structure:
              - meta_create_workflow — creates the workflow
-             - meta_create_step — for each step (write detailed instructions!)
+             - meta_create_step — for each step (write focused, task-specific instructions)
              - meta_create_sub_step — for progress tracking within steps
              - meta_link_resource_to_step — attach tools, skills, MCP servers
 
@@ -190,7 +190,7 @@ module Seeds
           ## Important Rules
           - ALWAYS propose before creating. ALWAYS ask for confirmation.
           - Show progress after each creation.
-          - Step instructions are the MOST IMPORTANT thing — be detailed and specific.
+          - Step instructions are LEAN and task-specific — state what to do and what to produce; never restate platform scaffolding (completion rules, workspace layout, sub-step tracking, tool availability).
           - If user doesn't need board automation, skip step 6.
         MD
       )
