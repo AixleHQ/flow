@@ -25,6 +25,70 @@ class IntegrationTest < ActiveSupport::TestCase
     assert { integration.valid? }
   end
 
+  test "valid coder integration" do
+    integration = build(:integration, :coder, :active, company: @company, connected_by: @user)
+    assert { integration.valid? }
+  end
+
+  test "coder integration round-trips coder_url and session_token through credentials" do
+    integration = build(:integration, :coder, company: @company, connected_by: @user)
+    integration.credentials_data = {
+      coder_url: "https://coder.example.com",
+      session_token: "vFVrbTLdls-XYZ"
+    }
+    integration.save!
+    integration.reload
+
+    assert_equal "https://coder.example.com", integration.credentials_data["coder_url"]
+    assert_equal "vFVrbTLdls-XYZ", integration.credentials_data["session_token"]
+    assert_equal "https://coder.example.com", integration.coder_url
+  end
+
+  test "coder integration encrypts session_token at rest" do
+    integration = build(:integration, :coder, company: @company, connected_by: @user)
+    integration.credentials_data = {
+      coder_url: "https://coder.example.com",
+      session_token: "vFVrbTLdls-XYZ"
+    }
+    integration.save!
+
+    raw = integration.read_attribute(:credentials)
+    assert { raw.present? }
+    assert { !raw.include?("vFVrbTLdls-XYZ") }
+    assert { !raw.include?("coder.example.com") }
+  end
+
+  test "coder_lock_ttl_minutes returns the stored setting" do
+    integration = build(:integration, :coder, company: @company, connected_by: @user)
+    integration.settings = { "lock_ttl_minutes" => 120 }
+    assert_equal 120, integration.coder_lock_ttl_minutes
+  end
+
+  test "coder_lock_ttl_minutes returns nil when setting is absent" do
+    integration = build(:integration, :coder, company: @company, connected_by: @user)
+    integration.settings = {}
+    assert_nil integration.coder_lock_ttl_minutes
+  end
+
+  test "IntegrationResource never serializes the session token" do
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    integration.credentials_data = {
+      coder_url: "https://coder.example.com",
+      session_token: "vFVrbTLdls-SECRET-TOKEN-XYZ"
+    }
+    integration.save!
+
+    serialized = IntegrationResource.new(integration).to_h
+    json = serialized.to_json
+
+    refute_includes json, "vFVrbTLdls-SECRET-TOKEN-XYZ"
+    refute_includes json, "session_token"
+    refute_includes json, "sessionToken"
+    # Public Coder URL field is present (camelCased by Alba transform_keys :lower_camel).
+    coder_url = serialized["coderUrl"] || serialized[:coderUrl] || serialized[:coder_url] || serialized["coder_url"]
+    assert_equal "https://coder.example.com", coder_url
+  end
+
   test "name must be present" do
     integration = build(:integration, name: nil, company: @company, connected_by: @user)
     assert { !integration.valid? }
@@ -88,7 +152,7 @@ class IntegrationTest < ActiveSupport::TestCase
   end
 
   test "provider enumerize values" do
-    assert_equal %w[github gitlab linear], Integration.provider.values.map(&:to_s)
+    assert_equal %w[github gitlab linear coder], Integration.provider.values.map(&:to_s)
   end
 
   test "status enumerize values" do

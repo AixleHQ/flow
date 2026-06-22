@@ -37,7 +37,10 @@ module Interceptors
           begin
             super
           rescue StandardError => e
-            Sentry.capture_exception(e)
+            # Activity cancellations (tab closed, workflow cancelled by the user)
+            # are expected control flow, not application errors — don't report
+            # them to Sentry. Still re-raise so Temporal handles the cancellation.
+            Sentry.capture_exception(e) unless Temporalio::Error.canceled?(e)
             raise
           end
         end

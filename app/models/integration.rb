@@ -4,7 +4,7 @@ class Integration < ApplicationRecord
   include Encryptable
   extend Enumerize
 
-  enumerize :provider, in: %i[github gitlab linear], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -59,6 +59,28 @@ class Integration < ApplicationRecord
 
   def installation_id
     credentials_data["installation_id"]
+  end
+
+  # ----- Coder accessors -----
+
+  def coder_url
+    credentials_data["coder_url"]
+  end
+
+  def coder_user_id
+    credentials_data["user_id"]
+  end
+
+  def coder_default_template
+    settings&.dig("default_template")
+  end
+
+  def coder_machine_prefix
+    settings&.dig("machine_prefix")
+  end
+
+  def coder_lock_ttl_minutes
+    settings&.dig("lock_ttl_minutes")&.to_i
   end
 
   def self.ransackable_attributes(_auth_object = nil)

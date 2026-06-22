@@ -8,16 +8,29 @@ import {
   Group,
   Menu,
   Modal,
+  NumberInput,
   PasswordInput,
   Stack,
   Text,
+  TextInput,
   ThemeIcon,
   Title,
+  UnstyledButton,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconBrandGithub, IconLink, IconPlus, IconSettings, IconTrash } from '@tabler/icons-react';
+import {
+  IconBrandGithub,
+  IconChevronDown,
+  IconChevronRight,
+  IconLink,
+  IconPlus,
+  IconSettings,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
+
+import { isValidHttpsUrl } from 'shared/lib/urlValidation';
 
 export interface Integration {
   id: number;
@@ -27,6 +40,10 @@ export interface Integration {
   scopeIndicator: string;
   githubUrl: string | null;
   installationId?: string;
+  coderUrl?: string | null;
+  coderDefaultTemplate?: string | null;
+  coderMachinePrefix?: string | null;
+  coderLockTtlMinutes?: number | null;
   connectedBy: { id: number; name: string };
   createdAt: string;
 }
@@ -44,11 +61,21 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
+const CoderIcon = ({ size = 20 }: { size?: number } = {}) => (
+  <img src="/images/coder.svg" alt="Coder" width={size} height={size} />
+);
 
 const ProviderIcon = ({ provider, size = 20 }: { provider: string; size?: number }) => {
   if (provider === 'github') return <IconBrandGithub size={size} />;
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
+  if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
   return <IconLink size={size} />;
+};
+
+const PROVIDER_ICON_COLORS: Record<string, string> = {
+  github: 'dark',
+  gitlab: 'orange',
+  coder: 'blue',
 };
 
 const formatDate = (d: string) =>
@@ -77,7 +104,7 @@ const IntegrationCard = ({
   <Card withBorder p="md" radius="md">
     <Group justify="space-between" wrap="nowrap">
       <Group gap="md" wrap="nowrap">
-        <ThemeIcon variant="light" size="lg" radius="md" color={integration.provider === 'github' ? 'dark' : 'orange'}>
+        <ThemeIcon variant="light" size="lg" radius="md" color={PROVIDER_ICON_COLORS[integration.provider] ?? 'gray'}>
           <ProviderIcon provider={integration.provider} size={18} />
         </ThemeIcon>
         <Box>
@@ -140,6 +167,31 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
   const [gitlabLoading, setGitlabLoading] = useState(false);
+
+  const [coderOpen, setCoderOpen] = useState(false);
+  const [coderUrl, setCoderUrl] = useState('');
+  const [coderToken, setCoderToken] = useState('');
+  const [coderDefaultTemplate, setCoderDefaultTemplate] = useState('');
+  const [coderMachinePrefix, setCoderMachinePrefix] = useState('');
+  const [coderLockTtlMinutes, setCoderLockTtlMinutes] = useState<number | string>(60);
+  const [coderAdvancedOpen, setCoderAdvancedOpen] = useState(false);
+  const [coderLoading, setCoderLoading] = useState(false);
+  const [coderError, setCoderError] = useState<string | null>(null);
+
+  const resetCoderForm = useCallback(() => {
+    setCoderUrl('');
+    setCoderToken('');
+    setCoderDefaultTemplate('');
+    setCoderMachinePrefix('');
+    setCoderLockTtlMinutes(60);
+    setCoderAdvancedOpen(false);
+    setCoderError(null);
+  }, []);
+
+  const closeCoderModal = useCallback(() => {
+    setCoderOpen(false);
+    resetCoderForm();
+  }, [resetCoderForm]);
 
   const projectIntegrations = useMemo(() => integrations.filter((i) => i.scopeIndicator === 'project'), [integrations]);
   const companyIntegrations = useMemo(() => integrations.filter((i) => i.scopeIndicator === 'company'), [integrations]);
@@ -213,6 +265,43 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     );
   }, [basePath, gitlabPat]);
 
+  const handleConnectCoder = useCallback(() => {
+    const trimmedUrl = coderUrl.trim();
+    const trimmedToken = coderToken.trim();
+    if (!trimmedUrl || !trimmedToken) return;
+    if (!isValidHttpsUrl(trimmedUrl)) {
+      setCoderError('Coder URL must be a valid https URL');
+      return;
+    }
+
+    setCoderError(null);
+    setCoderLoading(true);
+
+    const ttl = typeof coderLockTtlMinutes === 'number' ? coderLockTtlMinutes : Number(coderLockTtlMinutes);
+    const payload: Record<string, string | number> = {
+      provider: 'coder',
+      coderUrl: trimmedUrl,
+      sessionToken: trimmedToken,
+    };
+    if (coderDefaultTemplate.trim()) payload.defaultTemplate = coderDefaultTemplate.trim();
+    if (coderMachinePrefix.trim()) payload.machinePrefix = coderMachinePrefix.trim();
+    if (!Number.isNaN(ttl) && ttl > 0) payload.lockTtlMinutes = ttl;
+
+    router.post(basePath, payload, {
+      preserveScroll: true,
+      onSuccess: () => {
+        closeCoderModal();
+      },
+      onError: (errors) => {
+        const message =
+          typeof errors === 'object' && errors ? Object.values(errors).join(' ') : 'Failed to connect Coder';
+        setCoderError(message || 'Failed to connect Coder');
+        notifications.show({ message: 'Failed to connect Coder', color: 'red' });
+      },
+      onFinish: () => setCoderLoading(false),
+    });
+  }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
+
   const alreadyLinkedInstallationIds = useMemo(
     () => new Set(projectIntegrations.filter((i) => i.installationId).map((i) => i.installationId)),
     [projectIntegrations],
@@ -277,6 +366,9 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             </Menu.Item>
             <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
               GitLab
+            </Menu.Item>
+            <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+              Coder
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
@@ -357,6 +449,89 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               Cancel
             </Button>
             <Button onClick={handleConnectGitlab} loading={gitlabLoading} disabled={!gitlabPat.trim()}>
+              Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={coderOpen} onClose={closeCoderModal} title="Connect Coder" centered size="sm">
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Enter your Coder instance URL and a session token with full workspace permissions.
+          </Text>
+          <TextInput
+            label="Coder URL"
+            placeholder="https://coder.example.com"
+            value={coderUrl}
+            onChange={(e) => setCoderUrl(e.currentTarget.value)}
+            error={coderUrl.trim() && !isValidHttpsUrl(coderUrl) ? 'Must be a valid https URL' : undefined}
+            autoFocus
+            required
+          />
+          <PasswordInput
+            label="Session Token"
+            placeholder="vFVrbTLdls-..."
+            value={coderToken}
+            onChange={(e) => setCoderToken(e.currentTarget.value)}
+            required
+          />
+
+          <UnstyledButton onClick={() => setCoderAdvancedOpen((open) => !open)}>
+            <Group gap={4}>
+              {coderAdvancedOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
+              <Text size="sm" c="dimmed">
+                Advanced
+              </Text>
+            </Group>
+          </UnstyledButton>
+
+          {coderAdvancedOpen && (
+            <Stack gap="sm">
+              <TextInput
+                label="Default template"
+                placeholder="aws-ec2-spot-v1"
+                value={coderDefaultTemplate}
+                onChange={(e) => setCoderDefaultTemplate(e.currentTarget.value)}
+              />
+              <TextInput
+                label="Machine name prefix"
+                placeholder="aixle-prod"
+                value={coderMachinePrefix}
+                onChange={(e) => setCoderMachinePrefix(e.currentTarget.value)}
+              />
+              <NumberInput
+                label="Lock TTL (minutes)"
+                min={1}
+                max={1440}
+                value={coderLockTtlMinutes}
+                onChange={(value) => setCoderLockTtlMinutes(value)}
+                required
+                error={typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0 ? undefined : 'Required'}
+              />
+            </Stack>
+          )}
+
+          {coderError && (
+            <Text size="sm" c="red">
+              {coderError}
+            </Text>
+          )}
+
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeCoderModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConnectCoder}
+              loading={coderLoading}
+              disabled={
+                !coderUrl.trim() ||
+                !coderToken.trim() ||
+                !isValidHttpsUrl(coderUrl) ||
+                !(typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0)
+              }
+            >
               Connect
             </Button>
           </Group>

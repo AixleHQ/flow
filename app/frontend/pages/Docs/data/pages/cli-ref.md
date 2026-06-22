@@ -26,7 +26,7 @@ of these from the repo root.
 | Command            | What it does                                                                |
 | ------------------ | --------------------------------------------------------------------------- |
 | `make check`       | Run backend + frontend checks sequentially, stop on first failure.          |
-| `make check_all`   | Run all checks in parallel, never short-circuit, summarize failures.        |
+| `make check_all`   | Run all checks in parallel (this is what CI runs), never short-circuit, print the full log of any failed check, exit non-zero if any fail. |
 | `make lint`        | All linters: eslint-fix, rubocop-fix, brakeman, typescript.                 |
 | `make test`        | Rails tests (`bundle exec rails test`).                                     |
 | `make rails-test`  | Same as above.                                                              |

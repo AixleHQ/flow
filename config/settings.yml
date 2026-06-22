@@ -93,6 +93,18 @@ github:
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
 
+coder:
+  # TODO: wired by epic #279 MCP slice — these are operator-configurable defaults for the upcoming
+  # workspace/lock services; the current integration-setup slice does not read them.
+  default_template:          <%= ENV['CODER_DEFAULT_TEMPLATE'] || 'aws-ec2-spot-v1' %>
+  machine_prefix:            <%= ENV['CODER_MACHINE_PREFIX'] || 'aixle-prod' %>
+
+url_safety:
+  # Public hostnames that may resolve to a private IP via split-horizon DNS
+  # (e.g. our own staging/QA hosts served from inside the cluster). The DNS
+  # resolution check is skipped for an exact match against this allowlist.
+  trusted_hosts: <%= (ENV['URL_SAFETY_TRUSTED_HOSTS'] || '').split(',').map(&:strip).reject(&:empty?) %>
+
 traefik:
   ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
   http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>

@@ -21,6 +21,9 @@ class CompanyDashboard < Administrate::BaseDashboard
       collection: ->(field) { available_states_collection(field, :state) }
     ),
     state_event: Field::Select.with_options(
+      # Virtual AASM transition attribute (no DB column) — must not be searchable,
+      # or Administrate builds a LIKE against companies.state_event and crashes.
+      searchable: false,
       include_blank: true,
       collection: ->(field) { available_events_collection(field, :state) }
     ),

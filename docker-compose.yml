@@ -38,18 +38,6 @@ x-toolbox-environment: &toolbox-environment
   - AWS_ASSUME_ROLE_TTL=24h
 
 services:
-  bootstrap:
-    image: web
-    volumes: *web-volumes
-    environment:
-      <<: *web-environment
-    command: bin/docker-bootstrap check
-    depends_on:
-      db:
-        condition: service_healthy
-    restart: "no"
-    attach: false
-
   temporal:
     image: temporalio/auto-setup:1.29.0
     ports:
@@ -65,11 +53,11 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/$(hostname -i)/7233' || exit 1"]
+      test: ["CMD-SHELL", "temporal operator cluster health --address $(hostname -i):7233"]
       interval: 5s
       timeout: 5s
-      retries: 30
-      start_period: 30s
+      retries: 60
+      start_period: 60s
     attach: false
 
   temporal-ui:
@@ -94,8 +82,6 @@ services:
       - '4001:4001'
       - '4002:4002'  # MCP server (separate Puma via Procfile.dev)
     depends_on:
-      bootstrap:
-        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis:
@@ -108,6 +94,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.web.rule=PathPrefix(`/api`)"
       - "traefik.http.services.web.loadbalancer.server.port=4000"
+    entrypoint: bin/docker-entrypoint
     command: dev
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:4000/up || exit 1"]
@@ -127,11 +114,9 @@ services:
       RAILS_MAX_THREADS: '20'
     command: bin/temporal_worker
     depends_on:
-      bootstrap:
-        condition: service_completed_successfully
-      temporal:
+      web:
         condition: service_healthy
-      db:
+      temporal:
         condition: service_healthy
     stop_grace_period: 20m
     restart: on-failure:5
@@ -219,8 +204,6 @@ services:
     volumes:
       - .:/app:cached
       - /var/run/docker.sock:/var/run/docker.sock
-
-
 
 volumes:
   bundle_cache:

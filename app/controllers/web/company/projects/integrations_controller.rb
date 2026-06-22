@@ -28,6 +28,18 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
         connected_by: current_user,
         project: current_project
       ).create(personal_access_token: params[:personal_access_token].to_s)
+    when "coder"
+      Coder::IntegrationService.new(
+        company: current_company,
+        connected_by: current_user,
+        project: current_project
+      ).create(
+        coder_url:        params[:coder_url].to_s,
+        session_token:    params[:session_token].to_s,
+        default_template: params[:default_template].presence,
+        machine_prefix:   params[:machine_prefix].presence,
+        lock_ttl_minutes: params[:lock_ttl_minutes].presence
+      )
     end
 
     if integration.nil?

@@ -30,8 +30,7 @@ class MCPServer < ApplicationRecord
   validates :url, presence: true, if: -> { custom? && !transport_stdio? }
   validates :command, presence: true, if: :transport_stdio?
   validates :scope, presence: true, if: :custom?
-  validate :url_scheme_allowed, if: -> { custom? && url.present? }
-  validate :url_not_private_network, if: -> { custom? && url.present? }
+  validate :url_safety, if: -> { custom? && url.present? }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
@@ -87,50 +86,7 @@ class MCPServer < ApplicationRecord
 
   private
 
-  BLOCKED_HOSTS = %w[
-    localhost
-    metadata.google.internal
-    metadata.goog
-  ].freeze
-
-  def url_scheme_allowed
-    uri = URI.parse(url)
-    return if %w[http https].include?(uri.scheme)
-
-    errors.add(:url, "must use http or https")
-  rescue URI::InvalidURIError
-    errors.add(:url, "is not a valid URL")
-  end
-
-  def url_not_private_network
-    uri = URI.parse(url)
-    host = uri.host.to_s.downcase
-
-    if BLOCKED_HOSTS.include?(host)
-      errors.add(:url, "cannot point to internal services")
-      return
-    end
-
-    return unless blocked_ip?(host)
-
-    errors.add(:url, "cannot point to private or internal network addresses")
-  rescue URI::InvalidURIError
-    errors.add(:url, "is not a valid URL")
-  end
-
-  def blocked_ip?(host)
-    ip = IPAddr.new(host)
-    ip.private? || ip.loopback? || ip.link_local?
-  rescue IPAddr::InvalidAddressError
-    resolved_to_private?(host)
-  end
-
-  def resolved_to_private?(hostname)
-    Resolv.getaddresses(hostname).any? do |addr|
-      ip = IPAddr.new(addr)
-      ip.private? || ip.loopback? || ip.link_local?
-    end
-  rescue Resolv::ResolvError
-    false
+  def url_safety
+    UrlSafetyValidator.errors_for(url).each { |msg| errors.add(:url, msg) }
   end
 end

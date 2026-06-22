@@ -356,15 +356,23 @@ function TaskCardUI({
       radius="sm"
       p="xs"
       mb={8}
+      withBorder
+      bg="var(--mantine-color-dark-5)"
       onClick={() => onClick?.(task)}
-      style={{ cursor: 'pointer', transition: 'box-shadow 0.15s' }}
+      style={{
+        cursor: 'pointer',
+        transition: 'box-shadow 0.15s, border-color 0.15s',
+        borderColor: 'var(--app-border-strong)',
+      }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-accentBlue-4)';
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = isDragOverlay
           ? 'var(--mantine-shadow-lg)'
           : 'var(--mantine-shadow-xs)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
       }}
     >
       {/* Title row with priority dot */}
@@ -535,6 +543,7 @@ function BoardColumn({
           minWidth: 44,
           maxWidth: 44,
           backgroundColor: 'var(--mantine-color-dark-6)',
+          border: '1px solid var(--app-border-default)',
           borderRadius: 10,
           maxHeight: '100%',
           display: 'flex',
@@ -603,6 +612,7 @@ function BoardColumn({
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'var(--mantine-color-dark-6)',
+        border: '1px solid var(--app-border-default)',
         borderRadius: 10,
         overflow: 'hidden',
         ...overStyle,

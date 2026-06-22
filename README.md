@@ -16,21 +16,12 @@ cd palad-app
 
 2. Set up and start the project:
 ```bash
-make start   # first time: env files, build, deps, start everything
-make up      # every day: start all services
+make setup   # first time: build images, install deps, prepare database
+make up      # start all services
 ```
 
-Or step by step:
-```bash
-make setup   # first time only
-make up      # every day
-```
-
-On first run, env files are created automatically:
-- `.env.development` from `.env.example`
-- `test/playwright/helpers/.env` from its `.env.example`
-
-Fill in secrets from 1Password when you need integrations (OAuth, GitHub App, etc.). `make check-env` prints placeholder warnings without blocking startup.
+On first run, `.env.development` is created automatically from `.env.example`.
+All integrations (OAuth, GitHub App, etc.) are optional — fill in real keys when you need them. The app works locally without them (password login).
 
 `make setup` will:
 - Build Docker images
@@ -39,7 +30,7 @@ Fill in secrets from 1Password when you need integrations (OAuth, GitHub App, et
 - Create and set up the database
 - Build agent Docker images
 
-`make up` starts all services in one terminal: web, worker, db, redis, traefik, temporal, and more. A fast dependency check runs on startup; if you skipped `make setup`, packages will be installed on first start (slower).
+`make up` starts all services in one terminal: web, worker, db, redis, traefik, temporal, and more. On each start, the entrypoint checks dependencies and runs pending migrations automatically.
 
 3. Access the application at `http://localhost:4000`
 
@@ -83,7 +74,8 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Reset database: `make db-reset`
 
 ### Code Quality and Testing
-- Run all linters and tests: `make check`
+- Run every check the way CI does — `rails-test`, `rubocop`, `brakeman`, `eslint` and `typescript` in parallel; never short-circuits, prints the full log of any failing check, and exits non-zero if any fail: `make check_all`
+- Run all linters and tests sequentially (auto-fixes rubocop/eslint, stops at the first failure): `make check`
 - Run only linters: `make lint`
 - Run only tests: `make test`
 - Run Rubocop (Ruby linter): `make rubocop`
@@ -93,18 +85,11 @@ To enable Google OAuth login, you need to configure Google Cloud Console:
 - Run Brakeman security analysis: `make brakeman`
 - Run Rails tests: `make rails-test`
 
-### Frontend Development
-- Run FSD (Feature-Sliced Design) analysis: `make fsd`
-- Fix FSD issues: `make fsd-fix`
-
 ### Docker & Runtime
-- First-time setup and run: `make start`
-- First-time setup only: `make setup`
+- First-time setup (build images, install deps, prepare DB, build agent images): `make setup`
 - Start all services: `make up`
 - Stop all services: `make down`
 - Clean reset (removes volumes): `make reset`
-- Environment diagnostics: `make doctor`
-- Check env placeholders (informational): `make check-env`
 - Build agent images only: `make build-agents`
 - Open shell in web container: `make shell`
 - Show available commands: `make help`
@@ -223,24 +208,11 @@ const response = {
 
 ## Contributing
 
-1. Create a new branch for your feature
+1. Create a new branch from `develop` for your feature
 2. Make your changes
-3. Run `make check` to ensure all tests and linters pass
+3. Run `make check_all` to ensure all tests and linters pass
 4. Submit a pull request
 
 ## AWS Vault Configuration
 
 To configure AWS Vault, run: `aws-vault add {your_aws_vault_profile}`
-
-## Remote Execution
-
-To execute into QA container, run:
-```
-make qa-web-exec PROFILE={your_aws_vault_profile}
-```
-
-## Login to AWS account with AWS-Vault
-
-```
-make login_aws PROFILE={your_aws_vault_profile}
-```

@@ -40,20 +40,14 @@ rake db:migrate
 
 ## Local Development
 
-First-time setup installs dependencies into Docker volumes:
-
 ```bash
-make start   # first time: env files, build, install deps, start all services
+make setup   # first time: build, install deps, prepare database
 make up      # daily: start all services (web, worker, db, redis, temporal, ...)
-make doctor  # diagnostics
 make down    # stop containers
 make reset   # stop and remove volumes (destructive)
 ```
 
-`make setup` / `make up` create `.env.development` and Playwright `.env` from examples when missing.
-`make check-env` prints placeholder warnings (informational, non-blocking).
-
-Daily development: `make up` only. Dependency check uses a lockfile stamp to skip bundle/yarn when unchanged.
+Daily development: `make up` only. The entrypoint checks deps and runs pending migrations on each start.
 
 ## Makefile
 
