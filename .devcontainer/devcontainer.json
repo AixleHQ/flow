@@ -7,6 +7,8 @@
 		"context": ".."
 	},
 
+	"initializeCommand": "sh -lc 'docker compose up -d db redis'",
+
 	// The optional 'workspaceFolder' property is the path VS Code should open by default when
 	// connected.
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
@@ -20,11 +22,21 @@
 	],
 
 	"containerEnv": {
-		"KUBECONFIG": "/root/.kube/config"
+		"KUBECONFIG": "/root/.kube/config",
+		"DB_HOST": "db",
+		"DB_PORT": "5432",
+		"DB_USERNAME": "postgres",
+		"DB_NAME": "aixle_development",
+		"REDIS_URL": "redis://redis:6379/1"
+	},
+
+	"remoteEnv": {
+		"RUBY_LSP": "1"
 	},
 
 	// Ensure Orbstack hostnames resolve inside the container
 	"runArgs": [
+		"--network=app_default",
 		"--add-host=k8s.orb.local:host-gateway",
 		"--add-host=docker.orb.local:host-gateway",
 		"--add-host=orbstack:host-gateway"

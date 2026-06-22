@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+if ENV["RUBY_LSP"] == "1"
+  return
+end
+
 Typelizer.configure do |config|
   config.output_dir = Rails.root.join("app/frontend/types/generated")
   config.types_import_path = "@/types/generated"
