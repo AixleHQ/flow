@@ -215,6 +215,15 @@ module Agents
       { models: fetch_available_models(credentials, credential: credential), source: :api }
     end
 
+    # Comparable expiry of the credential's primary token, or nil if the agent's
+    # tokens don't carry one. Used to avoid overwriting a newer stored token with
+    # an older one when sessions run concurrently and refresh-token rotation occurs.
+    # @param credentials [Hash] decrypted credential data
+    # @return [Integer, nil]
+    def token_expires_at(_credentials)
+      nil
+    end
+
     # =================================================================
     # Usage Collection (called once at session cleanup)
     # =================================================================

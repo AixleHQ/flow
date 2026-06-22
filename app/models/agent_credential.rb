@@ -17,6 +17,11 @@ class AgentCredential < ApplicationRecord
   # Callbacks
   after_create :set_as_user_default
   before_destroy :reassign_user_default
+  # Bust the cached model list whenever the stored auth data changes (re-auth or a
+  # refreshed token) or the record is removed, so the profile select never serves
+  # models fetched with a stale token. See User#fetch_or_cache_agent_models.
+  after_save :invalidate_models_cache, if: :saved_change_to_encrypted_config_data?
+  after_destroy :invalidate_models_cache
 
   broadcasts_to :user
 
@@ -31,16 +36,27 @@ class AgentCredential < ApplicationRecord
     "Unable to decrypt"
   end
 
-  # Create credential from collected artifacts
+  # Create or replace credential from collected artifacts.
+  # config_data is fully replaced (not merged) so re-authentication wipes any
+  # stale fields from a previous login/auth method. Settings stored in metadata
+  # (the user's default_model, env-field values like google_cloud_project) are
+  # not auth data, so they survive re-auth — only the two bookkeeping keys are
+  # refreshed.
   def self.from_artifacts(user_id, agent_type, artifacts_hash)
     credential = find_or_initialize_by(user_id: user_id, agent_type: agent_type)
     credential.config_data = artifacts_hash
-    credential.metadata = {
-      collected_at: Time.current,
-      artifact_keys: artifacts_hash.keys
-    }
+    preserved = (credential.metadata || {}).except("collected_at", "artifact_keys")
+    credential.metadata = preserved.merge(
+      "collected_at" => Time.current,
+      "artifact_keys" => artifacts_hash.keys
+    )
     credential.save!
     credential
+  end
+
+  # Cache key for this credential's fetched model list (per-credential, not global).
+  def models_cache_key
+    "agent_models/#{agent_type}/#{id}"
   end
 
   # Get decrypted config data as hash
@@ -87,6 +103,10 @@ class AgentCredential < ApplicationRecord
 
     fallback = user.agent_credentials.where.not(id: id).order(created_at: :desc).first
     user.update!(default_agent_credential: fallback)
+  end
+
+  def invalidate_models_cache
+    Rails.cache.delete(models_cache_key)
   end
 
   def encryption_key_setting

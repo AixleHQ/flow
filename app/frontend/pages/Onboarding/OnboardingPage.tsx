@@ -17,6 +17,7 @@ import {
   Text,
   ThemeIcon,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconCheck, IconChevronLeft, IconChevronRight, IconLock, IconRocket, IconUser } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -94,6 +95,7 @@ function AgentAuthTerminal({
   onAuthenticated: () => void;
 }) {
   const [authDetected, setAuthDetected] = useState(false);
+  const [finishError, setFinishError] = useState(false);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishedRef = useRef(false);
   const creatingRef = useRef(false);
@@ -160,14 +162,23 @@ function AgentAuthTerminal({
   const handleFinish = useCallback(async () => {
     if (!session || finishedRef.current) return;
     finishedRef.current = true;
+    setFinishError(false);
     try {
       await apiFetch(finishApiV1TerminalSessionPath(session.id), { method: 'POST' });
 
       onAuthenticated();
     } catch {
       finishedRef.current = false;
+      setFinishError(true);
+      notifications.show({ message: 'Failed to save authentication', color: 'red' });
     }
   }, [session, onAuthenticated]);
+
+  // Auto-finish as soon as the watcher confirms credentials exist — no manual
+  // "save" step. Credentials are persisted server-side during session cleanup.
+  useEffect(() => {
+    if (authDetected && session?.state === 'ready') handleFinish();
+  }, [authDetected, session?.state, handleFinish]);
 
   if (isConfigured) {
     return (
@@ -212,21 +223,27 @@ function AgentAuthTerminal({
           py="xs"
           style={{ borderTop: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}
         >
-          <Group gap="xs">
-            {authDetected && (
-              <Badge color="green" size="sm" variant="filled">
-                Auth detected
-              </Badge>
-            )}
-            {!authDetected && (
-              <Text size="xs" c="dimmed">
-                Complete authentication in the terminal above
+          {authDetected && finishError ? (
+            <>
+              <Text size="xs" c="red">
+                Couldn&apos;t save credentials.
               </Text>
-            )}
-          </Group>
-          <Button color="green" size="xs" onClick={handleFinish} disabled={!authDetected}>
-            Save Authentication
-          </Button>
+              <Button color="green" size="xs" onClick={handleFinish}>
+                Retry
+              </Button>
+            </>
+          ) : authDetected ? (
+            <Group gap="xs">
+              <Loader size="xs" color="green" />
+              <Text size="xs" c="green" fw={500}>
+                Credentials detected — saving…
+              </Text>
+            </Group>
+          ) : (
+            <Text size="xs" c="dimmed">
+              Complete authentication in the terminal above
+            </Text>
+          )}
         </Group>
       </Box>
     );

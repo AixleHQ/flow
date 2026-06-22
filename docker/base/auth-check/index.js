@@ -29,6 +29,12 @@ const AUTH_REQUIRED_KEYS = (process.env.AUTH_REQUIRED_KEYS || '')
 
 function checkAuthComplete(configContent) {
   if (AUTH_REQUIRED_KEYS.length === 0) return false;
+  // `__present__` sentinel: a non-empty watched file IS the completion signal (no
+  // JSON key). For opaque/encrypted credential blobs and to avoid matching a config
+  // file written at auth-method selection. See watcher/index.js for details.
+  if (AUTH_REQUIRED_KEYS.includes('__present__')) {
+    return typeof configContent === 'string' && configContent.trim().length > 0;
+  }
   try {
     const config = JSON.parse(configContent);
     return AUTH_REQUIRED_KEYS.some((key) => {

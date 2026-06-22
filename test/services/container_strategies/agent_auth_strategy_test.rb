@@ -328,6 +328,53 @@ module ContainerStrategies
       assert env_vars.is_a?(Array)
     end
 
+    # == before_cleanup: credential persistence ==
+
+    test "before_cleanup does not save a credential when auth is incomplete" do
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      # ~/.claude.json exists (Claude always writes it) but carries no token;
+      # ~/.claude/.credentials.json is absent.
+      strategy.stubs(:read_file_from_container).returns(nil)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude.json")
+              .returns({ "numStartups" => 1, "oauthAccount" => { "id" => "acc" } }.to_json)
+
+      assert_no_difference "AgentCredential.count" do
+        result = strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+        assert_equal false, result[:auth_completed]
+        refute result.key?(:credential_id)
+      end
+    end
+
+    test "before_cleanup saves a clean sliced credential when a token is present" do
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude.json")
+              .returns({ "numStartups" => 5, "projects" => { "/x" => {} },
+                         "oauthAccount" => { "emailAddress" => "u@x.com" }, "userID" => "uid-1" }.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-z", "refreshToken" => "sk-ant-ort01-z" } }.to_json)
+
+      assert_difference "AgentCredential.count", 1 do
+        result = strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+        assert result[:auth_completed]
+        assert result[:credential_id]
+      end
+
+      cred = @user.agent_credentials.find_by(agent_type: "claude_code")
+      # Only the sliced credential keys are stored — no .claude.json bloat.
+      refute cred.config_data.key?("numStartups")
+      refute cred.config_data.key?("projects")
+      assert_equal "sk-ant-oat01-z", cred.config_data.dig("claudeAiOauth", "accessToken")
+      assert_equal "u@x.com", cred.config_data.dig("oauthAccount", "emailAddress")
+      assert_equal "uid-1", cred.config_data["userID"]
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code")

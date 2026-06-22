@@ -1,0 +1,16 @@
+#!/bin/sh
+# Helper used by the tmux copy bindings (see tmux.conf): reads the selection on
+# stdin and emits it to the pane tty ($1) as an OSC 52 "set clipboard" sequence
+# wrapped in a tmux DCS-passthrough envelope. tmux's own set-clipboard forwarding
+# doesn't reach ttyd's xterm in this stack, but DCS-passthrough does — so this is
+# how a copy-mode selection (incl. a long OAuth URL on one line in a wide pane)
+# reaches the browser clipboard. allow-passthrough must be on (it is, in tmux.conf).
+#
+# Skip empty / whitespace-only selections. A bare click (or a 1px accidental drag)
+# in the terminal registers as a zero-width copy; emitting OSC 52 with an empty
+# payload would CLEAR the browser clipboard, silently wiping whatever the user had
+# copied. So only forward a selection that contains a real (non-whitespace) char.
+S=$(cat)
+[ -z "$(printf '%s' "$S" | tr -d '[:space:]')" ] && exit 0
+B=$(printf '%s' "$S" | base64 | tr -d '\r\n')
+printf '\033Ptmux;\033\033]52;c;%s\007\033\\' "$B" > "$1"

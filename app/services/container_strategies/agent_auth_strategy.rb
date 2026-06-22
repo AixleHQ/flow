@@ -34,7 +34,11 @@ module ContainerStrategies
       {}
     end
 
-    # == before_cleanup(container_id:, session_id:, **) → { auth_files:, credential_id: } ==
+    # == before_cleanup(container_id:, session_id:, **) → { auth_completed:, credential_id: } ==
+    # Persists a credential ONLY when auth actually completed (a real token is
+    # present). Cleanup runs unconditionally (always: true), and the agent's
+    # config file may exist without a token — so gating on auth_complete? is what
+    # prevents an empty/garbage credential from being created on a failed/aborted login.
 
     def before_cleanup(container_id: nil, session_id: nil, **)
       return {} if container_id.blank?
@@ -44,15 +48,19 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       auth_files = extract_auth_files(container, agent_service)
-      result = { auth_files: auth_files, auth_completed: auth_files.any? }
+      completed = auth_files_complete?(auth_files, agent_service)
+      result = { auth_completed: completed }
 
-      if auth_files.any? && session.present?
-        credential = save_credentials(session, auth_files)
-        result[:credential_id] = credential.id
-        Rails.logger.info("[AgentAuth] Credential saved: #{credential.id}")
+      if completed && session.present?
+        credential = save_credentials(session, auth_files, agent_service)
+        if credential
+          result[:credential_id] = credential.id
+          Rails.logger.info("[AgentAuth] Credential saved: #{credential.id}")
+        end
+      else
+        Rails.logger.info("[AgentAuth] before_cleanup: auth not complete (#{auth_files.size} files) — no credential saved")
       end
 
-      Rails.logger.info("[AgentAuth] before_cleanup: #{auth_files.size} files")
       result
     end
 
@@ -66,63 +74,11 @@ module ContainerStrategies
 
     private
 
-    def extract_auth_files(container, agent_service)
-      auth_files = {}
-
-      paths = if agent_service.adapter.respond_to?(:auth_file_paths)
-                agent_service.adapter.auth_file_paths
-      else
-                [ agent_service.config_path ]
-      end
-
-      paths.each do |path|
-        content = read_file_from_container(container, path)
-        auth_files[path] = content if content.present?
-      rescue StandardError => e
-        Rails.logger.warn("[AgentAuth] Failed to extract #{path}: #{e.message}")
-      end
-
-      auth_files
-    end
-
-    def save_credentials(session, auth_files)
-      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
-      container = resolve_container(auth_files.values.first ? nil : nil) rescue nil
-
-      config_data = {}
-      auth_files.each do |path, content|
-        basename = File.basename(path)
-
-        # Encrypted credential files (e.g. Gemini API key) — try to decrypt
-        if basename == "gemini-credentials.json" && adapter.respond_to?(:decrypt_credentials_file)
-          hostname = extract_container_hostname
-          api_key = adapter.decrypt_credentials_file(content, hostname)
-          config_data["api_key"] = api_key if api_key
-          next
-        end
-
-        parsed = JSON.parse(content)
-        if basename == "settings.json"
-          # Skip settings — not needed in stored credentials
-        else
-          config_data.merge!(parsed)
-        end
-      rescue JSON::ParserError
-        config_data["_raw_#{basename}"] = content
-      rescue StandardError => e
-        Rails.logger.warn("[AgentAuth] Failed to process #{path}: #{e.message}")
-      end
+    def save_credentials(session, auth_files, agent_service)
+      config_data = build_credentials_from_files(auth_files, agent_service.adapter)
+      return nil if config_data.blank?
 
       AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)
-    end
-
-    def extract_container_hostname
-      session = TerminalSession.find(input[:session_id])
-      container = resolve_container(session.container_id)
-      result = runtime.exec(container, [ "hostname" ])
-      result[0].join.strip
-    rescue StandardError
-      ""
     end
   end
 end

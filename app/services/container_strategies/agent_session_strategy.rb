@@ -82,6 +82,7 @@ module ContainerStrategies
       logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
       collect_usage(session, agent_service, log_contents)
+      persist_refreshed_credentials(container, session, agent_service)
 
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")
       { logs_count: logs_count, outputs_count: outputs_count }
@@ -234,6 +235,43 @@ module ContainerStrategies
       agent_service.adapter.collect_usage(session, log_contents)
     rescue StandardError => e
       Rails.logger.error("[AgentSession] Failed to collect usage: #{e.message}")
+    end
+
+    # Agents (e.g. Claude Code) refresh their access/refresh tokens during a
+    # session. Those refreshed tokens live only in the container's config files;
+    # without this, the next session reloads the old (possibly expired) token.
+    # Re-extract the auth files and update the stored credential when the token
+    # material actually changed. Only updates an existing credential — never
+    # creates one from a session.
+    def persist_refreshed_credentials(container, session, agent_service)
+      auth_files = extract_auth_files(container, agent_service)
+      return unless auth_files_complete?(auth_files, agent_service)
+
+      config_data = build_credentials_from_files(auth_files, agent_service.adapter)
+      return if config_data.blank?
+
+      credential = session.user.agent_credentials.find_by(agent_type: input[:agent_type])
+      return unless credential
+      return if credential.config_data == config_data # cheap pre-check, avoids locking on no-op
+
+      adapter = agent_service.adapter
+      # Lock the row so concurrent sessions can't race the read-compare-write, and
+      # refuse to overwrite a newer stored token with an older one — refresh-token
+      # rotation means the last session to clean up could otherwise persist a
+      # already-revoked token.
+      credential.with_lock do
+        current = credential.config_data
+        next if current == config_data
+
+        new_exp = adapter.token_expires_at(config_data)
+        old_exp = adapter.token_expires_at(current)
+        next if new_exp && old_exp && new_exp.to_i <= old_exp.to_i
+
+        AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)
+        Rails.logger.info("[AgentSession] Persisted refreshed #{input[:agent_type]} credentials for user #{session.user_id}")
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[AgentSession] Failed to persist refreshed credentials: #{e.message}")
     end
   end
 end

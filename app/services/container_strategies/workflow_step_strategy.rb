@@ -44,6 +44,7 @@ module ContainerStrategies
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
       collect_usage(session, agent_service, log_contents)
+      persist_refreshed_credentials(container, session, agent_service)
 
       outputs_count = collect_workflow_outputs(container_id)
 

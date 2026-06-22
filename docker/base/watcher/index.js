@@ -455,6 +455,15 @@ function checkAuthComplete(configContent) {
     return false;
   }
 
+  // `__present__` sentinel: the watched file existing with non-empty content IS the
+  // completion signal — no JSON key check. Used when the credential is an opaque or
+  // encrypted blob (e.g. Gemini's gemini-credentials.json), and to avoid matching a
+  // config file written at auth-METHOD selection (before the credential is entered),
+  // which would otherwise report success prematurely and close the auth container.
+  if (AUTH_REQUIRED_KEYS.includes('__present__')) {
+    return typeof configContent === 'string' && configContent.trim().length > 0;
+  }
+
   try {
     const config = JSON.parse(configContent);
 

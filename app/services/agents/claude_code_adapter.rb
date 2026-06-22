@@ -42,8 +42,9 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
-    # Built-in Claude Code tools (always allowed)
-    BUILTIN_TOOLS = %w[Task Bash Glob Grep LS Read Edit MultiEdit Write WebFetch WebSearch].freeze
+    # Built-in Claude Code tools (always allowed). DesignSync is an aixle-provided
+    # tool — it must be allow-listed or dontAsk mode denies it outright.
+    BUILTIN_TOOLS = %w[Task Bash Glob Grep LS Read Edit MultiEdit Write WebFetch WebSearch DesignSync].freeze
 
     def allowed_tools(mcp_server_names = [])
       mcp_permissions = mcp_server_names.map { |name| "mcp__#{name}" }
@@ -63,6 +64,13 @@ module Agents
     def auth_complete?(config_content)
       config = parse_json(config_content)
       config["primaryApiKey"].present? || config.dig("claudeAiOauth", "accessToken").present?
+    end
+
+    # claudeAiOauth.expiresAt is the OAuth access-token expiry (epoch ms). Used to
+    # avoid clobbering a freshly-refreshed token with an older one from a
+    # concurrent session (Claude Code rotates the refresh token on refresh).
+    def token_expires_at(credentials)
+      credentials.dig("claudeAiOauth", "expiresAt")
     end
 
     # Extract only the credentials we need to persist
@@ -100,11 +108,12 @@ module Agents
     def config_files(credentials, workflow_config = {})
       mcp_names = workflow_config[:enabled_mcp_servers] || []
       model = workflow_config[:model]
+      mode = workflow_config[:mode]
       files = {
         # Main config (includes primaryApiKey for API-key path users)
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings with permissions and optional model override
-        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
+        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model, mode: mode).to_json
       }
 
       oauth = credentials["claudeAiOauth"]
@@ -158,16 +167,26 @@ module Agents
       fetch_available_models_with_source(credentials, credential: credential)[:models]
     end
 
+    # Fetch the model list using whichever auth the credential carries:
+    #   - primaryApiKey            → x-api-key (platform.claude.com API key path)
+    #   - claudeAiOauth.accessToken → Authorization: Bearer + oauth beta header (claude.ai OAuth path)
+    # OAuth support matters because claude.ai logins have no API key, so without
+    # it those users would always fall back to the hardcoded (stale) list.
     def fetch_available_models_with_source(credentials, credential: nil)
       api_key = credentials["primaryApiKey"]
+      oauth_token = credentials.dig("claudeAiOauth", "accessToken")
 
-      if api_key.present?
-        models = fetch_models_via_api(api_key)
-        if models != FALLBACK_CLAUDE_MODELS
-          { models: models, source: :api }
+      models =
+        if api_key.present?
+          fetch_models_via_api(api_key: api_key)
+        elsif oauth_token.present?
+          fetch_models_via_api(oauth_token: oauth_token)
         else
-          { models: models, source: :fallback }
+          []
         end
+
+      if models.present?
+        { models: models, source: :api }
       else
         { models: FALLBACK_CLAUDE_MODELS, source: :fallback }
       end
@@ -176,12 +195,14 @@ module Agents
       { models: FALLBACK_CLAUDE_MODELS, source: :fallback }
     end
 
+    # Safety net used only when the live API is unreachable or the token lacks
+    # model-list access. Kept current so even the fallback isn't badly stale.
     FALLBACK_CLAUDE_MODELS = [
+      { model_id: "claude-opus-4-8", display_name: "Claude Opus 4.8", description: "Most capable model" },
       { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6", description: "Best balance of speed and intelligence" },
-      { model_id: "claude-opus-4-6", display_name: "Claude Opus 4.6", description: "Most capable model" },
-      { model_id: "claude-sonnet-4-5-20250929", display_name: "Claude Sonnet 4.5", description: "Fast and capable" },
-      { model_id: "claude-opus-4-5-20251101", display_name: "Claude Opus 4.5", description: "Advanced reasoning" },
-      { model_id: "claude-haiku-4-5-20251001", display_name: "Claude Haiku 4.5", description: "Fastest model" }
+      { model_id: "claude-opus-4-7", display_name: "Claude Opus 4.7", description: "Highly autonomous, long-horizon work" },
+      { model_id: "claude-opus-4-6", display_name: "Claude Opus 4.6", description: "Advanced reasoning" },
+      { model_id: "claude-haiku-4-5", display_name: "Claude Haiku 4.5", description: "Fastest model" }
     ].freeze
 
     # Default environment variables for Claude Code runtime.
@@ -242,23 +263,36 @@ module Agents
 
     private
 
-    def fetch_models_via_api(api_key)
+    # Returns an array of normalized models, or [] on any non-success / empty
+    # result (the caller decides whether to fall back). Exactly one of api_key /
+    # oauth_token should be provided.
+    OAUTH_BETA_HEADER = "oauth-2025-04-20"
+
+    def fetch_models_via_api(api_key: nil, oauth_token: nil)
       uri = URI(ANTHROPIC_MODELS_URL)
       uri.query = URI.encode_www_form(limit: 100)
       req = Net::HTTP::Get.new(uri)
-      req["x-api-key"] = api_key
       req["anthropic-version"] = "2023-06-01"
 
+      if api_key.present?
+        req["x-api-key"] = api_key
+      elsif oauth_token.present?
+        # OAuth tokens authenticate via Bearer + the oauth beta header (not x-api-key).
+        req["authorization"] = "Bearer #{oauth_token}"
+        req["anthropic-beta"] = OAUTH_BETA_HEADER
+      else
+        return []
+      end
+
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
-      return FALLBACK_CLAUDE_MODELS unless response.is_a?(Net::HTTPSuccess)
+      return [] unless response.is_a?(Net::HTTPSuccess)
 
       data = JSON.parse(response.body)
-      models = (data["data"] || []).filter_map do |m|
+      (data["data"] || []).filter_map do |m|
         next unless m["id"].to_s.include?("claude")
 
         { model_id: m["id"], display_name: m["display_name"] || m["id"], description: "#{m["max_input_tokens"]} max input tokens" }
       end
-      models.presence || FALLBACK_CLAUDE_MODELS
     end
 
     # Build normalized events from OTLP payload (same format as Cursor API events).
@@ -397,11 +431,19 @@ module Agents
       end
     end
 
-    def generate_settings(mcp_server_names = [], model: nil)
+    # Permission mode by session mode:
+    #   interactive     → "auto"    (a human is at the terminal; auto-accept edits)
+    #   non_interactive → "dontAsk" (autonomous; deny unlisted tools outright rather
+    #                                than block on a prompt nobody can answer)
+    def permission_default_mode(mode)
+      mode.to_s == "interactive" ? "auto" : "dontAsk"
+    end
+
+    def generate_settings(mcp_server_names = [], model: nil, mode: nil)
       settings = {
         # Auto-accept the bypass permissions warning
         "permissions" => {
-          "defaultMode" => "dontAsk",
+          "defaultMode" => permission_default_mode(mode),
           "allow" => allowed_tools(mcp_server_names),
           "deny" => [],
           "ask" => []

@@ -127,14 +127,12 @@ RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
 COPY --from=ttyd-builder /ttyd-src/build/ttyd /usr/local/bin/ttyd
 RUN chmod +x /usr/local/bin/ttyd && ttyd --version
 
-# Helper used by tmux copy bindings: reads the selection on stdin and emits it as
-# an OSC 52 "set clipboard" sequence WRAPPED in a tmux DCS-passthrough envelope,
-# written to the pane tty ($1). tmux's own set-clipboard forwarding doesn't reach
-# ttyd's xterm in this stack, but DCS-passthrough does — so this is how a copy-mode
-# selection (incl. a long OAuth URL on one line in a wide pane) reaches the browser
+# Helper used by tmux copy bindings (see docker/base/tmux-osc52): forwards a
+# copy-mode selection to the browser clipboard via DCS-passthrough-wrapped OSC 52,
+# and skips empty/whitespace-only selections so a bare click doesn't wipe the
 # clipboard. allow-passthrough must be on (it is, in tmux.conf).
-RUN printf '#!/bin/sh\nB=$(base64 | tr -d "\\r\\n")\nprintf "\\033Ptmux;\\033\\033]52;c;%%s\\007\\033\\\\\\\\" "$B" > "$1"\n' \
-      > /usr/local/bin/tmux-osc52 && chmod +x /usr/local/bin/tmux-osc52
+COPY tmux-osc52 /usr/local/bin/tmux-osc52
+RUN chmod +x /usr/local/bin/tmux-osc52
 
 # -----------------------------------------------------------------------------
 # Install OpenVSCode Server from GitHub releases
