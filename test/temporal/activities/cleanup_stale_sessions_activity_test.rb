@@ -216,6 +216,65 @@ module Activities
 
         assert_equal 0, result[:cleaned_running]
         assert_equal 0, result[:cleaned_ready]
+        assert_equal 0, result[:cleaned_finishing]
+      end
+
+      # == Finishing Stale Recovery ==
+
+      test "fails finishing session stuck past threshold when container is gone" do
+        stale = create(:terminal_session, :finishing, user: @user,
+          finishing_at: 15.minutes.ago, temporal_workflow_id: "wf-stuck")
+        @runtime_mock.stubs(:resolve_container).with(stale.container_id).returns(nil)
+
+        result = @activity.run
+
+        assert_equal 1, result[:cleaned_finishing]
+        stale.reload
+        assert_equal "failed", stale.state
+        assert_nil stale.container_id
+        assert_match(/workflow ended without cleanup/, stale.error_message)
+      end
+
+      test "completes finishing session stuck past threshold when container is alive" do
+        stale = create(:terminal_session, :finishing, user: @user,
+          session_type: "agent_session", finishing_at: 15.minutes.ago)
+
+        container_mock = mock("container")
+        @runtime_mock.stubs(:resolve_container).with(stale.container_id).returns(container_mock)
+
+        strategy_mock = mock("strategy")
+        strategy_mock.expects(:before_cleanup).once
+        strategy_mock.expects(:cleanup).returns({ status: :cleaned_up })
+        TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
+
+        result = @activity.run
+
+        assert_equal 1, result[:cleaned_finishing]
+        stale.reload
+        assert_equal "finished", stale.state
+        assert_nil stale.container_id
+      end
+
+      test "does not clean up finishing sessions within threshold" do
+        recent = create(:terminal_session, :finishing, user: @user,
+          finishing_at: 2.minutes.ago)
+
+        result = @activity.run
+
+        assert_equal 0, result[:cleaned_finishing]
+        recent.reload
+        assert_equal "finishing", recent.state
+      end
+
+      test "uses finishing_at, not started_at, for finishing threshold" do
+        recent_finishing = create(:terminal_session, :finishing, user: @user,
+          started_at: 2.hours.ago, finishing_at: 1.minute.ago)
+
+        result = @activity.run
+
+        assert_equal 0, result[:cleaned_finishing]
+        recent_finishing.reload
+        assert_equal "finishing", recent_finishing.state
       end
 
       test "sets finished_at on failed sessions" do

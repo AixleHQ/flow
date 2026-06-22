@@ -21,12 +21,18 @@ class SessionService
     end
 
     def finish(session:)
-      raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}" unless session.may_finish?
+      unless session.may_start_finishing? || session.finishing?
+        raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
+      end
+
+      return unless session.may_start_finishing?
+
+      session.start_finishing!
 
       if session.temporal_workflow_id.present?
         signal_container_finished(session)
       else
-        session.finish!
+        session.finish! if session.may_finish?
       end
     end
 
@@ -105,12 +111,16 @@ class SessionService
 
         if error_msg.include?("already completed") || error_msg.include?("not found") || error_msg.include?("disabled")
           Rails.logger.warn("[SessionService] Temporal workflow gone, finishing session #{session.id} directly")
-          session.finish! if session.may_finish?
+          finalize_finished(session)
         end
       end
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
-      session.finish! if session.may_finish?
+      finalize_finished(session)
+    end
+
+    def finalize_finished(session)
+      session.complete_finish!
     end
 
     def cancel_temporal_workflow(session)

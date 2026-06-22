@@ -10,6 +10,7 @@ module TerminalSessionStateMachine
       state :not_started, initial: true
       state :running
       state :ready
+      state :finishing
       state :finished
       state :failed
 
@@ -21,12 +22,16 @@ module TerminalSessionStateMachine
         transitions from: %i[not_started running], to: :ready, after: :on_ready
       end
 
+      event :start_finishing do
+        transitions from: %i[not_started running ready], to: :finishing, after: :on_finishing
+      end
+
       event :finish do
-        transitions from: %i[not_started running ready], to: :finished, after: :on_finished
+        transitions from: :finishing, to: :finished, after: :on_finished
       end
 
       event :fail do
-        transitions from: %i[not_started running ready], to: :failed, after: :on_failed
+        transitions from: %i[not_started running ready finishing], to: :failed, after: :on_failed
       end
     end
   end

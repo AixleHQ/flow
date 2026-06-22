@@ -44,6 +44,7 @@ const STATE_COLORS: Record<string, string> = {
   not_started: 'gray',
   running: 'blue',
   ready: 'green',
+  finishing: 'yellow',
   finished: 'gray',
   failed: 'red',
 };
@@ -85,12 +86,13 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   const agentColor = AGENT_COLORS[s.agentType ?? ''] ?? 'gray';
   const stateColor = STATE_COLORS[s.state] ?? 'gray';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
+  const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
   const isActive = isReady || s.state === 'running';
 
   const [ideLoaded, setIdeLoaded] = useState(false);
   const [termLoaded, setTermLoaded] = useState(false);
-  const [stopping, setStopping] = useState(false);
+  const [finishRequested, setFinishRequested] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
 
   const now = useElapsedTimer(isActive);
@@ -107,12 +109,13 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   const canShowTerminal = !!ttydUrl;
 
   const handleFinish = useCallback(async () => {
-    setStopping(true);
+    setFinishRequested(true);
     try {
       await apiFetch(finishApiV1TerminalSessionPath(s.id), { method: 'POST' });
-      router.reload();
-    } finally {
-      setStopping(false);
+      router.reload({ onFinish: () => setFinishRequested(false) });
+    } catch (e) {
+      setFinishRequested(false);
+      throw e;
     }
   }, [s.id]);
 
@@ -189,8 +192,8 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         )}
       </div>
       <div className={classes.headerRight}>
-        {!isTerminal && (
-          <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={stopping}>
+        {!isTerminal && !isFinishing && (
+          <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={finishRequested}>
             Finish
           </Button>
         )}
@@ -450,12 +453,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
 
   return (
     <div className={classes.root}>
-      {stopping && (
-        <div className={classes.stoppingOverlay}>
+      {(finishRequested || isFinishing) && (
+        <div className={classes.finishingOverlay}>
           <Stack align="center" gap="sm">
-            <Loader color="red" size="lg" />
-            <Text fw={600} c="red">
-              Stopping session...
+            <Loader color="yellow" size="lg" />
+            <Text fw={600} c="yellow.8">
+              Finishing session…
             </Text>
           </Stack>
         </div>

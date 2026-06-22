@@ -61,6 +61,7 @@ class TerminalSession < ApplicationRecord
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
   scope :active, -> { where(state: %w[not_started running ready]) }
+  scope :finishing, -> { where(state: "finishing") }
   scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
   scope :with_cached_resource_counts, -> {
@@ -73,6 +74,18 @@ class TerminalSession < ApplicationRecord
 
   def active?
     state.in?(%w[not_started running ready])
+  end
+
+  def finishing?
+    state == "finishing"
+  end
+
+  # Idempotently runs the `start_finishing! → finish!` chain that fires at the
+  # tail of every finalization path. Safe to call multiple times: each AASM
+  # transition is guarded by its `may_*?` predicate.
+  def complete_finish!
+    start_finishing! if may_start_finishing?
+    finish! if may_finish?
   end
 
   def config_files
@@ -149,6 +162,10 @@ class TerminalSession < ApplicationRecord
 
   def on_ready
     update!(ready_at: Time.current)
+  end
+
+  def on_finishing
+    update!(finishing_at: Time.current)
   end
 
   def on_finished

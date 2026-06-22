@@ -55,6 +55,7 @@ const STATE_COLORS: Record<string, string> = {
   not_started: 'gray',
   running: 'blue',
   ready: 'green',
+  finishing: 'yellow',
   finished: 'gray',
   failed: 'red',
 };
@@ -144,8 +145,9 @@ const SessionPage = () => {
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   const isActive = ['not_started', 'running', 'ready'].includes(s.state);
+  const isFinishing = s.state === 'finishing';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
-  const [finishing, setStopping] = useState(false);
+  const [finishRequested, setFinishRequested] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
   const [termLoaded, setTermLoaded] = useState(false);
 
@@ -167,13 +169,13 @@ const SessionPage = () => {
   const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
 
   const handleFinish = useCallback(() => {
-    setStopping(true);
+    setFinishRequested(true);
     router.post(
       `${basePath}/aixle_builder/${s.id}/finish`,
       {},
       {
         preserveScroll: true,
-        onFinish: () => setStopping(false),
+        onFinish: () => setFinishRequested(false),
       },
     );
   }, [s.id, basePath]);
@@ -378,12 +380,12 @@ const SessionPage = () => {
     <>
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
-        {finishing && (
-          <div className={classes.stoppingOverlay}>
+        {(finishRequested || isFinishing) && (
+          <div className={classes.finishingOverlay}>
             <Stack align="center" gap="sm">
-              <Loader color="red" size="lg" />
-              <Text fw={600} c="red">
-                Stopping session...
+              <Loader color="yellow" size="lg" />
+              <Text fw={600} c="yellow.8">
+                Finishing session…
               </Text>
             </Stack>
           </div>
@@ -432,7 +434,7 @@ const SessionPage = () => {
                 variant="outline"
                 color="yellow"
                 onClick={handleFinish}
-                loading={finishing}
+                loading={finishRequested}
                 leftSection={<IconPlayerStop size={14} />}
               >
                 Finish Session

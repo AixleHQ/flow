@@ -623,6 +623,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_18_223142) do
     t.datetime "created_at", null: false
     t.text "error_message"
     t.datetime "finished_at"
+    t.datetime "finishing_at"
     t.text "initial_prompt"
     t.bigint "input_tokens", default: 0, null: false
     t.string "mcp_key"
