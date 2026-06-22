@@ -432,24 +432,32 @@ class SessionContextService
     end
 
     def clone_repository(container_id, repo, integration, token, uid, session)
-      clone_url = build_clone_url(repo, integration, token)
       target_path = "/workspace/repo/#{repo.repo_name}"
-      branch = Shellwords.escape(repo.source_branch)
+      2.times do |index|
+        result = exec_clone_command(container_id, repo, integration, token, uid, target_path)
+        exit_code = result[2]
 
-      cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path}" ]
-      result = runtime.exec(container_id, cmd)
-      exit_code = result[2]
+        if exit_code.to_i.zero?
+          repo.update_column(:last_fetched_at, Time.current)
+          Rails.logger.info("[SessionContext] Cloned repository: #{repo.full_name} → #{target_path}")
+          return
+        end
 
-      if exit_code.to_i.zero?
-        repo.update_column(:last_fetched_at, Time.current)
-        Rails.logger.info("[SessionContext] Cloned repository: #{repo.full_name} → #{target_path}")
-      else
         stderr = Array(result[1]).join
-        raise "git clone exited with #{exit_code}: #{stderr}"
+        raise "git clone exited with #{exit_code}: #{stderr}" if index == 1
+
+        sleep 2
       end
     rescue => e
       Rails.logger.error("[SessionContext] Failed to clone #{repo.full_name}: #{e.message}")
       record_failed_repo(session, repo, e.message)
+    end
+
+    def exec_clone_command(container_id, repo, integration, token, uid, target_path)
+      clone_url = build_clone_url(repo, integration, token)
+      branch = Shellwords.escape(repo.source_branch)
+      cmd = [ "sh", "-c", "git clone --depth=1 --branch=#{branch} #{clone_url} #{target_path} && chown -R #{uid}:#{uid} #{target_path}" ]
+      runtime.exec(container_id, cmd)
     end
 
     def build_clone_url(repo, integration, token)
