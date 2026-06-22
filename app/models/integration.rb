@@ -4,7 +4,7 @@ class Integration < ApplicationRecord
   include Encryptable
   extend Enumerize
 
-  enumerize :provider, in: %i[github gitlab linear coder], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company

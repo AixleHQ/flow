@@ -17,6 +17,10 @@ Rails.application.routes.draw do
   # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
   post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
 
+  # Generic inbound webhook gateway (Slack + arbitrary sources, public — verified
+  # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
+  post "/webhooks/in/:slug", to: "webhooks/ingress#receive", as: :webhook_ingress
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure

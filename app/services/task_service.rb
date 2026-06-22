@@ -108,12 +108,22 @@ class TaskService
         return { error: "Active workflow run already exists for this task" }
       end
 
-      WorkflowService.start(
+      event = TriggerEngine.record_event(
+        event_type: "workflow.manual_requested",
+        source: "manual",
+        subject: task.id,
+        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id },
+        project: task.board.project,
+        board_task: task
+      )
+
+      TriggerEngine.fire_workflow(
         workflow: binding.workflow,
         project: task.board.project,
-        user: actor,
         task: task,
-        mode: :non_interactive
+        actor: actor,
+        event: event,
+        source: "manual"
       )
     end
 
@@ -142,13 +152,7 @@ class TaskService
       return if task.task_waits.pending.exists?
       return if quota_block_auto_trigger?(binding, column)
 
-      WorkflowService.start(
-        workflow: binding.workflow,
-        project: column.board.project,
-        user: actor,
-        task: task,
-        mode: :non_interactive
-      )
+      TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: actor)
     rescue StandardError => e
       Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
     end
