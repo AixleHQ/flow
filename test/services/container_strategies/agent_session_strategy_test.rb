@@ -121,6 +121,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -229,6 +230,7 @@ module ContainerStrategies
       strategy.stubs(:read_file_from_container).with(container_mock, "/tmp/session.log").returns("log content here")
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:collect_usage)
 
       assert_difference "SessionLog.count", 1 do
@@ -259,6 +261,7 @@ module ContainerStrategies
       strategy.stubs(:read_file_from_container).raises(StandardError.new("Read error"))
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -283,6 +286,7 @@ module ContainerStrategies
       strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
       strategy.stubs(:collect_usage)
 
       assert_no_difference "SessionLog.count" do
@@ -308,6 +312,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
 
       result = strategy.before_cleanup(container_id: "abc123")
 
@@ -360,6 +365,70 @@ module ContainerStrategies
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
+    end
+
+    # == persist_refreshed_credentials (#2: capture tokens refreshed mid-session) ==
+
+    test "persist_refreshed_credentials updates existing credential when token changed" do
+      @credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "old", "refreshToken" => "r1" } })
+      strategy = build_strategy
+      container = mock("container")
+      agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "NEW", "refreshToken" => "r2" } }.to_json)
+
+      strategy.send(:persist_refreshed_credentials, container, @session, agent_service)
+
+      assert_equal "NEW", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    test "persist_refreshed_credentials is a no-op when the token is unchanged" do
+      @credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "same" } })
+      strategy = build_strategy
+      container = mock("container")
+      agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "same" } }.to_json)
+
+      AgentCredential.expects(:from_artifacts).never
+
+      strategy.send(:persist_refreshed_credentials, container, @session, agent_service)
+    end
+
+    test "persist_refreshed_credentials does not overwrite a newer stored token with an older one" do
+      # A concurrent session refreshed first (stored token, expiresAt 2000); this
+      # container still holds the older, now-rotated token (expiresAt 1000).
+      @credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "live", "expiresAt" => 2000 } })
+      strategy = build_strategy
+      container = mock("container")
+      agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "stale", "expiresAt" => 1000 } }.to_json)
+
+      strategy.send(:persist_refreshed_credentials, container, @session, agent_service)
+
+      assert_equal "live", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    test "persist_refreshed_credentials does not create a credential when none exists" do
+      @credential.destroy!
+      strategy = build_strategy
+      container = mock("container")
+      agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "NEW" } }.to_json)
+
+      assert_no_difference "AgentCredential.count" do
+        strategy.send(:persist_refreshed_credentials, container, @session, agent_service)
+      end
     end
 
     private

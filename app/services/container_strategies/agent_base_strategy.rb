@@ -181,6 +181,71 @@ module ContainerStrategies
       }
     end
 
+    # =================================================================
+    # Credential extraction (shared by auth + session strategies)
+    # =================================================================
+
+    # Read the agent's auth file(s) from the container.
+    # @return [Hash<String, String>] path => content (only present files)
+    def extract_auth_files(container, agent_service)
+      paths = if agent_service.adapter.respond_to?(:auth_file_paths)
+                agent_service.adapter.auth_file_paths
+      else
+                [ agent_service.config_path ]
+      end
+
+      paths.each_with_object({}) do |path, files|
+        content = read_file_from_container(container, path)
+        files[path] = content if content.present?
+      rescue StandardError => e
+        Rails.logger.warn("[#{strategy_name}] Failed to extract #{path}: #{e.message}")
+      end
+    end
+
+    # True only when one of the auth files actually contains a real credential/token.
+    # Guards against persisting a credential when the file merely exists (e.g. Claude
+    # Code always writes ~/.claude.json on startup, even before login completes).
+    def auth_files_complete?(auth_files, agent_service)
+      auth_files.any? { |_path, content| content.present? && agent_service.auth_complete?(content) }
+    end
+
+    # Build the minimal credential hash to persist from collected auth files.
+    # Uses the adapter's #extract_credentials (a clean slice of the needed keys)
+    # rather than storing whole config blobs, so credentials stay tidy and a
+    # re-auth replaces them with no leftover fields from a previous login.
+    def build_credentials_from_files(auth_files, adapter)
+      config_data = {}
+
+      auth_files.each do |path, content|
+        basename = File.basename(path)
+
+        # Gemini: API key lives in an encrypted file — decrypt instead of slicing.
+        if basename == "gemini-credentials.json" && adapter.respond_to?(:decrypt_credentials_file)
+          api_key = adapter.decrypt_credentials_file(content, extract_container_hostname)
+          config_data["api_key"] = api_key if api_key
+          next
+        end
+
+        # settings.json carries no secrets we persist (auth method marker only).
+        next if basename == "settings.json"
+
+        config_data.merge!(adapter.extract_credentials(content))
+      rescue StandardError => e
+        Rails.logger.warn("[#{strategy_name}] Failed to process #{path}: #{e.message}")
+      end
+
+      config_data
+    end
+
+    def extract_container_hostname
+      session = TerminalSession.find(input[:session_id])
+      container = resolve_container(session.container_id)
+      result = runtime.exec(container, [ "hostname" ])
+      result[0].join.strip
+    rescue StandardError
+      ""
+    end
+
     def traefik_labels(route_token, router_name)
       labels = {
         "traefik.enable" => "true",

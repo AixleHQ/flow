@@ -83,7 +83,7 @@ class SessionContextService
       if credential.present?
         measure_step("credentials") do
           resolved_model = resolve_session_model(session, credential)
-          workflow_config = { enabled_mcp_servers: mcp_server_names, model: resolved_model }.compact
+          workflow_config = { enabled_mcp_servers: mcp_server_names, model: resolved_model, mode: session.mode }.compact
           Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
           credential.write_to_container(container_id, workflow_config)
           context_log.record(:credentials, agent_type: credential.agent_type, config_keys: credential.config_data.keys, workflow_config: workflow_config)

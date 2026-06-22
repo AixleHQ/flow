@@ -626,6 +626,7 @@ const WorkflowRunShowPage = () => {
               key={selectedStep.terminalUrl}
               src={selectedStep.terminalUrl!}
               title="Terminal"
+              allow="clipboard-read; clipboard-write"
               className={classes.terminalIframe}
               onLoad={() => setTermLoaded(true)}
             />

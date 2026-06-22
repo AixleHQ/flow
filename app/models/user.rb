@@ -89,15 +89,7 @@ class User < ApplicationRecord
 
   def agent_models_by_type
     agent_credentials.each_with_object({}) do |cred, hash|
-      cache_key = "agent_models/#{cred.agent_type}"
-      models = Rails.cache.read(cache_key)
-
-      if models.nil?
-        adapter = AgentCredentialsService.for(cred.agent_type).adapter
-        result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
-        models = result[:models] || []
-        Rails.cache.write(cache_key, models, expires_in: 1.day) if models.any?
-      end
+      models = fetch_or_cache_agent_models(cred)
 
       hash[cred.agent_type] = models.map do |m|
         { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"] }
@@ -126,6 +118,29 @@ class User < ApplicationRecord
   end
 
   private
+
+  # Fetch the model list for a credential, caching per-credential (not globally —
+  # the old key collided across users, so one user's fallback poisoned everyone).
+  # API-sourced lists are cached for a day; fallback lists only briefly, so a
+  # transient API failure or an expired token doesn't pin a stale list for 24h.
+  # The cache is also busted whenever the credential's auth data changes
+  # (re-auth / refreshed token) — see AgentCredential#invalidate_models_cache.
+  def fetch_or_cache_agent_models(cred)
+    cache_key = cred.models_cache_key
+    cached = Rails.cache.read(cache_key)
+    return cached if cached
+
+    adapter = AgentCredentialsService.for(cred.agent_type).adapter
+    result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
+    models = result[:models] || []
+
+    if models.any?
+      ttl = result[:source] == :api ? 1.day : 1.hour
+      Rails.cache.write(cache_key, models, expires_in: ttl)
+    end
+
+    models
+  end
 
   def set_onboarding_completed_at
     self.onboarding_completed_at = Time.current

@@ -135,6 +135,32 @@ module Agents
       refute files.key?("/home/claude/.claude/.credentials.json")
     end
 
+    test "config_files defaultMode is dontAsk for non_interactive sessions" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+    end
+
+    test "config_files defaultMode is auto for interactive sessions" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "auto", settings.dig("permissions", "defaultMode")
+    end
+
+    test "config_files defaults to dontAsk when mode is absent" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+    end
+
+    test "DesignSync is allow-listed so dontAsk mode does not deny it" do
+      assert_includes @adapter.allowed_tools([]), "DesignSync"
+
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_includes settings.dig("permissions", "allow"), "DesignSync"
+    end
+
     test "config_files includes MCP permissions when enabled_mcp_servers provided" do
       credentials = { "primaryApiKey" => "sk" }
       workflow_config = { enabled_mcp_servers: %w[context7 tavily] }
@@ -252,6 +278,50 @@ module Agents
       assert_equal 100, stat.input_tokens
     end
 
+    # == Available Models ==
+
+    test "fetch_available_models_with_source falls back when no credentials" do
+      result = @adapter.fetch_available_models_with_source({})
+
+      assert_equal :fallback, result[:source]
+      assert_equal ClaudeCodeAdapter::FALLBACK_CLAUDE_MODELS, result[:models]
+    end
+
+    test "fetch_available_models_with_source uses x-api-key for API key credentials" do
+      captured = stub_models_response([ { "id" => "claude-opus-4-8", "display_name" => "Claude Opus 4.8" } ])
+
+      result = @adapter.fetch_available_models_with_source({ "primaryApiKey" => "sk-key" })
+
+      assert_equal :api, result[:source]
+      assert_equal "claude-opus-4-8", result[:models].first[:model_id]
+      assert_equal "sk-key", captured[:req]["x-api-key"]
+      assert_nil captured[:req]["authorization"]
+    end
+
+    test "fetch_available_models_with_source uses OAuth bearer when only claudeAiOauth present" do
+      captured = stub_models_response([ { "id" => "claude-sonnet-4-6", "display_name" => "Claude Sonnet 4.6" } ])
+
+      result = @adapter.fetch_available_models_with_source({ "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-x" } })
+
+      assert_equal :api, result[:source]
+      assert_equal "claude-sonnet-4-6", result[:models].first[:model_id]
+      assert_equal "Bearer sk-ant-oat01-x", captured[:req]["authorization"]
+      assert_equal "oauth-2025-04-20", captured[:req]["anthropic-beta"]
+      assert_nil captured[:req]["x-api-key"]
+    end
+
+    test "fetch_available_models_with_source falls back on non-success response" do
+      response = mock("response")
+      response.stubs(:is_a?).with(Net::HTTPSuccess).returns(false)
+      http = mock("http")
+      http.stubs(:request).returns(response)
+      Net::HTTP.stubs(:start).yields(http).returns(response)
+
+      result = @adapter.fetch_available_models_with_source({ "primaryApiKey" => "sk-key" })
+
+      assert_equal :fallback, result[:source]
+    end
+
     test "ingest_usage supports legacy metric names" do
       payload = {
         "resourceMetrics" => [ {
@@ -278,6 +348,23 @@ module Agents
       assert_equal :ok, result
       @session.reload
       assert_equal 50, @session.usage_statistic.output_tokens
+    end
+
+    private
+
+    # Stub Net::HTTP to return a successful /v1/models response and capture the
+    # outgoing request so header/auth assertions can be made.
+    def stub_models_response(data)
+      captured = {}
+      response = mock("response")
+      response.stubs(:is_a?).with(Net::HTTPSuccess).returns(true)
+      response.stubs(:body).returns({ "data" => data }.to_json)
+
+      http = mock("http")
+      http.stubs(:request).with { |req| captured[:req] = req; true }.returns(response)
+      Net::HTTP.stubs(:start).yields(http).returns(response)
+
+      captured
     end
   end
 end

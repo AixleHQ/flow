@@ -366,7 +366,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         <Box className={classes.panelContainer}>
           <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
             {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe src={ttydUrl!} title="Terminal" onLoad={() => setTermLoaded(true)} />
+            <iframe
+              src={ttydUrl!}
+              title="Terminal"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setTermLoaded(true)}
+            />
           </div>
         </Box>
       );
@@ -386,7 +391,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
           )}
           <div style={{ flex: 1 }} className={`${classes.panelFrame} ${classes.terminalFrame}`}>
             {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe src={ttydUrl!} title="Terminal" onLoad={() => setTermLoaded(true)} />
+            <iframe
+              src={ttydUrl!}
+              title="Terminal"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setTermLoaded(true)}
+            />
           </div>
         </Box>
       );
@@ -402,7 +412,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         <Panel defaultSize={50} minSize={20}>
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
             {!ideLoaded && renderLoadingOverlay('Loading editor...')}
-            <iframe src={s.ideUrl!} title="VS Code Editor" onLoad={() => setIdeLoaded(true)} />
+            <iframe
+              src={s.ideUrl!}
+              title="VS Code Editor"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setIdeLoaded(true)}
+            />
           </div>
         </Panel>
         <PanelResizeHandle className={classes.resizeHandle} onDoubleClick={toggleEditor}>
@@ -421,7 +436,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         <Panel defaultSize={50} minSize={20}>
           <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
             {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe src={ttydUrl!} title="Terminal" onLoad={() => setTermLoaded(true)} />
+            <iframe
+              src={ttydUrl!}
+              title="Terminal"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setTermLoaded(true)}
+            />
           </div>
         </Panel>
       </PanelGroup>

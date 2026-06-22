@@ -282,8 +282,10 @@ function AgentAuthModal({
   const [watcherUrl, setWatcherUrl] = useState<string | null>(null);
   const [cableStream, setCableStream] = useState<string | null>(null);
   const [authDetected, setAuthDetected] = useState(false);
+  const [finishError, setFinishError] = useState(false);
   const cableSubRef = useRef<Subscription | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const finishingRef = useRef(false);
 
   const agentInfo = AVAILABLE_AGENTS.find((a) => a.type === agentType)!;
 
@@ -332,6 +334,8 @@ function AgentAuthModal({
     setWatcherUrl(null);
     setCableStream(null);
     setAuthDetected(false);
+    setFinishError(false);
+    finishingRef.current = false;
     try {
       const res = await apiFetch(apiV1TerminalSessionsPath(), {
         method: 'POST',
@@ -412,7 +416,9 @@ function AgentAuthModal({
   }, [watcherUrl, authDetected, sessionState]);
 
   const handleFinish = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || finishingRef.current) return;
+    finishingRef.current = true;
+    setFinishError(false);
     try {
       await apiFetch(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' });
       setSessionState('finished');
@@ -422,9 +428,18 @@ function AgentAuthModal({
         onClose();
       }, 2000);
     } catch {
+      finishingRef.current = false;
+      setFinishError(true);
       notifications.show({ message: 'Failed to save authentication', color: 'red' });
     }
   }, [sessionId, agentInfo.name, cleanup, onClose]);
+
+  // Auto-finish as soon as the watcher confirms credentials exist — no manual
+  // "save" step. The watcher only reports authenticated once a real token is
+  // written, and the server persists the credential during cleanup.
+  useEffect(() => {
+    if (authDetected && sessionState === 'ready') handleFinish();
+  }, [authDetected, sessionState, handleFinish]);
 
   const handleClose = useCallback(() => {
     cleanup();
@@ -469,25 +484,32 @@ function AgentAuthModal({
             <iframe
               src={ttydUrl}
               title={`Authenticate ${agentInfo.name}`}
+              allow="clipboard-read; clipboard-write"
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: '#000' }}
             />
           </Box>
           <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--mantine-color-dark-4)' }}>
-            <Group gap="xs">
-              {authDetected && (
-                <Badge color="green" size="sm" variant="filled">
-                  Auth detected
-                </Badge>
-              )}
-              {!authDetected && (
-                <Text size="xs" c="dimmed">
-                  Complete authentication in the terminal above
+            {authDetected && finishError ? (
+              <>
+                <Text size="xs" c="red">
+                  Couldn&apos;t save credentials.
                 </Text>
-              )}
-            </Group>
-            <Button color="green" size="sm" onClick={handleFinish} disabled={!authDetected}>
-              Save Authentication
-            </Button>
+                <Button color="green" size="xs" onClick={handleFinish}>
+                  Retry
+                </Button>
+              </>
+            ) : authDetected ? (
+              <Group gap="xs">
+                <Loader size="xs" color="green" />
+                <Text size="xs" c="green" fw={500}>
+                  Credentials detected — saving…
+                </Text>
+              </Group>
+            ) : (
+              <Text size="xs" c="dimmed">
+                Complete authentication in the terminal above
+              </Text>
+            )}
           </Group>
         </Box>
       );

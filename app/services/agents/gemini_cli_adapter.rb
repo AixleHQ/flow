@@ -31,9 +31,13 @@ module Agents
       "/home/gemini"
     end
 
-    # Watcher monitors settings.json — created when user completes API key auth
+    # Watch the actual API-key credential file. gemini-credentials.json only appears
+    # once the user has entered the key (the CLI encrypts and writes it). We must NOT
+    # watch settings.json: its `security` block is written at auth-METHOD selection,
+    # before the key is entered, so the watcher would report success prematurely and
+    # the auth container would close before the user finishes.
     def auth_watch_path
-      "#{home_dir}/.gemini/settings.json"
+      "#{home_dir}/.gemini/#{API_KEY_CREDS_PATH}"
     end
 
     # Auth files to extract at cleanup
@@ -44,13 +48,20 @@ module Agents
       ]
     end
 
+    # The credential file is an encrypted (non-JSON) blob, so completion = the file
+    # exists with content. The watcher treats __present__ as "file present & non-empty".
     def auth_required_keys
-      %w[security]
+      %w[__present__]
     end
 
+    # Server-side completion check (gates credential persistence). The encrypted
+    # gemini-credentials.json is a non-blank, non-JSON blob → complete. settings.json
+    # is valid JSON but only marks the chosen auth method, so it must NOT count.
     def auth_complete?(config_content)
-      config = parse_json(config_content)
-      config.dig("security", "auth", "selectedType").present?
+      parsed = parse_json(config_content)
+      return false if parsed.is_a?(Hash) && parsed.any?
+
+      config_content.to_s.strip.present?
     end
 
     # Not used directly — API key is extracted via decrypt in save_credentials
@@ -62,13 +73,31 @@ module Agents
       credentials
     end
 
-    # API key auth: GEMINI_API_KEY env var + settings.json
+    # API key auth: GEMINI_API_KEY env var + settings.json. Also pre-trusts the
+    # workspace so the agent session doesn't stop on the folder-trust prompt.
     def config_files(credentials, workflow_config = {})
+      workspace = workflow_config[:workspace] || "/workspace"
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
           model: workflow_config[:model], auth_type: "gemini-api-key"
         ).to_json
-      }
+      }.merge(trusted_folders_files(workspace))
+    end
+
+    # Written before auth starts (AgentAuthStrategy#before_exec) so the auth
+    # terminal trusts /workspace and doesn't block on "Do you trust the files in
+    # this folder?" — which otherwise also skips project agents.
+    def auth_setup_files
+      trusted_folders_files
+    end
+
+    # Gemini CLI persists folder trust to ~/.gemini/trustedFolders.json (this exact
+    # shape is what it writes when the user picks "Trust folder"). Writing it upfront
+    # pre-trusts the workspace. `security.folderTrust.enabled: false` in settings.json
+    # does not reliably suppress the prompt in current CLI versions, so this is the
+    # source of truth.
+    def trusted_folders_files(workspace = "/workspace")
+      { "#{home_dir}/.gemini/trustedFolders.json" => { workspace => "TRUST_FOLDER" }.to_json }
     end
 
     # Pass API key as env var — Gemini CLI picks it up automatically

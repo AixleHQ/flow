@@ -20,18 +20,27 @@ module Agents
       assert_equal "/home/gemini", @adapter.home_dir
     end
 
-    test "auth_required_keys returns security" do
-      assert_equal %w[security], @adapter.auth_required_keys
+    test "auth_watch_path points at the credential file, not settings.json" do
+      assert_equal "/home/gemini/.gemini/gemini-credentials.json", @adapter.auth_watch_path
     end
 
-    test "auth_complete? returns true with security auth selectedType" do
+    test "auth_required_keys uses the existence sentinel" do
+      assert_equal %w[__present__], @adapter.auth_required_keys
+    end
+
+    test "auth_complete? is true for a non-blank encrypted credential blob" do
+      # gemini-credentials.json is encrypted (iv:authTag:ciphertext), not JSON.
+      assert @adapter.auth_complete?("a1b2:c3d4:e5f6deadbeef")
+    end
+
+    test "auth_complete? is false for settings.json (auth-method marker only)" do
       content = { "security" => { "auth" => { "selectedType" => "gemini-api-key" } } }.to_json
-      assert @adapter.auth_complete?(content)
+      refute @adapter.auth_complete?(content)
     end
 
-    test "auth_complete? returns false without security auth selectedType" do
-      content = { "security" => { "auth" => {} } }.to_json
-      refute @adapter.auth_complete?(content)
+    test "auth_complete? is false for blank content" do
+      refute @adapter.auth_complete?("")
+      refute @adapter.auth_complete?("   ")
     end
 
     test "extract_credentials returns empty hash" do
@@ -62,6 +71,29 @@ module Agents
       assert_equal false, settings.dig("security", "folderTrust", "enabled")
       assert_equal "auto_edit", settings.dig("tools", "approvalMode")
       assert_equal true, settings.dig("tools", "autoAccept")
+    end
+
+    test "auth_setup_files pre-trusts the workspace so auth does not prompt" do
+      files = @adapter.auth_setup_files
+
+      assert files.key?("/home/gemini/.gemini/trustedFolders.json")
+      trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
+      assert_equal "TRUST_FOLDER", trusted["/workspace"]
+    end
+
+    test "config_files pre-trusts the workspace for agent sessions" do
+      files = @adapter.config_files({ "api_key" => "test-key" })
+
+      assert files.key?("/home/gemini/.gemini/trustedFolders.json")
+      trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
+      assert_equal "TRUST_FOLDER", trusted["/workspace"]
+    end
+
+    test "config_files trusts a custom workspace path when provided" do
+      files = @adapter.config_files({ "api_key" => "k" }, { workspace: "/srv/app" })
+
+      trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
+      assert_equal "TRUST_FOLDER", trusted["/srv/app"]
     end
 
     test "required_env_fields returns empty array" do
