@@ -117,32 +117,70 @@ module ContextBuilders
         Do NOT create one mega-workflow with 10 steps that covers the entire lifecycle.
         Instead, create many small workflows — one per automatable column.
 
-        ## Steps and SubSteps
+        ## How Many Steps — Default to ONE
 
-        When a step has multiple goals or phases within one agent session, create **SubSteps**
-        as intermediate milestones. SubSteps help track progress and make the step's work visible.
+        A new Step = a new agent session = a new terminal = a new container. It is expensive
+        and it SEVERS context between steps. Default to a SINGLE step, and add another step
+        ONLY when one of these is concretely true:
 
-        Example — a "Tech Design" step might have sub-steps:
-        1. "Analyze Requirements" — read task description and comments
-        2. "Research Existing Code" — understand current architecture
-        3. "Draft Design Document" — write the tech design
-        4. "Post Design as Comment" — attach result to the task
+        1. A genuinely **different agent / persona** is needed (e.g. Architect vs Developer).
+        2. **Different tools, skills, or MCP servers** are required that shouldn't load together.
+        3. A **separate, explicitly handed-off deliverable** must exist as an asset for a later step.
+        4. **Parallelism (DAG)** — independent work that should run concurrently.
+        5. A **distinct external-skill phase** — e.g. one step writes a design *description*
+           via a BMAD skill, a separate step *renders* that design through drawing tools.
+           Different phase, different tools, different artifact → it earns its own step.
 
-        Always create sub-steps when a step involves 3+ distinct activities. The agent marks
-        them via `mark_sub_step` tool as it progresses, giving the user visibility into progress.
+        If none of these apply, it is ONE step. Test each candidate boundary with: "would I
+        hand this to a different person, with different tools?" If no → it is a sub-step, not a
+        step. A multi-step workflow where every step is the same agent doing sequential work on
+        the same files is over-split — collapse it into one step with sub-steps.
 
-        **SubStep fields that matter:**
-        - `name` — shown in the progress dashboard
-        - `instructions` — additional guidance shown to the agent for this sub-step
-        - `required` (true/false) — if true, must be completed for the step to finish.
-          Use `required: false` for optional sub-steps (e.g., "Optimize if time permits")
+        **SubSteps** are progress milestones inside ONE session — the agent marks them with
+        `mark_sub_step`. Create them when a step has 3+ distinct phases worth tracking, but they
+        are optional. Useful fields: `name` (shown in the dashboard), `instructions` (extra
+        guidance for that phase), `required` (set false for optional phases).
 
-        **SubSteps vs separate Steps — when to choose what:**
-        - **SubSteps**: multiple activities within ONE agent session, shared context, no need
-          for different tools/agents. Example: "Read code → Write tests → Run tests" in one QA step.
-        - **Separate Steps**: different agents, different tool requirements, outputs needed as
-          explicit assets, or when parallelism is needed (DAG). Example: "Tech Design" (architect)
-          → "Implementation" (developer) — different agents, different skills.
+        ## Writing Step Instructions — Keep Them Lean
+
+        The #1 mistake when authoring a step is re-explaining things the platform already
+        provides. Every executing step session AUTOMATICALLY receives a system context that
+        already contains all of the following — so step `instructions` must NEVER restate it:
+
+        - **Completion rules** — the agent is already told it MUST call `finish_session` on
+          success and `fail_session` only on genuine failure, and that the session will not end
+          on its own. Do NOT write a "PRIME DIRECTIVE" or any finish/fail rules.
+        - **Non-interactive rules** — already told to never ask the user questions, make
+          reasonable assumptions, and save results to `/workspace/outputs/`.
+        - **Workspace layout** — `/workspace/outputs/`, `/workspace/assets/` (read-only) and
+          `/workspace/repo/<name>/` are already explained.
+        - **Sub-step protocol** — each sub-step's runtime id, description and instructions are
+          already listed, along with how to call `mark_sub_step` / `list_sub_steps`.
+        - **Tool & MCP availability** — the standard shell tools (`tree`, `rg`, `fd`, `jq`,
+          `git`, `curl`, `cloc`) and every connected MCP server are already listed, plus the
+          async container-tool protocol. These tools are ALWAYS present — never write
+          availability probes (`command -v tree`) or fallbacks ("if rg is missing, use grep").
+        - **Resources** — mounted repos (paths, branches, ids) and pre-loaded asset paths are
+          already enumerated. Refer to resources by purpose, not by re-listing paths/ids.
+
+        So `instructions` should contain ONLY the task-specific content, in roughly this shape:
+
+        ```
+        ## Your Task
+        <1-2 sentences: what this step accomplishes>
+
+        ## Inputs
+        <which assets / repos / prior-step outputs to use — by purpose>
+
+        ## Output
+        <the exact deliverable: file(s) in /workspace/outputs/, a board comment, etc.>
+        ```
+
+        Aim for the length of a focused task brief (~15-40 lines), like a good QA-testing
+        prompt — NOT a defensive runbook. A short instruction is CORRECT, not a sign that
+        something is missing. Never add generic "never error out" / "guaranteed to complete" /
+        "catch every exception" prose. Trust the executing agent — specify the task, not the
+        scaffolding.
 
         ## Data Sources: Always Validate
 
@@ -243,7 +281,9 @@ module ContextBuilders
 
         - ALWAYS propose structure and get approval before creating entities
         - Show progress after each creation ("Created agent: PM ✓")
-        - Write DETAILED step instructions — they are the core of the automation
+        - Write LEAN, focused step instructions — state the task-specific WHAT and the exact
+          OUTPUT, and never restate anything the platform already injects (see "Writing Step
+          Instructions — Keep Them Lean")
         - For auto-triggered workflows: ALL steps must have allow_non_interactive: true
         - Board automation is optional — only suggest if the process benefits
         - Prefer reusing existing agents/tools when appropriate

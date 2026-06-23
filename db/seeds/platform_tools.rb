@@ -236,7 +236,7 @@ module Seeds
             workflow_id: { type: "integer", description: "Target workflow ID. Defaults to last created workflow." },
             name: { type: "string", description: "Step name" },
             position: { type: "integer", description: "Position in workflow (0-based). Auto-assigned if omitted." },
-            instructions: { type: "string", description: "Detailed instructions for the agent (markdown)" },
+            instructions: { type: "string", description: "Focused, task-specific instructions (markdown): what to do and what to produce. Do NOT restate session-completion rules, workspace layout, sub-step tracking, or tool availability — the platform injects those automatically." },
             description: { type: "string", description: "Brief description for UI" },
             agent_id: { type: "integer", description: "Agent to run this step" },
             allow_non_interactive: { type: "boolean", description: "Can run without user interaction" },
