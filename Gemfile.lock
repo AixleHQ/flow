@@ -276,7 +276,7 @@ GEM
       csv
       mini_mime (>= 1.0.0)
       multi_xml (>= 0.5.2)
-    i18n (1.15.1)
+    i18n (1.15.2)
       concurrent-ruby (~> 1.0)
     ice_nine (0.11.2)
     image_processing (1.14.0)
@@ -296,7 +296,7 @@ GEM
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
     jmespath (1.6.2)
-    json (2.19.9)
+    json (2.20.0)
     jsonpath (1.1.5)
       multi_json
     jsonrpc-rails (0.5.4)
@@ -589,7 +589,7 @@ GEM
       lint_roller (~> 1.1)
       rubocop (>= 1.75.0, < 2.0)
       rubocop-ast (>= 1.47.1, < 2.0)
-    rubocop-rails (2.35.4)
+    rubocop-rails (2.35.5)
       activesupport (>= 4.2.0)
       lint_roller (~> 1.1)
       rack (>= 1.1)
