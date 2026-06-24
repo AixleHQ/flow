@@ -21,7 +21,7 @@ module Api
               case kind
               when "column" then create_column_trigger
               when "webhook" then create_webhook_trigger
-              when "slack", "schedule", "event" then create_event_trigger(kind)
+              when "slack", "event" then create_event_trigger(kind)
               else return render json: { errors: [ "Unsupported trigger kind: #{kind}" ] }, status: :unprocessable_entity
               end
 
@@ -71,10 +71,11 @@ module Api
           end
 
           def create_event_trigger(kind)
+            # schedule.fired is intentionally not creatable yet — it needs the
+            # Temporal Schedules backing (a separate, not-yet-built step) to fire.
             event_type =
               case kind
-              when "slack"    then "slack.message"
-              when "schedule" then "schedule.fired"
+              when "slack" then "slack.message"
               else params.dig(:trigger, :event_type).to_s.presence || "webhook.received"
               end
             binding = current_workflow.trigger_bindings.create!(
