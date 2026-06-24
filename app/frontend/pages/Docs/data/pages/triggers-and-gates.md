@@ -13,7 +13,7 @@ event  →  normalize  →  dedup  →  match a trigger  →  start a WorkflowRu
 Adding a new source means emitting a normalized **event**, never editing the
 dispatch logic. This page explains the model end to end.
 
-> **info** Two primitives, not one. **Triggers start runs. Gates defer them.** A CI "wait" is a *gate*, not a trigger — see [Gates & waits](#gates-and-waits) below. Keeping the two apart is the key to the whole model.
+> **info** Two primitives, not one. **Triggers start runs. Gates defer them.** A CI check is a *gate*, not a trigger — see [Gates](#gates) below. Keeping the two apart is the key to the whole model.
 
 ## The trigger pipeline
 
@@ -67,7 +67,7 @@ matching events:
 
 ```
 Slack:   channel = #deploys   AND   text = "ship it"
-Webhook: ref = refs/heads/main AND   repository.name = palad-app
+Webhook: ref = refs/heads/main AND   repository.name = my-app
 ```
 
 Filters are stored as `filter_predicate` and matched by exact key/value
@@ -75,24 +75,24 @@ containment against the event data. Conditions are AND-ed.
 
 > **info** v1 matching is **exact equality**. Richer operators (`contains`, regex, comparisons) are a planned extension — until then the editor shows them disabled.
 
-## Gates and waits
+## Gates
 
-A **wait** is not a trigger — it is a *gate*: a runtime precondition attached
+A **gate** is not a trigger — it is a runtime precondition attached
 to a single task that **holds the column auto-trigger** until an external
 condition clears.
 
-A wait is created **by a running workflow**, via the `board_create_wait` tool —
+A gate is created **by a running workflow**, via the `board_create_gate` tool —
 for example, an agent opens a pull request and then parks the task until CI is
-green. While any wait is pending, the column auto-trigger will not start the
+green. While any gate is pending, the column auto-trigger will not start the
 next run for that task. When the matching CI event arrives
-(GitHub checks / GitHub Actions / GitLab pipeline), the wait resolves and the
-auto-trigger re-evaluates — firing only once the **last** wait clears.
+(GitHub checks / GitHub Actions / GitLab pipeline), the gate resolves and the
+auto-trigger re-evaluates — firing only once the **last** gate clears.
 
-| | Trigger | Gate (wait) |
+| | Trigger | Gate |
 | --- | ------- | ----------- |
 | **Effect** | starts a run | defers the auto-start |
 | **Lifetime** | standing config | runtime, one-shot, per task |
-| **Created by** | a person, in config | a workflow step (`board_create_wait`) |
+| **Created by** | a person, in config | a workflow step (`board_create_gate`) |
 | **Cleared by** | — | a matching CI event (resolve once) |
 
 So the same CI webhook can do one of two things: **resolve a gate** on a
@@ -100,7 +100,7 @@ waiting task (today's path), or — if you bind a workflow to a `ci.completed`
 event — **start a run** directly. Wait-resolution is the special case;
 event-to-workflow matching is the general one.
 
-> **tip** A card "stuck" in a bound column almost always has a pending wait. Open it and clear the wait, and the binding re-evaluates.
+> **tip** A card "stuck" in a bound column almost always has a pending gate. Open it and clear the gate, and the binding re-evaluates.
 
 ## Inbound webhooks = a start API
 
@@ -110,7 +110,7 @@ The generic gateway turns any external system into a workflow launcher:
 curl -X POST https://<host>/webhooks/in/<endpoint-slug> \
   -H 'Content-Type: application/json' \
   -H 'X-Idempotency-Key: build-7f3a' \
-  -d '{ "ref": "refs/heads/main", "repository": { "name": "palad-app" } }'
+  -d '{ "ref": "refs/heads/main", "repository": { "name": "my-app" } }'
 ```
 
 The gateway verifies the signature on the raw body (per the endpoint's
@@ -149,7 +149,7 @@ body. Slack endpoints also answer the `url_verification` handshake automatically
   launch for the same `(event, trigger)`.
 - **Cooldown** — a per-trigger minimum gap (throttling, *not* dedup).
 - **Auto-trigger guards** — the column auto-trigger is additionally skipped
-  while the task has pending **waits**, or after a `quota_exceeded` failure.
+  while the task has pending **gates**, or after a `quota_exceeded` failure.
 
 > **warning** The cooldown is rate-limiting, not correctness. Idempotency comes from the delivery-id dedup and the dispatch ledger.
 
@@ -162,9 +162,9 @@ body. Slack endpoints also answer the `url_verification` handshake automatically
 | `trigger_dispatches` | audit + idempotency ledger (`event → trigger → run`) |
 | `webhook_endpoints` | a registered inbound source (slug, provider, verification, secret) |
 | `received_webhooks` | raw inbound deliveries + idempotency store |
-| `column_workflow_bindings` | board-native column → workflow binding (unchanged) |
-| `task_waits` | runtime CI gates on a task (unchanged) |
+| `column_workflow_bindings` | board-native column → workflow binding |
+| `gates` | runtime CI gates on a task |
 
-The pipeline is unified; the storage is not. Board bindings and waits keep
+The pipeline is unified; the storage is not. Board bindings and gates keep
 their own tables and semantics — the engine just reads them through the same
 match-and-dispatch path. See the [domain model reference](/docs/reference).

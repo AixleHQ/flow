@@ -1,6 +1,6 @@
 # Integrations
 
-Aixle Flow integrates with Git hosts (for repo mounting and CI waits),
+Aixle Flow integrates with Git hosts (for repo mounting and CI gates),
 OAuth providers (for sign-in), and MCP servers (for tools).
 
 ## Git hosts

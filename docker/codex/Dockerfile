@@ -2,7 +2,7 @@
 # OpenAI Codex CLI Interactive Session Image
 #
 # Build context: docker/ (parent dir, for access to base/ scripts)
-# Build command: docker build -f codex/Dockerfile -t palad/codex:latest .
+# Build command: docker build -f codex/Dockerfile -t aixle/codex:latest .
 # =============================================================================
 ARG BASE_IMAGE=aixle/agent-base-core:latest
 FROM ${BASE_IMAGE}

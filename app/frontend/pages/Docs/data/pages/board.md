@@ -12,7 +12,7 @@ where every card represents a unit of work — and where automation lives.
 | **Subtask**         | One level of nesting (epic → story).                              |
 | **Comment**         | Threaded discussion; agents can tag comments (`code_review`, `qa_report`). |
 | **Asset**           | File attached to a task; passed to the agent at `/workspace/assets/`. |
-| **Wait**            | External blocker — e.g. waiting for a GitHub PR check.            |
+| **Gate**            | External blocker — e.g. waiting for a GitHub PR check.            |
 | **Activity log**    | Immutable event stream — every move, comment, run.                |
 
 ## Column → Workflow Bindings

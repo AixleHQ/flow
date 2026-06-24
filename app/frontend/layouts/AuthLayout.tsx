@@ -63,7 +63,7 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
             <Text component="span" size="xs" c="dimmed" lh={1}>
               Powered by
             </Text>
-            <Logo width={44} h={12} style={{ transform: 'translateY(-1px)' }} />
+            <Logo width={50} />
           </Box>
         )}
       </Box>

@@ -28,8 +28,8 @@ class BoardTaskResource < ApplicationResource
   end
 
   attribute :pending_gates do |task|
-    task.pending_gates.map do |wait|
-      { id: wait.id, gate_type: wait.gate_type, metadata: wait.metadata, created_at: wait.created_at.iso8601 }
+    task.pending_gates.map do |gate|
+      { id: gate.id, gate_type: gate.gate_type, metadata: gate.metadata, created_at: gate.created_at.iso8601 }
     end
   end
 end

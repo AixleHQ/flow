@@ -25,8 +25,8 @@ comfortable install.
 ## Getting the code
 
 ```bash
-git clone https://github.com/palad-ai/palad-app.git
-cd palad-app
+git clone https://github.com/aixleHQ/flow.git
+cd flow
 ```
 
 ## One-command setup
@@ -45,8 +45,7 @@ builds the four agent runtime images in parallel.
 ## Start the app
 
 ```bash
-make up      # web, db, redis, traefik, temporal (terminal 1)
-make worker  # Temporal worker — must stay attached (terminal 2)
+make up      # starts all services: web, worker, db, redis, traefik, temporal
 ```
 
 Open **http://localhost:4000**.

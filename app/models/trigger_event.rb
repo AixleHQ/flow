@@ -12,7 +12,7 @@ class TriggerEvent < ApplicationRecord
 
   # event_type conventions (reverse-DNS-ish):
   #   board.column.auto_triggered   — task entered a column with an auto binding
-  #   board.task.wait_resolved      — a task_wait resolved (or was removed)
+  #   board.task.gate_resolved      — a gate resolved (or was removed)
   #   workflow.manual_requested     — user pressed the manual trigger button
   #   slack.message                 — inbound Slack message via the gateway
   #   webhook.received              — generic inbound webhook via the gateway

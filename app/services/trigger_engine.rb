@@ -6,7 +6,7 @@
 # call into WorkflowService.start:
 #
 #   • column auto-binding   → TaskService.check_auto_trigger → fire_for_column_binding
-#   • task wait resolution  → TaskService.resolve_gate/remove_gate → check_auto_trigger
+#   • task gate resolution  → TaskService.resolve_gate/remove_gate → check_auto_trigger
 #   • manual launch button  → TaskService.trigger_workflow → fire_for_binding
 #   • Slack / webhook        → Webhooks::ProcessEventJob → publish → dispatch
 #
@@ -78,7 +78,7 @@ class TriggerEngine
     end
 
     # Fire the workflow bound to a legacy ColumnWorkflowBinding (auto column move
-    # / wait resolution). Records the event, then fires once.
+    # / gate resolution). Records the event, then fires once.
     def fire_for_column_binding(binding:, task:, actor:)
       event = record_event(
         event_type: "board.column.auto_triggered",

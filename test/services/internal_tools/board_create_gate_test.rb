@@ -29,7 +29,7 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
 
   # == github_checks_completed ==
 
-  test "creates a github_checks_completed wait with valid params" do
+  test "creates a github_checks_completed gate with valid params" do
     result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
@@ -74,8 +74,8 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
       session: @session
     ).execute
 
-    wait = Gate.last
-    assert_equal @user, wait.creator
+    gate = Gate.last
+    assert_equal @user, gate.creator
   end
 
   # == validation errors ==
@@ -170,7 +170,7 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
 
   # == github_workflow_completed ==
 
-  test "creates a github_workflow_completed wait with valid params" do
+  test "creates a github_workflow_completed gate with valid params" do
     result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
@@ -264,7 +264,7 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
 
   # == gitlab_pipeline_completed ==
 
-  test "creates a gitlab_pipeline_completed wait with valid params" do
+  test "creates a gitlab_pipeline_completed gate with valid params" do
     result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,

@@ -15,7 +15,7 @@ module Api
             @board = create(:board, project: @project)
             @column = create(:board_column, board: @board)
             @task = create(:board_task, board: @board, board_column: @column)
-            @wait = Gate.create!(
+            @gate = Gate.create!(
               board_task: @task,
               creator: @user,
               gate_type: :github_checks_completed,
@@ -25,8 +25,8 @@ module Api
             sign_in @user
           end
 
-          test "destroy removes pending wait" do
-            delete :destroy, params: { project_id: @project.id, task_id: @task.id, id: @wait.id }
+          test "destroy removes pending gate" do
+            delete :destroy, params: { project_id: @project.id, task_id: @task.id, id: @gate.id }
 
             assert_response :no_content
           end

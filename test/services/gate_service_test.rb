@@ -20,15 +20,15 @@ class GateServiceTest < ActiveSupport::TestCase
 
   # == resolve_github_checks ==
 
-  test "resolves a pending wait matching repo and PR number" do
-    wait = @task.gates.create!(
+  test "resolves a pending gate matching repo and PR number" do
+    gate = @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
       creator: @user
     )
 
     TaskService.expects(:resolve_gate).with(
-      wait: wait,
+      gate: gate,
       resolution_data: { conclusion: "success" }
     ).once
 
@@ -39,7 +39,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no waits match the repo" do
+  test "does nothing when no gates match the repo" do
     @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: "other/repo", pr_number: 42 },
@@ -55,7 +55,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no waits match the PR number" do
+  test "does nothing when no gates match the PR number" do
     @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 99 },
@@ -71,7 +71,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no pending waits exist" do
+  test "does nothing when no pending gates exist" do
     @task.gates.create!(
       gate_type: :github_checks_completed,
       status:    :resolved,
@@ -88,23 +88,23 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "resolves multiple matching waits across different tasks" do
+  test "resolves multiple matching gates across different tasks" do
     task2 = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    wait1 = @task.gates.create!(
+    gate1 = @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
       creator: @user
     )
-    wait2 = task2.gates.create!(
+    gate2 = task2.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
       creator: @user
     )
 
-    resolved_waits = []
+    resolved_gates = []
     TaskService.stubs(:resolve_gate).with do |args|
-      resolved_waits << args[:wait]
+      resolved_gates << args[:gate]
       true
     end
 
@@ -114,17 +114,17 @@ class GateServiceTest < ActiveSupport::TestCase
       conclusion: "success"
     )
 
-    assert_includes resolved_waits, wait1
-    assert_includes resolved_waits, wait2
+    assert_includes resolved_gates, gate1
+    assert_includes resolved_gates, gate2
   end
 
-  test "does not resolve waits for tasks in a different project" do
+  test "does not resolve gates for tasks in a different project" do
     other_project = create(:project, company: @company, owner: @user)
     other_board   = create(:board, project: other_project)
     other_column  = create(:board_column, board: other_board)
     other_task    = create(:board_task, board: other_board, board_column: other_column)
 
-    # This wait belongs to a project with no connection to @repo_name
+    # This gate belongs to a project with no connection to @repo_name
     other_task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
@@ -142,15 +142,15 @@ class GateServiceTest < ActiveSupport::TestCase
 
   # == resolve_github_workflow ==
 
-  test "resolves a pending workflow wait matching repo and run_id" do
-    wait = @task.gates.create!(
+  test "resolves a pending workflow gate matching repo and run_id" do
+    gate = @task.gates.create!(
       gate_type: :github_workflow_completed,
       metadata:  { repo_full_name: @repo_name, run_id: 1001 },
       creator: @user
     )
 
     TaskService.expects(:resolve_gate).with(
-      wait: wait,
+      gate: gate,
       resolution_data: { conclusion: "success" }
     ).once
 
@@ -161,7 +161,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no workflow waits match the repo" do
+  test "does nothing when no workflow gates match the repo" do
     @task.gates.create!(
       gate_type: :github_workflow_completed,
       metadata:  { repo_full_name: "other/repo", run_id: 1001 },
@@ -177,7 +177,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no workflow waits match the run_id" do
+  test "does nothing when no workflow gates match the run_id" do
     @task.gates.create!(
       gate_type: :github_workflow_completed,
       metadata:  { repo_full_name: @repo_name, run_id: 9999 },
@@ -193,7 +193,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no pending workflow waits exist" do
+  test "does nothing when no pending workflow gates exist" do
     @task.gates.create!(
       gate_type: :github_workflow_completed,
       status:    :resolved,
@@ -210,7 +210,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does not match github_checks_completed waits when resolving workflow" do
+  test "does not match github_checks_completed gates when resolving workflow" do
     @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
@@ -228,15 +228,15 @@ class GateServiceTest < ActiveSupport::TestCase
 
   # == resolve_gitlab_pipeline ==
 
-  test "resolves a pending gitlab pipeline wait matching repo and pipeline_id" do
-    wait = @task.gates.create!(
+  test "resolves a pending gitlab pipeline gate matching repo and pipeline_id" do
+    gate = @task.gates.create!(
       gate_type: :gitlab_pipeline_completed,
       metadata:  { repo_full_name: @repo_name, pipeline_id: 5000 },
       creator: @user
     )
 
     TaskService.expects(:resolve_gate).with(
-      wait: wait,
+      gate: gate,
       resolution_data: { status: "success" }
     ).once
 
@@ -247,7 +247,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no gitlab pipeline waits match the repo" do
+  test "does nothing when no gitlab pipeline gates match the repo" do
     @task.gates.create!(
       gate_type: :gitlab_pipeline_completed,
       metadata:  { repo_full_name: "other/repo", pipeline_id: 5000 },
@@ -263,7 +263,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when no gitlab pipeline waits match the pipeline_id" do
+  test "does nothing when no gitlab pipeline gates match the pipeline_id" do
     @task.gates.create!(
       gate_type: :gitlab_pipeline_completed,
       metadata:  { repo_full_name: @repo_name, pipeline_id: 9999 },
@@ -279,7 +279,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does nothing when gitlab pipeline wait is already resolved" do
+  test "does nothing when gitlab pipeline gate is already resolved" do
     @task.gates.create!(
       gate_type: :gitlab_pipeline_completed,
       status:    :resolved,
@@ -296,7 +296,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "does not match github waits when resolving gitlab pipeline" do
+  test "does not match github gates when resolving gitlab pipeline" do
     @task.gates.create!(
       gate_type: :github_workflow_completed,
       metadata:  { repo_full_name: @repo_name, run_id: 5000 },

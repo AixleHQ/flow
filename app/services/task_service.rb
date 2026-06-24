@@ -127,22 +127,22 @@ class TaskService
       )
     end
 
-    def resolve_gate(wait:, resolution_data: {})
-      wait.update!(
+    def resolve_gate(gate:, resolution_data: {})
+      gate.update!(
         status: :resolved,
         resolved_at: Time.current,
         resolution_data: resolution_data
       )
 
-      task = wait.board_task
-      check_auto_trigger(task: task, column: task.board_column, actor: wait.creator)
+      task = gate.board_task
+      check_auto_trigger(task: task, column: task.board_column, actor: gate.creator)
     end
 
-    def remove_gate(wait:, actor:)
-      task = wait.board_task
+    def remove_gate(gate:, actor:)
+      task = gate.board_task
       column = task.board_column
 
-      wait.destroy!
+      gate.destroy!
       check_auto_trigger(task: task, column: column, actor: actor)
     end
 

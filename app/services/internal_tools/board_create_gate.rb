@@ -18,14 +18,14 @@ module InternalTools
       metadata = build_metadata(gate_type, task)
       return metadata if metadata.is_a?(Hash) && metadata.key?(:exit_code)
 
-      wait = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
+      gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
 
       success({
-        id:        wait.id,
+        id:        gate.id,
         task_id:   task.id,
-        gate_type: wait.gate_type,
-        status:    wait.status,
-        metadata:  wait.metadata
+        gate_type: gate.gate_type,
+        status:    gate.status,
+        metadata:  gate.metadata
       }.to_json)
     end
 

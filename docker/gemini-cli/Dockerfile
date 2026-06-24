@@ -2,7 +2,7 @@
 # Gemini CLI Interactive Session Image
 #
 # Build context: docker/ (parent dir, for access to base/ scripts)
-# Build command: docker build -f gemini-cli/Dockerfile -t palad/gemini-cli:latest .
+# Build command: docker build -f gemini-cli/Dockerfile -t aixle/gemini-cli:latest .
 # =============================================================================
 ARG BASE_IMAGE=aixle/agent-base-core:latest
 FROM ${BASE_IMAGE}

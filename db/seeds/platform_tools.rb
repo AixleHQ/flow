@@ -176,13 +176,13 @@ module Seeds
       },
       {
         name: "board_create_gate",
-        display_name: "Board Create Wait",
-        description: "Create a Wait on a board task. The auto-workflow for the task's column will not fire until all Waits are resolved.",
+        display_name: "Board Create Gate",
+        description: "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all Gates are resolved.",
         input_schema: {
           type: "object",
           properties: {
             task_id:        { type: "integer", description: "Board task ID" },
-            gate_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed, github_workflow_completed" },
+            gate_type:      { type: "string",  description: "Gate type. Supported: github_checks_completed, github_workflow_completed" },
             repo_full_name: { type: "string",  description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo" },
             pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" },
             run_id:         { type: "integer", description: "(github_workflow_completed) GitHub Actions workflow run ID" }

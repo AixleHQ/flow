@@ -6,7 +6,7 @@ class TaskStatisticsService
     keyword_init: true
   )
 
-  WaitStat = Struct.new(
+  GateStat = Struct.new(
     :id, :gate_type, :status, :created_at, :resolved_at, :duration_seconds,
     keyword_init: true
   )
@@ -95,15 +95,15 @@ class TaskStatisticsService
   end
 
   def build_gate_stats
-    @task.gates.order(:created_at).map do |wait|
-      resolved_at = wait.resolved? ? wait.resolved_at : nil
-      duration = resolved_at ? (resolved_at - wait.created_at).round : nil
+    @task.gates.order(:created_at).map do |gate|
+      resolved_at = gate.resolved? ? gate.resolved_at : nil
+      duration = resolved_at ? (resolved_at - gate.created_at).round : nil
 
-      WaitStat.new(
-        id: wait.id,
-        gate_type: wait.gate_type,
-        status: wait.status,
-        created_at: wait.created_at,
+      GateStat.new(
+        id: gate.id,
+        gate_type: gate.gate_type,
+        status: gate.status,
+        created_at: gate.created_at,
         resolved_at: resolved_at,
         duration_seconds: duration
       )
