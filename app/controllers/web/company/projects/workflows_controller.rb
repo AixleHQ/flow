@@ -35,7 +35,9 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       workflow: WorkflowResource.new(workflow).to_h,
       steps: workflow.steps.not_deleted.map { |s| StepResource.new(s).to_h },
       read_only: workflow.scope_type == "Company",
-      board_columns: current_project.board&.board_columns&.map { |c| { id: c.id, name: c.name } } || [],
+      board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.map { |c|
+        { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
+      } || [],
       configured_agents: current_user.configured_agents,
       agents: InertiaRails.defer(group: "resources") {
         Agent.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }

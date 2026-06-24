@@ -28,6 +28,7 @@ import {
   IconTrash,
   IconWebhook,
 } from '@tabler/icons-react';
+import cronstrue from 'cronstrue';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
@@ -36,6 +37,7 @@ import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } fro
 interface ColumnOption {
   id: number;
   name: string;
+  boundWorkflowName?: string | null;
 }
 
 interface Trigger {
@@ -70,6 +72,43 @@ const KIND_META: Record<string, { label: string; color: string; icon: typeof Ico
   schedule: { label: 'Schedule', color: 'green', icon: IconBolt },
   event: { label: 'Event', color: 'blue', icon: IconBolt },
 };
+
+// IANA timezone list from the runtime (falls back to UTC if unsupported).
+const TIMEZONES: string[] = (() => {
+  try {
+    const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+    return intl.supportedValuesOf?.('timeZone') ?? ['UTC'];
+  } catch {
+    return ['UTC'];
+  }
+})();
+
+// Append the current UTC offset to a timezone, e.g. "Europe/Belgrade (UTC+02:00)".
+function tzLabel(tz: string): string {
+  try {
+    const raw =
+      new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+        .formatToParts(new Date())
+        .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
+    const offset = raw === 'GMT' ? 'UTC+00:00' : raw.replace('GMT', 'UTC');
+    return `${tz} (${offset})`;
+  } catch {
+    return tz;
+  }
+}
+
+const TIMEZONE_OPTIONS = TIMEZONES.map((tz) => ({ value: tz, label: tzLabel(tz) }));
+
+// Human-readable description of a cron expression (e.g. "At 09:00, Monday through Friday").
+function describeCron(expr: string): { ok: boolean; text: string } {
+  const value = expr.trim();
+  if (!value) return { ok: false, text: 'Enter a cron expression' };
+  try {
+    return { ok: true, text: cronstrue.toString(value, { throwExceptionOnParseError: true, verbose: false }) };
+  } catch {
+    return { ok: false, text: 'Not a valid cron expression' };
+  }
+}
 
 export function WorkflowTriggersDrawer({ opened, onClose, projectId, workflowId, columns }: Props) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
@@ -222,8 +261,10 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<{ url: string; secret: string } | null>(null);
 
-  // column
-  const [columnId, setColumnId] = useState<string | null>(columns[0]?.id?.toString() ?? null);
+  // column — default to the first column not already bound to a workflow
+  const [columnId, setColumnId] = useState<string | null>(
+    (columns.find((c) => !c.boundWorkflowName) ?? columns[0])?.id?.toString() ?? null,
+  );
   const [mode, setMode] = useState('auto');
   const [cooldown, setCooldown] = useState<number | string>(5);
   // slack
@@ -243,6 +284,14 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
   const [subjectColumnId, setSubjectColumnId] = useState<string | null>(columns[0]?.id?.toString() ?? null);
 
   const columnData = columns.map((c) => ({ value: c.id.toString(), label: c.name }));
+  // For the column-enter trigger: a column already bound to a workflow is taken
+  // (one binding per column), so disable it and show which workflow holds it.
+  const columnBindingData = columns.map((c) => ({
+    value: c.id.toString(),
+    label: c.boundWorkflowName ? `${c.name} (→ ${c.boundWorkflowName})` : c.name,
+    disabled: Boolean(c.boundWorkflowName),
+  }));
+  const cronDesc = describeCron(cron);
 
   const submit = useCallback(async () => {
     setSaving(true);
@@ -345,10 +394,11 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         <>
           <Select
             label="Column"
-            data={columnData}
+            data={columnBindingData}
             value={columnId}
             onChange={setColumnId}
             placeholder="Pick a column"
+            searchable
           />
           <Group grow>
             <Box>
@@ -374,15 +424,22 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         <>
           <TextInput
             label="Cron"
+            description="minute · hour · day-of-month · month · day-of-week"
             placeholder="0 9 * * 1-5"
             value={cron}
             onChange={(e) => setCron(e.currentTarget.value)}
+            error={cron.trim() && !cronDesc.ok ? 'Invalid cron' : undefined}
           />
-          <TextInput
+          <Text size="xs" c={cronDesc.ok ? 'teal' : 'dimmed'}>
+            {cronDesc.ok ? `Runs: ${cronDesc.text}` : cronDesc.text}
+          </Text>
+          <Select
             label="Timezone"
-            placeholder="UTC"
+            data={TIMEZONE_OPTIONS}
             value={timezone}
-            onChange={(e) => setTimezone(e.currentTarget.value)}
+            onChange={(v) => setTimezone(v ?? 'UTC')}
+            searchable
+            nothingFoundMessage="No timezone"
           />
           <Text size="xs" c="dimmed">
             A timer starts a workflow, not a task — unless you pick “Create a task” below.
@@ -478,7 +535,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         <Button variant="default" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={submit} loading={saving}>
+        <Button onClick={submit} loading={saving} disabled={kind === 'schedule' && !cronDesc.ok}>
           Add trigger
         </Button>
       </Group>

@@ -150,7 +150,7 @@ interface Props {
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   configuredAgents: string[];
-  boardColumns?: { id: number; name: string }[];
+  boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
 }
 
 const AVAILABLE_RUNTIMES = [
@@ -1267,7 +1267,6 @@ const BuilderPage = () => {
                           value={toStringArr(selectedStep.assetIds)}
                           onChange={(v) => updateStepField(selectedStep.id, 'assetIds', toNumberArr(v), true)}
                           placeholder="Select assets..."
-                          description="Loaded into this step's container, in addition to workflow base assets"
                           disabled={readOnly}
                           searchable
                         />
