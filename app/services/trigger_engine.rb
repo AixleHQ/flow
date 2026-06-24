@@ -57,14 +57,19 @@ class TriggerEngine
     end
 
     # Fire the workflow bound to a TriggerBinding (Slack/webhook/custom source).
+    # The binding's subject_policy decides what board task (if any) the run is
+    # about: none → task-less project run; existing_task → the event's task;
+    # create_task → a fresh card in the binding's subject_column.
     def fire_for_binding(binding:, event:, task: nil, actor: nil)
       actor ||= binding.created_by
       return nil if actor.nil? # a run requires a user
 
+      subject = resolve_subject(binding: binding, event: event, fallback_task: task)
+
       fire_workflow(
         workflow: binding.workflow,
         project: binding.project,
-        task: task,
+        task: subject,
         actor: actor,
         event: event,
         source: "trigger_binding:#{binding.id}",
@@ -127,6 +132,38 @@ class TriggerEngine
     end
 
     private
+
+    # Resolve the board task a binding's run should be about, per subject_policy.
+    def resolve_subject(binding:, event:, fallback_task:)
+      case binding.subject_policy.to_s
+      when "existing_task" then event.board_task || fallback_task
+      when "create_task"   then create_subject_task(binding, event)
+      else nil # none → task-less, project-level run
+      end
+    end
+
+    def create_subject_task(binding, event)
+      column = binding.subject_column
+      return nil if column.nil?
+
+      # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
+      column.board.board_tasks.create!(
+        board_column: column,
+        title: render_title(binding.subject_title_template, event)
+      )
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")
+      nil
+    end
+
+    # Minimal title templating: {{date}} and {{<top-level event.data key>}}.
+    def render_title(template, event)
+      tpl = template.presence || "#{event.event_type} — {{date}}"
+      tpl.gsub(/\{\{\s*([\w.]+)\s*\}\}/) do
+        key = Regexp.last_match(1)
+        key == "date" ? (event.occurred_at || Time.current).to_date.to_s : event.data[key].to_s
+      end.strip.presence || event.event_type
+    end
 
     # Internal events carry no external dedup_key → key on the event id so a
     # dispatch is always unique (never suppresses an expected launch). External

@@ -55,10 +55,16 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'A DAG of steps orchestrated by Temporal — each step is one agent session in one container.',
   },
   {
+    slug: 'workflow-triggers',
+    title: 'Workflow Triggers',
+    section: 'User guide',
+    desc: 'How workflows start: column bindings, manual, schedule, Slack and webhooks; triggers vs gates (waits); subject_policy; the webhook start API.',
+  },
+  {
     slug: 'integrations',
     title: 'Integrations',
     section: 'User guide',
-    desc: 'Connect Aixle Flow with GitHub, GitLab, Linear, and Google OAuth.',
+    desc: 'Connect Aixle Flow with GitHub, GitLab, Linear, Coder, and Slack.',
   },
   {
     slug: 'configuration',

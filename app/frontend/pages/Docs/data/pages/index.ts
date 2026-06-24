@@ -11,6 +11,7 @@ import reference from './reference.md?raw';
 import runtimes from './runtimes.md?raw';
 import tools from './tools.md?raw';
 import userGuide from './user-guide.md?raw';
+import workflowTriggers from './workflow-triggers.md?raw';
 import workflows from './workflows.md?raw';
 
 export interface TocItem {
@@ -98,6 +99,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: workflows,
     toc: extractToc(workflows),
+  },
+  'workflow-triggers': {
+    title: 'Workflow Triggers',
+    section: 'User guide',
+    content: workflowTriggers,
+    toc: extractToc(workflowTriggers),
   },
   integrations: {
     title: 'Integrations',

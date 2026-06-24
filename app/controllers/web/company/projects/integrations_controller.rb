@@ -40,6 +40,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
         machine_prefix:   params[:machine_prefix].presence,
         lock_ttl_minutes: params[:lock_ttl_minutes].presence
       )
+    when "slack"
+      Slack::IntegrationService.new(
+        company: current_company,
+        connected_by: current_user,
+        project: current_project
+      ).create(
+        workspace_name: params[:workspace_name].to_s,
+        signing_secret: params[:signing_secret].to_s
+      )
     end
 
     if integration.nil?

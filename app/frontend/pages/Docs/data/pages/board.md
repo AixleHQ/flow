@@ -17,8 +17,10 @@ where every card represents a unit of work — and where automation lives.
 
 ## Column → Workflow Bindings
 
-This is the trigger that makes the board *do* things. Each column can
-have **at most one** `ColumnWorkflowBinding`:
+This is the board-native trigger. Each column can have **at most one**
+`ColumnWorkflowBinding`. It's one of several trigger sources — for schedules,
+Slack and webhooks (and the full model), see
+[Workflow Triggers](/docs/workflow-triggers).
 
 | Field             | Purpose                                                                |
 | ----------------- | ---------------------------------------------------------------------- |
@@ -65,8 +67,9 @@ stack.
 ## Common gotchas
 
 - **A card "stuck" in a bound column** usually means there's a
-  `TaskWait` on it (e.g. a CI check that never completed). Open the
-  card and clear the wait — the binding will re-evaluate.
+  `TaskWait` on it (e.g. a CI check that never completed). A wait is a
+  *gate*, not a trigger — it holds the auto-trigger until it resolves.
+  Open the card and clear the wait, and the binding re-evaluates.
 - **Auto-trigger didn't fire** — check the `cooldown_seconds` window
   and whether the binding was set to `manual` instead of `auto`.
 - **Two workflows on one column** is not supported. Build a single

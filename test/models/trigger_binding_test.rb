@@ -50,6 +50,19 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert binding.matches?("anything" => "goes")
   end
 
+  test "subject_policy defaults to none" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
+    assert_equal "none", binding.subject_policy
+  end
+
+  test "create_task subject_policy requires a subject_column" do
+    binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: nil)
+
+    assert_not binding.valid?
+    assert_includes binding.errors[:subject_column], "is required when subject_policy is create_task"
+  end
+
   test "for_event scopes by project, event_type and enabled" do
     match = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "other.type")

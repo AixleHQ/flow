@@ -120,4 +120,48 @@ class TriggerEngineTest < ActiveSupport::TestCase
     assert TriggerEvent.exists?(event_type: "board.column.auto_triggered", board_task_id: task.id)
     assert_equal 1, TriggerDispatch.count
   end
+
+  # == subject_policy ==
+
+  test "subject_policy none starts a task-less project run" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :none)
+    event = create(:trigger_event, event_type: "slack.message", project: @project)
+
+    WorkflowService.expects(:start).with(has_entries(task: nil, workflow: @workflow)).once.returns(build(:workflow_run))
+
+    TriggerEngine.fire_for_binding(binding: binding, event: event)
+  end
+
+  test "subject_policy create_task creates a card in the subject column and runs on it" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: column,
+      subject_title_template: "Triage: {{text}}")
+    event = create(:trigger_event, event_type: "slack.message", project: @project, data: { "text" => "fix login" })
+
+    WorkflowService.expects(:start).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
+
+    assert_difference -> { BoardTask.count }, 1 do
+      TriggerEngine.fire_for_binding(binding: binding, event: event)
+    end
+
+    task = BoardTask.order(:id).last
+    assert_equal column.id, task.board_column_id
+    assert_equal "Triage: fix login", task.title
+  end
+
+  test "subject_policy existing_task uses the event's task" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column)
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received", subject_policy: :existing_task)
+    event = create(:trigger_event, event_type: "webhook.received", project: @project, board_task: task)
+
+    WorkflowService.expects(:start).with(has_entries(task: task, workflow: @workflow)).once.returns(build(:workflow_run))
+
+    TriggerEngine.fire_for_binding(binding: binding, event: event)
+  end
 end

@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  CopyButton,
   Divider,
   Group,
   Menu,
@@ -21,8 +22,11 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconBrandGithub,
+  IconBrandSlack,
+  IconCheck,
   IconChevronDown,
   IconChevronRight,
+  IconCopy,
   IconLink,
   IconPlus,
   IconSettings,
@@ -44,6 +48,7 @@ export interface Integration {
   coderDefaultTemplate?: string | null;
   coderMachinePrefix?: string | null;
   coderLockTtlMinutes?: number | null;
+  slackRequestUrl?: string | null;
   connectedBy: { id: number; name: string };
   createdAt: string;
 }
@@ -69,6 +74,7 @@ const ProviderIcon = ({ provider, size = 20 }: { provider: string; size?: number
   if (provider === 'github') return <IconBrandGithub size={size} />;
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
+  if (provider === 'slack') return <IconBrandSlack size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -76,6 +82,7 @@ const PROVIDER_ICON_COLORS: Record<string, string> = {
   github: 'dark',
   gitlab: 'orange',
   coder: 'blue',
+  slack: 'grape',
 };
 
 const formatDate = (d: string) =>
@@ -124,6 +131,25 @@ const IntegrationCard = ({
           <Text size="xs" c="dimmed">
             Connected by {integration.connectedBy.name} on {formatDate(integration.createdAt)}
           </Text>
+          {integration.provider === 'slack' && integration.slackRequestUrl && (
+            <Group gap={6} mt={4} wrap="nowrap">
+              <Text size="xs" c="dimmed" ff="monospace" truncate maw={280}>
+                {integration.slackRequestUrl}
+              </Text>
+              <CopyButton value={integration.slackRequestUrl}>
+                {({ copied, copy }) => (
+                  <Button
+                    variant="subtle"
+                    size="compact-xs"
+                    onClick={copy}
+                    leftSection={copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                  >
+                    {copied ? 'Copied' : 'Request URL'}
+                  </Button>
+                )}
+              </CopyButton>
+            </Group>
+          )}
         </Box>
       </Group>
 
@@ -177,6 +203,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
   const [coderAdvancedOpen, setCoderAdvancedOpen] = useState(false);
   const [coderLoading, setCoderLoading] = useState(false);
   const [coderError, setCoderError] = useState<string | null>(null);
+
+  const [slackOpen, setSlackOpen] = useState(false);
+  const [slackWorkspace, setSlackWorkspace] = useState('');
+  const [slackSecret, setSlackSecret] = useState('');
+  const [slackLoading, setSlackLoading] = useState(false);
 
   const resetCoderForm = useCallback(() => {
     setCoderUrl('');
@@ -302,6 +333,27 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
 
+  const closeSlackModal = useCallback(() => {
+    setSlackOpen(false);
+    setSlackWorkspace('');
+    setSlackSecret('');
+  }, []);
+
+  const handleConnectSlack = useCallback(() => {
+    if (!slackSecret.trim()) return;
+    setSlackLoading(true);
+    router.post(
+      basePath,
+      { provider: 'slack', workspaceName: slackWorkspace.trim(), signingSecret: slackSecret.trim() },
+      {
+        preserveScroll: true,
+        onSuccess: () => closeSlackModal(),
+        onError: () => notifications.show({ message: 'Failed to connect Slack', color: 'red' }),
+        onFinish: () => setSlackLoading(false),
+      },
+    );
+  }, [basePath, closeSlackModal, slackSecret, slackWorkspace]);
+
   const alreadyLinkedInstallationIds = useMemo(
     () => new Set(projectIntegrations.filter((i) => i.installationId).map((i) => i.installationId)),
     [projectIntegrations],
@@ -369,6 +421,9 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             </Menu.Item>
             <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
               Coder
+            </Menu.Item>
+            <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={() => setSlackOpen(true)}>
+              Slack
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
@@ -532,6 +587,40 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                 !(typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0)
               }
             >
+              Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={slackOpen} onClose={closeSlackModal} title="Connect Slack" centered size="sm">
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Create an Aixle app in your Slack workspace, then paste its <b>Signing Secret</b>. After connecting, copy
+            the generated Request URL into the app&apos;s Event Subscriptions.
+          </Text>
+          <TextInput
+            label="Workspace name"
+            placeholder="Acme HQ"
+            value={slackWorkspace}
+            onChange={(e) => setSlackWorkspace(e.currentTarget.value)}
+            autoFocus
+          />
+          <PasswordInput
+            label="Signing secret"
+            placeholder="••••••••"
+            value={slackSecret}
+            onChange={(e) => setSlackSecret(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleConnectSlack();
+            }}
+            required
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeSlackModal}>
+              Cancel
+            </Button>
+            <Button onClick={handleConnectSlack} loading={slackLoading} disabled={!slackSecret.trim()}>
               Connect
             </Button>
           </Group>
