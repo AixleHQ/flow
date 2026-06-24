@@ -121,6 +121,62 @@ class TriggerEngineTest < ActiveSupport::TestCase
     assert_equal 1, TriggerDispatch.count
   end
 
+  # == relay / outbox dispatch_pending ==
+
+  test "dispatch_pending marks the event dispatched and is a no-op on re-call" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", filter_predicate: {})
+    event = create(:trigger_event, event_type: "slack.message", project: @project, relay_state: "pending")
+
+    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+
+    TriggerEngine.dispatch_pending(event)
+    assert_equal "dispatched", event.reload.relay_state
+
+    # Already dispatched → re-call does nothing (no second start).
+    TriggerEngine.dispatch_pending(event)
+    assert_equal 1, TriggerDispatch.count
+  end
+
+  test "fire_workflow resumes a dispatch left matched-but-unstarted (crash recovery)" do
+    event = create(:trigger_event, event_type: TriggerEngine::COLUMN_EVENT_TYPE, project: @project)
+    # Simulate a crash after the ledger insert but before WorkflowService.start:
+    # the dispatch row exists with status "matched" and no run.
+    TriggerDispatch.create!(
+      trigger_event: event, source: "column_workflow_binding",
+      dedup_key: "event:#{event.id}:column_workflow_binding", status: "matched"
+    )
+
+    run = build(:workflow_run)
+    WorkflowService.expects(:start).once.returns(run)
+
+    result = TriggerEngine.fire_workflow(
+      workflow: @workflow, project: @project, task: nil, actor: @user,
+      event: event, source: "column_workflow_binding"
+    )
+
+    assert_equal run, result
+    assert_equal 1, TriggerDispatch.count
+  end
+
+  test "fire_workflow does not restart a dispatch that already produced a run" do
+    event = create(:trigger_event, event_type: TriggerEngine::COLUMN_EVENT_TYPE, project: @project)
+    existing_run = create(:workflow_run, project: @project, workflow: @workflow, user: @user)
+    TriggerDispatch.create!(
+      trigger_event: event, source: "column_workflow_binding",
+      dedup_key: "event:#{event.id}:column_workflow_binding",
+      status: "started", workflow_run: existing_run
+    )
+
+    WorkflowService.expects(:start).never
+
+    assert_equal existing_run, TriggerEngine.fire_workflow(
+      workflow: @workflow, project: @project, task: nil, actor: @user,
+      event: event, source: "column_workflow_binding"
+    )
+  end
+
   # == subject_policy ==
 
   test "subject_policy none starts a task-less project run" do

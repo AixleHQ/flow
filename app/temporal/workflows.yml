@@ -11,6 +11,12 @@ workflows:
       - name: workflow_fire_schedule_trigger_activity
         task_queue: aixle_ruby
 
+  - name: outbox_relay_workflow
+    owner: aixle_ruby
+    activities:
+      - name: outbox_relay_drain_activity
+        task_queue: aixle_ruby
+
   - name: stale_session_cleanup_workflow
     owner: aixle_ruby
     activities:

@@ -8,12 +8,15 @@ module Activities
       def run(input)
         binding = TriggerBinding.find(input.trigger_binding_id)
 
+        # Recorded as "dispatched": this activity fires the binding itself and
+        # Temporal already retries it, so the outbox relay must not re-sweep it.
         event = TriggerEngine.record_event(
           event_type: TriggerBinding::SCHEDULE_EVENT_TYPE,
           source: "schedule_trigger:#{binding.id}",
           subject: binding.id,
           data: { "trigger_binding_id" => binding.id, "fired_at" => Time.current.iso8601 },
-          project: binding.project
+          project: binding.project,
+          relay_state: "dispatched"
         )
 
         run = TriggerEngine.fire_for_binding(binding: binding, event: event, actor: binding.created_by)

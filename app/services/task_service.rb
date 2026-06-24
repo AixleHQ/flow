@@ -5,11 +5,20 @@ class TaskService
     def create(board:, params:, actor:)
       task = board.board_tasks.build(params)
 
-      if task.save
-        record_activity(board, :task_created, actor, task: task,
-          metadata: { title: task.title, task_type: task.task_type })
-        check_auto_trigger(task: task, column: task.board_column, actor: actor)
+      pending_event = nil
+      saved = false
+      ActiveRecord::Base.transaction do
+        saved = task.save
+        raise ActiveRecord::Rollback unless saved
+        # Record the auto-trigger event atomically with the task so a crash can't
+        # leave the task created but the trigger lost (it is dispatched below).
+        pending_event = record_pending_auto_trigger(task: task, column: task.board_column, actor: actor)
       end
+      return task unless saved
+
+      record_activity(board, :task_created, actor, task: task,
+        metadata: { title: task.title, task_type: task.task_type })
+      TriggerEngine.dispatch_pending(pending_event) if pending_event
 
       task
     end
@@ -41,6 +50,7 @@ class TaskService
       from_column = task.board_column
       column_changed = from_column.id != to_column.id
 
+      pending_event = nil
       ActiveRecord::Base.transaction do
         task.lock!
 
@@ -54,6 +64,10 @@ class TaskService
 
         new_pos = position || (to_column.board_tasks.maximum(:position).to_i + 1)
         task.update!(board_column: to_column, position: new_pos)
+
+        # Record the auto-trigger event atomically with the move; it is dispatched
+        # inline below (and recovered by the relay if this process then dies).
+        pending_event = record_pending_auto_trigger(task: task, column: to_column, actor: actor) if column_changed
       end
 
       if column_changed
@@ -63,7 +77,7 @@ class TaskService
         )
         record_activity(task.board, :task_moved, actor, task: task,
           metadata: { from_column: from_column.name, to_column: to_column.name })
-        check_auto_trigger(task: task, column: to_column, actor: actor)
+        TriggerEngine.dispatch_pending(pending_event) if pending_event
       end
 
       task.reload
@@ -109,52 +123,76 @@ class TaskService
       end
 
       event = TriggerEngine.record_event(
-        event_type: "workflow.manual_requested",
+        event_type: TriggerEngine::MANUAL_EVENT_TYPE,
         source: "manual",
         subject: task.id,
         data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id },
         project: task.board.project,
-        board_task: task
+        board_task: task,
+        actor: actor,
+        relay_state: "pending"
       )
 
-      TriggerEngine.fire_workflow(
-        workflow: binding.workflow,
-        project: task.board.project,
-        task: task,
-        actor: actor,
-        event: event,
-        source: "manual"
-      )
+      run = TriggerEngine.dispatch_pending(event).first
+      run || { error: "Workflow could not be started" }
     end
 
     def resolve_gate(gate:, resolution_data: {})
-      gate.update!(
-        status: :resolved,
-        resolved_at: Time.current,
-        resolution_data: resolution_data
-      )
+      pending_event = nil
+      ActiveRecord::Base.transaction do
+        gate.update!(
+          status: :resolved,
+          resolved_at: Time.current,
+          resolution_data: resolution_data
+        )
+        task = gate.board_task
+        pending_event = record_pending_auto_trigger(task: task, column: task.board_column, actor: gate.creator)
+      end
 
-      task = gate.board_task
-      check_auto_trigger(task: task, column: task.board_column, actor: gate.creator)
+      TriggerEngine.dispatch_pending(pending_event) if pending_event
     end
 
     def remove_gate(gate:, actor:)
       task = gate.board_task
       column = task.board_column
 
-      gate.destroy!
-      check_auto_trigger(task: task, column: column, actor: actor)
+      pending_event = nil
+      ActiveRecord::Base.transaction do
+        gate.destroy!
+        pending_event = record_pending_auto_trigger(task: task, column: column, actor: actor)
+      end
+
+      TriggerEngine.dispatch_pending(pending_event) if pending_event
     end
 
+    # Record a pending column-trigger event and dispatch it inline. A convenience
+    # wrapper around the in-transaction outbox path for callers that auto-trigger
+    # outside a domain transaction (and for tests). Returns the WorkflowRun or nil.
     def check_auto_trigger(task:, column:, actor:)
-      binding = column.column_workflow_binding
-      return unless binding&.trigger_mode&.to_sym == :auto
-      return if task.gates.pending.exists?
-      return if quota_block_auto_trigger?(binding, column)
-
-      TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: actor)
+      event = record_pending_auto_trigger(task: task, column: column, actor: actor)
+      TriggerEngine.dispatch_pending(event).first if event
     rescue StandardError => e
       Rails.logger.error("[TaskService] Auto-trigger failed: #{e.message}")
+      nil
+    end
+
+    # Apply the auto-trigger guards and, if they pass, record a pending
+    # column-trigger event (the transactional-outbox row). Returns the recorded
+    # TriggerEvent or nil. MUST be called inside the producer's transaction so the
+    # event commits atomically with the domain write; the caller dispatches it
+    # after the transaction commits (and OutboxRelay recovers it on a crash).
+    #
+    # No rescue here on purpose: a failure to record must roll the whole
+    # transaction back (atomic-or-nothing), not silently drop the trigger while
+    # committing the domain write. The out-of-transaction check_auto_trigger
+    # wrapper above is where best-effort error handling lives.
+    def record_pending_auto_trigger(task:, column:, actor:)
+      binding = column.column_workflow_binding
+      return nil unless binding&.trigger_mode&.to_sym == :auto
+      return nil if task.gates.pending.exists?
+      return nil if quota_block_auto_trigger?(binding, column)
+
+      TriggerEngine.record_column_trigger(binding: binding, task: task, actor: actor)
     end
 
     private

@@ -153,11 +153,28 @@ body. Slack endpoints also answer the `url_verification` handshake automatically
 
 > **warning** The cooldown is rate-limiting, not correctness. Idempotency comes from the delivery-id dedup and the dispatch ledger.
 
+## Delivery guarantees (transactional outbox)
+
+Board-native triggers (a task entering a column, a gate resolving, the manual
+**Run** button) face a classic dual-write hazard: the task move commits, then the
+process dies before the workflow is launched, and the trigger is lost. To prevent
+that, those producers record the `trigger_event` **in the same database
+transaction as the move/gate change** (`relay_state: pending`), then dispatch it
+inline. Either both commit or neither does.
+
+A **relay** — a Temporal cron (`outbox_relay_workflow`, every minute, SKIP-overlap)
+— sweeps any event left `pending` past a short grace window (a crash victim) and
+dispatches it. So delivery is **at-least-once**, and the dispatch ledger keeps it
+to a single launch. The happy path is still the inline dispatch; the relay only
+recovers from a crash, so a restart never drops a trigger.
+
+> **note** A workflow can, in rare crash windows, be *started* twice (the relay re-launches what a dying process may have already begun). The dispatch ledger collapses this to one run in the common case; design long-running side effects to tolerate at-least-once.
+
 ## Data model
 
 | Table | Role |
 | ----- | ---- |
-| `trigger_events` | the normalized event envelope + audit/replay log |
+| `trigger_events` | the normalized event envelope + audit/replay log; also the transactional **outbox** (`relay_state`) |
 | `trigger_bindings` | off-board standing triggers (schedule / Slack / webhook) |
 | `trigger_dispatches` | audit + idempotency ledger (`event → trigger → run`) |
 | `webhook_endpoints` | a registered inbound source (slug, provider, verification, secret) |

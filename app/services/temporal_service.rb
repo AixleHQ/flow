@@ -157,13 +157,24 @@ class TemporalService
               cron_expressions: [ schedule_def.cron ],
             ),
             policy: Temporalio::Client::Schedule::Policy.new(
-              overlap: Temporalio::Client::Schedule::OverlapPolicy::BUFFER_ONE
+              overlap: schedule_overlap_policy(schedule_def)
             ),
           )
         ) if schedule_def.enabled
       end
     rescue Temporalio::Error::ScheduleAlreadyRunningError => e
       Rails.logger.warn("[Temporal] Schedule #{workflow&.name} already exists: #{e.message}")
+    end
+
+    # Per-schedule overlap policy. Defaults to BUFFER_ONE (queue one), but a
+    # schedule can opt into SKIP via `overlap: skip` in schedules.yml — used by the
+    # outbox relay, which is idempotent and must never run two drains at once.
+    def schedule_overlap_policy(schedule_def)
+      if schedule_def.overlap.to_s == "skip"
+        Temporalio::Client::Schedule::OverlapPolicy::SKIP
+      else
+        Temporalio::Client::Schedule::OverlapPolicy::BUFFER_ONE
+      end
     end
 
     def delete_schedules
