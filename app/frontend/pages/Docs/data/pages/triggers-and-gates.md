@@ -1,6 +1,8 @@
-# Workflow Triggers
+# Triggers and Gates
 
-A **trigger** answers one question: *when should a workflow run start?* Aixle
+A **trigger** answers one question: *when should a workflow run start?* A **gate**
+answers the opposite: *what must hold before a started run is allowed to proceed?*
+Triggers start runs; gates defer them. Aixle
 Flow funnels every source — a card moving columns, a timer, a Slack message,
 an inbound webhook, a manual click — through one pipeline:
 

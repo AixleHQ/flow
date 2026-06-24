@@ -20,7 +20,7 @@ where every card represents a unit of work — and where automation lives.
 This is the board-native trigger. Each column can have **at most one**
 `ColumnWorkflowBinding`. It's one of several trigger sources — for schedules,
 Slack and webhooks (and the full model), see
-[Workflow Triggers](/docs/workflow-triggers).
+[Triggers and Gates](/docs/triggers-and-gates).
 
 | Field             | Purpose                                                                |
 | ----------------- | ---------------------------------------------------------------------- |

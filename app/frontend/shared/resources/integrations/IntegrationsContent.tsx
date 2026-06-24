@@ -404,7 +404,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
           <Title order={2}>{title}</Title>
           <Text size="sm" c="dimmed" mt={2}>
             {isProjectContext
-              ? 'Connect GitHub or GitLab for this project, or use company-wide integrations'
+              ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
               : 'Connect external services to your company'}
           </Text>
         </Box>
@@ -439,18 +439,23 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               <Text fw={500} size="lg">
                 No integrations connected
               </Text>
-              <Text size="sm" c="dimmed" mt={4} maw={400}>
-                {isProjectContext
-                  ? 'Add a project-scoped GitHub or GitLab installation, or rely on company integrations'
-                  : 'Connect GitHub or GitLab to access repositories in agent sessions'}
+              <Text size="sm" c="dimmed" mt={4} maw={440}>
+                Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from
+                messages.
               </Text>
             </Box>
-            <Group gap="sm">
+            <Group gap="sm" justify="center" wrap="wrap">
               <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-                Connect GitHub
+                GitHub
               </Button>
               <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-                Connect GitLab
+                GitLab
+              </Button>
+              <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                Coder
+              </Button>
+              <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={() => setSlackOpen(true)}>
+                Slack
               </Button>
             </Group>
           </Stack>

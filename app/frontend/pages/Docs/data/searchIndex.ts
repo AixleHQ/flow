@@ -55,10 +55,10 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'A DAG of steps orchestrated by Temporal — each step is one agent session in one container.',
   },
   {
-    slug: 'workflow-triggers',
-    title: 'Workflow Triggers',
+    slug: 'triggers-and-gates',
+    title: 'Triggers and Gates',
     section: 'User guide',
-    desc: 'How workflows start: column bindings, manual, schedule, Slack and webhooks; triggers vs gates (waits); subject_policy; the webhook start API.',
+    desc: 'How workflows start and pause: triggers (column, manual, schedule, Slack, webhook) vs gates (CI waits); subject_policy; the webhook start API.',
   },
   {
     slug: 'integrations',

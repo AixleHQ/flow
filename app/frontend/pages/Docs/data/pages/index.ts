@@ -10,8 +10,8 @@ import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
 import runtimes from './runtimes.md?raw';
 import tools from './tools.md?raw';
+import triggersAndGates from './triggers-and-gates.md?raw';
 import userGuide from './user-guide.md?raw';
-import workflowTriggers from './workflow-triggers.md?raw';
 import workflows from './workflows.md?raw';
 
 export interface TocItem {
@@ -100,11 +100,11 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     content: workflows,
     toc: extractToc(workflows),
   },
-  'workflow-triggers': {
-    title: 'Workflow Triggers',
+  'triggers-and-gates': {
+    title: 'Triggers and Gates',
     section: 'User guide',
-    content: workflowTriggers,
-    toc: extractToc(workflowTriggers),
+    content: triggersAndGates,
+    toc: extractToc(triggersAndGates),
   },
   integrations: {
     title: 'Integrations',

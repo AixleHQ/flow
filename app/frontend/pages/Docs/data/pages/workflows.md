@@ -85,7 +85,7 @@ A `WorkflowRun` can be triggered by:
 - a schedule, a Slack message, or an inbound webhook,
 - the API (`POST /api/v1/projects/:id/workflow_runs`).
 
-> **info** All of these flow through one event pipeline, and each off-board trigger carries a `subject_policy` deciding whether the run gets a board task. See [Workflow Triggers](/docs/workflow-triggers) for the full model — including why a CI **wait** is a *gate*, not a trigger.
+> **info** All of these flow through one event pipeline, and each off-board trigger carries a `subject_policy` deciding whether the run gets a board task. See [Triggers and Gates](/docs/triggers-and-gates) for the full model — including why a CI **wait** is a *gate*, not a trigger.
 
 ## Approval gates and human-in-the-loop
 
