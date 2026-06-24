@@ -185,6 +185,42 @@ class TemporalService
     rescue Temporalio::Error::RPCError => e
     end
 
+    # Create a dynamic, per-record schedule (e.g. for a user's schedule trigger)
+    # with a caller-supplied stable schedule_id and input. Fires the
+    # ScheduledTriggerWorkflow on the given cron (optionally in a timezone).
+    def create_binding_schedule(schedule_id:, cron:, input:, timezone: nil)
+      workflow = TemporalWorkflowRegistry.workflows["scheduled_trigger_workflow"]
+      return if workflow.nil?
+
+      with_test_environment_handling do |cl|
+        cl.create_schedule(
+          schedule_id,
+          Temporalio::Client::Schedule.new(
+            action: Temporalio::Client::Schedule::Action::StartWorkflow.new(
+              workflow.name, input, id: "#{schedule_id}-run", task_queue: workflow.owner
+            ),
+            spec: Temporalio::Client::Schedule::Spec.new(
+              cron_expressions: [ cron ],
+              time_zone_name: timezone.presence
+            ),
+            policy: Temporalio::Client::Schedule::Policy.new(
+              overlap: Temporalio::Client::Schedule::OverlapPolicy::SKIP
+            )
+          )
+        )
+      end
+    rescue Temporalio::Error::ScheduleAlreadyRunningError => e
+      Rails.logger.warn("[Temporal] Schedule #{schedule_id} already exists: #{e.message}")
+    end
+
+    def delete_binding_schedule(schedule_id)
+      with_test_environment_handling do |cl|
+        cl.schedule_handle(schedule_id).delete
+      end
+    rescue Temporalio::Error::RPCError => e
+      Rails.logger.warn("[Temporal] Failed to delete schedule #{schedule_id}: #{e.message}")
+    end
+
     def enabled?
       Settings.temporal.enabled.to_s == "true"
     end

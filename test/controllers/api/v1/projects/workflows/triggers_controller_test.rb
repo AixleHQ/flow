@@ -70,6 +70,19 @@ module Api
             assert_equal 7, json["cooldown_seconds"]
           end
 
+          test "create schedule trigger persists schedule_config" do
+            assert_difference -> { TriggerBinding.count }, 1 do
+              post :create, params: {
+                project_id: @project.id, workflow_id: @workflow.id,
+                trigger: { kind: "schedule", schedule_config: { cron: "0 9 * * 1-5", timezone: "UTC" }, subject_policy: "none" }
+              }
+            end
+            assert_response :created
+            assert_equal "schedule", json["kind"]
+            assert_equal "schedule.fired", json["event_type"]
+            assert_equal "0 9 * * 1-5", json["schedule_config"]["cron"]
+          end
+
           test "unsupported kind is rejected" do
             post :create, params: { project_id: @project.id, workflow_id: @workflow.id, trigger: { kind: "nonsense" } }
             assert_response :unprocessable_entity

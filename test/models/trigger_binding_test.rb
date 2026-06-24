@@ -63,6 +63,14 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_includes binding.errors[:subject_column], "is required when subject_policy is create_task"
   end
 
+  test "schedule binding requires a cron in schedule_config" do
+    binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "schedule.fired", schedule_config: {})
+
+    assert_not binding.valid?
+    assert_includes binding.errors[:schedule_config], "must include a cron expression"
+  end
+
   test "for_event scopes by project, event_type and enabled" do
     match = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "other.type")

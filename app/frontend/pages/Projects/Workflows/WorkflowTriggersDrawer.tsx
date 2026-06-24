@@ -50,6 +50,7 @@ interface Trigger {
   board_column_id?: number;
   subject_policy?: string;
   filter_predicate?: Record<string, unknown>;
+  schedule_config?: { cron?: string; timezone?: string };
 }
 
 interface Props {
@@ -60,7 +61,7 @@ interface Props {
   columns: ColumnOption[];
 }
 
-type Kind = 'column' | 'slack' | 'webhook';
+type Kind = 'column' | 'slack' | 'webhook' | 'schedule';
 
 const KIND_META: Record<string, { label: string; color: string; icon: typeof IconBolt }> = {
   column: { label: 'Task enters column', color: 'teal', icon: IconColumns },
@@ -197,6 +198,10 @@ export function WorkflowTriggersDrawer({ opened, onClose, projectId, workflowId,
 
 function triggerSummary(t: Trigger): string {
   if (t.kind === 'column') return `${t.column_name ?? 'column'} · ${t.trigger_mode} · cooldown ${t.cooldown_seconds}s`;
+  if (t.kind === 'schedule') {
+    const cfg = t.schedule_config ?? {};
+    return `${cfg.cron ?? '—'} · ${cfg.timezone ?? 'UTC'} · subject: ${t.subject_policy ?? 'none'}`;
+  }
   const parts: string[] = [];
   const pred = t.filter_predicate ?? {};
   Object.keys(pred).forEach((k) => parts.push(k));
@@ -230,6 +235,9 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
   const [condField, setCondField] = useState('');
   const [condOp, setCondOp] = useState('eq');
   const [condValue, setCondValue] = useState('');
+  // schedule
+  const [cron, setCron] = useState('0 9 * * 1-5');
+  const [timezone, setTimezone] = useState('UTC');
   // shared subject
   const [subjectPolicy, setSubjectPolicy] = useState('none');
   const [subjectColumnId, setSubjectColumnId] = useState<string | null>(columns[0]?.id?.toString() ?? null);
@@ -254,6 +262,8 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         if (condField.trim()) {
           filter[condField.trim()] = condOp === 'eq' ? condValue : { op: condOp, value: condValue };
         }
+      } else if (kind === 'schedule') {
+        trigger.schedule_config = { cron: cron.trim(), timezone: timezone.trim() || 'UTC' };
       }
       trigger.filter_predicate = filter;
       trigger.subject_policy = subjectPolicy;
@@ -292,6 +302,8 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
     condField,
     condOp,
     condValue,
+    cron,
+    timezone,
     subjectPolicy,
     subjectColumnId,
     projectId,
@@ -323,6 +335,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         onChange={(v) => setKind(v as Kind)}
         data={[
           { value: 'column', label: 'Column' },
+          { value: 'schedule', label: 'Schedule' },
           { value: 'slack', label: 'Slack' },
           { value: 'webhook', label: 'Webhook' },
         ]}
@@ -354,6 +367,33 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             </Box>
             <NumberInput label="Cooldown (s)" value={cooldown} onChange={setCooldown} min={0} />
           </Group>
+        </>
+      )}
+
+      {kind === 'schedule' && (
+        <>
+          <TextInput
+            label="Cron"
+            placeholder="0 9 * * 1-5"
+            value={cron}
+            onChange={(e) => setCron(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Timezone"
+            placeholder="UTC"
+            value={timezone}
+            onChange={(e) => setTimezone(e.currentTarget.value)}
+          />
+          <Text size="xs" c="dimmed">
+            A timer starts a workflow, not a task — unless you pick “Create a task” below.
+          </Text>
+          <SubjectPicker
+            subjectPolicy={subjectPolicy}
+            setSubjectPolicy={setSubjectPolicy}
+            columnData={columnData}
+            subjectColumnId={subjectColumnId}
+            setSubjectColumnId={setSubjectColumnId}
+          />
         </>
       )}
 
