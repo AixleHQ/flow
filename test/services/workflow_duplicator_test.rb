@@ -8,7 +8,9 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
     @source = create(:workflow, scope: @company, name: "Source WF")
-    @step1 = create(:step, workflow: @source, position: 1, name: "First")
+    @step1 = create(:step, workflow: @source, position: 1, name: "First",
+                           tool_ids: [ 7 ], skill_ids: [ 8 ], mcp_server_ids: [ 9 ],
+                           asset_ids: [ 42, 43 ])
     @step2 = create(:step, workflow: @source, position: 2, name: "Second",
                            depends_on_step_ids: [ @step1.id ],
                            preferred_model: "claude-sonnet-4",
@@ -31,6 +33,10 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert copied_steps[1].bmad_enabled
     assert_equal "claude_code", copied_steps[1].required_agent_runtime
     assert_equal 1, copied_steps[0].sub_steps.active.count
+    assert_equal [ 7 ], copied_steps[0].tool_ids
+    assert_equal [ 8 ], copied_steps[0].skill_ids
+    assert_equal [ 9 ], copied_steps[0].mcp_server_ids
+    assert_equal [ 42, 43 ], copied_steps[0].asset_ids
   end
 
   test "generates unique name when duplicate exists" do

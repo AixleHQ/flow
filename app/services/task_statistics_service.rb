@@ -7,13 +7,13 @@ class TaskStatisticsService
   )
 
   WaitStat = Struct.new(
-    :id, :wait_type, :status, :created_at, :resolved_at, :duration_seconds,
+    :id, :gate_type, :status, :created_at, :resolved_at, :duration_seconds,
     keyword_init: true
   )
 
   Result = Struct.new(
     :cost_totals, :token_totals, :time_totals,
-    :wait_stats, :workflow_breakdowns,
+    :gate_stats, :workflow_breakdowns,
     keyword_init: true
   )
 
@@ -24,7 +24,7 @@ class TaskStatisticsService
   def call
     agg = aggregate_workflow_runs
     workflow_breakdowns = build_workflow_breakdowns
-    wait_stats = build_wait_stats
+    gate_stats = build_gate_stats
 
     Result.new(
       cost_totals: {
@@ -36,7 +36,7 @@ class TaskStatisticsService
       time_totals: {
         total_duration_seconds: agg[:total_duration_seconds]
       },
-      wait_stats:,
+      gate_stats:,
       workflow_breakdowns:
     )
   end
@@ -94,14 +94,14 @@ class TaskStatisticsService
     end
   end
 
-  def build_wait_stats
-    @task.task_waits.order(:created_at).map do |wait|
+  def build_gate_stats
+    @task.gates.order(:created_at).map do |wait|
       resolved_at = wait.resolved? ? wait.resolved_at : nil
       duration = resolved_at ? (resolved_at - wait.created_at).round : nil
 
       WaitStat.new(
         id: wait.id,
-        wait_type: wait.wait_type,
+        gate_type: wait.gate_type,
         status: wait.status,
         created_at: wait.created_at,
         resolved_at: resolved_at,

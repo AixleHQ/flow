@@ -3,8 +3,8 @@
 require "test_helper"
 
 class ResolveGitlabPipelineJobTest < ActiveJob::TestCase
-  test "calls WaitService.resolve_gitlab_pipeline with correct args" do
-    WaitService.expects(:resolve_gitlab_pipeline).with(
+  test "calls GateService.resolve_gitlab_pipeline with correct args" do
+    GateService.expects(:resolve_gitlab_pipeline).with(
       repo_full_name: "group/app",
       pipeline_id: 1234,
       status: "success",
@@ -20,7 +20,7 @@ class ResolveGitlabPipelineJobTest < ActiveJob::TestCase
   end
 
   test "passes nil mr_iid when not provided" do
-    WaitService.expects(:resolve_gitlab_pipeline).with(
+    GateService.expects(:resolve_gitlab_pipeline).with(
       repo_full_name: "group/app",
       pipeline_id: 9999,
       status: "failed",

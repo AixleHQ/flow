@@ -27,9 +27,9 @@ class BoardTaskResource < ApplicationResource
     end
   end
 
-  attribute :pending_waits do |task|
-    task.pending_task_waits.map do |wait|
-      { id: wait.id, wait_type: wait.wait_type, metadata: wait.metadata, created_at: wait.created_at.iso8601 }
+  attribute :pending_gates do |task|
+    task.pending_gates.map do |wait|
+      { id: wait.id, gate_type: wait.gate_type, metadata: wait.metadata, created_at: wait.created_at.iso8601 }
     end
   end
 end

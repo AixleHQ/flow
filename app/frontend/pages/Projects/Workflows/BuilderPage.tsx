@@ -109,6 +109,7 @@ interface Step {
   toolIds: number[];
   mcpServerIds: number[];
   skillIds: number[];
+  assetIds: number[];
   inputAssetSpecs: AssetSpec[];
   outputAssetSpecs: AssetSpec[];
   subSteps: SubStep[];
@@ -485,6 +486,7 @@ const BuilderPage = () => {
         toolIds: data.toolIds ?? [],
         mcpServerIds: data.mcpServerIds ?? [],
         skillIds: data.skillIds ?? [],
+        assetIds: data.assetIds ?? [],
         dependsOnStepIds: data.dependsOnStepIds ?? [],
         inputAssetSpecs: data.inputAssetSpecs ?? [],
         outputAssetSpecs: data.outputAssetSpecs ?? [],
@@ -1239,6 +1241,17 @@ const BuilderPage = () => {
                           value={toStringArr(selectedStep.skillIds)}
                           onChange={(v) => updateStepField(selectedStep.id, 'skillIds', toNumberArr(v), true)}
                           placeholder="Select skills..."
+                          disabled={readOnly}
+                          searchable
+                        />
+                        <MultiSelect
+                          label="Assets"
+                          size="sm"
+                          data={toSelectData(assets)}
+                          value={toStringArr(selectedStep.assetIds)}
+                          onChange={(v) => updateStepField(selectedStep.id, 'assetIds', toNumberArr(v), true)}
+                          placeholder="Select assets..."
+                          description="Loaded into this step's container, in addition to workflow base assets"
                           disabled={readOnly}
                           searchable
                         />

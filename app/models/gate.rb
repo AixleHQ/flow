@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-class TaskWait < ApplicationRecord
+class Gate < ApplicationRecord
   extend Enumerize
 
   belongs_to :board_task
   belongs_to :creator, class_name: "User"
 
-  enumerize :wait_type, in: %i[github_checks_completed github_workflow_completed gitlab_pipeline_completed], predicates: true
+  enumerize :gate_type, in: %i[github_checks_completed github_workflow_completed gitlab_pipeline_completed], predicates: true
   enumerize :status, in: %i[pending resolved], default: :pending, predicates: true, scope: true
 
-  validates :wait_type, presence: true
+  validates :gate_type, presence: true
   validates :status, presence: true
 
   scope :pending,  -> { where(status: "pending") }
@@ -24,21 +24,21 @@ class TaskWait < ApplicationRecord
   # Scope waits by PR number only — used after the query is already scoped to
   # the correct project(s) via for_repository.
   scope :for_github_pr_number, ->(pr_number) {
-    where(wait_type: "github_checks_completed")
+    where(gate_type: "github_checks_completed")
       .where("(metadata->>'pr_number')::int = ?", pr_number.to_i)
   }
 
   # Scope waits by workflow run ID only — used after the query is already
   # scoped to the correct project(s) via for_repository.
   scope :for_github_workflow_run_id, ->(run_id) {
-    where(wait_type: "github_workflow_completed")
+    where(gate_type: "github_workflow_completed")
       .where("(metadata->>'run_id')::bigint = ?", run_id.to_i)
   }
 
   # Scope waits by GitLab pipeline ID only — used after the query is already
   # scoped to the correct project(s) via for_repository.
   scope :for_gitlab_pipeline_id, ->(pipeline_id) {
-    where(wait_type: "gitlab_pipeline_completed")
+    where(gate_type: "gitlab_pipeline_completed")
       .where("(metadata->>'pipeline_id')::bigint = ?", pipeline_id.to_i)
   }
 

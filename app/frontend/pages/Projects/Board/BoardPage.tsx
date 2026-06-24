@@ -102,7 +102,7 @@ import {
   apiV1ProjectTaskCommentsPath,
   apiV1ProjectTaskAssetsPath,
   apiV1ProjectTaskAssetPath,
-  apiV1ProjectTaskWaitPath,
+  apiV1ProjectTaskGatePath,
   moveApiV1ProjectTaskPath,
   triggerWorkflowApiV1ProjectTaskPath,
   apiV1ProjectColumnsPath,
@@ -153,9 +153,9 @@ interface Workflow {
   id: number;
   name: string;
 }
-interface TaskWait {
+interface Gate {
   id: number;
-  waitType: string;
+  gateType: string;
   metadata: Record<string, unknown> & { repoFullName?: string; prNumber?: number; runId?: number };
   createdAt: string;
 }
@@ -176,7 +176,7 @@ interface Task {
   childrenCount: number;
   assetsCount?: number;
   recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string }>;
-  pendingWaits: TaskWait[];
+  pendingGates: Gate[];
   createdAt: string;
   updatedAt: string;
 }
@@ -508,14 +508,14 @@ function BoardColumn({
   if (collapsed) {
     const priorityIndicators = tasks.slice(0, 5).map((t) => {
       const latestRun = t.recentWorkflowRuns?.[0];
-      const hasPendingWaits = (t.pendingWaits?.length ?? 0) > 0;
+      const hasPendingGates = (t.pendingGates?.length ?? 0) > 0;
       let color = '#9e9e9e';
       let hasActiveRun = false;
       if (latestRun) {
         color = workflowStatusColor(latestRun.state);
         hasActiveRun = WORKFLOW_ACTIVE_STATES.has(latestRun.state);
       }
-      if (hasPendingWaits) {
+      if (hasPendingGates) {
         color = '#eab308';
         hasActiveRun = false;
       }
@@ -527,9 +527,9 @@ function BoardColumn({
           tooltipParts.push(`Status: ${latestRun.state}`);
         }
       }
-      if (hasPendingWaits) {
-        const oldestWait = t.pendingWaits.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
-        tooltipParts.push(`Waiting — ${formatElapsedTime(oldestWait.createdAt)}`);
+      if (hasPendingGates) {
+        const oldestGate = t.pendingGates.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+        tooltipParts.push(`Waiting — ${formatElapsedTime(oldestGate.createdAt)}`);
       }
       return { id: t.id, task: t, color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
     });
@@ -747,9 +747,9 @@ async function deleteTaskAsset(projectId: number, taskId: number, assetId: numbe
   }
 }
 
-async function deleteTaskWait(projectId: number, taskId: number, waitId: number): Promise<boolean> {
+async function deleteTaskGate(projectId: number, taskId: number, gateId: number): Promise<boolean> {
   try {
-    const res = await apiFetch(apiV1ProjectTaskWaitPath(projectId, taskId, waitId), {
+    const res = await apiFetch(apiV1ProjectTaskGatePath(projectId, taskId, gateId), {
       method: 'DELETE',
     });
     return res.ok;
@@ -807,9 +807,9 @@ interface TaskStatistics {
   costTotals: { totalCostCents: number };
   tokenTotals: { totalTokens: number };
   timeTotals: { totalDurationSeconds: number };
-  waitStats: Array<{
+  gateStats: Array<{
     id: number;
-    waitType: string;
+    gateType: string;
     status: string;
     createdAt: string;
     resolvedAt: string | null;
@@ -871,7 +871,7 @@ function TaskDetailSidebar({
   const [authorFilter, setAuthorFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
-  const [deletingWaitId, setDeletingWaitId] = useState<number | null>(null);
+  const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1008,13 +1008,13 @@ function TaskDetailSidebar({
     setTriggeringWorkflow(false);
   }, [projectId, task]);
 
-  const handleDeleteWait = useCallback(
-    async (waitId: number) => {
+  const handleDeleteGate = useCallback(
+    async (gateId: number) => {
       if (!task) return;
-      setDeletingWaitId(waitId);
-      await deleteTaskWait(projectId, task.id, waitId);
+      setDeletingGateId(gateId);
+      await deleteTaskGate(projectId, task.id, gateId);
       router.reload({ only: ['selected_task'] });
-      setDeletingWaitId(null);
+      setDeletingGateId(null);
     },
     [projectId, task],
   );
@@ -1401,18 +1401,18 @@ function TaskDetailSidebar({
             )}
 
             {/* Pending waits */}
-            {(task.pendingWaits ?? []).length > 0 && (
+            {(task.pendingGates ?? []).length > 0 && (
               <Box>
                 <Group gap={6} mb={4}>
                   <ThemeIcon size={18} variant="light" color="yellow" radius="xl">
                     <IconHourglass size={12} />
                   </ThemeIcon>
                   <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                    Pending Waits ({(task.pendingWaits ?? []).length})
+                    Pending Waits ({(task.pendingGates ?? []).length})
                   </Text>
                 </Group>
                 <Stack gap={4}>
-                  {(task.pendingWaits ?? []).map((wait) => (
+                  {(task.pendingGates ?? []).map((wait) => (
                     <Group key={wait.id} gap="xs" align="flex-start" wrap="nowrap">
                       <Badge
                         size="xs"
@@ -1420,10 +1420,10 @@ function TaskDetailSidebar({
                         variant="filled"
                         style={{ fontSize: 10, fontWeight: 600, flexShrink: 0 }}
                       >
-                        {wait.waitType.replace(/_/g, ' ')}
+                        {wait.gateType.replace(/_/g, ' ')}
                       </Badge>
                       <Box style={{ flex: 1, minWidth: 0 }}>
-                        {wait.waitType === 'github_checks_completed' &&
+                        {wait.gateType === 'github_checks_completed' &&
                           wait.metadata.repoFullName &&
                           wait.metadata.prNumber && (
                             <Text
@@ -1439,7 +1439,7 @@ function TaskDetailSidebar({
                               {String(wait.metadata.repoFullName)} #{String(wait.metadata.prNumber)}
                             </Text>
                           )}
-                        {wait.waitType === 'github_workflow_completed' &&
+                        {wait.gateType === 'github_workflow_completed' &&
                           wait.metadata.repoFullName &&
                           wait.metadata.runId && (
                             <Text
@@ -1460,8 +1460,8 @@ function TaskDetailSidebar({
                         size="xs"
                         variant="subtle"
                         color="gray"
-                        onClick={() => handleDeleteWait(wait.id)}
-                        loading={deletingWaitId === wait.id}
+                        onClick={() => handleDeleteGate(wait.id)}
+                        loading={deletingGateId === wait.id}
                       >
                         <IconX size={12} />
                       </ActionIcon>
@@ -1919,27 +1919,27 @@ function TaskDetailSidebar({
               )}
 
               {/* Waits with icons and duration sub-text */}
-              {stats.waitStats.length > 0 && (
+              {stats.gateStats.length > 0 && (
                 <>
                   <Group gap={6} mt="xl" mb="sm">
                     <Text size="13px" fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
                       Waits
                     </Text>
                     <Text size="11px" c="dimmed">
-                      {stats.waitStats.filter((w) => w.status === 'pending').length} pending &middot;{' '}
-                      {stats.waitStats.filter((w) => w.status === 'resolved').length} resolved
+                      {stats.gateStats.filter((w) => w.status === 'pending').length} pending &middot;{' '}
+                      {stats.gateStats.filter((w) => w.status === 'resolved').length} resolved
                     </Text>
                   </Group>
                   <Paper p="md" radius="md" withBorder>
                     <Stack gap={0}>
-                      {stats.waitStats.map((w, idx) => (
+                      {stats.gateStats.map((w, idx) => (
                         <Group
                           key={w.id}
                           gap={10}
                           align="center"
                           py={8}
                           style={
-                            idx < stats.waitStats.length - 1
+                            idx < stats.gateStats.length - 1
                               ? { borderBottom: '1px solid var(--mantine-color-dark-5)' }
                               : undefined
                           }
@@ -1951,7 +1951,7 @@ function TaskDetailSidebar({
                           )}
                           <Box style={{ flex: 1, minWidth: 0 }}>
                             <Text size="xs" fw={500}>
-                              {w.waitType.replace(/_/g, ' ')}
+                              {w.gateType.replace(/_/g, ' ')}
                             </Text>
                             {w.durationSeconds != null && (
                               <Text size="11px" c="dimmed">
@@ -2674,7 +2674,7 @@ function normalizeTask(t: Task): Task {
     ...t,
     title: t.title ?? '',
     tags: t.tags ?? [],
-    pendingWaits: t.pendingWaits ?? [],
+    pendingGates: t.pendingGates ?? [],
     recentWorkflowRuns: t.recentWorkflowRuns ?? [],
     assetsCount: t.assetsCount ?? 0,
     childrenCount: t.childrenCount ?? 0,

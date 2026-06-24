@@ -127,7 +127,7 @@ class TaskService
       )
     end
 
-    def resolve_wait(wait:, resolution_data: {})
+    def resolve_gate(wait:, resolution_data: {})
       wait.update!(
         status: :resolved,
         resolved_at: Time.current,
@@ -138,7 +138,7 @@ class TaskService
       check_auto_trigger(task: task, column: task.board_column, actor: wait.creator)
     end
 
-    def remove_wait(wait:, actor:)
+    def remove_gate(wait:, actor:)
       task = wait.board_task
       column = task.board_column
 
@@ -149,7 +149,7 @@ class TaskService
     def check_auto_trigger(task:, column:, actor:)
       binding = column.column_workflow_binding
       return unless binding&.trigger_mode&.to_sym == :auto
-      return if task.task_waits.pending.exists?
+      return if task.gates.pending.exists?
       return if quota_block_auto_trigger?(binding, column)
 
       TriggerEngine.fire_for_column_binding(binding: binding, task: task, actor: actor)

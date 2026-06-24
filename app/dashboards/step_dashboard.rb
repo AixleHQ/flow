@@ -26,6 +26,7 @@ class StepDashboard < Administrate::BaseDashboard
     tool_ids: Field::JSONB,
     skill_ids: Field::JSONB,
     mcp_server_ids: Field::JSONB,
+    asset_ids: Field::JSONB,
     sub_steps: Field::HasMany,
     created_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),
     updated_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M")
@@ -61,6 +62,7 @@ class StepDashboard < Administrate::BaseDashboard
     tool_ids
     skill_ids
     mcp_server_ids
+    asset_ids
     sub_steps
     created_at
     updated_at

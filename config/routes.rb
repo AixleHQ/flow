@@ -104,7 +104,7 @@ Rails.application.routes.draw do
               scope module: :task do
                 resources :comments, only: %i[index create]
                 resources :assets, only: %i[index create destroy]
-                resources :waits, only: %i[destroy]
+                resources :gates, only: %i[destroy]
                 resources :transitions, only: %i[index]
                 resources :activities, only: %i[index]
                 resource :statistics, only: %i[show]

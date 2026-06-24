@@ -422,6 +422,29 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [ 100, 101 ], result[:input_asset_ids]
   end
 
+  test "workflow session merges base + step + run assets" do
+    session = build_workflow_session(
+      workflow_config: { "base_asset_ids" => [ 100 ] },
+      step_asset_ids: [ 200 ],
+      run_input_asset_ids: [ 101 ]
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ 100, 200, 101 ], result[:input_asset_ids]
+  end
+
+  test "workflow session deduplicates assets shared across base and step" do
+    session = build_workflow_session(
+      workflow_config: { "base_asset_ids" => [ 100 ] },
+      step_asset_ids: [ 100, 200 ]
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ 100, 200 ], result[:input_asset_ids]
+  end
+
   # === Story 29.7: Config Resolution Traceability ===
 
   test "resolve_with_breakdown returns agent_runtime_source step_required" do
@@ -467,14 +490,16 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   test "resolve_with_breakdown returns input_asset breakdown" do
     session = build_workflow_session(
       workflow_config: { "base_asset_ids" => [ 100 ] },
+      step_asset_ids: [ 200 ],
       run_input_asset_ids: [ 101 ]
     )
 
     result = SessionConfigResolver.resolve_with_breakdown(session)
 
     assert_equal [ 100 ], result[:input_assets][:from_workflow_base]
+    assert_equal [ 200 ], result[:input_assets][:from_step]
     assert_equal [ 101 ], result[:input_assets][:from_run_user]
-    assert_equal [ 100, 101 ], result[:input_assets][:resolved]
+    assert_equal [ 100, 200, 101 ], result[:input_assets][:resolved]
   end
 
   test "resolve_with_breakdown returns repository project fallback for board_triggered sessions" do
@@ -572,6 +597,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   private
 
   def build_workflow_session(step_tool_ids: [], step_skill_ids: [], step_mcp_server_ids: [],
+                             step_asset_ids: [],
                              agent_runtime: "claude_code", step_agent: nil,
                              run_mode: "interactive", mount_repositories: true,
                              run_repository_ids: [], run_input_asset_ids: [],
@@ -580,7 +606,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
                              step_bmad_enabled: false)
     workflow = create(:workflow, :with_company_scope, config: workflow_config)
     step = create(:step, workflow: workflow, tool_ids: step_tool_ids, skill_ids: step_skill_ids,
-      mcp_server_ids: step_mcp_server_ids, agent: step_agent, mount_repositories: mount_repositories,
+      mcp_server_ids: step_mcp_server_ids, asset_ids: step_asset_ids, agent: step_agent,
+      mount_repositories: mount_repositories,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,

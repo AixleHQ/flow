@@ -36,6 +36,10 @@ class StepResource < ApplicationResource
     step.skill_ids || []
   end
 
+  attribute :asset_ids do |step|
+    step.asset_ids || []
+  end
+
   attribute :sub_steps do |step|
     step.sub_steps.select { |ss| ss.deleted_at.nil? }.map do |ss|
       SubStepResource.new(ss).to_h

@@ -66,6 +66,7 @@ class WorkflowDuplicator
       tool_ids: step.tool_ids,
       mcp_server_ids: step.mcp_server_ids,
       skill_ids: step.skill_ids,
+      asset_ids: step.asset_ids,
       mount_repositories: step.mount_repositories,
       depends_on_step_ids: []
     )

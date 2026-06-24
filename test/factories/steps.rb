@@ -14,6 +14,9 @@ FactoryBot.define do
     input_asset_specs { [] }
     output_asset_specs { [] }
     tool_ids { [] }
+    skill_ids { [] }
+    mcp_server_ids { [] }
+    asset_ids { [] }
     agent { nil }
 
     trait :with_agent do

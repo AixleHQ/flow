@@ -159,17 +159,17 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert_equal "Active workflow run already exists for this task", result[:error]
   end
 
-  # == resolve_wait ==
+  # == resolve_gate ==
 
-  test "resolve_wait marks wait as resolved with resolution data" do
+  test "resolve_gate marks wait as resolved with resolution data" do
     task = create(:board_task, board: @board, board_column: @column)
-    wait = task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    wait = task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )
 
-    TaskService.resolve_wait(wait: wait, resolution_data: { conclusion: "success" })
+    TaskService.resolve_gate(wait: wait, resolution_data: { conclusion: "success" })
 
     wait.reload
     assert wait.resolved?
@@ -177,13 +177,13 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert_not_nil wait.resolved_at
   end
 
-  test "resolve_wait triggers auto-workflow when all waits resolved" do
+  test "resolve_gate triggers auto-workflow when all waits resolved" do
     workflow = create(:workflow, scope: @company)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
-    wait = task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    wait = task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )
@@ -192,50 +192,50 @@ class TaskServiceTest < ActiveSupport::TestCase
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
-    TaskService.resolve_wait(wait: wait, resolution_data: { conclusion: "success" })
+    TaskService.resolve_gate(wait: wait, resolution_data: { conclusion: "success" })
   end
 
-  test "resolve_wait does not trigger auto-workflow when other pending waits remain" do
+  test "resolve_gate does not trigger auto-workflow when other pending waits remain" do
     workflow = create(:workflow, scope: @company)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
-    wait1 = task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    wait1 = task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )
-    task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 2 },
       creator: @user
     )
 
     WorkflowService.expects(:start).never
 
-    TaskService.resolve_wait(wait: wait1, resolution_data: { conclusion: "success" })
+    TaskService.resolve_gate(wait: wait1, resolution_data: { conclusion: "success" })
   end
 
-  test "remove_wait deletes pending wait" do
+  test "remove_gate deletes pending wait" do
     task = create(:board_task, board: @board, board_column: @column)
-    wait = task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    wait = task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )
 
-    assert_difference -> { TaskWait.count }, -1 do
-      TaskService.remove_wait(wait: wait, actor: @user)
+    assert_difference -> { Gate.count }, -1 do
+      TaskService.remove_gate(wait: wait, actor: @user)
     end
   end
 
-  test "remove_wait triggers auto-workflow when it removes the last pending wait" do
+  test "remove_gate triggers auto-workflow when it removes the last pending wait" do
     workflow = create(:workflow, scope: @company)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
-    wait = task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    wait = task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )
@@ -244,7 +244,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
-    TaskService.remove_wait(wait: wait, actor: @user)
+    TaskService.remove_gate(wait: wait, actor: @user)
   end
 
   # == check_auto_trigger (pending waits guard) ==
@@ -254,8 +254,8 @@ class TaskServiceTest < ActiveSupport::TestCase
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
-    task.task_waits.create!(
-      wait_type: :github_checks_completed,
+    task.gates.create!(
+      gate_type: :github_checks_completed,
       metadata: { repo_full_name: "org/app", pr_number: 1 },
       creator: @user
     )

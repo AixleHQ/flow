@@ -108,6 +108,11 @@ module InternalTools
         missing = step.mcp_server_ids - MCPServer.where(id: step.mcp_server_ids).pluck(:id)
         missing.each { |id| errors << "Step '#{step.name}' links non-existent mcp_server_id #{id}" }
       end
+
+      if step.asset_ids.present?
+        missing = step.asset_ids - Asset.where(deleted_at: nil, id: step.asset_ids).pluck(:id)
+        missing.each { |id| errors << "Step '#{step.name}' links non-existent asset_id #{id}" }
+      end
     end
 
     def has_cycle?(steps)

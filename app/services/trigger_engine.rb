@@ -6,7 +6,7 @@
 # call into WorkflowService.start:
 #
 #   • column auto-binding   → TaskService.check_auto_trigger → fire_for_column_binding
-#   • task wait resolution  → TaskService.resolve_wait/remove_wait → check_auto_trigger
+#   • task wait resolution  → TaskService.resolve_gate/remove_gate → check_auto_trigger
 #   • manual launch button  → TaskService.trigger_workflow → fire_for_binding
 #   • Slack / webhook        → Webhooks::ProcessEventJob → publish → dispatch
 #

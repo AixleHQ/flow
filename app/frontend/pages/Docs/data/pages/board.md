@@ -30,7 +30,7 @@ Slack and webhooks (and the full model), see
 
 When a card enters a bound column in auto mode and:
 
-- there is **no pending TaskWait** on the card, **and**
+- there is **no pending Gate** on the card, **and**
 - there is **no active WorkflowRun** on the card,
 
 a new non-interactive `WorkflowRun` starts. The agent reads the card
@@ -67,9 +67,9 @@ stack.
 ## Common gotchas
 
 - **A card "stuck" in a bound column** usually means there's a
-  `TaskWait` on it (e.g. a CI check that never completed). A wait is a
-  *gate*, not a trigger — it holds the auto-trigger until it resolves.
-  Open the card and clear the wait, and the binding re-evaluates.
+  `Gate` on it (e.g. a CI check that never completed). A gate is not a
+  trigger — it holds the auto-trigger until it resolves. Open the card
+  and clear the gate, and the binding re-evaluates.
 - **Auto-trigger didn't fire** — check the `cooldown_seconds` window
   and whether the binding was set to `manual` instead of `auto`.
 - **Two workflows on one column** is not supported. Build a single

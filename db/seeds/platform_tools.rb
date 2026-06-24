@@ -175,19 +175,19 @@ module Seeds
         }
       },
       {
-        name: "board_create_wait",
+        name: "board_create_gate",
         display_name: "Board Create Wait",
         description: "Create a Wait on a board task. The auto-workflow for the task's column will not fire until all Waits are resolved.",
         input_schema: {
           type: "object",
           properties: {
             task_id:        { type: "integer", description: "Board task ID" },
-            wait_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed, github_workflow_completed" },
+            gate_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed, github_workflow_completed" },
             repo_full_name: { type: "string",  description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo" },
             pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" },
             run_id:         { type: "integer", description: "(github_workflow_completed) GitHub Actions workflow run ID" }
           },
-          required: %w[task_id wait_type]
+          required: %w[task_id gate_type]
         }
       }
     ].freeze
@@ -246,6 +246,7 @@ module Seeds
             tool_ids: { type: "array", items: { type: "integer" }, description: "Tool IDs available in this step" },
             skill_ids: { type: "array", items: { type: "integer" }, description: "Skill IDs injected into context" },
             mcp_server_ids: { type: "array", items: { type: "integer" }, description: "MCP server IDs" },
+            asset_ids: { type: "array", items: { type: "integer" }, description: "Asset IDs loaded into this step's container (in addition to workflow base assets)" },
             mount_repositories: { type: "boolean", description: "Mount Git repos in /workspace" },
             input_asset_specs: { type: "array", description: "Required input files" },
             output_asset_specs: { type: "array", description: "Expected output files" },
@@ -324,6 +325,7 @@ module Seeds
             tool_ids: { type: "array", items: { type: "integer" } },
             skill_ids: { type: "array", items: { type: "integer" } },
             mcp_server_ids: { type: "array", items: { type: "integer" } },
+            asset_ids: { type: "array", items: { type: "integer" } },
             mount_repositories: { type: "boolean" },
             depends_on_step_ids: { type: "array", items: { type: "integer" } }
           },
@@ -420,12 +422,12 @@ module Seeds
       {
         name: "meta_link_resource_to_step",
         display_name: "Meta Link Resource to Step",
-        description: "Link a tool, skill, or MCP server to a step.",
+        description: "Link a tool, skill, MCP server, or asset to a step.",
         input_schema: {
           type: "object",
           properties: {
             step_id: { type: "integer", description: "Step ID" },
-            resource_type: { type: "string", enum: %w[tool skill mcp_server], description: "Resource type" },
+            resource_type: { type: "string", enum: %w[tool skill mcp_server asset], description: "Resource type" },
             resource_id: { type: "integer", description: "Resource ID to link" }
           },
           required: %w[step_id resource_type resource_id]

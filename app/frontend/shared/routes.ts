@@ -97,6 +97,11 @@ export function webhooksGitlabPath(options?: object): string {
   return "/" + "webhooks" + "/" + "gitlab" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /webhooks/in/:slug(.:format) */
+export function webhookIngressPath(slug: ScalarType, options?: object): string {
+  return "/" + "webhooks" + "/" + "in" + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
+}
+
 /** /auth/:provider/callback(.:format) */
 export function authCallbackPath(provider: ScalarType, options?: object): string {
   return "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
@@ -292,9 +297,9 @@ export function apiV1ProjectTaskAssetPath(project_id: ScalarType, task_id: Scala
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "assets" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
 }
 
-/** /api/v1/projects/:project_id/tasks/:task_id/waits/:id(.:format) */
-export function apiV1ProjectTaskWaitPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "waits" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
+/** /api/v1/projects/:project_id/tasks/:task_id/gates/:id(.:format) */
+export function apiV1ProjectTaskGatePath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "gates" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
 }
 
 /** /api/v1/projects/:project_id/tasks/:task_id/transitions(.:format) */
@@ -1095,6 +1100,21 @@ export function companyProjectsPath(options?: object): string {
 /** /company/projects/:id(.:format) */
 export function companyProjectPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/workflow_catalog/:id/duplicate(.:format) */
+export function duplicateCompanyWorkflowCatalogPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "workflow_catalog" + "/" + id + "/" + "duplicate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/workflow_catalog(.:format) */
+export function companyWorkflowCatalogIndexPath(options?: object): string {
+  return "/" + "company" + "/" + "workflow_catalog" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/analytics(.:format) */
+export function companyAnalyticsPath(options?: object): string {
+  return "/" + "company" + "/" + "analytics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/workflow_catalog/:id/duplicate(.:format) */

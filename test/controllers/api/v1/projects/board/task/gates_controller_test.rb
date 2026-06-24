@@ -7,7 +7,7 @@ module Api
   module Projects
     module Board
       module Task
-        class WaitsControllerTest < ActionController::TestCase
+        class GatesControllerTest < ActionController::TestCase
           setup do
             @company = create(:company)
             @user = create(:user, :onboarding_completed, company: @company)
@@ -15,10 +15,10 @@ module Api
             @board = create(:board, project: @project)
             @column = create(:board_column, board: @board)
             @task = create(:board_task, board: @board, board_column: @column)
-            @wait = TaskWait.create!(
+            @wait = Gate.create!(
               board_task: @task,
               creator: @user,
-              wait_type: :github_checks_completed,
+              gate_type: :github_checks_completed,
               status: :pending,
               metadata: {}
             )

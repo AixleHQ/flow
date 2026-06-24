@@ -192,4 +192,20 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal session, step_run.reload.terminal_session
     assert_not_nil session.temporal_workflow_id
   end
+
+  test "create_for_workflow_step attaches step assets to session input_assets" do
+    mock_temporal_start
+
+    asset = create(:asset, scope: @project, created_by: @user, name: "step-doc.md")
+    workflow = create(:workflow, scope: @company)
+    step = create(:step, workflow: workflow, instructions: "Use the doc", asset_ids: [ asset.id ])
+    workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    step_run = create(:step_run, workflow_run: workflow_run, step: step)
+
+    session = SessionService.create_for_workflow_step(step_run: step_run)
+
+    # SessionContextService#inject_assets mounts session.input_asset_ids into the container,
+    # so a step asset reaching session.input_assets is the contract that it reaches /workspace/assets/.
+    assert_includes session.input_assets, asset
+  end
 end

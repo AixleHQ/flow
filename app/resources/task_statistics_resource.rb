@@ -13,11 +13,11 @@ class TaskStatisticsResource < ApplicationResource
     { totalDurationSeconds: result.time_totals[:total_duration_seconds] }
   end
 
-  attribute :wait_stats do |result|
-    result.wait_stats.map do |w|
+  attribute :gate_stats do |result|
+    result.gate_stats.map do |w|
       {
         id: w.id,
-        waitType: w.wait_type,
+        gateType: w.gate_type,
         status: w.status,
         createdAt: w.created_at,
         resolvedAt: w.resolved_at,
