@@ -66,6 +66,7 @@ import {
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import classes from './BuilderPage.module.css';
+import { WorkflowTriggersDrawer } from './WorkflowTriggersDrawer';
 
 interface Project {
   id: number;
@@ -149,6 +150,7 @@ interface Props {
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   configuredAgents: string[];
+  boardColumns?: { id: number; name: string }[];
 }
 
 const AVAILABLE_RUNTIMES = [
@@ -414,6 +416,7 @@ const BuilderPage = () => {
     agentModels: rawAgentModels,
     readOnly,
     configuredAgents,
+    boardColumns,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   const agents = rawAgents ?? [];
@@ -440,6 +443,7 @@ const BuilderPage = () => {
   const [deleteStepConfirm, setDeleteStepConfirm] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [runModalOpen, setRunModalOpen] = useState(false);
+  const [triggersOpen, setTriggersOpen] = useState(false);
 
   const selectedStep = useMemo(() => steps.find((s) => s.id === selectedStepId) ?? null, [steps, selectedStepId]);
 
@@ -995,14 +999,26 @@ const BuilderPage = () => {
                 </Badge>
               </Group>
               {project && (
-                <Button
-                  size="sm"
-                  leftSection={<IconPlayerPlay size={14} />}
-                  disabled={readOnly || steps.length === 0}
-                  onClick={() => setRunModalOpen(true)}
-                >
-                  Run
-                </Button>
+                <Group gap="xs">
+                  {!readOnly && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      leftSection={<IconBolt size={14} />}
+                      onClick={() => setTriggersOpen(true)}
+                    >
+                      Triggers
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    leftSection={<IconPlayerPlay size={14} />}
+                    disabled={readOnly || steps.length === 0}
+                    onClick={() => setRunModalOpen(true)}
+                  >
+                    Run
+                  </Button>
+                </Group>
               )}
             </Group>
             {!readOnly && (
@@ -1424,6 +1440,15 @@ const BuilderPage = () => {
           agentModels={agentModels}
           repositories={repositories}
           assets={assets}
+        />
+      )}
+      {project && !readOnly && (
+        <WorkflowTriggersDrawer
+          opened={triggersOpen}
+          onClose={() => setTriggersOpen(false)}
+          projectId={project.id}
+          workflowId={workflow.id}
+          columns={boardColumns ?? []}
         />
       )}
     </>

@@ -112,7 +112,6 @@ import {
   apiV1ProjectBoardPath,
   apiV1ProjectViewPresetsPath,
   apiV1ProjectViewPresetPath,
-  apiV1ProjectColumnWorkflowBindingPath,
 } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -2015,21 +2014,14 @@ interface ColState {
   bindingChanged: boolean;
 }
 
-const TRIGGER_MODES = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'manual', label: 'Manual' },
-];
-
 function SortableColumnRow({
   col,
   idx,
-  workflowOptions,
   updateCol,
   removeColumn,
 }: {
   col: ColState;
   idx: number;
-  workflowOptions: Array<{ value: string; label: string }>;
   updateCol: (idx: number, field: keyof ColState, value: string | number | null) => void;
   removeColumn: (idx: number) => void;
 }) {
@@ -2067,29 +2059,10 @@ function SortableColumnRow({
         size="xs"
         mb="xs"
       />
-      <Group gap="sm" align="flex-end">
-        <Select
-          label="Workflow"
-          placeholder="None"
-          data={workflowOptions}
-          value={col.workflowId}
-          onChange={(v) => updateCol(idx, 'workflowId', v)}
-          clearable
-          searchable
-          size="xs"
-          style={{ flex: 1 }}
-        />
-        {col.workflowId && (
-          <Select
-            label="Trigger"
-            data={TRIGGER_MODES}
-            value={col.triggerMode}
-            onChange={(v) => updateCol(idx, 'triggerMode', v ?? 'auto')}
-            size="xs"
-            w={100}
-          />
-        )}
-      </Group>
+      <Text size="xs" c="dimmed">
+        Triggers (incl. “task enters this column”) are configured per workflow — open a workflow and use the{' '}
+        <b>Triggers</b> button.
+      </Text>
     </Paper>
   );
 }
@@ -2099,13 +2072,11 @@ function BoardSettingsDialog({
   onClose,
   projectId,
   columns: initialColumns,
-  workflows,
 }: {
   opened: boolean;
   onClose: () => void;
   projectId: number;
   columns: Column[];
-  workflows: Workflow[];
 }) {
   const [cols, setCols] = useState<ColState[]>([]);
   const [saving, setSaving] = useState(false);
@@ -2113,7 +2084,6 @@ function BoardSettingsDialog({
 
   useEffect(() => {
     if (opened) {
-      router.reload({ only: ['workflows'] });
       setCols(
         initialColumns.map((c) => ({
           id: c.id,
@@ -2128,8 +2098,6 @@ function BoardSettingsDialog({
       setDeletedIds([]);
     }
   }, [opened, initialColumns]);
-
-  const workflowOptions = workflows.map((w) => ({ value: String(w.id), label: w.name }));
 
   const addColumn = () =>
     setCols((prev) => [
@@ -2224,39 +2192,6 @@ function BoardSettingsDialog({
       });
     }
 
-    for (let i = 0; i < cols.length; i++) {
-      const col = cols[i];
-      const resolvedId = col.id ?? createdIdMap.get(i);
-      if (!resolvedId) continue;
-
-      const isNew = !col.id;
-      if (!isNew && !col.bindingChanged) continue;
-
-      const bindingUrl = apiV1ProjectColumnWorkflowBindingPath(projectId, resolvedId);
-
-      if (!col.workflowId) {
-        if (col.bindingId) {
-          await apiFetch(bindingUrl, { method: 'DELETE' });
-        }
-      } else if (col.bindingId) {
-        await apiFetch(bindingUrl, {
-          method: 'PATCH',
-          headers: jsonHeaders,
-          body: JSON.stringify({
-            columnWorkflowBinding: { workflowId: Number(col.workflowId), triggerMode: col.triggerMode },
-          }),
-        });
-      } else if (col.workflowId) {
-        await apiFetch(bindingUrl, {
-          method: 'POST',
-          headers: jsonHeaders,
-          body: JSON.stringify({
-            columnWorkflowBinding: { workflowId: Number(col.workflowId), triggerMode: col.triggerMode },
-          }),
-        });
-      }
-    }
-
     setSaving(false);
     onClose();
     router.reload({ only: ['columns', 'tasks', 'workflows'] });
@@ -2286,7 +2221,6 @@ function BoardSettingsDialog({
                   key={col.id ? `col-${col.id}` : `col-new-${idx}`}
                   col={col}
                   idx={idx}
-                  workflowOptions={workflowOptions}
                   updateCol={updateCol}
                   removeColumn={removeColumn}
                 />
@@ -2690,7 +2624,6 @@ const BoardPage = () => {
     columns,
     tasks: serverTasks,
     members,
-    workflows,
     viewPresets,
     currentUserId,
     cableStream,
@@ -3191,7 +3124,6 @@ const BoardPage = () => {
         onClose={() => setSettingsOpen(false)}
         projectId={project.id}
         columns={columns}
-        workflows={workflows}
       />
 
       {/* Create Task Modal */}
