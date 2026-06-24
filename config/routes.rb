@@ -68,6 +68,7 @@ Rails.application.routes.draw do
                   patch :reorder
                 end
               end
+              resources :triggers, only: %i[index create update destroy]
             end
           end
 

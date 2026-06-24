@@ -26,10 +26,11 @@ class TriggerBinding < ApplicationRecord
   scope :active, -> { where(enabled: true) }
   scope :for_event, ->(event) { active.where(project_id: event.project_id, event_type: event.event_type) }
 
-  # JSONB containment: does the event data satisfy every key/value of the
-  # predicate? Empty predicate ⇒ matches any event of this type.
+  # Does the event data satisfy every condition in the predicate? Supports
+  # equality (scalar values), operator objects ({"op","value"}) and dot-path
+  # fields. Empty predicate ⇒ matches any event of this type. See TriggerFilter.
   def matches?(data)
-    filter_predicate.all? { |key, value| data[key.to_s] == value }
+    TriggerFilter.match?(filter_predicate, data)
   end
 
   private
