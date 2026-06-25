@@ -148,7 +148,6 @@ gem "image_processing", "~> 1.14"
 gem "faraday-retry", "~> 2.3"
 
 gem "lograge", "~> 0.14.0"
-gem "rubyzip"
 gem "minitar"
 
 gem "rotp", "~> 6.3"

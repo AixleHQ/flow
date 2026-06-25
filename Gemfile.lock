@@ -813,7 +813,6 @@ DEPENDENCIES
   rubocop-rails
   rubocop-rails-omakase
   ruby-filemagic!
-  rubyzip
   sentry-rails
   sentry-ruby
   shrine (~> 3.6)
