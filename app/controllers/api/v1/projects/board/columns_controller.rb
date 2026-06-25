@@ -35,6 +35,7 @@ module Api
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           end
 
+          # @summary Reorder board columns
           def reorder
             ActiveRecord::Base.transaction do
               offset = current_board.board_columns.count + 1

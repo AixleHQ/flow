@@ -3,6 +3,7 @@
 module Api
   module V1
     class AssetsController < ApplicationController
+      # @summary Generate a presigned URL for direct file upload
       def presign
         if Rails.env.development? || Rails.env.test?
           uid = SecureRandom.hex(30)
@@ -30,6 +31,7 @@ module Api
         end
       end
 
+      # @summary Upload a file to temporary cache storage
       def upload
         _status, headers, body = AssetFileUploader.upload_response(:cache, request.env)
         uploaded_file = Hashie::Mash.new(JSON.parse(body.first))

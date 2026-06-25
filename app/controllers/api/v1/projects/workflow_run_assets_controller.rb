@@ -10,6 +10,7 @@ module Api
           render json: assets.map { |a| WorkflowRunAssetResource.new(a).to_h }
         end
 
+        # @summary Export a workflow run asset to project assets
         def export
           workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])
           asset = workflow_run.workflow_run_assets.find(params[:id])
@@ -20,6 +21,7 @@ module Api
           render json: AssetResource.new(result[:asset]).to_h, status: :created
         end
 
+        # @summary Download a workflow run asset file
         def download
           workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])
           asset = workflow_run.workflow_run_assets.find(params[:id])
@@ -31,6 +33,7 @@ module Api
           redirect_to asset.file.url, allow_other_host: true
         end
 
+        # @summary Export all workflow run assets to project assets
         def export_all
           workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])
           assets = workflow_run.workflow_run_assets
