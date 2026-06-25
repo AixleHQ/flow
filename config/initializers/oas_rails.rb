@@ -8,13 +8,13 @@ end
 
 OasRails.configure do |config|
   # Basic Information about the API
-  config.info.title = "Aixle API"
+  config.info.title = "Aixle Flow API"
   config.info.version = "1.0.0"
-  config.info.summary = "Aixle Application JSON API"
+  config.info.summary = "Aixle Flow Application JSON API"
   config.info.description = <<~HEREDOC
-    # Aixle Application API Documentation
+    # Aixle Flow Application API Documentation
 
-    This documentation provides details about all available API endpoints for the Aixle application.
+    This documentation provides details about all available API endpoints for the Aixle Flow application.
 
     ## Authentication
 
@@ -39,7 +39,7 @@ OasRails.configure do |config|
 
     API requests are subject to rate limiting. Excessive requests will be rejected with a 429 status code.
   HEREDOC
-  config.info.contact.name = "Aixle Support"
+  config.info.contact.name = "Aixle Flow Support"
   config.info.contact.email = "support@aixle.com"
   config.info.contact.url = "https://aixle.com/support"
 
@@ -47,9 +47,9 @@ OasRails.configure do |config|
   config.servers = [
     # { url: 'https://api.aixle.com', description: 'Production' },
     # { url: 'https://staging-api.aixle.com', description: 'Staging' },
-    { url: "http://localhost:4000", description: "Aixle Development" },
-    { url: "https://qa.aixle.com", description: "Aixle QA" },
-    { url: "https://aixle.com", description: "Aixle Production" }
+    { url: "http://localhost:4000", description: "Aixle Flow Development" },
+    { url: "https://staging.flow.aixle.com", description: "Aixle Flow Staging" },
+    { url: "https://flow.aixle.com", description: "Aixle Flow Production" }
   ]
 
   # Tag Information
