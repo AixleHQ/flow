@@ -188,7 +188,9 @@ class TriggerEngine
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.start(
             workflow: workflow, project: project, user: actor,
-            task: subject, mode: :non_interactive
+            task: subject, mode: :non_interactive,
+            input_asset_ids: Array(event.data["input_asset_ids"]),
+            shared_context: slack_run_context(event)
           )
           dispatch.update!(
             workflow_run_id: result.try(:id),
@@ -281,6 +283,21 @@ class TriggerEngine
       base = event.dedup_key.presence || "event:#{event.id}"
       target = trigger_binding ? "binding:#{trigger_binding.id}" : source
       "#{base}:#{target}"
+    end
+
+    # Reply coordinates for a Slack-originated event, threaded into the run's
+    # shared_context so the workflow (and the slack_post_message tool) can reply in
+    # the originating channel/thread. Empty for non-Slack events.
+    def slack_run_context(event)
+      return {} unless event.event_type.to_s.start_with?("slack.")
+
+      slack = {
+        "channel" => event.data["channel"],
+        "thread_ts" => event.data["thread_ts"] || event.data["ts"],
+        "team" => event.data["team"],
+        "integration_id" => event.data["integration_id"]
+      }.compact
+      slack.present? ? { "slack" => slack } : {}
     end
   end
 end

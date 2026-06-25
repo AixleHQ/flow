@@ -19,6 +19,8 @@ module Webhooks
         return
       end
 
+      ingest_slack_files(endpoint, normalized) if endpoint.provider == "slack"
+
       TriggerEngine.publish(
         event_type: normalized[:event_type],
         source: "#{endpoint.provider}:#{endpoint.slug}",
@@ -36,12 +38,12 @@ module Webhooks
     # Provider-specific payload → normalized event. Returns nil to skip.
     def normalize(endpoint, payload)
       case endpoint.provider.to_s
-      when "slack"   then normalize_slack(payload)
+      when "slack"   then normalize_slack(endpoint, payload)
       else                normalize_generic(endpoint, payload)
       end
     end
 
-    def normalize_slack(payload)
+    def normalize_slack(endpoint, payload)
       event = payload["event"]
       return nil unless event.is_a?(Hash)
 
@@ -57,9 +59,38 @@ module Webhooks
           "channel" => event["channel"],
           "user" => event["user"],
           "text" => event["text"],
-          "team" => payload["team_id"]
+          "team" => payload["team_id"],
+          # Reply coordinates + attachments, carried into the run via shared_context
+          # (replies) and File ingestion (input assets).
+          "ts" => event["ts"],
+          "thread_ts" => event["thread_ts"].presence || event["ts"],
+          "files" => normalize_slack_files(event["files"]),
+          "integration_id" => endpoint.config.to_h["integration_id"]
         }.compact
       }
+    end
+
+    # Download any Slack attachments into project assets and pass their ids to the
+    # run as input_asset_ids (via the event data → fire_workflow forwarding).
+    def ingest_slack_files(endpoint, normalized)
+      files = normalized[:data]["files"]
+      return if files.blank?
+
+      integration = Integration.find_by(id: endpoint.config.to_h["integration_id"])
+      return if integration.nil?
+
+      asset_ids = Slack::FileIngestor.new(integration: integration, project: endpoint.project).ingest(files)
+      normalized[:data]["input_asset_ids"] = asset_ids if asset_ids.present?
+    end
+
+    # Keep only the file fields we need (and only well-formed entries); nil when
+    # the message has no attachments so the key drops out of the event data.
+    def normalize_slack_files(files)
+      Array(files).filter_map do |f|
+        next unless f.is_a?(Hash)
+
+        f.slice("id", "name", "title", "url_private", "url_private_download", "mimetype", "filetype", "size")
+      end.presence
     end
 
     def normalize_generic(endpoint, payload)

@@ -607,6 +607,22 @@ module Seeds
         )
       end
 
+      Tool.find_or_initialize_by(name: "slack_post_message", kind: :workflow).update!(
+        display_name: "Slack Post Message",
+        description: "Post a message to Slack from this workflow. Omit channel/thread to reply in " \
+                     "the channel/thread that triggered the run. Requires a Slack integration on the project.",
+        input_schema: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "Message text (required)" },
+            channel: { type: "string", description: "Channel ID. Defaults to the triggering channel for Slack-started runs." },
+            thread_ts: { type: "string", description: "Thread timestamp to reply into. Defaults to the triggering thread." }
+          },
+          required: %w[text]
+        },
+        execution_mode: :app
+      )
+
       # -- Meta-workflow tools: used by Aixle Builder to create entities --
       META_WORKFLOW_TOOLS.each do |attrs|
         Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(

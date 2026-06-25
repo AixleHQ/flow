@@ -40,16 +40,9 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
         machine_prefix:   params[:machine_prefix].presence,
         lock_ttl_minutes: params[:lock_ttl_minutes].presence
       )
-    when "slack"
-      Slack::IntegrationService.new(
-        company: current_company,
-        connected_by: current_user,
-        project: current_project
-      ).create(
-        workspace_name: params[:workspace_name].to_s,
-        signing_secret: params[:signing_secret].to_s
-      )
     end
+    # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
+    # not this paste-credentials path.
 
     if integration.nil?
       redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{provider}"
@@ -65,5 +58,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     integration = Integration.for_project(current_project).find(params[:id])
     integration.destroy
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
+  end
+
+  # Kick off the Slack OAuth install for this project: redirect to Slack's consent
+  # screen with a signed `state` that carries the project. Slack redirects back to
+  # the deployment-wide callback (Web::Integrations::SlackOauthController#callback).
+  def slack_oauth_start
+    # allow_other_host: the target is Slack's hardcoded authorize URL built from
+    # deployment Settings.slack.* — never user-supplied.
+    redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
   end
 end

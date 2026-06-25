@@ -270,6 +270,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
   // slack
   const [channel, setChannel] = useState('');
   const [textContains, setTextContains] = useState('');
+  const [textOp, setTextOp] = useState('contains');
   // webhook
   const [verification, setVerification] = useState('none');
   const [secret, setSecret] = useState('');
@@ -304,7 +305,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
       const filter: Record<string, unknown> = {};
       if (kind === 'slack') {
         if (channel.trim()) filter.channel = channel.trim();
-        if (textContains.trim()) filter.text = { op: 'contains', value: textContains.trim() };
+        if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
       } else if (kind === 'webhook') {
         trigger.verification_strategy = verification;
         if (secret.trim()) trigger.secret = secret.trim();
@@ -346,6 +347,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
     cooldown,
     channel,
     textContains,
+    textOp,
     verification,
     secret,
     condField,
@@ -462,12 +464,25 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             value={channel}
             onChange={(e) => setChannel(e.currentTarget.value)}
           />
-          <TextInput
-            label="Text contains"
-            placeholder="ship it (optional)"
-            value={textContains}
-            onChange={(e) => setTextContains(e.currentTarget.value)}
-          />
+          <Group grow align="flex-end">
+            <Select
+              label="Text match"
+              data={[
+                { value: 'contains', label: 'contains' },
+                { value: 'eq', label: 'equals' },
+                { value: 'regex', label: 'regex' },
+              ]}
+              value={textOp}
+              onChange={(v) => setTextOp(v ?? 'contains')}
+              allowDeselect={false}
+            />
+            <TextInput
+              label="Pattern"
+              placeholder={textOp === 'regex' ? '^run report' : 'ship it (optional)'}
+              value={textContains}
+              onChange={(e) => setTextContains(e.currentTarget.value)}
+            />
+          </Group>
           <SubjectPicker
             subjectPolicy={subjectPolicy}
             setSubjectPolicy={setSubjectPolicy}

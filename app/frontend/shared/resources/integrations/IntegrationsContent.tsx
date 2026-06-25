@@ -204,11 +204,6 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
   const [coderLoading, setCoderLoading] = useState(false);
   const [coderError, setCoderError] = useState<string | null>(null);
 
-  const [slackOpen, setSlackOpen] = useState(false);
-  const [slackWorkspace, setSlackWorkspace] = useState('');
-  const [slackSecret, setSlackSecret] = useState('');
-  const [slackLoading, setSlackLoading] = useState(false);
-
   const resetCoderForm = useCallback(() => {
     setCoderUrl('');
     setCoderToken('');
@@ -333,26 +328,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
 
-  const closeSlackModal = useCallback(() => {
-    setSlackOpen(false);
-    setSlackWorkspace('');
-    setSlackSecret('');
-  }, []);
-
+  // Slack connects via OAuth: redirect to the project-scoped start action, which
+  // bounces to Slack's consent screen. The install binds to this project.
   const handleConnectSlack = useCallback(() => {
-    if (!slackSecret.trim()) return;
-    setSlackLoading(true);
-    router.post(
-      basePath,
-      { provider: 'slack', workspaceName: slackWorkspace.trim(), signingSecret: slackSecret.trim() },
-      {
-        preserveScroll: true,
-        onSuccess: () => closeSlackModal(),
-        onError: () => notifications.show({ message: 'Failed to connect Slack', color: 'red' }),
-        onFinish: () => setSlackLoading(false),
-      },
-    );
-  }, [basePath, closeSlackModal, slackSecret, slackWorkspace]);
+    window.location.href = `${basePath}/slack_oauth_start`;
+  }, [basePath]);
 
   const alreadyLinkedInstallationIds = useMemo(
     () => new Set(projectIntegrations.filter((i) => i.installationId).map((i) => i.installationId)),
@@ -422,9 +402,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
               Coder
             </Menu.Item>
-            <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={() => setSlackOpen(true)}>
-              Slack
-            </Menu.Item>
+            {isProjectContext && (
+              <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                Slack
+              </Menu.Item>
+            )}
           </Menu.Dropdown>
         </Menu>
       </Group>
@@ -454,9 +436,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                 Coder
               </Button>
-              <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={() => setSlackOpen(true)}>
-                Slack
-              </Button>
+              {isProjectContext && (
+                <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                  Slack
+                </Button>
+              )}
             </Group>
           </Stack>
         </Card>
@@ -592,40 +576,6 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                 !(typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0)
               }
             >
-              Connect
-            </Button>
-          </Group>
-        </Stack>
-      </Modal>
-
-      <Modal opened={slackOpen} onClose={closeSlackModal} title="Connect Slack" centered size="sm">
-        <Stack gap="md">
-          <Text size="sm" c="dimmed">
-            Create an Aixle app in your Slack workspace, then paste its <b>Signing Secret</b>. After connecting, copy
-            the generated Request URL into the app&apos;s Event Subscriptions.
-          </Text>
-          <TextInput
-            label="Workspace name"
-            placeholder="Acme HQ"
-            value={slackWorkspace}
-            onChange={(e) => setSlackWorkspace(e.currentTarget.value)}
-            autoFocus
-          />
-          <PasswordInput
-            label="Signing secret"
-            placeholder="••••••••"
-            value={slackSecret}
-            onChange={(e) => setSlackSecret(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleConnectSlack();
-            }}
-            required
-          />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={closeSlackModal}>
-              Cancel
-            </Button>
-            <Button onClick={handleConnectSlack} loading={slackLoading} disabled={!slackSecret.trim()}>
               Connect
             </Button>
           </Group>

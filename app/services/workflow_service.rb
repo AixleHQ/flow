@@ -12,7 +12,7 @@ class WorkflowService
       false
     end
 
-    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil)
+    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {})
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
@@ -22,7 +22,7 @@ class WorkflowService
         input_asset_ids: input_asset_ids,
         repository_ids: repository_ids,
         agent_runtime: agent_runtime.presence,
-        shared_context: { "requested_model" => requested_model.presence }.compact
+        shared_context: { "requested_model" => requested_model.presence }.compact.merge(shared_context.to_h.stringify_keys)
       )
 
       validate_mode!(run, workflow, overrides)
@@ -55,12 +55,14 @@ class WorkflowService
     def complete(run:)
       run.complete! if run.may_complete?
       record_activity(run, :workflow_completed)
+      notify_slack(run, "✅ Workflow *#{run.workflow.name}* finished.")
       broadcast_task_updated(run)
     end
 
     def fail(run:)
       run.fail! if run.may_fail?
       record_activity(run, :workflow_failed)
+      notify_slack(run, "❌ Workflow *#{run.workflow.name}* failed.")
       broadcast_task_updated(run)
     end
 
@@ -131,6 +133,14 @@ class WorkflowService
       run.board_task.board.touch
     rescue StandardError => e
       Rails.logger.warn("[WorkflowService] Failed to broadcast task update for run ##{run.id}: #{e.message}")
+    end
+
+    # Best-effort safety-net reply to the originating Slack thread (no-op for
+    # non-Slack runs). The agent-driven slack_post_message tool is the primary path.
+    def notify_slack(run, text)
+      Slack::Notifier.notify_run(run, text)
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] Slack notify failed for run ##{run.id}: #{e.message}")
     end
 
     def record_activity(run, event_type)
