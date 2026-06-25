@@ -24,6 +24,7 @@ module Api
           render json: { id: asset.id }, status: :ok
         end
 
+        # @summary Download a company asset file
         def download
           asset = current_company.assets.find(params[:id])
           version = asset.resolve_version(params[:version])

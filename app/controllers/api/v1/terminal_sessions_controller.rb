@@ -36,6 +36,7 @@ module Api
         head :ok
       end
 
+      # @summary Finish an active terminal session
       def finish
         session = current_user.terminal_sessions.find(params[:id])
         SessionService.finish(session: session)

@@ -32,6 +32,7 @@ module Api
           head :no_content
         end
 
+        # @summary Reorder steps within a workflow
         def reorder
           positions = params.require(:positions).to_unsafe_h
           positions = positions.select { |k, v| k.match?(/\A\d+\z/) && v.to_s.match?(/\A\d+\z/) }

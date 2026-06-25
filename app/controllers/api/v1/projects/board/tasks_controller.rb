@@ -39,6 +39,7 @@ module Api
             head :no_content
           end
 
+          # @summary Move a board task to a column and position
           def move
             task = current_board.board_tasks.find(params[:id])
             target_column = current_board.board_columns.find(params[:column_id])
@@ -46,12 +47,14 @@ module Api
             render json: BoardTaskResource.new(moved_task).to_h
           end
 
+          # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])
             runs = task.workflow_runs.includes(:workflow).order(created_at: :desc)
             render json: runs.map { |r| TaskWorkflowRunResource.new(r).to_h }
           end
 
+          # @summary Trigger the bound workflow for a board task
           def trigger_workflow
             task = current_board.board_tasks.find(params[:id])
             binding = task.board_column.column_workflow_binding
