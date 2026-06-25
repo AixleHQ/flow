@@ -28,12 +28,13 @@ check: be_check fe_check
 CHECK_RESULTS := tmp/check_results
 check_all:
 	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
-	@echo "Running rails-test, rubocop, brakeman, eslint, typescript in parallel..."
+	@echo "Running rails-test, rubocop, brakeman, eslint, typescript, fe-test in parallel..."
 	@( bundle exec rails test                                       > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
 	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
 	 ( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
 	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
+	 ( yarn test --coverage                                         > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )    & \
 	 wait
 	@echo ""
 	@echo "=== Summary ==="
@@ -47,6 +48,12 @@ check_all:
 	    fail=1; \
 	  fi; \
 	done; \
+	echo ""; \
+	echo "=== Coverage (line %) ==="; \
+	be=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/.last_run.json"))["result"]["line"]; rescue; puts "n/a"; end' 2>/dev/null); \
+	fe=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/frontend/coverage-summary.json"))["total"]["lines"]["pct"]; rescue; puts "n/a"; end' 2>/dev/null); \
+	printf "  backend  (rails / simplecov): %s%%\n" "$$be"; \
+	printf "  frontend (vitest / v8):       %s%%\n" "$$fe"; \
 	if [ $$fail -ne 0 ]; then \
 	  echo ""; \
 	  echo "=== Failure output (full log per failed check) ==="; \
@@ -81,6 +88,10 @@ test: rails-test
 # Run Rails tests
 rails-test:
 	bundle exec rails test
+
+# Run frontend tests (Vitest, node-only — no backend). Runs inside the web container; also part of check_all.
+fe-test:
+	yarn test
 
 # Run Rubocop
 rubocop:

@@ -255,7 +255,7 @@ interface RegistrySearchModalProps {
   results: RegistrySkill[];
 }
 
-function RegistrySearchModal({
+export function RegistrySearchModal({
   opened,
   onClose,
   basePath,
