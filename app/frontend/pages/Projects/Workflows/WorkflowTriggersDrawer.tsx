@@ -248,6 +248,35 @@ function triggerSummary(t: Trigger): string {
   return `${filter} · subject: ${t.subject_policy ?? 'none'}`;
 }
 
+// Builds a ready-to-run curl command for the created webhook, adapting the auth
+// headers to the chosen verification strategy.
+function buildWebhookCurl(url: string, secret: string | undefined, verification: string): string {
+  const s = secret || '<secret>';
+  if (verification === 'hmac_sha256') {
+    return [
+      `BODY='{"hello":"world"}'`,
+      `SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac '${s}' | sed 's/^.* //')`,
+      `curl -X POST '${url}' \\`,
+      `  -H 'Content-Type: application/json' \\`,
+      `  -H "X-Hub-Signature-256: sha256=$SIG" \\`,
+      `  -d "$BODY"`,
+    ].join('\n');
+  }
+  if (verification === 'shared_token') {
+    return [
+      `curl -X POST '${url}' \\`,
+      `  -H 'Content-Type: application/json' \\`,
+      `  -H 'X-Webhook-Token: ${s}' \\`,
+      `  -d '{"hello":"world"}'`,
+    ].join('\n');
+  }
+  return [
+    `curl -X POST '${url}' \\`,
+    `  -H 'Content-Type: application/json' \\`,
+    `  -d '{"hello":"world"}'`,
+  ].join('\n');
+}
+
 interface AddProps {
   projectId: number;
   workflowId: number;
@@ -283,6 +312,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
   // shared subject
   const [subjectPolicy, setSubjectPolicy] = useState('none');
   const [subjectColumnId, setSubjectColumnId] = useState<string | null>(columns[0]?.id?.toString() ?? null);
+  const [subjectTitleTemplate, setSubjectTitleTemplate] = useState('');
 
   const columnData = columns.map((c) => ({ value: c.id.toString(), label: c.name }));
   // For the column-enter trigger: a column already bound to a workflow is taken
@@ -317,7 +347,10 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
       }
       trigger.filter_predicate = filter;
       trigger.subject_policy = subjectPolicy;
-      if (subjectPolicy === 'create_task') trigger.subject_column_id = subjectColumnId;
+      if (subjectPolicy === 'create_task') {
+        trigger.subject_column_id = subjectColumnId;
+        if (subjectTitleTemplate.trim()) trigger.subject_title_template = subjectTitleTemplate.trim();
+      }
     }
 
     try {
@@ -357,22 +390,61 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
     timezone,
     subjectPolicy,
     subjectColumnId,
+    subjectTitleTemplate,
     projectId,
     workflowId,
     onCreated,
   ]);
 
   if (created) {
+    const curl = buildWebhookCurl(created.url, created.secret, verification);
     return (
       <Stack gap="sm" p="sm" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
         <Text size="sm" fw={600}>
           Webhook trigger created
         </Text>
         <Text size="xs" c="dimmed">
-          Point your source at this URL. It is a signed, idempotent start API for this workflow.
+          Point your source at this URL. It is an idempotent start API for this workflow.
         </Text>
         <CopyField label="Request URL" value={created.url} />
         {created.secret && <CopyField label="Secret" value={created.secret} />}
+        <Box>
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" fw={500}>
+              Example request ({verification === 'none' ? 'no auth' : verification === 'hmac_sha256' ? 'HMAC SHA-256' : 'shared token'})
+            </Text>
+            <CopyButton value={curl}>
+              {({ copied, copy }) => (
+                <Button
+                  size="compact-xs"
+                  variant="light"
+                  onClick={copy}
+                  leftSection={copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                >
+                  {copied ? 'Copied' : 'Copy curl'}
+                </Button>
+              )}
+            </CopyButton>
+          </Group>
+          <Text
+            component="pre"
+            size="xs"
+            ff="monospace"
+            style={{
+              whiteSpace: 'pre',
+              overflowX: 'auto',
+              background: 'var(--app-bg-subtle, rgba(0,0,0,0.05))',
+              padding: 8,
+              borderRadius: 6,
+              margin: 0,
+            }}
+          >
+            {curl}
+          </Text>
+        </Box>
+        <Text size="xs" c="dimmed">
+          Runs the workflow as <b>you</b> — the trigger&apos;s creator.
+        </Text>
         <Button onClick={onCreated}>Done</Button>
       </Stack>
     );
@@ -452,6 +524,8 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             columnData={columnData}
             subjectColumnId={subjectColumnId}
             setSubjectColumnId={setSubjectColumnId}
+            subjectTitleTemplate={subjectTitleTemplate}
+            setSubjectTitleTemplate={setSubjectTitleTemplate}
           />
         </>
       )}
@@ -489,6 +563,8 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             columnData={columnData}
             subjectColumnId={subjectColumnId}
             setSubjectColumnId={setSubjectColumnId}
+            subjectTitleTemplate={subjectTitleTemplate}
+            setSubjectTitleTemplate={setSubjectTitleTemplate}
           />
         </>
       )}
@@ -542,6 +618,8 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             columnData={columnData}
             subjectColumnId={subjectColumnId}
             setSubjectColumnId={setSubjectColumnId}
+            subjectTitleTemplate={subjectTitleTemplate}
+            setSubjectTitleTemplate={setSubjectTitleTemplate}
           />
         </>
       )}
@@ -564,12 +642,16 @@ function SubjectPicker({
   columnData,
   subjectColumnId,
   setSubjectColumnId,
+  subjectTitleTemplate,
+  setSubjectTitleTemplate,
 }: {
   subjectPolicy: string;
   setSubjectPolicy: (v: string) => void;
   columnData: { value: string; label: string }[];
   subjectColumnId: string | null;
   setSubjectColumnId: (v: string | null) => void;
+  subjectTitleTemplate: string;
+  setSubjectTitleTemplate: (v: string) => void;
 }) {
   return (
     <>
@@ -583,7 +665,19 @@ function SubjectPicker({
         onChange={(v) => setSubjectPolicy(v ?? 'none')}
       />
       {subjectPolicy === 'create_task' && (
-        <Select label="Task column" data={columnData} value={subjectColumnId} onChange={setSubjectColumnId} />
+        <>
+          <Select label="Task column" data={columnData} value={subjectColumnId} onChange={setSubjectColumnId} />
+          <TextInput
+            label="Task title template"
+            placeholder="webhook.received — {{date}}"
+            description="Leave blank for a default. Use {{date}} or any top-level payload key, e.g. {{order_id}}."
+            value={subjectTitleTemplate}
+            onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
+          />
+          <Text size="xs" c="dimmed">
+            The task body is filled with the triggering payload automatically.
+          </Text>
+        </>
       )}
     </>
   );

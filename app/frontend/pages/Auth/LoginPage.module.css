@@ -1,3 +1,20 @@
+/* ── Brand lockup (logo + Flow) ─────────────────── */
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandFlow {
+  font-family: 'Sora', sans-serif;
+  font-weight: 700;
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--app-text-primary, var(--mantine-color-gray-1));
+}
+
 /* ── Card ───────────────────────────────────────── */
 
 @keyframes fadeSlideUp {

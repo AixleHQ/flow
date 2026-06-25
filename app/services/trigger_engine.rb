@@ -258,11 +258,26 @@ class TriggerEngine
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
       column.board.board_tasks.create!(
         board_column: column,
-        title: render_title(binding.subject_title_template, event)
+        title: render_title(binding.subject_title_template, event),
+        description: render_subject_body(event)
       )
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")
       nil
+    end
+
+    # Internal routing/transport keys that aren't part of the user-facing payload
+    # and shouldn't leak into the created card's body.
+    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files].freeze
+
+    # Renders the triggering payload into the created card's description so the
+    # run's input is visible on the board. Returns nil when there's nothing useful
+    # to show (e.g. an empty schedule fire).
+    def render_subject_body(event)
+      payload = (event.data || {}).except(*INTERNAL_DATA_KEYS)
+      return nil if payload.blank?
+
+      "Triggered by `#{event.event_type}`\n\n```json\n#{JSON.pretty_generate(payload)}\n```"
     end
 
     # Minimal title templating: {{date}} and {{<top-level event.data key>}}.
