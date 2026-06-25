@@ -42,7 +42,7 @@
     "@mantine/core": "^9.0.0",
     "@mantine/dates": "^9.4.0",
     "@mantine/form": "^9.0.0",
-    "@mantine/hooks": "^9.3.2",
+    "@mantine/hooks": "^9.4.0",
     "@mantine/modals": "^9.4.0",
     "@mantine/notifications": "^9.0.0",
     "@rails/actioncable": "^8.1.300",
