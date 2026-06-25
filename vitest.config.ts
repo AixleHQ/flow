@@ -1,0 +1,34 @@
+import reactSwc from '@vitejs/plugin-react-swc';
+import { defineConfig } from 'vitest/config';
+import tsconfigPaths from 'vite-tsconfig-paths';
+
+// Dedicated config — intentionally does NOT load ViteRuby()/inertia() from vite.config.ts,
+// which assume a live Rails/Inertia context and break under Vitest (vitest#436).
+// Keeps tsconfig path aliases (shared/ui, layouts/*, @/types/generated, test/*) and JSX.
+export default defineConfig({
+  plugins: [tsconfigPaths(), reactSwc()],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./app/frontend/test/setup.ts'],
+    css: false, // assert behavior/roles, not pixels
+    clearMocks: true, // reset spy call history between tests, keep implementations
+    include: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['node_modules/**', 'test/playwright/**'],
+    coverage: {
+      provider: 'v8',
+      // separate dir so it never clobbers SimpleCov's output in coverage/
+      reportsDirectory: './coverage/frontend',
+      reporter: ['text-summary', 'json-summary', 'html'],
+      // count untested source files as 0% so the % reflects the whole frontend
+      include: ['app/frontend/**/*.{ts,tsx}'],
+      exclude: [
+        'app/frontend/**/*.{test,spec}.{ts,tsx}',
+        'app/frontend/test/**',
+        'app/frontend/types/generated/**',
+        'app/frontend/entrypoints/**',
+        'app/frontend/**/*.d.ts',
+      ],
+    },
+  },
+});
