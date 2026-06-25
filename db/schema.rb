@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_22_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -303,16 +303,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_22_120000) do
     t.text "value"
     t.index ["scope_type", "scope_id", "name"], name: "index_config_items_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
-  end
-
-  create_table "contact_requests", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "email", null: false
-    t.string "first_name", null: false
-    t.string "last_name", null: false
-    t.datetime "updated_at", null: false
-    t.index ["created_at"], name: "index_contact_requests_on_created_at"
-    t.index ["email"], name: "index_contact_requests_on_email"
   end
 
   create_table "integrations", force: :cascade do |t|

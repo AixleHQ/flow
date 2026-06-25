@@ -517,16 +517,6 @@ export function adminToolResultPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "tool_results" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /admin/contact_requests(.:format) */
-export function adminContactRequestsPath(options?: object): string {
-  return "/" + "admin" + "/" + "contact_requests" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /admin/contact_requests/:id(.:format) */
-export function adminContactRequestPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "contact_requests" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
 /** /admin/agents(.:format) */
 export function adminAgentsPath(options?: object): string {
   return "/" + "admin" + "/" + "agents" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

@@ -59,7 +59,6 @@ module Admin
         cache_write_tokens: 0,
         cache_read_tokens: 0
       )
-      @contact = ContactRequest.create!(first_name: "A", last_name: "B", email: "ab@example.com")
       @quota = NamespaceResourceQuota.create!(scope: @project, max_pods: 10)
     end
 
@@ -160,16 +159,6 @@ module Admin
 
     test "tool_results#show" do
       get admin_tool_result_path(@tool_result)
-      assert_response :success
-    end
-
-    test "contact_requests#index" do
-      get admin_contact_requests_path
-      assert_response :success
-    end
-
-    test "contact_requests#show" do
-      get admin_contact_request_path(@contact)
       assert_response :success
     end
 
