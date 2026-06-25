@@ -47,7 +47,7 @@
     "@mantine/notifications": "^9.0.0",
     "@rails/actioncable": "^8.1.300",
     "@sentry/react": "^10.43.0",
-    "@tabler/icons-react": "^3.41.1",
+    "@tabler/icons-react": "^3.44.0",
     "@tanstack/react-table": "^8.21.3",
     "@types/recharts": "^2.0.1",
     "@uiw/codemirror-extensions-langs": "^4.25.10",
