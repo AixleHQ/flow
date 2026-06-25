@@ -140,7 +140,6 @@ Rails.application.routes.draw do
     resources :assets, only: %i[index show]
     resources :asset_versions, only: %i[index show]
     resources :tool_results, only: %i[index show]
-    resources :contact_requests, only: %i[index show destroy]
 
     resources :agents, only: %i[index show]
     resources :boards, only: %i[index show]
