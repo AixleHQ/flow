@@ -16,6 +16,7 @@ import {
   IconLayoutSidebar,
   IconLogout,
   IconMenu2,
+  IconPlayerPlay,
   IconPlugConnected,
   IconRobot,
   IconSettings,
@@ -50,6 +51,7 @@ import {
   companyProjectSettingsPath,
   companyProjectSkillsPath,
   companyProjectToolsPath,
+  companyProjectWorkflowRunsPath,
   companyProjectWorkflowsPath,
   companyProjectsPath,
   companyRepositoriesPath,
@@ -102,6 +104,7 @@ const buildProjectNavGroups = (projectId: string): NavGroup[] => [
     items: [
       { label: 'Tasks', icon: <IconCheckbox size={18} />, path: companyProjectBoardPath(projectId) },
       { label: 'Workflows', icon: <IconGitMerge size={18} />, path: companyProjectWorkflowsPath(projectId) },
+      { label: 'Runs', icon: <IconPlayerPlay size={18} />, path: companyProjectWorkflowRunsPath(projectId) },
       { label: 'Sessions', icon: <IconTerminal2 size={18} />, path: companyProjectSessionsPath(projectId) },
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyProjectAssetsPath(projectId) },
     ],

@@ -833,6 +833,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
           <a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a>
         </span>
       </span>
+      <a class="btn btn-outline btn-sm nav-cta" href="<%= login_path %>">Log in</a>
       <button class="btn btn-primary btn-sm nav-cta" onclick="go('contact')">Get in touch</button>
     </div>
     <button class="nav-burger" onclick="openSheet(true)" aria-label="Menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
@@ -854,6 +855,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
     <button onclick="go('compare')">Compare</button>
     <button onclick="go('opensource')">Open source</button>
     <button onclick="window.open('https://docs.aixle.com/flow','_blank');openSheet(false)">Docs</button>
+    <button onclick="window.location.href='<%= login_path %>'">Log in</button>
   </div>
   <button class="btn btn-primary sheet-cta" onclick="go('contact')">Get in touch</button>
 </div>
