@@ -25,6 +25,7 @@ class TriggerBinding < ApplicationRecord
   validate :workflow_accessible_from_project
   validate :create_task_requires_column
   validate :schedule_requires_cron
+  validate :workflow_supports_auto_run
 
   scope :active, -> { where(enabled: true) }
   scope :for_event, ->(event) { active.where(project_id: event.project_id, event_type: event.event_type) }
@@ -65,6 +66,20 @@ class TriggerBinding < ApplicationRecord
     return unless schedule?
 
     errors.add(:schedule_config, "must include a cron expression") if schedule_config["cron"].blank?
+  end
+
+  # Off-board triggers (slack / webhook / schedule) fire unattended in
+  # non-interactive mode, so every step must allow auto-run — otherwise the launch
+  # is silently skipped at fire time (WorkflowService#validate_mode!). Column
+  # triggers are exempt by design: their manual mode puts a human on the button.
+  def workflow_supports_auto_run
+    return unless enabled? && workflow
+
+    manual_steps = workflow.steps.not_deleted.reject(&:allow_non_interactive)
+    return if manual_steps.empty?
+
+    errors.add(:workflow,
+      "can't run unattended — enable auto-run on these steps first: #{manual_steps.map(&:name).join(', ')}")
   end
 
   def enqueue_schedule_reconcile

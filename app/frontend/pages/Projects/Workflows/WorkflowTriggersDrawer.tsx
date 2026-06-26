@@ -13,6 +13,7 @@ import {
   SegmentedControl,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   ThemeIcon,
@@ -24,6 +25,7 @@ import {
   IconCheck,
   IconColumns,
   IconCopy,
+  IconPencil,
   IconPlus,
   IconTrash,
   IconWebhook,
@@ -51,6 +53,8 @@ interface Trigger {
   column_name?: string;
   board_column_id?: number;
   subject_policy?: string;
+  subject_column_id?: number | null;
+  subject_title_template?: string | null;
   filter_predicate?: Record<string, unknown>;
   schedule_config?: { cron?: string; timezone?: string };
 }
@@ -114,6 +118,7 @@ export function WorkflowTriggersDrawer({ opened, onClose, projectId, workflowId,
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Trigger | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,6 +182,22 @@ export function WorkflowTriggersDrawer({ opened, onClose, projectId, workflowId,
             {triggers.map((t) => {
               const meta = KIND_META[t.kind] ?? KIND_META.event;
               const Icon = meta.icon;
+              if (editing && editing.id === t.id && editing.kind === t.kind) {
+                return (
+                  <AddTriggerForm
+                    key={`edit-${t.kind}-${t.id}`}
+                    projectId={projectId}
+                    workflowId={workflowId}
+                    columns={columns}
+                    editing={t}
+                    onCancel={() => setEditing(null)}
+                    onCreated={() => {
+                      setEditing(null);
+                      load();
+                    }}
+                  />
+                );
+              }
               return (
                 <Group
                   key={`${t.kind}-${t.id}`}
@@ -203,18 +224,31 @@ export function WorkflowTriggersDrawer({ opened, onClose, projectId, workflowId,
                       </Text>
                     </Box>
                   </Group>
-                  <ActionIcon variant="subtle" color="red" onClick={() => remove(t)} aria-label="Remove trigger">
-                    <IconTrash size={16} />
-                  </ActionIcon>
+                  <Group gap={4} wrap="nowrap">
+                    <ActionIcon
+                      variant="subtle"
+                      color="gray"
+                      onClick={() => {
+                        setAdding(false);
+                        setEditing(t);
+                      }}
+                      aria-label="Edit trigger"
+                    >
+                      <IconPencil size={16} />
+                    </ActionIcon>
+                    <ActionIcon variant="subtle" color="red" onClick={() => remove(t)} aria-label="Remove trigger">
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Group>
                 </Group>
               );
             })}
           </Stack>
         )}
 
-        <Divider />
+        {!editing && <Divider />}
 
-        {adding ? (
+        {editing ? null : adding ? (
           <AddTriggerForm
             projectId={projectId}
             workflowId={workflowId}
@@ -281,38 +315,74 @@ interface AddProps {
   projectId: number;
   workflowId: number;
   columns: ColumnOption[];
+  editing?: Trigger;
   onCancel: () => void;
   onCreated: () => void;
 }
 
-function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }: AddProps) {
-  const [kind, setKind] = useState<Kind>('column');
+// In edit mode, recover the slack/webhook filter inputs from the stored predicate.
+// slack predicate: { channel, text: { op, value } }
+// webhook predicate: { [field]: value } or { [field]: { op, value } }
+function slackFilterFromPredicate(pred: Record<string, unknown>): { channel: string; op: string; value: string } {
+  const channel = typeof pred.channel === 'string' ? pred.channel : '';
+  const text = pred.text;
+  if (text && typeof text === 'object') {
+    const t = text as { op?: string; value?: string };
+    return { channel, op: t.op ?? 'contains', value: t.value ?? '' };
+  }
+  if (typeof text === 'string') return { channel, op: 'contains', value: text };
+  return { channel, op: 'contains', value: '' };
+}
+
+function webhookFilterFromPredicate(pred: Record<string, unknown>): { field: string; op: string; value: string } {
+  const field = Object.keys(pred)[0];
+  if (!field) return { field: '', op: 'eq', value: '' };
+  const raw = pred[field];
+  if (raw && typeof raw === 'object') {
+    const r = raw as { op?: string; value?: unknown };
+    return { field, op: r.op ?? 'eq', value: r.value == null ? '' : String(r.value) };
+  }
+  return { field, op: 'eq', value: raw == null ? '' : String(raw) };
+}
+
+function AddTriggerForm({ projectId, workflowId, columns, editing, onCancel, onCreated }: AddProps) {
+  const isEdit = Boolean(editing);
+  const editPred = editing?.filter_predicate ?? {};
+  const editSlack = editing?.kind === 'slack' ? slackFilterFromPredicate(editPred) : null;
+  const editWebhook = editing?.kind === 'webhook' ? webhookFilterFromPredicate(editPred) : null;
+
+  const [kind, setKind] = useState<Kind>((editing?.kind as Kind) ?? 'column');
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<{ url: string; secret: string } | null>(null);
 
   // column — default to the first column not already bound to a workflow
   const [columnId, setColumnId] = useState<string | null>(
-    (columns.find((c) => !c.boundWorkflowName) ?? columns[0])?.id?.toString() ?? null,
+    editing?.board_column_id?.toString() ??
+      (columns.find((c) => !c.boundWorkflowName) ?? columns[0])?.id?.toString() ??
+      null,
   );
-  const [mode, setMode] = useState('auto');
-  const [cooldown, setCooldown] = useState<number | string>(5);
+  const [mode, setMode] = useState(editing?.trigger_mode ?? 'auto');
+  const [cooldown, setCooldown] = useState<number | string>(editing?.cooldown_seconds ?? 5);
+  const [enabled, setEnabled] = useState(editing?.enabled ?? true);
   // slack
-  const [channel, setChannel] = useState('');
-  const [textContains, setTextContains] = useState('');
-  const [textOp, setTextOp] = useState('contains');
+  const [channel, setChannel] = useState(editSlack?.channel ?? '');
+  const [textContains, setTextContains] = useState(editSlack?.value ?? '');
+  const [textOp, setTextOp] = useState(editSlack?.op ?? 'contains');
   // webhook
   const [verification, setVerification] = useState('none');
   const [secret, setSecret] = useState('');
-  const [condField, setCondField] = useState('');
-  const [condOp, setCondOp] = useState('eq');
-  const [condValue, setCondValue] = useState('');
+  const [condField, setCondField] = useState(editWebhook?.field ?? '');
+  const [condOp, setCondOp] = useState(editWebhook?.op ?? 'eq');
+  const [condValue, setCondValue] = useState(editWebhook?.value ?? '');
   // schedule
-  const [cron, setCron] = useState('0 9 * * 1-5');
-  const [timezone, setTimezone] = useState('UTC');
+  const [cron, setCron] = useState(editing?.schedule_config?.cron ?? '0 9 * * 1-5');
+  const [timezone, setTimezone] = useState(editing?.schedule_config?.timezone ?? 'UTC');
   // shared subject
-  const [subjectPolicy, setSubjectPolicy] = useState('none');
-  const [subjectColumnId, setSubjectColumnId] = useState<string | null>(columns[0]?.id?.toString() ?? null);
-  const [subjectTitleTemplate, setSubjectTitleTemplate] = useState('');
+  const [subjectPolicy, setSubjectPolicy] = useState(editing?.subject_policy ?? 'none');
+  const [subjectColumnId, setSubjectColumnId] = useState<string | null>(
+    editing?.subject_column_id?.toString() ?? columns[0]?.id?.toString() ?? null,
+  );
+  const [subjectTitleTemplate, setSubjectTitleTemplate] = useState(editing?.subject_title_template ?? '');
 
   const columnData = columns.map((c) => ({ value: c.id.toString(), label: c.name }));
   // For the column-enter trigger: a column already bound to a workflow is taken
@@ -326,9 +396,9 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
 
   const submit = useCallback(async () => {
     setSaving(true);
-    const trigger: Record<string, unknown> = { kind };
+    const trigger: Record<string, unknown> = isEdit ? {} : { kind };
     if (kind === 'column') {
-      trigger.board_column_id = columnId;
+      if (!isEdit) trigger.board_column_id = columnId;
       trigger.trigger_mode = mode;
       trigger.cooldown_seconds = cooldown;
     } else {
@@ -337,8 +407,11 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         if (channel.trim()) filter.channel = channel.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
       } else if (kind === 'webhook') {
-        trigger.verification_strategy = verification;
-        if (secret.trim()) trigger.secret = secret.trim();
+        // verification_strategy + secret are immutable (set at create time only).
+        if (!isEdit) {
+          trigger.verification_strategy = verification;
+          if (secret.trim()) trigger.secret = secret.trim();
+        }
         if (condField.trim()) {
           filter[condField.trim()] = condOp === 'eq' ? condValue : { op: condOp, value: condValue };
         }
@@ -351,9 +424,31 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         trigger.subject_column_id = subjectColumnId;
         if (subjectTitleTemplate.trim()) trigger.subject_title_template = subjectTitleTemplate.trim();
       }
+      if (isEdit) trigger.enabled = enabled;
     }
 
     try {
+      if (isEdit && editing) {
+        const url = apiV1ProjectWorkflowTriggerPath(
+          projectId,
+          workflowId,
+          editing.id,
+          kind === 'column' ? { kind: 'column' } : {},
+        );
+        const res = await apiFetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          notifications.show({ message: (data.errors ?? ['Failed to update trigger']).join(', '), color: 'red' });
+          return;
+        }
+        onCreated();
+        return;
+      }
+
       const res = await apiFetch(apiV1ProjectWorkflowTriggersPath(projectId, workflowId), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -374,10 +469,13 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
       setSaving(false);
     }
   }, [
+    isEdit,
+    editing,
     kind,
     columnId,
     mode,
     cooldown,
+    enabled,
     channel,
     textContains,
     textOp,
@@ -452,17 +550,23 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
 
   return (
     <Stack gap="sm" p="sm" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
-      <SegmentedControl
-        fullWidth
-        value={kind}
-        onChange={(v) => setKind(v as Kind)}
-        data={[
-          { value: 'column', label: 'Column' },
-          { value: 'schedule', label: 'Schedule' },
-          { value: 'slack', label: 'Slack' },
-          { value: 'webhook', label: 'Webhook' },
-        ]}
-      />
+      {isEdit ? (
+        <Text size="sm" fw={600}>
+          Edit {(KIND_META[kind] ?? KIND_META.event).label.toLowerCase()} trigger
+        </Text>
+      ) : (
+        <SegmentedControl
+          fullWidth
+          value={kind}
+          onChange={(v) => setKind(v as Kind)}
+          data={[
+            { value: 'column', label: 'Column' },
+            { value: 'schedule', label: 'Schedule' },
+            { value: 'slack', label: 'Slack' },
+            { value: 'webhook', label: 'Webhook' },
+          ]}
+        />
+      )}
 
       {kind === 'column' && (
         <>
@@ -473,6 +577,7 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
             onChange={setColumnId}
             placeholder="Pick a column"
             searchable
+            disabled={isEdit}
           />
           <Group grow>
             <Box>
@@ -571,24 +676,26 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
 
       {kind === 'webhook' && (
         <>
-          <Group grow>
-            <Select
-              label="Verification"
-              data={[
-                { value: 'none', label: 'None' },
-                { value: 'hmac_sha256', label: 'HMAC SHA-256' },
-                { value: 'shared_token', label: 'Shared token' },
-              ]}
-              value={verification}
-              onChange={(v) => setVerification(v ?? 'none')}
-            />
-            <PasswordInput
-              label="Secret"
-              placeholder="optional"
-              value={secret}
-              onChange={(e) => setSecret(e.currentTarget.value)}
-            />
-          </Group>
+          {!isEdit && (
+            <Group grow>
+              <Select
+                label="Verification"
+                data={[
+                  { value: 'none', label: 'None' },
+                  { value: 'hmac_sha256', label: 'HMAC SHA-256' },
+                  { value: 'shared_token', label: 'Shared token' },
+                ]}
+                value={verification}
+                onChange={(v) => setVerification(v ?? 'none')}
+              />
+              <PasswordInput
+                label="Secret"
+                placeholder="optional"
+                value={secret}
+                onChange={(e) => setSecret(e.currentTarget.value)}
+              />
+            </Group>
+          )}
           <Text size="xs" fw={500}>
             Only when (optional)
           </Text>
@@ -624,12 +731,20 @@ function AddTriggerForm({ projectId, workflowId, columns, onCancel, onCreated }:
         </>
       )}
 
+      {isEdit && kind !== 'column' && (
+        <Switch
+          label="Enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.currentTarget.checked)}
+        />
+      )}
+
       <Group justify="flex-end">
         <Button variant="default" onClick={onCancel}>
           Cancel
         </Button>
         <Button onClick={submit} loading={saving} disabled={kind === 'schedule' && !cronDesc.ok}>
-          Add trigger
+          {isEdit ? 'Save' : 'Add trigger'}
         </Button>
       </Group>
     </Stack>

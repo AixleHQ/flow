@@ -71,6 +71,35 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_includes binding.errors[:schedule_config], "must include a cron expression"
   end
 
+  test "invalid when a workflow step requires user interaction (no auto-run)" do
+    wf = create(:workflow, scope: @company)
+    wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
+
+    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
+
+    assert_not binding.valid?
+    assert_includes binding.errors[:workflow].join, "Manual step"
+  end
+
+  test "valid when every workflow step allows auto-run" do
+    wf = create(:workflow, scope: @company)
+    wf.steps.create!(name: "Auto step", position: 1, allow_non_interactive: true)
+
+    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
+
+    assert binding.valid?
+  end
+
+  test "a disabled binding skips the auto-run validation" do
+    wf = create(:workflow, scope: @company)
+    wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
+
+    binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user,
+      event_type: "slack.message", enabled: false)
+
+    assert binding.valid?
+  end
+
   test "for_event scopes by project, event_type and enabled" do
     match = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "other.type")
