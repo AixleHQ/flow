@@ -7,6 +7,8 @@
 # - system:   platform-provided "big" tools, visible in UI, attached explicitly
 # - internal: invisible helpers, auto-injected when session has container tools (read_tool_result)
 # - workflow: invisible, auto-injected only in workflow_step sessions (list_sub_steps, mark_sub_step)
+# - meta:     meta-workflow tools (meta_*) used ONLY by the Aixle Builder; hidden from
+#             normal tool pickers (excluded from visible_for_project/visible_for_company)
 #
 # execution_mode: app | container
 # - app:       executes in Rails process (InternalToolExecutor), synchronous
@@ -16,7 +18,7 @@
 class Tool < ApplicationRecord
   extend Enumerize
 
-  enumerize :kind, in: %i[custom system internal workflow], default: :custom, predicates: true
+  enumerize :kind, in: %i[custom system internal workflow meta], default: :custom, predicates: true
   enumerize :execution_mode, in: %i[app container], default: :container, predicates: true
 
   belongs_to :scope, polymorphic: true, optional: true
@@ -54,11 +56,28 @@ class Tool < ApplicationRecord
 
   # Tools visible in UI management (system + custom, not internal/workflow)
   scope :ui_visible, -> { where(kind: %w[custom system]) }
+  # NOTE: only system/internal/workflow platform kinds are listed here, so :meta
+  # tools (Aixle Builder meta_* tools) are intentionally excluded from pickers.
   scope :visible_for_project, ->(project) {
     not_deleted.enabled.where(kind: %w[system internal workflow])
                .or(not_deleted.enabled.where(scope_type: "Company", scope_id: project.company_id))
                .or(not_deleted.enabled.where(scope_type: "Project", scope_id: project.id))
+               .where("tools.requires_integration IS NULL OR tools.requires_integration IN (?)",
+                      active_integration_providers(project))
   }
+
+  # Providers of integrations active for this project (project-scoped or
+  # company-wide). Used to gate tools that require an integration to be usable —
+  # e.g. slack_post_message is hidden until Slack is connected.
+  def self.active_integration_providers(project)
+    return [] if project.nil?
+
+    Integration.active
+               .where("(project_id = :pid) OR (project_id IS NULL AND company_id = :cid)",
+                      pid: project.id, cid: project.company_id)
+               .distinct.pluck(:provider)
+  end
+  # Like visible_for_project, :meta tools are excluded (only system/internal/workflow).
   scope :visible_for_company, ->(company) {
     not_deleted.enabled.where(kind: %w[system internal workflow])
                .or(not_deleted.enabled.where(scope_type: "Company", scope_id: company.id))

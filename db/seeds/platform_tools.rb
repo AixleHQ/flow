@@ -609,23 +609,40 @@ module Seeds
 
       Tool.find_or_initialize_by(name: "slack_post_message", kind: :workflow).update!(
         display_name: "Slack Post Message",
-        description: "Post a message to Slack from this workflow. Omit channel/thread to reply in " \
-                     "the channel/thread that triggered the run. Requires a Slack integration on the project.",
+        description: "Send a Slack message from this workflow. `text` and `files` are both optional but " \
+                     "at least one is required — text only, files only, or both arrive as ONE message. " \
+                     "Omit channel/thread to reply in the channel/thread that triggered the run. " \
+                     "Requires a Slack integration on the project.",
         input_schema: {
           type: "object",
           properties: {
-            text: { type: "string", description: "Message text (required)" },
+            text: { type: "string", description: "Message text. Optional when files are provided." },
+            files: {
+              type: "array",
+              description: "Optional file attachments, sent in the SAME message as the text.",
+              items: {
+                type: "object",
+                properties: {
+                  filename: { type: "string", description: "File name, e.g. fizzbuzz.rb" },
+                  content: { type: "string", description: "Full text content of the file" },
+                  title: { type: "string", description: "Optional display title (defaults to filename)" }
+                },
+                required: %w[filename content]
+              }
+            },
             channel: { type: "string", description: "Channel ID. Defaults to the triggering channel for Slack-started runs." },
             thread_ts: { type: "string", description: "Thread timestamp to reply into. Defaults to the triggering thread." }
           },
-          required: %w[text]
+          required: []
         },
-        execution_mode: :app
+        execution_mode: :app,
+        requires_integration: "slack"
       )
 
-      # -- Meta-workflow tools: used by Aixle Builder to create entities --
+      # -- Meta-workflow tools: used ONLY by Aixle Builder; kind :meta hides them
+      #    from normal tool pickers (visible_for_project/visible_for_company).
       META_WORKFLOW_TOOLS.each do |attrs|
-        Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(
+        Tool.find_or_initialize_by(name: attrs[:name], kind: :meta).update!(
           display_name: attrs[:display_name],
           description: attrs[:description],
           input_schema: attrs[:input_schema],
