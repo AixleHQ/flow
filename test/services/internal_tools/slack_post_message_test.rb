@@ -45,11 +45,32 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal 0, run_tool(text: "hi", channel: "C2", thread_ts: "999")[:exit_code]
   end
 
-  test "errors when text is blank" do
+  test "errors when neither text nor files are given" do
     Slack::Client.expects(:post_message).never
+    Slack::Client.expects(:upload_files).never
     result = run_tool(text: "")
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "text is required"
+    assert_includes result[:stderr], "text` and/or `files"
+  end
+
+  test "sends text and a file as a single message via the upload flow" do
+    Slack::Client.expects(:upload_files)
+      .with(has_entries(token: "xoxb-1", channel: "C1", thread_ts: "111.2", initial_comment: "here you go",
+                        files: [ { filename: "fizzbuzz.rb", content: "puts 'Fizz'", title: nil } ]))
+      .once.returns({ "ok" => true })
+    Slack::Client.expects(:post_message).never
+
+    result = run_tool(text: "here you go",
+      files: [ { "filename" => "fizzbuzz.rb", "content" => "puts 'Fizz'" } ])
+    assert_equal 0, result[:exit_code]
+  end
+
+  test "can send files only, with no text" do
+    Slack::Client.expects(:upload_files)
+      .with(has_entries(initial_comment: nil, files: [ { filename: "a.txt", content: "x", title: nil } ]))
+      .once.returns({ "ok" => true })
+
+    assert_equal 0, run_tool(files: [ { "filename" => "a.txt", "content" => "x" } ])[:exit_code]
   end
 
   test "errors when the project has no active Slack integration" do

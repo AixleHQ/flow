@@ -15,6 +15,13 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/Integrations/IntegrationsPage"
   end
 
+  test "slack_oauth_start authorizes an admin and redirects to Slack consent" do
+    get slack_oauth_start_company_project_integrations_path(@project)
+
+    assert_response :redirect
+    assert_includes response.location, Slack::Oauth::AUTHORIZE_URL
+  end
+
   test "destroy removes integration" do
     integration = create(:integration, company: @company, connected_by: @user, project: @project)
 

@@ -21,10 +21,10 @@ module Webhooks
       )
     end
 
-    test "normalizes a Slack message and starts the bound workflow" do
+    test "starts the bound workflow on an app_mention" do
       payload = {
         "type" => "event_callback", "event_id" => "Ev1", "team_id" => "T1",
-        "event" => { "type" => "message", "channel" => "C1", "user" => "U1", "text" => "hello" }
+        "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1", "text" => "<@B> hello" }
       }
       rw = received(payload)
 
@@ -39,8 +39,23 @@ module Webhooks
       assert_equal 1, TriggerDispatch.count
     end
 
+    test "ignores plain channel messages that do not mention the bot" do
+      payload = {
+        "type" => "event_callback", "event_id" => "EvMsg", "team_id" => "T1",
+        "event" => { "type" => "message", "channel" => "C1", "user" => "U1", "text" => "just chatting" }
+      }
+      rw = received(payload, key: "EvMsg")
+
+      WorkflowService.expects(:start).never
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
+
+      assert_equal "skipped", rw.reload.status
+      assert_not TriggerEvent.exists?(event_type: "slack.message")
+    end
+
     test "ignores the bot's own messages" do
-      payload = { "event" => { "type" => "message", "channel" => "C1", "bot_id" => "B1" } }
+      payload = { "event" => { "type" => "app_mention", "channel" => "C1", "bot_id" => "B1" } }
       rw = received(payload, key: "Ev2")
 
       WorkflowService.expects(:start).never
@@ -50,7 +65,7 @@ module Webhooks
       assert_equal "skipped", rw.reload.status
     end
 
-    test "threads Slack reply context into shared_context and captures attachments" do
+    test "threads Slack reply context and the message into shared_context; whitelists attachments" do
       integration = Integration.create!(
         provider: :slack, company: @user.company, project: @project, connected_by: @user,
         name: "Acme", status: :active, settings: { "team_id" => "T1" }
@@ -73,7 +88,8 @@ module Webhooks
           workflow: @workflow,
           shared_context: has_entries(
             "slack" => has_entries("channel" => "C1", "thread_ts" => "111.222",
-                                   "team" => "T1", "integration_id" => integration.id)
+                                   "team" => "T1", "integration_id" => integration.id,
+                                   "text" => "run report", "user" => "U1")
           )
         )
       ).once.returns(build(:workflow_run))
@@ -101,7 +117,7 @@ module Webhooks
       payload = {
         "type" => "event_callback", "event_id" => "EvFiles", "team_id" => "T1",
         "event" => {
-          "type" => "message", "channel" => "C1", "ts" => "1.1",
+          "type" => "app_mention", "channel" => "C1", "ts" => "1.1",
           "files" => [ { "id" => "F1", "name" => "in.txt", "url_private" => "https://files.slack.com/in.txt", "size" => 5 } ]
         }
       }
@@ -116,7 +132,7 @@ module Webhooks
     end
 
     test "does not start a workflow when the channel predicate does not match" do
-      payload = { "event_id" => "Ev3", "event" => { "type" => "message", "channel" => "OTHER" } }
+      payload = { "event_id" => "Ev3", "event" => { "type" => "app_mention", "channel" => "OTHER" } }
       rw = received(payload, key: "Ev3")
 
       WorkflowService.expects(:start).never

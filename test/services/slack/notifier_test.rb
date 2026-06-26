@@ -22,6 +22,23 @@ module Slack
       assert Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi")
     end
 
+    test "post with files uploads them in one message via the client" do
+      Slack::Client.expects(:upload_files)
+        .with(has_entries(token: "xoxb-1", channel: "C1", initial_comment: "hi",
+                          files: [ { filename: "a.rb", content: "x" } ]))
+        .once.returns({ "ok" => true })
+      Slack::Client.expects(:post_message).never
+
+      assert Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        files: [ { filename: "a.rb", content: "x" } ])
+    end
+
+    test "post is a no-op when neither text nor files are given" do
+      Slack::Client.expects(:post_message).never
+      Slack::Client.expects(:upload_files).never
+      assert_not Slack::Notifier.post(integration: @integration, channel: "C1")
+    end
+
     test "post is a no-op (false) when the integration is nil or channel blank" do
       Slack::Client.expects(:post_message).never
       assert_not Slack::Notifier.post(integration: nil, channel: "C1", text: "hi")

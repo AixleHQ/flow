@@ -35,6 +35,29 @@ module Slack
         }.compact)
       end
 
+      # Upload one or more files and share them in a SINGLE Slack message. Each
+      # file is `{ filename:, content:, title? }`; `initial_comment` becomes the
+      # message text shown above the attachments. Uses Slack's external-upload flow
+      # (getUploadURLExternal → POST bytes → completeUploadExternal). Requires the
+      # files:write scope.
+      def upload_files(token:, channel:, files:, initial_comment: nil, thread_ts: nil)
+        uploaded = Array(files).map do |f|
+          content  = f[:content].to_s
+          filename = f[:filename].presence || "file"
+          info = post("files.getUploadURLExternal", token: token,
+            params: { filename: filename, length: content.bytesize })
+          put_file_bytes(info["upload_url"], filename, content)
+          { id: info["file_id"], title: (f[:title].presence || filename) }
+        end
+
+        post("files.completeUploadExternal", token: token, params: {
+          files: uploaded.to_json,
+          channel_id: channel,
+          thread_ts: thread_ts,
+          initial_comment: initial_comment.presence
+        })
+      end
+
       # Download a private file's bytes. `url` is an absolute Slack file URL
       # (url_private / url_private_download); requires the files:read scope. Returns
       # the raw body string (not JSON). When max_bytes is set, the body is streamed
@@ -61,6 +84,28 @@ module Slack
       end
 
       private
+
+      # POST raw file bytes to the short-lived upload_url from getUploadURLExternal.
+      # Sent as multipart/form-data (field "file"), built by hand to avoid a
+      # faraday-multipart dependency.
+      def put_file_bytes(upload_url, filename, content)
+        boundary = "----aixle#{SecureRandom.hex(12)}"
+        body = +""
+        body << "--#{boundary}\r\n"
+        body << %(Content-Disposition: form-data; name="file"; filename="#{filename}"\r\n)
+        body << "Content-Type: application/octet-stream\r\n\r\n"
+        body << content
+        body << "\r\n--#{boundary}--\r\n"
+
+        resp = Faraday.new do |f|
+          f.request :retry, max: 2, interval: 0.2
+          f.adapter Faraday.default_adapter
+        end.post(upload_url) do |req|
+          req.headers["Content-Type"] = "multipart/form-data; boundary=#{boundary}"
+          req.body = body
+        end
+        raise Error, "file_upload_failed_#{resp.status}" unless resp.success?
+      end
 
       def post_form(path, params)
         resp = connection.post(path) do |req|

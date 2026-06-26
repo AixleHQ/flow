@@ -192,9 +192,11 @@ class TriggerEngine
             input_asset_ids: Array(event.data["input_asset_ids"]),
             shared_context: slack_run_context(event)
           )
+          started = result.try(:persisted?)
           dispatch.update!(
             workflow_run_id: result.try(:id),
-            status: result.try(:persisted?) ? "started" : "skipped"
+            status: started ? "started" : "skipped",
+            detail: started ? {} : { "reason" => skip_reason(result) }
           )
         end
       end
@@ -240,6 +242,14 @@ class TriggerEngine
       )
     rescue ActiveRecord::RecordNotUnique
       TriggerDispatch.find_by!(dedup_key: dedup_key)
+    end
+
+    # Human-readable reason a launch didn't start, recorded on the dispatch so a
+    # skip is diagnosable instead of silently swallowed. The most common cause is
+    # WorkflowService#validate_mode! rejecting steps that require user interaction.
+    def skip_reason(result)
+      msgs = result.try(:errors)&.full_messages
+      msgs.presence&.join("; ") || "workflow did not start"
     end
 
     # Resolve the board task a binding's run should be about, per subject_policy.
@@ -300,9 +310,10 @@ class TriggerEngine
       "#{base}:#{target}"
     end
 
-    # Reply coordinates for a Slack-originated event, threaded into the run's
-    # shared_context so the workflow (and the slack_post_message tool) can reply in
-    # the originating channel/thread. Empty for non-Slack events.
+    # Slack context threaded into the run's shared_context: reply coordinates so the
+    # workflow (and the slack_post_message tool) can reply in the originating
+    # channel/thread, PLUS the triggering message text + author so the agent knows
+    # what it was asked to do. Empty for non-Slack events.
     def slack_run_context(event)
       return {} unless event.event_type.to_s.start_with?("slack.")
 
@@ -310,7 +321,9 @@ class TriggerEngine
         "channel" => event.data["channel"],
         "thread_ts" => event.data["thread_ts"] || event.data["ts"],
         "team" => event.data["team"],
-        "integration_id" => event.data["integration_id"]
+        "integration_id" => event.data["integration_id"],
+        "text" => event.data["text"],
+        "user" => event.data["user"]
       }.compact
       slack.present? ? { "slack" => slack } : {}
     end

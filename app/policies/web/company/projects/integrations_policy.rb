@@ -7,6 +7,8 @@ module Web
         def index? = project_accessible?
         def create? = project_accessible? && current_user.admin?
         def destroy? = project_accessible? && current_user.admin?
+        # Starting the Slack OAuth install is an integration-create action.
+        def slack_oauth_start? = create?
 
         private
 

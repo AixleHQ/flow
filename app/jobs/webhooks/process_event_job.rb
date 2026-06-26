@@ -48,8 +48,13 @@ module Webhooks
       return nil unless event.is_a?(Hash)
 
       kind = event["type"].to_s # "message", "app_mention", "reaction_added", ...
-      return nil if kind.blank?
-      return nil if event["bot_id"].present? # ignore the bot's own messages
+      # Mention-based ChatOps: only act when the bot is explicitly @mentioned. Slack
+      # delivers that as an `app_mention` event. Every other channel message arrives
+      # as a plain `message` event — ignore it, so the bot only responds when called
+      # (and a mention doesn't double-fire: the same message is ALSO sent as
+      # `message`, which we drop here).
+      return nil unless kind == "app_mention"
+      return nil if event["bot_id"].present? # safety: ignore bot-authored mentions
 
       {
         event_type: "slack.message",

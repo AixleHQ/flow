@@ -54,5 +54,23 @@ module Slack
       res = Slack::Client.auth_test(token: "xoxb-1")
       assert_equal "T1", res["team_id"]
     end
+
+    test "upload_files runs the external-upload flow and shares files in one message" do
+      get_url = stub_request(:post, "https://slack.com/api/files.getUploadURLExternal")
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { ok: true, upload_url: "https://files.slack.com/upload/x", file_id: "F1" }.to_json)
+      put_bytes = stub_request(:post, "https://files.slack.com/upload/x").to_return(status: 200, body: "OK")
+      complete = stub_request(:post, "https://slack.com/api/files.completeUploadExternal")
+        .with(body: hash_including("channel_id" => "C1", "thread_ts" => "5.5", "initial_comment" => "hi"))
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { ok: true }.to_json)
+
+      res = Slack::Client.upload_files(token: "xoxb-1", channel: "C1",
+        files: [ { filename: "a.rb", content: "puts 1" } ], initial_comment: "hi", thread_ts: "5.5")
+
+      assert res["ok"]
+      assert_requested get_url
+      assert_requested put_bytes
+      assert_requested complete
+    end
   end
 end
