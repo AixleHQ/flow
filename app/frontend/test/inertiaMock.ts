@@ -33,8 +33,20 @@ export function makeFormStub<T extends Record<string, unknown>>(initial: T = {} 
   return stub;
 }
 
-/** Mutable state shared between the @inertiajs/react mock (setup.ts) and renderPage(). */
-export const inertiaState: { pageProps: Record<string, unknown>; form: ReturnType<typeof makeFormStub> } = {
+/**
+ * Mutable state shared between the @inertiajs/react mock (setup.ts) and renderPage().
+ * `form` is null by default: the useForm() mock then builds a stub seeded with the component's own
+ * initial data (so `data.field` is never undefined at render). A test can pin a controllable stub
+ * via renderPage(..., { form }) to assert submit/validation behavior.
+ */
+export const inertiaState: { pageProps: Record<string, unknown>; form: ReturnType<typeof makeFormStub> | null } = {
   pageProps: {},
-  form: makeFormStub(),
+  form: null,
 };
+
+/** Resolve useForm(initial) / useForm(rememberKey, initial) against the optional pinned stub. */
+export function resolveForm(arg1?: unknown, arg2?: unknown) {
+  if (inertiaState.form) return inertiaState.form;
+  const initial = (typeof arg1 === 'string' ? arg2 : arg1) as Record<string, unknown> | undefined;
+  return makeFormStub(initial ?? {});
+}
