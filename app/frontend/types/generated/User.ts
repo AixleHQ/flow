@@ -13,6 +13,6 @@ type User = {
   createdAt: string;
   updatedAt: string;
   invitedBy: unknown | null;
-};
+}
 
 export default User;

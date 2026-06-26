@@ -13,6 +13,6 @@ type BoardActivity = {
   actorName: unknown;
   taskTitle: unknown;
   description: unknown;
-};
+}
 
 export default BoardActivity;

@@ -10,6 +10,6 @@ type ColumnWorkflowBinding = {
   createdAt: string;
   updatedAt: string;
   workflowName: unknown;
-};
+}
 
 export default ColumnWorkflowBinding;

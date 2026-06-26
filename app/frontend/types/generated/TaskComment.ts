@@ -10,6 +10,6 @@ type TaskComment = {
   tags: Array<string> | null;
   createdAt: string;
   authorName: unknown;
-};
+}
 
 export default TaskComment;

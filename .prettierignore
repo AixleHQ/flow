@@ -1,0 +1,5 @@
+# Auto-generated, DO-NOT-EDIT outputs — formatting is owned by the generator
+# (Typelizer / route helpers), not Prettier. Keeping them here stops editor
+# format-on-save and `prettier --write` from churning the generated files.
+app/frontend/types/generated/
+app/frontend/shared/routes.ts

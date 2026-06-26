@@ -11,6 +11,6 @@ type AgentCredential = {
   createdAt: string;
   updatedAt: string;
   configKeys: unknown;
-};
+}
 
 export default AgentCredential;

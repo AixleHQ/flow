@@ -12,6 +12,6 @@ type ConfigItem = {
   updatedAt: string;
   value: string | null;
   scopeIndicator: unknown;
-};
+}
 
 export default ConfigItem;

@@ -23,6 +23,6 @@ type Workflow = {
   baseSkillIds: unknown;
   baseMCPServerIds: unknown;
   baseAssetIds: unknown;
-};
+}
 
 export default Workflow;

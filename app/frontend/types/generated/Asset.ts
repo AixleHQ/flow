@@ -19,6 +19,6 @@ type Asset = {
   latestVersion: unknown;
   createdByName: unknown;
   scopeIndicator: unknown;
-};
+}
 
 export default Asset;

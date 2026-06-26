@@ -21,6 +21,6 @@ type BoardTask = {
   assetsCount: unknown;
   recentWorkflowRuns: unknown;
   pendingWaits: unknown;
-};
+}
 
 export default BoardTask;

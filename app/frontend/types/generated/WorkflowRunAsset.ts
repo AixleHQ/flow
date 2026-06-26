@@ -13,6 +13,6 @@ type WorkflowRunAsset = {
   fileSize: number | null;
   stepName: unknown;
   downloadUrl: unknown;
-};
+}
 
 export default WorkflowRunAsset;

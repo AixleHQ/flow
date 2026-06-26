@@ -11,6 +11,6 @@ type ColumnTransition = {
   actorType: string;
   workflowRunId: number | null;
   createdAt: string;
-};
+}
 
 export default ColumnTransition;

@@ -5,6 +5,6 @@
 type BoardWorkflow = {
   id: unknown;
   name: unknown;
-};
+}
 
 export default BoardWorkflow;

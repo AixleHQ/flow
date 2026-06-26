@@ -18,7 +18,9 @@ export default typescriptEslint.config(
     files: ['**/*.{js,jsx,ts,tsx}'],
   },
   {
-    ignores: ['dist/*', 'node_modules/*', 'app/frontend/shared/routes.ts'],
+    // Auto-generated, DO-NOT-EDIT outputs (Typelizer types + route helpers).
+    // Their formatting is the generator's, not Prettier's — don't lint them.
+    ignores: ['dist/*', 'node_modules/*', 'app/frontend/shared/routes.ts', 'app/frontend/types/generated/**'],
   },
   {
     languageOptions: {

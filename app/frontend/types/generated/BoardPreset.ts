@@ -6,6 +6,6 @@ type BoardPreset = {
   key: unknown;
   displayName: unknown;
   columns: unknown;
-};
+}
 
 export default BoardPreset;

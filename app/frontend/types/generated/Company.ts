@@ -9,6 +9,6 @@ type Company = {
   logoUrl: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;
-};
+}
 
 export default Company;

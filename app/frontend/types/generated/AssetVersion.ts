@@ -11,6 +11,6 @@ type AssetVersion = {
   uploadedById: number;
   fileUrl: unknown;
   createdAt: string;
-};
+}
 
 export default AssetVersion;

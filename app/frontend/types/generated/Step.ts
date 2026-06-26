@@ -26,6 +26,6 @@ type Step = {
   mcpServerIds: unknown;
   skillIds: unknown;
   subSteps: unknown;
-};
+}
 
 export default Step;

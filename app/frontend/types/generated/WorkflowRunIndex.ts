@@ -16,6 +16,6 @@ type WorkflowRunIndex = {
   workflowName: unknown;
   stepsCompleted: unknown;
   stepsTotal: unknown;
-};
+}
 
 export default WorkflowRunIndex;

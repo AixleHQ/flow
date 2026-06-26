@@ -20,6 +20,6 @@ type MCPServer = {
   updatedAt: string;
   internal: unknown;
   scopeIndicator: unknown;
-};
+}
 
 export default MCPServer;

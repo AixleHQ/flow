@@ -9,6 +9,6 @@ type Board = {
   createdAt: string;
   updatedAt: string;
   boardColumns?: unknown;
-};
+}
 
 export default Board;

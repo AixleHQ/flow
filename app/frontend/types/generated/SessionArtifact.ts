@@ -11,6 +11,6 @@ type SessionArtifact = {
   fileSize: unknown;
   contentType: unknown;
   downloadUrl: unknown;
-};
+}
 
 export default SessionArtifact;

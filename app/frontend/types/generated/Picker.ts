@@ -5,6 +5,6 @@
 type Picker = {
   id: unknown;
   name: unknown;
-};
+}
 
 export default Picker;

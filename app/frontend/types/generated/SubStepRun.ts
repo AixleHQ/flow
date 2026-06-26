@@ -9,6 +9,6 @@ type SubStepRun = {
   completedAt: string | null;
   subStepName: unknown;
   subStepDescription: unknown;
-};
+}
 
 export default SubStepRun;

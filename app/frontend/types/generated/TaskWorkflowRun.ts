@@ -10,6 +10,6 @@ type TaskWorkflowRun = {
   completedAt: unknown;
   createdAt: unknown;
   workflowName: unknown;
-};
+}
 
 export default TaskWorkflowRun;

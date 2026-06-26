@@ -13,6 +13,6 @@ type TaskAsset = {
   fileUrl: unknown;
   fileSize: unknown;
   contentType: unknown;
-};
+}
 
 export default TaskAsset;

@@ -9,6 +9,6 @@ type BoardViewPreset = {
   shared: boolean;
   userId: number;
   createdAt: string;
-};
+}
 
 export default BoardViewPreset;

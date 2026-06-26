@@ -12,6 +12,6 @@ type SubStep = {
   required: boolean;
   createdAt: string;
   updatedAt: string;
-};
+}
 
 export default SubStep;

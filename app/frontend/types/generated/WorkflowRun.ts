@@ -23,6 +23,6 @@ type WorkflowRun = {
   agentType: unknown;
   costCents: unknown;
   stepRuns: unknown;
-};
+}
 
 export default WorkflowRun;

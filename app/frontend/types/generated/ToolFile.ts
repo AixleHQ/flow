@@ -11,6 +11,6 @@ type ToolFile = {
   binary: unknown;
   fileName: unknown;
   fileUrl: unknown;
-};
+}
 
 export default ToolFile;

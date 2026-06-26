@@ -21,6 +21,6 @@ type StepRun = {
   terminalUrl: unknown;
   ideUrl: unknown;
   subStepRuns: unknown;
-};
+}
 
 export default StepRun;

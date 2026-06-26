@@ -8,6 +8,6 @@ type TaskStatistics = {
   timeTotals: unknown;
   waitStats: unknown;
   workflowBreakdowns: unknown;
-};
+}
 
 export default TaskStatistics;

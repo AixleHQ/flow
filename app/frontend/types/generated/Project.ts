@@ -16,6 +16,6 @@ type Project = {
   sessionsCount: unknown;
   workflowsCount: unknown;
   boardTasksCount: unknown;
-};
+}
 
 export default Project;

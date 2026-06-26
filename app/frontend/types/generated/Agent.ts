@@ -16,6 +16,6 @@ type Agent = {
   createdAt: string;
   updatedAt: string;
   scopeIndicator: unknown;
-};
+}
 
 export default Agent;

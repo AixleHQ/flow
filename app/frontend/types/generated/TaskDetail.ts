@@ -21,6 +21,6 @@ type TaskDetail = {
   assetsCount: unknown;
   recentWorkflowRuns: unknown;
   pendingWaits: unknown;
-};
+}
 
 export default TaskDetail;

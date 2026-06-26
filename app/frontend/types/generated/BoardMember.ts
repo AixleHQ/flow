@@ -5,6 +5,6 @@
 type BoardMember = {
   id: unknown;
   name: unknown;
-};
+}
 
 export default BoardMember;

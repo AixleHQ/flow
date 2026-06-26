@@ -10,6 +10,6 @@ type BoardColumn = {
   createdAt: string;
   updatedAt: string;
   workflowBinding: unknown;
-};
+}
 
 export default BoardColumn;
