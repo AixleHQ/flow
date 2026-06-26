@@ -20,7 +20,7 @@ const SessionShowPage = () => {
         cableStream={cableStream}
         context={{
           backPath: '/company/sessions',
-          newSessionPath: '/company/sessions/new',
+          // Company-level session creation was removed; omit newSessionPath to hide the "New Session" button.
           artifactsPath: `/company/sessions/${session.id}/artifacts`,
         }}
       />

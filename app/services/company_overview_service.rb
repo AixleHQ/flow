@@ -37,7 +37,8 @@ class CompanyOverviewService
     if project
       Workflow.for_project(project)
     else
-      Workflow.belonging_to_company(company)
+      # All workflows across the company's projects (company-level workflows were removed).
+      company.workflows.active
     end
   end
 

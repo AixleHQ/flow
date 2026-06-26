@@ -49,16 +49,6 @@ Rails.application.routes.draw do
         end
       end
 
-      resources :workflows, only: %i[show update destroy] do
-        scope module: :workflows do
-          resources :steps, only: %i[index show create update destroy] do
-            collection do
-              patch :reorder
-            end
-          end
-        end
-      end
-
       resources :projects, only: [] do
         scope module: :projects do
           resources :assets, only: %i[create destroy] do
@@ -193,12 +183,10 @@ Rails.application.routes.draw do
     namespace :company do
       resources :members, only: %i[index create update destroy]
       resources :config_items, only: %i[index create update destroy]
-      resources :integrations, only: %i[index create destroy] do
-        collection do
-          get :github_setup
-        end
-      end
-      resources :repositories, only: %i[index create update destroy]
+      # GitHub App setup callback (single global endpoint; project target carried in `state`).
+      # Company-level integration management has been removed — integrations are project-scoped.
+      get "integrations/github_setup", to: "integrations/github_setup#github_setup",
+          as: :integrations_github_setup
       resources :projects, only: %i[index show create destroy] do
         scope module: :projects do
           resources :overview, only: :index
@@ -245,15 +233,6 @@ Rails.application.routes.draw do
           resource :settings, only: %i[show update]
         end
       end
-      resources :agents, only: %i[index create update destroy]
-      resources :tools, only: %i[index create update destroy]
-      resources :skills, only: %i[index create destroy]
-      resources :mcp_servers, only: %i[index create update destroy]
-      resources :workflows, only: %i[index create destroy] do
-        member do
-          get :builder
-        end
-      end
       resources :workflow_catalog, only: :index do
         member do
           post :duplicate
@@ -261,7 +240,7 @@ Rails.application.routes.draw do
       end
       resources :analytics, only: :index
       resources :assets, only: %i[index]
-      resources :sessions, only: %i[index new show] do
+      resources :sessions, only: %i[index show] do
         scope module: :sessions do
           resources :artifacts, only: :index do
             collection do

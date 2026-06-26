@@ -61,10 +61,6 @@ import {
   apiV1ProjectWorkflowStepsPath,
   apiV1ProjectWorkflowStepPath,
   reorderApiV1ProjectWorkflowStepsPath,
-  apiV1WorkflowPath,
-  apiV1WorkflowStepsPath,
-  apiV1WorkflowStepPath,
-  reorderApiV1WorkflowStepsPath,
 } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -173,17 +169,24 @@ const ON_FAILURE_OPTIONS = [
   { value: 'fail', label: 'Fail' },
 ];
 
+// Workflows are always edited within a project context (the company-level
+// workflow editor was removed). These helpers require a non-null projectId.
+const requireProjectId = (projectId: number | null): number => {
+  if (projectId == null) throw new Error('BuilderPage requires a project context');
+  return projectId;
+};
+
 const workflowApi = (projectId: number | null, workflowId: number) =>
-  projectId ? apiV1ProjectWorkflowPath(projectId, workflowId) : apiV1WorkflowPath(workflowId);
+  apiV1ProjectWorkflowPath(requireProjectId(projectId), workflowId);
 
 const stepsCollectionApi = (projectId: number | null, workflowId: number) =>
-  projectId ? apiV1ProjectWorkflowStepsPath(projectId, workflowId) : apiV1WorkflowStepsPath(workflowId);
+  apiV1ProjectWorkflowStepsPath(requireProjectId(projectId), workflowId);
 
 const stepApi = (projectId: number | null, workflowId: number, stepId: number) =>
-  projectId ? apiV1ProjectWorkflowStepPath(projectId, workflowId, stepId) : apiV1WorkflowStepPath(workflowId, stepId);
+  apiV1ProjectWorkflowStepPath(requireProjectId(projectId), workflowId, stepId);
 
 const stepsReorderApi = (projectId: number | null, workflowId: number) =>
-  projectId ? reorderApiV1ProjectWorkflowStepsPath(projectId, workflowId) : reorderApiV1WorkflowStepsPath(workflowId);
+  reorderApiV1ProjectWorkflowStepsPath(requireProjectId(projectId), workflowId);
 
 // Fields stored in the workflow's config JSON — must be sent nested under `config` in PATCH requests.
 const CONFIG_FIELDS = new Set([
@@ -427,7 +430,8 @@ const BuilderPage = () => {
   }, [agentModels]);
 
   const projectId = project?.id ?? null;
-  const backPath = projectId ? `/company/projects/${projectId}/workflows` : '/company/workflows';
+  // Company-level workflows were removed; BuilderPage always renders within a project.
+  const backPath = projectId ? `/company/projects/${projectId}/workflows` : '/company/projects';
 
   const [workflow, setWorkflow] = useState(initialWorkflow);
   const [steps, setSteps] = useState(initialSteps);

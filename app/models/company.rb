@@ -18,7 +18,10 @@ class Company < ApplicationRecord
   has_many :assets, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
-  has_many :workflows, as: :scope, dependent: :destroy
+  # Workflows are owned by projects (company-level workflows were removed).
+  # A company's workflows are the aggregate of its projects' workflows.
+  # Cascade on destroy is handled by projects' own `dependent: :destroy`.
+  has_many :workflows, through: :projects
   has_many :terminal_sessions, through: :users
 
   # Virtual attributes for initial admin creation (used in admin form)

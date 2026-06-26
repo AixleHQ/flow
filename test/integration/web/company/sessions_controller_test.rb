@@ -27,11 +27,6 @@ class Web::Company::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Company/Sessions/Index"
   end
 
-  test "new renders new session page" do
-    get new_company_session_path
-    assert_inertia_page "Company/Sessions/New"
-  end
-
   test "show renders session detail page" do
     session = create(:terminal_session, user: @user, project: create(:project, company: @company, owner: @user))
     get company_session_path(session)

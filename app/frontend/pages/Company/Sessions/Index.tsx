@@ -1,6 +1,6 @@
 import { InfiniteScroll, router } from '@inertiajs/react';
-import { Badge, Box, Button, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
-import { IconExternalLink, IconPlus } from '@tabler/icons-react';
+import { Badge, Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
+import { IconExternalLink } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -213,9 +213,6 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
               allowDeselect={false}
             />
           </Group>
-          <Button size="sm" leftSection={<IconPlus size={16} />} component="a" href="/company/sessions/new">
-            New Session
-          </Button>
         </Group>
 
         {sessions.length === 0 ? (

@@ -186,50 +186,10 @@ demo_task.update!(
 
 puts "Board seeded: #{demo_board.name} (#{demo_board.board_columns.count} columns, #{demo_board.board_tasks.count} tasks)"
 
-# ===========================================================================
-# MCP Servers
-# ===========================================================================
-puts "Creating MCP servers..."
-context7_api_key = ENV["CONTEXT7_API_KEY"].to_s.strip
-context7_headers = context7_api_key.empty? ? {} : { CONTEXT7_API_KEY: context7_api_key }
-
-# Company-scoped MCP servers
-company_mcp_servers = [
-  {
-    name: "context7",
-    display_name: "Context7 Documentation",
-    description: "Library documentation search. Retrieves up-to-date API docs, code examples, and best practices for programming libraries and frameworks.",
-    url: "https://mcp.context7.com/mcp",
-    transport: :sse,
-    headers: context7_headers
-  }
-]
-
-company_mcp_servers.each do |server_data|
-  server = test_company.mcp_servers.find_or_create_by!(name: server_data[:name]) do |s|
-    s.display_name = server_data[:display_name]
-    s.description = server_data[:description]
-    s.url = server_data[:url]
-    s.transport = server_data[:transport]
-    s.headers = server_data[:headers]
-    s.kind = :custom
-    s.enabled = true
-  end
-  puts "  MCP Server created: #{server.display_name} (company)"
-end
-
-puts "CONTEXT7_API_KEY is not set. Seeding MCP server without auth headers." if context7_headers.empty?
-
-require_relative "seeds/semgrep"
-Seeds::Semgrep.seed!(test_company)
-
-# ===========================================================================
-# Workflows (loaded from db/seeds/)
-# ===========================================================================
-require_relative "seeds/code_report"
-
-puts "Creating workflows..."
-Seeds::CodeReport.seed!(test_company)
+# NOTE: Company-scoped demo seeds (Context7 MCP server, Semgrep tool, Code Report
+# agent/workflow) were removed along with the company-level entity screens —
+# these resources now live at the project level. System-scoped platform tools are
+# still seeded above via Seeds::PlatformTools.
 
 puts "Seed data created successfully!"
 puts ""
