@@ -304,11 +304,9 @@ function buildWebhookCurl(url: string, secret: string | undefined, verification:
       `  -d '{"hello":"world"}'`,
     ].join('\n');
   }
-  return [
-    `curl -X POST '${url}' \\`,
-    `  -H 'Content-Type: application/json' \\`,
-    `  -d '{"hello":"world"}'`,
-  ].join('\n');
+  return [`curl -X POST '${url}' \\`, `  -H 'Content-Type: application/json' \\`, `  -d '{"hello":"world"}'`].join(
+    '\n',
+  );
 }
 
 interface AddProps {
@@ -509,7 +507,8 @@ function AddTriggerForm({ projectId, workflowId, columns, editing, onCancel, onC
         <Box>
           <Group justify="space-between" mb={4}>
             <Text size="xs" fw={500}>
-              Example request ({verification === 'none' ? 'no auth' : verification === 'hmac_sha256' ? 'HMAC SHA-256' : 'shared token'})
+              Example request (
+              {verification === 'none' ? 'no auth' : verification === 'hmac_sha256' ? 'HMAC SHA-256' : 'shared token'})
             </Text>
             <CopyButton value={curl}>
               {({ copied, copy }) => (
@@ -732,11 +731,7 @@ function AddTriggerForm({ projectId, workflowId, columns, editing, onCancel, onC
       )}
 
       {isEdit && kind !== 'column' && (
-        <Switch
-          label="Enabled"
-          checked={enabled}
-          onChange={(e) => setEnabled(e.currentTarget.checked)}
-        />
+        <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
       )}
 
       <Group justify="flex-end">

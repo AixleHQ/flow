@@ -773,7 +773,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_27_000003) do
     t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
     t.index ["event_type"], name: "index_trigger_events_on_event_type"
     t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
-    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY ((ARRAY['pending'::character varying, 'dispatching'::character varying])::text[]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|

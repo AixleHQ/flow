@@ -102,6 +102,11 @@ export function webhookIngressPath(slug: ScalarType, options?: object): string {
   return "/" + "webhooks" + "/" + "in" + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /webhooks/slack/events(.:format) */
+export function slackEventsWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /auth/:provider/callback(.:format) */
 export function authCallbackPath(provider: ScalarType, options?: object): string {
   return "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
@@ -867,6 +872,11 @@ export function onboardingPath(options?: object): string {
   return "/" + "onboarding" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/slack/oauth/callback(.:format) */
+export function slackOauthCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /company/members(.:format) */
 export function companyMembersPath(options?: object): string {
   return "/" + "company" + "/" + "members" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1027,6 +1037,11 @@ export function companyProjectRepositoryPath(project_id: ScalarType, id: ScalarT
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /company/projects/:project_id/integrations/slack_oauth_start(.:format) */
+export function slackOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "slack_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /company/projects/:project_id/integrations(.:format) */
 export function companyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
@@ -1110,21 +1125,6 @@ export function companyProjectsPath(options?: object): string {
 /** /company/projects/:id(.:format) */
 export function companyProjectPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
-/** /company/workflow_catalog/:id/duplicate(.:format) */
-export function duplicateCompanyWorkflowCatalogPath(id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "workflow_catalog" + "/" + id + "/" + "duplicate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
-/** /company/workflow_catalog(.:format) */
-export function companyWorkflowCatalogIndexPath(options?: object): string {
-  return "/" + "company" + "/" + "workflow_catalog" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /company/analytics(.:format) */
-export function companyAnalyticsPath(options?: object): string {
-  return "/" + "company" + "/" + "analytics" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/workflow_catalog/:id/duplicate(.:format) */
