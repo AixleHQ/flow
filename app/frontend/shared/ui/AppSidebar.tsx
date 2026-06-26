@@ -30,11 +30,8 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 
 import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
 import {
-  companyAgentsPath,
   companyAssetsPath,
   companyConfigItemsPath,
-  companyIntegrationsPath,
-  companyMCPServersPath,
   companyMembersPath,
   companyProjectAgentsPath,
   companyProjectAnalyticsPath,
@@ -54,11 +51,8 @@ import {
   companyProjectWorkflowRunsPath,
   companyProjectWorkflowsPath,
   companyProjectsPath,
-  companyRepositoriesPath,
   companySessionsPath,
-  companySkillsPath,
-  companyToolsPath,
-  companyWorkflowsPath,
+  companyWorkflowCatalogIndexPath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
@@ -153,21 +147,8 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
   {
-    label: 'Shared Library',
-    items: [
-      { label: 'Agents', icon: <IconRobot size={18} />, path: companyAgentsPath(), adminOnly: true },
-      { label: 'Tools', icon: <IconTool size={18} />, path: companyToolsPath(), adminOnly: true },
-      { label: 'Skills', icon: <IconSparkles size={18} />, path: companySkillsPath(), adminOnly: true },
-      { label: 'MCP Servers', icon: <IconArrowsExchange size={18} />, path: companyMCPServersPath(), adminOnly: true },
-      { label: 'Repositories', icon: <IconGitBranch size={18} />, path: companyRepositoriesPath() },
-      {
-        label: 'Integrations',
-        icon: <IconPlugConnected size={18} />,
-        path: companyIntegrationsPath(),
-        adminOnly: true,
-      },
-      { label: 'Workflows', icon: <IconGitMerge size={18} />, path: companyWorkflowsPath(), adminOnly: true },
-    ],
+    label: 'Library',
+    items: [{ label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() }],
   },
   {
     label: 'Admin',

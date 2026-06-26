@@ -16,7 +16,9 @@ import classes from './SessionShowContent.module.css';
 
 export interface SessionShowContext {
   backPath: string;
-  newSessionPath: string;
+  // Optional: company-level session creation was removed, so the company
+  // session view omits this and the "New Session" buttons are hidden.
+  newSessionPath?: string;
   artifactsPath: string;
 }
 
@@ -197,9 +199,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             Finish
           </Button>
         )}
-        <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => router.visit(ctx.newSessionPath)}>
-          New Session
-        </Button>
+        {ctx.newSessionPath && (
+          <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => router.visit(ctx.newSessionPath!)}>
+            New Session
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -329,7 +333,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             <Button variant="outline" onClick={() => router.visit(ctx.backPath)}>
               All Sessions
             </Button>
-            <Button onClick={() => router.visit(ctx.newSessionPath)}>New Session</Button>
+            {ctx.newSessionPath && <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>}
           </Group>
         </Stack>
       </Card>

@@ -44,15 +44,15 @@ module Seeds
           │       │   ├── SubSteps (ordered, trackable units)
           │       │   └── Links to: Agent, Tools, Skills, MCP Servers
           │       └── WorkflowRuns (execution instances)
-          ├── Workflows (company-level — inherited by all projects)
-          ├── Agents, Tools, Skills, MCP Servers (company-level)
+          └── Workflow Catalog (company-wide view of PUBLISHED workflows; duplicate into a project to use)
 
           ## Scoping Rules
 
-          - Company-scoped entities are visible to ALL projects in the company.
-          - Project-scoped entities are visible ONLY within that project.
-          - Use company scope for reusable agents/tools across projects.
-          - Use project scope for project-specific workflows.
+          - Agents, Tools, Skills, MCP Servers, Repositories, and Integrations are scoped to a PROJECT
+            and visible ONLY within that project.
+          - Published workflows are discoverable company-wide via the Workflow Catalog and can be
+            duplicated into any project the user belongs to.
+          - Use project scope for project-specific workflows and resources.
 
           ## Workflow
 
