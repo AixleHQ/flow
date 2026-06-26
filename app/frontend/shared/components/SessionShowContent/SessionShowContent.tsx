@@ -333,9 +333,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             <Button variant="outline" onClick={() => router.visit(ctx.backPath)}>
               All Sessions
             </Button>
-            {ctx.newSessionPath && (
-              <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>
-            )}
+            {ctx.newSessionPath && <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>}
           </Group>
         </Stack>
       </Card>

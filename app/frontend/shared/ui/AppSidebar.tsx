@@ -148,9 +148,7 @@ const companyNavGroups: NavGroup[] = [
   },
   {
     label: 'Library',
-    items: [
-      { label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() },
-    ],
+    items: [{ label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() }],
   },
   {
     label: 'Admin',
