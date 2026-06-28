@@ -27,15 +27,6 @@ module Slack
         Rails.logger.warn("[Slack::Notifier] post failed: #{e.message}")
         false
       end
-
-      # Reply into the Slack thread that started a run (no-op for non-Slack runs).
-      def notify_run(run, text)
-        slack = run.shared_context.to_h["slack"]
-        return false if slack.blank?
-
-        integration = Integration.find_by(id: slack["integration_id"])
-        post(integration: integration, channel: slack["channel"], text: text, thread_ts: slack["thread_ts"])
-      end
     end
   end
 end

@@ -55,22 +55,5 @@ module Slack
       Slack::Client.expects(:post_message).raises(Slack::Client::Error.new("channel_not_found"))
       assert_not Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi")
     end
-
-    test "notify_run replies into the originating Slack thread" do
-      run = create(:workflow_run, project: @project, user: @user,
-        shared_context: { "slack" => { "channel" => "C9", "thread_ts" => "5.5", "integration_id" => @integration.id } })
-
-      Slack::Client.expects(:post_message)
-        .with(has_entries(token: "xoxb-1", channel: "C9", thread_ts: "5.5"))
-        .once.returns({ "ok" => true })
-
-      assert Slack::Notifier.notify_run(run, "done")
-    end
-
-    test "notify_run is a no-op for non-Slack runs" do
-      run = create(:workflow_run, project: @project, user: @user, shared_context: {})
-      Slack::Client.expects(:post_message).never
-      assert_not Slack::Notifier.notify_run(run, "done")
-    end
   end
 end

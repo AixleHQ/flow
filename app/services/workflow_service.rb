@@ -55,14 +55,12 @@ class WorkflowService
     def complete(run:)
       run.complete! if run.may_complete?
       record_activity(run, :workflow_completed)
-      notify_slack(run, "✅ Workflow *#{run.workflow.name}* finished.")
       broadcast_task_updated(run)
     end
 
     def fail(run:)
       run.fail! if run.may_fail?
       record_activity(run, :workflow_failed)
-      notify_slack(run, "❌ Workflow *#{run.workflow.name}* failed.")
       broadcast_task_updated(run)
     end
 
@@ -133,14 +131,6 @@ class WorkflowService
       run.board_task.board.touch
     rescue StandardError => e
       Rails.logger.warn("[WorkflowService] Failed to broadcast task update for run ##{run.id}: #{e.message}")
-    end
-
-    # Best-effort safety-net reply to the originating Slack thread (no-op for
-    # non-Slack runs). The agent-driven slack_post_message tool is the primary path.
-    def notify_slack(run, text)
-      Slack::Notifier.notify_run(run, text)
-    rescue StandardError => e
-      Rails.logger.warn("[WorkflowService] Slack notify failed for run ##{run.id}: #{e.message}")
     end
 
     def record_activity(run, event_type)
