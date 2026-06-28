@@ -7,6 +7,7 @@ import type { ReactElement, ReactNode } from 'react';
 
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
 
+import { buildSharedProps } from './factories/sharedProps';
 import { inertiaState, makeFormStub } from './inertiaMock';
 
 /**
@@ -19,7 +20,9 @@ export function renderPage<TProps extends Record<string, unknown>>(
   opts: { props?: TProps; form?: ReturnType<typeof makeFormStub> } = {},
 ) {
   inertiaState.pageProps = opts.props ?? {};
-  if (opts.form) inertiaState.form = opts.form;
+  // Reset to null so a prior test's pinned form never leaks; when null, the useForm() mock seeds a
+  // fresh stub from the component's own initial data.
+  inertiaState.form = opts.form ?? null;
   return render(ui, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <MantineProvider
@@ -37,5 +40,17 @@ export function renderPage<TProps extends Record<string, unknown>>(
   });
 }
 
-export { userEvent, makeFormStub };
+/**
+ * Like renderPage(), but pre-seeds the SharedProps every AuthLayout/ProjectLayout reads
+ * (currentUser/flash/projects/permissions/settings). Page-specific props are merged on top, so a
+ * page test only declares what it actually asserts. Use for any page rendered inside a layout.
+ */
+export function renderAuthedPage<TProps extends Record<string, unknown>>(
+  ui: ReactElement,
+  opts: { props?: Partial<TProps>; form?: ReturnType<typeof makeFormStub> } = {},
+) {
+  return renderPage(ui, { ...opts, props: { ...buildSharedProps(), ...opts.props } });
+}
+
+export { userEvent, makeFormStub, buildSharedProps };
 export * from '@testing-library/react';

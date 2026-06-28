@@ -35,7 +35,7 @@ import {
   IconSourceCode,
   IconTrash,
 } from '@tabler/icons-react';
-import { zodResolver } from 'mantine-form-zod-resolver';
+import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { z } from 'zod';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
