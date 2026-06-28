@@ -4289,6 +4289,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"cronstrue@npm:^3.21.0":
+  version: 3.21.0
+  resolution: "cronstrue@npm:3.21.0"
+  bin:
+    cronstrue: bin/cli.js
+  checksum: 10c0/6896a5685a841436ab057fe7e8ea545341db77f414b286f032a4b4d26c87320a65da5cc774d5b7ef132ff25a6eae8779c56ecc48cfd6d5da8ef9a14483adfd76
+  languageName: node
+  linkType: hard
+
 "cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
@@ -9220,6 +9229,7 @@ __metadata:
     "@xterm/addon-fit": "npm:^0.11.0"
     "@xterm/addon-web-links": "npm:^0.12.0"
     "@xterm/xterm": "npm:^6.0.0"
+    cronstrue: "npm:^3.21.0"
     date-fns: "npm:^4.4.0"
     dayjs: "npm:^1.11.20"
     emoji-mart: "npm:^5.6.0"

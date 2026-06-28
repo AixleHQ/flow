@@ -20,7 +20,7 @@ is reached over `streamable-http` at the `MCP_SERVER_URL` env variable
 and authenticated with a per-session `X-Session-Key` header. It exposes:
 
 - **Board tools** (`board_*`) — read and mutate the board: get/list/create/
-  update/move tasks, comments, assets, tags, and Waits.
+  update/move tasks, comments, assets, tags, and Gates.
 - **Progress tools** (`list_sub_steps`, `mark_sub_step`) — auto-injected
   only in workflow-step sessions.
 - **Session lifecycle** (`finish_session`, `fail_session`) — how an agent

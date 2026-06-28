@@ -10,8 +10,8 @@ This is a Ruby on Rails application with a modern frontend stack.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/palad-ai/palad-app.git
-cd palad-app
+git clone https://github.com/aixleHQ/flow.git
+cd flow
 ```
 
 2. Set up and start the project:

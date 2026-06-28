@@ -2,7 +2,7 @@
 
 require "test_helper"
 
-class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
+class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
   setup do
     @company     = create(:company)
     @user        = create(:user, company: @company)
@@ -12,7 +12,7 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     @column      = create(:board_column, board: @board, name: "In Progress", position: 1)
     @task        = create(:board_task, board: @board, board_column: @column, title: "My task")
 
-    # Repository linked to the project — required for repo validation in board_create_wait
+    # Repository linked to the project — required for repo validation in board_create_gate
     @repo_name   = "org/app"
     create(:repository, full_name: @repo_name, scope: @project, integration: @integration)
 
@@ -29,11 +29,11 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
 
   # == github_checks_completed ==
 
-  test "creates a github_checks_completed wait with valid params" do
-    result = InternalTools::BoardCreateWait.new(
+  test "creates a github_checks_completed gate with valid params" do
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_checks_completed",
+        gate_type:      "github_checks_completed",
         repo_full_name: @repo_name,
         pr_number:      42
       },
@@ -43,18 +43,18 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
     assert_equal @task.id, data["task_id"]
-    assert_equal "github_checks_completed", data["wait_type"]
+    assert_equal "github_checks_completed", data["gate_type"]
     assert_equal "pending", data["status"]
     assert_equal @repo_name, data["metadata"]["repo_full_name"]
     assert_equal 42, data["metadata"]["pr_number"]
   end
 
-  test "creates a persisted TaskWait record" do
-    assert_difference -> { TaskWait.count }, 1 do
-      InternalTools::BoardCreateWait.new(
+  test "creates a persisted Gate record" do
+    assert_difference -> { Gate.count }, 1 do
+      InternalTools::BoardCreateGate.new(
         params: {
           task_id:        @task.id,
-          wait_type:      "github_checks_completed",
+          gate_type:      "github_checks_completed",
           repo_full_name: @repo_name,
           pr_number:      7
         },
@@ -64,27 +64,27 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "sets creator from workflow run user" do
-    InternalTools::BoardCreateWait.new(
+    InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_checks_completed",
+        gate_type:      "github_checks_completed",
         repo_full_name: @repo_name,
         pr_number:      42
       },
       session: @session
     ).execute
 
-    wait = TaskWait.last
-    assert_equal @user, wait.creator
+    gate = Gate.last
+    assert_equal @user, gate.creator
   end
 
   # == validation errors ==
 
-  test "returns error for unknown wait_type" do
-    result = InternalTools::BoardCreateWait.new(
+  test "returns error for unknown gate_type" do
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:       @task.id,
-        wait_type:     "unknown_type",
+        gate_type:     "unknown_type",
         repo_full_name: "org/app",
         pr_number:     1
       },
@@ -92,14 +92,14 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     ).execute
 
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "Unsupported wait_type"
+    assert_includes result[:stderr], "Unsupported gate_type"
   end
 
   test "returns error when task not found" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:       999_999,
-        wait_type:     "github_checks_completed",
+        gate_type:     "github_checks_completed",
         repo_full_name: "org/app",
         pr_number:     1
       },
@@ -111,10 +111,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repo_full_name is missing" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:   @task.id,
-        wait_type: "github_checks_completed",
+        gate_type: "github_checks_completed",
         pr_number: 1
       },
       session: @session
@@ -125,10 +125,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when pr_number is missing" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_checks_completed",
+        gate_type:      "github_checks_completed",
         repo_full_name: "org/app"
       },
       session: @session
@@ -139,10 +139,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when pr_number is zero" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_checks_completed",
+        gate_type:      "github_checks_completed",
         repo_full_name: @repo_name,
         pr_number:      0
       },
@@ -154,10 +154,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repository is not linked to the project" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_checks_completed",
+        gate_type:      "github_checks_completed",
         repo_full_name: "other/unlinked-repo",
         pr_number:      1
       },
@@ -170,11 +170,11 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
 
   # == github_workflow_completed ==
 
-  test "creates a github_workflow_completed wait with valid params" do
-    result = InternalTools::BoardCreateWait.new(
+  test "creates a github_workflow_completed gate with valid params" do
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_workflow_completed",
+        gate_type:      "github_workflow_completed",
         repo_full_name: @repo_name,
         run_id:         5000
       },
@@ -184,18 +184,18 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
     assert_equal @task.id, data["task_id"]
-    assert_equal "github_workflow_completed", data["wait_type"]
+    assert_equal "github_workflow_completed", data["gate_type"]
     assert_equal "pending", data["status"]
     assert_equal @repo_name, data["metadata"]["repo_full_name"]
     assert_equal 5000, data["metadata"]["run_id"]
   end
 
-  test "creates a persisted TaskWait record for github_workflow_completed" do
-    assert_difference -> { TaskWait.count }, 1 do
-      InternalTools::BoardCreateWait.new(
+  test "creates a persisted Gate record for github_workflow_completed" do
+    assert_difference -> { Gate.count }, 1 do
+      InternalTools::BoardCreateGate.new(
         params: {
           task_id:        @task.id,
-          wait_type:      "github_workflow_completed",
+          gate_type:      "github_workflow_completed",
           repo_full_name: @repo_name,
           run_id:         7
         },
@@ -205,10 +205,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when run_id is missing for github_workflow_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_workflow_completed",
+        gate_type:      "github_workflow_completed",
         repo_full_name: @repo_name
       },
       session: @session
@@ -219,10 +219,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when run_id is zero for github_workflow_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_workflow_completed",
+        gate_type:      "github_workflow_completed",
         repo_full_name: @repo_name,
         run_id:         0
       },
@@ -234,10 +234,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repo_full_name is missing for github_workflow_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:   @task.id,
-        wait_type: "github_workflow_completed",
+        gate_type: "github_workflow_completed",
         run_id:    1
       },
       session: @session
@@ -248,10 +248,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repository is not linked to the project for github_workflow_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "github_workflow_completed",
+        gate_type:      "github_workflow_completed",
         repo_full_name: "other/unlinked-repo",
         run_id:         1
       },
@@ -264,11 +264,11 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
 
   # == gitlab_pipeline_completed ==
 
-  test "creates a gitlab_pipeline_completed wait with valid params" do
-    result = InternalTools::BoardCreateWait.new(
+  test "creates a gitlab_pipeline_completed gate with valid params" do
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "gitlab_pipeline_completed",
+        gate_type:      "gitlab_pipeline_completed",
         repo_full_name: @repo_name,
         pipeline_id:    12345
       },
@@ -278,17 +278,17 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
     assert_equal @task.id, data["task_id"]
-    assert_equal "gitlab_pipeline_completed", data["wait_type"]
+    assert_equal "gitlab_pipeline_completed", data["gate_type"]
     assert_equal "pending", data["status"]
     assert_equal @repo_name, data["metadata"]["repo_full_name"]
     assert_equal 12345, data["metadata"]["pipeline_id"]
   end
 
   test "returns error when pipeline_id is missing for gitlab_pipeline_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "gitlab_pipeline_completed",
+        gate_type:      "gitlab_pipeline_completed",
         repo_full_name: @repo_name
       },
       session: @session
@@ -299,10 +299,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when pipeline_id is zero for gitlab_pipeline_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "gitlab_pipeline_completed",
+        gate_type:      "gitlab_pipeline_completed",
         repo_full_name: @repo_name,
         pipeline_id:    0
       },
@@ -314,10 +314,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repo_full_name is missing for gitlab_pipeline_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:     @task.id,
-        wait_type:   "gitlab_pipeline_completed",
+        gate_type:   "gitlab_pipeline_completed",
         pipeline_id: 1
       },
       session: @session
@@ -328,10 +328,10 @@ class InternalTools::BoardCreateWaitTest < ActiveSupport::TestCase
   end
 
   test "returns error when repository is not linked to the project for gitlab_pipeline_completed" do
-    result = InternalTools::BoardCreateWait.new(
+    result = InternalTools::BoardCreateGate.new(
       params: {
         task_id:        @task.id,
-        wait_type:      "gitlab_pipeline_completed",
+        gate_type:      "gitlab_pipeline_completed",
         repo_full_name: "other/unlinked-repo",
         pipeline_id:    1
       },

@@ -10,6 +10,7 @@ import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
 import runtimes from './runtimes.md?raw';
 import tools from './tools.md?raw';
+import triggersAndGates from './triggers-and-gates.md?raw';
 import userGuide from './user-guide.md?raw';
 import workflows from './workflows.md?raw';
 
@@ -98,6 +99,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: workflows,
     toc: extractToc(workflows),
+  },
+  'triggers-and-gates': {
+    title: 'Triggers and Gates',
+    section: 'User guide',
+    content: triggersAndGates,
+    toc: extractToc(triggersAndGates),
   },
   integrations: {
     title: 'Integrations',

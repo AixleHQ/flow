@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -112,8 +112,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.datetime "expires_at"
     t.datetime "last_used_at"
     t.jsonb "metadata", default: {}
-    t.datetime "quota_error_detected_at"
-    t.string "status"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
@@ -305,6 +303,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
+  create_table "gates", force: :cascade do |t|
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "creator_id"
+    t.string "gate_type", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.jsonb "resolution_data", default: {}, null: false
+    t.datetime "resolved_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.index "(((metadata ->> 'pipeline_id'::text))::bigint)", name: "index_gates_on_metadata_pipeline_id", where: "((gate_type)::text = 'gitlab_pipeline_completed'::text)"
+    t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_gates_on_metadata_pr_number"
+    t.index "(((metadata ->> 'run_id'::text))::bigint)", name: "index_gates_on_metadata_run_id"
+    t.index "((metadata ->> 'repo_full_name'::text))", name: "index_gates_on_metadata_repo_full_name"
+    t.index ["board_task_id"], name: "index_gates_on_board_task_id"
+    t.index ["creator_id"], name: "index_gates_on_creator_id"
+    t.index ["gate_type", "status"], name: "index_gates_on_gate_type_and_status"
+    t.index ["status"], name: "index_gates_on_status"
+  end
+
   create_table "integrations", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.bigint "connected_by_id", null: false
@@ -386,6 +404,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.index ["state"], name: "index_projects_on_state"
   end
 
+  create_table "received_webhooks", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "event_type"
+    t.string "idempotency_key", null: false
+    t.jsonb "raw_payload", default: {}, null: false
+    t.string "status", default: "received", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "webhook_endpoint_id", null: false
+    t.index ["webhook_endpoint_id", "idempotency_key"], name: "index_received_webhooks_on_endpoint_and_idempotency_key", unique: true
+    t.index ["webhook_endpoint_id"], name: "index_received_webhooks_on_webhook_endpoint_id"
+  end
+
   create_table "repositories", force: :cascade do |t|
     t.string "clone_url", null: false
     t.datetime "created_at", null: false
@@ -454,6 +484,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "package"
+    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
@@ -499,6 +530,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   create_table "steps", force: :cascade do |t|
     t.bigint "agent_id"
     t.boolean "allow_non_interactive", default: false, null: false
+    t.jsonb "asset_ids", default: [], null: false
     t.boolean "bmad_enabled", default: false, null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -577,26 +609,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.string "tags", default: [], array: true
     t.index ["author_id"], name: "index_task_comments_on_author_id"
     t.index ["board_task_id"], name: "index_task_comments_on_board_task_id"
-  end
-
-  create_table "task_waits", force: :cascade do |t|
-    t.bigint "board_task_id", null: false
-    t.datetime "created_at", null: false
-    t.bigint "creator_id"
-    t.jsonb "metadata", default: {}, null: false
-    t.jsonb "resolution_data", default: {}, null: false
-    t.datetime "resolved_at"
-    t.string "status", default: "pending", null: false
-    t.datetime "updated_at", null: false
-    t.string "wait_type", null: false
-    t.index "(((metadata ->> 'pipeline_id'::text))::bigint)", name: "index_task_waits_on_metadata_pipeline_id", where: "((wait_type)::text = 'gitlab_pipeline_completed'::text)"
-    t.index "(((metadata ->> 'pr_number'::text))::integer)", name: "index_task_waits_on_metadata_pr_number"
-    t.index "(((metadata ->> 'run_id'::text))::bigint)", name: "index_task_waits_on_metadata_run_id"
-    t.index "((metadata ->> 'repo_full_name'::text))", name: "index_task_waits_on_metadata_repo_full_name"
-    t.index ["board_task_id"], name: "index_task_waits_on_board_task_id"
-    t.index ["creator_id"], name: "index_task_waits_on_creator_id"
-    t.index ["status"], name: "index_task_waits_on_status"
-    t.index ["wait_type", "status"], name: "index_task_waits_on_wait_type_and_status"
   end
 
   create_table "terminal_sessions", force: :cascade do |t|
@@ -691,6 +703,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.string "kind", default: "custom", null: false
     t.string "name", null: false
     t.jsonb "required_config_items", default: []
+    t.string "requires_integration"
     t.bigint "scope_id"
     t.string "scope_type"
     t.datetime "updated_at", null: false
@@ -698,6 +711,71 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.index ["kind"], name: "index_tools_on_kind"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type"], name: "index_tools_on_scope_type"
+  end
+
+  create_table "trigger_bindings", force: :cascade do |t|
+    t.integer "cooldown_seconds", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.boolean "enabled", default: true, null: false
+    t.string "event_type", null: false
+    t.jsonb "filter_predicate", default: {}, null: false
+    t.string "name"
+    t.bigint "project_id", null: false
+    t.jsonb "schedule_config", default: {}, null: false
+    t.bigint "subject_column_id"
+    t.string "subject_policy", default: "none", null: false
+    t.string "subject_title_template"
+    t.string "trigger_mode", default: "auto", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_id", null: false
+    t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
+    t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
+    t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
+    t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
+    t.index ["workflow_id"], name: "index_trigger_bindings_on_workflow_id"
+  end
+
+  create_table "trigger_dispatches", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "dedup_key", null: false
+    t.jsonb "detail", default: {}, null: false
+    t.string "source"
+    t.string "status", default: "matched", null: false
+    t.bigint "trigger_binding_id"
+    t.bigint "trigger_event_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_run_id"
+    t.index ["dedup_key"], name: "index_trigger_dispatches_on_dedup_key", unique: true
+    t.index ["trigger_binding_id"], name: "index_trigger_dispatches_on_trigger_binding_id"
+    t.index ["trigger_event_id"], name: "index_trigger_dispatches_on_trigger_event_id"
+    t.index ["workflow_run_id"], name: "index_trigger_dispatches_on_workflow_run_id"
+  end
+
+  create_table "trigger_events", force: :cascade do |t|
+    t.bigint "actor_id"
+    t.bigint "board_task_id"
+    t.bigint "company_id"
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.string "dedup_key"
+    t.datetime "dispatched_at"
+    t.string "event_type", null: false
+    t.datetime "occurred_at"
+    t.bigint "project_id"
+    t.integer "relay_attempts", default: 0, null: false
+    t.string "relay_error"
+    t.string "relay_state", default: "dispatched", null: false
+    t.string "source"
+    t.string "subject"
+    t.datetime "updated_at", null: false
+    t.index ["actor_id"], name: "index_trigger_events_on_actor_id"
+    t.index ["board_task_id"], name: "index_trigger_events_on_board_task_id"
+    t.index ["company_id", "event_type"], name: "index_trigger_events_on_company_id_and_event_type"
+    t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
+    t.index ["event_type"], name: "index_trigger_events_on_event_type"
+    t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|
@@ -750,6 +828,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"
     t.index ["state"], name: "index_users_on_state"
+  end
+
+  create_table "webhook_endpoints", force: :cascade do |t|
+    t.bigint "company_id"
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.boolean "enabled", default: true, null: false
+    t.text "encrypted_secret"
+    t.bigint "project_id"
+    t.string "provider", default: "generic", null: false
+    t.string "slug", null: false
+    t.datetime "updated_at", null: false
+    t.string "verification_strategy", default: "none", null: false
+    t.index ["company_id"], name: "index_webhook_endpoints_on_company_id"
+    t.index ["created_by_id"], name: "index_webhook_endpoints_on_created_by_id"
+    t.index ["project_id"], name: "index_webhook_endpoints_on_project_id"
+    t.index ["slug"], name: "index_webhook_endpoints_on_slug", unique: true
   end
 
   create_table "workflow_run_assets", force: :cascade do |t|
@@ -841,6 +937,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   add_foreign_key "column_transitions", "workflow_runs"
   add_foreign_key "column_workflow_bindings", "board_columns"
   add_foreign_key "column_workflow_bindings", "workflows"
+  add_foreign_key "gates", "board_tasks", on_delete: :cascade
+  add_foreign_key "gates", "users", column: "creator_id"
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
@@ -848,6 +946,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
+  add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
   add_foreign_key "repositories", "integrations"
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
   add_foreign_key "session_input_assets", "terminal_sessions", on_delete: :cascade
@@ -872,8 +971,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   add_foreign_key "task_assets", "users", column: "author_id"
   add_foreign_key "task_comments", "board_tasks"
   add_foreign_key "task_comments", "users", column: "author_id"
-  add_foreign_key "task_waits", "board_tasks", on_delete: :cascade
-  add_foreign_key "task_waits", "users", column: "creator_id"
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "projects"
   add_foreign_key "terminal_sessions", "users"
@@ -881,10 +978,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_000006) do
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify
   add_foreign_key "tool_results", "terminal_sessions"
   add_foreign_key "tool_results", "tools"
+  add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
+  add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "workflows", on_delete: :cascade
+  add_foreign_key "trigger_dispatches", "trigger_bindings", on_delete: :nullify
+  add_foreign_key "trigger_dispatches", "trigger_events", on_delete: :cascade
+  add_foreign_key "trigger_dispatches", "workflow_runs", on_delete: :nullify
+  add_foreign_key "trigger_events", "board_tasks", on_delete: :nullify
+  add_foreign_key "trigger_events", "projects", on_delete: :nullify
+  add_foreign_key "trigger_events", "users", column: "actor_id"
   add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "users", "agent_credentials", column: "default_agent_credential_id"
   add_foreign_key "users", "companies"
   add_foreign_key "users", "users", column: "invited_by_id"
+  add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
+  add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
+  add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "workflow_runs"
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify

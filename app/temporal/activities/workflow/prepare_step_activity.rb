@@ -54,8 +54,14 @@ module Activities
             .pluck(:name)
         end
 
-        if workflow_run.input_asset_ids.present?
-          names += ::Asset.where(id: workflow_run.input_asset_ids).pluck(:name)
+        # Mirror SessionConfigResolver#resolve_input_asset_ids: assets injected into the
+        # container come from the workflow base, the step itself, and the run. All three
+        # are valid sources for satisfying a step's required input_asset_specs.
+        injected_asset_ids = (step.workflow&.base_asset_ids || []) +
+                             (step.asset_ids || []) +
+                             (workflow_run.input_asset_ids || [])
+        if injected_asset_ids.present?
+          names += ::Asset.where(id: injected_asset_ids.uniq).pluck(:name)
         end
 
         names.uniq

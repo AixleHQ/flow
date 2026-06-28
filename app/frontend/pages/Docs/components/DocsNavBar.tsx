@@ -35,7 +35,12 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
           <span className={classes.searchKbd}>⌘K</span>
         </button>
 
-        <a href="https://github.com/palad-ai" target="_blank" rel="noopener noreferrer" className={classes.githubLink}>
+        <a
+          href="https://github.com/aixleHQ/flow"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={classes.githubLink}
+        >
           <IconBrandGithub size={15} />
           GitHub
           <span className={classes.githubStars}>★ 2.4k</span>

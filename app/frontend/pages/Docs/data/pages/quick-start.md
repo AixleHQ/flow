@@ -19,8 +19,8 @@ building agent containers); subsequent starts are seconds.
 ## 1. Clone
 
 ```bash
-git clone https://github.com/palad-ai/palad-app.git
-cd palad-app
+git clone https://github.com/aixleHQ/flow.git
+cd flow
 ```
 
 ## 2. Configure environment
@@ -52,21 +52,19 @@ This single command:
 - Installs Ruby gems (Bundler) and JS packages (Yarn) inside the web
   container.
 - Creates the database, runs migrations, and seeds defaults.
-- Builds the four agent runtime images
-  (`aixle/agent-base-core`, `aixle/claude-code`, `aixle/cursor-cli`,
-  `aixle/codex`, `aixle/gemini-cli`).
+- Builds the shared `aixle/agent-base-core` base image plus the four agent
+  runtime images (`aixle/claude-code`, `aixle/cursor-cli`, `aixle/codex`,
+  `aixle/gemini-cli`).
 
 ## 4. Run
 
-Two terminals required — `make worker` needs to stay attached to a TTY:
-
 ```bash
-# terminal 1 — web, db, redis, traefik, temporal
 make up
-
-# terminal 2 — Temporal worker
-make worker
 ```
+
+This starts every service in one terminal — web, worker, db, redis, traefik,
+and Temporal. The entrypoint runs any pending migrations automatically on each
+start.
 
 Open **http://localhost:4000** and sign in with the seeded user (or
 register a new one if registration is enabled in your `.env`).

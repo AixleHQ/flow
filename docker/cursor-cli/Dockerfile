@@ -2,7 +2,7 @@
 # Cursor CLI Interactive Session Image
 #
 # Build context: docker/ (parent dir, for access to base/ scripts)
-# Build command: docker build -f cursor-cli/Dockerfile -t palad/cursor-cli:latest .
+# Build command: docker build -f cursor-cli/Dockerfile -t aixle/cursor-cli:latest .
 # =============================================================================
 ARG BASE_IMAGE=aixle/agent-base-core:latest
 FROM ${BASE_IMAGE}

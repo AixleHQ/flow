@@ -97,6 +97,16 @@ export function webhooksGitlabPath(options?: object): string {
   return "/" + "webhooks" + "/" + "gitlab" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /webhooks/in/:slug(.:format) */
+export function webhookIngressPath(slug: ScalarType, options?: object): string {
+  return "/" + "webhooks" + "/" + "in" + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
+}
+
+/** /webhooks/slack/events(.:format) */
+export function slackEventsWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /auth/:provider/callback(.:format) */
 export function authCallbackPath(provider: ScalarType, options?: object): string {
   return "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
@@ -185,6 +195,16 @@ export function apiV1ProjectWorkflowStepsPath(project_id: ScalarType, workflow_i
 /** /api/v1/projects/:project_id/workflows/:workflow_id/steps/:id(.:format) */
 export function apiV1ProjectWorkflowStepPath(project_id: ScalarType, workflow_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "steps" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/workflows/:workflow_id/triggers(.:format) */
+export function apiV1ProjectWorkflowTriggersPath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "triggers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/workflows/:workflow_id/triggers/:id(.:format) */
+export function apiV1ProjectWorkflowTriggerPath(project_id: ScalarType, workflow_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "triggers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","id","format"]);
 }
 
 /** /api/v1/projects/:project_id/workflows/:id(.:format) */
@@ -292,9 +312,9 @@ export function apiV1ProjectTaskAssetPath(project_id: ScalarType, task_id: Scala
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "assets" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
 }
 
-/** /api/v1/projects/:project_id/tasks/:task_id/waits/:id(.:format) */
-export function apiV1ProjectTaskWaitPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "waits" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
+/** /api/v1/projects/:project_id/tasks/:task_id/gates/:id(.:format) */
+export function apiV1ProjectTaskGatePath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "gates" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
 }
 
 /** /api/v1/projects/:project_id/tasks/:task_id/transitions(.:format) */
@@ -852,6 +872,11 @@ export function onboardingPath(options?: object): string {
   return "/" + "onboarding" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /integrations/slack/oauth/callback(.:format) */
+export function slackOauthCallbackPath(options?: object): string {
+  return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /company/members(.:format) */
 export function companyMembersPath(options?: object): string {
   return "/" + "company" + "/" + "members" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1010,6 +1035,11 @@ export function companyProjectRepositoriesPath(project_id: ScalarType, options?:
 /** /company/projects/:project_id/repositories/:id(.:format) */
 export function companyProjectRepositoryPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "repositories" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/slack_oauth_start(.:format) */
+export function slackOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "slack_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/integrations(.:format) */

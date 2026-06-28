@@ -20,7 +20,7 @@ Company
     │   ├── BoardColumns
     │   │   └── ColumnWorkflowBinding (0..1)
     │   ├── BoardTasks
-    │   │   ├── TaskComments, TaskAssets, TaskWaits, ColumnTransitions
+    │   │   ├── TaskComments, TaskAssets, Gates, ColumnTransitions
     │   │   └── WorkflowRuns
     │   ├── BoardActivities (immutable log)
     │   └── BoardViewPresets

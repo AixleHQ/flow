@@ -5,10 +5,21 @@ module Web
     module Projects
       class IntegrationsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def create? = project_accessible? && current_user.admin?
-        def destroy? = project_accessible? && current_user.admin?
+        # Managing a project's integrations (incl. starting the Slack OAuth install)
+        # is allowed for company admins AND the project's own owner.
+        def create? = manage_integrations?
+        def destroy? = manage_integrations?
+        def slack_oauth_start? = manage_integrations?
 
         private
+
+        def manage_integrations?
+          project_accessible? && (current_user.admin? || project_owner?)
+        end
+
+        def project_owner?
+          project&.owner_id == current_user.id
+        end
 
         def project = context.project
 

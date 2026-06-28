@@ -93,6 +93,18 @@ github:
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
 
+slack:
+  # One Slack app per Aixle deployment (multi-workspace via OAuth). Companies
+  # connect their workspace with one click; these app-level credentials are
+  # operator-set once, never per-tenant. Same convention as github/google above.
+  # Quoted so YAML keeps these as strings — a Slack client_id like
+  # "316958682017.11461756007041" otherwise parses as a Float and loses precision.
+  client_id: "<%= ENV['SLACK_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['SLACK_CLIENT_SECRET'] %>"
+  signing_secret: "<%= ENV['SLACK_SIGNING_SECRET'] %>"
+  # Bot scopes requested at install time (space-separated per Slack's OAuth spec).
+  scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write' %>
+
 coder:
   # TODO: wired by epic #279 MCP slice — these are operator-configurable defaults for the upcoming
   # workspace/lock services; the current integration-setup slice does not read them.

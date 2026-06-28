@@ -30,7 +30,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
                (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
                (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
              SQL
-             .includes(:assignee, :workflow_runs, :pending_task_waits)
+             .includes(:assignee, :workflow_runs, :pending_gates)
              .order(:position).map { |t| BoardTaskResource.new(t).to_h }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
@@ -96,7 +96,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
 
   def find_task(board)
     board.board_tasks
-         .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_task_waits)
+         .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_gates)
          .find_by(id: params[:task])
     # note: task_assets included here so TaskDetailResource.assets_count avoids N+1
   end

@@ -47,7 +47,7 @@ internal `aixle-tools` MCP server:
 | `board_add_comment` / `board_get_comments` | Add or read agent comments (Markdown). |
 | `board_attach_asset` / `board_get_task_assets` | Attach or list task files.        |
 | `board_manage_tags`    | Add or remove a tag on a task or comment.                     |
-| `board_create_wait`    | Create a Wait so a column's auto-workflow won't fire until it resolves (e.g. `github_checks_completed`). |
+| `board_create_gate`    | Create a Gate so a column's auto-workflow won't fire until it resolves (e.g. `github_checks_completed`). |
 
 Plus the always-present lifecycle and progress tools: `finish_session`,
 `fail_session`, `list_sub_steps`, `mark_sub_step`, `read_tool_result`.

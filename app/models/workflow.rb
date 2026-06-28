@@ -7,6 +7,7 @@ class Workflow < ApplicationRecord
   has_many :steps, dependent: :destroy
   has_many :runs, class_name: "WorkflowRun", dependent: :destroy
   has_many :column_workflow_bindings
+  has_many :trigger_bindings, dependent: :destroy
 
   before_destroy :purge_steps, prepend: true
   before_destroy :check_column_bindings

@@ -7,7 +7,8 @@ module InternalTools
     RESOURCE_FIELDS = {
       "tool" => :tool_ids,
       "skill" => :skill_ids,
-      "mcp_server" => :mcp_server_ids
+      "mcp_server" => :mcp_server_ids,
+      "asset" => :asset_ids
     }.freeze
 
     def execute
@@ -18,7 +19,7 @@ module InternalTools
       resource_id = params[:resource_id]
 
       field = RESOURCE_FIELDS[resource_type]
-      return error("Invalid resource_type: #{resource_type}. Use: tool, skill, mcp_server") unless field
+      return error("Invalid resource_type: #{resource_type}. Use: tool, skill, mcp_server, asset") unless field
 
       current_ids = step.send(field) || []
       unless current_ids.include?(resource_id)

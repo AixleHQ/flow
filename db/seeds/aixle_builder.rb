@@ -141,7 +141,8 @@ module Seeds
 
       archive_replaced_steps!(workflow, keep_names: [ "Build Workflow" ])
 
-      all_tool_ids = Tool.where(kind: :workflow, name: tool_names).pluck(:id)
+      # meta_* tools are kind :meta (hidden from pickers); workflow kept for safety.
+      all_tool_ids = Tool.where(kind: [ :workflow, :meta ], name: tool_names).pluck(:id)
 
       workflow.steps.find_or_initialize_by(name: "Build Workflow").update!(
         position: 1,

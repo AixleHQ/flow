@@ -13,3 +13,12 @@ schedules:
   - workflow: quota_error_scan_workflow
     cron: "* * * * *"
     enabled: true
+
+  # Transactional-outbox safety net: re-dispatches trigger events a producer
+  # committed but crashed before dispatching. Every minute is the finest cron
+  # granularity; the happy path dispatches inline, so this only recovers crashes.
+  # SKIP overlap: the relay is idempotent and must never run two drains at once.
+  - workflow: outbox_relay_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true

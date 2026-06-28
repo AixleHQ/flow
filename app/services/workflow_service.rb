@@ -12,7 +12,7 @@ class WorkflowService
       false
     end
 
-    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil)
+    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {})
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
@@ -22,7 +22,7 @@ class WorkflowService
         input_asset_ids: input_asset_ids,
         repository_ids: repository_ids,
         agent_runtime: agent_runtime.presence,
-        shared_context: { "requested_model" => requested_model.presence }.compact
+        shared_context: { "requested_model" => requested_model.presence }.compact.merge(shared_context.to_h.stringify_keys)
       )
 
       validate_mode!(run, workflow, overrides)

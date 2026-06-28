@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  CopyButton,
   Divider,
   Group,
   Menu,
@@ -21,8 +22,11 @@ import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
   IconBrandGithub,
+  IconBrandSlack,
+  IconCheck,
   IconChevronDown,
   IconChevronRight,
+  IconCopy,
   IconLink,
   IconPlus,
   IconSettings,
@@ -44,6 +48,7 @@ export interface Integration {
   coderDefaultTemplate?: string | null;
   coderMachinePrefix?: string | null;
   coderLockTtlMinutes?: number | null;
+  slackRequestUrl?: string | null;
   connectedBy: { id: number; name: string };
   createdAt: string;
 }
@@ -69,6 +74,7 @@ const ProviderIcon = ({ provider, size = 20 }: { provider: string; size?: number
   if (provider === 'github') return <IconBrandGithub size={size} />;
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
+  if (provider === 'slack') return <IconBrandSlack size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -76,6 +82,7 @@ const PROVIDER_ICON_COLORS: Record<string, string> = {
   github: 'dark',
   gitlab: 'orange',
   coder: 'blue',
+  slack: 'grape',
 };
 
 const formatDate = (d: string) =>
@@ -124,6 +131,25 @@ const IntegrationCard = ({
           <Text size="xs" c="dimmed">
             Connected by {integration.connectedBy.name} on {formatDate(integration.createdAt)}
           </Text>
+          {integration.provider === 'slack' && integration.slackRequestUrl && (
+            <Group gap={6} mt={4} wrap="nowrap">
+              <Text size="xs" c="dimmed" ff="monospace" truncate maw={280}>
+                {integration.slackRequestUrl}
+              </Text>
+              <CopyButton value={integration.slackRequestUrl}>
+                {({ copied, copy }) => (
+                  <Button
+                    variant="subtle"
+                    size="compact-xs"
+                    onClick={copy}
+                    leftSection={copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                  >
+                    {copied ? 'Copied' : 'Request URL'}
+                  </Button>
+                )}
+              </CopyButton>
+            </Group>
+          )}
         </Box>
       </Group>
 
@@ -302,6 +328,12 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
 
+  // Slack connects via OAuth: redirect to the project-scoped start action, which
+  // bounces to Slack's consent screen. The install binds to this project.
+  const handleConnectSlack = useCallback(() => {
+    window.location.href = `${basePath}/slack_oauth_start`;
+  }, [basePath]);
+
   const alreadyLinkedInstallationIds = useMemo(
     () => new Set(projectIntegrations.filter((i) => i.installationId).map((i) => i.installationId)),
     [projectIntegrations],
@@ -352,7 +384,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
           <Title order={2}>{title}</Title>
           <Text size="sm" c="dimmed" mt={2}>
             {isProjectContext
-              ? 'Connect GitHub or GitLab for this project, or use company-wide integrations'
+              ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
               : 'Connect external services to your company'}
           </Text>
         </Box>
@@ -370,6 +402,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
               Coder
             </Menu.Item>
+            {isProjectContext && (
+              <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                Slack
+              </Menu.Item>
+            )}
           </Menu.Dropdown>
         </Menu>
       </Group>
@@ -384,19 +421,26 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               <Text fw={500} size="lg">
                 No integrations connected
               </Text>
-              <Text size="sm" c="dimmed" mt={4} maw={400}>
-                {isProjectContext
-                  ? 'Add a project-scoped GitHub or GitLab installation, or rely on company integrations'
-                  : 'Connect GitHub or GitLab to access repositories in agent sessions'}
+              <Text size="sm" c="dimmed" mt={4} maw={440}>
+                Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from
+                messages.
               </Text>
             </Box>
-            <Group gap="sm">
+            <Group gap="sm" justify="center" wrap="wrap">
               <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-                Connect GitHub
+                GitHub
               </Button>
               <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-                Connect GitLab
+                GitLab
               </Button>
+              <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                Coder
+              </Button>
+              {isProjectContext && (
+                <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                  Slack
+                </Button>
+              )}
             </Group>
           </Stack>
         </Card>

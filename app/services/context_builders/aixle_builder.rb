@@ -201,12 +201,15 @@ module ContextBuilders
 
         ### Input Assets (→ `/workspace/assets/`)
 
-        Assets come from THREE additive sources:
+        Assets come from FOUR additive sources:
         1. **Workflow base assets** (`workflow.config.base_asset_ids`) — always loaded. Use for
            shared docs, templates, style guides that every step needs.
-        2. **Run-time assets** (`workflow_run.input_asset_ids`) — user picks these when starting
+        2. **Step assets** (`step.asset_ids`) — loaded only for that step's container. Use for
+           context a single step needs but the rest of the workflow does not. Link via
+           `meta_link_resource_to_step` (resource_type: "asset") or set on `meta_create_step`.
+        3. **Run-time assets** (`workflow_run.input_asset_ids`) — user picks these when starting
            a run. Use for per-run context like a specific brief or data file.
-        3. **Board task assets** — files attached to the task card. Automatically included for
+        4. **Board task assets** — files attached to the task card. Automatically included for
            board-triggered workflows.
 
         When creating steps, use `input_asset_specs` to document what files the step expects
@@ -219,7 +222,7 @@ module ContextBuilders
         When a step has `mount_repositories: true`:
         - Project repositories are shallow-cloned with authenticated GitHub access
         - The agent can read code, create branches, commit, push, and create PRs
-        - Use `board_create_wait` to pause automation until CI checks pass on a PR
+        - Use `board_create_gate` to pause automation until CI checks pass on a PR
         - The platform resolves repos from `workflow_run.repository_ids`, falling back to all
           project repos for board-triggered workflows with `inherit_all_project_resources`
 
@@ -250,7 +253,8 @@ module ContextBuilders
         ### Tools, Skills — Same Resolution
 
         Tools and Skills resolve identically: `project (if inherit_all) + workflow base + step`.
-        Use `meta_link_resource_to_step` to attach specific tools/skills to steps after creation.
+        Use `meta_link_resource_to_step` to attach specific tools/skills/assets to steps after
+        creation (resource_type: "tool", "skill", "mcp_server", or "asset").
 
         ## Inter-Step Data Flow
 

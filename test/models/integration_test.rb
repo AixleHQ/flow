@@ -152,7 +152,7 @@ class IntegrationTest < ActiveSupport::TestCase
   end
 
   test "provider enumerize values" do
-    assert_equal %w[github gitlab linear coder], Integration.provider.values.map(&:to_s)
+    assert_equal %w[github gitlab linear coder slack], Integration.provider.values.map(&:to_s)
   end
 
   test "status enumerize values" do

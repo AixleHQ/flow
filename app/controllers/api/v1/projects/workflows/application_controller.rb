@@ -18,7 +18,7 @@ module Api
               :mount_repositories, :bmad_enabled, :required_agent_runtime, :preferred_model,
               input_asset_specs: [ :name, :asset_type, :required ],
               output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
-              tool_ids: [], mcp_server_ids: [], skill_ids: [], depends_on_step_ids: [],
+              tool_ids: [], mcp_server_ids: [], skill_ids: [], asset_ids: [], depends_on_step_ids: [],
               sub_steps_attributes: %i[id position name description instructions required _destroy]
             )
           end

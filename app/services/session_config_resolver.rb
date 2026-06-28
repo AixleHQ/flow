@@ -153,6 +153,7 @@ class SessionConfigResolver
     if workflow_session?
       ids = []
       ids += workflow&.base_asset_ids || []
+      ids += step&.asset_ids || []
       ids += workflow_run&.input_asset_ids || []
       ids += board_task_asset_ids
       ids.uniq
@@ -221,12 +222,14 @@ class SessionConfigResolver
     end
 
     from_base = workflow&.base_asset_ids || []
+    from_step = step&.asset_ids || []
     from_run = workflow_run&.input_asset_ids || []
     from_board = board_task_asset_ids
-    resolved = (from_base + from_run + from_board).uniq
+    resolved = (from_base + from_step + from_run + from_board).uniq
 
     {
       from_workflow_base: from_base,
+      from_step: from_step,
       from_run_user: from_run,
       from_board_task: from_board,
       resolved: resolved

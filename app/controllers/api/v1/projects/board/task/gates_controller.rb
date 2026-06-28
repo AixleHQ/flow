@@ -5,10 +5,10 @@ module Api
     module Projects
       module Board
         module Task
-          class WaitsController < Task::ApplicationController
+          class GatesController < Task::ApplicationController
             def destroy
-              wait = current_task.task_waits.pending.find(params[:id])
-              TaskService.remove_wait(wait: wait, actor: current_user)
+              gate = current_task.gates.pending.find(params[:id])
+              TaskService.remove_gate(gate: gate, actor: current_user)
               head :no_content
             end
           end

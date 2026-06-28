@@ -23,6 +23,16 @@ class Repository < ApplicationRecord
   }
   scope :visible_for_company, ->(company) { for_company(company) }
 
+  # Project ids connected to a repo by full_name — directly (Project-scoped repo)
+  # or via the company (Company-scoped repo applies to all the company's projects).
+  # Used to fan an inbound CI webhook out to every project that owns the repo.
+  def self.project_ids_for(repo_full_name)
+    from_project = where(full_name: repo_full_name, scope_type: "Project").pluck(:scope_id)
+    company_ids = where(full_name: repo_full_name, scope_type: "Company").pluck(:scope_id)
+    from_company = company_ids.any? ? Project.where(company_id: company_ids).pluck(:id) : []
+    (from_project + from_company).uniq
+  end
+
   def picker_name
     full_name
   end

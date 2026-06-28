@@ -175,19 +175,19 @@ module Seeds
         }
       },
       {
-        name: "board_create_wait",
-        display_name: "Board Create Wait",
-        description: "Create a Wait on a board task. The auto-workflow for the task's column will not fire until all Waits are resolved.",
+        name: "board_create_gate",
+        display_name: "Board Create Gate",
+        description: "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all Gates are resolved.",
         input_schema: {
           type: "object",
           properties: {
             task_id:        { type: "integer", description: "Board task ID" },
-            wait_type:      { type: "string",  description: "Wait type. Supported: github_checks_completed, github_workflow_completed" },
+            gate_type:      { type: "string",  description: "Gate type. Supported: github_checks_completed, github_workflow_completed" },
             repo_full_name: { type: "string",  description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo" },
             pr_number:      { type: "integer", description: "(github_checks_completed) Pull request number" },
             run_id:         { type: "integer", description: "(github_workflow_completed) GitHub Actions workflow run ID" }
           },
-          required: %w[task_id wait_type]
+          required: %w[task_id gate_type]
         }
       }
     ].freeze
@@ -246,6 +246,7 @@ module Seeds
             tool_ids: { type: "array", items: { type: "integer" }, description: "Tool IDs available in this step" },
             skill_ids: { type: "array", items: { type: "integer" }, description: "Skill IDs injected into context" },
             mcp_server_ids: { type: "array", items: { type: "integer" }, description: "MCP server IDs" },
+            asset_ids: { type: "array", items: { type: "integer" }, description: "Asset IDs loaded into this step's container (in addition to workflow base assets)" },
             mount_repositories: { type: "boolean", description: "Mount Git repos in /workspace" },
             input_asset_specs: { type: "array", description: "Required input files" },
             output_asset_specs: { type: "array", description: "Expected output files" },
@@ -324,6 +325,7 @@ module Seeds
             tool_ids: { type: "array", items: { type: "integer" } },
             skill_ids: { type: "array", items: { type: "integer" } },
             mcp_server_ids: { type: "array", items: { type: "integer" } },
+            asset_ids: { type: "array", items: { type: "integer" } },
             mount_repositories: { type: "boolean" },
             depends_on_step_ids: { type: "array", items: { type: "integer" } }
           },
@@ -420,12 +422,12 @@ module Seeds
       {
         name: "meta_link_resource_to_step",
         display_name: "Meta Link Resource to Step",
-        description: "Link a tool, skill, or MCP server to a step.",
+        description: "Link a tool, skill, MCP server, or asset to a step.",
         input_schema: {
           type: "object",
           properties: {
             step_id: { type: "integer", description: "Step ID" },
-            resource_type: { type: "string", enum: %w[tool skill mcp_server], description: "Resource type" },
+            resource_type: { type: "string", enum: %w[tool skill mcp_server asset], description: "Resource type" },
             resource_id: { type: "integer", description: "Resource ID to link" }
           },
           required: %w[step_id resource_type resource_id]
@@ -605,9 +607,42 @@ module Seeds
         )
       end
 
-      # -- Meta-workflow tools: used by Aixle Builder to create entities --
+      Tool.find_or_initialize_by(name: "slack_post_message", kind: :workflow).update!(
+        display_name: "Slack Post Message",
+        description: "Send a Slack message from this workflow. `text` and `files` are both optional but " \
+                     "at least one is required — text only, files only, or both arrive as ONE message. " \
+                     "Omit channel/thread to reply in the channel/thread that triggered the run. " \
+                     "Requires a Slack integration on the project.",
+        input_schema: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "Message text. Optional when files are provided." },
+            files: {
+              type: "array",
+              description: "Optional file attachments, sent in the SAME message as the text.",
+              items: {
+                type: "object",
+                properties: {
+                  filename: { type: "string", description: "File name, e.g. fizzbuzz.rb" },
+                  content: { type: "string", description: "Full text content of the file" },
+                  title: { type: "string", description: "Optional display title (defaults to filename)" }
+                },
+                required: %w[filename content]
+              }
+            },
+            channel: { type: "string", description: "Channel ID. Defaults to the triggering channel for Slack-started runs." },
+            thread_ts: { type: "string", description: "Thread timestamp to reply into. Defaults to the triggering thread." }
+          },
+          required: []
+        },
+        execution_mode: :app,
+        requires_integration: "slack"
+      )
+
+      # -- Meta-workflow tools: used ONLY by Aixle Builder; kind :meta hides them
+      #    from normal tool pickers (visible_for_project/visible_for_company).
       META_WORKFLOW_TOOLS.each do |attrs|
-        Tool.find_or_initialize_by(name: attrs[:name], kind: :workflow).update!(
+        Tool.find_or_initialize_by(name: attrs[:name], kind: :meta).update!(
           display_name: attrs[:display_name],
           description: attrs[:description],
           input_schema: attrs[:input_schema],

@@ -2,7 +2,7 @@
 # Claude Code Interactive Session Image
 #
 # Build context: docker/ (parent dir, for access to base/ scripts)
-# Build command: docker build -f claude-code/Dockerfile -t palad/claude-code:latest .
+# Build command: docker build -f claude-code/Dockerfile -t aixle/claude-code:latest .
 # =============================================================================
 ARG BASE_IMAGE=aixle/agent-base-core:latest
 FROM ${BASE_IMAGE}

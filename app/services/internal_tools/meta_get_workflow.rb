@@ -24,6 +24,7 @@ module InternalTools
           tool_ids: step.tool_ids,
           skill_ids: step.skill_ids,
           mcp_server_ids: step.mcp_server_ids,
+          asset_ids: step.asset_ids,
           depends_on_step_ids: step.depends_on_step_ids,
           sub_steps: step.sub_steps.active.order(:position).map do |ss|
             {

@@ -70,7 +70,10 @@ const LoginPage = () => {
     <PageShell variant="centered">
       <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
         <Center mb={32}>
-          <Logo width={120} colorScheme="dark" />
+          <span className={classes.brand}>
+            <Logo width={96} colorScheme="dark" />
+            <span className={classes.brandFlow}>Flow</span>
+          </span>
         </Center>
 
         <GoogleLoginButton />

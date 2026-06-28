@@ -17,6 +17,14 @@ Rails.application.routes.draw do
   # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
   post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
 
+  # Generic inbound webhook gateway (arbitrary sources, public — verified
+  # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
+  post "/webhooks/in/:slug", to: "webhooks/ingress#receive", as: :webhook_ingress
+
+  # Multi-workspace Slack Events API endpoint (public — verified centrally with
+  # the app signing secret, then routed by team_id to the workspace's install).
+  post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure
@@ -64,6 +72,7 @@ Rails.application.routes.draw do
                   patch :reorder
                 end
               end
+              resources :triggers, only: %i[index create update destroy]
             end
           end
 
@@ -100,7 +109,7 @@ Rails.application.routes.draw do
               scope module: :task do
                 resources :comments, only: %i[index create]
                 resources :assets, only: %i[index create destroy]
-                resources :waits, only: %i[destroy]
+                resources :gates, only: %i[destroy]
                 resources :transitions, only: %i[index]
                 resources :activities, only: %i[index]
                 resource :statistics, only: %i[show]
@@ -180,6 +189,10 @@ Rails.application.routes.draw do
     end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
+    # Slack OAuth callback — one deployment-wide redirect URI registered on the
+    # Slack app; the project is carried in the signed `state`, not the path.
+    get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
+
     namespace :company do
       resources :members, only: %i[index create update destroy]
       resources :config_items, only: %i[index create update destroy]
@@ -223,7 +236,11 @@ Rails.application.routes.draw do
           resources :assets, only: %i[index]
           resources :analytics, only: :index
           resources :repositories, only: %i[index create update destroy]
-          resources :integrations, only: %i[index create destroy]
+          resources :integrations, only: %i[index create destroy] do
+            collection do
+              get :slack_oauth_start
+            end
+          end
           resources :agents, only: %i[index create update destroy]
           resources :tools, only: %i[index create update destroy]
           resources :mcp_servers, only: %i[index create update destroy]

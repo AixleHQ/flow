@@ -19,6 +19,6 @@ export const buildBoardTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   childrenCount: 0,
   assetsCount: 0,
   recentWorkflowRuns: [],
-  pendingWaits: [],
+  pendingGates: [],
   ...overrides,
 });

@@ -247,6 +247,36 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     assert data["errors"].any? { |e| e.include?("no steps") }
   end
 
+  test "meta_finalize_workflow flags a non-existent linked asset_id" do
+    wf = create(:workflow, scope: @project)
+    agent = Agent.create!(scope: @project, name: "a1", title: "T", persona: "p")
+    create(:step, workflow: wf, name: "S1", position: 1, instructions: "Do it", agent: agent,
+                  asset_ids: [ 999_999 ])
+    @workflow_run.update!(shared_context: { "target_workflow_id" => wf.id })
+
+    result = InternalTools::MetaFinalizeWorkflow.new(params: {}, session: @session).execute
+
+    data = JSON.parse(result[:stdout])
+    refute data["valid"]
+    assert data["errors"].any? { |e| e.include?("non-existent asset_id 999999") }
+  end
+
+  # ── meta_link_resource_to_step ──
+
+  test "meta_link_resource_to_step links an asset to a step" do
+    wf = create(:workflow, scope: @project)
+    step = create(:step, workflow: wf, name: "S1")
+    asset = create(:asset, scope: @project, created_by: @user)
+
+    result = InternalTools::MetaLinkResourceToStep.new(
+      params: { step_id: step.id, resource_type: "asset", resource_id: asset.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal [ asset.id ], step.reload.asset_ids
+  end
+
   # ── meta_update_step ──
 
   test "meta_update_step updates step fields" do

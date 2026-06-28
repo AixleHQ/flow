@@ -15,7 +15,7 @@ it's required.
 | `RAILS_PORT` / `PORT`   | no       | `4000`               | HTTP port the web server listens on.                     |
 | `APP_VERSION`           | no       | unset                | App version string shown in UI footer / API headers.     |
 | `DOMAIN`                | no       | `localhost:4000`     | Public host the app is reachable at.                     |
-| `PROTOCOL`              | no       | `http`               | `http` or `https`.                                       |
+| `PROTOCOL`              | no       | `https`              | `http` or `https`.                                       |
 | `ASSET_HOST`            | no       | unset                | CDN host for static assets, if any.                      |
 
 ## Database & cache
@@ -61,7 +61,7 @@ it's required.
 | `AGENT_IMAGE_CURSOR_CLI`        | `aixle/cursor-cli`    | Override image for Cursor CLI runtime.                   |
 | `AGENT_IMAGE_CODEX`             | `aixle/codex`         | Override image for Codex runtime.                        |
 | `AGENT_IMAGE_GEMINI_CLI`        | `aixle/gemini-cli`    | Override image for Gemini CLI runtime.                   |
-| `AGENT_MCP_STARTUP_TIMEOUT_MS`  | `10000`               | How long the platform waits for an agent's MCP handshake.|
+| `AGENT_MCP_STARTUP_TIMEOUT_MS`  | `90000`               | How long the platform waits for an agent's MCP handshake.|
 | `MCP_SERVER_URL`                | computed              | Internal MCP server URL injected into agent containers.  |
 | `CONTAINER_ASSET_HOST`          | computed              | Host the agent uses to fetch / upload assets.            |
 | `MAX_FILE_SIZE`                 | env-dependent         | Max upload size in bytes. Test env defaults to 1 MB.    |

@@ -9,6 +9,7 @@ module ContextBuilders
     def build
       sections = []
       sections << workflow_overview_section
+      sections << trigger_message_section if trigger_message.present?
       sections << current_step_section
       sections << sub_steps_section if sub_steps.any?
       sections << previous_steps_section if completed_step_runs.any?
@@ -33,6 +34,37 @@ module ContextBuilders
         priority: :critical,
         content: build_current_step
       )
+    end
+
+    # When the run was started by a Slack (or other chat) trigger, surface the
+    # originating message so the agent acts on what the user actually asked for —
+    # otherwise it only sees the static step instructions.
+    def trigger_message_section
+      section(
+        tag: "trigger-message",
+        priority: :critical,
+        content: build_trigger_message,
+        position_hint: :top
+      )
+    end
+
+    def build_trigger_message
+      <<~MD.strip
+        ## Triggering message
+
+        This run was started by a Slack message#{trigger_user_suffix}. Treat it as the user's request and respond to it:
+
+        > #{trigger_message.to_s.gsub("\n", "\n> ")}
+      MD
+    end
+
+    def trigger_user_suffix
+      user = workflow_run.shared_context.to_h.dig("slack", "user")
+      user.present? ? " from <@#{user}>" : ""
+    end
+
+    def trigger_message
+      @trigger_message ||= workflow_run.shared_context.to_h.dig("slack", "text")
     end
 
     def sub_steps_section

@@ -22,6 +22,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'mcp', label: 'MCP servers' },
       { slug: 'board', label: 'Board' },
       { slug: 'workflows', label: 'Workflows' },
+      { slug: 'triggers-and-gates', label: 'Triggers and gates' },
       { slug: 'integrations', label: 'Integrations' },
       { slug: 'configuration', label: 'Configuration' },
     ],

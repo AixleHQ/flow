@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module InternalTools
-  class BoardCreateWait < Base
-    SUPPORTED_WAIT_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
+  class BoardCreateGate < Base
+    SUPPORTED_GATE_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
 
     def execute
       require_workflow_context!
@@ -12,27 +12,27 @@ module InternalTools
       task = board.board_tasks.find_by(id: params[:task_id])
       return error("Task not found on this board") unless task
 
-      wait_type = params[:wait_type]
-      return error("Unsupported wait_type: #{wait_type}") unless SUPPORTED_WAIT_TYPES.include?(wait_type)
+      gate_type = params[:gate_type]
+      return error("Unsupported gate_type: #{gate_type}") unless SUPPORTED_GATE_TYPES.include?(gate_type)
 
-      metadata = build_metadata(wait_type, task)
+      metadata = build_metadata(gate_type, task)
       return metadata if metadata.is_a?(Hash) && metadata.key?(:exit_code)
 
-      wait = task.task_waits.create!(wait_type: wait_type, metadata: metadata, creator: workflow_run.user)
+      gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
 
       success({
-        id:        wait.id,
+        id:        gate.id,
         task_id:   task.id,
-        wait_type: wait.wait_type,
-        status:    wait.status,
-        metadata:  wait.metadata
+        gate_type: gate.gate_type,
+        status:    gate.status,
+        metadata:  gate.metadata
       }.to_json)
     end
 
     private
 
-    def build_metadata(wait_type, task)
-      case wait_type
+    def build_metadata(gate_type, task)
+      case gate_type
       when "github_checks_completed"
         repo_full_name = params[:repo_full_name]
         pr_number      = params[:pr_number].to_i
@@ -77,4 +77,10 @@ module InternalTools
       end
     end
   end
+
+  # Backward compatibility: the tool was historically named "board_create_wait".
+  # InternalToolExecutor resolves "board_create_wait".camelize → BoardCreateWait,
+  # so keep that constant pointing at the renamed class for any Tool record or
+  # workflow instruction that still uses the old name.
+  BoardCreateWait = BoardCreateGate
 end
