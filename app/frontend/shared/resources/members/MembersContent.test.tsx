@@ -97,7 +97,10 @@ describe('MembersContent', () => {
     await userEvent.click(remove);
 
     await waitFor(() =>
-      expect(router.delete).toHaveBeenCalledWith('/company/members/7', expect.objectContaining({ preserveScroll: true })),
+      expect(router.delete).toHaveBeenCalledWith(
+        '/company/members/7',
+        expect.objectContaining({ preserveScroll: true }),
+      ),
     );
   });
 

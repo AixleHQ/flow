@@ -316,13 +316,14 @@ describe('SkillsContent — installed skills grid', () => {
 
   it('opens the delete confirmation modal when the remove icon is clicked on a project skill', async () => {
     renderPage(
-      <SkillsContent {...contentBaseProps} skills={[makeSkill({ name: 'removable-skill', scopeIndicator: 'project' })]} />,
+      <SkillsContent
+        {...contentBaseProps}
+        skills={[makeSkill({ name: 'removable-skill', scopeIndicator: 'project' })]}
+      />,
     );
 
     // The card's trash ActionIcon is the only button besides the header "Add from Registry".
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => !/add from registry/i.test(b.textContent ?? ''));
+    const trashButton = screen.getAllByRole('button').find((b) => !/add from registry/i.test(b.textContent ?? ''));
     expect(trashButton).toBeDefined();
     await userEvent.click(trashButton!);
 
@@ -340,14 +341,15 @@ describe('SkillsContent — installed skills grid', () => {
       />,
     );
 
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => !/add from registry/i.test(b.textContent ?? ''));
+    const trashButton = screen.getAllByRole('button').find((b) => !/add from registry/i.test(b.textContent ?? ''));
     await userEvent.click(trashButton!);
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
-    expect(router.delete).toHaveBeenCalledWith('/projects/7/skills/42', expect.objectContaining({ preserveScroll: true }));
+    expect(router.delete).toHaveBeenCalledWith(
+      '/projects/7/skills/42',
+      expect.objectContaining({ preserveScroll: true }),
+    );
   });
 
   it('disables removal of company skills on a project page (no delete handler)', async () => {
@@ -359,9 +361,7 @@ describe('SkillsContent — installed skills grid', () => {
       />,
     );
 
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => !/add from registry/i.test(b.textContent ?? ''));
+    const trashButton = screen.getAllByRole('button').find((b) => !/add from registry/i.test(b.textContent ?? ''));
     // On a project page a company skill's trash icon is disabled; clicking must not open a delete dialog
     expect(trashButton).toBeDisabled();
     await userEvent.click(trashButton!).catch(() => undefined);
@@ -377,9 +377,7 @@ describe('SkillsContent — installed skills grid', () => {
       />,
     );
 
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => !/add from registry/i.test(b.textContent ?? ''));
+    const trashButton = screen.getAllByRole('button').find((b) => !/add from registry/i.test(b.textContent ?? ''));
     expect(trashButton).not.toBeDisabled();
     await userEvent.click(trashButton!);
     expect(await screen.findByText('Delete Skill')).toBeInTheDocument();

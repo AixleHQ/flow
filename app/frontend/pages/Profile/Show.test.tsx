@@ -1,8 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { makeFormStub, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+
 import type { AgentCredential, SharedUser } from 'shared/ui';
+
 import ProfilePage from './Show';
 
 const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
@@ -179,9 +182,7 @@ describe('Profile/Show', () => {
     expect(screen.getByText('Cursor CLI')).toBeInTheDocument();
     expect(screen.getByText('OpenAI Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
-    expect(
-      screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities")).toBeInTheDocument();
   });
 
   it('shows the Default Agent Runtime selector and Default Models card when credentials exist', () => {

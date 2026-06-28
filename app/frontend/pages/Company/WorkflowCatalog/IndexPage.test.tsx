@@ -6,7 +6,6 @@ import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/rende
 
 import IndexPage from './IndexPage';
 
-
 const workflow = (overrides: Record<string, unknown> = {}) => ({
   id: 1,
   name: 'Onboarding Flow',
@@ -22,7 +21,8 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
   it('renders the heading and the published-by-empty state when there are no workflows', () => {
     renderAuthedPage(<IndexPage />, { props: { workflows: [], projects: [] } });
 
-    expect(screen.getByText('Workflow Catalog')).toBeInTheDocument();
+    // 'Workflow Catalog' also appears as a sidebar nav label, so scope to the page heading.
+    expect(screen.getByText('Workflow Catalog', { selector: 'p' })).toBeInTheDocument();
     expect(screen.getByText('No workflows published yet')).toBeInTheDocument();
   });
 

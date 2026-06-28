@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
-import type { Agent } from 'shared/resources/agents/AgentsContent';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+
+import type { Agent } from 'shared/resources/agents/AgentsContent';
 
 import AgentsPage from './AgentsPage';
 

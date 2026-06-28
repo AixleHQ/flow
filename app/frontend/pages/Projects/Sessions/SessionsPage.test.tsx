@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
 import SessionsPage from './SessionsPage';
 
 const project = { id: 7, name: 'Atlas Migration' };
@@ -171,9 +173,12 @@ describe('Projects/Sessions/SessionsPage', () => {
   // --- row clickability ---
 
   it('does not navigate and shows no open link for a non-clickable (running) row', async () => {
-    renderAuthedPage(<SessionsPage sessions={[makeSession({ id: 55, state: 'running' })]} filters={{}} perPage={20} />, {
-      props: { project },
-    });
+    renderAuthedPage(
+      <SessionsPage sessions={[makeSession({ id: 55, state: 'running' })]} filters={{}} perPage={20} />,
+      {
+        props: { project },
+      },
+    );
 
     const row = screen.getByText('#55').closest('tr') as HTMLElement;
     // The "Open session" external link only renders for clickable states.
@@ -184,9 +189,12 @@ describe('Projects/Sessions/SessionsPage', () => {
   });
 
   it('renders an Open session external link on a clickable row pointing at the session', () => {
-    renderAuthedPage(<SessionsPage sessions={[makeSession({ id: 77, state: 'finished' })]} filters={{}} perPage={20} />, {
-      props: { project },
-    });
+    renderAuthedPage(
+      <SessionsPage sessions={[makeSession({ id: 77, state: 'finished' })]} filters={{}} perPage={20} />,
+      {
+        props: { project },
+      },
+    );
 
     const row = screen.getByText('#77').closest('tr') as HTMLElement;
     expect(within(row).getByRole('link')).toHaveAttribute('href', '/company/projects/7/sessions/77');
@@ -268,10 +276,7 @@ describe('Projects/Sessions/SessionsPage', () => {
   // --- token / cost / duration formatting (via rendered cells) ---
 
   it('formats large token totals with k/M suffixes', () => {
-    const sessions = [
-      makeSession({ id: 100, totalTokens: 12_345 }),
-      makeSession({ id: 101, totalTokens: 2_500_000 }),
-    ];
+    const sessions = [makeSession({ id: 100, totalTokens: 12_345 }), makeSession({ id: 101, totalTokens: 2_500_000 })];
     renderAuthedPage(<SessionsPage sessions={sessions} filters={{}} perPage={20} />, { props: { project } });
 
     const row100 = screen.getByText('#100').closest('tr') as HTMLElement;

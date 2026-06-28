@@ -138,7 +138,9 @@ describe('Projects/Workflows/BuilderPage', () => {
     });
 
     // Company-level read-only banner.
-    expect(screen.getByText('This is a company-level workflow. Copy it to your project to customize.')).toBeInTheDocument();
+    expect(
+      screen.getByText('This is a company-level workflow. Copy it to your project to customize.'),
+    ).toBeInTheDocument();
 
     // Name renders as static text (not an editable input) and there is no Add Step / Run affordance.
     expect(screen.getByText('Company onboarding')).toBeInTheDocument();
@@ -211,7 +213,9 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(deleteIcon!.closest('button')!);
 
     // Confirmation modal appears.
-    expect(screen.getByText('Are you sure you want to delete this step? This action cannot be undone.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Are you sure you want to delete this step? This action cannot be undone.'),
+    ).toBeInTheDocument();
 
     // Confirm.
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -230,7 +234,9 @@ describe('Projects/Workflows/BuilderPage', () => {
     });
 
     await userEvent.click(document.querySelector('.tabler-icon-trash')!.closest('button')!);
-    expect(screen.getByText('Are you sure you want to delete this step? This action cannot be undone.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Are you sure you want to delete this step? This action cannot be undone.'),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
@@ -341,7 +347,9 @@ describe('Projects/Workflows/BuilderPage', () => {
 
   it('shows "Max Retries" only when On Failure is set to retry', () => {
     renderAuthedPage(<BuilderPage />, {
-      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'retry', maxRetries: 3 })] }),
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'retry', maxRetries: 3 })],
+      }),
     });
 
     // The execution accordion is open by default; Max Retries is visible for retry policy.

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { type TocItem } from '../data/pages';

@@ -2,7 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { Alert, Button, Group, Loader, Modal, Select, Stack, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconAlertCircle } from '@tabler/icons-react';
-import { zodResolver } from 'mantine-form-zod-resolver';
+import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { z } from 'zod';
 

@@ -2,9 +2,9 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 import SessionShowPage from './Show';
 
 function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession {
@@ -59,18 +59,10 @@ describe('Company/Sessions/Show', () => {
     // The raw state string can surface in both the header badge and the waiting panel.
     expect(screen.getAllByText('running').length).toBeGreaterThan(0);
     expect(screen.getByText('#4242')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New Session' })).toBeInTheDocument();
     // An active, non-finishing session exposes the Finish action.
     expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument();
-  });
-
-  it('navigates to the new-session path when New Session is clicked', async () => {
-    renderAuthedPage(<SessionShowPage />, {
-      props: { session: buildSession({ state: 'running' }), cableStream: 'stream-token' },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: 'New Session' }));
-    expect(router.visit).toHaveBeenCalledWith('/company/sessions/new');
+    // Company-level session creation was removed; the header omits the "New Session" button.
+    expect(screen.queryByRole('button', { name: 'New Session' })).not.toBeInTheDocument();
   });
 
   it('renders the completion card with cost summary and review action for a finished session with pending outputs', () => {

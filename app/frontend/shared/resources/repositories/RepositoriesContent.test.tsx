@@ -43,11 +43,7 @@ describe('RepositoriesContent', () => {
 
   it('shows the empty state when there are no repositories', () => {
     renderPage(
-      <RepositoriesContent
-        title="Code Repositories"
-        basePath="/companies/1/repositories"
-        repositories={[]}
-      />,
+      <RepositoriesContent title="Code Repositories" basePath="/companies/1/repositories" repositories={[]} />,
     );
 
     expect(screen.getByText('No repositories added')).toBeInTheDocument();

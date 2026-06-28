@@ -1,10 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-import ConfigPage from './ConfigPage';
+
 import type { ConfigItem } from 'shared/resources/config-items/ConfigItemsContent';
 
+import ConfigPage from './ConfigPage';
 
 const project = { id: 7, name: 'Gateway Service' };
 

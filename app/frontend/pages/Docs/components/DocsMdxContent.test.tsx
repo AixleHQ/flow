@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen, within } from 'test/renderPage';
 
 import { DocsMdxContent } from './DocsMdxContent';
@@ -8,9 +9,7 @@ import { DocsMdxContent } from './DocsMdxContent';
 // prop, so renderPage(<DocsMdxContent content=... />) is enough — it reads no usePage data.
 describe('Docs/components/DocsMdxContent', () => {
   it('renders headings as the matching heading levels with slugified ids', () => {
-    renderPage(
-      <DocsMdxContent content={'# Getting Started\n\n## Install Steps\n\n### Sub Section'} />,
-    );
+    renderPage(<DocsMdxContent content={'# Getting Started\n\n## Install Steps\n\n### Sub Section'} />);
 
     const h1 = screen.getByRole('heading', { name: 'Getting Started', level: 1 });
     expect(h1).toBeInTheDocument();
@@ -19,18 +18,11 @@ describe('Docs/components/DocsMdxContent', () => {
     const h2 = screen.getByRole('heading', { name: 'Install Steps', level: 2 });
     expect(h2).toHaveAttribute('id', 'install-steps');
 
-    expect(screen.getByRole('heading', { name: 'Sub Section', level: 3 })).toHaveAttribute(
-      'id',
-      'sub-section',
-    );
+    expect(screen.getByRole('heading', { name: 'Sub Section', level: 3 })).toHaveAttribute('id', 'sub-section');
   });
 
   it('renders an external link with target/rel and an internal link without them', () => {
-    renderPage(
-      <DocsMdxContent
-        content={'[Outside](https://example.com) and [Inside](/docs/agents)'}
-      />,
-    );
+    renderPage(<DocsMdxContent content={'[Outside](https://example.com) and [Inside](/docs/agents)'} />);
 
     const external = screen.getByRole('link', { name: /Outside/ });
     expect(external).toHaveAttribute('href', 'https://example.com');
@@ -44,9 +36,7 @@ describe('Docs/components/DocsMdxContent', () => {
   });
 
   it('renders a fenced code block via DocsCodeBlock with a language label and copy button', () => {
-    renderPage(
-      <DocsMdxContent content={'```typescript\nconst answer = 42;\n```'} />,
-    );
+    renderPage(<DocsMdxContent content={'```typescript\nconst answer = 42;\n```'} />);
 
     // DocsCodeBlock maps the `typescript` fence to the "TypeScript" label.
     expect(screen.getByText('TypeScript')).toBeInTheDocument();
@@ -57,9 +47,7 @@ describe('Docs/components/DocsMdxContent', () => {
   });
 
   it('renders a blockquote whose keyword turns it into a callout with the keyword stripped', () => {
-    renderPage(
-      <DocsMdxContent content={'> tip Remember to save your work often.'} />,
-    );
+    renderPage(<DocsMdxContent content={'> tip Remember to save your work often.'} />);
 
     // The remarkCalloutType plugin removes the leading "tip" keyword from the text.
     expect(screen.getByText('Remember to save your work often.')).toBeInTheDocument();
@@ -69,14 +57,9 @@ describe('Docs/components/DocsMdxContent', () => {
   it('renders GFM tables and lists from markdown', () => {
     renderPage(
       <DocsMdxContent
-        content={[
-          '| Name | Role |',
-          '| --- | --- |',
-          '| Ada | Engineer |',
-          '',
-          '- first item',
-          '- second item',
-        ].join('\n')}
+        content={['| Name | Role |', '| --- | --- |', '| Ada | Engineer |', '', '- first item', '- second item'].join(
+          '\n',
+        )}
       />,
     );
 
@@ -91,14 +74,10 @@ describe('Docs/components/DocsMdxContent', () => {
   });
 
   it('renders an inline code span without the code-block copy chrome', () => {
-    renderPage(
-      <DocsMdxContent content={'Use the `yarn build` command to compile.'} />,
-    );
+    renderPage(<DocsMdxContent content={'Use the `yarn build` command to compile.'} />);
 
     expect(screen.getByText('yarn build')).toBeInTheDocument();
     // Inline code never renders the fenced block's copy button.
-    expect(
-      screen.queryByRole('button', { name: 'Copy code to clipboard' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copy code to clipboard' })).not.toBeInTheDocument();
   });
 });

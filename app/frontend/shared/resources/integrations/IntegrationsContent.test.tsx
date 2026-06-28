@@ -49,7 +49,8 @@ describe('IntegrationsContent', () => {
     );
 
     expect(screen.getByText('No integrations connected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Connect GitHub/i })).toBeInTheDocument();
+    // The empty-state action buttons are labeled by provider name only ("GitHub", "GitLab", ...).
+    expect(screen.getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
   });
 
   it('connecting GitLab with a valid token fires a router.post with the gitlab payload', async () => {
@@ -58,8 +59,9 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    // Open the GitLab connect modal from the empty-state action.
-    await userEvent.click(screen.getByRole('button', { name: /Connect GitLab/i }));
+    // Open the GitLab connect modal from the empty-state action (button labeled "GitLab",
+    // whose accessible name also includes the GitLab icon's alt text).
+    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
 
     const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
     await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-secret-token');
@@ -78,7 +80,7 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /Connect GitLab/i }));
+    await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
 
     const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
     expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
@@ -102,7 +104,10 @@ describe('IntegrationsContent', () => {
     await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
-      expect(router.delete).toHaveBeenCalledWith('/company/integrations/7', expect.objectContaining({ preserveScroll: true })),
+      expect(router.delete).toHaveBeenCalledWith(
+        '/company/integrations/7',
+        expect.objectContaining({ preserveScroll: true }),
+      ),
     );
   });
 
@@ -133,7 +138,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /Connect GitHub/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
 
       expect(window.location.href).toBe('https://github.com/apps/aixle-app/installations/new');
     });
@@ -144,7 +149,7 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /Connect GitHub/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
 
       expect(window.location.href).toBe(
         `https://github.com/apps/aixle-app/installations/new?state=${encodeURIComponent('project:42')}`,
@@ -157,7 +162,7 @@ describe('IntegrationsContent', () => {
         { props: { settings: { githubAppSlug: null } } },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /Connect GitHub/i }));
+      await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
 
       expect(window.location.href).toBe('/company/integrations/github_setup');
     });
@@ -331,7 +336,10 @@ describe('IntegrationsContent', () => {
       );
 
       const dialog = await openCoderModal();
-      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'http://insecure.example.com');
+      await userEvent.type(
+        within(dialog).getByPlaceholderText('https://coder.example.com'),
+        'http://insecure.example.com',
+      );
       await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'tok-123');
 
       expect(within(dialog).getByText('Must be a valid https URL')).toBeInTheDocument();

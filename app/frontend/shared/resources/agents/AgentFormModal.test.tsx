@@ -107,9 +107,7 @@ describe('AgentFormModal', () => {
   });
 
   it('renders duplicate mode with a Duplicate title and copy-suffixed prefilled values', () => {
-    renderPage(
-      <AgentFormModal opened onClose={vi.fn()} duplicateAgent={editAgent} basePath="/projects/1/agents" />,
-    );
+    renderPage(<AgentFormModal opened onClose={vi.fn()} duplicateAgent={editAgent} basePath="/projects/1/agents" />);
 
     expect(screen.getByText('Duplicate Agent')).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('analyst_copy');
@@ -120,9 +118,7 @@ describe('AgentFormModal', () => {
   });
 
   it('fires router.post (not patch) when saving a duplicated agent', async () => {
-    renderPage(
-      <AgentFormModal opened onClose={vi.fn()} duplicateAgent={editAgent} basePath="/projects/1/agents" />,
-    );
+    renderPage(<AgentFormModal opened onClose={vi.fn()} duplicateAgent={editAgent} basePath="/projects/1/agents" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 

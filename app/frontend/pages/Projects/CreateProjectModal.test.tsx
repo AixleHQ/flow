@@ -46,7 +46,10 @@ describe('Projects/CreateProjectModal', () => {
     await userEvent.click(createButton);
 
     expect(form.transform).toHaveBeenCalled();
-    expect(form.post).toHaveBeenCalledWith('/company/projects', expect.objectContaining({ onSuccess: expect.any(Function) }));
+    expect(form.post).toHaveBeenCalledWith(
+      '/company/projects',
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 
   it('resets, clears errors and closes when Cancel is clicked', async () => {

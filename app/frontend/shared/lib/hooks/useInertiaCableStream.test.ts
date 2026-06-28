@@ -73,9 +73,7 @@ describe('useInertiaCableStream', () => {
   });
 
   it('reloads (debounced) with only/except on a refresh broadcast', () => {
-    renderHook(() =>
-      useInertiaCableStream('signed-stream-xyz', { only: ['board'], except: ['flash'] }),
-    );
+    renderHook(() => useInertiaCableStream('signed-stream-xyz', { only: ['board'], except: ['flash'] }));
     act(() => vi.advanceTimersByTime(50));
 
     act(() => lastHandlers?.received({ type: 'refresh' }));

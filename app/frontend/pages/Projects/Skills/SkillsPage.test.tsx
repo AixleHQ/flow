@@ -38,9 +38,7 @@ describe('Projects/Skills/SkillsPage', () => {
     renderAuthedPage(<SkillsPage />, { props: pageProps([]) });
 
     expect(screen.getByText('Project Skills')).toBeInTheDocument();
-    expect(
-      screen.getByText('Skills from skills.sh registry installed for this project.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Skills from skills.sh registry installed for this project.')).toBeInTheDocument();
   });
 
   it('shows the empty state with a registry browse CTA when no skills are installed', () => {

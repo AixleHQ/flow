@@ -15,9 +15,7 @@ const columns = [
   { id: 200, name: 'In Progress', position: 1, purpose: null, workflowBinding: null },
 ];
 
-const makeTask = (
-  overrides: Partial<{ id: number; title: string; boardColumnId: number; position: number }> = {},
-) => ({
+const makeTask = (overrides: Partial<{ id: number; title: string; boardColumnId: number; position: number }> = {}) => ({
   id: 1,
   title: 'Untitled',
   description: null,
@@ -221,9 +219,7 @@ describe('Projects/Board/BoardPage', () => {
   it('opens the Board Settings dialog with editable column rows', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
-    const settingsButton = screen
-      .getAllByRole('button')
-      .find((b) => b.querySelector('svg.tabler-icon-settings'));
+    const settingsButton = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-settings'));
     await userEvent.click(settingsButton!);
 
     const dialog = await screen.findByRole('dialog');
@@ -353,7 +349,7 @@ describe('Projects/Board/BoardPage', () => {
           costTotals: { totalCostCents: 250 },
           tokenTotals: { totalTokens: 12500 },
           timeTotals: { totalDurationSeconds: 95 },
-          waitStats: [],
+          gateStats: [],
           workflowBreakdowns: [],
         },
       },
@@ -407,9 +403,7 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     // The trash ActionIcon in the drawer header opens the confirm modal.
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => b.querySelector('svg.tabler-icon-trash'));
+    const trashButton = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-trash'));
     await userEvent.click(trashButton!);
 
     expect(await screen.findByText('Delete Task')).toBeInTheDocument();
@@ -433,9 +427,7 @@ describe('Projects/Board/BoardPage', () => {
       },
     });
 
-    const trashButton = screen
-      .getAllByRole('button')
-      .find((b) => b.querySelector('svg.tabler-icon-trash'));
+    const trashButton = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-trash'));
     await userEvent.click(trashButton!);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));

@@ -3,7 +3,6 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
-
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { SessionShowContent, type SessionShowContext } from './SessionShowContent';
@@ -81,9 +80,7 @@ describe('SessionShowContent', () => {
   });
 
   it('navigates back when the back arrow is clicked', async () => {
-    renderPage(
-      <SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />,
-    );
+    renderPage(<SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />);
 
     // The back ActionIcon is the first button (icon-only); find via its Tabler icon SVG.
     const backIcon = document.querySelector('svg.tabler-icon-arrow-left');
@@ -95,9 +92,7 @@ describe('SessionShowContent', () => {
   });
 
   it('shows the Finish button for an active session and POSTs to finish then reloads', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(null, { status: 200 }));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
 
     renderPage(
       <SessionShowContent
@@ -124,9 +119,7 @@ describe('SessionShowContent', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    renderPage(
-      <SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />,
-    );
+    renderPage(<SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />);
 
     const copyIcon = document.querySelector('svg.tabler-icon-copy');
     const copyBtn = copyIcon?.closest('button');
@@ -203,11 +196,7 @@ describe('SessionShowContent', () => {
 
   it('renders the finishing overlay while the session is finishing', () => {
     renderPage(
-      <SessionShowContent
-        session={makeSession({ state: 'finishing' })}
-        cableStream="signed-stream"
-        context={ctx}
-      />,
+      <SessionShowContent session={makeSession({ state: 'finishing' })} cableStream="signed-stream" context={ctx} />,
     );
 
     expect(screen.getByText(/finishing session/i)).toBeInTheDocument();

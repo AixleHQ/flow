@@ -30,9 +30,7 @@ describe('DocsSearchModal', () => {
     const listbox = await screen.findByRole('listbox');
     expect(within(listbox).getByText('Workflows')).toBeInTheDocument();
     // The matched result also surfaces its description text.
-    expect(
-      within(listbox).getByText(/A DAG of steps orchestrated by Temporal/i),
-    ).toBeInTheDocument();
+    expect(within(listbox).getByText(/A DAG of steps orchestrated by Temporal/i)).toBeInTheDocument();
   });
 
   it('shows a no-results message for a query with no matches', async () => {

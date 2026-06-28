@@ -10,9 +10,7 @@ const server = { id: 7, name: 'github', displayName: 'GitHub Server' };
 
 describe('DeleteMcpServerModal', () => {
   it('renders the title and the server name in the confirmation prompt', () => {
-    renderPage(
-      <DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />,
-    );
+    renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />);
 
     expect(screen.getByRole('heading', { name: /delete mcp server/i })).toBeInTheDocument();
     expect(screen.getByText('GitHub Server')).toBeInTheDocument();
@@ -20,17 +18,13 @@ describe('DeleteMcpServerModal', () => {
   });
 
   it('renders nothing when no server is provided', () => {
-    renderPage(
-      <DeleteMcpServerModal opened onClose={vi.fn()} server={null} basePath="/projects/1/mcp-servers" />,
-    );
+    renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={null} basePath="/projects/1/mcp-servers" />);
 
     expect(screen.queryByRole('heading', { name: /delete mcp server/i })).not.toBeInTheDocument();
   });
 
   it('confirming Delete fires router.delete to the server path', async () => {
-    renderPage(
-      <DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />,
-    );
+    renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />);
 
     await userEvent.click(screen.getByRole('button', { name: /delete/i }));
 
@@ -42,9 +36,7 @@ describe('DeleteMcpServerModal', () => {
 
   it('clicking Cancel calls onClose and does NOT delete', async () => {
     const onClose = vi.fn();
-    renderPage(
-      <DeleteMcpServerModal opened onClose={onClose} server={server} basePath="/projects/1/mcp-servers" />,
-    );
+    renderPage(<DeleteMcpServerModal opened onClose={onClose} server={server} basePath="/projects/1/mcp-servers" />);
 
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
 

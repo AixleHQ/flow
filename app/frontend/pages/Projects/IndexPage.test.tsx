@@ -85,10 +85,7 @@ describe('Projects/IndexPage', () => {
   it('sorts projects alphabetically by name by default', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
-        projects: [
-          project({ id: 1, name: 'Zeta', slug: 'zeta' }),
-          project({ id: 2, name: 'Alpha', slug: 'alpha' }),
-        ],
+        projects: [project({ id: 1, name: 'Zeta', slug: 'zeta' }), project({ id: 2, name: 'Alpha', slug: 'alpha' })],
       },
     });
 

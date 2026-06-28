@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import type TerminalSession from 'types/generated/TerminalSession';
-
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import type TerminalSession from 'types/generated/TerminalSession';
 
 import ProjectSessionShowPage from './ShowPage';
 

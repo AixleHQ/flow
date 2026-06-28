@@ -66,7 +66,9 @@ describe('Company/ConfigItems/Index', () => {
   it('deletes a config item via the row menu after confirmation', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     // Use a secret item so the row's only button is the actions menu trigger (no copy button).
-    renderAuthedPage(<ConfigItemsIndex configItems={[configItem({ id: 42, name: 'DATABASE_URL', itemType: 'secret' })]} />);
+    renderAuthedPage(
+      <ConfigItemsIndex configItems={[configItem({ id: 42, name: 'DATABASE_URL', itemType: 'secret' })]} />,
+    );
 
     const row = screen.getByText('DATABASE_URL').closest('tr');
     expect(row).not.toBeNull();

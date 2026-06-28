@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import ShowPage from './ShowPage';
@@ -113,8 +114,8 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       }),
     });
 
-    const banner = screen.getByText('Workflow stopped: account ran out of credits').closest('[role="alert"]')
-      ?? document.body;
+    const banner =
+      screen.getByText('Workflow stopped: account ran out of credits').closest('[role="alert"]') ?? document.body;
     expect(within(banner as HTMLElement).getByText('Acme Cloud')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Re-run Workflow' }));
@@ -367,8 +368,22 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       startedAt: '2026-01-01T00:00:00Z',
       stepNote: 'Heads up: this step is flaky',
       subStepRuns: [
-        { id: 1, state: 'completed', subStepName: 'Fetch data', subStepDescription: null, startedAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:00:30Z' },
-        { id: 2, state: 'in_progress', subStepName: 'Transform', subStepDescription: null, startedAt: '2026-01-01T00:00:30Z', completedAt: null },
+        {
+          id: 1,
+          state: 'completed',
+          subStepName: 'Fetch data',
+          subStepDescription: null,
+          startedAt: '2026-01-01T00:00:00Z',
+          completedAt: '2026-01-01T00:00:30Z',
+        },
+        {
+          id: 2,
+          state: 'in_progress',
+          subStepName: 'Transform',
+          subStepDescription: null,
+          startedAt: '2026-01-01T00:00:30Z',
+          completedAt: null,
+        },
       ],
     };
     renderAuthedPage(<ShowPage />, {
@@ -409,9 +424,9 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('promotes a single asset through the promote modal via apiFetch', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const assets = [
       {
@@ -451,9 +466,9 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('finishes an interactive agent session and reloads the run', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const runningInteractive = {
       ...baseStep,

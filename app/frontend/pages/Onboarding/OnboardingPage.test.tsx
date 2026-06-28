@@ -2,11 +2,11 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import type { AgentType, SharedUser } from 'shared/ui';
+import { buildSharedUser } from 'test/factories/sharedProps';
+import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
-import { buildSharedUser } from 'test/factories/sharedProps';
+import type { AgentType, SharedUser } from 'shared/ui';
 
 import OnboardingPage from './OnboardingPage';
 

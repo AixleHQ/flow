@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen } from 'test/renderPage';
 
 import { DocsCallout } from './DocsCallout';
@@ -30,10 +31,7 @@ describe('Docs/components/DocsCallout', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Pro tip' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'See the agents guide' })).toHaveAttribute(
-      'href',
-      '/docs/agents',
-    );
+    expect(screen.getByRole('link', { name: 'See the agents guide' })).toHaveAttribute('href', '/docs/agents');
   });
 
   it('defaults to the info variant and renders the info-circle icon', () => {
@@ -44,18 +42,14 @@ describe('Docs/components/DocsCallout', () => {
   });
 
   it('renders the alert-triangle icon for the warning variant', () => {
-    const { container } = renderPage(
-      <DocsCallout variant="warning">Be careful here</DocsCallout>,
-    );
+    const { container } = renderPage(<DocsCallout variant="warning">Be careful here</DocsCallout>);
 
     expect(screen.getByText('Be careful here')).toBeInTheDocument();
     expect(container.querySelector('svg.tabler-icon-alert-triangle')).toBeInTheDocument();
   });
 
   it('renders the alert-circle icon for the danger variant', () => {
-    const { container } = renderPage(
-      <DocsCallout variant="danger">This action is irreversible</DocsCallout>,
-    );
+    const { container } = renderPage(<DocsCallout variant="danger">This action is irreversible</DocsCallout>);
 
     expect(screen.getByText('This action is irreversible')).toBeInTheDocument();
     expect(container.querySelector('svg.tabler-icon-alert-circle')).toBeInTheDocument();

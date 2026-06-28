@@ -30,7 +30,9 @@ describe('AgentsContent', () => {
       makeAgent({ id: 2, name: 'tech_writer', title: 'Tech Writer' }),
     ];
 
-    renderPage(<AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+    );
 
     expect(screen.getByText('Agents')).toBeInTheDocument();
     expect(screen.getByText('Manage your agents')).toBeInTheDocument();
@@ -51,7 +53,9 @@ describe('AgentsContent', () => {
       makeAgent({ id: 2, name: 'tech_writer', title: 'Tech Writer' }),
     ];
 
-    renderPage(<AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+    );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'writer');
 
@@ -61,12 +65,7 @@ describe('AgentsContent', () => {
 
   it('clicking "Add Agent" opens the create form modal', async () => {
     renderPage(
-      <AgentsContent
-        agents={[makeAgent()]}
-        basePath="/company/agents"
-        title="Agents"
-        subtitle="Manage your agents"
-      />,
+      <AgentsContent agents={[makeAgent()]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: /add agent/i }));
@@ -119,7 +118,9 @@ describe('AgentsContent', () => {
   it('shows the "no match" empty state (without the add-first-agent button) when search matches nothing', async () => {
     const agents = [makeAgent({ id: 1, name: 'market_analyst', title: 'Market Analyst' })];
 
-    renderPage(<AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+    );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'nonexistent_zzz');
 
@@ -134,7 +135,9 @@ describe('AgentsContent', () => {
       makeAgent({ id: 2, name: 'tech_writer', title: 'Documentation Owner' }),
     ];
 
-    renderPage(<AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+    );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'tech_writer');
 
@@ -275,7 +278,9 @@ describe('AgentsContent', () => {
   it('does not render the Scope column in a company context', () => {
     const agents = [makeAgent({ id: 1, title: 'Market Analyst' })];
 
-    renderPage(<AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+    );
 
     expect(screen.queryByText('Scope')).not.toBeInTheDocument();
   });

@@ -54,12 +54,7 @@ describe('ConfigItemValueField', () => {
   it('editing the autocomplete in config-item mode fires onChange with the config_item: prefix', async () => {
     const onChange = vi.fn();
     renderPage(
-      <ConfigItemValueField
-        value="config_item:"
-        onChange={onChange}
-        configItemNames={['API_KEY']}
-        label="Secret"
-      />,
+      <ConfigItemValueField value="config_item:" onChange={onChange} configItemNames={['API_KEY']} label="Secret" />,
     );
 
     await userEvent.type(screen.getByPlaceholderText('Select config item...'), 'D');

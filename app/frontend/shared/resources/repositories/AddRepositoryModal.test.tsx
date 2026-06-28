@@ -189,10 +189,7 @@ describe('AddRepositoryModal', () => {
       />,
       {
         props: {
-          integrations: [
-            integration,
-            { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' },
-          ],
+          integrations: [integration, { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' }],
         },
       },
     );
@@ -213,10 +210,7 @@ describe('AddRepositoryModal', () => {
       />,
       {
         props: {
-          integrations: [
-            integration,
-            { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' },
-          ],
+          integrations: [integration, { id: 9, name: 'Other Org', provider: 'gitlab', status: 'active' }],
         },
       },
     );

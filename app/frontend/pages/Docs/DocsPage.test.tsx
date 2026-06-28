@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
 import DocsPage from './DocsPage';
 
 // DocsPage reads `slug` from usePage().props and renders inside its own DocsLayout

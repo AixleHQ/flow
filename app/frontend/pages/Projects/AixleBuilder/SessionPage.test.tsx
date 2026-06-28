@@ -84,9 +84,7 @@ describe('Projects/AixleBuilder/SessionPage', () => {
         session: baseSession,
         cableStream: 'signed-stream',
         builderActivities: [],
-        workflows: [
-          { id: 1, name: 'Triage Inbound', description: 'Sort new requests', stepsCount: 4 },
-        ],
+        workflows: [{ id: 1, name: 'Triage Inbound', description: 'Sort new requests', stepsCount: 4 }],
         boardColumns: [],
       },
     });
@@ -114,9 +112,7 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     const startNew = screen.getByRole('button', { name: 'Start New Build' });
 
     await userEvent.click(startNew);
-    await waitFor(() =>
-      expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder'),
-    );
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder'));
   });
 
   it('falls back to the raw agentType when it is not a known label', () => {

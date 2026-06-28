@@ -102,9 +102,7 @@ describe('ToolsContent', () => {
   }
 
   it('opens the edit modal for an editable tool', async () => {
-    const { container } = renderPage(
-      <ToolsContent {...baseProps} tools={[makeTool({ displayName: 'PDF Reader' })]} />,
-    );
+    const { container } = renderPage(<ToolsContent {...baseProps} tools={[makeTool({ displayName: 'PDF Reader' })]} />);
 
     await clickIconButton(container, 'tabler-icon-edit');
 

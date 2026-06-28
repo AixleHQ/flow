@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
+
 import NewPage from './NewPage';
 
 const project = { id: 7, name: 'Orbital Lab' };
@@ -157,8 +159,6 @@ describe('Projects/Sessions/NewPage', () => {
     expect(body.terminalSession.agentType).toBe('claude_code');
     expect(body.terminalSession.projectId).toBe(7);
 
-    await waitFor(() =>
-      expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/42'),
-    );
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/42'));
   });
 });

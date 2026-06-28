@@ -122,9 +122,7 @@ describe('Projects/Workflows/WorkflowsPage', () => {
 
   it('shows the step count and last-run date on a workflow card', () => {
     renderAuthedPage(<WorkflowsPage />, {
-      props: baseProps([
-        workflow({ id: 1, name: 'Nightly Build', stepsCount: 5, lastRunAt: '2026-03-15T10:00:00Z' }),
-      ]),
+      props: baseProps([workflow({ id: 1, name: 'Nightly Build', stepsCount: 5, lastRunAt: '2026-03-15T10:00:00Z' })]),
     });
 
     const lastRunDate = new Date('2026-03-15T10:00:00Z').toLocaleDateString();

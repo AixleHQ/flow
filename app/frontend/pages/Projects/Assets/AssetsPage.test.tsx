@@ -8,7 +8,6 @@ import type { Asset } from 'shared/resources/assets/AssetsContent';
 
 import AssetsPage from './AssetsPage';
 
-
 const project = { id: 7, name: 'Rocket Project' };
 
 const asset = (overrides: Partial<Asset> = {}): Asset => ({

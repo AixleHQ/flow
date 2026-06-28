@@ -56,9 +56,7 @@ describe('InertiaRouteIndicator', () => {
   it('unsubscribes from both events on unmount', () => {
     const unsubStart = vi.fn();
     const unsubFinish = vi.fn();
-    vi.mocked(router.on)
-      .mockReturnValueOnce(unsubStart)
-      .mockReturnValueOnce(unsubFinish);
+    vi.mocked(router.on).mockReturnValueOnce(unsubStart).mockReturnValueOnce(unsubFinish);
 
     const { unmount } = renderPage(<InertiaRouteIndicator />);
     expect(unsubStart).not.toHaveBeenCalled();

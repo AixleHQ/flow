@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
-import type { Asset } from './AssetsContent';
 import { AssetPreviewModal } from './AssetPreviewModal';
+import type { Asset } from './AssetsContent';
 
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
   return {
@@ -103,7 +103,10 @@ describe('AssetPreviewModal', () => {
     renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/txt" />);
 
     await waitFor(() => expect(screen.getByText('hello inline preview')).toBeInTheDocument());
-    expect(fetchSpy).toHaveBeenCalledWith('https://files.example/notes.txt', expect.objectContaining({ credentials: 'include' }));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'https://files.example/notes.txt',
+      expect.objectContaining({ credentials: 'include' }),
+    );
 
     fetchSpy.mockRestore();
   });
@@ -292,9 +295,7 @@ describe('AssetPreviewModal', () => {
       },
     });
 
-    const { container } = renderPage(
-      <AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/svg" />,
-    );
+    const { container } = renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/svg" />);
 
     await waitFor(() => expect(container.querySelector('svg title')).not.toBeNull());
     expect(container.querySelector('svg title')?.textContent).toBe('inline-vector-art');

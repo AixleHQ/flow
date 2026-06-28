@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen, within } from 'test/renderPage';
+
 import { DocsConceptCards, DocsHeroBlock } from './DocsHeroBlock';
 
 // Both exports are static presentational blocks (no props, no usePage, no forms),

@@ -1,9 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-import ToolsPage from './ToolsPage';
+
 import type { Tool } from 'shared/resources/tools/ToolsContent';
+
+import ToolsPage from './ToolsPage';
 
 const project = { id: 7, name: 'Gateway Service' };
 

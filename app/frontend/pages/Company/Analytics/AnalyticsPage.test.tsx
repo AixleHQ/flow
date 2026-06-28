@@ -55,9 +55,7 @@ describe('Company/Analytics/AnalyticsPage', () => {
 
     // "Analytics" also appears in the sidebar nav, so the page title is not unique; assert the
     // unique subtitle copy and the section landmarks instead.
-    expect(
-      screen.getByText('Company-wide agent activity, costs, and session insights'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Company-wide agent activity, costs, and session insights')).toBeInTheDocument();
     expect(screen.getByText('Projects Overview')).toBeInTheDocument();
     expect(screen.getByText('Agent Activity')).toBeInTheDocument();
     expect(screen.getByText('Cost & Token Usage')).toBeInTheDocument();

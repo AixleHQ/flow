@@ -125,9 +125,7 @@ describe('Projects/Analytics/AnalyticsPage', () => {
 
     expect(screen.getByText('Workflow Breakdown')).toBeInTheDocument();
     expect(screen.getByText('Nightly Triage')).toBeInTheDocument();
-    expect(
-      screen.queryByText('No workflow runs in the selected period.'),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText('No workflow runs in the selected period.')).not.toBeInTheDocument();
   });
 
   it('shows the empty workflow state when there are no workflow runs', () => {

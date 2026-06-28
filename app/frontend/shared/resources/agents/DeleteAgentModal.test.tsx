@@ -10,9 +10,7 @@ const agent = { id: 42, name: 'support_bot', title: 'Support Bot', icon: '🛟' 
 
 describe('DeleteAgentModal', () => {
   it('renders the title, agent details and warning when opened with an agent', () => {
-    renderPage(
-      <DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />,
-    );
+    renderPage(<DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />);
 
     expect(screen.getByText('Delete Agent')).toBeInTheDocument();
     expect(screen.getByText('Support Bot')).toBeInTheDocument();
@@ -29,9 +27,7 @@ describe('DeleteAgentModal', () => {
   });
 
   it('confirming Delete fires router.delete to the agent path', async () => {
-    renderPage(
-      <DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />,
-    );
+    renderPage(<DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />);
 
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
 
@@ -43,9 +39,7 @@ describe('DeleteAgentModal', () => {
 
   it('clicking Cancel calls onClose and does NOT fire a delete request', async () => {
     const onClose = vi.fn();
-    renderPage(
-      <DeleteAgentModal opened onClose={onClose} agent={agent} basePath="/projects/1/agents" />,
-    );
+    renderPage(<DeleteAgentModal opened onClose={onClose} agent={agent} basePath="/projects/1/agents" />);
 
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
 

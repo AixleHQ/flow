@@ -153,7 +153,13 @@ describe('McpServersContent', () => {
         {...baseProps}
         mcpServers={[
           makeServer({ id: 1, displayName: 'Custom One', kind: 'custom', scopeIndicator: 'company' }),
-          makeServer({ id: 2, displayName: 'System One', kind: 'internal', internal: true, scopeIndicator: 'internal' }),
+          makeServer({
+            id: 2,
+            displayName: 'System One',
+            kind: 'internal',
+            internal: true,
+            scopeIndicator: 'internal',
+          }),
         ]}
       />,
     );
@@ -282,9 +288,7 @@ describe('McpServersContent', () => {
       <McpServersContent
         {...baseProps}
         editableScope="project"
-        mcpServers={[
-          makeServer({ id: 1, displayName: 'Inherited Server', kind: 'custom', scopeIndicator: 'company' }),
-        ]}
+        mcpServers={[makeServer({ id: 1, displayName: 'Inherited Server', kind: 'custom', scopeIndicator: 'company' })]}
       />,
     );
 

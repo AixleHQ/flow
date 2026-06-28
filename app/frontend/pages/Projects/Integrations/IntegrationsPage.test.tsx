@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import type { Integration } from 'shared/resources/integrations/IntegrationsContent';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
-import { router } from '@inertiajs/react';
+import type { Integration } from 'shared/resources/integrations/IntegrationsContent';
 
 import IntegrationsPage from './IntegrationsPage';
 
@@ -28,9 +28,9 @@ describe('Projects/Integrations/IntegrationsPage', () => {
 
     expect(screen.getByRole('heading', { name: 'Integrations' })).toBeInTheDocument();
     expect(screen.getByText('No integrations connected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Connect GitHub' })).toBeInTheDocument();
-    // The GitLab button carries an <img alt="GitLab"> icon, so its accessible name is prefixed.
-    expect(screen.getByRole('button', { name: /Connect GitLab/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'GitHub' })).toBeInTheDocument();
+    // The GitLab button carries an <img alt="GitLab"> icon, so its accessible name doubles the label.
+    expect(screen.getByRole('button', { name: /GitLab/ })).toBeInTheDocument();
   });
 
   it('lists project and company integrations in their scoped sections', () => {

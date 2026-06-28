@@ -47,7 +47,8 @@ window.IntersectionObserver = ResizeObserverStub as unknown as typeof Intersecti
 // which jsdom does not implement. CM invokes them from a requestAnimationFrame callback, so the
 // missing method throws *asynchronously* after the test finishes — an unhandled error that fails the
 // whole run even though every test passes. Stub them as empty/zero rects.
-Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+Range.prototype.getClientRects = () =>
+  ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () =>
   ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) as DOMRect;
 

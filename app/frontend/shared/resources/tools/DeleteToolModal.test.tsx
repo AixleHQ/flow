@@ -10,9 +10,7 @@ const tool = { id: 7, name: 'web_search', displayName: 'Web Search' };
 
 describe('DeleteToolModal', () => {
   it('renders the confirmation title and the tool name/displayName when opened', () => {
-    renderPage(
-      <DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />,
-    );
+    renderPage(<DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />);
 
     expect(screen.getByText('Delete Tool')).toBeInTheDocument();
     expect(screen.getByText(/are you sure you want to delete this tool/i)).toBeInTheDocument();
@@ -27,9 +25,7 @@ describe('DeleteToolModal', () => {
   });
 
   it('confirming the delete fires router.delete to the tool path', async () => {
-    renderPage(
-      <DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />,
-    );
+    renderPage(<DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
@@ -41,9 +37,7 @@ describe('DeleteToolModal', () => {
 
   it('cancel calls onClose and does NOT fire a delete request', async () => {
     const onClose = vi.fn();
-    renderPage(
-      <DeleteToolModal opened onClose={onClose} tool={tool} basePath="/projects/1/tools" />,
-    );
+    renderPage(<DeleteToolModal opened onClose={onClose} tool={tool} basePath="/projects/1/tools" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 

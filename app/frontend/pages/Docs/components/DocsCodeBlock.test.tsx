@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi } from 'vitest';
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 import { notifications } from '@mantine/notifications';
+import { describe, expect, it, vi } from 'vitest';
+
+import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+
 import { DocsCodeBlock } from './DocsCodeBlock';
 
 // DocsCodeBlock is presentational and takes its data via props, so renderPage is
@@ -74,9 +76,7 @@ describe('Docs/components/DocsCodeBlock', () => {
     await user.click(screen.getByRole('button', { name: 'Copy code to clipboard' }));
 
     await waitFor(() => {
-      expect(showSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ message: 'Failed to copy', color: 'red' }),
-      );
+      expect(showSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to copy', color: 'red' }));
     });
     // On failure the button stays in its default "Copy" state.
     expect(screen.getByRole('button', { name: 'Copy code to clipboard' })).toHaveTextContent('Copy');

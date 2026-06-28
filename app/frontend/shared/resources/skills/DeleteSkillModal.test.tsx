@@ -10,9 +10,7 @@ const skill = { id: 7, name: 'react_helper', title: 'React Helper' };
 
 describe('DeleteSkillModal', () => {
   it('renders the confirmation prompt with the skill title when opened', () => {
-    renderPage(
-      <DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />,
-    );
+    renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />);
 
     expect(screen.getByRole('heading', { name: /delete skill/i })).toBeInTheDocument();
     expect(screen.getByText(/this action cannot be undone/i)).toBeInTheDocument();
@@ -33,18 +31,14 @@ describe('DeleteSkillModal', () => {
   });
 
   it('renders no modal content when skill is null', () => {
-    renderPage(
-      <DeleteSkillModal opened onClose={vi.fn()} skill={null} basePath="/projects/1/skills" />,
-    );
+    renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={null} basePath="/projects/1/skills" />);
 
     expect(screen.queryByRole('heading', { name: /delete skill/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/this action cannot be undone/i)).not.toBeInTheDocument();
   });
 
   it('confirming Delete fires router.delete with the skill path', async () => {
-    renderPage(
-      <DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />,
-    );
+    renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />);
 
     await userEvent.click(screen.getByRole('button', { name: /delete/i }));
 
@@ -56,9 +50,7 @@ describe('DeleteSkillModal', () => {
 
   it('clicking Cancel calls onClose and does NOT delete', async () => {
     const onClose = vi.fn();
-    renderPage(
-      <DeleteSkillModal opened onClose={onClose} skill={skill} basePath="/projects/1/skills" />,
-    );
+    renderPage(<DeleteSkillModal opened onClose={onClose} skill={skill} basePath="/projects/1/skills" />);
 
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
 

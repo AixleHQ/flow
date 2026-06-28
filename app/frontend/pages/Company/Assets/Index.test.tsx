@@ -46,10 +46,7 @@ describe('Company/Assets/Index', () => {
   it('lists assets in the table given seeded props', () => {
     renderAuthedPage(<AssetsIndex />, {
       props: {
-        assets: [
-          asset({ id: 1, name: 'roadmap.pdf' }),
-          asset({ id: 2, name: 'logo.png', folder: 'brand' }),
-        ],
+        assets: [asset({ id: 1, name: 'roadmap.pdf' }), asset({ id: 2, name: 'logo.png', folder: 'brand' })],
       },
     });
 
@@ -60,10 +57,7 @@ describe('Company/Assets/Index', () => {
   it('filters assets by the search query', async () => {
     renderAuthedPage(<AssetsIndex />, {
       props: {
-        assets: [
-          asset({ id: 1, name: 'roadmap.pdf' }),
-          asset({ id: 2, name: 'logo.png' }),
-        ],
+        assets: [asset({ id: 1, name: 'roadmap.pdf' }), asset({ id: 2, name: 'logo.png' })],
       },
     });
 

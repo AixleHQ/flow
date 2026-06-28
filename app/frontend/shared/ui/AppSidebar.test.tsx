@@ -66,9 +66,8 @@ describe('AppSidebar', () => {
     expect(screen.getByRole('link', { name: 'Members' })).toBeInTheDocument();
 
     // Admin-only items must not be rendered.
-    expect(screen.queryByRole('link', { name: 'Integrations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Assets' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Config Items' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Skills' })).not.toBeInTheDocument();
   });
 
   it('shows admin-only links when the viewer is an admin', () => {
@@ -76,19 +75,15 @@ describe('AppSidebar', () => {
       props: { permissions: { isAdmin: true, canManageMembers: true, canManageProjects: true } },
     });
 
-    expect(screen.getByRole('link', { name: 'Integrations' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Assets' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Config Items' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Skills' })).toBeInTheDocument();
   });
 
   it('renders project-scoped navigation with project-prefixed hrefs in project context', () => {
     renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
 
     // Project nav items appear and link under the project id.
-    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute(
-      'href',
-      '/company/projects/7/overview',
-    );
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', '/company/projects/7/overview');
     expect(screen.getByRole('link', { name: 'Tasks' })).toHaveAttribute('href', '/company/projects/7/board');
     expect(screen.getByRole('link', { name: 'Sessions' })).toBeInTheDocument();
 

@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
+
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
 import SettingsPage from './SettingsPage';
 
 const project = {
@@ -232,7 +234,10 @@ describe('Projects/Settings/SettingsPage', () => {
 
     await userEvent.click(confirm);
 
-    expect(router.delete).toHaveBeenCalledWith('/company/projects/7', expect.objectContaining({ onSuccess: expect.any(Function) }));
+    expect(router.delete).toHaveBeenCalledWith(
+      '/company/projects/7',
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
   });
 
   it('submits the chosen artifacts language after picking a new option', async () => {
@@ -254,5 +259,4 @@ describe('Projects/Settings/SettingsPage', () => {
       expect.objectContaining({ preserveScroll: true }),
     );
   });
-
 });

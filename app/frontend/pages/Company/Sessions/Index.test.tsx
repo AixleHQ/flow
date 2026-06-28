@@ -36,16 +36,13 @@ function makeSession(overrides: Partial<SessionFixture> = {}): SessionFixture {
 }
 
 describe('Company/Sessions/Index', () => {
-  it('renders the page heading and the New Session action when sessions exist', () => {
+  it('renders the page heading and subtitle when sessions exist', () => {
     renderAuthedPage(<SessionsIndex sessions={[makeSession()]} filters={{}} perPage={20} />);
 
     // 'Sessions' also appears in the layout sidebar nav, so scope by the unique subtitle.
     const subtitle = screen.getByText('Agent session history across the company');
     expect(subtitle).toBeInTheDocument();
     expect(screen.getAllByText('Sessions').length).toBeGreaterThan(0);
-
-    const newSession = screen.getByRole('link', { name: /New Session/i });
-    expect(newSession).toHaveAttribute('href', '/company/sessions/new');
   });
 
   it('shows the no-sessions empty state when the list is empty and no filters are applied', () => {
@@ -142,11 +139,7 @@ describe('Company/Sessions/Index', () => {
 
   it('formats cost in dollars and dashes a zero cost', () => {
     renderAuthedPage(
-      <SessionsIndex
-        sessions={[makeSession({ id: 501, costCents: 1234 })]}
-        filters={{}}
-        perPage={20}
-      />,
+      <SessionsIndex sessions={[makeSession({ id: 501, costCents: 1234 })]} filters={{}} perPage={20} />,
     );
 
     expect(within(screen.getByRole('table')).getByText('$12.34')).toBeInTheDocument();
@@ -251,11 +244,7 @@ describe('Company/Sessions/Index', () => {
 
   it('renders one badge per model on a session', () => {
     renderAuthedPage(
-      <SessionsIndex
-        sessions={[makeSession({ id: 1101, models: ['opus-4', 'haiku-3'] })]}
-        filters={{}}
-        perPage={20}
-      />,
+      <SessionsIndex sessions={[makeSession({ id: 1101, models: ['opus-4', 'haiku-3'] })]} filters={{}} perPage={20} />,
     );
 
     const table = screen.getByRole('table');
@@ -276,9 +265,7 @@ describe('Company/Sessions/Index', () => {
     expect(screen.getByPlaceholderText('Agent')).toHaveValue('Cursor CLI');
     expect(screen.getByPlaceholderText('Status')).toHaveValue('Failed');
     // Per-page select (the only combobox without a placeholder) reflects 50.
-    const perPageInput = screen
-      .getAllByRole('combobox')
-      .find((el) => !el.getAttribute('placeholder'));
+    const perPageInput = screen.getAllByRole('combobox').find((el) => !el.getAttribute('placeholder'));
     expect(perPageInput).toHaveValue('50');
   });
 
@@ -302,9 +289,7 @@ describe('Company/Sessions/Index', () => {
     renderAuthedPage(<SessionsIndex sessions={[makeSession()]} filters={{ state_eq: 'ready' }} perPage={20} />);
 
     // The per-page select is the only combobox without a placeholder.
-    const perPageSelect = screen
-      .getAllByRole('combobox')
-      .find((el) => !el.getAttribute('placeholder'));
+    const perPageSelect = screen.getAllByRole('combobox').find((el) => !el.getAttribute('placeholder'));
     expect(perPageSelect).toBeDefined();
     await user.click(perPageSelect as HTMLElement);
     await user.click(await screen.findByRole('option', { name: '100' }));

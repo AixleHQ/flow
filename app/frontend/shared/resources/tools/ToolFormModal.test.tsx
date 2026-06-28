@@ -21,9 +21,7 @@ const editTool = {
 
 describe('ToolFormModal', () => {
   it('renders the Create title and basic fields when opened', () => {
-    renderPage(
-      <ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />,
-    );
+    renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
     expect(screen.getByRole('heading', { name: 'Create Tool' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: /^name$/i })).toBeInTheDocument();
@@ -45,9 +43,7 @@ describe('ToolFormModal', () => {
 
   it('clicking Cancel calls onClose', async () => {
     const onClose = vi.fn();
-    renderPage(
-      <ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />,
-    );
+    renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onClose).toHaveBeenCalled();
@@ -61,9 +57,7 @@ describe('ToolFormModal', () => {
     const swallow = (e: ErrorEvent) => e.preventDefault();
     window.addEventListener('error', swallow);
     try {
-      renderPage(
-        <ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />,
-      );
+      renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
       await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
@@ -75,9 +69,7 @@ describe('ToolFormModal', () => {
   });
 
   it('a valid create submit fires router.post to basePath with the tool payload', async () => {
-    renderPage(
-      <ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />,
-    );
+    renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
 
     await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
     await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
@@ -232,7 +224,9 @@ describe('ToolFormModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
 
     // handleSubmit bails (setActiveTab('files'), no router call).
-    await waitFor(() => expect(screen.getByRole('tab', { name: /files \(1\)/i })).toHaveAttribute('aria-selected', 'true'));
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /files \(1\)/i })).toHaveAttribute('aria-selected', 'true'),
+    );
     expect(router.post).not.toHaveBeenCalled();
     expect(router.patch).not.toHaveBeenCalled();
   });
@@ -273,7 +267,13 @@ describe('ToolFormModal', () => {
     };
 
     renderPage(
-      <ToolFormModal opened onClose={vi.fn()} editTool={toolWithFiles} configItemNames={[]} basePath="/projects/1/tools" />,
+      <ToolFormModal
+        opened
+        onClose={vi.fn()}
+        editTool={toolWithFiles}
+        configItemNames={[]}
+        basePath="/projects/1/tools"
+      />,
     );
 
     await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));
@@ -296,7 +296,13 @@ describe('ToolFormModal', () => {
     };
 
     renderPage(
-      <ToolFormModal opened onClose={vi.fn()} editTool={toolWithBinary} configItemNames={[]} basePath="/projects/1/tools" />,
+      <ToolFormModal
+        opened
+        onClose={vi.fn()}
+        editTool={toolWithBinary}
+        configItemNames={[]}
+        basePath="/projects/1/tools"
+      />,
     );
 
     await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));

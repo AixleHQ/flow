@@ -205,9 +205,7 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
   });
 
   it('formats a sub-minute duration in seconds', () => {
-    const runs = [
-      makeRun({ id: 71, startedAt: '2026-06-26T10:00:00Z', completedAt: '2026-06-26T10:00:45Z' }),
-    ];
+    const runs = [makeRun({ id: 71, startedAt: '2026-06-26T10:00:00Z', completedAt: '2026-06-26T10:00:45Z' })];
 
     renderAuthedPage(<WorkflowRunsPage runs={runs} filters={{}} perPage={20} />, {
       props: { project },
@@ -218,9 +216,7 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
   });
 
   it('formats a multi-minute duration as minutes and seconds', () => {
-    const runs = [
-      makeRun({ id: 72, startedAt: '2026-06-26T10:00:00Z', completedAt: '2026-06-26T10:02:30Z' }),
-    ];
+    const runs = [makeRun({ id: 72, startedAt: '2026-06-26T10:00:00Z', completedAt: '2026-06-26T10:02:30Z' })];
 
     renderAuthedPage(<WorkflowRunsPage runs={runs} filters={{}} perPage={20} />, {
       props: { project },

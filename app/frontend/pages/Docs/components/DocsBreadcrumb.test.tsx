@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
+
 import { renderPage, screen, within } from 'test/renderPage';
+
 import { DocsBreadcrumb } from './DocsBreadcrumb';
 
 // DocsBreadcrumb is a presentational component that takes `section` and `title`
@@ -28,9 +30,7 @@ describe('Docs/components/DocsBreadcrumb', () => {
   });
 
   it('reflects different prop values when re-rendered', () => {
-    const { rerender } = renderPage(
-      <DocsBreadcrumb section="Getting started" title="Installation" />,
-    );
+    const { rerender } = renderPage(<DocsBreadcrumb section="Getting started" title="Installation" />);
     expect(screen.getByText('Installation')).toBeInTheDocument();
 
     rerender(<DocsBreadcrumb section="Integrations" title="GitLab setup" />);

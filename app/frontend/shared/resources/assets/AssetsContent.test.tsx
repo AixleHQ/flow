@@ -133,8 +133,7 @@ describe('AssetsContent', () => {
   });
 
   it('hides the Upload button and first-upload CTA when no createEndpoint is given', () => {
-    const { createEndpoint: _omit, ...noCreate } = baseProps;
-    renderPage(<AssetsContent {...noCreate} assets={[]} />);
+    renderPage(<AssetsContent {...baseProps} createEndpoint={undefined} assets={[]} />);
 
     expect(screen.getByText('No assets yet')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^upload$/i })).not.toBeInTheDocument();
@@ -168,7 +167,10 @@ describe('AssetsContent', () => {
     renderPage(
       <AssetsContent
         {...baseProps}
-        assets={[makeAsset({ id: 1, name: 'rootless.pdf', folder: null }), makeAsset({ id: 2, name: 'also-root.txt', folder: null })]}
+        assets={[
+          makeAsset({ id: 1, name: 'rootless.pdf', folder: null }),
+          makeAsset({ id: 2, name: 'also-root.txt', folder: null }),
+        ]}
       />,
     );
 
@@ -347,7 +349,9 @@ describe('AssetsContent', () => {
 
     // router.reload is a spy that never resolves onFinish on its own; invoke it to clear the
     // loading state and reveal the seeded versions table.
-    const reloadArgs = (router.reload as unknown as { mock: { calls: [{ onFinish?: () => void }][] } }).mock.calls.at(-1)?.[0];
+    const reloadArgs = (router.reload as unknown as { mock: { calls: [{ onFinish?: () => void }][] } }).mock.calls.at(
+      -1,
+    )?.[0];
     act(() => reloadArgs?.onFinish?.());
 
     const dialog = await screen.findByRole('dialog');
@@ -364,7 +368,9 @@ describe('AssetsContent', () => {
     const historyBtn = container.querySelector('.tabler-icon-history')?.closest('button');
     await userEvent.click(historyBtn as HTMLButtonElement);
 
-    const reloadArgs = (router.reload as unknown as { mock: { calls: [{ onFinish?: () => void }][] } }).mock.calls.at(-1)?.[0];
+    const reloadArgs = (router.reload as unknown as { mock: { calls: [{ onFinish?: () => void }][] } }).mock.calls.at(
+      -1,
+    )?.[0];
     act(() => reloadArgs?.onFinish?.());
 
     const dialog = await screen.findByRole('dialog');

@@ -21,7 +21,7 @@ describe('DocsNavBar', () => {
     renderPage(<DocsNavBar onMenuClick={vi.fn()} onSearchClick={vi.fn()} />);
 
     const github = screen.getByRole('link', { name: /GitHub/i });
-    expect(github).toHaveAttribute('href', 'https://github.com/palad-ai');
+    expect(github).toHaveAttribute('href', 'https://github.com/aixleHQ/flow');
     expect(github).toHaveAttribute('target', '_blank');
     expect(github).toHaveAttribute('rel', 'noopener noreferrer');
     expect(github).toHaveTextContent('★ 2.4k');
