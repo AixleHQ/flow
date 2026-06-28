@@ -5,6 +5,13 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 // Dedicated config — intentionally does NOT load ViteRuby()/inertia() from vite.config.ts,
 // which assume a live Rails/Inertia context and break under Vitest (vitest#436).
 // Keeps tsconfig path aliases (shared/ui, layouts/*, @/types/generated, test/*) and JSX.
+
+// CI runners (2–4 vCPU) run these jsdom + userEvent tests ~6–10× slower than a dev machine —
+// with coverage on, the heaviest form-interaction tests (~0.8s locally) brush the default 5s
+// ceiling and flake. Give CI generous headroom and retry the occasional contention-driven
+// timeout. Locally we keep the tight 5s ceiling and no retries so real hangs surface fast.
+const isCI = !!process.env.CI;
+
 export default defineConfig({
   plugins: [tsconfigPaths(), reactSwc()],
   test: {
@@ -13,6 +20,9 @@ export default defineConfig({
     setupFiles: ['./app/frontend/test/setup.ts'],
     css: false, // assert behavior/roles, not pixels
     clearMocks: true, // reset spy call history between tests, keep implementations
+    testTimeout: isCI ? 20000 : 5000,
+    hookTimeout: isCI ? 20000 : 10000,
+    retry: isCI ? 2 : 0,
     include: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules/**', 'test/playwright/**'],
     coverage: {
