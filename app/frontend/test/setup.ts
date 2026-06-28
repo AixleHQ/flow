@@ -52,6 +52,16 @@ Range.prototype.getClientRects = () =>
 Range.prototype.getBoundingClientRect = () =>
   ({ x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}) }) as DOMRect;
 
+// Raw fetch() is a backend seam too. Components such as BuilderPage auto-save via fetch() to RELATIVE
+// API URLs (e.g. /api/v1/projects/…/steps/…). jsdom runs on Node's undici fetch, which rejects relative
+// URLs ("Failed to parse URL"); a debounced call that fires after its test finished then throws an
+// unhandled rejection that contaminates whichever test is running next (a shared-worker, timing-driven
+// flake). Default fetch to an inert resolved Response so stray/late calls are harmless; tests that need
+// to assert specific requests override this via vi.spyOn(globalThis, 'fetch').
+globalThis.fetch = vi.fn(
+  async () => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+) as typeof fetch;
+
 afterEach(() => cleanup());
 
 // ---------------------------------------------------------------------------
