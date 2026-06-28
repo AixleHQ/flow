@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_27_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -755,6 +755,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_27_000003) do
   create_table "trigger_events", force: :cascade do |t|
     t.bigint "actor_id"
     t.bigint "board_task_id"
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.jsonb "data", default: {}, null: false
     t.string "dedup_key"
@@ -770,10 +771,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_27_000003) do
     t.datetime "updated_at", null: false
     t.index ["actor_id"], name: "index_trigger_events_on_actor_id"
     t.index ["board_task_id"], name: "index_trigger_events_on_board_task_id"
+    t.index ["company_id", "event_type"], name: "index_trigger_events_on_company_id_and_event_type"
     t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
     t.index ["event_type"], name: "index_trigger_events_on_event_type"
     t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
-    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY ((ARRAY['pending'::character varying, 'dispatching'::character varying])::text[]))"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|

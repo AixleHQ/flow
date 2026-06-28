@@ -28,7 +28,20 @@ class TriggerBinding < ApplicationRecord
   validate :workflow_supports_auto_run
 
   scope :active, -> { where(enabled: true) }
-  scope :for_event, ->(event) { active.where(project_id: event.project_id, event_type: event.event_type) }
+  # Match an event to bindings. Project-scoped events (column/webhook/schedule)
+  # match bindings in that project; company-scoped events (Slack — one workspace
+  # serves every project of the company) fan out to bindings across all the
+  # company's projects.
+  scope :for_event, ->(event) {
+    rel = active.where(event_type: event.event_type)
+    if event.project_id
+      rel.where(project_id: event.project_id)
+    elsif event.company_id
+      rel.where(project_id: Project.where(company_id: event.company_id).select(:id))
+    else
+      none
+    end
+  }
 
   # A schedule trigger is reconciled onto a Temporal Schedule (async, off the
   # request) whenever it is created/updated, and removed when destroyed.

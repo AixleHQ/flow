@@ -8,6 +8,7 @@
 # See TriggerEngine for how events are produced and dispatched to workflows.
 class TriggerEvent < ApplicationRecord
   belongs_to :project, optional: true
+  belongs_to :company, optional: true
   belongs_to :board_task, optional: true
   belongs_to :actor, class_name: "User", optional: true
   has_many :trigger_dispatches, dependent: :destroy

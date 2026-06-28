@@ -88,5 +88,31 @@ module Slack
         assert_equal "Acme Renamed", second.reload.name
       end
     end
+
+    test "the install is company-scoped (no project binding) so all projects share it" do
+      Slack::Client.expects(:exchange_code).returns(oauth_response)
+
+      integration = service.create_from_oauth(code: "c")
+
+      assert_nil integration.project_id
+      assert_equal @company.id, integration.company_id
+      endpoint = WebhookEndpoint.find_by(slug: "slack-team-T123")
+      assert_nil endpoint.project_id
+      assert_equal @company.id, endpoint.company_id
+    end
+
+    test "a company can connect several different workspaces" do
+      Slack::Client.stubs(:exchange_code).returns(
+        oauth_response(team_id: "T1", team_name: "WS One"),
+        oauth_response(team_id: "T2", team_name: "WS Two")
+      )
+
+      first  = service.create_from_oauth(code: "c1")
+      second = service.create_from_oauth(code: "c2")
+
+      assert_not_equal first.id, second.id
+      teams = Integration.where(provider: :slack, company: @company).map { |i| i.settings["team_id"] }
+      assert_equal %w[T1 T2], teams.sort
+    end
   end
 end

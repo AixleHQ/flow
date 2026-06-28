@@ -42,14 +42,22 @@ module InternalTools
       workflow_run&.shared_context.to_h["slack"] || {}
     end
 
-    # Prefer a project-scoped Slack install, falling back to a company-wide one.
+    # Reply through the SAME workspace that triggered this run (its integration is
+    # carried in shared_context), so with several connected workspaces the message
+    # goes back to the right one. Falls back to any active install for the company
+    # (e.g. a run not started from Slack).
     def slack_integration
       return nil if project.nil?
 
-      Integration.active.where(provider: :slack)
-        .where("(project_id = :pid) OR (project_id IS NULL AND company_id = :cid)",
-               pid: project.id, cid: project.company_id)
-        .order(Arel.sql("project_id IS NULL")) # project-scoped (false) sorts before company-wide
+      scope = Integration.active.where(provider: :slack, company_id: project.company_id)
+
+      if (id = slack_context["integration_id"]).present?
+        by_id = scope.find_by(id: id)
+        return by_id if by_id
+      end
+
+      scope.where("project_id = :pid OR project_id IS NULL", pid: project.id)
+        .order(Arel.sql("project_id IS NULL"))
         .first
     end
   end

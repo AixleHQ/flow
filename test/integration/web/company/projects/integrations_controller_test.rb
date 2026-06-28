@@ -22,6 +22,29 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_includes response.location, Slack::Oauth::AUTHORIZE_URL
   end
 
+  test "slack_oauth_start is allowed for a non-admin project owner" do
+    owner = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    sign_in_as(owner)
+
+    get slack_oauth_start_company_project_integrations_path(project)
+
+    assert_response :redirect
+    assert_includes response.location, Slack::Oauth::AUTHORIZE_URL
+  end
+
+  test "slack_oauth_start is denied for a non-admin, non-owner member" do
+    member = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(member)
+
+    get slack_oauth_start_company_project_integrations_path(@project)
+
+    # Denied — blocked by project scoping (404) or the integrations policy; either
+    # way a non-admin, non-owner is never sent to Slack's consent screen.
+    assert_not_equal 200, response.status
+    assert_not_includes response.location.to_s, Slack::Oauth::AUTHORIZE_URL
+  end
+
   test "destroy removes integration" do
     integration = create(:integration, company: @company, connected_by: @user, project: @project)
 

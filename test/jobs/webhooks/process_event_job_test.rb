@@ -8,7 +8,8 @@ module Webhooks
       @user = create(:user, :with_company)
       @project = create(:project, owner: @user, company: @user.company)
       @workflow = create(:workflow, scope: @user.company)
-      @endpoint = create(:webhook_endpoint, provider: :slack, project: @project)
+      # Slack endpoints are company-scoped (one workspace serves every project).
+      @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.company)
       @binding = create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user,
         event_type: "slack.message", filter_predicate: { "channel" => "C1" })
@@ -37,6 +38,26 @@ module Webhooks
       assert_equal "processed", rw.reload.status
       assert TriggerEvent.exists?(event_type: "slack.message")
       assert_equal 1, TriggerDispatch.count
+    end
+
+    test "a company-scoped Slack event fans out to bindings across the company's projects" do
+      project_b = create(:project, owner: @user, company: @user.company)
+      workflow_b = create(:workflow, scope: @user.company)
+      create(:trigger_binding, project: project_b, workflow: workflow_b, created_by: @user,
+        event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+
+      payload = {
+        "type" => "event_callback", "event_id" => "EvFan", "team_id" => "T1",
+        "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1", "text" => "<@B> hi" }
+      }
+      rw = received(payload, key: "EvFan")
+
+      # Both projects' triggers fire from the one workspace event.
+      WorkflowService.expects(:start).twice.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
+
+      assert_equal 2, TriggerDispatch.count
     end
 
     test "ignores plain channel messages that do not mention the bot" do
@@ -103,16 +124,17 @@ module Webhooks
       assert_equal integration.id, event.data["integration_id"]
     end
 
-    test "ingests Slack attachments into project assets and forwards them as input_asset_ids" do
+    test "ingests Slack attachments into the matching binding's project at fire time" do
       integration = Integration.create!(
-        provider: :slack, company: @user.company, project: @project, connected_by: @user,
+        provider: :slack, company: @user.company, project: nil, connected_by: @user,
         name: "Acme", status: :active
       )
       integration.update!(credentials_data: { "bot_token" => "xoxb-1" })
       @endpoint.update!(config: { "integration_id" => integration.id })
 
       Slack::Client.expects(:download_file).returns("BYTES")
-      WorkflowService.expects(:start).once.returns(build(:workflow_run))
+      captured = nil
+      WorkflowService.expects(:start).with { |kw| captured = kw; true }.returns(build(:workflow_run))
 
       payload = {
         "type" => "event_callback", "event_id" => "EvFiles", "team_id" => "T1",
@@ -127,8 +149,9 @@ module Webhooks
         Webhooks::ProcessEventJob.perform_now(rw.id)
       end
 
-      event = TriggerEvent.find_by(event_type: "slack.message")
-      assert_equal [ Asset.last.id ], event.data["input_asset_ids"]
+      # Ingested at fire time for the firing binding's project and forwarded to the run.
+      assert_equal @project, captured[:project]
+      assert_equal [ Asset.last.id ], captured[:input_asset_ids]
     end
 
     test "does not start a workflow when the channel predicate does not match" do

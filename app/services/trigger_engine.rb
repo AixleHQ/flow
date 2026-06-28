@@ -37,7 +37,7 @@ class TriggerEngine
     # it if it is never dispatched). "dispatched" records an inert audit row that
     # the relay ignores — used by paths that dispatch through another durable
     # mechanism (e.g. the schedule activity, which Temporal already retries).
-    def record_event(event_type:, source:, subject: nil, data: {}, project: nil, board_task: nil,
+    def record_event(event_type:, source:, subject: nil, data: {}, project: nil, company: nil, board_task: nil,
                      actor: nil, dedup_key: nil, relay_state: "pending")
       TriggerEvent.create!(
         event_type: event_type,
@@ -45,6 +45,7 @@ class TriggerEngine
         subject: subject&.to_s,
         data: data.deep_stringify_keys,
         project_id: project&.id,
+        company_id: company&.id,
         board_task_id: board_task&.id,
         actor_id: actor&.id,
         dedup_key: dedup_key,
@@ -56,10 +57,10 @@ class TriggerEngine
     # Persist a normalized event AND dispatch it. Used by the generic webhook /
     # Slack ingestion path. Idempotent on dedup_key: a redelivered event is
     # recorded once and dispatched once.
-    def publish(event_type:, source:, subject: nil, data: {}, project: nil, board_task: nil, dedup_key: nil)
+    def publish(event_type:, source:, subject: nil, data: {}, project: nil, company: nil, board_task: nil, dedup_key: nil)
       event = record_event(
         event_type: event_type, source: source, subject: subject,
-        data: data, project: project, board_task: board_task, dedup_key: dedup_key,
+        data: data, project: project, company: company, board_task: board_task, dedup_key: dedup_key,
         relay_state: "pending"
       )
       dispatch_pending(event)
@@ -104,7 +105,7 @@ class TriggerEngine
     # Match an event against the generalized binding registry and fire each.
     # Returns the array of created workflow runs (nils for suppressed duplicates).
     def dispatch(event)
-      return [] if event.project_id.blank?
+      return [] if event.project_id.blank? && event.company_id.blank?
 
       TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }.map do |binding|
         fire_for_binding(binding: binding, event: event, task: event.board_task, actor: binding.created_by)
@@ -189,7 +190,7 @@ class TriggerEngine
           result = WorkflowService.start(
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
-            input_asset_ids: Array(event.data["input_asset_ids"]),
+            input_asset_ids: input_asset_ids_for(event, project),
             shared_context: slack_run_context(event)
           )
           started = result.try(:persisted?)
@@ -242,6 +243,23 @@ class TriggerEngine
       )
     rescue ActiveRecord::RecordNotUnique
       TriggerDispatch.find_by!(dedup_key: dedup_key)
+    end
+
+    # Input assets for the run. Slack events carry raw file metadata (not yet
+    # ingested) because a company-scoped workspace event can fan out to several
+    # projects — so each fired run downloads the attachments into ITS OWN project
+    # here, at fire time. Non-Slack sources pass through any pre-resolved ids.
+    def input_asset_ids_for(event, project)
+      files = event.data["files"]
+      return Array(event.data["input_asset_ids"]) if files.blank? || project.nil?
+
+      integration = Integration.find_by(id: event.data["integration_id"])
+      return Array(event.data["input_asset_ids"]) if integration.nil?
+
+      Array(Slack::FileIngestor.new(integration: integration, project: project).ingest(files))
+    rescue StandardError => e
+      Rails.logger.error("[TriggerEngine] Slack file ingest failed for project ##{project&.id}: #{e.message}")
+      Array(event.data["input_asset_ids"])
     end
 
     # Human-readable reason a launch didn't start, recorded on the dispatch so a

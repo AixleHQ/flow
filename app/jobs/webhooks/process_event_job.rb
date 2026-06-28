@@ -19,14 +19,15 @@ module Webhooks
         return
       end
 
-      ingest_slack_files(endpoint, normalized) if endpoint.provider == "slack"
-
+      # Slack endpoints are company-scoped (one workspace serves every project of
+      # the company) → company-wide fan-out. Other endpoints stay project-scoped.
       TriggerEngine.publish(
         event_type: normalized[:event_type],
         source: "#{endpoint.provider}:#{endpoint.slug}",
         subject: normalized[:subject],
         data: normalized[:data],
         project: endpoint.project,
+        company: endpoint.company,
         dedup_key: "#{endpoint.provider}:#{received.idempotency_key}"
       )
 
@@ -73,19 +74,6 @@ module Webhooks
           "integration_id" => endpoint.config.to_h["integration_id"]
         }.compact
       }
-    end
-
-    # Download any Slack attachments into project assets and pass their ids to the
-    # run as input_asset_ids (via the event data → fire_workflow forwarding).
-    def ingest_slack_files(endpoint, normalized)
-      files = normalized[:data]["files"]
-      return if files.blank?
-
-      integration = Integration.find_by(id: endpoint.config.to_h["integration_id"])
-      return if integration.nil?
-
-      asset_ids = Slack::FileIngestor.new(integration: integration, project: endpoint.project).ingest(files)
-      normalized[:data]["input_asset_ids"] = asset_ids if asset_ids.present?
     end
 
     # Keep only the file fields we need (and only well-formed entries); nil when

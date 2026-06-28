@@ -88,4 +88,19 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "No channel"
   end
+
+  test "replies through the workspace that triggered the run (by integration_id)" do
+    other = Integration.create!(provider: :slack, company: @company, project: nil,
+      connected_by: @user, name: "WS Two", status: :active)
+    other.update!(credentials_data: { "bot_token" => "xoxb-OTHER", "team_id" => "T2" })
+    @workflow_run.update!(shared_context: {
+      "slack" => { "channel" => "C9", "thread_ts" => "9.9", "integration_id" => other.id }
+    })
+
+    Slack::Client.expects(:post_message)
+      .with(has_entries(token: "xoxb-OTHER", channel: "C9", thread_ts: "9.9"))
+      .once.returns({ "ok" => true })
+
+    assert_equal 0, run_tool(text: "hi")[:exit_code]
+  end
 end

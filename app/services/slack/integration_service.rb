@@ -58,8 +58,11 @@ module Slack
 
     private
 
+    # A Slack install belongs to the COMPANY (project_id: nil) and serves every
+    # project — connecting from any project reuses the one company-wide install,
+    # and a company can connect several different workspaces (one per team_id).
     def build_integration
-      @company.integrations.build(provider: :slack, connected_by: @connected_by, project: @project)
+      @company.integrations.build(provider: :slack, connected_by: @connected_by, project: nil)
     end
 
     # Anchor a WebhookEndpoint for this install, keyed by team_id, so inbound
@@ -82,7 +85,7 @@ module Slack
       endpoint.assign_attributes(
         provider: :slack,
         verification_strategy: :slack_v0,
-        project: @project,
+        project: nil, # company-scoped: the workspace serves all the company's projects
         company: @company,
         created_by: @connected_by,
         enabled: true,
@@ -91,11 +94,12 @@ module Slack
       endpoint.save!
     end
 
-    # One install per (project, team_id): reconnecting the same workspace updates
-    # the existing record (refreshed token) rather than duplicating it.
+    # One install per (company, team_id): reconnecting the same workspace (from any
+    # project) updates the existing record (refreshed token) rather than
+    # duplicating it; a different team_id yields a separate company-wide install.
     def find_or_build_for_team(team_id)
       @company.integrations
-        .where(provider: :slack, project_id: @project&.id)
+        .where(provider: :slack, project_id: nil)
         .find { |i| i.settings.to_h["team_id"].to_s == team_id } || build_integration
     end
 
