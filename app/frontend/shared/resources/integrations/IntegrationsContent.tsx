@@ -150,6 +150,11 @@ const IntegrationCard = ({
               </CopyButton>
             </Group>
           )}
+          {integration.provider === 'coder' && integration.coderUrl && (
+            <Text size="xs" c="dimmed" mt={2}>
+              {integration.coderUrl}
+            </Text>
+          )}
         </Box>
       </Group>
 

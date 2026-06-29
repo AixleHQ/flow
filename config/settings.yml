@@ -106,10 +106,17 @@ slack:
   scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write' %>
 
 coder:
-  # TODO: wired by epic #279 MCP slice — these are operator-configurable defaults for the upcoming
-  # workspace/lock services; the current integration-setup slice does not read them.
+  # Operator-configurable defaults consumed by the Coder MCP services
+  # (workspace allocation, lock service, ssh runner). Per-integration values
+  # (template, machine prefix, lock TTL) override these defaults.
   default_template:          <%= ENV['CODER_DEFAULT_TEMPLATE'] || 'aws-ec2-spot-v1' %>
   machine_prefix:            <%= ENV['CODER_MACHINE_PREFIX'] || 'aixle-prod' %>
+  # Single total-response budget for `coder_ssh_exec` (DD-15). Picked below
+  # the MCP transport inline limit (OQ-7). Full output is still available via
+  # the existing ToolResult / read_tool_result path.
+  ssh_exec_inline_bytes:     <%= (ENV['CODER_SSH_EXEC_INLINE_BYTES'] || 262144).to_i %>
+  # `await_build` polling budget in seconds (DD-14 / OQ-6).
+  await_build_timeout:       <%= (ENV['CODER_AWAIT_BUILD_TIMEOUT'] || 240).to_i %>
 
 url_safety:
   # Public hostnames that may resolve to a private IP via split-horizon DNS

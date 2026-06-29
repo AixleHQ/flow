@@ -27,7 +27,7 @@ module Coder
 
       assert integration.persisted?
       assert_equal "active", integration.status.to_s
-      assert_equal "alice", integration.name
+      assert_equal "Coder (alice)", integration.name
       assert_equal "https://coder.example.com", integration.credentials_data["coder_url"]
       assert_equal "tok-1", integration.credentials_data["session_token"]
       assert_equal "user-uuid", integration.credentials_data["user_id"]
@@ -148,6 +148,49 @@ module Coder
 
       assert integration.active?
       assert_equal project.id, integration.project_id
+    end
+
+    test "spawns a managed MCP server on successful create" do
+      stub_users_me
+
+      integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
+        coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60
+      )
+
+      server = MCPServer.for_integration(integration).first
+      assert server, "expected a managed MCPServer to be created"
+      assert server.managed?
+      assert server.enabled
+      assert_equal "coder-#{integration.id}", server.name
+      assert_equal "Company", server.scope_type
+    end
+
+    test "spawns a disabled managed MCP server when create lands in :error state" do
+      stub_users_me(status: 401)
+
+      integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
+        coder_url: "https://coder.example.com", session_token: "bad", lock_ttl_minutes: 60
+      )
+
+      server = MCPServer.for_integration(integration).first
+      assert server
+      assert_not server.enabled
+    end
+
+    test "allows multiple Coder integrations in the same scope" do
+      stub_users_me
+
+      first = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
+        coder_url: "https://coder.example.com", session_token: "tok-1", lock_ttl_minutes: 60
+      )
+      second = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
+        coder_url: "https://coder.example.com", session_token: "tok-2", lock_ttl_minutes: 60
+      )
+
+      assert first.persisted?
+      assert second.persisted?
+      assert_not_equal first.id, second.id
+      assert_equal 2, MCPServer.where(integration_id: [ first.id, second.id ]).count
     end
   end
 end

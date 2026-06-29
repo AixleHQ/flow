@@ -2,11 +2,12 @@
 
 module InternalTools
   class Base
-    attr_reader :params, :session
+    attr_reader :params, :session, :mcp_server
 
-    def initialize(params:, session:)
+    def initialize(params:, session:, mcp_server: nil)
       @params = params.with_indifferent_access
       @session = session
+      @mcp_server = mcp_server
     end
 
     def execute

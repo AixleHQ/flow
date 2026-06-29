@@ -68,4 +68,15 @@ class InternalTools::BaseTest < ActiveSupport::TestCase
     handler = InternalTools::Base.new(params: {}, session: @session)
     assert_equal workflow_run, handler.send(:workflow_run)
   end
+
+  test "mcp_server defaults to nil and is exposed via attr_reader" do
+    handler = InternalTools::Base.new(params: {}, session: @session)
+    assert_nil handler.mcp_server
+  end
+
+  test "mcp_server keyword is exposed when provided" do
+    mcp_server = Object.new
+    handler = InternalTools::Base.new(params: {}, session: @session, mcp_server: mcp_server)
+    assert_equal mcp_server, handler.mcp_server
+  end
 end

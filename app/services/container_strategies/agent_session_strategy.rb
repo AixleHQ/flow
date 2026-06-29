@@ -83,6 +83,7 @@ module ContainerStrategies
       outputs_count = collect_outputs(container, session)
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
+      IntegrationCleanupService.release_session_locks!(session)
 
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")
       { logs_count: logs_count, outputs_count: outputs_count }

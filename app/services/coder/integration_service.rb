@@ -31,6 +31,7 @@ module Coder
         integration.status = :error
         integration.settings = { error: "Coder URL #{url_errors.first}" }
         integration.save
+        sync_mcp_server(integration) if integration.persisted?
         return integration
       end
 
@@ -44,6 +45,7 @@ module Coder
         integration.status = :error
         integration.settings = { error: "Lock TTL minutes is required" }
         integration.save
+        sync_mcp_server(integration) if integration.persisted?
         return integration
       end
 
@@ -54,7 +56,7 @@ module Coder
 
       begin
         info = Coder::TokenService.new(integration).verify_token
-        integration.name = info[:username].presence || "Coder"
+        integration.name = display_name_for(info[:username])
         integration.credentials_data = integration.credentials_data.merge(user_id: info[:id])
         integration.settings = {
           coder_username:    info[:username],
@@ -72,10 +74,17 @@ module Coder
       end
 
       integration.save
+      sync_mcp_server(integration) if integration.persisted?
       integration
     end
 
     private
+
+    def sync_mcp_server(integration)
+      Coder::MCPServerSyncService.new(integration).sync!
+    rescue ActiveRecord::RecordInvalid => e
+      Rails.logger.warn("[Coder::IntegrationService] MCP server sync failed: #{e.message}")
+    end
 
     def build_integration
       @company.integrations.build(
@@ -87,6 +96,14 @@ module Coder
 
     def normalize_url(url)
       url.to_s.strip.chomp("/")
+    end
+
+    # Per requester ask on PR #257: distinguish the integration with a "Coder"
+    # prefix so the per-user identity is recognisable in lists that mix
+    # multiple integration providers.
+    def display_name_for(username)
+      username = username.to_s.strip
+      username.empty? ? "Coder" : "Coder (#{username})"
     end
 
     def parse_positive_int(value)

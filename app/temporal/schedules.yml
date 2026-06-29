@@ -22,3 +22,7 @@ schedules:
     cron: "* * * * *"
     overlap: skip
     enabled: true
+
+  - workflow: coder_sweep_expired_locks_workflow
+    cron: "0 * * * *"
+    enabled: true

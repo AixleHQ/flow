@@ -53,6 +53,12 @@ module ContainerStrategies
       # immediately (causing a race), so we do it here instead for workflow steps.
       notify_workflow_execution(session)
 
+      # Provider-agnostic teardown hook: every integration that holds
+      # session-scoped runtime state (Coder workspace locks today, others
+      # later) releases it here. The dispatcher lives in
+      # `IntegrationCleanupService` so this strategy stays integration-free.
+      IntegrationCleanupService.release_session_locks!(session)
+
       Rails.logger.info("[WorkflowStepStrategy] Cleanup: #{logs_count} logs, #{outputs_count} workflow assets")
       { logs_count: logs_count, outputs_count: outputs_count }
     end

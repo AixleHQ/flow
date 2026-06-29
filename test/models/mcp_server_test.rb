@@ -281,6 +281,115 @@ class MCPServerTest < ActiveSupport::TestCase
   # Scopes
   # ====================================================================
 
+  # ====================================================================
+  # Managed kind (Coder MCP — DD-17)
+  # ====================================================================
+
+  test "managed server requires an integration" do
+    server = MCPServer.new(
+      name: "coder-1",
+      display_name: "Coder",
+      kind: "managed",
+      scope: @company
+    )
+
+    assert_not server.valid?
+    assert_includes server.errors[:integration], "can't be blank"
+  end
+
+  test "managed server requires a scope" do
+    integration = create(:integration, :coder, company: @company, connected_by: @user)
+
+    server = MCPServer.new(
+      name: "coder-1",
+      display_name: "Coder",
+      kind: "managed",
+      integration: integration
+    )
+
+    assert_not server.valid?
+    assert_includes server.errors[:scope], "can't be blank"
+  end
+
+  test "non-managed server rejects integration FK" do
+    integration = create(:integration, :coder, company: @company, connected_by: @user)
+
+    server = MCPServer.new(
+      name: "custom-no-integration",
+      display_name: "Custom",
+      url: "https://example.com",
+      kind: "custom",
+      scope: @company,
+      integration: integration
+    )
+
+    assert_not server.valid?
+    assert_includes server.errors[:integration], "must be blank"
+  end
+
+  test "managed server is valid with integration and scope" do
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+
+    server = MCPServer.new(
+      name: "coder-#{integration.id}",
+      display_name: "Coder",
+      kind: "managed",
+      integration: integration,
+      scope: @company
+    )
+
+    assert server.valid?, "Expected managed server to be valid; errors: #{server.errors.full_messages}"
+    assert server.save
+    assert server.managed?
+  end
+
+  test "managed_servers scope filters by kind" do
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    managed = MCPServer.create!(
+      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      integration: integration, scope: @company
+    )
+    custom = MCPServer.create!(
+      name: "custom-x", display_name: "Custom", url: "https://example.com",
+      kind: "custom", scope: @company
+    )
+
+    assert_includes MCPServer.managed_servers, managed
+    assert_not_includes MCPServer.managed_servers, custom
+  end
+
+  test "for_integration scope returns the managed row" do
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    server = MCPServer.create!(
+      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      integration: integration, scope: @company
+    )
+
+    assert_equal [ server ], MCPServer.for_integration(integration).to_a
+  end
+
+  test "visible_for_project surfaces managed servers in scope" do
+    integration = create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
+    server = MCPServer.create!(
+      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      integration: integration, scope: @project
+    )
+
+    assert_includes MCPServer.visible_for_project(@project), server
+  end
+
+  test "destroying integration deletes its managed MCP server (FK cascade)" do
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    MCPServer.create!(
+      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      integration: integration, scope: @company
+    )
+
+    assert_difference "MCPServer.managed_servers.count", -1 do
+      integration.destroy
+    end
+  end
+
   test "enabled scope filters correctly" do
     enabled = MCPServer.create!(
       name: "enabled-server",

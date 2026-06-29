@@ -323,6 +323,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.index ["status"], name: "index_gates_on_status"
   end
 
+  create_table "integration_data", force: :cascade do |t|
+    t.bigint "integration_id", null: false
+    t.string "key", null: false
+    t.jsonb "value", default: {}, null: false
+    t.datetime "expires_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "ix_integration_data_expires_at", where: "(expires_at IS NOT NULL)"
+    t.index ["integration_id", "key"], name: "ix_integration_data_integration_key", unique: true
+    t.index ["integration_id"], name: "index_integration_data_on_integration_id"
+  end
+
   create_table "integrations", force: :cascade do |t|
     t.bigint "company_id", null: false
     t.bigint "connected_by_id", null: false
@@ -357,6 +369,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.string "transport", default: "sse"
     t.datetime "updated_at", null: false
     t.string "url"
+    t.bigint "integration_id"
+    t.index ["integration_id"], name: "index_mcp_servers_on_integration_id"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
   end
@@ -939,9 +953,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
   add_foreign_key "column_workflow_bindings", "workflows"
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id"
+  add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
+  add_foreign_key "mcp_servers", "integrations", on_delete: :cascade
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"

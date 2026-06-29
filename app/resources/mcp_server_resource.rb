@@ -5,10 +5,14 @@ class MCPServerResource < ApplicationResource
 
   attributes :id, :name, :display_name, :url, :transport, :headers,
              :description, :kind, :scope_type, :scope_id, :enabled,
-             :command, :env, :created_at, :updated_at
+             :command, :env, :integration_id, :created_at, :updated_at
 
   attribute :internal do |server|
     server.internal?
+  end
+
+  attribute :managed do |server|
+    server.managed?
   end
 
   attribute :scope_indicator do |server|
