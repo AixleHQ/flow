@@ -1559,13 +1559,7 @@ function TaskDetailSidebar({
               filteredComments.map((c) => {
                 const isCollapsed = collapsedComments.has(c.id);
                 return (
-                  <Paper
-                    key={c.id}
-                    p="sm"
-                    radius="sm"
-                    mb="sm"
-                    style={{ backgroundColor: 'var(--app-bg-elevated)' }}
-                  >
+                  <Paper key={c.id} p="sm" radius="sm" mb="sm" style={{ backgroundColor: 'var(--app-bg-elevated)' }}>
                     <Group
                       gap="xs"
                       style={{ cursor: 'pointer', userSelect: 'none' }}

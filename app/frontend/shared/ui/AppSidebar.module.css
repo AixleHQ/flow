@@ -237,7 +237,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--app-text-primary);
-  font-family: Sora, sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

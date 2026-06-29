@@ -360,8 +360,7 @@ function AgentActivityPanel({ tickInterval }: { tickInterval: number }) {
                   gap="sm"
                   py={8}
                   style={{
-                    borderBottom:
-                      idx < sessionsByAgent.length - 1 ? '1px solid var(--app-border-default)' : undefined,
+                    borderBottom: idx < sessionsByAgent.length - 1 ? '1px solid var(--app-border-default)' : undefined,
                   }}
                 >
                   <Box

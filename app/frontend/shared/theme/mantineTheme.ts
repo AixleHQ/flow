@@ -37,8 +37,8 @@ const dark: MantineColorsTuple = [
 ];
 
 export const mantineTheme = createTheme({
-  fontFamily: 'Inter, sans-serif',
-  fontFamilyMonospace: 'Geist Mono, monospace',
+  fontFamily: 'Figtree, sans-serif',
+  fontFamilyMonospace: '"JetBrains Mono", monospace',
 
   primaryColor: 'brand',
   // Dark: brand orange (6). Light: darker press tone (7) so white text on
@@ -47,8 +47,10 @@ export const mantineTheme = createTheme({
   colors: { brand, dark },
 
   headings: {
-    fontFamily: 'Sora, sans-serif',
-    fontWeight: '700',
+    // Aixle uses Lab Grotesque (→ Hanken Grotesk) at regular-ish weight; size and
+    // tight tracking carry the headlines rather than heavy bold.
+    fontFamily: '"Hanken Grotesk", sans-serif',
+    fontWeight: '500',
   },
 
   defaultRadius: 'md',
@@ -93,7 +95,12 @@ export const mantineTheme = createTheme({
  */
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
-    '--app-font-body': 'Inter, sans-serif',
+    /* Aixle typography — body Figtree, headings Hanken Grotesk, code JetBrains Mono,
+       small decorative mono labels Spline Sans Mono. */
+    '--app-font-body': 'Figtree, sans-serif',
+    '--app-font-heading': '"Hanken Grotesk", sans-serif',
+    '--app-font-mono': '"JetBrains Mono", monospace',
+    '--app-font-mono-label': '"Spline Sans Mono", monospace',
   },
 
   light: {
@@ -112,6 +119,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--app-action-selected': 'rgba(224,88,46,0.12)',
 
     /* Mantine internal input/form variables — GitHub light */
+    '--mantine-color-text': '#1f2328',
+    '--mantine-color-body': '#ffffff',
     '--mantine-color-default': '#ffffff',
     '--mantine-color-default-border': '#d1d9e0',
     '--mantine-color-default-hover': '#f6f8fa',
@@ -146,6 +155,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--app-action-selected': 'rgba(224,88,46,0.12)',
 
     /* Mantine internal input/form variables */
+    '--mantine-color-text': '#d1cfcd',
+    '--mantine-color-body': '#0a0908',
     '--mantine-color-default': '#0a0908',
     '--mantine-color-default-border': '#393837',
     '--mantine-color-default-hover': '#191817',

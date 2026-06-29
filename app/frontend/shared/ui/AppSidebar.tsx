@@ -55,8 +55,8 @@ import {
   companyWorkflowCatalogIndexPath,
 } from 'shared/routes';
 
-import { ColorSchemeToggle } from './ColorSchemeToggle';
 import classes from './AppSidebar.module.css';
+import { ColorSchemeToggle } from './ColorSchemeToggle';
 import type { SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
