@@ -1,0 +1,11 @@
+# Issue template chooser configuration.
+# TODO (product): enable GitHub Discussions on the repo for the Q&A link below
+# to work (Settings → General → Features → Discussions).
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & discussion
+    url: https://github.com/palad-ai/palad-app/discussions
+    about: Ask questions, share ideas, and discuss usage in GitHub Discussions.
+  - name: 🔒 Report a security vulnerability
+    url: https://github.com/palad-ai/palad-app/security/policy
+    about: Please report security issues privately — never as a public issue.

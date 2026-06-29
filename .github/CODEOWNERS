@@ -1,0 +1,37 @@
+# Code owners for Aixle Flow
+#
+# Each line maps a path pattern to the GitHub users/teams who are requested for
+# review when matching files change. Later matches take precedence.
+# Docs: https://docs.github.com/articles/about-code-owners
+#
+# TODO (maintainers): replace the placeholder team/handles below with real
+# GitHub usernames or a @palad-ai/<team> team, then keep this in sync with the
+# maintainer list in GOVERNANCE.md.
+
+# Default owners for everything in the repo
+*                               @palad-ai/maintainers
+
+# Backend (Rails)
+/app/                           @palad-ai/maintainers
+/app/policies/                  @palad-ai/maintainers
+/app/state_machines/            @palad-ai/maintainers
+/app/services/                  @palad-ai/maintainers
+/config/                        @palad-ai/maintainers
+/db/                            @palad-ai/maintainers
+/test/                          @palad-ai/maintainers
+
+# Frontend (React / Inertia / Mantine)
+/app/frontend/                  @palad-ai/maintainers
+
+# Container runtimes & agent images
+/docker/                        @palad-ai/maintainers
+/kube/                          @palad-ai/maintainers
+
+# Docs, community health, and project meta
+/docs/                          @palad-ai/maintainers
+/README.md                      @palad-ai/maintainers
+/ROADMAP.md                     @palad-ai/maintainers
+/ARCHITECTURE.md                @palad-ai/maintainers
+/GOVERNANCE.md                  @palad-ai/maintainers
+/SECURITY.md                    @palad-ai/maintainers
+/.github/                       @palad-ai/maintainers
