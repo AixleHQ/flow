@@ -488,7 +488,7 @@ function AgentAuthModal({
               style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: '#000' }}
             />
           </Box>
-          <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--mantine-color-dark-4)' }}>
+          <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--app-border-default)' }}>
             {authDetected && finishError ? (
               <>
                 <Text size="xs" c="red">

@@ -5,8 +5,8 @@
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background: var(--mantine-color-dark-8);
-  color: var(--mantine-color-dark-0);
+  background: var(--app-bg-default);
+  color: var(--app-text-primary);
   font-family: 'Inter', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -15,15 +15,15 @@
 
 .docsRoot ::-webkit-scrollbar { width: 6px; height: 6px; }
 .docsRoot ::-webkit-scrollbar-track { background: transparent; }
-.docsRoot ::-webkit-scrollbar-thumb { background: var(--mantine-color-dark-5); border-radius: 4px; }
-.docsRoot ::-webkit-scrollbar-thumb:hover { background: var(--mantine-color-dark-4); }
+.docsRoot ::-webkit-scrollbar-thumb { background: var(--app-bg-elevated); border-radius: 4px; }
+.docsRoot ::-webkit-scrollbar-thumb:hover { background: var(--app-border-default); }
 
 /* ─── Navbar ─────────────────────────────────────────────────────────────── */
 
 .navbar {
   height: 54px;
-  background: var(--mantine-color-dark-7);
-  border-bottom: 1px solid var(--mantine-color-dark-5);
+  background: var(--app-bg-paper);
+  border-bottom: 1px solid var(--app-bg-elevated);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -45,11 +45,11 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   cursor: pointer;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   margin-right: 6px;
   flex-shrink: 0;
 }
@@ -57,7 +57,7 @@
 .navLogo {
   font-size: 15px;
   font-weight: 700;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   letter-spacing: -0.02em;
   margin-right: 24px;
   cursor: pointer;
@@ -65,10 +65,10 @@
   transition: color 0.15s;
 }
 
-.navLogo:hover { color: var(--mantine-color-blue-4); }
+.navLogo:hover { color: var(--mantine-color-brand-4); }
 
 .navLogoAccent {
-  color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
 }
 
 .navLinks {
@@ -79,7 +79,7 @@
 
 .navLink {
   font-size: 13.5px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   padding: 5px 11px;
   border-radius: 4px;
   cursor: pointer;
@@ -90,12 +90,12 @@
 }
 
 .navLink:hover {
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--app-text-primary);
+  background: var(--app-action-hover);
 }
 
 .navLinkActive {
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   font-weight: 500;
 }
 
@@ -111,8 +111,8 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   padding: 5px 8px;
   cursor: pointer;
@@ -120,22 +120,22 @@
 }
 
 .searchTrigger:hover {
-  border-color: var(--mantine-color-blue-4);
-  box-shadow: 0 0 0 2px rgba(122, 162, 200, 0.15);
+  border-color: var(--mantine-color-brand-4);
+  box-shadow: 0 0 0 2px rgba(224, 88, 46, 0.15);
 }
 
 .searchTriggerText {
   font-size: 12px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   white-space: nowrap;
 }
 
 .searchKbd {
   font-family: 'Geist Mono', monospace;
   font-size: 10px;
-  color: var(--mantine-color-dark-2);
-  background: var(--mantine-color-dark-5);
-  border: 1px solid var(--mantine-color-dark-4);
+  color: var(--app-text-tertiary);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   padding: 1px 5px;
   display: inline-flex;
@@ -150,9 +150,9 @@
   gap: 6px;
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--mantine-color-dark-1);
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  color: var(--app-text-secondary);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   padding: 5px 10px;
   cursor: pointer;
@@ -161,13 +161,13 @@
 }
 
 .githubLink:hover {
-  background: var(--mantine-color-dark-5);
-  border-color: var(--mantine-color-dark-3);
+  background: var(--app-bg-elevated);
+  border-color: var(--app-border-strong);
 }
 
 .githubStars {
   font-size: 11px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   margin-left: 2px;
 }
 
@@ -184,8 +184,8 @@
 .sidebar {
   width: 240px;
   flex-shrink: 0;
-  background: var(--mantine-color-dark-7);
-  border-right: 1px solid var(--mantine-color-dark-5);
+  background: var(--app-bg-paper);
+  border-right: 1px solid var(--app-bg-elevated);
   padding: 16px 0 32px;
   overflow-y: auto;
 }
@@ -199,7 +199,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   padding: 8px 16px 4px;
   display: block;
   margin: 0;
@@ -228,7 +228,7 @@
   align-items: center;
   justify-content: space-between;
   font-size: 13px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   padding: 5px 16px;
   cursor: pointer;
   line-height: 1.5;
@@ -238,20 +238,20 @@
 }
 
 .sbItem:hover {
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--app-text-primary);
+  background: var(--app-action-hover);
 }
 
 .sbItemActive {
-  color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
   font-weight: 500;
-  background: rgba(122, 162, 200, 0.08);
-  box-shadow: inset 2px 0 0 var(--mantine-color-blue-4);
+  background: rgba(224, 88, 46, 0.08);
+  box-shadow: inset 2px 0 0 var(--mantine-color-brand-4);
 }
 
 .sbItemActive:hover {
-  color: var(--mantine-color-blue-4);
-  background: rgba(122, 162, 200, 0.1);
+  color: var(--mantine-color-brand-4);
+  background: rgba(224, 88, 46, 0.1);
 }
 
 .sbGroup {
@@ -260,7 +260,7 @@
   width: 100%;
   padding: 5px 16px;
   font-size: 13px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   background: none;
   border: none;
   border-radius: 0;
@@ -271,12 +271,12 @@
 }
 
 .sbGroup:hover {
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.04);
+  color: var(--app-text-primary);
+  background: var(--app-action-hover);
 }
 
 .sbGroupActive {
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   font-weight: 500;
 }
 
@@ -295,7 +295,7 @@
   margin-left: auto;
   flex-shrink: 0;
   transition: transform 0.15s;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
 }
 
 .sbToggleIconOpen {
@@ -306,8 +306,8 @@
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  background: rgba(122, 162, 200, 0.15);
-  color: var(--mantine-color-blue-4);
+  background: rgba(224, 88, 46, 0.15);
+  color: var(--mantine-color-brand-4);
   border-radius: 4px;
   padding: 1px 5px;
   margin-left: 4px;
@@ -316,7 +316,7 @@
 .sbSubItem {
   display: block;
   font-size: 12.5px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   padding: 4px 12px;
   cursor: pointer;
   line-height: 1.5;
@@ -325,10 +325,10 @@
   text-decoration: none;
 }
 
-.sbSubItem:hover { color: var(--mantine-color-dark-0); }
+.sbSubItem:hover { color: var(--app-text-primary); }
 
 .sbSubItemActive {
-  color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
   font-weight: 500;
 }
 
@@ -339,7 +339,7 @@
   padding: 32px 40px;
   overflow-y: auto;
   min-width: 0;
-  background: var(--mantine-color-dark-8);
+  background: var(--app-bg-default);
 }
 
 .article {
@@ -362,31 +362,31 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   margin-bottom: 20px;
 }
 
 .breadcrumbSep {
-  color: var(--mantine-color-dark-4);
+  color: var(--app-border-default);
   font-size: 10px;
 }
 
 .breadcrumbLink {
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   text-decoration: none;
   cursor: pointer;
   transition: color 0.12s;
 }
 
-.breadcrumbLink:hover { color: var(--mantine-color-blue-4); }
+.breadcrumbLink:hover { color: var(--mantine-color-brand-4); }
 
 .breadcrumbSection {
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   cursor: pointer;
 }
 
 .breadcrumbCurrent {
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
 }
 
 /* ─── TOC ─────────────────────────────────────────────────────────────────── */
@@ -395,9 +395,9 @@
   width: 230px;
   flex-shrink: 0;
   padding: 24px 16px;
-  border-left: 1px solid var(--mantine-color-dark-5);
+  border-left: 1px solid var(--app-bg-elevated);
   overflow-y: auto;
-  background: var(--mantine-color-dark-7);
+  background: var(--app-bg-paper);
 }
 
 .tocTitle {
@@ -405,7 +405,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   margin-bottom: 12px;
   display: block;
   margin: 0 0 12px;
@@ -424,22 +424,22 @@
 .tocLink {
   display: block;
   font-size: 12.5px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   padding: 3px 0 3px 12px;
-  border-left: 1px solid var(--mantine-color-dark-5);
+  border-left: 1px solid var(--app-bg-elevated);
   line-height: 1.5;
   cursor: pointer;
   transition: color 0.12s, border-color 0.12s;
   text-decoration: none;
 }
 
-.tocLink:hover { color: var(--mantine-color-dark-0); }
+.tocLink:hover { color: var(--app-text-primary); }
 
 .tocLinkIndented { padding-left: 20px; }
 
 .tocLinkActive {
-  color: var(--mantine-color-blue-4);
-  border-left-color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
+  border-left-color: var(--mantine-color-brand-4);
 }
 
 /* ─── Markdown Typography ─────────────────────────────────────────────────── */
@@ -448,7 +448,7 @@
   font-size: 30px;
   font-weight: 700;
   font-family: 'Sora', sans-serif;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   line-height: 1.2;
   letter-spacing: -0.02em;
   margin: 0 0 10px;
@@ -458,10 +458,10 @@
   font-size: 17px;
   font-weight: 600;
   font-family: 'Sora', sans-serif;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   letter-spacing: -0.01em;
   padding-top: 22px;
-  border-top: 1px solid var(--mantine-color-dark-5);
+  border-top: 1px solid var(--app-bg-elevated);
   margin-bottom: 14px;
   margin-top: 0;
 }
@@ -470,14 +470,14 @@
   font-size: 15px;
   font-weight: 600;
   font-family: 'Sora', sans-serif;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   margin-top: 22px;
   margin-bottom: 10px;
 }
 
 .mdParagraph {
   font-size: 14px;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   line-height: 1.75;
   margin-bottom: 18px;
   max-width: 600px;
@@ -486,7 +486,7 @@
 .mdList,
 .mdOrderedList {
   font-size: 14px;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   line-height: 1.75;
   margin: 0 0 18px;
   padding-left: 24px;
@@ -498,16 +498,16 @@
 }
 
 .mdLink {
-  color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
   text-decoration: none;
-  border-bottom: 1px solid rgba(122, 162, 200, 0.35);
+  border-bottom: 1px solid rgba(224, 88, 46, 0.35);
   transition: border-color 0.15s;
   display: inline-flex;
   align-items: center;
   gap: 3px;
 }
 
-.mdLink:hover { border-color: var(--mantine-color-blue-4); }
+.mdLink:hover { border-color: var(--mantine-color-brand-4); }
 
 .externalLinkIcon {
   opacity: 0.7;
@@ -516,7 +516,7 @@
 
 .mdHr {
   height: 1px;
-  background: var(--mantine-color-dark-5);
+  background: var(--app-bg-elevated);
   border: none;
   margin: 24px 0 20px;
 }
@@ -539,17 +539,17 @@
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   padding: 8px 12px;
-  border-bottom: 1px solid var(--mantine-color-dark-4);
+  border-bottom: 1px solid var(--app-border-default);
   text-align: left;
-  background: var(--mantine-color-dark-7);
+  background: var(--app-bg-paper);
 }
 
 .mdTable td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--mantine-color-dark-5);
-  color: var(--mantine-color-dark-1);
+  border-bottom: 1px solid var(--app-bg-elevated);
+  color: var(--app-text-secondary);
   vertical-align: top;
 }
 
@@ -559,9 +559,9 @@
 .mdTable th code {
   font-family: 'Geist Mono', monospace;
   font-size: 11.5px;
-  color: var(--mantine-color-blue-4);
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.18);
+  color: var(--mantine-color-brand-4);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.18);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -569,7 +569,7 @@
 /* ─── Details / Summary ───────────────────────────────────────────────────── */
 
 .mdDetails {
-  border: 1px solid var(--mantine-color-dark-4);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   margin-bottom: 20px;
   overflow: hidden;
@@ -581,28 +581,28 @@
   gap: 8px;
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   padding: 11px 14px;
   cursor: pointer;
-  background: var(--mantine-color-dark-6);
+  background: var(--app-bg-elevated);
   transition: background 0.12s;
   user-select: none;
   list-style: none;
 }
 
 .mdSummary::-webkit-details-marker { display: none; }
-.mdSummary:hover { background: var(--mantine-color-dark-5); }
+.mdSummary:hover { background: var(--app-bg-elevated); }
 
 /* Body content — the <div> wrapper inside <details> */
 .mdDetails > div {
   padding: 14px;
-  border-top: 1px solid var(--mantine-color-dark-5);
-  background: var(--mantine-color-dark-7);
+  border-top: 1px solid var(--app-bg-elevated);
+  background: var(--app-bg-paper);
 }
 
 .mdDetails > div p {
   font-size: 13.5px;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   line-height: 1.7;
   margin: 0 0 10px;
 }
@@ -616,9 +616,9 @@
 .inlineCode {
   font-family: 'Geist Mono', monospace;
   font-size: 12px;
-  color: var(--mantine-color-blue-4);
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.18);
+  color: var(--mantine-color-brand-4);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.18);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -626,8 +626,8 @@
 /* ─── Code Block ──────────────────────────────────────────────────────────── */
 
 .codeBlock {
-  background: #0f1520;
-  border: 1px solid var(--mantine-color-dark-5);
+  background: var(--app-bg-deep);
+  border: 1px solid var(--app-bg-elevated);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 20px;
@@ -638,14 +638,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 7px 14px;
-  border-bottom: 1px solid var(--mantine-color-dark-5);
+  border-bottom: 1px solid var(--app-bg-elevated);
   background: rgba(0, 0, 0, 0.15);
 }
 
 .codeLang {
   font-family: 'Geist Mono', monospace;
   font-size: 10.5px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
 }
 
 .copyButton {
@@ -653,7 +653,7 @@
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   cursor: pointer;
   padding: 3px 7px;
   border-radius: 4px;
@@ -665,8 +665,8 @@
 }
 
 .copyButton:hover {
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--app-text-primary);
+  background: var(--app-action-hover);
 }
 
 .copyButtonCopied { color: #6ac99a; }
@@ -683,9 +683,9 @@
 .heroTag {
   font-size: 11px;
   font-weight: 500;
-  color: var(--mantine-color-blue-4);
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.2);
+  color: var(--mantine-color-brand-4);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
   padding: 2px 8px;
 }
@@ -703,9 +703,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--mantine-color-dark-8);
-  background: #c8d8e4;
-  border: 1px solid #c8d8e4;
+  color: #fff;
+  background: var(--mantine-color-brand-5);
+  border: 1px solid var(--mantine-color-brand-5);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -715,8 +715,8 @@
 }
 
 .chipPrimary:hover {
-  background: #dce8f0;
-  box-shadow: 0 4px 14px rgba(200, 216, 228, 0.2);
+  background: var(--mantine-color-brand-4);
+  box-shadow: 0 4px 14px rgba(224, 88, 46, 0.2);
 }
 
 .chipPrimary:active { transform: scale(0.97); }
@@ -727,9 +727,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--mantine-color-dark-2);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--mantine-color-dark-4);
+  color: var(--app-text-tertiary);
+  background: var(--app-action-hover);
+  border: 1px solid var(--app-border-default);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -739,9 +739,9 @@
 }
 
 .chipSecondary:hover {
-  border-color: var(--mantine-color-blue-4);
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--mantine-color-brand-4);
+  color: var(--app-text-primary);
+  background: var(--app-action-selected);
 }
 
 .chipSecondary:active { transform: scale(0.97); }
@@ -754,8 +754,8 @@
 }
 
 .conceptCard {
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: var(--mantine-radius-md);
   padding: 16px;
   cursor: pointer;
@@ -766,34 +766,34 @@
 }
 
 .conceptCard:hover {
-  border-color: var(--mantine-color-blue-6);
-  box-shadow: 0 2px 12px rgba(122, 162, 200, 0.12);
+  border-color: var(--mantine-color-brand-6);
+  box-shadow: 0 2px 12px rgba(224, 88, 46, 0.12);
 }
 
 .conceptCardIcon {
   width: 32px;
   height: 32px;
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.2);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 10px;
-  color: var(--mantine-color-blue-4);
+  color: var(--mantine-color-brand-4);
   flex-shrink: 0;
 }
 
 .conceptCardName {
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   margin-bottom: 4px;
 }
 
 .conceptCardDesc {
   font-size: 12.5px;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   line-height: 1.6;
 }
 
@@ -808,9 +808,9 @@
 :global(.docsTag) {
   font-size: 11px;
   font-weight: 500;
-  color: var(--mantine-color-blue-4);
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.2);
+  color: var(--mantine-color-brand-4);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
   padding: 2px 8px;
 }
@@ -830,9 +830,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--mantine-color-dark-8);
-  background: #c8d8e4;
-  border: 1px solid #c8d8e4;
+  color: #fff;
+  background: var(--mantine-color-brand-5);
+  border: 1px solid var(--mantine-color-brand-5);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -842,8 +842,8 @@
 }
 
 :global(.docsChipPrimary:hover) {
-  background: #dce8f0;
-  box-shadow: 0 4px 14px rgba(200, 216, 228, 0.2);
+  background: var(--mantine-color-brand-4);
+  box-shadow: 0 4px 14px rgba(224, 88, 46, 0.2);
 }
 
 :global(.docsChipPrimary:active) { transform: scale(0.97); }
@@ -854,9 +854,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: var(--mantine-color-dark-2);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--mantine-color-dark-4);
+  color: var(--app-text-tertiary);
+  background: var(--app-action-hover);
+  border: 1px solid var(--app-border-default);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -866,9 +866,9 @@
 }
 
 :global(.docsChipSecondary:hover) {
-  border-color: var(--mantine-color-blue-4);
-  color: var(--mantine-color-dark-0);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--mantine-color-brand-4);
+  color: var(--app-text-primary);
+  background: var(--app-action-selected);
 }
 
 :global(.docsChipSecondary:active) { transform: scale(0.97); }
@@ -883,8 +883,8 @@
 }
 
 :global(.docsConceptCard) {
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: var(--mantine-radius-md);
   padding: 16px;
   cursor: pointer;
@@ -895,15 +895,15 @@
 }
 
 :global(.docsConceptCard:hover) {
-  border-color: var(--mantine-color-blue-6);
-  box-shadow: 0 2px 12px rgba(122, 162, 200, 0.12);
+  border-color: var(--mantine-color-brand-6);
+  box-shadow: 0 2px 12px rgba(224, 88, 46, 0.12);
 }
 
 :global(.docsCardIcon) {
   width: 32px;
   height: 32px;
-  background: rgba(122, 162, 200, 0.1);
-  border: 1px solid rgba(122, 162, 200, 0.2);
+  background: rgba(224, 88, 46, 0.1);
+  border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
   margin-bottom: 10px;
 }
@@ -911,14 +911,14 @@
 :global(.docsCardName) {
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   margin-bottom: 4px;
   display: block;
 }
 
 :global(.docsCardDesc) {
   font-size: 12.5px;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   line-height: 1.6;
   display: block;
 }
@@ -955,7 +955,7 @@
 .calloutInfo {
   background: var(--callout-info-bg);
   border-color: var(--callout-info-border);
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
 }
 .calloutInfo .calloutIcon { color: var(--callout-info-icon, #4e7494); }
 .calloutInfo strong { color: var(--callout-info-strong, #6a8faa); }
@@ -963,7 +963,7 @@
 .calloutWarning {
   background: var(--callout-warning-bg);
   border-color: var(--callout-warning-border);
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
 }
 .calloutWarning .calloutIcon { color: var(--callout-warning-icon, #7a6430); }
 .calloutWarning strong { color: var(--callout-warning-strong, #8a7440); }
@@ -971,7 +971,7 @@
 .calloutDanger {
   background: var(--callout-danger-bg);
   border-color: var(--callout-danger-border);
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
 }
 .calloutDanger .calloutIcon { color: var(--callout-danger-icon, #7a3838); }
 .calloutDanger strong { color: var(--callout-danger-strong, #8a4848); }
@@ -979,7 +979,7 @@
 .calloutTip {
   background: var(--callout-tip-bg);
   border-color: var(--callout-tip-border);
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
 }
 .calloutTip .calloutIcon { color: var(--callout-tip-icon, #5a4880); }
 .calloutTip strong { color: var(--callout-tip-strong, #6a5890); }
@@ -995,8 +995,8 @@
 
 .pageNavItem {
   flex: 1;
-  background: var(--mantine-color-dark-6);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
   border-radius: 4px;
   padding: 11px 14px;
   cursor: pointer;
@@ -1007,8 +1007,8 @@
 }
 
 .pageNavItem:hover {
-  border-color: var(--mantine-color-blue-4);
-  box-shadow: 0 2px 10px rgba(122, 162, 200, 0.1);
+  border-color: var(--mantine-color-brand-4);
+  box-shadow: 0 2px 10px rgba(224, 88, 46, 0.1);
 }
 
 .pageNavNext {
@@ -1018,7 +1018,7 @@
 
 .pageNavLabel {
   font-size: 10.5px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   margin-bottom: 4px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1027,7 +1027,7 @@
 .pageNavTitle {
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--mantine-color-dark-1);
+  color: var(--app-text-secondary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1038,8 +1038,8 @@
 /* ─── Search Modal ────────────────────────────────────────────────────────── */
 
 .searchModalContent {
-  background: var(--mantine-color-dark-7);
-  border: 1px solid var(--mantine-color-dark-4);
+  background: var(--app-bg-paper);
+  border: 1px solid var(--app-border-default);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.3);
@@ -1055,12 +1055,12 @@
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--mantine-color-dark-5);
+  border-bottom: 1px solid var(--app-bg-elevated);
 }
 
 .searchInputIcon {
   font-size: 17px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   flex-shrink: 0;
 }
 
@@ -1071,11 +1071,11 @@
   outline: none;
   font-family: 'Inter', sans-serif;
   font-size: 15px;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   padding: 0;
 }
 
-.searchInput::placeholder { color: var(--mantine-color-dark-3); }
+.searchInput::placeholder { color: var(--app-border-strong); }
 
 .searchResults {
   max-height: 360px;
@@ -1092,7 +1092,7 @@
   padding: 11px 16px;
   cursor: pointer;
   transition: background 0.1s;
-  border-bottom: 1px solid var(--mantine-color-dark-6);
+  border-bottom: 1px solid var(--app-bg-elevated);
   background: none;
   border-left: none;
   border-right: none;
@@ -1102,22 +1102,22 @@
 }
 
 .searchResultItem:last-child { border-bottom: none; }
-.searchResultItem:hover { background: rgba(122, 162, 200, 0.08); }
+.searchResultItem:hover { background: rgba(224, 88, 46, 0.08); }
 
-.searchResultItemActive { background: rgba(122, 162, 200, 0.08); }
+.searchResultItemActive { background: rgba(224, 88, 46, 0.08); }
 
 .searchResultTitle {
   display: block;
   font-size: 13.5px;
   font-weight: 500;
-  color: var(--mantine-color-dark-0);
+  color: var(--app-text-primary);
   margin-bottom: 1px;
 }
 
 .searchResultSection {
   display: block;
   font-size: 10px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
@@ -1125,7 +1125,7 @@
 
 .searchResultDesc {
   font-size: 12px;
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
   margin: 0;
 }
 
@@ -1133,20 +1133,20 @@
   padding: 32px 16px;
   text-align: center;
   font-size: 14px;
-  color: var(--mantine-color-dark-3);
+  color: var(--app-border-strong);
   margin: 0;
 }
 
 /* ─── Mobile Drawer ───────────────────────────────────────────────────────── */
 
 .mobileDrawerContent {
-  background: var(--mantine-color-dark-7) !important;
-  border-right: 1px solid var(--mantine-color-dark-5);
+  background: var(--app-bg-paper) !important;
+  border-right: 1px solid var(--app-bg-elevated);
 }
 
 .mobileDrawerHeader {
-  background: var(--mantine-color-dark-7) !important;
-  border-bottom: 1px solid var(--mantine-color-dark-6);
+  background: var(--app-bg-paper) !important;
+  border-bottom: 1px solid var(--app-bg-elevated);
   min-height: 54px;
 }
 

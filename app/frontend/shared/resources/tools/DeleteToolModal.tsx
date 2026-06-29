@@ -50,7 +50,7 @@ export const DeleteToolModal: FC<DeleteToolModalProps> = ({ opened, onClose, too
           borderRadius: 'var(--mantine-radius-sm)',
         }}
       >
-        <Text fw={500} c="white">
+        <Text fw={500} c="var(--app-text-primary)">
           {tool.displayName}
         </Text>
         <Text fz={12} ff="JetBrains Mono, monospace" c="dimmed">

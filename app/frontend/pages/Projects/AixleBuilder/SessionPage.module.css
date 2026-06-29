@@ -105,7 +105,7 @@
 
 .resizeHandle:hover,
 .resizeHandle[data-resize-handle-active] {
-  background: var(--mantine-color-blue-6);
+  background: var(--mantine-color-brand-6);
 }
 
 .collapseBtn {
@@ -164,8 +164,8 @@
   justify-content: center;
   flex-shrink: 0;
   margin-top: 2px;
-  background: var(--mantine-color-dark-5);
-  color: var(--mantine-color-blue-4);
+  background: var(--app-bg-elevated);
+  color: var(--mantine-color-brand-4);
 }
 
 /* ── Workflow / Board Preview Items ─────────────── */
@@ -178,7 +178,7 @@
 }
 
 .previewCard:hover {
-  border-color: var(--mantine-color-blue-6);
+  border-color: var(--mantine-color-brand-6);
 }
 
 .boardColumn {
@@ -189,7 +189,7 @@
 }
 
 .boardColumn:hover {
-  border-color: var(--mantine-color-blue-6);
+  border-color: var(--mantine-color-brand-6);
 }
 
 /* ── Ended State ────────────────────────────────── */

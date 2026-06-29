@@ -78,7 +78,7 @@ const LoginPage = () => {
 
         <GoogleLoginButton />
 
-        <Divider label="OR" labelPosition="center" my="lg" color="dark.4" />
+        <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
 
         <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
           Enter your credentials to access your workspace

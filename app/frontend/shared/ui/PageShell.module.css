@@ -1,8 +1,8 @@
 .root {
   background: radial-gradient(
     ellipse at 50% 0%,
-    var(--mantine-color-dark-7) 0%,
-    var(--mantine-color-dark-9) 70%
+    var(--app-bg-paper) 0%,
+    var(--app-bg-deep) 70%
   );
 }
 

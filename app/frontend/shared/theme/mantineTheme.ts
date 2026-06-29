@@ -1,38 +1,50 @@
 import { Card, Input, createTheme, type CSSVariablesResolver, type MantineColorsTuple } from '@mantine/core';
 
-const accentBlue: MantineColorsTuple = [
-  'rgba(122,162,200,0.05)', // 0 — hover
-  'rgba(122,162,200,0.08)', // 1
-  'rgba(122,162,200,0.10)', // 2 — active / dim
-  'rgba(122,162,200,0.16)', // 3 — mid
-  'rgba(122,162,200,0.28)', // 4 — muted border
-  '#7aa2c8', // 5 — base accent ← primaryShade
-  '#6892b8', // 6
-  '#5a82a8', // 7
-  '#3a6288', // 8
-  '#2a4a68', // 9
+/**
+ * Brand accent — Aixle orange (#E0582E). Single accent, used with intent.
+ * Ramp goes light → dark; base brand orange sits at shade 6, the brighter
+ * hover tone at shade 5, the darker press tone at shade 7.
+ */
+const brand: MantineColorsTuple = [
+  '#fdeee8', // 0 — lightest tint
+  '#f9d8cc', // 1
+  '#f2b49e', // 2
+  '#ec8f6d', // 3
+  '#e97a50', // 4
+  '#e66339', // 5 — hover (bright, used as dark-scheme primary)
+  '#e0582e', // 6 — base accent (Aixle orange) ← light primaryShade
+  '#c44a24', // 7 — press (darker, accessible on white)
+  '#a23c1d', // 8
+  '#7e2e16', // 9
 ];
 
+/**
+ * Neutral scale — Aixle warm near-black ramp (off-white → black).
+ * Mapped onto Mantine's `dark` tuple indices: 0 = lightest text,
+ * 7 = body/page background, 9 = deepest.
+ */
 const dark: MantineColorsTuple = [
-  '#e8edf2', // 0 — text-1
-  '#96a0a8', // 1 — text-2
-  '#586470', // 2 — text-3
-  '#253040', // 3 — border-mid
-  '#1e2c3c', // 4 — border
-  '#1c2838', // 5 — raised cards
-  '#131c24', // 6 — bg-card
-  '#141c26', // 7 — surface / sidebar
-  '#0d1117', // 8 — page bg
-  '#080e14', // 9 — deepest
+  '#d1cfcd', // 0 — text-1 (off-white, Aixle fg)
+  '#9f9d9c', // 1 — text-2
+  '#7f7e7c', // 2 — text-3 / subtle
+  '#5d5b5a', // 3 — disabled
+  '#393837', // 4 — border-strong
+  '#292726', // 5 — border / hairline
+  '#191817', // 6 — surface (sidebar, panels)
+  '#0a0908', // 7 — page background (Aixle black)
+  '#070605', // 8
+  '#040302', // 9 — deepest
 ];
 
 export const mantineTheme = createTheme({
   fontFamily: 'Inter, sans-serif',
   fontFamilyMonospace: 'Geist Mono, monospace',
 
-  primaryColor: 'accentBlue',
-  primaryShade: { light: 5, dark: 5 },
-  colors: { accentBlue, dark },
+  primaryColor: 'brand',
+  // Dark: brand orange (6). Light: darker press tone (7) so white text on
+  // filled buttons clears WCAG AA contrast on a white canvas.
+  primaryShade: { light: 7, dark: 6 },
+  colors: { brand, dark },
 
   headings: {
     fontFamily: 'Sora, sans-serif',
@@ -71,37 +83,81 @@ export const mantineTheme = createTheme({
   },
 });
 
+/**
+ * Semantic `--app-*` tokens. These are the app's theming contract — every
+ * surface/border/text color in pages and CSS modules should reference one of
+ * these so it adapts between schemes automatically.
+ *
+ * Dark  = Aixle warm near-black palette.
+ * Light = GitHub-Primer-like neutrals with the same orange accent.
+ */
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
     '--app-font-body': 'Inter, sans-serif',
-    '--app-bg-default': '#0d1117',
-    '--app-bg-paper': '#141c26',
-    '--app-bg-elevated': '#131c24',
-    '--app-bg-deep': '#080e14',
-    '--app-border-default': '#1e2c3c',
-    '--app-border-subtle': '#141c26',
-    '--app-border-strong': '#253040',
-    '--app-text-primary': '#e8edf2',
-    '--app-text-secondary': '#96a0a8',
-    '--app-text-tertiary': '#586470',
-    '--app-action-hover': 'rgba(122,162,200,0.05)',
-    '--app-action-selected': 'rgba(122,162,200,0.10)',
   },
-  light: {},
+
+  light: {
+    /* App semantic tokens — GitHub-like light */
+    '--app-bg-default': '#ffffff',
+    '--app-bg-paper': '#ffffff',
+    '--app-bg-elevated': '#f6f8fa',
+    '--app-bg-deep': '#f6f8fa',
+    '--app-border-default': '#d1d9e0',
+    '--app-border-subtle': '#eaeef2',
+    '--app-border-strong': '#afb8c1',
+    '--app-text-primary': '#1f2328',
+    '--app-text-secondary': '#59636e',
+    '--app-text-tertiary': '#818b98',
+    '--app-action-hover': 'rgba(208,215,222,0.32)',
+    '--app-action-selected': 'rgba(224,88,46,0.12)',
+
+    /* Mantine internal input/form variables — GitHub light */
+    '--mantine-color-default': '#ffffff',
+    '--mantine-color-default-border': '#d1d9e0',
+    '--mantine-color-default-hover': '#f6f8fa',
+    '--mantine-color-default-color': '#1f2328',
+    '--mantine-color-placeholder': '#818b98',
+    '--mantine-color-dimmed': '#59636e',
+
+    /* brand variants tuned for a light canvas */
+    '--mantine-color-brand-light': 'rgba(224,88,46,0.10)',
+    '--mantine-color-brand-light-hover': 'rgba(224,88,46,0.16)',
+    '--mantine-color-brand-light-color': '#c44a24',
+    '--mantine-color-brand-outline': '#c44a24',
+    '--mantine-color-brand-outline-hover': 'rgba(224,88,46,0.06)',
+    '--mantine-color-brand-subtle': 'transparent',
+    '--mantine-color-brand-subtle-hover': 'rgba(224,88,46,0.10)',
+    '--mantine-color-brand-subtle-color': '#c44a24',
+  },
+
   dark: {
+    /* App semantic tokens — Aixle warm near-black */
+    '--app-bg-default': '#0a0908',
+    '--app-bg-paper': '#191817',
+    '--app-bg-elevated': '#1c1a18',
+    '--app-bg-deep': '#050403',
+    '--app-border-default': '#292726',
+    '--app-border-subtle': '#1c1a18',
+    '--app-border-strong': '#393837',
+    '--app-text-primary': '#d1cfcd',
+    '--app-text-secondary': '#9f9d9c',
+    '--app-text-tertiary': '#7f7e7c',
+    '--app-action-hover': 'rgba(209,207,205,0.05)',
+    '--app-action-selected': 'rgba(224,88,46,0.12)',
+
     /* Mantine internal input/form variables */
-    '--mantine-color-default': '#0d1117',
-    '--mantine-color-default-border': '#253040',
-    '--mantine-color-default-hover': '#141c26',
-    '--mantine-color-default-color': '#e8edf2',
-    '--mantine-color-default-color-hover': '#e8edf2',
-    '--mantine-color-placeholder': '#586470',
+    '--mantine-color-default': '#0a0908',
+    '--mantine-color-default-border': '#393837',
+    '--mantine-color-default-hover': '#191817',
+    '--mantine-color-default-color': '#d1cfcd',
+    '--mantine-color-default-color-hover': '#d1cfcd',
+    '--mantine-color-placeholder': '#7f7e7c',
     /* Brighter icon color for Select/Input right-section chevrons */
-    '--mantine-color-dimmed': '#96a0a8',
+    '--mantine-color-dimmed': '#9f9d9c',
     /* Fix "light" variant — Mantine's dark-scheme auto-generated tints are near-invisible */
-    '--mantine-color-accentBlue-light': 'rgba(122,162,200,0.15)',
-    '--mantine-color-accentBlue-light-hover': 'rgba(122,162,200,0.22)',
-    '--mantine-color-accentBlue-light-color': '#7aa2c8',
+    '--mantine-color-brand-light': 'rgba(224,88,46,0.15)',
+    '--mantine-color-brand-light-hover': 'rgba(224,88,46,0.22)',
+    '--mantine-color-brand-light-color': '#e0582e',
     '--mantine-color-red-light': 'rgba(255,100,100,0.15)',
     '--mantine-color-red-light-hover': 'rgba(255,100,100,0.22)',
     '--mantine-color-red-light-color': '#ff6b6b',
@@ -123,12 +179,12 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--mantine-color-blue-light': 'rgba(77,171,247,0.15)',
     '--mantine-color-blue-light-hover': 'rgba(77,171,247,0.22)',
     '--mantine-color-blue-light-color': '#4dabf7',
-    '--mantine-color-dark-light': 'rgba(37,48,64,0.50)',
-    '--mantine-color-dark-light-hover': 'rgba(37,48,64,0.70)',
-    '--mantine-color-dark-light-color': '#96a0a8',
+    '--mantine-color-dark-light': 'rgba(41,39,38,0.50)',
+    '--mantine-color-dark-light-hover': 'rgba(41,39,38,0.70)',
+    '--mantine-color-dark-light-color': '#9f9d9c',
     /* Fix "outline" variant — border uses filled color, text matches */
-    '--mantine-color-accentBlue-outline': '#7aa2c8',
-    '--mantine-color-accentBlue-outline-hover': 'rgba(122,162,200,0.08)',
+    '--mantine-color-brand-outline': '#e0582e',
+    '--mantine-color-brand-outline-hover': 'rgba(224,88,46,0.08)',
     '--mantine-color-red-outline': '#ff6b6b',
     '--mantine-color-red-outline-hover': 'rgba(255,100,100,0.08)',
     '--mantine-color-green-outline': '#52c478',
@@ -146,9 +202,9 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--mantine-color-cyan-outline': '#66d9e8',
     '--mantine-color-cyan-outline-hover': 'rgba(102,217,232,0.08)',
     /* Fix "subtle" variant — no bg by default, hover shows tint, text = accent color */
-    '--mantine-color-accentBlue-subtle': 'transparent',
-    '--mantine-color-accentBlue-subtle-hover': 'rgba(122,162,200,0.10)',
-    '--mantine-color-accentBlue-subtle-color': '#7aa2c8',
+    '--mantine-color-brand-subtle': 'transparent',
+    '--mantine-color-brand-subtle-hover': 'rgba(224,88,46,0.10)',
+    '--mantine-color-brand-subtle-color': '#e0582e',
     '--mantine-color-red-subtle': 'transparent',
     '--mantine-color-red-subtle-hover': 'rgba(255,100,100,0.10)',
     '--mantine-color-red-subtle-color': '#ff6b6b',

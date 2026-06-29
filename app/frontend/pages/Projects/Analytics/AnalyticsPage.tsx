@@ -141,11 +141,11 @@ const PERIOD_OPTIONS = [
 ];
 
 const chartTooltipStyle = {
-  backgroundColor: '#1a1a2e',
-  border: '1px solid rgba(255,255,255,0.12)',
+  backgroundColor: 'var(--app-bg-default)',
+  border: '1px solid var(--app-border-default)',
   borderRadius: 8,
   fontSize: 12,
-  color: '#fff',
+  color: 'var(--app-text-primary)',
 };
 
 function formatCostCents(cents: number): string {
@@ -288,7 +288,7 @@ function AgentActivityPanel({ tickInterval }: { tickInterval: number }) {
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} />
               <RechartsTooltip contentStyle={chartTooltipStyle} />
@@ -345,7 +345,7 @@ function AgentActivityPanel({ tickInterval }: { tickInterval: number }) {
                   py={8}
                   style={{
                     borderBottom:
-                      idx < sessionsByAgent.length - 1 ? '1px solid var(--mantine-color-dark-4)' : undefined,
+                      idx < sessionsByAgent.length - 1 ? '1px solid var(--app-border-default)' : undefined,
                   }}
                 >
                   <Box
@@ -393,7 +393,7 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
                   <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 100).toFixed(0)}`} />
               <RechartsTooltip
@@ -426,7 +426,7 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
                   <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
               <RechartsTooltip
@@ -492,7 +492,7 @@ function SourcesPanel() {
               gap="sm"
               py={8}
               style={{
-                borderBottom: idx < sources.sources.length - 1 ? '1px solid var(--mantine-color-dark-4)' : undefined,
+                borderBottom: idx < sources.sources.length - 1 ? '1px solid var(--app-border-default)' : undefined,
               }}
             >
               <Box
@@ -531,7 +531,7 @@ function DurationPanel() {
       </Text>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={duration.buckets} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" vertical={false} />
           <XAxis dataKey="range" tick={{ fontSize: 12 }} />
           <YAxis tick={{ fontSize: 12 }} />
           <RechartsTooltip contentStyle={chartTooltipStyle} formatter={(v) => [`${Number(v)} sessions`]} />
@@ -596,7 +596,7 @@ function WorkflowCostsPanel() {
                     <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={wfTickInterval} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 100).toFixed(0)}`} />
                 <RechartsTooltip
@@ -629,7 +629,7 @@ function WorkflowCostsPanel() {
                     <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={wfTickInterval} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
                 <RechartsTooltip
@@ -667,7 +667,7 @@ function WorkflowCostsPanel() {
                 layout="vertical"
                 margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" horizontal={false} />
                 <XAxis
                   type="number"
                   tick={{ fontSize: 11 }}
@@ -702,7 +702,7 @@ function WorkflowCostsPanel() {
                 layout="vertical"
                 margin={{ top: 4, right: 16, bottom: 0, left: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
                 <RechartsTooltip
@@ -734,7 +734,7 @@ function WorkflowCostsPanel() {
                 gridTemplateColumns: '1fr 120px 100px 100px 100px 80px 90px 90px',
                 gap: 8,
                 padding: '8px 0',
-                borderBottom: '1px solid var(--mantine-color-dark-4)',
+                borderBottom: '1px solid var(--app-border-default)',
               }}
             >
               {[
@@ -764,7 +764,7 @@ function WorkflowCostsPanel() {
                     gap: 8,
                     alignItems: 'center',
                     padding: '12px 0',
-                    borderBottom: i < wfWorkflows.length - 1 ? '1px solid var(--mantine-color-dark-4)' : undefined,
+                    borderBottom: i < wfWorkflows.length - 1 ? '1px solid var(--app-border-default)' : undefined,
                   }}
                 >
                   <Box>
@@ -780,7 +780,7 @@ function WorkflowCostsPanel() {
                         width: '80%',
                         height: 4,
                         borderRadius: 2,
-                        backgroundColor: 'var(--mantine-color-dark-5)',
+                        backgroundColor: 'var(--app-bg-elevated)',
                       }}
                     >
                       <Box style={{ height: 4, borderRadius: 2, backgroundColor: color, width: `${pct}%` }} />

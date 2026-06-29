@@ -91,7 +91,7 @@ export function SkillsContent({
     <Box>
       <Group justify="space-between" mb="lg">
         <Box>
-          <Text fz={24} fw={600} c="white">
+          <Text fz={24} fw={600} c="var(--app-text-primary)">
             {title}
           </Text>
           <Text fz={14} c="dimmed" mt={4}>
@@ -150,7 +150,7 @@ export function SkillsContent({
             >
               <Group justify="space-between" align="flex-start" wrap="nowrap" mb={8}>
                 <Group gap={8} align="center" style={{ minWidth: 0, flex: 1 }}>
-                  <Text fz={15} fw={600} c="white" ff="JetBrains Mono, monospace" truncate>
+                  <Text fz={15} fw={600} c="var(--app-text-primary)" ff="JetBrains Mono, monospace" truncate>
                     {skill.name}
                   </Text>
                   <Badge
@@ -184,7 +184,7 @@ export function SkillsContent({
               </Group>
 
               {skill.title && skill.title !== skill.name && (
-                <Text fz={13} fw={500} c="var(--mantine-color-gray-4)" mb={4}>
+                <Text fz={13} fw={500} c="var(--app-text-secondary)" mb={4}>
                   {skill.title}
                 </Text>
               )}
@@ -319,7 +319,7 @@ export function RegistrySearchModal({
       opened={opened}
       onClose={handleClose}
       title={
-        <Text fz={18} fw={600} c="white">
+        <Text fz={18} fw={600} c="var(--app-text-primary)">
           Search skills.sh Registry
         </Text>
       }
@@ -365,7 +365,7 @@ export function RegistrySearchModal({
                     <Group justify="space-between" align="flex-start" wrap="nowrap">
                       <Box style={{ minWidth: 0, flex: 1 }}>
                         <Group gap={8} align="center">
-                          <Text fz={15} fw={600} c="white" ff="JetBrains Mono, monospace">
+                          <Text fz={15} fw={600} c="var(--app-text-primary)" ff="JetBrains Mono, monospace">
                             {skill.name}
                           </Text>
                           <Badge size="xs" variant="light" color="gray">
@@ -423,7 +423,7 @@ export function RegistrySearchModal({
                 Try different keywords or browse{' '}
                 <Text
                   span
-                  c="blue"
+                  c="brand"
                   component="a"
                   href="https://skills.sh"
                   target="_blank"
@@ -445,7 +445,7 @@ export function RegistrySearchModal({
                 Search the{' '}
                 <Text
                   span
-                  c="blue"
+                  c="brand"
                   component="a"
                   href="https://skills.sh"
                   target="_blank"

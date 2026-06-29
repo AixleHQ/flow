@@ -249,11 +249,11 @@ const CHART_COLORS = [
   '#ffc107',
 ];
 const CHART_TOOLTIP_STYLE: React.CSSProperties = {
-  backgroundColor: '#1a1a2e',
+  backgroundColor: 'var(--app-bg-default)',
   border: '1px solid rgba(255,255,255,0.12)',
   borderRadius: 8,
   fontSize: 12,
-  color: '#fff',
+  color: 'var(--app-text-primary)',
 };
 
 function workflowStatusColor(state: string): string {
@@ -356,7 +356,7 @@ function TaskCardUI({
       p="xs"
       mb={8}
       withBorder
-      bg="var(--mantine-color-dark-5)"
+      bg="var(--app-bg-elevated)"
       onClick={() => onClick?.(task)}
       style={{
         cursor: 'pointer',
@@ -365,7 +365,7 @@ function TaskCardUI({
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-accentBlue-4)';
+        (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
       }}
       onMouseLeave={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = isDragOverlay
@@ -428,7 +428,7 @@ function TaskCardUI({
         <Group gap={6}>
           {task.assigneeName && (
             <Tooltip label={task.assigneeName}>
-              <Avatar size={20} radius="xl" color="blue" style={{ fontSize: 10 }}>
+              <Avatar size={20} radius="xl" color="brand" style={{ fontSize: 10 }}>
                 {avatarInitials(task.assigneeName)}
               </Avatar>
             </Tooltip>
@@ -499,7 +499,7 @@ function BoardColumn({
   const taskIds = useMemo(() => tasks.map((t) => `task-${t.id}`), [tasks]);
 
   const overStyle = {
-    outline: isDropTarget ? '2px solid var(--mantine-color-blue-6)' : '2px solid transparent',
+    outline: isDropTarget ? '2px solid var(--mantine-color-brand-6)' : '2px solid transparent',
     outlineOffset: -2,
     transition: 'outline-color 0.15s ease',
   };
@@ -541,7 +541,7 @@ function BoardColumn({
           flex: '0 0 44px',
           minWidth: 44,
           maxWidth: 44,
-          backgroundColor: 'var(--mantine-color-dark-6)',
+          backgroundColor: 'var(--app-bg-elevated)',
           border: '1px solid var(--app-border-default)',
           borderRadius: 10,
           maxHeight: '100%',
@@ -610,7 +610,7 @@ function BoardColumn({
         minWidth: 280,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: 'var(--mantine-color-dark-6)',
+        backgroundColor: 'var(--app-bg-elevated)',
         border: '1px solid var(--app-border-default)',
         borderRadius: 10,
         overflow: 'hidden',
@@ -651,7 +651,7 @@ function BoardColumn({
             fw={600}
             c="dimmed"
             style={{
-              backgroundColor: 'var(--mantine-color-dark-5)',
+              backgroundColor: 'var(--app-bg-elevated)',
               borderRadius: 10,
               padding: '1px 6px',
               flexShrink: 0,
@@ -1058,7 +1058,7 @@ function TaskDetailSidebar({
       }}
     >
       {/* Header */}
-      <Box p="md" style={{ borderBottom: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}>
+      <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)', flexShrink: 0 }}>
         <Group justify="space-between" mb="xs">
           <Group gap="xs">
             <ActionIcon variant="subtle" size="sm" onClick={() => setWide(!wide)}>
@@ -1302,7 +1302,7 @@ function TaskDetailSidebar({
                         target="_blank"
                         rel="noopener"
                         size="sm"
-                        c="blue"
+                        c="brand"
                         style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, textDecoration: 'none' }}
                         onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
                           e.currentTarget.style.textDecoration = 'underline';
@@ -1365,7 +1365,7 @@ function TaskDetailSidebar({
                         >
                           {child.taskType.replace('_', ' ')}
                         </Badge>
-                        <Text size="xs" c="blue" style={{ flex: 1 }} lineClamp={1}>
+                        <Text size="xs" c="brand" style={{ flex: 1 }} lineClamp={1}>
                           {child.title}
                         </Text>
                       </UnstyledButton>
@@ -1384,7 +1384,7 @@ function TaskDetailSidebar({
                 <UnstyledButton onClick={() => onOpenTask(parentTask)}>
                   <Text
                     size="sm"
-                    c="blue"
+                    c="brand"
                     style={{ textDecoration: 'none' }}
                     onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
                       e.currentTarget.style.textDecoration = 'underline';
@@ -1431,7 +1431,7 @@ function TaskDetailSidebar({
                               target="_blank"
                               rel="noopener noreferrer"
                               size="xs"
-                              c="blue"
+                              c="brand"
                               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                             >
                               <IconLink size={10} />
@@ -1447,7 +1447,7 @@ function TaskDetailSidebar({
                               target="_blank"
                               rel="noopener noreferrer"
                               size="xs"
-                              c="blue"
+                              c="brand"
                               style={{ display: 'flex', alignItems: 'center', gap: 4 }}
                             >
                               <IconLink size={10} />
@@ -1493,7 +1493,7 @@ function TaskDetailSidebar({
             />
           </Group>
 
-          <Box p="md" style={{ borderBottom: '1px solid var(--mantine-color-dark-4)' }}>
+          <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
             <Textarea
               placeholder="Write a comment... (⌘+Enter to send)"
               value={commentBody}
@@ -1564,7 +1564,7 @@ function TaskDetailSidebar({
                     p="sm"
                     radius="sm"
                     mb="sm"
-                    style={{ backgroundColor: 'var(--mantine-color-dark-6)' }}
+                    style={{ backgroundColor: 'var(--app-bg-elevated)' }}
                   >
                     <Group
                       gap="xs"
@@ -1572,7 +1572,7 @@ function TaskDetailSidebar({
                       onClick={() => toggleComment(c.id)}
                       mb={isCollapsed ? 0 : 4}
                     >
-                      <Avatar size={22} radius="xl" color="blue" style={{ fontSize: 10 }}>
+                      <Avatar size={22} radius="xl" color="brand" style={{ fontSize: 10 }}>
                         {(c.authorName ?? 'U')[0]}
                       </Avatar>
                       <Text size="xs" fw={600}>
@@ -1686,7 +1686,7 @@ function TaskDetailSidebar({
             </Text>
           ) : (
             (activities ?? []).map((a) => (
-              <Group key={a.id} gap="sm" py="xs" style={{ borderBottom: '1px solid var(--mantine-color-dark-5)' }}>
+              <Group key={a.id} gap="sm" py="xs" style={{ borderBottom: '1px solid var(--app-bg-elevated)' }}>
                 <Box style={{ flex: 1, minWidth: 0 }}>
                   <Text size="sm" lineClamp={2}>
                     {a.description}
@@ -1810,7 +1810,7 @@ function TaskDetailSidebar({
                                 color: 'var(--mantine-color-dimmed)',
                                 fontWeight: 600,
                                 padding: '6px 8px',
-                                borderBottom: '1px solid var(--mantine-color-dark-4)',
+                                borderBottom: '1px solid var(--app-border-default)',
                               }}
                             >
                               Workflow
@@ -1822,7 +1822,7 @@ function TaskDetailSidebar({
                                 color: 'var(--mantine-color-dimmed)',
                                 fontWeight: 600,
                                 padding: '6px 8px',
-                                borderBottom: '1px solid var(--mantine-color-dark-4)',
+                                borderBottom: '1px solid var(--app-border-default)',
                               }}
                             >
                               Cost
@@ -1834,7 +1834,7 @@ function TaskDetailSidebar({
                                 color: 'var(--mantine-color-dimmed)',
                                 fontWeight: 600,
                                 padding: '6px 8px',
-                                borderBottom: '1px solid var(--mantine-color-dark-4)',
+                                borderBottom: '1px solid var(--app-border-default)',
                               }}
                             >
                               Tokens
@@ -1846,7 +1846,7 @@ function TaskDetailSidebar({
                                 color: 'var(--mantine-color-dimmed)',
                                 fontWeight: 600,
                                 padding: '6px 8px',
-                                borderBottom: '1px solid var(--mantine-color-dark-4)',
+                                borderBottom: '1px solid var(--app-border-default)',
                               }}
                             >
                               Run Time
@@ -1860,7 +1860,7 @@ function TaskDetailSidebar({
                                 style={{
                                   fontSize: 12,
                                   padding: '6px 8px',
-                                  borderBottom: '1px solid var(--mantine-color-dark-5)',
+                                  borderBottom: '1px solid var(--app-bg-elevated)',
                                 }}
                               >
                                 <Group gap={8} wrap="nowrap">
@@ -1883,7 +1883,7 @@ function TaskDetailSidebar({
                                   textAlign: 'right',
                                   fontSize: 12,
                                   padding: '6px 8px',
-                                  borderBottom: '1px solid var(--mantine-color-dark-5)',
+                                  borderBottom: '1px solid var(--app-bg-elevated)',
                                 }}
                               >
                                 {formatCostCents(b.costCents)}
@@ -1893,7 +1893,7 @@ function TaskDetailSidebar({
                                   textAlign: 'right',
                                   fontSize: 12,
                                   padding: '6px 8px',
-                                  borderBottom: '1px solid var(--mantine-color-dark-5)',
+                                  borderBottom: '1px solid var(--app-bg-elevated)',
                                 }}
                               >
                                 {formatTokens(b.totalTokens)}
@@ -1903,7 +1903,7 @@ function TaskDetailSidebar({
                                   textAlign: 'right',
                                   fontSize: 12,
                                   padding: '6px 8px',
-                                  borderBottom: '1px solid var(--mantine-color-dark-5)',
+                                  borderBottom: '1px solid var(--app-bg-elevated)',
                                 }}
                               >
                                 {formatDuration(b.durationSeconds)}
@@ -1939,7 +1939,7 @@ function TaskDetailSidebar({
                           py={8}
                           style={
                             idx < stats.gateStats.length - 1
-                              ? { borderBottom: '1px solid var(--mantine-color-dark-5)' }
+                              ? { borderBottom: '1px solid var(--app-bg-elevated)' }
                               : undefined
                           }
                         >
@@ -2281,7 +2281,7 @@ function ActivityFeedPanel({ projectId, initialActivities }: { projectId: number
           ) : (
             <>
               {activities.map((a) => (
-                <Group key={a.id} gap="sm" py={4} style={{ borderBottom: '1px solid var(--mantine-color-dark-5)' }}>
+                <Group key={a.id} gap="sm" py={4} style={{ borderBottom: '1px solid var(--app-bg-elevated)' }}>
                   <Box style={{ flex: 1, minWidth: 0 }}>
                     <Text size="xs" lineClamp={1}>
                       {a.description}
@@ -2333,7 +2333,7 @@ function BoardPresetPicker({ projectId, presets }: { projectId: number; presets:
   return (
     <Box py={60} maw={700} mx="auto">
       <Stack align="center" mb="xl">
-        <ThemeIcon size={64} radius="xl" variant="light" color="blue">
+        <ThemeIcon size={64} radius="xl" variant="light" color="brand">
           <IconLayoutKanban size={32} />
         </ThemeIcon>
         <Text size="xl" fw={700}>
@@ -2365,7 +2365,7 @@ function BoardPresetPicker({ projectId, presets }: { projectId: number; presets:
             onClick={() => !creating && handleCreate(preset.key)}
           >
             <Stack align="center" gap="sm">
-              <ThemeIcon size={48} radius="md" variant="light" color="blue">
+              <ThemeIcon size={48} radius="md" variant="light" color="brand">
                 {PRESET_ICONS[preset.key] ?? <IconLayoutKanban size={28} />}
               </ThemeIcon>
               <Text fw={600} ta="center">

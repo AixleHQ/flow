@@ -67,7 +67,7 @@ const IndexPage = () => {
       <Box mih="100vh" bg="var(--app-bg-default)">
         <Group justify="space-between" align="flex-start" mb={24}>
           <Box>
-            <Text fz={32} fw={600} c="white" mb={8}>
+            <Text fz={32} fw={600} c="var(--app-text-primary)" mb={8}>
               Workflow Catalog
             </Text>
             <Text c="dimmed" size="sm">

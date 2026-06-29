@@ -113,7 +113,7 @@ export function ToolsContent({
     <Box>
       <Group justify="space-between" mb="lg">
         <Box>
-          <Text fz={24} fw={600} c="white">
+          <Text fz={24} fw={600} c="var(--app-text-primary)">
             {title}
           </Text>
           <Text fz={14} c="dimmed" mt={4}>
@@ -210,7 +210,7 @@ export function ToolsContent({
                   <Table.Tr key={tool.id}>
                     <Table.Td>
                       <Box>
-                        <Text fz={14} fw={500} c="white">
+                        <Text fz={14} fw={500} c="var(--app-text-primary)">
                           {tool.displayName}
                         </Text>
                         <Text fz={13} fw={500} c="dimmed" ff="JetBrains Mono, monospace">

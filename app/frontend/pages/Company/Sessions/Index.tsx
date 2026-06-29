@@ -216,7 +216,7 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
         </Group>
 
         {sessions.length === 0 ? (
-          <Box py="xl" ta="center" style={{ border: '1px solid var(--mantine-color-dark-4)', borderRadius: 8 }}>
+          <Box py="xl" ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
             <Text c="dimmed">{Object.keys(filters).length > 0 ? 'No sessions match filters' : 'No sessions yet'}</Text>
           </Box>
         ) : (

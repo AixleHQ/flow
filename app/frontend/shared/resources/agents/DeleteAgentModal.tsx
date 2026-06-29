@@ -56,7 +56,7 @@ export const DeleteAgentModal: FC<DeleteAgentModalProps> = ({ opened, onClose, a
       >
         <Text fz={24}>{agent.icon || '🤖'}</Text>
         <Box>
-          <Text fw={500} c="white">
+          <Text fw={500} c="var(--app-text-primary)">
             {agent.title}
           </Text>
           <Text fz={12} ff="JetBrains Mono, monospace" c="dimmed">

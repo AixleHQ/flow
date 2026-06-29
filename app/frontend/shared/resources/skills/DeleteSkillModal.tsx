@@ -38,7 +38,7 @@ export const DeleteSkillModal: FC<DeleteSkillModalProps> = ({ opened, onClose, s
       <Box>
         <Text fz={14} c="dimmed" mb="md">
           Are you sure you want to delete skill{' '}
-          <Text span fw={600} c="white">
+          <Text span fw={600} c="var(--app-text-primary)">
             {skill.title || skill.name}
           </Text>
           ? This action cannot be undone.

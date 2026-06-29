@@ -1,5 +1,5 @@
 import { createInertiaApp } from '@inertiajs/react';
-import { MantineProvider } from '@mantine/core';
+import { MantineProvider, localStorageColorSchemeManager } from '@mantine/core';
 import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
@@ -7,6 +7,10 @@ import * as Sentry from '@sentry/react';
 import { initSentry } from 'shared/lib/sentry';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
 import { InertiaRouteIndicator } from 'shared/ui';
+
+// Persist the chosen color scheme. Key matches the inline anti-flash script in
+// app/views/layouts/inertia.html.haml so the scheme is applied before paint.
+const colorSchemeManager = localStorageColorSchemeManager({ key: 'mantine-color-scheme-value' });
 
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
@@ -37,7 +41,12 @@ createInertiaApp({
   withApp(app: React.ReactNode) {
     return (
       <Sentry.ErrorBoundary showDialog>
-        <MantineProvider theme={mantineTheme} defaultColorScheme="dark" cssVariablesResolver={cssVariablesResolver}>
+        <MantineProvider
+          theme={mantineTheme}
+          defaultColorScheme="dark"
+          colorSchemeManager={colorSchemeManager}
+          cssVariablesResolver={cssVariablesResolver}
+        >
           <ModalsProvider>
             <Notifications position="top-right" />
             <InertiaRouteIndicator />

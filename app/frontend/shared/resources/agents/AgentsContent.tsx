@@ -72,7 +72,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
     <Box>
       <Group justify="space-between" mb="lg">
         <Box>
-          <Text fz={24} fw={600} c="white">
+          <Text fz={24} fw={600} c="var(--app-text-primary)">
             {title}
           </Text>
           <Text fz={14} c="dimmed" mt={4}>
@@ -165,7 +165,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                         {agent.icon || '🤖'}
                       </Center>
                       <Box>
-                        <Text fz={14} fw={500} c="white">
+                        <Text fz={14} fw={500} c="var(--app-text-primary)">
                           {agent.title}
                         </Text>
                         <Text fz={13} fw={500} c="dimmed" ff="JetBrains Mono, monospace">

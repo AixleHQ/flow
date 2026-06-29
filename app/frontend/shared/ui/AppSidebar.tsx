@@ -55,6 +55,7 @@ import {
   companyWorkflowCatalogIndexPath,
 } from 'shared/routes';
 
+import { ColorSchemeToggle } from './ColorSchemeToggle';
 import classes from './AppSidebar.module.css';
 import type { SharedPermissions, SharedProject, SharedProps } from './types';
 
@@ -487,6 +488,7 @@ function SidebarContent({
       </ScrollArea>
 
       <div className={`${classes.collapseRow} ${collapsed ? classes.collapseRowCollapsed : ''}`}>
+        <ColorSchemeToggle className={classes.collapseBtn} tooltipPosition={collapsed ? 'right' : 'top'} />
         <UnstyledButton
           onClick={toggleCollapsed}
           className={classes.collapseBtn}

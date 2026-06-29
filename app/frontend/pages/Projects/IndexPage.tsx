@@ -76,7 +76,7 @@ const IndexPage = () => {
       <Box>
         <Group justify="space-between" align="flex-start" mb={24}>
           <Box>
-            <Text fz={32} fw={600} c="white" mb={8}>
+            <Text fz={32} fw={600} c="var(--app-text-primary)" mb={8}>
               Projects
             </Text>
             <Text fz={16} c="dimmed">
@@ -114,7 +114,7 @@ const IndexPage = () => {
               <Text fz={48} opacity={0.5}>
                 📁
               </Text>
-              <Text fz={20} fw={500} c="white">
+              <Text fz={20} fw={500} c="var(--app-text-primary)">
                 No projects yet
               </Text>
               <Text fz={14} c="dimmed" ta="center" maw={400}>
@@ -129,7 +129,7 @@ const IndexPage = () => {
               <Text fz={48} opacity={0.5}>
                 🔍
               </Text>
-              <Text fz={20} fw={500} c="white">
+              <Text fz={20} fw={500} c="var(--app-text-primary)">
                 No projects found
               </Text>
               <Text fz={14} c="dimmed">
