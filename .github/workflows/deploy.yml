@@ -151,23 +151,38 @@ jobs:
           cache-to: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }},mode=max,image-manifest=true,oci-mediatypes=true
 
   # ---------------------------------------------------------------------------
-  # Checks (parallel, via reusable workflow)
+  # Checks (frontend and backend run as SEPARATE jobs, on separate runners, in
+  # parallel — so Vitest never competes with the Ruby suite for CPU. Each job
+  # never short-circuits, prints the full log of every failed check, and exits
+  # non-zero if any one fails. See the be_check_all / fe_check_all Makefile targets.)
   # ---------------------------------------------------------------------------
-  checks:
-    name: Checks
+  be-checks:
+    name: Backend Checks
     needs:
       - prepare-config
       - build-web
     uses: ./.github/workflows/code-check.yml
     with:
-      # Runs rails-test, rubocop, brakeman, eslint and typescript in parallel
-      # inside one job (see the `check_all` Makefile target). It never short-
-      # circuits, prints the full log of every failed check, and exits non-zero
-      # if any one of them fails.
-      command: check_all
+      # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
+      command: be_check_all
       runner: ${{ needs.prepare-config.outputs.ci_runner }}
       needs-db: true
       timeout: 25
+      image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
+    secrets: inherit
+
+  fe-checks:
+    name: Frontend Checks
+    needs:
+      - prepare-config
+      - build-web
+    uses: ./.github/workflows/code-check.yml
+    with:
+      # eslint + tsc, then Vitest on its own (backendless, no DB needed).
+      command: fe_check_all
+      runner: ${{ needs.prepare-config.outputs.ci_runner }}
+      needs-db: false
+      timeout: 20
       image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
 
@@ -197,7 +212,8 @@ jobs:
     needs:
       - prepare-config
       - build-web
-      - checks
+      - be-checks
+      - fe-checks
     env:
       KUBE_NAMESPACE: ${{ needs.prepare-config.outputs.kube_namespace }}
       SERVICE_ACCOUNT: ${{ needs.prepare-config.outputs.service_account }}

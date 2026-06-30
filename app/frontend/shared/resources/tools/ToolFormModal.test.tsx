@@ -6,6 +6,21 @@ import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage'
 
 import { ToolFormModal } from './ToolFormModal';
 
+// ToolFileEditor wraps CodeMirror (@uiw/react-codemirror): a contenteditable editor that loads
+// language parsers and measures layout from a requestAnimationFrame callback. It is by far the
+// heaviest component these tests render, and the file mounts it on every Files-tab test. Under CI's
+// `check_all` (rails test + rubocop + brakeman + eslint + tsc + this suite, all in parallel on a
+// 2–4 vCPU runner) the CPU starvation pushed the heaviest case here past even the 20s timeout, and
+// vitest's retries re-ran it in the same still-starved worker → 3/3 failures, read as flaky.
+// These tests only assert the editor *slot* is present (the "Content" label shown in text mode) and
+// the surrounding file-row behavior — never the editor internals, which ToolFileEditor.test.tsx
+// covers against the REAL CodeMirror. Stub it with a trivial element so this suite stops paying the
+// CodeMirror render cost.
+vi.mock('./ToolFileEditor', async () => {
+  const { createElement } = await import('react');
+  return { ToolFileEditor: () => createElement('div', null, 'Content') };
+});
+
 const editTool = {
   id: 7,
   name: 'my_tool',

@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 DOCKER_COMPOSE ?= docker compose
 
@@ -22,20 +22,37 @@ db-reset:
 # Run all linters and tests
 check: be_check fe_check
 
-# Run all checks in parallel, never short-circuit, summarize at the end.
-# Each check writes its output to tmp/check_results/<name>.log and exit code to <name>.status.
-# Failures are surfaced together (with last 80 log lines each) so you can fix them in one pass.
+# CI checks. Each check writes tmp/check_results/<name>.log + <name>.status so a batch never
+# short-circuits and every failure is surfaced together. CI runs frontend and backend as SEPARATE
+# jobs (see .github/workflows/deploy.yml) so Vitest never competes with the Ruby suite for CPU;
+# `check_all` keeps the combined one-command run for local use.
 CHECK_RESULTS := tmp/check_results
-check_all:
-	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
-	@echo "Running rails-test, rubocop, brakeman, eslint, typescript, fe-test in parallel..."
+
+# Backend (Ruby) checks, in parallel. Each subshell records its own exit code, so `wait` never aborts.
+define run_be_checks
+	@echo "Running rails-test, rubocop, brakeman in parallel..."
 	@( bundle exec rails test                                       > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
 	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
-	 ( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
-	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
-	 ( yarn test --coverage                                         > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )    & \
 	 wait
+endef
+
+# Frontend (JS/TS) checks. eslint + tsc run in parallel; Vitest then runs ON ITS OWN. Vitest spawns a
+# worker per core and (with coverage's all:true) instruments the whole frontend, so racing it against
+# tsc/eslint — let alone the Ruby suite in the old all-in-one check_all — CPU-starved the heaviest
+# jsdom+userEvent form tests past their timeout: green in isolation, flaky only under the full load.
+define run_fe_checks
+	@echo "Running eslint, typescript in parallel..."
+	@( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
+	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
+	 wait
+	@echo "Running fe-test (Vitest + coverage) on its own..."
+	@( yarn test --coverage                                         > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )
+endef
+
+# Summarize every tmp/check_results/*.status, print whichever coverage files exist, dump the full log
+# of each failed check, and exit non-zero if any failed.
+define summarize_checks
 	@echo ""
 	@echo "=== Summary ==="
 	@fail=0; for f in $(CHECK_RESULTS)/*.status; do \
@@ -50,10 +67,14 @@ check_all:
 	done; \
 	echo ""; \
 	echo "=== Coverage (line %) ==="; \
-	be=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/.last_run.json"))["result"]["line"]; rescue; puts "n/a"; end' 2>/dev/null); \
-	fe=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/frontend/coverage-summary.json"))["total"]["lines"]["pct"]; rescue; puts "n/a"; end' 2>/dev/null); \
-	printf "  backend  (rails / simplecov): %s%%\n" "$$be"; \
-	printf "  frontend (vitest / v8):       %s%%\n" "$$fe"; \
+	if [ -f coverage/.last_run.json ]; then \
+	  be=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/.last_run.json"))["result"]["line"]; rescue; puts "n/a"; end' 2>/dev/null); \
+	  printf "  backend  (rails / simplecov): %s%%\n" "$$be"; \
+	fi; \
+	if [ -f coverage/frontend/coverage-summary.json ]; then \
+	  fe=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/frontend/coverage-summary.json"))["total"]["lines"]["pct"]; rescue; puts "n/a"; end' 2>/dev/null); \
+	  printf "  frontend (vitest / v8):       %s%%\n" "$$fe"; \
+	fi; \
 	if [ $$fail -ne 0 ]; then \
 	  echo ""; \
 	  echo "=== Failure output (full log per failed check) ==="; \
@@ -68,6 +89,27 @@ check_all:
 	  done; \
 	  exit 1; \
 	fi
+endef
+
+# Backend checks only (CI runs this in the backend job).
+be_check_all:
+	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
+	$(run_be_checks)
+	$(summarize_checks)
+
+# Frontend checks only (CI runs this in the frontend job — no DB needed).
+fe_check_all:
+	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
+	$(run_fe_checks)
+	$(summarize_checks)
+
+# Everything in one pass (local convenience). Never short-circuits: the run_* batches capture each
+# exit code into <name>.status, so failures are reported by summarize_checks, not by aborting early.
+check_all:
+	@rm -rf $(CHECK_RESULTS) && mkdir -p $(CHECK_RESULTS)
+	$(run_be_checks)
+	$(run_fe_checks)
+	$(summarize_checks)
 
 # Run backend checks
 be_check: rails-test rubocop-fix brakeman
