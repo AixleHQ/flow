@@ -102,7 +102,13 @@ module Coder
       assert_match(/HTTP 401/, integration.settings["error"])
     end
 
-    test "sad path: invalid Coder URL (http://) rejected before HTTP call" do
+    test "allows an http Coder URL" do
+      stub_request(:get, "http://coder.example.com/api/v2/users/me").to_return(
+        status: 200,
+        body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "http://coder.example.com",
         session_token: "tok-1",
@@ -110,8 +116,8 @@ module Coder
       )
 
       assert integration.persisted?
-      assert_equal "error", integration.status.to_s
-      assert_match(/http/, integration.settings["error"])
+      assert_equal "active", integration.status.to_s
+      assert_equal "http://coder.example.com", integration.credentials_data["coder_url"]
     end
 
     test "sad path: localhost URL rejected before HTTP call" do

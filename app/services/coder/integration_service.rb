@@ -21,7 +21,7 @@ module Coder
       normalized_url = normalize_url(coder_url)
       integration = build_integration
 
-      url_errors = UrlSafetyValidator.errors_for(normalized_url, require_https: true)
+      url_errors = UrlSafetyValidator.errors_for(normalized_url)
       if url_errors.any?
         integration.credentials_data = {
           coder_url: normalized_url,
