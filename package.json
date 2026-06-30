@@ -89,7 +89,7 @@
     "remark-gfm": "^4.0.1",
     "use-debounce": "^10.1.0",
     "zod": "^4.4.3",
-    "zustand": "^5.0.9"
+    "zustand": "^5.0.14"
   },
   "scripts": {
     "tsc": "tsc",
