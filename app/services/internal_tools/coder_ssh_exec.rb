@@ -3,7 +3,7 @@
 module InternalTools
   # coder_ssh_exec — run a shell command on a Coder workspace previously
   # allocated by this terminal session. The command runs in the Rails
-  # process via `coder ssh -- sh -c <command>`; the integration token is
+  # process via `coder ssh <workspace> -- <command>`; the integration token is
   # passed via the process environment and never appears in argv.
   #
   # The session-ownership check enforces that the calling session is the

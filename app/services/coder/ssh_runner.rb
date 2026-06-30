@@ -47,7 +47,18 @@ module Coder
         "CODER_SESSION_TOKEN" => session_token
       }
 
-      argv = [ "coder", "ssh", workspace_name.to_s, "--", "sh", "-c", command.to_s ]
+      # The remote command is passed as a SINGLE token after the `--`
+      # separator: `coder ssh <workspace> -- <command>` (the canonical shape in
+      # coder-instructions.md §8, e.g. `coder ssh alex -- ps aux`). `coder ssh`
+      # forwards everything after `--` to the workspace's login shell, so the
+      # command string is interpreted as a shell command there (pipes, `;`,
+      # quoting and redirection all work). We must NOT wrap it in our own
+      # `sh -c <command>`: `coder ssh` space-joins its post-`--` argv tokens
+      # before forwarding, which collapses the `sh`/`-c`/`<command>` boundaries
+      # and destroys any quoting inside the command (e.g. `echo "a b"` would run
+      # as the empty `echo` plus stray tokens). Keeping the command as one argv
+      # element preserves it verbatim. See task #284 / issue-coder-ssh-exec.md.
+      argv = [ "coder", "ssh", workspace_name.to_s, "--", command.to_s ]
 
       begin
         Open3.popen3(env, *argv, pgroup: true) do |stdin, sout, serr, wait_thr|

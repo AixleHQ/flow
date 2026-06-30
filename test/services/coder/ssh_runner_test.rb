@@ -66,25 +66,34 @@ module Coder
       assert_not_includes captured_args, @token
     end
 
-    # Regression guard: the `coder ssh <workspace> -- sh -c <cmd>` shape (with the
-    # `--` separator) is the canonical invocation documented in coder-instructions.md
-    # §8. Without the separator the CLI rejects the trailing tokens with
-    # `wanted 1 args but got N`, which broke coder_ssh_exec end-to-end during
-    # integration testing (see task #284, asset wf_output_20260623-1-7hx199.md).
-    test "passes `--` between the workspace name and the remote `sh -c` command" do
+    # Regression guard: the canonical invocation is
+    # `coder ssh <workspace> -- <command>` (coder-instructions.md §8, e.g.
+    # `coder ssh alex -- ps aux`). Two things matter and are both asserted here:
+    #
+    #   1. The `--` separator must sit immediately after the workspace name —
+    #      without it the CLI rejects the trailing tokens (`wanted 1 args but
+    #      got N` / `No containers found!`), which broke coder_ssh_exec
+    #      end-to-end (task #284, asset wf_output_20260623-1-7hx199.md).
+    #   2. The command must be the SINGLE token right after `--` — NOT wrapped
+    #      in `sh -c`. `coder ssh` space-joins its post-`--` argv before
+    #      forwarding to the remote login shell, so an extra `sh -c` wrapper
+    #      collapses the boundaries and corrupts any quoting inside the command
+    #      (e.g. `echo "a b"` ran as an empty `echo`). See issue-coder-ssh-exec.md.
+    test "passes `--` then the command as a single token (no `sh -c` wrapper)" do
       captured_args = nil
       stub = popen3_stub { |_env, argv| captured_args = argv }
 
+      command = 'echo "a b"; whoami'
       Open3.stub(:popen3, stub) do
-        Coder::SshRunner.new(@integration).exec(workspace_name: "ws-x", command: "whoami")
+        Coder::SshRunner.new(@integration).exec(workspace_name: "ws-x", command: command)
       end
 
       ws_idx = captured_args.index("ws-x")
       assert ws_idx, "expected workspace name to appear in argv"
       assert_equal "--", captured_args[ws_idx + 1], "expected `--` immediately after workspace name"
-      assert_equal "sh", captured_args[ws_idx + 2]
-      assert_equal "-c", captured_args[ws_idx + 3]
-      assert_equal "whoami", captured_args[ws_idx + 4]
+      assert_equal command, captured_args[ws_idx + 2], "expected the command verbatim as one token after `--`"
+      assert_equal ws_idx + 3, captured_args.length, "expected no extra tokens (no `sh`/`-c`) after the command"
+      assert_not_includes captured_args, "sh", "command must not be wrapped in `sh -c`"
     end
 
     # Regression guard: protect the well-known popen3 + Timeout anti-pattern by
@@ -178,7 +187,7 @@ module Coder
     end
 
     # DD-15: on timeout, the child process group must be signalled — otherwise
-    # the underlying `coder ssh` and its remote `sh -c` are orphaned.
+    # the underlying `coder ssh` and its remote command are orphaned.
     test "kills the process group on timeout instead of leaking the child" do
       signals = []
       original_grace = Coder::SshRunner.kill_grace_seconds
