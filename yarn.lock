@@ -8221,9 +8221,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nuqs@npm:^2.4.3":
-  version: 2.8.9
-  resolution: "nuqs@npm:2.8.9"
+"nuqs@npm:^2.9.0":
+  version: 2.9.0
+  resolution: "nuqs@npm:2.9.0"
   dependencies:
     "@standard-schema/spec": "npm:1.0.0"
   peerDependencies:
@@ -8231,7 +8231,7 @@ __metadata:
     "@tanstack/react-router": ^1
     next: ">=14.2.0"
     react: ">=18.2.0 || ^19.0.0-0"
-    react-router: ^5 || ^6 || ^7
+    react-router: ^5 || ^6 || ^7 || ^8
     react-router-dom: ^5 || ^6 || ^7
   peerDependenciesMeta:
     "@remix-run/react":
@@ -8244,7 +8244,7 @@ __metadata:
       optional: true
     react-router-dom:
       optional: true
-  checksum: 10c0/1de53ba6cca7af326b17cd6c92501c6cfcd0abbe7e399319b228b07644b24e57bf3bba63fbf1cabaa27f77e40bcf15d5a3792e7767c800161903ef2e09b3ad85
+  checksum: 10c0/a2f60cf57dbfdff68e9313876ac42ce3ba6240e72a79b3d5baf4fa1c84f2bb61945c937f66128555f6da45c7947dc5bfe6c62bf8ecd35159bb96b5c0edeea984
   languageName: node
   linkType: hard
 
@@ -9353,7 +9353,7 @@ __metadata:
     mantine-form-zod-resolver: "npm:^1.3.0"
     mermaid: "npm:^11.15.0"
     nanoid: "npm:^5.1.5"
-    nuqs: "npm:^2.4.3"
+    nuqs: "npm:^2.9.0"
     prettier: "npm:^3.9.4"
     prettier-plugin-packagejson: "npm:^3.0.0"
     react: "npm:^19.2.7"
