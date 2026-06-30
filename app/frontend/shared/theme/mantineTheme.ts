@@ -1,21 +1,22 @@
 import { Card, Input, createTheme, type CSSVariablesResolver, type MantineColorsTuple } from '@mantine/core';
 
 /**
- * Brand accent — Aixle orange (#E0582E). Single accent, used with intent.
+ * Brand accent — Aixle terracotta (#CF6B4A) — a desaturated tone of the brand orange (#E0582E),
+ * calmer in dense UI. Single accent, used with intent.
  * Ramp goes light → dark; base brand orange sits at shade 6, the brighter
  * hover tone at shade 5, the darker press tone at shade 7.
  */
 const brand: MantineColorsTuple = [
-  '#fdeee8', // 0 — lightest tint
-  '#f9d8cc', // 1
-  '#f2b49e', // 2
-  '#ec8f6d', // 3
-  '#e97a50', // 4
-  '#e66339', // 5 — hover (bright, used as dark-scheme primary)
-  '#e0582e', // 6 — base accent (Aixle orange) ← light primaryShade
-  '#c44a24', // 7 — press (darker, accessible on white)
-  '#a23c1d', // 8
-  '#7e2e16', // 9
+  '#f8e8e2', // 0 — lightest tint
+  '#efcec3', // 1
+  '#e3a996', // 2
+  '#dd967e', // 3
+  '#db8f76', // 4
+  '#d78569', // 5 — hover (bright, used as dark-scheme primary)
+  '#cf6b4a', // 6 — base accent (Aixle orange) ← light primaryShade
+  '#b95331', // 7 — press (darker, accessible on white)
+  '#994529', // 8
+  '#793620', // 9
 ];
 
 /**
@@ -116,7 +117,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--app-text-secondary': '#59636e',
     '--app-text-tertiary': '#818b98',
     '--app-action-hover': 'rgba(208,215,222,0.32)',
-    '--app-action-selected': 'rgba(224,88,46,0.12)',
+    '--app-action-selected': 'rgba(207,107,74,0.12)',
 
     /* Mantine internal input/form variables — GitHub light */
     '--mantine-color-text': '#1f2328',
@@ -129,14 +130,14 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--mantine-color-dimmed': '#59636e',
 
     /* brand variants tuned for a light canvas */
-    '--mantine-color-brand-light': 'rgba(224,88,46,0.10)',
-    '--mantine-color-brand-light-hover': 'rgba(224,88,46,0.16)',
-    '--mantine-color-brand-light-color': '#c44a24',
-    '--mantine-color-brand-outline': '#c44a24',
-    '--mantine-color-brand-outline-hover': 'rgba(224,88,46,0.06)',
+    '--mantine-color-brand-light': 'rgba(207,107,74,0.10)',
+    '--mantine-color-brand-light-hover': 'rgba(207,107,74,0.16)',
+    '--mantine-color-brand-light-color': '#b95331',
+    '--mantine-color-brand-outline': '#b95331',
+    '--mantine-color-brand-outline-hover': 'rgba(207,107,74,0.06)',
     '--mantine-color-brand-subtle': 'transparent',
-    '--mantine-color-brand-subtle-hover': 'rgba(224,88,46,0.10)',
-    '--mantine-color-brand-subtle-color': '#c44a24',
+    '--mantine-color-brand-subtle-hover': 'rgba(207,107,74,0.10)',
+    '--mantine-color-brand-subtle-color': '#b95331',
   },
 
   dark: {
@@ -152,7 +153,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--app-text-secondary': '#9f9d9c',
     '--app-text-tertiary': '#7f7e7c',
     '--app-action-hover': 'rgba(209,207,205,0.05)',
-    '--app-action-selected': 'rgba(224,88,46,0.12)',
+    '--app-action-selected': 'rgba(207,107,74,0.12)',
 
     /* Mantine internal input/form variables */
     '--mantine-color-text': '#d1cfcd',
@@ -166,9 +167,9 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     /* Brighter icon color for Select/Input right-section chevrons */
     '--mantine-color-dimmed': '#9f9d9c',
     /* Fix "light" variant — Mantine's dark-scheme auto-generated tints are near-invisible */
-    '--mantine-color-brand-light': 'rgba(224,88,46,0.15)',
-    '--mantine-color-brand-light-hover': 'rgba(224,88,46,0.22)',
-    '--mantine-color-brand-light-color': '#e0582e',
+    '--mantine-color-brand-light': 'rgba(207,107,74,0.15)',
+    '--mantine-color-brand-light-hover': 'rgba(207,107,74,0.22)',
+    '--mantine-color-brand-light-color': '#cf6b4a',
     '--mantine-color-red-light': 'rgba(255,100,100,0.15)',
     '--mantine-color-red-light-hover': 'rgba(255,100,100,0.22)',
     '--mantine-color-red-light-color': '#ff6b6b',
@@ -194,8 +195,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--mantine-color-dark-light-hover': 'rgba(41,39,38,0.70)',
     '--mantine-color-dark-light-color': '#9f9d9c',
     /* Fix "outline" variant — border uses filled color, text matches */
-    '--mantine-color-brand-outline': '#e0582e',
-    '--mantine-color-brand-outline-hover': 'rgba(224,88,46,0.08)',
+    '--mantine-color-brand-outline': '#cf6b4a',
+    '--mantine-color-brand-outline-hover': 'rgba(207,107,74,0.08)',
     '--mantine-color-red-outline': '#ff6b6b',
     '--mantine-color-red-outline-hover': 'rgba(255,100,100,0.08)',
     '--mantine-color-green-outline': '#52c478',
@@ -214,8 +215,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
     '--mantine-color-cyan-outline-hover': 'rgba(102,217,232,0.08)',
     /* Fix "subtle" variant — no bg by default, hover shows tint, text = accent color */
     '--mantine-color-brand-subtle': 'transparent',
-    '--mantine-color-brand-subtle-hover': 'rgba(224,88,46,0.10)',
-    '--mantine-color-brand-subtle-color': '#e0582e',
+    '--mantine-color-brand-subtle-hover': 'rgba(207,107,74,0.10)',
+    '--mantine-color-brand-subtle-color': '#cf6b4a',
     '--mantine-color-red-subtle': 'transparent',
     '--mantine-color-red-subtle-hover': 'rgba(255,100,100,0.10)',
     '--mantine-color-red-subtle-color': '#ff6b6b',
