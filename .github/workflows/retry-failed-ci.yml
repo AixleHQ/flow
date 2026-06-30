@@ -1,0 +1,70 @@
+name: Retry failed CI
+
+# Auto-retry transient CI failures once.
+#
+# Observed symptom: jobs (most often "Build Web") die mid-step with
+# "The operation was canceled." — the self-hosted/ARC runner is lost or the
+# build is killed mid bundle-install. These surface as conclusion == 'failure'
+# (across the last 100 runs we saw 0 'cancelled' / 0 'timed_out', only
+# 'failure'), so a failure-guarded auto-rerun absorbs them.
+#
+# How it works: when a watched workflow finishes as 'failure', re-run ONLY its
+# failed jobs (and their dependents) via `gh run rerun --failed`. This reuses
+# the same run id and bumps run_attempt, so a successful retry lets downstream
+# jobs (db-migrate / deploy) proceed normally and never double-deploys.
+#
+# NOTE: this file must live on the DEFAULT branch (develop) — workflow_run only
+# triggers from the default branch's copy. It will not fire from feature/PR
+# branches, but it watches runs from every branch.
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy aixle domains
+      - Build Extra Images
+    types:
+      - completed
+
+permissions:
+  actions: write # required for `gh run rerun` (GITHUB_TOKEN Actions: write)
+  contents: read
+
+# One retry job per source run; never cancel an in-flight retry.
+concurrency:
+  group: retry-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  rerun-failed:
+    name: Re-run failed jobs
+    # Pure gh-CLI job: pin a GitHub-hosted runner so the retry path does NOT
+    # depend on the (possibly unhealthy) self-hosted runner pool whose failures
+    # it is meant to absorb. Do not use vars.CI_RUNNER here.
+    runs-on: ubuntu-latest
+    # run_attempt is 1 on the first run, so '< 2' => exactly one rerun
+    # (two attempts total); the rerun's own completed event (attempt 2) is not
+    # retried again, so there is no infinite loop.
+    #
+    # Guard on 'failure' only. We deliberately do NOT retry 'cancelled':
+    # concurrency-superseded runs (stale commits) and manual cancellations both
+    # report 'cancelled', and re-running those would be wrong. Genuine
+    # job timeouts also report 'cancelled' — if those ever become the flaky
+    # case, fix the timeout/hang rather than broadening this guard.
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 2
+    steps:
+      - name: Re-run failed jobs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          SOURCE_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          echo "Re-running failed jobs for run ${RUN_ID} (attempt ${ATTEMPT})"
+          echo "Source: ${SOURCE_URL}"
+          # Don't fail this workflow if the rerun is rejected (run older than
+          # 30 days, or the 50-rerun-per-run cap reached).
+          gh run rerun "$RUN_ID" --failed \
+            || echo "::warning::gh run rerun was rejected (run too old or rerun cap reached)"

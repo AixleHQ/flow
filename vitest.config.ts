@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs';
+
 import reactSwc from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vitest/config';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -6,11 +8,16 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 // which assume a live Rails/Inertia context and break under Vitest (vitest#436).
 // Keeps tsconfig path aliases (shared/ui, layouts/*, @/types/generated, test/*) and JSX.
 
-// CI runners (2–4 vCPU) run these jsdom + userEvent tests ~6–10× slower than a dev machine —
+// CI runners (2–4 vCPU) run these jsdom + userEvent tests ~6–10× slower than bare metal —
 // with coverage on, the heaviest form-interaction tests (~0.8s locally) brush the default 5s
-// ceiling and flake. Give CI generous headroom and retry the occasional contention-driven
-// timeout. Locally we keep the tight 5s ceiling and no retries so real hangs surface fast.
-const isCI = !!process.env.CI;
+// ceiling and flake. Give slow runners generous headroom and retry the occasional contention-driven
+// timeout. This app's tests ALWAYS run inside the web container (the host has no node_modules that
+// works — the bind-mounted native bindings are Linux), and Docker-on-Mac is CPU-throttled just like
+// CI — so "in a container" is itself a slow-runner signal, not just CI. Without this, a local
+// `docker compose exec web yarn test` got the tight 5s/no-retry budget and the heavy form tests
+// timed out (e.g. McpServerFormModal stdio/header submits). Only a true bare-metal host run (no
+// /.dockerenv, no CI) keeps the tight ceiling so genuine hangs still surface fast there.
+const isSlowRunner = !!process.env.CI || existsSync('/.dockerenv');
 
 export default defineConfig({
   plugins: [tsconfigPaths(), reactSwc()],
@@ -20,9 +27,9 @@ export default defineConfig({
     setupFiles: ['./app/frontend/test/setup.ts'],
     css: false, // assert behavior/roles, not pixels
     clearMocks: true, // reset spy call history between tests, keep implementations
-    testTimeout: isCI ? 20000 : 5000,
-    hookTimeout: isCI ? 20000 : 10000,
-    retry: isCI ? 2 : 0,
+    testTimeout: isSlowRunner ? 20000 : 5000,
+    hookTimeout: isSlowRunner ? 20000 : 10000,
+    retry: isSlowRunner ? 2 : 0,
     include: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['node_modules/**', 'test/playwright/**'],
     coverage: {

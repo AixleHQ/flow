@@ -76,6 +76,40 @@ vi.mock('@rails/actioncable', () => ({
   }),
 }));
 
+// Uppy + its AwsS3 plugin are the asset-upload seam (AssetsContent presigns to S3). The real
+// @uppy/core constructor unconditionally schedules `setTimeout(updateOnlineStatus, 3000)` and
+// attaches permanent window 'online'/'offline' listeners that read `window.navigator`. In a worker
+// that runs file after file, that 3s timer fires *after* the test's jsdom realm is disposed and
+// throws "ReferenceError: window is not defined" as an unhandled error that fails the whole run —
+// and only in full runs (>3s), never in isolation (<3s), so it reads as flaky. destroy() removes
+// the listeners but cannot cancel the unstored timer. No test drives an actual upload (they assert
+// the modal/list UI only), so stub Uppy inert: chainable instance, no timers, no window access.
+vi.mock('@uppy/core', () => {
+  class UppyMock {
+    use() {
+      return this;
+    }
+    on() {
+      return this;
+    }
+    off() {
+      return this;
+    }
+    addFile() {
+      return 'mock-file-id';
+    }
+    upload() {
+      return Promise.resolve({ successful: [], failed: [] });
+    }
+    cancelAll() {}
+    destroy() {}
+    close() {}
+  }
+  return { default: UppyMock };
+});
+
+vi.mock('@uppy/aws-s3', () => ({ default: class AwsS3Mock {} }));
+
 vi.mock('@inertiajs/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@inertiajs/react')>();
   const { inertiaState, resolveForm } = await import('./inertiaMock');
