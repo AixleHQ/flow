@@ -21,20 +21,24 @@ Rails.application.config.after_initialize do
 
   # Patch Tools module for dynamic tool resolution
   ActionMCP::Server::Tools.module_eval do
-    # Override tools/list to return session-specific tools
+    MANAGED_NAMESPACE_PREFIX = "mcp__"
+    MANAGED_NAMESPACE_SEPARATOR = "__"
+
+    # Override tools/list to return session-specific tools.
+    #
+    # Managed MCP servers (e.g. Coder) re-expose the underlying Tool records
+    # with a `mcp__<server-name>__<tool>` namespace so that multiple
+    # integrations in the same scope surface independently to the agent.
     def send_tools_list(request_id, params = {})
       session = current_terminal_session!(request_id)
       return unless session
 
-      tools = session.available_tools.map do |tool|
-        schema = tool.input_schema.presence || { "type" => "object", "properties" => {}, "required" => [] }
-        schema = schema.deep_stringify_keys if schema.respond_to?(:deep_stringify_keys)
+      tools = session.available_tools.map { |tool| serialize_tool(tool) }
 
-        {
-          "name" => tool.name,
-          "description" => tool.description || tool.display_name,
-          "inputSchema" => schema
-        }
+      session.mcp_servers.where(kind: "managed", enabled: true).each do |server|
+        managed_tools_for(server).each do |tool|
+          tools << serialize_tool(tool, namespace: server.name)
+        end
       end
 
       send_jsonrpc_response(request_id, result: { tools: tools })
@@ -45,7 +49,19 @@ Rails.application.config.after_initialize do
       session = current_terminal_session!(request_id)
       return unless session
 
-      tool = session.available_tools.detect { |t| t.name == tool_name }
+      mcp_server   = nil
+      resolved_name = tool_name
+
+      if (parsed = parse_managed_namespace(tool_name))
+        server_name, resolved_name = parsed
+        mcp_server = session.mcp_servers.where(kind: "managed", enabled: true).find_by(name: server_name)
+        unless mcp_server
+          send_jsonrpc_error(request_id, :method_not_found, "Managed MCP server '#{server_name}' not bound to this session")
+          return
+        end
+      end
+
+      tool = resolve_tool_for_call(session, resolved_name, mcp_server)
 
       unless tool
         send_jsonrpc_error(request_id, :method_not_found, "Tool '#{tool_name}' not available")
@@ -53,13 +69,57 @@ Rails.application.config.after_initialize do
       end
 
       begin
-        result = execute_tool(tool, arguments, session)
+        result = execute_tool(tool, arguments, session, mcp_server: mcp_server)
         content = build_response_content(result)
         send_jsonrpc_response(request_id, result: { content: content })
       rescue StandardError => e
         Rails.logger.error("[MCP] Tool execution failed: #{e.message}")
         send_jsonrpc_error(request_id, :internal_error, "Tool execution failed: #{e.message}")
       end
+    end
+
+    def serialize_tool(tool, namespace: nil)
+      schema = tool.input_schema.presence || { "type" => "object", "properties" => {}, "required" => [] }
+      schema = schema.deep_stringify_keys if schema.respond_to?(:deep_stringify_keys)
+      name   = namespace.present? ? "mcp__#{namespace}__#{tool.name}" : tool.name
+
+      {
+        "name" => name,
+        "description" => tool.description || tool.display_name,
+        "inputSchema" => schema
+      }
+    end
+
+    def resolve_tool_for_call(session, base_name, mcp_server)
+      if mcp_server&.managed?
+        names = Integrations::ManagedMCPToolRegistry.tool_names_for(mcp_server.integration&.provider)
+        return nil unless names.include?(base_name)
+        Tool.system_tools.enabled.not_deleted.find_by(name: base_name)
+      else
+        session.available_tools.detect { |t| t.name == base_name }
+      end
+    end
+
+    # Parse a tool name of the form `mcp__<server-name>__<tool-name>` into a
+    # [server_name, tool_name] pair. Splits on the first `__` after the
+    # `mcp__` prefix so server names containing dashes work; tool names
+    # containing underscores also work. Returns nil if the name does not
+    # match the managed-namespace shape.
+    def parse_managed_namespace(name)
+      return nil unless name.is_a?(String) && name.start_with?(MANAGED_NAMESPACE_PREFIX)
+
+      rest = name.delete_prefix(MANAGED_NAMESPACE_PREFIX)
+      idx  = rest.index(MANAGED_NAMESPACE_SEPARATOR)
+      return nil unless idx
+
+      [ rest[0...idx], rest[(idx + MANAGED_NAMESPACE_SEPARATOR.length)..] ]
+    end
+
+    def managed_tools_for(server)
+      names = Integrations::ManagedMCPToolRegistry.tool_names_for(server.integration&.provider)
+      return [] if names.empty?
+
+      Tool.system_tools.enabled.not_deleted.where(name: names).to_a
     end
 
     private
@@ -73,14 +133,15 @@ Rails.application.config.after_initialize do
       nil
     end
 
-    def execute_tool(tool, arguments, session)
+    def execute_tool(tool, arguments, session, mcp_server: nil)
       params = resolve_repository_params(arguments || {}, session)
 
       if tool.execution_mode.app?
         tool.execute(
           parameters: params,
           project: session.project,
-          session: session
+          session: session,
+          mcp_server: mcp_server
         )
       else
         tool_result = ToolResult.create!(

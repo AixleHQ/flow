@@ -329,7 +329,7 @@ describe('IntegrationsContent', () => {
       return screen.findByRole('dialog', { name: /Connect Coder/i });
     };
 
-    it('keeps Connect disabled and shows a validation error for a non-https URL', async () => {
+    it('keeps Connect disabled and shows a validation error for a non-http(s) URL', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
@@ -338,13 +338,36 @@ describe('IntegrationsContent', () => {
       const dialog = await openCoderModal();
       await userEvent.type(
         within(dialog).getByPlaceholderText('https://coder.example.com'),
-        'http://insecure.example.com',
+        'ftp://insecure.example.com',
       );
       await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'tok-123');
 
-      expect(within(dialog).getByText('Must be a valid https URL')).toBeInTheDocument();
+      expect(within(dialog).getByText('Must be a valid http or https URL')).toBeInTheDocument();
       expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
       expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it('allows an http coder URL', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'http://coder.acme.dev');
+      await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/integrations',
+        expect.objectContaining({
+          provider: 'coder',
+          coderUrl: 'http://coder.acme.dev',
+          sessionToken: 'session-token-xyz',
+        }),
+        expect.any(Object),
+      );
     });
 
     it('posts the coder payload with advanced fields when the form is valid', async () => {

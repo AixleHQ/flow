@@ -568,6 +568,77 @@ module Seeds
     ].freeze
     end
 
+    unless const_defined?(:CODER_SYSTEM_TOOLS, false)
+    # Coder MCP tools (kind: :system): bind explicitly to a workflow step via
+    # the managed MCP server spawned by a Coder integration. Dispatch happens
+    # in the Rails process (execution_mode: :app); the integration token
+    # never crosses the MCP boundary.
+    CODER_SYSTEM_TOOLS = [
+      {
+        name: "coder_allocate_machine",
+        display_name: "Coder: Allocate Machine",
+        description: "Allocate a Coder workspace for the current terminal session. Picks an available " \
+                     "workspace from the integration's pool (or creates one if a default " \
+                     "template is configured), locks it to the current terminal session, and " \
+                     "returns the workspace identity (name, id, ssh command, lock expiry).",
+        input_schema: {
+          type: "object",
+          properties: {
+            note: {
+              type: "string",
+              description: "Optional free-form note recorded on the workspace lock " \
+                           "(audit / debug aid). Do NOT include the task id or task link — " \
+                           "task context is derived server-side."
+            }
+          },
+          required: []
+        }
+      },
+      {
+        name: "coder_ssh_exec",
+        display_name: "Coder: Run Command (SSH)",
+        description: "Run a shell command on a Coder workspace previously allocated by this " \
+                     "step. Returns the exit code, stdout, stderr, and a `truncated` marker " \
+                     "if the response exceeded the inline budget.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workspace_name: {
+              type: "string",
+              description: "Workspace name returned by coder_allocate_machine."
+            },
+            command: {
+              type: "string",
+              description: "Shell command to execute (run via sh -c)."
+            },
+            timeout_seconds: {
+              type: "integer",
+              description: "Per-call timeout in seconds. Default 60, max 600."
+            }
+          },
+          required: %w[workspace_name command]
+        }
+      },
+      {
+        name: "coder_release_machine",
+        display_name: "Coder: Release Machine",
+        description: "Release the Coder workspace lock for the given workspace. Idempotent — " \
+                     "returns success whether or not a lock was held. The step's teardown also " \
+                     "auto-releases any locks held by this session.",
+        input_schema: {
+          type: "object",
+          properties: {
+            workspace_name: {
+              type: "string",
+              description: "Workspace name returned by coder_allocate_machine."
+            }
+          },
+          required: %w[workspace_name]
+        }
+      }
+    ].freeze
+    end
+
     def self.seed!
       puts "Creating platform tools..." unless Rails.env.test?
 
@@ -694,6 +765,19 @@ module Seeds
         },
         execution_mode: :app
       )
+
+      # -- Coder MCP tools (system): bind explicitly to a workflow step via the
+      # managed MCP server spawned by a Coder integration. Dispatch happens in
+      # the Rails process (execution_mode: :app); the integration token never
+      # crosses the MCP boundary.
+      CODER_SYSTEM_TOOLS.each do |attrs|
+        Tool.find_or_initialize_by(name: attrs[:name], kind: :system).update!(
+          display_name: attrs[:display_name],
+          description: attrs[:description],
+          input_schema: attrs[:input_schema],
+          execution_mode: :app
+        )
+      end
     end
   end
 end

@@ -99,10 +99,10 @@ class Tool < ApplicationRecord
   # Routes based on execution_mode:
   # - app       → InternalToolExecutor (Ruby handler, synchronous)
   # - container → Temporal start_workflow (Docker container, async)
-  def execute(parameters: {}, project: nil, session: nil, timeout: 300, tool_result_id: nil)
+  def execute(parameters: {}, project: nil, session: nil, timeout: 300, tool_result_id: nil, mcp_server: nil)
     case execution_mode.to_sym
     when :app
-      InternalToolExecutor.execute(self, parameters, session)
+      InternalToolExecutor.execute(self, parameters, session, mcp_server: mcp_server)
     when :container
       start_container_execution(
         parameters: parameters, project: project,

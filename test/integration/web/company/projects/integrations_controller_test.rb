@@ -91,4 +91,26 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal "error", integration.status.to_s
     assert_response :redirect
   end
+
+  test "create coder integration allows http URL" do
+    stub_request(:get, "http://coder.example.com/api/v2/users/me").to_return(
+      status: 200,
+      body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
+      headers: { "Content-Type" => "application/json" }
+    )
+
+    assert_difference("Integration.count", 1) do
+      post company_project_integrations_path(@project), params: {
+        provider: "coder",
+        coderUrl: "http://coder.example.com",
+        sessionToken: "tok-1",
+        lockTtlMinutes: "60"
+      }
+    end
+
+    integration = Integration.last
+    assert_equal "active", integration.status.to_s
+    assert_equal "http://coder.example.com", integration.credentials_data["coder_url"]
+    assert_response :redirect
+  end
 end

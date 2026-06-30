@@ -9,11 +9,14 @@ class InternalToolExecutor
     # @param tool [Tool] internal tool record
     # @param params [Hash] tool call parameters
     # @param session [TerminalSession] current session
+    # @param mcp_server [MCPServer, nil] originating MCP server (managed/internal),
+    #   when the tool was routed through one. Used by handlers that need to
+    #   resolve a per-integration context (e.g. Coder MCP tools).
     # @return [Hash] { exit_code:, stdout:, stderr: }
-    def execute(tool, params, session)
+    def execute(tool, params, session, mcp_server: nil)
       validate_params!(tool, params)
       handler_class = resolve_handler(tool)
-      handler = handler_class.new(params: params || {}, session: session)
+      handler = handler_class.new(params: params || {}, session: session, mcp_server: mcp_server)
       handler.execute
     rescue InternalTools::WorkflowContextError => e
       { exit_code: 1, stdout: "", stderr: e.message }

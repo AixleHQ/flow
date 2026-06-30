@@ -28,6 +28,17 @@ class Seeds::PlatformToolsTest < ActiveSupport::TestCase
     end
   end
 
+  test "seed creates the three Coder MCP system tools" do
+    Seeds::PlatformTools.seed!
+
+    %w[coder_allocate_machine coder_ssh_exec coder_release_machine].each do |tool_name|
+      tool = Tool.find_by(name: tool_name)
+      assert_not_nil tool, "expected #{tool_name} to be seeded"
+      assert_equal "system", tool.kind.to_s
+      assert_equal "app", tool.execution_mode.to_s
+    end
+  end
+
   test "board_add_comment tool description mentions markdown support" do
     Seeds::PlatformTools.seed!
 

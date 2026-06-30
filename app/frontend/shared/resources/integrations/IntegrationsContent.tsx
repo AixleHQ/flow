@@ -34,7 +34,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
-import { isValidHttpsUrl } from 'shared/lib/urlValidation';
+import { isValidHttpUrl } from 'shared/lib/urlValidation';
 
 export interface Integration {
   id: number;
@@ -149,6 +149,11 @@ const IntegrationCard = ({
                 )}
               </CopyButton>
             </Group>
+          )}
+          {integration.provider === 'coder' && integration.coderUrl && (
+            <Text size="xs" c="dimmed" mt={2}>
+              {integration.coderUrl}
+            </Text>
           )}
         </Box>
       </Group>
@@ -295,8 +300,8 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     const trimmedUrl = coderUrl.trim();
     const trimmedToken = coderToken.trim();
     if (!trimmedUrl || !trimmedToken) return;
-    if (!isValidHttpsUrl(trimmedUrl)) {
-      setCoderError('Coder URL must be a valid https URL');
+    if (!isValidHttpUrl(trimmedUrl)) {
+      setCoderError('Coder URL must be a valid http or https URL');
       return;
     }
 
@@ -509,7 +514,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             placeholder="https://coder.example.com"
             value={coderUrl}
             onChange={(e) => setCoderUrl(e.currentTarget.value)}
-            error={coderUrl.trim() && !isValidHttpsUrl(coderUrl) ? 'Must be a valid https URL' : undefined}
+            error={coderUrl.trim() && !isValidHttpUrl(coderUrl) ? 'Must be a valid http or https URL' : undefined}
             autoFocus
             required
           />
@@ -572,7 +577,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               disabled={
                 !coderUrl.trim() ||
                 !coderToken.trim() ||
-                !isValidHttpsUrl(coderUrl) ||
+                !isValidHttpUrl(coderUrl) ||
                 !(typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0)
               }
             >
