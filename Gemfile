@@ -141,7 +141,7 @@ group :test do
   gem "capybara", ">= 3"
 end
 
-gem "shrine", "~> 3.6"
+gem "shrine", "~> 3.8"
 gem "aws-sdk-s3", "~> 1.226"
 gem "image_processing", "~> 1.14"
 
