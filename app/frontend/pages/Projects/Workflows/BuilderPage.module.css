@@ -11,13 +11,13 @@
   min-width: 300px;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--mantine-color-dark-4);
-  background-color: var(--mantine-color-dark-7);
+  border-right: 1px solid var(--app-border-default);
+  background-color: var(--app-bg-paper);
 }
 
 .sidebarHeader {
   padding: 16px;
-  border-bottom: 1px solid var(--mantine-color-dark-4);
+  border-bottom: 1px solid var(--app-border-default);
   flex-shrink: 0;
 }
 
@@ -30,13 +30,13 @@
 
 .sidebarFooter {
   padding: 8px;
-  border-top: 1px solid var(--mantine-color-dark-4);
+  border-top: 1px solid var(--app-border-default);
   flex-shrink: 0;
 }
 
 .sidebarBase {
   padding: 8px;
-  border-top: 1px solid var(--mantine-color-dark-4);
+  border-top: 1px solid var(--app-border-default);
   flex-shrink: 0;
   overflow-y: auto;
   max-height: 40%;
@@ -52,12 +52,12 @@
 }
 
 .stepCard:hover {
-  background-color: var(--mantine-color-dark-5);
+  background-color: var(--app-bg-elevated);
 }
 
 .stepCardSelected {
-  background-color: var(--mantine-color-dark-5);
-  border-left-color: var(--mantine-color-blue-6);
+  background-color: var(--app-bg-elevated);
+  border-left-color: var(--mantine-color-brand-6);
 }
 
 .mainArea {
@@ -70,7 +70,7 @@
 
 .mainHeader {
   padding: 16px 24px;
-  border-bottom: 1px solid var(--mantine-color-dark-4);
+  border-bottom: 1px solid var(--app-border-default);
   flex-shrink: 0;
 }
 

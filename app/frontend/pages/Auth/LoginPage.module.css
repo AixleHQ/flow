@@ -7,12 +7,12 @@
 }
 
 .brandFlow {
-  font-family: 'Sora', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-weight: 700;
   font-size: 26px;
   line-height: 1;
   letter-spacing: -0.01em;
-  color: var(--app-text-primary, var(--mantine-color-gray-1));
+  color: var(--app-text-primary);
 }
 
 /* ── Card ───────────────────────────────────────── */
@@ -29,8 +29,8 @@
 }
 
 .formCard {
-  background-color: var(--mantine-color-dark-7);
-  border: 1px solid var(--mantine-color-dark-4);
+  background-color: var(--app-bg-paper);
+  border: 1px solid var(--app-border-default);
   animation: fadeSlideUp 0.3s ease-out both;
 }
 
@@ -49,45 +49,45 @@
 /* ── Labels & Text ──────────────────────────────── */
 
 .label {
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
 }
 
 .subtitle {
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
 }
 
 /* ── Inputs ─────────────────────────────────────── */
 
 .input {
-  background-color: var(--mantine-color-dark-8);
-  border-color: var(--mantine-color-dark-4);
-  color: var(--mantine-color-gray-1);
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  background-color: var(--app-bg-default);
+  border-color: var(--app-border-default);
+  color: var(--app-text-primary);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
   font-size: 14px;
   padding: 12px 16px;
   height: auto;
 }
 
 .input::placeholder {
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
 }
 
 .input:focus {
-  border-color: var(--mantine-color-blue-5);
+  border-color: var(--mantine-color-brand-5);
 }
 
 .visibilityToggle {
-  color: var(--mantine-color-dark-2);
+  color: var(--app-text-tertiary);
 }
 
 .visibilityToggle:hover {
-  color: var(--mantine-color-gray-3);
+  color: var(--app-text-secondary);
 }
 
 /* ── Submit ─────────────────────────────────────── */
 
 .submitButton {
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
   font-size: 14px;
   font-weight: 500;
 }
@@ -95,16 +95,16 @@
 /* ── Google Button ──────────────────────────────── */
 
 .googleButton {
-  background-color: var(--mantine-color-dark-6);
-  color: var(--mantine-color-gray-1);
-  border-color: var(--mantine-color-dark-4);
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  background-color: var(--app-bg-elevated);
+  color: var(--app-text-primary);
+  border-color: var(--app-border-default);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
   font-size: 14px;
   font-weight: 500;
   transition: background-color 150ms ease, border-color 150ms ease;
 }
 
 .googleButton:hover {
-  background-color: var(--mantine-color-dark-5);
-  border-color: var(--mantine-color-dark-3);
+  background-color: var(--app-bg-elevated);
+  border-color: var(--app-border-strong);
 }

@@ -14,7 +14,7 @@
   min-height: 0;
   padding: 16px;
   align-items: stretch;
-  background-color: var(--mantine-color-dark-7);
+  background-color: var(--app-bg-paper);
   border-radius: 12px;
 }
 
@@ -38,7 +38,7 @@
 }
 
 .commentMd code {
-  background-color: var(--mantine-color-dark-5);
+  background-color: var(--app-bg-elevated);
   padding: 1px 4px;
   border-radius: 3px;
   font-size: 12px;
@@ -46,7 +46,7 @@
 }
 
 .commentMd pre {
-  background-color: var(--mantine-color-dark-5);
+  background-color: var(--app-bg-elevated);
   padding: 8px 12px;
   border-radius: 6px;
   overflow: auto;
@@ -75,12 +75,12 @@
 }
 
 .commentMd a {
-  color: var(--mantine-color-blue-5);
+  color: var(--mantine-color-brand-5);
   text-decoration: underline;
 }
 
 .commentMd blockquote {
-  border-left: 3px solid var(--mantine-color-dark-4);
+  border-left: 3px solid var(--app-border-default);
   padding-left: 8px;
   margin: 4px 0;
   color: var(--mantine-color-dimmed);
@@ -95,13 +95,13 @@
 
 .commentMd th,
 .commentMd td {
-  border: 1px solid var(--mantine-color-dark-4);
+  border: 1px solid var(--app-border-default);
   padding: 4px 8px;
   font-size: 12px;
 }
 
 .commentMd th {
-  background-color: var(--mantine-color-dark-5);
+  background-color: var(--app-bg-elevated);
   font-weight: 600;
 }
 
@@ -115,7 +115,7 @@
 }
 
 .childTaskRow:hover {
-  background-color: var(--mantine-color-dark-5);
+  background-color: var(--app-bg-elevated);
 }
 
 :global(@keyframes priorityBarPulse) {

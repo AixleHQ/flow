@@ -82,11 +82,11 @@
 }
 
 .stepItem:hover {
-  background: var(--mantine-color-dark-5);
+  background: var(--app-bg-elevated);
 }
 
 .stepItemActive {
-  background: var(--mantine-color-dark-5);
+  background: var(--app-bg-elevated);
 }
 
 /* ── DAG Wave Connectors ───────────────────────── */
@@ -180,12 +180,12 @@
 }
 
 .parallelTab:hover {
-  background: var(--mantine-color-dark-5);
+  background: var(--app-bg-elevated);
 }
 
 .parallelTabActive {
   background: var(--app-bg-paper);
-  border-bottom-color: var(--mantine-color-blue-5);
+  border-bottom-color: var(--mantine-color-brand-5);
 }
 
 /* ── Step Info Bar ─────────────────────────────── */
@@ -258,7 +258,7 @@
 }
 
 .assetCard:hover {
-  border-color: var(--mantine-color-blue-6);
+  border-color: var(--mantine-color-brand-6);
 }
 
 /* ── Status Bar ────────────────────────────────── */
@@ -292,7 +292,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--mantine-color-blue-5);
+  background: var(--mantine-color-brand-5);
   animation: liveBlink 1.5s ease-in-out infinite;
   flex-shrink: 0;
 }

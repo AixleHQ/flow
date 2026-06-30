@@ -762,7 +762,7 @@ const BuilderPage = () => {
           color="blue"
           mb={0}
           radius={0}
-          style={{ margin: '-24px -32px 0', borderBottom: '1px solid var(--mantine-color-dark-4)' }}
+          style={{ margin: '-24px -32px 0', borderBottom: '1px solid var(--app-border-default)' }}
         >
           This is a company-level workflow. Copy it to your project to customize.
         </Alert>

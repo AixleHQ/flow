@@ -121,7 +121,7 @@ export const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
                 flexShrink: 0,
               }}
             />
-            <Text fz={18} fw={600} c="white" lh={1.4} truncate style={{ flex: 1, minWidth: 0 }}>
+            <Text fz={18} fw={600} c="var(--app-text-primary)" lh={1.4} truncate style={{ flex: 1, minWidth: 0 }}>
               {project.name}
             </Text>
           </Group>

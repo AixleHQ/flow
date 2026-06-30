@@ -69,7 +69,7 @@
 /* ── Subtitle text ─────────────────────────── */
 
 .subtitle {
-  font-family: var(--app-font-body, 'Inter', sans-serif);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
 }
 
 /* ── Confetti (Step 4) ────────────────────── */

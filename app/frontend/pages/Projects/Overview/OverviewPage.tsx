@@ -117,9 +117,9 @@ const s: Record<string, CSSProperties> = {
   },
   statCard: {
     padding: 20,
-    backgroundColor: 'var(--mantine-color-dark-7)',
+    backgroundColor: 'var(--app-bg-paper)',
     borderRadius: 12,
-    border: '1px solid var(--mantine-color-dark-4)',
+    border: '1px solid var(--app-border-default)',
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
@@ -149,16 +149,16 @@ const s: Record<string, CSSProperties> = {
   },
   card: {
     padding: 24,
-    backgroundColor: 'var(--mantine-color-dark-7)',
+    backgroundColor: 'var(--app-bg-paper)',
     borderRadius: 12,
-    border: '1px solid var(--mantine-color-dark-4)',
+    border: '1px solid var(--app-border-default)',
   },
   activityItem: {
     display: 'flex',
     alignItems: 'flex-start',
     gap: 12,
     padding: '10px 0',
-    borderBottom: '1px solid var(--mantine-color-dark-4)',
+    borderBottom: '1px solid var(--app-border-default)',
   },
   activityItemLast: {
     display: 'flex',
@@ -203,9 +203,9 @@ const s: Record<string, CSSProperties> = {
   },
   boardGrid: {
     padding: 24,
-    backgroundColor: 'var(--mantine-color-dark-7)',
+    backgroundColor: 'var(--app-bg-paper)',
     borderRadius: 12,
-    border: '1px solid var(--mantine-color-dark-4)',
+    border: '1px solid var(--app-border-default)',
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
     gap: 16,
@@ -214,7 +214,7 @@ const s: Record<string, CSSProperties> = {
     textAlign: 'center',
     padding: 12,
     borderRadius: 8,
-    backgroundColor: 'var(--mantine-color-dark-6)',
+    backgroundColor: 'var(--app-bg-elevated)',
   },
   boardCellValue: {
     fontSize: 28,
@@ -229,7 +229,7 @@ const s: Record<string, CSSProperties> = {
     textAlign: 'center',
     padding: 12,
     borderRadius: 8,
-    backgroundColor: 'var(--mantine-color-blue-7)',
+    backgroundColor: 'var(--mantine-color-brand-7)',
   },
   boardCellTotalValue: {
     fontSize: 28,

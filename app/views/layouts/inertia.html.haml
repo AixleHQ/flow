@@ -8,9 +8,24 @@
     = csp_meta_tag
     = action_cable_meta_tag
 
+    / Apply the persisted Mantine color scheme before first paint to avoid a flash.
+    / Key + default must match localStorageColorSchemeManager in application.tsx.
+    :javascript
+      (function () {
+        try {
+          var scheme = localStorage.getItem('mantine-color-scheme-value') || 'dark';
+          if (scheme === 'auto') {
+            scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+        } catch (e) {
+          document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
+        }
+      })();
+
     %link{rel: "preconnect", href: "https://fonts.googleapis.com"}/
     %link{rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true}/
-    %link{href: "https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Geist+Mono:wght@400;500;700&display=swap", rel: "stylesheet"}/
+    %link{href: "https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Spline+Sans+Mono:wght@400;500&display=swap", rel: "stylesheet"}/
 
     %link{rel: "icon", href: "/favicon.ico", sizes: "any"}
     %link{rel: "icon", type: "image/svg+xml", href: "/icon.svg"}

@@ -243,13 +243,13 @@ const WorkflowsPage = () => {
         p="md"
         mb="md"
         style={{
-          borderColor: 'var(--mantine-color-blue-6)',
+          borderColor: 'var(--mantine-color-brand-6)',
           backgroundImage: 'linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, rgba(168, 85, 247, 0.04) 100%)',
         }}
       >
         <Group justify="space-between" wrap="nowrap">
           <Group gap="sm" wrap="nowrap">
-            <IconWand size={24} style={{ color: 'var(--mantine-color-blue-5)', flexShrink: 0 }} />
+            <IconWand size={24} style={{ color: 'var(--mantine-color-brand-5)', flexShrink: 0 }} />
             <Box>
               <Text fw={600} size="sm">
                 Aixle Builder
@@ -299,7 +299,7 @@ const WorkflowsPage = () => {
       </Group>
 
       {filtered.length === 0 ? (
-        <Box py={60} ta="center" style={{ border: '1px solid var(--mantine-color-dark-4)', borderRadius: 8 }}>
+        <Box py={60} ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
           <Text size="xl">&#128736;</Text>
           <Text c="dimmed" mt="sm">
             {search ? 'No workflows match your search' : 'No workflows yet'}
@@ -323,7 +323,7 @@ const WorkflowsPage = () => {
                     {wf.name}
                   </Text>
                   {isInherited && (
-                    <Badge size="xs" variant="outline" color="blue">
+                    <Badge size="xs" variant="outline" color="brand">
                       company
                     </Badge>
                   )}

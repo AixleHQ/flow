@@ -245,7 +245,7 @@ function LiveDuration({ startedAt }: { startedAt: string }) {
         : `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
 
   return (
-    <Text size="xs" c="blue" ff="monospace" className={classes.elapsed}>
+    <Text size="xs" c="brand" ff="monospace" className={classes.elapsed}>
       {text}
     </Text>
   );
@@ -648,7 +648,7 @@ const WorkflowRunShowPage = () => {
             <Stack gap="lg">
               {/* Session finished banner */}
               {sessionFinished && selectedStep.terminalSessionId && (
-                <Card withBorder p="sm" bg="var(--mantine-color-dark-6)">
+                <Card withBorder p="sm" bg="var(--app-bg-elevated)">
                   <Group justify="space-between">
                     <Group gap="sm">
                       <IconTerminal2 size={18} style={{ opacity: 0.5 }} />
@@ -939,7 +939,7 @@ const WorkflowRunShowPage = () => {
 
         {/* ── Progress Bar ───────────────────────── */}
         {isActive && run.stepsTotal > 0 && (
-          <Progress value={progressPct} size="xs" color={run.state === 'running' ? 'blue' : 'yellow'} radius={0} />
+          <Progress value={progressPct} size="xs" color={run.state === 'running' ? 'brand' : 'yellow'} radius={0} />
         )}
 
         {/* ── Quota Error Banner ──────────────────── */}
@@ -1007,7 +1007,7 @@ const WorkflowRunShowPage = () => {
                       )}
                       {wave.steps.length > 1 && (
                         <div className={classes.parallelLabel}>
-                          <Badge size="xs" variant="outline" color="blue">
+                          <Badge size="xs" variant="outline" color="brand">
                             {wave.steps.length} parallel
                           </Badge>
                         </div>

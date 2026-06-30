@@ -56,6 +56,7 @@ import {
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
+import { ColorSchemeToggle } from './ColorSchemeToggle';
 import type { SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
@@ -487,6 +488,7 @@ function SidebarContent({
       </ScrollArea>
 
       <div className={`${classes.collapseRow} ${collapsed ? classes.collapseRowCollapsed : ''}`}>
+        <ColorSchemeToggle className={classes.collapseBtn} tooltipPosition={collapsed ? 'right' : 'top'} />
         <UnstyledButton
           onClick={toggleCollapsed}
           className={classes.collapseBtn}

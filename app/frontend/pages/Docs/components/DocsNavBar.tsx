@@ -30,7 +30,7 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
 
       <div className={classes.navbarRight}>
         <button type="button" className={classes.searchTrigger} onClick={onSearchClick} aria-label="Open search">
-          <IconSearch size={13} style={{ color: 'var(--mantine-color-dark-2)' }} />
+          <IconSearch size={13} style={{ color: 'var(--app-text-tertiary)' }} />
           <span className={classes.searchTriggerText}>Search docs...</span>
           <span className={classes.searchKbd}>⌘K</span>
         </button>

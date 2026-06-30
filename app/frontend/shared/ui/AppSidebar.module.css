@@ -80,7 +80,7 @@
 
 .navOverviewActive {
   background: var(--app-action-selected);
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
 }
 
 /* ── Nav items ───────────────────────────────────────────────────────────── */
@@ -109,7 +109,7 @@
 
 .navItemActive {
   background: var(--app-action-selected);
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
 }
 
 .navItemIcon {
@@ -216,7 +216,7 @@
 .swIcoLetter {
   font-size: 14px;
   font-weight: 700;
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
 }
 
 .swText {
@@ -237,7 +237,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--app-text-primary);
-  font-family: Sora, sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -305,7 +305,7 @@
 }
 
 .swSearchInput:focus {
-  border-color: rgba(122, 162, 200, 0.28);
+  border-color: rgba(224, 88, 46, 0.28);
 }
 
 .swSection {
@@ -366,7 +366,7 @@
 .dpIcoLetter {
   font-size: 10px;
   font-weight: 700;
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
 }
 
 .dpName {
@@ -379,7 +379,7 @@
 }
 
 .dpCheck {
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
   flex-shrink: 0;
 }
 
@@ -414,13 +414,15 @@
 .collapseRow {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 4px 10px 8px;
   flex-shrink: 0;
   overflow: hidden;
 }
 
 .collapseRowCollapsed {
+  flex-direction: column;
+  gap: 4px;
   justify-content: center;
   padding: 4px 0 8px;
 }
@@ -481,7 +483,7 @@
   height: 24px;
   border-radius: 50%;
   background: var(--app-action-selected);
-  border: 1px solid var(--mantine-color-accentBlue-4);
+  border: 1px solid var(--mantine-color-brand-4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -495,7 +497,7 @@
 .userAvatarInitials {
   font-size: 14px;
   font-weight: 700;
-  color: var(--mantine-color-accentBlue-5);
+  color: var(--mantine-color-brand-5);
 }
 
 .userName {

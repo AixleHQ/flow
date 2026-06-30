@@ -221,7 +221,7 @@ function AgentAuthTerminal({
           justify="space-between"
           px="sm"
           py="xs"
-          style={{ borderTop: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}
+          style={{ borderTop: '1px solid var(--app-border-default)', flexShrink: 0 }}
         >
           {authDetected && finishError ? (
             <>
@@ -283,7 +283,7 @@ function AuthenticateStep({
   return (
     <Card withBorder p={0} style={{ overflow: 'hidden' }}>
       <Box style={{ display: 'flex', minHeight: 500 }}>
-        <Box w={280} p="md" style={{ borderRight: '1px solid var(--mantine-color-dark-4)', flexShrink: 0 }}>
+        <Box w={280} p="md" style={{ borderRight: '1px solid var(--app-border-default)', flexShrink: 0 }}>
           <Text fw={600} size="lg" mb="xs">
             Authenticate Your Agents
           </Text>
@@ -302,11 +302,11 @@ function AuthenticateStep({
                   onClick={() => setActiveAgent(agentType)}
                   p="sm"
                   style={{
-                    border: `1px solid ${isActive ? 'var(--mantine-color-blue-6)' : 'var(--mantine-color-dark-4)'}`,
+                    border: `1px solid ${isActive ? 'var(--mantine-color-brand-6)' : 'var(--app-border-default)'}`,
                     borderLeft: `4px solid ${AGENT_COLORS[agentType] ?? '#666'}`,
                     borderRadius: 8,
                     cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--mantine-color-dark-5)' : undefined,
+                    backgroundColor: isActive ? 'var(--app-bg-elevated)' : undefined,
                   }}
                 >
                   <Group justify="space-between">
@@ -358,7 +358,7 @@ function AuthenticateStep({
         </Box>
       </Box>
 
-      <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--mantine-color-dark-4)' }}>
+      <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--app-border-default)' }}>
         <Button
           variant="outline"
           size="md"
@@ -549,7 +549,7 @@ const OnboardingPage = () => {
       <Center mb="xl" className={classes.welcomeCard}>
         <Stack align="center" gap={4}>
           {company?.logoUrl && <img src={company.logoUrl} alt={company.name} className={classes.companyLogo} />}
-          <ThemeIcon size="xl" radius="xl" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
+          <ThemeIcon size="xl" radius="xl" variant="gradient" gradient={{ from: 'brand', to: 'orange' }}>
             <IconRocket size={28} />
           </ThemeIcon>
           <Text size="xl" fw={700}>
@@ -633,10 +633,10 @@ const OnboardingPage = () => {
                     className={classes.agentCard}
                     style={{
                       borderLeftColor: AGENT_COLORS[agent.type] ?? '#666',
-                      borderRightColor: selected ? 'var(--mantine-color-blue-6)' : undefined,
-                      borderTopColor: selected ? 'var(--mantine-color-blue-6)' : undefined,
-                      borderBottomColor: selected ? 'var(--mantine-color-blue-6)' : undefined,
-                      backgroundColor: selected ? 'var(--mantine-color-blue-light)' : undefined,
+                      borderRightColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
+                      borderTopColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
+                      borderBottomColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
+                      backgroundColor: selected ? 'var(--mantine-color-brand-light)' : undefined,
                     }}
                     onClick={() => toggleAgent(agent.type)}
                   >
