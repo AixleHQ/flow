@@ -120,6 +120,26 @@ module Coder
       assert_equal "http://coder.example.com", integration.credentials_data["coder_url"]
     end
 
+    test "allows a trusted internal kubernetes service URL for Coder" do
+      stub_request(:get, "http://coder.coder.svc.cluster.local/api/v2/users/me").to_return(
+        status: 200,
+        body: { id: "user-uuid", username: "alice", email: "alice@example.com" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+      Resolv.stubs(:getaddresses).with("coder.coder.svc.cluster.local").returns([ "10.0.0.5" ])
+
+      integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
+        coder_url: "http://coder.coder.svc.cluster.local",
+        session_token: "tok-1",
+        lock_ttl_minutes: 60
+      )
+
+      assert integration.persisted?
+      assert_equal "active", integration.status.to_s
+      assert_equal "http://coder.coder.svc.cluster.local", integration.credentials_data["coder_url"]
+    end
+
     test "sad path: localhost URL rejected before HTTP call" do
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
         coder_url: "https://localhost",

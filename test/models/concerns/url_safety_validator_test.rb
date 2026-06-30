@@ -158,6 +158,15 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
     assert_empty UrlSafetyValidator.errors_for("https://Coder.Staging.Aixle.Com")
   end
 
+  test "trusted_hosts_override allows a private-resolving host for a single call-site" do
+    Resolv.stubs(:getaddresses).with("coder.coder.svc.cluster.local").returns([ "10.0.0.5" ])
+
+    assert_empty UrlSafetyValidator.errors_for(
+      "http://coder.coder.svc.cluster.local",
+      trusted_hosts_override: [ "coder.coder.svc.cluster.local" ]
+    )
+  end
+
   test "trusted hosts allowlist does not bypass literal private IP" do
     UrlSafetyValidator.stubs(:trusted_hosts).returns([ "10.0.0.5" ])
 

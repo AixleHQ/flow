@@ -111,6 +111,10 @@ coder:
   # (template, machine prefix, lock TTL) override these defaults.
   default_template:          <%= ENV['CODER_DEFAULT_TEMPLATE'] || 'aws-ec2-spot-v1' %>
   machine_prefix:            <%= ENV['CODER_MACHINE_PREFIX'] || 'aixle-prod' %>
+  # Internal Coder hosts that are allowed specifically for the Coder
+  # integration create flow. This does not weaken URL validation globally for
+  # other integrations or custom MCP servers.
+  trusted_hosts: <%= (ENV['CODER_TRUSTED_HOSTS'] || 'coder.coder.svc.cluster.local').split(',').map(&:strip).reject(&:empty?) %>
   # Single total-response budget for `coder_ssh_exec` (DD-15). Picked below
   # the MCP transport inline limit (OQ-7). Full output is still available via
   # the existing ToolResult / read_tool_result path.

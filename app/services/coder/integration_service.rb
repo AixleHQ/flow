@@ -21,7 +21,10 @@ module Coder
       normalized_url = normalize_url(coder_url)
       integration = build_integration
 
-      url_errors = UrlSafetyValidator.errors_for(normalized_url)
+      url_errors = UrlSafetyValidator.errors_for(
+        normalized_url,
+        trusted_hosts_override: coder_trusted_hosts
+      )
       if url_errors.any?
         integration.credentials_data = {
           coder_url: normalized_url,
@@ -96,6 +99,11 @@ module Coder
 
     def normalize_url(url)
       url.to_s.strip.chomp("/")
+    end
+
+    def coder_trusted_hosts
+      raw = Settings.coder&.trusted_hosts
+      Array(raw).map(&:to_s)
     end
 
     # Per requester ask on PR #257: distinguish the integration with a "Coder"
