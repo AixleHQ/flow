@@ -10,7 +10,7 @@ RUN apk update && \
 #
 # Downloads the linux amd64 build from the GitHub release tarball. The tarball
 # is small (~50MB) and ships a single `coder` binary plus license/readme files.
-ARG CODER_CLI_VERSION=v2.18.2
+ARG CODER_CLI_VERSION=v2.34.5
 RUN set -eux; \
     curl -fsSL "https://github.com/coder/coder/releases/download/${CODER_CLI_VERSION}/coder_${CODER_CLI_VERSION#v}_linux_amd64.tar.gz" \
         -o /tmp/coder.tar.gz && \
