@@ -324,12 +324,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
   end
 
   create_table "integration_data", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "expires_at"
     t.bigint "integration_id", null: false
     t.string "key", null: false
-    t.jsonb "value", default: {}, null: false
-    t.datetime "expires_at"
-    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "value", default: {}, null: false
     t.index ["expires_at"], name: "ix_integration_data_expires_at", where: "(expires_at IS NOT NULL)"
     t.index ["integration_id", "key"], name: "ix_integration_data_integration_key", unique: true
     t.index ["integration_id"], name: "index_integration_data_on_integration_id"
@@ -362,6 +362,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.boolean "enabled", default: true, null: false
     t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
+    t.bigint "integration_id"
     t.string "kind", default: "custom", null: false
     t.string "name", null: false
     t.bigint "scope_id"
@@ -369,7 +370,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.string "transport", default: "sse"
     t.datetime "updated_at", null: false
     t.string "url"
-    t.bigint "integration_id"
     t.index ["integration_id"], name: "index_mcp_servers_on_integration_id"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
@@ -789,7 +789,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
     t.index ["event_type"], name: "index_trigger_events_on_event_type"
     t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
-    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY ((ARRAY['pending'::character varying, 'dispatching'::character varying])::text[]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|

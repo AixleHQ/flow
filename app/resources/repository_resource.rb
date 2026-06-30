@@ -6,6 +6,7 @@ class RepositoryResource < ApplicationResource
 
   one :integration, resource: IntegrationResource
 
+  typelize %w[company project]
   attribute :scope_indicator do |repo|
     repo.scope_indicator
   end

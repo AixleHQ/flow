@@ -4,6 +4,9 @@ class BoardActivityResource < ApplicationResource
   attributes :id, :event_type, :actor_id, :actor_type,
              :board_task_id, :metadata, :created_at
 
+  typelize metadata: "Record<string, unknown>"
+
+  typelize :string
   attribute :actor_name do |activity|
     user = activity.actor
     case activity.actor_type
@@ -14,10 +17,12 @@ class BoardActivityResource < ApplicationResource
     end
   end
 
+  typelize :string?
   attribute :task_title do |activity|
     activity.board_task&.title
   end
 
+  typelize :string
   attribute :description do |activity|
     actor = case activity.actor_type
     when "agent" then "Agent (managed by #{activity.actor.name})"

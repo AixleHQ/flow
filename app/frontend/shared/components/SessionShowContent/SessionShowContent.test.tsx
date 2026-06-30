@@ -41,7 +41,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     watcherUrl: undefined,
     ideUrl: undefined,
     cableStream: undefined,
-    sessionConfig: null,
+    sessionConfig: {},
     toolIds: [],
     skillIds: [],
     mcpServerIds: [],

@@ -40,7 +40,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   metadata: null,
   collectedAt: null,
   updatedAt: '2026-01-01T00:00:00Z',
-  sessionConfig: null,
+  sessionConfig: {},
   toolIds: [],
   skillIds: [],
   mcpServerIds: [],

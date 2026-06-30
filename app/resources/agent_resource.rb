@@ -5,6 +5,7 @@ class AgentResource < ApplicationResource
              :principles, :source, :scope_type, :scope_id,
              :created_at, :updated_at
 
+  typelize %w[system company project]
   attribute :scope_indicator do |agent|
     agent.scope_indicator
   end

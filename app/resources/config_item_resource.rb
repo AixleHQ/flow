@@ -7,6 +7,7 @@ class ConfigItemResource < ApplicationResource
     item.display_value
   end
 
+  typelize %w[company project]
   attribute :scope_indicator do |item|
     item.scope_indicator
   end

@@ -11,7 +11,19 @@ class TerminalSessionResource < ApplicationResource
              :artifacts_reviewed, :initial_prompt,
              :error_message, :container_id,
              :project_id, :route_token, :configured_agent_id,
-             :context_metadata, :metadata, :collected_at, :updated_at
+             :collected_at, :updated_at
+
+  # Free-form jsonb columns — column inference only sees `unknown`. Expose as explicit attributes so
+  # the keyless typelize applies (matches IntegrationResource#settings).
+  typelize "Record<string, unknown> | null"
+  attribute :context_metadata do |session|
+    session.context_metadata
+  end
+
+  typelize "Record<string, unknown> | null"
+  attribute :metadata do |session|
+    session.metadata
+  end
 
   typelize :string?
   attribute :websocket_url do |session|
@@ -47,6 +59,7 @@ class TerminalSessionResource < ApplicationResource
     InertiaCable::Streams::StreamName.signed_stream_name(session)
   end
 
+  typelize "{ config_files?: Record<string, unknown>; env_vars?: Record<string, string>; bmad_enabled?: boolean; bmad_modules?: string[] }"
   attribute :session_config do |session|
     {
       "config_files" => session.config_files,

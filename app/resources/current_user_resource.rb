@@ -8,10 +8,12 @@ class CurrentUserResource < ApplicationResource
   one :company, resource: CompanyResource
   many :agent_credentials, resource: AgentCredentialResource
 
+  typelize "string[]"
   attribute :configured_agents do |user|
     user.agent_credentials.pluck(:agent_type)
   end
 
+  typelize :string?
   attribute :default_agent_runtime do |user|
     user.default_agent_runtime
   end

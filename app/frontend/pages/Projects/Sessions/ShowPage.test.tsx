@@ -38,7 +38,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     metadata: null,
     collectedAt: null,
     updatedAt: '2026-06-26T10:05:00Z',
-    sessionConfig: null,
+    sessionConfig: {},
     toolIds: [],
     skillIds: [],
     mcpServerIds: [],

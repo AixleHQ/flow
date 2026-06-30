@@ -12,10 +12,12 @@ class WorkflowRunAssetResource < ApplicationResource
     wra.file&.size
   end
 
+  typelize :string?
   attribute :step_name do |wra|
     wra.produced_by_step_run&.step&.name
   end
 
+  typelize :string?
   attribute :download_url do |wra|
     next nil unless wra.file.present?
 

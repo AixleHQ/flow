@@ -3,6 +3,7 @@
 class ProjectResource < ApplicationResource
   attributes :id, :name, :description, :slug, :state, :created_at, :updated_at
 
+  typelize :number
   attribute :collaborators_count do |project|
     if project.respond_to?(:cached_collaborators_count)
       project.cached_collaborators_count.to_i
@@ -11,6 +12,7 @@ class ProjectResource < ApplicationResource
     end
   end
 
+  typelize :number
   attribute :members_count do |project|
     if project.respond_to?(:cached_collaborators_count)
       project.cached_collaborators_count.to_i + 1
@@ -19,6 +21,7 @@ class ProjectResource < ApplicationResource
     end
   end
 
+  typelize "string | null"
   attribute :last_activity_at do |project|
     if project.respond_to?(:cached_last_activity_at)
       project.cached_last_activity_at
@@ -27,6 +30,7 @@ class ProjectResource < ApplicationResource
     end
   end
 
+  typelize :number
   attribute :sessions_count do |project|
     if project.respond_to?(:cached_sessions_count)
       project.cached_sessions_count.to_i
@@ -35,6 +39,7 @@ class ProjectResource < ApplicationResource
     end
   end
 
+  typelize :number
   attribute :workflows_count do |project|
     if project.respond_to?(:cached_workflows_count)
       project.cached_workflows_count.to_i
@@ -43,6 +48,7 @@ class ProjectResource < ApplicationResource
     end
   end
 
+  typelize :number
   attribute :board_tasks_count do |project|
     if project.respond_to?(:cached_board_tasks_count)
       project.cached_board_tasks_count.to_i

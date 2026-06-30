@@ -5,28 +5,34 @@ class BoardTaskResource < ApplicationResource
              :assignee_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 
+  typelize :string?
   attribute :assignee_name do |task|
     task.assignee&.name
   end
 
+  typelize :number
   attribute :comments_count do |task|
     task.has_attribute?(:comments_count) ? task[:comments_count].to_i : task.task_comments.size
   end
 
+  typelize :number
   attribute :children_count do |task|
     task.has_attribute?(:children_count) ? task[:children_count].to_i : task.child_tasks.size
   end
 
+  typelize :number
   attribute :assets_count do |task|
     task.has_attribute?(:assets_count) ? task[:assets_count].to_i : task.task_assets.size
   end
 
+  typelize "Array<{ id: number; state: string; created_at: string }>"
   attribute :recent_workflow_runs do |task|
     task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
       { id: run.id, state: run.state, created_at: run.created_at.iso8601 }
     end
   end
 
+  typelize "Array<{ id: number; gate_type: string; metadata: Record<string, unknown>; created_at: string }>"
   attribute :pending_gates do |task|
     task.pending_gates.map do |gate|
       { id: gate.id, gate_type: gate.gate_type, metadata: gate.metadata, created_at: gate.created_at.iso8601 }

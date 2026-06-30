@@ -61,6 +61,7 @@ class IntegrationResource < ApplicationResource
     integration.coder? ? integration.coder_lock_ttl_minutes : nil
   end
 
+  typelize :string?
   attribute :slack_request_url do |integration|
     integration.slack? ? integration.settings&.dig("request_url") : nil
   end

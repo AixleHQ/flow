@@ -3,6 +3,7 @@
 class UserResource < ApplicationResource
   attributes :id, :email, :name, :role, :state, :position, :invited_at, :created_at, :updated_at
 
+  typelize "{ id: number; name: string } | null"
   attribute :invited_by do |user|
     next nil unless user.invited_by.present?
 

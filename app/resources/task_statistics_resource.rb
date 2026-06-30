@@ -1,18 +1,22 @@
 # frozen_string_literal: true
 
 class TaskStatisticsResource < ApplicationResource
+  typelize "{ totalCostCents: number }"
   attribute :cost_totals do |result|
     { totalCostCents: result.cost_totals[:total_cost_cents] }
   end
 
+  typelize "{ totalTokens: number }"
   attribute :token_totals do |result|
     { totalTokens: result.token_totals[:total_tokens] }
   end
 
+  typelize "{ totalDurationSeconds: number }"
   attribute :time_totals do |result|
     { totalDurationSeconds: result.time_totals[:total_duration_seconds] }
   end
 
+  typelize "Array<{ id: number; gateType: \"github_checks_completed\" | \"github_workflow_completed\" | \"gitlab_pipeline_completed\"; status: \"pending\" | \"resolved\"; createdAt: string; resolvedAt: string | null; durationSeconds: number | null }>"
   attribute :gate_stats do |result|
     result.gate_stats.map do |w|
       {
@@ -26,6 +30,7 @@ class TaskStatisticsResource < ApplicationResource
     end
   end
 
+  typelize "Array<{ workflowId: number; workflowName: string; costCents: number; totalTokens: number; durationSeconds: number }>"
   attribute :workflow_breakdowns do |result|
     result.workflow_breakdowns.map do |b|
       {

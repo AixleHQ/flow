@@ -10,14 +10,17 @@ class WorkflowRunResource < ApplicationResource
     run.mode.to_s
   end
 
+  typelize :string?
   attribute :failed_account_name do |run|
     run.failed_agent_credential&.agent_type
   end
 
+  typelize :string?
   attribute :workflow_name do |run|
     run.workflow&.name
   end
 
+  typelize :number
   attribute :steps_completed do |run|
     if run.association(:step_runs).loaded?
       run.step_runs.to_a.count { |sr| sr.state.to_s == "completed" }
@@ -26,22 +29,27 @@ class WorkflowRunResource < ApplicationResource
     end
   end
 
+  typelize :number
   attribute :steps_total do |run|
     run.step_runs_count
   end
 
+  typelize :string?
   attribute :user_name do |run|
     run.user&.name
   end
 
+  typelize :string?
   attribute :agent_type do |run|
     run.step_runs.first&.terminal_session&.agent_type
   end
 
+  typelize :number
   attribute :cost_cents do |run|
     run.step_runs.sum { |sr| sr.terminal_session&.cost_cents.to_i }
   end
 
+  typelize "StepRun[]"
   attribute :step_runs do |run|
     step_name_map = run.workflow.steps.each_with_object({}) { |s, h| h[s.id] = s.name }
     traefik = { ws_base: Settings.traefik.ws_base, http_base: Settings.traefik.http_base }
