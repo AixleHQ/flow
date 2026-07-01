@@ -16,6 +16,20 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props scope: "company", period: "30d"
   end
 
+  test "index is denied for an employee (non-admin)" do
+    employee = create(:user, :employee, :onboarding_completed, company: @company,
+                                                               password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(employee)
+
+    get company_analytics_path
+
+    # Authorization gate fires: 302 redirect + not-authorized alert (not a 403 — see design doc
+    # DECISION 1), landing on root_path (redirect_back fallback, no Referer in the request).
+    assert_response :redirect
+    assert_redirected_to root_path
+    assert_equal "You are not authorized to perform this action.", flash[:alert]
+  end
+
   test "index passes custom period" do
     get company_analytics_path(period: "7d")
     assert_inertia_page "Company/Analytics/AnalyticsPage"

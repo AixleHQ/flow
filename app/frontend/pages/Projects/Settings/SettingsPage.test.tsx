@@ -22,6 +22,7 @@ const project = {
   boardTasksCount: 5,
   repositoriesCount: 1,
   integrationsCount: 4,
+  canDelete: true,
 };
 
 const members = [
@@ -238,6 +239,14 @@ describe('Projects/Settings/SettingsPage', () => {
       '/company/projects/7',
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it('hides the Delete control when the user cannot delete the project', () => {
+    renderAuthedPage(<SettingsPage />, { props: { project: { ...project, canDelete: false }, members } });
+
+    // Danger Zone still renders (Archive lives there), but the destructive Delete button is gone.
+    expect(screen.getByRole('heading', { name: 'Danger Zone' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
   });
 
   it('submits the chosen artifacts language after picking a new option', async () => {
