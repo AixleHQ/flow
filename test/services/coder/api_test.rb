@@ -77,5 +77,54 @@ module Coder
         Coder::Api.verify_token(coder_url: BASE, session_token: TOKEN)
       end
     end
+
+    # ==================================================================
+    # SNI-preserving trusted-host TCP override
+    # ==================================================================
+
+    test "SniPreservingNetHttp points TCP at ipaddr while keeping the hostname address" do
+      adapter = Coder::Api::SniPreservingNetHttp.new(nil, { ipaddr: "203.0.113.10" })
+      env = Faraday::Env.from(
+        url: URI("https://coder.staging.aixle.com/api/v2/users/me"),
+        request: Faraday::RequestOptions.new
+      )
+
+      http = adapter.net_http_connection(env)
+
+      # The address must stay the hostname — Net::HTTP derives TLS SNI,
+      # certificate verification, and the Host header from it; ipaddr only
+      # redirects the TCP connection.
+      assert_equal "coder.staging.aixle.com", http.address
+      assert_equal "203.0.113.10", http.ipaddr
+    end
+
+    test "SniPreservingNetHttp without ipaddr behaves like the stock adapter" do
+      adapter = Coder::Api::SniPreservingNetHttp.new(nil, {})
+      env = Faraday::Env.from(
+        url: URI("https://coder.example.com/api"),
+        request: Faraday::RequestOptions.new
+      )
+
+      http = adapter.net_http_connection(env)
+
+      assert_equal "coder.example.com", http.address
+      assert_nil http.ipaddr
+    end
+
+    test "override decision trusts the union of global and CODER_TRUSTED_HOSTS lists" do
+      coder_hosts = Array(Settings.coder.trusted_hosts).map(&:to_s)
+      UrlSafetyValidator
+        .expects(:trusted_host?)
+        .with("coder.example.com", trusted_hosts_override: coder_hosts)
+        .returns(false)
+
+      stub_request(:get, "#{BASE}/api/v2/users/me").to_return(
+        status: 200,
+        body: { id: "u1", username: "a", email: "a@example.com" }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+      Coder::Api.verify_token(coder_url: BASE, session_token: TOKEN)
+    end
   end
 end

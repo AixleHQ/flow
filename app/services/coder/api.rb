@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "faraday/net_http"
+
 module Coder
   # Coder::Api — thin HTTP API layer for a Coder instance.
   #
@@ -32,6 +34,21 @@ module Coder
 
     HTTP_TIMEOUTS         = { open: 10, read: 30 }.freeze
     SESSION_TOKEN_HEADER  = "Coder-Session-Token"
+
+    # Faraday's stock net_http adapter ignores the `ssl: { hostname: }` option,
+    # so pointing the connection URL at a bare IP silently drops TLS SNI — and
+    # SNI-routing proxies (e.g. Traefik) then present their default self-signed
+    # certificate. This adapter keeps the URL on the original hostname (which
+    # is what Net::HTTP uses for SNI, certificate verification, and the Host
+    # header) and overrides only the TCP target via Net::HTTP#ipaddr.
+    class SniPreservingNetHttp < Faraday::Adapter::NetHttp
+      def net_http_connection(env)
+        super.tap do |http|
+          ipaddr = @connection_options[:ipaddr]
+          http.ipaddr = ipaddr if ipaddr
+        end
+      end
+    end
 
     class << self
       def verify_token(coder_url:, session_token:)
@@ -138,35 +155,39 @@ module Coder
       # Build the Faraday connection. When the configured Coder host is in
       # the trusted-hosts allowlist (split-horizon DNS scenario) the system
       # resolver may return a private IP that is not reachable from inside
-      # the cluster; in that case fall back to a public DNS lookup and
-      # connect to the public IP directly while preserving the original
-      # hostname for the Host header and TLS SNI.
+      # the cluster; in that case resolve the public IPv4 and connect to it
+      # through SniPreservingNetHttp. The URL must keep the hostname — the
+      # bare-IP-URL rewrite this replaces lost SNI and made Traefik serve its
+      # default self-signed certificate.
       def build_conn(coder_url, session_token)
         uri = URI.parse(coder_url)
-        target_url, sni_hostname, host_header = resolve_target(uri)
+        public_ip = public_ip_override(uri)
 
-        ssl_opts = sni_hostname ? { hostname: sni_hostname } : {}
-        Faraday.new(url: target_url, ssl: ssl_opts) do |f|
+        Faraday.new(url: uri.to_s) do |f|
           f.options.open_timeout = HTTP_TIMEOUTS[:open]
           f.options.timeout      = HTTP_TIMEOUTS[:read]
           f.headers[SESSION_TOKEN_HEADER] = session_token
           f.headers["Accept"] = "application/json"
-          f.headers["Host"] = host_header if host_header
+          f.adapter SniPreservingNetHttp, { ipaddr: public_ip } if public_ip
         end
       end
 
-      def resolve_target(uri)
-        return [ uri.to_s, nil, nil ] unless UrlSafetyValidator.trusted_host?(uri.host.to_s)
+      # Public-IPv4 override for hosts trusted via either the global
+      # URL_SAFETY_TRUSTED_HOSTS or the Coder-specific CODER_TRUSTED_HOSTS
+      # list — the same union the Coder integration's URL validation trusts,
+      # so one env var governs both the validation and the outbound path.
+      # In-cluster names (e.g. the default coder.coder.svc.cluster.local)
+      # yield no public IPv4 and fall through to a normal connection.
+      def public_ip_override(uri)
+        host = uri.host.to_s
+        return nil if host.empty?
+        return nil unless UrlSafetyValidator.trusted_host?(host, trusted_hosts_override: coder_trusted_hosts)
 
-        public_ip = UrlSafetyValidator.resolve_public_ipv4(uri.host)
-        return [ uri.to_s, nil, nil ] if public_ip.nil?
+        UrlSafetyValidator.resolve_public_ipv4(host)
+      end
 
-        rewritten = uri.dup
-        rewritten.host = public_ip
-
-        port = uri.port
-        host_header = port == uri.default_port ? uri.host : "#{uri.host}:#{port}"
-        [ rewritten.to_s, uri.host, host_header ]
+      def coder_trusted_hosts
+        Array(Settings.coder&.trusted_hosts).map(&:to_s)
       end
     end
   end
