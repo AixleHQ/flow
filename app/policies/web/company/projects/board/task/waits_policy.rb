@@ -6,15 +6,7 @@ module Web
       module Board
         module Task
           class WaitsPolicy < Web::Company::ApplicationPolicy
-            def destroy? = project_accessible?
-
-            private
-
-            def project = context.project
-
-            def project_accessible?
-              project&.accessible_by?(current_user)
-            end
+            def destroy? = project_writable?
           end
         end
       end

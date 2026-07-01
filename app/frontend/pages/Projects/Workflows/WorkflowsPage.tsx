@@ -35,6 +35,7 @@ import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -104,6 +105,7 @@ const WorkflowsPage = () => {
     configuredAgents,
     agentModels,
   } = usePage<{ props: Props }>().props as unknown as Props;
+  const { canExecute } = useProjectPermissions();
   const assets = rawAssets ?? [];
   const repositories = rawRepositories ?? [];
   const basePath = `/company/projects/${project.id}/workflows`;
@@ -292,9 +294,11 @@ const WorkflowsPage = () => {
           <Button variant="outline" size="sm" onClick={() => router.visit('/company/workflow_catalog')}>
             Catalog
           </Button>
-          <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
-            New Workflow
-          </Button>
+          {canExecute && (
+            <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
+              New Workflow
+            </Button>
+          )}
         </Group>
       </Group>
 
@@ -304,7 +308,7 @@ const WorkflowsPage = () => {
           <Text c="dimmed" mt="sm">
             {search ? 'No workflows match your search' : 'No workflows yet'}
           </Text>
-          {!search && (
+          {!search && canExecute && (
             <Button variant="outline" mt="md" onClick={() => setCreateOpen(true)}>
               Create your first workflow
             </Button>
@@ -340,16 +344,18 @@ const WorkflowsPage = () => {
 
                 <Group justify="space-between" mt="auto" pt="sm">
                   <Group gap="xs">
-                    <Tooltip label="Run workflow">
-                      <Button
-                        size="xs"
-                        variant="filled"
-                        leftSection={<IconPlayerPlay size={14} />}
-                        onClick={() => setRunWorkflow(wf)}
-                      >
-                        Run
-                      </Button>
-                    </Tooltip>
+                    {canExecute && (
+                      <Tooltip label="Run workflow">
+                        <Button
+                          size="xs"
+                          variant="filled"
+                          leftSection={<IconPlayerPlay size={14} />}
+                          onClick={() => setRunWorkflow(wf)}
+                        >
+                          Run
+                        </Button>
+                      </Tooltip>
+                    )}
                     <Tooltip label="Configure">
                       <Button
                         size="xs"
@@ -365,7 +371,7 @@ const WorkflowsPage = () => {
                     </Tooltip>
                   </Group>
                   <Group gap={4}>
-                    {isInherited ? (
+                    {canExecute && (isInherited ? (
                       <Tooltip label="Copy & Configure">
                         <ActionIcon
                           size="sm"
@@ -405,7 +411,7 @@ const WorkflowsPage = () => {
                           </ActionIcon>
                         </Tooltip>
                       </>
-                    )}
+                    ))}
                   </Group>
                 </Group>
               </Card>

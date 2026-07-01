@@ -96,6 +96,7 @@ import { formatDateTime } from 'shared/lib/formatDate';
 import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import {
   apiV1ProjectTasksPath,
   apiV1ProjectTaskPath,
@@ -485,6 +486,7 @@ function BoardColumn({
   onToggleCollapse,
   isFiltered,
   isDropTarget,
+  canExecute,
 }: {
   column: Column;
   tasks: Task[];
@@ -494,6 +496,7 @@ function BoardColumn({
   onToggleCollapse: (id: number) => void;
   isFiltered: boolean;
   isDropTarget: boolean;
+  canExecute: boolean;
 }) {
   const { setNodeRef } = useDroppable({ id: `column-${column.id}`, data: { columnId: column.id } });
   const taskIds = useMemo(() => tasks.map((t) => `task-${t.id}`), [tasks]);
@@ -660,9 +663,11 @@ function BoardColumn({
             {tasks.length}
           </Text>
         </Group>
-        <ActionIcon size="sm" variant="subtle" onClick={() => onAddTask(column.id)}>
-          <IconPlus size={16} />
-        </ActionIcon>
+        {canExecute && (
+          <ActionIcon size="sm" variant="subtle" onClick={() => onAddTask(column.id)}>
+            <IconPlus size={16} />
+          </ActionIcon>
+        )}
       </Box>
 
       {/* Task list */}
@@ -839,6 +844,7 @@ function TaskDetailSidebar({
   taskAssets,
   workflowRuns,
   stats,
+  canExecute,
 }: {
   task: Task | null;
   allTasks: Task[];
@@ -853,6 +859,7 @@ function TaskDetailSidebar({
   taskAssets: TaskAsset[];
   workflowRuns: TaskWorkflowRun[];
   stats: TaskStatistics | null;
+  canExecute: boolean;
 }) {
   const [tab, setTab] = useState<string | null>('details');
   const [editingTitle, setEditingTitle] = useState(false);
@@ -1087,7 +1094,7 @@ function TaskDetailSidebar({
             )}
           </Group>
           <Group gap="xs">
-            {canTriggerWorkflow && (
+            {canExecute && canTriggerWorkflow && (
               <Button
                 variant="light"
                 size="compact-sm"
@@ -1098,9 +1105,11 @@ function TaskDetailSidebar({
                 Run workflow
               </Button>
             )}
-            <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeleteConfirm(true)}>
-              <IconTrash size={16} />
-            </ActionIcon>
+            {canExecute && (
+              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeleteConfirm(true)}>
+                <IconTrash size={16} />
+              </ActionIcon>
+            )}
             <ActionIcon variant="subtle" size="sm" onClick={onClose}>
               <IconX size={16} />
             </ActionIcon>
@@ -1123,7 +1132,12 @@ function TaskDetailSidebar({
             styles={{ input: { fontWeight: 700, fontSize: 18, padding: 0, border: 'none', background: 'transparent' } }}
           />
         ) : (
-          <Text size="lg" fw={700} onClick={() => setEditingTitle(true)} style={{ cursor: 'pointer' }}>
+          <Text
+            size="lg"
+            fw={700}
+            onClick={() => canExecute && setEditingTitle(true)}
+            style={{ cursor: canExecute ? 'pointer' : 'default' }}
+          >
             {pendingTitle ?? task.title}
           </Text>
         )}
@@ -1178,10 +1192,11 @@ function TaskDetailSidebar({
               ) : (
                 <Box
                   onClick={() => {
+                    if (!canExecute) return;
                     setDescValue(task.description ?? '');
                     setEditingDesc(true);
                   }}
-                  style={{ cursor: 'pointer', minHeight: 40 }}
+                  style={{ cursor: canExecute ? 'pointer' : 'default', minHeight: 40 }}
                 >
                   {(pendingDesc ?? task.description) ? (
                     <Box className={styles.commentMd}>
@@ -1204,6 +1219,7 @@ function TaskDetailSidebar({
                 if (v && v !== String(task.boardColumnId)) moveToColumn(v);
               }}
               size="sm"
+              disabled={!canExecute}
             />
             <Select
               label="Type"
@@ -1216,6 +1232,7 @@ function TaskDetailSidebar({
               value={task.taskType}
               onChange={(v) => saveField('taskType', v)}
               size="sm"
+              disabled={!canExecute}
             />
             <Select
               label="Priority"
@@ -1230,6 +1247,7 @@ function TaskDetailSidebar({
               onChange={(v) => saveField('priority', v || null)}
               clearable
               size="sm"
+              disabled={!canExecute}
             />
             <Select
               label="Assignee"
@@ -1239,6 +1257,7 @@ function TaskDetailSidebar({
               clearable
               searchable
               size="sm"
+              disabled={!canExecute}
             />
 
             {/* Parent epic — for non-epic tasks */}
@@ -1251,6 +1270,7 @@ function TaskDetailSidebar({
                 clearable
                 searchable
                 size="sm"
+                disabled={!canExecute}
               />
             )}
 
@@ -1262,6 +1282,7 @@ function TaskDetailSidebar({
               placeholder="Add tag and press Enter"
               size="sm"
               clearable
+              disabled={!canExecute}
             />
 
             <Box>
@@ -1455,15 +1476,17 @@ function TaskDetailSidebar({
                             </Text>
                           )}
                       </Box>
-                      <ActionIcon
-                        size="xs"
-                        variant="subtle"
-                        color="gray"
-                        onClick={() => handleDeleteGate(wait.id)}
-                        loading={deletingGateId === wait.id}
-                      >
-                        <IconX size={12} />
-                      </ActionIcon>
+                      {canExecute && (
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          color="gray"
+                          onClick={() => handleDeleteGate(wait.id)}
+                          loading={deletingGateId === wait.id}
+                        >
+                          <IconX size={12} />
+                        </ActionIcon>
+                      )}
                     </Group>
                   ))}
                 </Stack>
@@ -1493,6 +1516,7 @@ function TaskDetailSidebar({
             />
           </Group>
 
+          {canExecute && (
           <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
             <Textarea
               placeholder="Write a comment... (⌘+Enter to send)"
@@ -1535,6 +1559,7 @@ function TaskDetailSidebar({
               Send
             </Button>
           </Box>
+          )}
 
           {filteredComments.length > 1 && (
             <Group justify="flex-end" px="md" pt="xs">
@@ -1608,17 +1633,19 @@ function TaskDetailSidebar({
 
         {/* Assets — with upload and delete */}
         <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto' }}>
-          <Group justify="flex-end" p="md" pb={0}>
-            <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
-            <Button
-              variant="outline"
-              size="xs"
-              leftSection={<IconCloudUpload size={14} />}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Upload File
-            </Button>
-          </Group>
+          {canExecute && (
+            <Group justify="flex-end" p="md" pb={0}>
+              <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
+              <Button
+                variant="outline"
+                size="xs"
+                leftSection={<IconCloudUpload size={14} />}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Upload File
+              </Button>
+            </Group>
+          )}
           <ScrollArea p="md">
             {(taskAssets ?? []).length === 0 ? (
               <Text size="sm" c="dimmed" ta="center" py="xl">
@@ -1651,9 +1678,11 @@ function TaskDetailSidebar({
                             <IconDownload size={14} />
                           </ActionIcon>
                         )}
-                        <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDeleteAsset(a.id)}>
-                          <IconTrash size={14} />
-                        </ActionIcon>
+                        {canExecute && (
+                          <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDeleteAsset(a.id)}>
+                            <IconTrash size={14} />
+                          </ActionIcon>
+                        )}
                       </Group>
                     </Group>
                     {a.tags && a.tags.length > 0 && (
@@ -2630,6 +2659,7 @@ const BoardPage = () => {
     taskWorkflowRuns,
     taskStatistics,
   } = usePage<{ props: Props }>().props as unknown as Props;
+  const { canExecute } = useProjectPermissions();
 
   const [localTasks, setLocalTasks] = useState<Task[]>(() => (serverTasks ?? []).map(normalizeTask));
   useEffect(() => {
@@ -2683,7 +2713,9 @@ const BoardPage = () => {
     router.get(boardUrl, {}, { preserveState: true, preserveScroll: true });
   }, [boardUrl]);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
+  // Viewers cannot reorder/move tasks: register no sensors so drag never activates.
+  const sensors = useSensors(...(canExecute ? [pointerSensor] : []));
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const pw = pointerWithin(args);
@@ -2938,6 +2970,7 @@ const BoardPage = () => {
         return;
 
       if (e.key === 'n' && !e.ctrlKey && !e.metaKey) {
+        if (!canExecute) return;
         e.preventDefault();
         setCreateOpen(true);
       } else if (e.key === '/' && !e.ctrlKey && !e.metaKey) {
@@ -2949,7 +2982,7 @@ const BoardPage = () => {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTask]);
+  }, [closeTask, canExecute]);
 
   if (!board) {
     return (
@@ -3056,11 +3089,13 @@ const BoardPage = () => {
               )}
             </ActionIcon>
           </Tooltip>
-          <Tooltip label="Board settings">
-            <ActionIcon variant="subtle" size="sm" onClick={() => setSettingsOpen(true)}>
-              <IconSettings size={16} />
-            </ActionIcon>
-          </Tooltip>
+          {canExecute && (
+            <Tooltip label="Board settings">
+              <ActionIcon variant="subtle" size="sm" onClick={() => setSettingsOpen(true)}>
+                <IconSettings size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
 
         {/* Board area */}
@@ -3083,6 +3118,7 @@ const BoardPage = () => {
                 onToggleCollapse={handleToggleCollapse}
                 isFiltered={hasActiveFilters}
                 isDropTarget={hoverColumnId === col.id}
+                canExecute={canExecute}
               />
             ))}
           </Box>
@@ -3112,6 +3148,7 @@ const BoardPage = () => {
         taskAssets={taskAssetsProp ?? []}
         workflowRuns={taskWorkflowRuns ?? []}
         stats={taskStatistics ?? null}
+        canExecute={canExecute}
       />
       <BoardSettingsDialog
         opened={settingsOpen}
@@ -3121,7 +3158,7 @@ const BoardPage = () => {
       />
 
       {/* Create Task Modal */}
-      <Modal opened={createOpen} onClose={() => setCreateOpen(false)} title="New Task" centered>
+      <Modal opened={canExecute && createOpen} onClose={() => setCreateOpen(false)} title="New Task" centered>
         <form onSubmit={form.onSubmit(handleCreateTask)}>
           <Stack gap="md">
             <TextInput label="Title" required {...form.getInputProps('title')} />

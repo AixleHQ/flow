@@ -1,5 +1,10 @@
 export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
-export type UserRole = 'employee' | 'admin' | 'super_admin';
+export type UserRole = 'employee' | 'admin' | 'super_admin' | 'viewer';
+
+export interface ProjectPermissions {
+  canExecute: boolean;
+  canManage: boolean;
+}
 
 export interface AgentCredential {
   id: number;

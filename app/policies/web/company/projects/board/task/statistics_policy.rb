@@ -7,14 +7,6 @@ module Web
         module Task
           class StatisticsPolicy < Web::Company::ApplicationPolicy
             def show? = project_accessible?
-
-            private
-
-            def project = context.project
-
-            def project_accessible?
-              project&.accessible_by?(current_user)
-            end
           end
         end
       end

@@ -34,6 +34,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 
 export interface Integration {
@@ -100,11 +101,13 @@ function getGithubInstallUrl(basePath: string, githubAppSlug: string | null): st
 const IntegrationCard = ({
   integration,
   readOnly,
+  canExecute,
   onDelete,
   onLink,
 }: {
   integration: Integration;
   readOnly?: boolean;
+  canExecute: boolean;
   onDelete: (i: Integration) => void;
   onLink?: (i: Integration) => void;
 }) => (
@@ -159,7 +162,7 @@ const IntegrationCard = ({
       </Group>
 
       <Group gap="xs">
-        {onLink && integration.status === 'active' && (
+        {canExecute && onLink && integration.status === 'active' && (
           <Button variant="light" size="xs" leftSection={<IconLink size={14} />} onClick={() => onLink(integration)}>
             Link to project
           </Button>
@@ -176,7 +179,7 @@ const IntegrationCard = ({
             Settings
           </Button>
         )}
-        {!readOnly && (
+        {canExecute && !readOnly && (
           <Button
             variant="subtle"
             color="red"
@@ -194,6 +197,7 @@ const IntegrationCard = ({
 
 export const IntegrationsContent = ({ integrations, basePath, title }: IntegrationsContentProps) => {
   const { settings } = usePage<{ settings: { githubAppSlug: string | null } }>().props;
+  const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
@@ -369,6 +373,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               key={integration.id}
               integration={integration}
               readOnly={options.readOnly}
+              canExecute={canExecute}
               onDelete={handleDelete}
               onLink={
                 options.showLink && !alreadyLinkedInstallationIds.has(integration.installationId)
@@ -393,27 +398,29 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               : 'Connect external services to your company'}
           </Text>
         </Box>
-        <Menu position="bottom-end" withArrow>
-          <Menu.Target>
-            <Button leftSection={<IconPlus size={16} />}>Connect</Button>
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-              GitHub
-            </Menu.Item>
-            <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-              GitLab
-            </Menu.Item>
-            <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
-              Coder
-            </Menu.Item>
-            {isProjectContext && (
-              <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
-                Slack
+        {canExecute && (
+          <Menu position="bottom-end" withArrow>
+            <Menu.Target>
+              <Button leftSection={<IconPlus size={16} />}>Connect</Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                GitHub
               </Menu.Item>
-            )}
-          </Menu.Dropdown>
-        </Menu>
+              <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                GitLab
+              </Menu.Item>
+              <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                Coder
+              </Menu.Item>
+              {isProjectContext && (
+                <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                  Slack
+                </Menu.Item>
+              )}
+            </Menu.Dropdown>
+          </Menu>
+        )}
       </Group>
 
       {integrations.length === 0 ? (
@@ -431,22 +438,24 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                 messages.
               </Text>
             </Box>
-            <Group gap="sm" justify="center" wrap="wrap">
-              <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-                GitHub
-              </Button>
-              <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-                GitLab
-              </Button>
-              <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
-                Coder
-              </Button>
-              {isProjectContext && (
-                <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
-                  Slack
+            {canExecute && (
+              <Group gap="sm" justify="center" wrap="wrap">
+                <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                  GitHub
                 </Button>
-              )}
-            </Group>
+                <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                  GitLab
+                </Button>
+                <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                  Coder
+                </Button>
+                {isProjectContext && (
+                  <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                    Slack
+                  </Button>
+                )}
+              </Group>
+            )}
           </Stack>
         </Card>
       ) : isProjectContext ? (
@@ -458,7 +467,12 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
       ) : (
         <Stack gap="sm">
           {integrations.map((integration) => (
-            <IntegrationCard key={integration.id} integration={integration} onDelete={handleDelete} />
+            <IntegrationCard
+              key={integration.id}
+              integration={integration}
+              canExecute={canExecute}
+              onDelete={handleDelete}
+            />
           ))}
         </Stack>
       )}

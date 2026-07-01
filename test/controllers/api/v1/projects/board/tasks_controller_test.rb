@@ -88,6 +88,59 @@ module Api
 
           assert_response :success
         end
+
+        # === viewer (read-only) enforcement ===
+
+        class ViewerTest < ActionController::TestCase
+          tests Api::V1::Projects::Board::TasksController
+
+          setup do
+            @company = create(:company)
+            @owner = create(:user, :onboarding_completed, company: @company)
+            @project = create(:project, company: @company, owner: @owner)
+            @board = create(:board, project: @project)
+            @col1 = create(:board_column, board: @board, name: "Todo")
+            @col2 = create(:board_column, board: @board, name: "Done")
+            @task = create(:board_task, board: @board, board_column: @col1)
+            @viewer = create(:user, :viewer, company: @company, email: "client@ext.com")
+            @project.add_collaborator(@viewer)
+            sign_in @viewer
+          end
+
+          test "viewer can read index/show/workflow_runs" do
+            get :index, params: { project_id: @project.id }
+            assert_response :success
+            get :show, params: { project_id: @project.id, id: @task.id }
+            assert_response :success
+            get :workflow_runs, params: { project_id: @project.id, id: @task.id }
+            assert_response :success
+          end
+
+          test "viewer create is forbidden" do
+            post :create, params: { project_id: @project.id, board_task: { title: "X", board_column_id: @col1.id } }
+            assert_response :forbidden
+          end
+
+          test "viewer update is forbidden" do
+            patch :update, params: { project_id: @project.id, id: @task.id, board_task: { title: "Y" } }
+            assert_response :forbidden
+          end
+
+          test "viewer destroy is forbidden" do
+            delete :destroy, params: { project_id: @project.id, id: @task.id }
+            assert_response :forbidden
+          end
+
+          test "viewer move is forbidden" do
+            patch :move, params: { project_id: @project.id, id: @task.id, column_id: @col2.id }
+            assert_response :forbidden
+          end
+
+          test "viewer trigger_workflow is forbidden" do
+            post :trigger_workflow, params: { project_id: @project.id, id: @task.id }
+            assert_response :forbidden
+          end
+        end
       end
     end
   end

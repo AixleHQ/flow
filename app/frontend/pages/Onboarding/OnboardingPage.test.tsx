@@ -363,4 +363,48 @@ describe('Onboarding/OnboardingPage', () => {
       expect.anything(),
     );
   });
+
+  describe('viewer (read-only client) onboarding', () => {
+    const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
+      userAt({ role: 'viewer', ...overrides });
+
+    it('hides the Select Agents and Authenticate steps for a viewer', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt(), authSessions: [] },
+      });
+
+      expect(screen.getByText('Your Profile')).toBeInTheDocument();
+      expect(screen.getByText('Complete')).toBeInTheDocument();
+      expect(screen.queryByText('Select Agents')).not.toBeInTheDocument();
+      expect(screen.queryByText('Authenticate')).not.toBeInTheDocument();
+    });
+
+    it('advances a viewer from the profile step with go_next (no agent selection)', async () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt({ position: 'dev', preferredAgentLanguage: 'en' }), authSessions: [] },
+      });
+
+      await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/onboarding',
+        expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'go_next' }) }),
+        expect.anything(),
+      );
+    });
+
+    it('shows the completion screen for a viewer whose server state reached step4', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: {
+          currentUser: viewerAt({ onboardingState: 'step4', position: 'dev', preferredAgentLanguage: 'en' }),
+          authSessions: [],
+        },
+      });
+
+      expect(screen.getByText("You're all set!")).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Get Started/ })).toBeInTheDocument();
+      // No Back button for viewers (avoids bouncing through hidden states).
+      expect(screen.queryByRole('button', { name: /Back/ })).not.toBeInTheDocument();
+    });
+  });
 });

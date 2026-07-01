@@ -434,7 +434,13 @@ const OnboardingPage = () => {
   useInertiaCableStream(cableStream);
 
   const company = currentUser?.company ?? null;
-  const activeStep = stateToStep[currentUser?.onboardingState ?? ''] ?? 0;
+  const isViewer = currentUser?.role === 'viewer';
+  const serverStep = stateToStep[currentUser?.onboardingState ?? ''] ?? 0;
+  // Viewers (external clients) never configure/authenticate agents, so their
+  // onboarding collapses to Profile → Complete. The server still walks the
+  // linear step1..step4 states; we present step1 as "Profile" and step4 as
+  // "Complete", auto-advancing through the hidden intermediate states.
+  const activeStep = isViewer ? (serverStep >= 3 ? 1 : 0) : serverStep;
 
   const [position, setPosition] = useState(currentUser?.position ?? '');
   const [language, setLanguage] = useState(currentUser?.preferredAgentLanguage ?? '');
@@ -445,7 +451,7 @@ const OnboardingPage = () => {
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const canAdvanceStep1 = !!position && !!language;
-  const canAdvanceStep2 = selectedAgents.length > 0;
+  const canAdvanceStep2 = isViewer || selectedAgents.length > 0;
 
   const configuredAgents = currentUser?.configuredAgents ?? [];
 
@@ -510,6 +516,15 @@ const OnboardingPage = () => {
     });
   }, []);
 
+  // Viewers skip the agent select/authenticate steps: once past the profile
+  // step, walk the (relaxed) state machine straight through to step4.
+  useEffect(() => {
+    if (!isViewer) return;
+    if (serverStep === 1 || serverStep === 2) {
+      submitStep({ onboardingStateEvent: 'go_next' });
+    }
+  }, [isViewer, serverStep, submitStep]);
+
   const handleNext = useCallback(() => {
     if (activeStep === 0) {
       if (!canAdvanceStep1) {
@@ -522,7 +537,7 @@ const OnboardingPage = () => {
         selectedAgents: selectedAgents,
         onboardingStateEvent: 'go_next',
       });
-    } else if (activeStep === 1) {
+    } else if (activeStep === 1 && !isViewer) {
       if (!canAdvanceStep2) {
         setValidationWarning('Select at least one agent to continue');
         return;
@@ -561,12 +576,18 @@ const OnboardingPage = () => {
         </Stack>
       </Center>
 
-      <Progress value={STEP_PROGRESS[activeStep] ?? 0} animated size="sm" mb="lg" radius="xl" />
+      <Progress
+        value={isViewer ? (activeStep === 0 ? 0 : 100) : (STEP_PROGRESS[activeStep] ?? 0)}
+        animated
+        size="sm"
+        mb="lg"
+        radius="xl"
+      />
 
       <Stepper active={activeStep} mb="xl" allowNextStepsSelect={false}>
         <Stepper.Step label="Your Profile" icon={<IconUser size={18} />} />
-        <Stepper.Step label="Select Agents" />
-        <Stepper.Step label="Authenticate" />
+        {!isViewer && <Stepper.Step label="Select Agents" />}
+        {!isViewer && <Stepper.Step label="Authenticate" />}
         <Stepper.Step label="Complete" icon={<IconCheck size={18} />} />
       </Stepper>
 
@@ -613,7 +634,7 @@ const OnboardingPage = () => {
       )}
 
       {/* Step 2: Select Agents */}
-      {activeStep === 1 && (
+      {activeStep === 1 && !isViewer && (
         <Box key="step-1" className={classes.stepContent}>
           <Card withBorder p="xl">
             <Text fw={600} size="lg" mb="xs">
@@ -677,7 +698,7 @@ const OnboardingPage = () => {
       )}
 
       {/* Step 3: Authenticate */}
-      {activeStep === 2 && (
+      {activeStep === 2 && !isViewer && (
         <Box key="step-2" className={classes.stepContent}>
           <AuthenticateStep
             selectedAgents={selectedAgents}
@@ -692,7 +713,7 @@ const OnboardingPage = () => {
       )}
 
       {/* Step 4: Complete */}
-      {activeStep === 3 && (
+      {((!isViewer && activeStep === 3) || (isViewer && activeStep === 1)) && (
         <Box key="step-3" className={classes.stepContent} pos="relative">
           <Confetti />
           <Card withBorder p="xl">
@@ -754,16 +775,18 @@ const OnboardingPage = () => {
               })}
             </Stack>
 
-            <Group justify="space-between">
-              <Button
-                variant="outline"
-                size="md"
-                leftSection={<IconChevronLeft size={16} />}
-                onClick={handleBack}
-                loading={loading}
-              >
-                Back
-              </Button>
+            <Group justify={isViewer ? 'flex-end' : 'space-between'}>
+              {!isViewer && (
+                <Button
+                  variant="outline"
+                  size="md"
+                  leftSection={<IconChevronLeft size={16} />}
+                  onClick={handleBack}
+                  loading={loading}
+                >
+                  Back
+                </Button>
+              )}
               <Button size="md" leftSection={<IconRocket size={16} />} onClick={handleComplete} loading={loading}>
                 Get Started
               </Button>

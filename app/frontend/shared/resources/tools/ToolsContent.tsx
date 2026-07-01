@@ -14,6 +14,8 @@ import {
 import { IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { DeleteToolModal } from './DeleteToolModal';
 import { ToolFormModal } from './ToolFormModal';
 
@@ -73,6 +75,7 @@ export function ToolsContent({
   subtitle,
   editableScopeIndicator = 'company',
 }: ToolsContentProps) {
+  const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('custom');
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -120,9 +123,11 @@ export function ToolsContent({
             {subtitle}
           </Text>
         </Box>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-          Add Tool
-        </Button>
+        {canExecute && (
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+            Add Tool
+          </Button>
+        )}
       </Group>
 
       <Group gap="md" mb="lg">
@@ -159,7 +164,7 @@ export function ToolsContent({
           <Text fz={16} c="dimmed" mt="sm">
             {hasFilters ? 'No tools match your filters' : 'No tools yet'}
           </Text>
-          {!hasFilters && (
+          {!hasFilters && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
               Add your first tool
             </Button>
@@ -247,14 +252,14 @@ export function ToolsContent({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
-                        {canEdit(tool) && (
+                        {canExecute && canEdit(tool) && (
                           <Tooltip label="Edit">
                             <ActionIcon variant="subtle" size="sm" onClick={() => handleEdit(tool)}>
                               <IconEdit size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canDelete(tool) && (
+                        {canExecute && canDelete(tool) && (
                           <Tooltip label="Delete">
                             <ActionIcon variant="subtle" size="sm" color="red" onClick={() => setDeleteTool(tool)}>
                               <IconTrash size={16} />

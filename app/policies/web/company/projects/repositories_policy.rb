@@ -5,17 +5,9 @@ module Web
     module Projects
       class RepositoriesPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def create? = project_accessible? && current_user.admin?
-        def update? = project_accessible? && current_user.admin?
-        def destroy? = project_accessible? && current_user.admin?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def create? = project_writable? && current_user.admin?
+        def update? = project_writable? && current_user.admin?
+        def destroy? = project_writable? && current_user.admin?
       end
     end
   end

@@ -19,6 +19,8 @@ import { IconAlertCircle, IconExternalLink, IconSparkles, IconWand } from '@tabl
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 interface Project {
@@ -82,6 +84,7 @@ const LandingPage = () => {
     assets,
     agentModels = [],
   } = usePage<{ props: Props }>().props as unknown as Props;
+  const { canExecute } = useProjectPermissions();
 
   const [runtime, setRuntime] = useState<string | null>(configuredAgents[0] ?? null);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -191,25 +194,27 @@ const LandingPage = () => {
             )}
           </Stack>
 
-          <Group mt="md">
-            {hasActive ? (
-              <Button size="md" leftSection={<IconSparkles size={16} />} onClick={handleContinue}>
-                Continue Active Session
-              </Button>
-            ) : (
-              <Tooltip label="No agent runtime configured" disabled={!!runtime}>
-                <Button
-                  size="md"
-                  leftSection={<IconSparkles size={16} />}
-                  onClick={handleStart}
-                  loading={starting}
-                  disabled={!runtime}
-                >
-                  Start Builder
+          {canExecute && (
+            <Group mt="md">
+              {hasActive ? (
+                <Button size="md" leftSection={<IconSparkles size={16} />} onClick={handleContinue}>
+                  Continue Active Session
                 </Button>
-              </Tooltip>
-            )}
-          </Group>
+              ) : (
+                <Tooltip label="No agent runtime configured" disabled={!!runtime}>
+                  <Button
+                    size="md"
+                    leftSection={<IconSparkles size={16} />}
+                    onClick={handleStart}
+                    loading={starting}
+                    disabled={!runtime}
+                  >
+                    Start Builder
+                  </Button>
+                </Tooltip>
+              )}
+            </Group>
+          )}
         </Stack>
       </Card>
 

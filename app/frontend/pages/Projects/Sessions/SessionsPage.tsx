@@ -4,6 +4,7 @@ import { IconExternalLink, IconPlus } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -116,6 +117,7 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
   const { project } = usePage<{ props: { project: { id: number; name: string } } }>().props as unknown as {
     project: { id: number; name: string };
   };
+  const { canExecute } = useProjectPermissions();
 
   // Local map mirrors the InfiniteScroll-accumulated sessions prop.
   // Cable updates patch individual entries in-place without touching the rest,
@@ -218,9 +220,11 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
             allowDeselect={true}
           />
         </Group>
-        <Button size="sm" leftSection={<IconPlus size={16} />} component="a" href={`${sessionsUrl}/new`}>
-          New Session
-        </Button>
+        {canExecute && (
+          <Button size="sm" leftSection={<IconPlus size={16} />} component="a" href={`${sessionsUrl}/new`}>
+            New Session
+          </Button>
+        )}
       </Group>
 
       {sessions.length === 0 ? (

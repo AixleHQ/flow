@@ -75,6 +75,40 @@ module Api
 
         assert_response :success
       end
+
+      # === viewer (read-only) enforcement ===
+
+      class ViewerTest < ActionController::TestCase
+        tests Api::V1::TerminalSessionsController
+
+        setup do
+          @company = create(:company)
+          @owner = create(:user, :onboarding_completed, company: @company)
+          @project = create(:project, company: @company, owner: @owner)
+          @viewer = create(:user, :viewer, company: @company, email: "client@ext.com")
+          @project.add_collaborator(@viewer)
+          sign_in @viewer
+        end
+
+        test "viewer cannot launch an agent session" do
+          post :create, params: {
+            terminal_session: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id }
+          }
+          assert_response :forbidden
+        end
+
+        test "viewer cannot finish a session" do
+          ts = create(:terminal_session, :running, user: @viewer, project: @project)
+          post :finish, params: { id: ts.id }
+          assert_response :forbidden
+        end
+
+        test "viewer can read own session" do
+          ts = create(:terminal_session, user: @viewer, project: @project, state: "ready")
+          get :show, params: { id: ts.id }
+          assert_response :success
+        end
+      end
     end
   end
 end

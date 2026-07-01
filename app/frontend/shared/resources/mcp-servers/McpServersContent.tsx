@@ -14,6 +14,8 @@ import {
 import { IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { DeleteMcpServerModal } from './DeleteMcpServerModal';
 import { McpServerFormModal } from './McpServerFormModal';
 
@@ -74,6 +76,7 @@ export function McpServersContent({
   subtitle,
   editableScope,
 }: McpServersContentProps) {
+  const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('custom');
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -118,9 +121,11 @@ export function McpServersContent({
             {subtitle}
           </Text>
         </Box>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-          Add MCP Server
-        </Button>
+        {canExecute && (
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+            Add MCP Server
+          </Button>
+        )}
       </Group>
 
       <Group gap="md" mb="lg">
@@ -156,7 +161,7 @@ export function McpServersContent({
           <Text fz={16} c="dimmed" mt="sm">
             {hasFilters ? 'No MCP servers match your filters' : 'No MCP servers configured'}
           </Text>
-          {!hasFilters && (
+          {!hasFilters && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
               Add your first MCP server
             </Button>
@@ -207,7 +212,7 @@ export function McpServersContent({
             </Table.Thead>
             <Table.Tbody>
               {filtered.map((server) => {
-                const canEdit = canEditServer(server, editableScope);
+                const canEdit = canExecute && canEditServer(server, editableScope);
                 return (
                   <Table.Tr key={server.id}>
                     <Table.Td>

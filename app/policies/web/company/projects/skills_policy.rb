@@ -5,16 +5,8 @@ module Web
     module Projects
       class SkillsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def create? = project_accessible?
-        def destroy? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def create? = project_writable?
+        def destroy? = project_writable?
       end
     end
   end

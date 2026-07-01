@@ -36,4 +36,22 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     delete company_member_path(member)
     assert_response :redirect
   end
+
+  test "invite as viewer with mismatched email domain succeeds" do
+    assert_difference -> { @company.users.where(role: "viewer").count }, 1 do
+      post company_members_path, params: {
+        user: { email: "client@totally-different-domain.com", name: "External Client", role: "viewer" }
+      }
+    end
+    assert_response :redirect
+    invited = @company.users.find_by(email: "client@totally-different-domain.com")
+    assert invited.viewer?
+  end
+
+  test "update to viewer succeeds" do
+    member = create(:user, :employee, company: @company)
+    patch company_member_path(member), params: { user: { role: "viewer" } }
+    assert_response :redirect
+    assert member.reload.viewer?
+  end
 end

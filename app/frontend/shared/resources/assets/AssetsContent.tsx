@@ -24,6 +24,7 @@ import type { Body, Meta } from '@uppy/core';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
@@ -110,6 +111,7 @@ export function AssetsContent({
   createEndpoint,
   projectId,
 }: AssetsContentProps) {
+  const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
   const [folderFilter, setFolderFilter] = useState<string | null>(null);
 
@@ -318,7 +320,7 @@ export function AssetsContent({
             {subtitle}
           </Text>
         </Box>
-        {createEndpoint && (
+        {canExecute && createEndpoint && (
           <Button leftSection={<IconUpload size={16} />} onClick={() => setUploadOpen(true)}>
             Upload
           </Button>
@@ -360,7 +362,7 @@ export function AssetsContent({
           <Text fz={16} c="dimmed" mt="sm">
             {search || folderFilter ? 'No assets match your filters' : 'No assets yet'}
           </Text>
-          {!search && !folderFilter && createEndpoint && (
+          {!search && !folderFilter && canExecute && createEndpoint && (
             <Button variant="outline" mt="sm" onClick={() => setUploadOpen(true)}>
               Upload your first file
             </Button>
@@ -496,7 +498,7 @@ export function AssetsContent({
                           <IconHistory size={16} />
                         </ActionIcon>
                       </Tooltip>
-                      {canDelete(asset) ? (
+                      {canExecute && canDelete(asset) ? (
                         <Tooltip label="Delete">
                           <ActionIcon variant="subtle" size="sm" color="red" onClick={() => handleSoftDelete(asset)}>
                             <IconTrash size={16} />

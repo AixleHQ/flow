@@ -51,12 +51,14 @@ const ROLE_COLORS: Record<UserRole, string> = {
   super_admin: 'grape',
   admin: 'blue',
   employee: 'gray',
+  viewer: 'teal',
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
   employee: 'Employee',
+  viewer: 'Viewer',
 };
 
 const formatDate = (d: string | null) => {
@@ -67,6 +69,7 @@ const formatDate = (d: string | null) => {
 const ROLE_FILTER_OPTIONS = [
   { value: 'admin', label: 'Admin' },
   { value: 'employee', label: 'Employee' },
+  { value: 'viewer', label: 'Viewer' },
 ];
 
 const STATUS_FILTER_OPTIONS = [

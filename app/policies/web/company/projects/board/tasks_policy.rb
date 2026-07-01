@@ -7,20 +7,12 @@ module Web
         class TasksPolicy < Web::Company::ApplicationPolicy
           def index? = project_accessible?
           def show? = project_accessible?
-          def create? = project_accessible?
-          def update? = project_accessible?
-          def destroy? = project_accessible?
-          def move? = project_accessible?
           def workflow_runs? = project_accessible?
-          def trigger_workflow? = project_accessible?
-
-          private
-
-          def project = context.project
-
-          def project_accessible?
-            project&.accessible_by?(current_user)
-          end
+          def create? = project_writable?
+          def update? = project_writable?
+          def destroy? = project_writable?
+          def move? = project_writable?
+          def trigger_workflow? = project_writable?
         end
       end
     end
