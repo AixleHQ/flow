@@ -77,7 +77,7 @@ class WorkflowDuplicator
         messages << "Some tools require an integration before they are usable: #{names}."
       end
 
-      messages << "Assets, repositories and integrations are not copied — set them up in the project as needed."
+      messages << "Secrets, assets, repositories and integrations are not copied — add/connect them in the project as needed."
 
       { needs_setup: messages }
     end

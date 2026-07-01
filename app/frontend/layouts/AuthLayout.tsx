@@ -24,7 +24,12 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
   const projectId = propProjectId ?? (pageProps.project ? String(pageProps.project.id) : undefined);
   const context = projectId ? 'project' : 'company';
 
-  const prevFlashRef = useRef(flash);
+  // Start undefined (not the current flash) so a flash that is already present
+  // on the first mount is shown, not suppressed. This layout is mounted fresh
+  // after a redirect (e.g. catalog "Duplicate to project" lands on the builder,
+  // which uses this layout as a persistent project layout), and the flash —
+  // including the "needs setup" summary — arrives with that first render.
+  const prevFlashRef = useRef<typeof flash | undefined>(undefined);
   useEffect(() => {
     if (flash === prevFlashRef.current) return;
     prevFlashRef.current = flash;
@@ -36,7 +41,9 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
     }
     // "Needs setup" summary after copying a workflow from the catalog: a list of
     // resources that were not copied / need manual setup (secrets, assets, etc).
-    const needsSetup = flash.needs_setup;
+    // NOTE: Inertia camelizes prop keys, so the Rails `needs_setup` flash key
+    // arrives here as `needsSetup` — reading `needs_setup` silently misses it.
+    const needsSetup = flash.needsSetup;
     if (Array.isArray(needsSetup) && needsSetup.length > 0) {
       notifications.show({
         title: 'Some resources need setup',

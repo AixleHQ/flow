@@ -205,6 +205,8 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
 
     # summary enumerates the config item the workflow relies on
     assert(duplicator.summary[:needs_setup].any? { |m| m.include?("API_KEY") })
+    # the standing summary line also states that secrets are not copied
+    assert(duplicator.summary[:needs_setup].any? { |m| m.match?(/Secrets.*not copied/i) })
   end
 
   test "generates unique name when duplicate exists" do
