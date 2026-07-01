@@ -17,7 +17,7 @@ class User < ApplicationRecord
   AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
 
   # Enumerize for roles and positions (not state machines)
-  enumerize :role, in: %i[employee admin super_admin], default: :employee, predicates: true, scope: true
+  enumerize :role, in: %i[employee admin super_admin viewer], default: :employee, predicates: true, scope: true
   enumerize :position, in: POSITIONS, predicates: true
 
   # Associations
@@ -87,6 +87,20 @@ class User < ApplicationRecord
     agent_credentials.exists?
   end
 
+  # A "client" (external observer) account: read-only everywhere, cannot run/mutate.
+  def read_only?
+    viewer?
+  end
+
+  # Clients never connect/run an agent, so onboarding must not require one.
+  def onboarding_requires_agent?
+    !read_only?
+  end
+
+  def can_advance_to_authenticated?
+    onboarding_requires_agent? ? has_configured_agents? : true
+  end
+
   def agent_models_by_type
     agent_credentials.each_with_object({}) do |cred, hash|
       models = fetch_or_cache_agent_models(cred)
@@ -106,7 +120,7 @@ class User < ApplicationRecord
   def can_complete_onboarding?
     position.present? &&
       preferred_agent_language.present? &&
-      has_configured_agents?
+      (read_only? || has_configured_agents?)
   end
 
   # Setter for invitation flow - sets invited_by and invited_at
@@ -150,6 +164,7 @@ class User < ApplicationRecord
   def email_domain_matches_company
     return if company.blank? || email.blank?
     return if super_admin?
+    return if read_only? # external clients have their own email domain
 
     domain = email.split("@").last
     return if domain == company.email_domain

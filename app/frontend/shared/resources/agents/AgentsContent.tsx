@@ -2,6 +2,8 @@ import { ActionIcon, Badge, Box, Button, Center, Group, Table, Text, TextInput, 
 import { IconCopy, IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { AgentFormModal } from './AgentFormModal';
 import { DeleteAgentModal } from './DeleteAgentModal';
 
@@ -39,6 +41,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
   const [duplicateAgent, setDuplicateAgent] = useState<Agent | null>(null);
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
+  const { canExecute } = useProjectPermissions();
 
   const isProjectContext = basePath.includes('projects');
 
@@ -79,9 +82,11 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
             {subtitle}
           </Text>
         </Box>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-          Add Agent
-        </Button>
+        {canExecute && (
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+            Add Agent
+          </Button>
+        )}
       </Group>
 
       <TextInput
@@ -107,7 +112,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
           <Text fz={16} c="dimmed" mt="sm">
             {search ? 'No agents match your search' : 'No agents yet'}
           </Text>
-          {!search && (
+          {!search && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
               Add your first agent
             </Button>
@@ -198,34 +203,36 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                     </Table.Td>
                   )}
                   <Table.Td>
-                    <Group gap={4} justify="flex-end">
-                      <Tooltip label="Duplicate">
-                        <ActionIcon variant="subtle" size="sm" onClick={() => handleDuplicate(agent)}>
-                          <IconCopy size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          disabled={isReadOnly(agent)}
-                          onClick={() => handleEdit(agent)}
-                        >
-                          <IconEdit size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
-                        <ActionIcon
-                          variant="subtle"
-                          size="sm"
-                          color="red"
-                          disabled={isReadOnly(agent)}
-                          onClick={() => setDeleteAgent(agent)}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
+                    {canExecute && (
+                      <Group gap={4} justify="flex-end">
+                        <Tooltip label="Duplicate">
+                          <ActionIcon variant="subtle" size="sm" onClick={() => handleDuplicate(agent)}>
+                            <IconCopy size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            disabled={isReadOnly(agent)}
+                            onClick={() => handleEdit(agent)}
+                          >
+                            <IconEdit size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                        <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            color="red"
+                            disabled={isReadOnly(agent)}
+                            onClick={() => setDeleteAgent(agent)}
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    )}
                   </Table.Td>
                 </Table.Tr>
               ))}

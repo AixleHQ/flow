@@ -6,15 +6,7 @@ module Web
       module Sessions
         class ArtifactsPolicy < Web::Company::ApplicationPolicy
           def index? = project_accessible?
-          def review? = project_accessible?
-
-          private
-
-          def project = context.project
-
-          def project_accessible?
-            project&.accessible_by?(current_user)
-          end
+          def review? = project_writable?
         end
       end
     end

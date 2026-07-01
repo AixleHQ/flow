@@ -22,6 +22,7 @@ interface Props {
 const ROLE_OPTIONS = [
   { value: 'employee', label: 'Employee' },
   { value: 'admin', label: 'Admin' },
+  { value: 'viewer', label: 'Viewer' },
 ];
 
 export const InviteUserModal: FC<Props> = ({ opened, onClose, basePath }) => {

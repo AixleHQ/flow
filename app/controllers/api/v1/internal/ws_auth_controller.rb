@@ -21,10 +21,7 @@ module Api
       #   403 Forbidden - user doesn't own session or session not running
       #   404 Not Found - session doesn't exist
       #
-      class WsAuthController < Api::V1::ApplicationController
-        # Skip default authentication - we handle it manually with proper logging
-        skip_before_action :authenticate_user!
-
+      class WsAuthController < Api::V1::Internal::ApplicationController
         def show
           route_token = extract_route_token
           unless route_token

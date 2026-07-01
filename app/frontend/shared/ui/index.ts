@@ -8,6 +8,7 @@ export type {
   SharedProps,
   SharedSettings,
   SharedPermissions,
+  ProjectPermissions,
   SharedUser,
   SharedCompany,
   SharedProject,

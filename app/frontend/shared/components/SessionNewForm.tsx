@@ -20,6 +20,7 @@ import { IconCheck, IconPlayerPlay, IconRobot } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
@@ -87,6 +88,7 @@ export const SessionNewForm = ({
   preSelectedProjectId,
 }: SessionNewFormProps) => {
   const { currentUser } = usePage().props as unknown as SharedProps;
+  const { canExecute } = useProjectPermissions();
   const configuredAgents = currentUser?.configuredAgents ?? [];
   const defaultRuntime = currentUser?.defaultAgentRuntime;
   const initialAgent = defaultRuntime && configuredAgents.includes(defaultRuntime) ? defaultRuntime : '';
@@ -474,19 +476,21 @@ export const SessionNewForm = ({
         )}
 
         {/* ── Start Button ────────────────────────────── */}
-        <Group>
-          <Button
-            size="lg"
-            leftSection={<IconPlayerPlay size={20} />}
-            onClick={handleStart}
-            loading={loading}
-            disabled={!canSubmit}
-            flex={1}
-            color={agentType ? (AGENT_MANTINE_COLORS[agentType] ?? undefined) : undefined}
-          >
-            Start Session
-          </Button>
-        </Group>
+        {canExecute && (
+          <Group>
+            <Button
+              size="lg"
+              leftSection={<IconPlayerPlay size={20} />}
+              onClick={handleStart}
+              loading={loading}
+              disabled={!canSubmit}
+              flex={1}
+              color={agentType ? (AGENT_MANTINE_COLORS[agentType] ?? undefined) : undefined}
+            >
+              Start Session
+            </Button>
+          </Group>
+        )}
       </Stack>
     </Card>
   );

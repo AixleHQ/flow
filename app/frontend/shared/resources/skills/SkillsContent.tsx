@@ -19,6 +19,8 @@ import { useDebouncedCallback } from '@mantine/hooks';
 import { IconDownload, IconExternalLink, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { DeleteSkillModal } from './DeleteSkillModal';
 
 export interface Skill {
@@ -69,6 +71,7 @@ export function SkillsContent({
   registryQuery,
   registryResults,
 }: SkillsContentProps) {
+  const { canExecute } = useProjectPermissions();
   const [filterSearch, setFilterSearch] = useState('');
   const [deleteSkill, setDeleteSkill] = useState<Skill | null>(null);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -98,9 +101,11 @@ export function SkillsContent({
             {subtitle}
           </Text>
         </Box>
-        <Button leftSection={<IconSearch size={16} />} onClick={() => setSearchModalOpen(true)}>
-          Add from Registry
-        </Button>
+        {canExecute && (
+          <Button leftSection={<IconSearch size={16} />} onClick={() => setSearchModalOpen(true)}>
+            Add from Registry
+          </Button>
+        )}
       </Group>
 
       <TextInput
@@ -126,7 +131,7 @@ export function SkillsContent({
           <Text fz={16} c="dimmed" mt="sm">
             {filterSearch ? 'No skills match your filter' : 'No skills installed'}
           </Text>
-          {!filterSearch && (
+          {!filterSearch && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setSearchModalOpen(true)}>
               Browse skills.sh registry
             </Button>
@@ -169,17 +174,19 @@ export function SkillsContent({
                     </ActionIcon>
                   </Tooltip>
                 ) : (
-                  <Tooltip label="Remove">
-                    <ActionIcon
-                      variant="subtle"
-                      size="sm"
-                      color="red"
-                      onClick={() => setDeleteSkill(skill)}
-                      style={{ flexShrink: 0 }}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Tooltip>
+                  canExecute && (
+                    <Tooltip label="Remove">
+                      <ActionIcon
+                        variant="subtle"
+                        size="sm"
+                        color="red"
+                        onClick={() => setDeleteSkill(skill)}
+                        style={{ flexShrink: 0 }}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  )
                 )}
               </Group>
 

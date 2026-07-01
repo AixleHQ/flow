@@ -66,4 +66,13 @@ describe('InviteUserModal', () => {
     expect(onClose).toHaveBeenCalled();
     expect(router.post).not.toHaveBeenCalled();
   });
+
+  it('offers Viewer as a role option', async () => {
+    renderPage(<InviteUserModal opened onClose={vi.fn()} basePath="/companies/1/members" />);
+
+    // The Role select renders its current value ("Employee") in its input.
+    await userEvent.click(screen.getByDisplayValue('Employee'));
+
+    expect(await screen.findByRole('option', { name: 'Viewer' })).toBeInTheDocument();
+  });
 });

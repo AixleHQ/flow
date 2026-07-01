@@ -5,17 +5,9 @@ module Web
     module Projects
       class WorkflowRunAssetsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def export? = project_accessible?
         def download? = project_accessible?
-        def export_all? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def export? = project_writable?
+        def export_all? = project_writable?
       end
     end
   end

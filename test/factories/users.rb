@@ -45,6 +45,10 @@ FactoryBot.define do
       role { "admin" }
     end
 
+    trait :viewer do
+      role { "viewer" }
+    end
+
     # == State Traits ==
 
     trait :onboarding_completed do

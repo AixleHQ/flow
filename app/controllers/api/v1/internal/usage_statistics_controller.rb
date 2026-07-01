@@ -3,9 +3,7 @@
 module Api
   module V1
     module Internal
-      class UsageStatisticsController < Api::V1::ApplicationController
-        skip_before_action :authenticate_user!
-
+      class UsageStatisticsController < Api::V1::Internal::ApplicationController
         # POST /api/v1/internal/usage_statistics
         def create
           result = UsageStatisticsService.process(request.raw_post)

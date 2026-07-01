@@ -6,19 +6,11 @@ module Web
       class WorkflowRunsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def show? = project_accessible?
-        def create? = project_accessible?
-        def cancel? = project_accessible?
-        def approve_step? = project_accessible?
-        def retry_step? = project_accessible?
-        def skip_step? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def create? = project_writable?
+        def cancel? = project_writable?
+        def approve_step? = project_writable?
+        def retry_step? = project_writable?
+        def skip_step? = project_writable?
       end
     end
   end

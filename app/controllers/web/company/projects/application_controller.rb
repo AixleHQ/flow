@@ -2,7 +2,10 @@
 
 class Web::Company::Projects::ApplicationController < Web::Company::ApplicationController
   inertia_share do
-    { project: InertiaRails.always { project_props } }
+    {
+      project: InertiaRails.always { project_props },
+      projectPermissions: InertiaRails.always { project_permissions_props }
+    }
   end
 
   private
@@ -19,5 +22,12 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
 
   def project_props
     ProjectResource.new(current_project).to_h
+  end
+
+  def project_permissions_props
+    {
+      canExecute: !current_user.read_only?,
+      canManage: current_user.admin? || current_project.admin?(current_user)
+    }
   end
 end

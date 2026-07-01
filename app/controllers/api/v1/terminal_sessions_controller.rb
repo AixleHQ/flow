@@ -11,6 +11,10 @@ module Api
       end
 
       def create
+        if current_user.read_only? && session_params[:session_type] != "auth_setup"
+          return render json: { error: "Viewers cannot launch sessions" }, status: :forbidden
+        end
+
         project = session_params[:project_id] ? current_user.company.projects.find(session_params[:project_id]) : nil
         agent = session_params[:configured_agent_id] ? find_accessible_agent(session_params[:configured_agent_id], project) : nil
 

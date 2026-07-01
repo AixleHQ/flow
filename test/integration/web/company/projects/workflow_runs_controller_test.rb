@@ -71,6 +71,22 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
+  test "viewer collaborator can read index but cannot create a run" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: @company,
+                                    email: "client@ext.com", password: AuthHelper::TEST_PASSWORD)
+    @project.add_collaborator(viewer)
+    sign_in_as(viewer)
+
+    get company_project_workflow_runs_path(@project)
+    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+
+    post company_project_workflow_runs_path(@project), params: {
+      workflow_run: { workflow_id: @workflow.id, mode: "non_interactive" }
+    }
+    assert_response :redirect
+    assert_equal 0, WorkflowRun.where(project: @project).count
+  end
+
   test "create normalizes camelCase step_overrides keys to snake_case" do
     create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
     mock_workflow_execution_start

@@ -5,14 +5,6 @@ module Web
     module Projects
       class AnalyticsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
       end
     end
   end

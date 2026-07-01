@@ -7,18 +7,10 @@ module Web
         class StepsPolicy < Web::Company::ApplicationPolicy
           def index? = project_accessible?
           def show? = project_accessible?
-          def create? = project_accessible?
-          def update? = project_accessible?
-          def destroy? = project_accessible?
-          def reorder? = project_accessible?
-
-          private
-
-          def project = context.project
-
-          def project_accessible?
-            project&.accessible_by?(current_user)
-          end
+          def create? = project_writable?
+          def update? = project_writable?
+          def destroy? = project_writable?
+          def reorder? = project_writable?
         end
       end
     end

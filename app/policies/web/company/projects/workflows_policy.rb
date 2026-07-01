@@ -6,21 +6,13 @@ module Web
       class WorkflowsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def builder? = project_accessible?
-        def create? = project_accessible?
         def show? = project_accessible?
-        def update? = project_accessible?
-        def destroy? = project_accessible?
-        def publish? = project_accessible?
-        def unpublish? = project_accessible?
-        def duplicate? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def create? = project_writable?
+        def update? = project_writable?
+        def destroy? = project_writable?
+        def publish? = project_writable?
+        def unpublish? = project_writable?
+        def duplicate? = project_writable?
       end
     end
   end

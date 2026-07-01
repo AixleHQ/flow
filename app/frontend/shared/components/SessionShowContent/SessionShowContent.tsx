@@ -10,6 +10,7 @@ import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 
 import classes from './SessionShowContent.module.css';
@@ -84,6 +85,7 @@ function useElapsedTimer(active: boolean): Date {
 }
 
 export function SessionShowContent({ session: s, cableStream, context: ctx }: Props) {
+  const { canExecute } = useProjectPermissions();
   const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
   const agentColor = AGENT_COLORS[s.agentType ?? ''] ?? 'gray';
   const stateColor = STATE_COLORS[s.state] ?? 'gray';
@@ -194,12 +196,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         )}
       </div>
       <div className={classes.headerRight}>
-        {!isTerminal && !isFinishing && (
+        {canExecute && !isTerminal && !isFinishing && (
           <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={finishRequested}>
             Finish
           </Button>
         )}
-        {ctx.newSessionPath && (
+        {canExecute && ctx.newSessionPath && (
           <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => router.visit(ctx.newSessionPath!)}>
             New Session
           </Button>
@@ -333,7 +335,9 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             <Button variant="outline" onClick={() => router.visit(ctx.backPath)}>
               All Sessions
             </Button>
-            {ctx.newSessionPath && <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>}
+            {canExecute && ctx.newSessionPath && (
+              <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>
+            )}
           </Group>
         </Stack>
       </Card>

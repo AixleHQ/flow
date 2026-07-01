@@ -85,12 +85,14 @@ const ROLE_COLORS: Record<UserRole, string> = {
   super_admin: 'grape',
   admin: 'blue',
   employee: 'gray',
+  viewer: 'teal',
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
   employee: 'Employee',
+  viewer: 'Viewer',
 };
 
 const formatDate = (d: string | null) => {

@@ -14,6 +14,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+
 import { AddRepositoryModal } from './AddRepositoryModal';
 import { EditRepositoryModal } from './EditRepositoryModal';
 
@@ -40,12 +42,14 @@ interface RepositoriesContentProps {
 const RepoCard = ({
   repo,
   readOnly,
+  canExecute,
   onEdit,
   onDelete,
   showScope,
 }: {
   repo: Repository;
   readOnly?: boolean;
+  canExecute: boolean;
   onEdit: (r: Repository) => void;
   onDelete: (r: Repository) => void;
   showScope?: boolean;
@@ -82,7 +86,7 @@ const RepoCard = ({
         </Box>
       </Group>
 
-      {!readOnly && (
+      {!readOnly && canExecute && (
         <Menu position="bottom-end" withArrow>
           <Menu.Target>
             <Button variant="subtle" size="xs" p={4} color="gray">
@@ -104,6 +108,7 @@ const RepoCard = ({
 );
 
 export const RepositoriesContent = ({ repositories, basePath, title, editBranches }: RepositoriesContentProps) => {
+  const { canExecute } = useProjectPermissions();
   const [editRepo, setEditRepo] = useState<Repository | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
 
@@ -147,6 +152,7 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
           key={repo.id}
           repo={repo}
           readOnly={readOnly || !canEdit(repo)}
+          canExecute={canExecute}
           onEdit={handleEdit}
           onDelete={handleDelete}
           showScope={!isProjectContext}
@@ -184,9 +190,11 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
             Repositories available for agent sessions and code context
           </Text>
         </Box>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
-          Add Repository
-        </Button>
+        {canExecute && (
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
+            Add Repository
+          </Button>
+        )}
       </Group>
 
       {repositories.length === 0 ? (
@@ -203,9 +211,11 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
                 Add repositories to use as code context in agent sessions. Connect a GitHub or GitLab integration first.
               </Text>
             </Box>
-            <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
-              Add Repository
-            </Button>
+            {canExecute && (
+              <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
+                Add Repository
+              </Button>
+            )}
           </Stack>
         </Card>
       ) : isProjectContext ? (

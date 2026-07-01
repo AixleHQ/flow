@@ -5,16 +5,8 @@ module Web
     module Projects
       class SessionsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def new? = project_accessible?
         def show? = project_accessible?
-
-        private
-
-        def project = context.project
-
-        def project_accessible?
-          project&.accessible_by?(current_user)
-        end
+        def new? = project_writable?
       end
     end
   end
