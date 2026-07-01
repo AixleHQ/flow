@@ -1517,48 +1517,48 @@ function TaskDetailSidebar({
           </Group>
 
           {canExecute && (
-          <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
-            <Textarea
-              placeholder="Write a comment... (⌘+Enter to send)"
-              value={commentBody}
-              onChange={(e) => setCommentBody(e.currentTarget.value)}
-              autosize
-              minRows={2}
-              maxRows={6}
-              size="sm"
-              mb="xs"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.metaKey) {
-                  e.preventDefault();
-                  handleSubmitComment();
-                }
-              }}
-            />
-            <Group gap="xs" mb="xs" wrap="wrap">
-              {COMMENT_TAG_SUGGESTIONS.map((tag) => (
-                <Badge
-                  key={tag}
-                  size="xs"
-                  variant={commentTags.includes(tag) ? 'filled' : 'outline'}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() =>
-                    setCommentTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+            <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
+              <Textarea
+                placeholder="Write a comment... (⌘+Enter to send)"
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.currentTarget.value)}
+                autosize
+                minRows={2}
+                maxRows={6}
+                size="sm"
+                mb="xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.metaKey) {
+                    e.preventDefault();
+                    handleSubmitComment();
                   }
-                >
-                  {tag}
-                </Badge>
-              ))}
-            </Group>
-            <Button
-              size="xs"
-              rightSection={<IconSend size={14} />}
-              onClick={handleSubmitComment}
-              loading={submittingComment}
-              disabled={!commentBody.trim()}
-            >
-              Send
-            </Button>
-          </Box>
+                }}
+              />
+              <Group gap="xs" mb="xs" wrap="wrap">
+                {COMMENT_TAG_SUGGESTIONS.map((tag) => (
+                  <Badge
+                    key={tag}
+                    size="xs"
+                    variant={commentTags.includes(tag) ? 'filled' : 'outline'}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() =>
+                      setCommentTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+                    }
+                  >
+                    {tag}
+                  </Badge>
+                ))}
+              </Group>
+              <Button
+                size="xs"
+                rightSection={<IconSend size={14} />}
+                onClick={handleSubmitComment}
+                loading={submittingComment}
+                disabled={!commentBody.trim()}
+              >
+                Send
+              </Button>
+            </Box>
           )}
 
           {filteredComments.length > 1 && (

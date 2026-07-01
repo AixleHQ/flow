@@ -365,8 +365,7 @@ describe('Onboarding/OnboardingPage', () => {
   });
 
   describe('viewer (read-only client) onboarding', () => {
-    const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
-      userAt({ role: 'viewer', ...overrides });
+    const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser => userAt({ role: 'viewer', ...overrides });
 
     it('hides the Select Agents and Authenticate steps for a viewer', () => {
       renderAuthedPage(<OnboardingPage />, {

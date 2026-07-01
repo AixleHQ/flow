@@ -371,47 +371,48 @@ const WorkflowsPage = () => {
                     </Tooltip>
                   </Group>
                   <Group gap={4}>
-                    {canExecute && (isInherited ? (
-                      <Tooltip label="Copy & Configure">
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          onClick={() => handleCopyAndConfigure(wf)}
-                          loading={loading}
-                        >
-                          <IconCopy size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    ) : (
-                      <>
-                        <Tooltip label={wf.publishedAt ? 'Unpublish from catalog' : 'Publish to catalog'}>
+                    {canExecute &&
+                      (isInherited ? (
+                        <Tooltip label="Copy & Configure">
                           <ActionIcon
                             size="sm"
                             variant="subtle"
-                            color={wf.publishedAt ? 'green' : 'gray'}
-                            onClick={() =>
-                              router.post(
-                                `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
-                                {},
-                                { preserveScroll: true },
-                              )
-                            }
+                            onClick={() => handleCopyAndConfigure(wf)}
+                            loading={loading}
                           >
-                            {wf.publishedAt ? <IconGlobe size={16} /> : <IconGlobeOff size={16} />}
+                            <IconCopy size={16} />
                           </ActionIcon>
                         </Tooltip>
-                        <Tooltip label="Edit name & description">
-                          <ActionIcon size="sm" variant="subtle" onClick={() => openEdit(wf)}>
-                            <IconEdit size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label="Delete workflow">
-                          <ActionIcon size="sm" variant="subtle" color="red" onClick={() => setDeleteWorkflow(wf)}>
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </>
-                    ))}
+                      ) : (
+                        <>
+                          <Tooltip label={wf.publishedAt ? 'Unpublish from catalog' : 'Publish to catalog'}>
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color={wf.publishedAt ? 'green' : 'gray'}
+                              onClick={() =>
+                                router.post(
+                                  `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
+                                  {},
+                                  { preserveScroll: true },
+                                )
+                              }
+                            >
+                              {wf.publishedAt ? <IconGlobe size={16} /> : <IconGlobeOff size={16} />}
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Edit name & description">
+                            <ActionIcon size="sm" variant="subtle" onClick={() => openEdit(wf)}>
+                              <IconEdit size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label="Delete workflow">
+                            <ActionIcon size="sm" variant="subtle" color="red" onClick={() => setDeleteWorkflow(wf)}>
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </>
+                      ))}
                   </Group>
                 </Group>
               </Card>

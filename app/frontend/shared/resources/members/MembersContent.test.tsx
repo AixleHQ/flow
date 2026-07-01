@@ -123,10 +123,10 @@ describe('MembersContent', () => {
     );
   });
 
-  it("renders a non-empty badge for a viewer member", () => {
-    renderPage(<MembersContent {...baseProps([makeUser({ id: 5, name: "Vic Viewer", role: "viewer" })])} />);
+  it('renders a non-empty badge for a viewer member', () => {
+    renderPage(<MembersContent {...baseProps([makeUser({ id: 5, name: 'Vic Viewer', role: 'viewer' })])} />);
 
-    const row = screen.getByText("Vic Viewer").closest("tr") as HTMLElement;
-    expect(within(row).getByText("Viewer")).toBeInTheDocument();
+    const row = screen.getByText('Vic Viewer').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Viewer')).toBeInTheDocument();
   });
 });
