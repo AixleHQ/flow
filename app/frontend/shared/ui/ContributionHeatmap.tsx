@@ -12,13 +12,7 @@ interface ContributionHeatmapProps {
 }
 
 // Five GitHub-like intensity buckets. Level 0 uses a subtle theme surface; 1–4 ramp green.
-const LEVEL_COLORS = [
-  'var(--app-bg-elevated)',
-  '#0e4429',
-  '#006d32',
-  '#26a641',
-  '#39d353',
-];
+const LEVEL_COLORS = ['var(--app-bg-elevated)', '#0e4429', '#006d32', '#26a641', '#39d353'];
 
 export function intensityLevel(count: number): number {
   if (count <= 0) return 0;

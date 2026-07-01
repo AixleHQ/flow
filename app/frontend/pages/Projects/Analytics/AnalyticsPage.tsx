@@ -849,8 +849,7 @@ function HeatmapPanel() {
 // --- Main page ---
 
 const AnalyticsPage = () => {
-  const { project, scope, period, participantId, participants } = usePage<{ props: Props }>()
-    .props as unknown as Props;
+  const { project, scope, period, participantId, participants } = usePage<{ props: Props }>().props as unknown as Props;
   const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
 
   const participantOptions = (participants ?? []).map((p) => ({

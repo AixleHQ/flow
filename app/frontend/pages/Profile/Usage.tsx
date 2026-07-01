@@ -13,14 +13,7 @@ import {
   Text,
   Tooltip,
 } from '@mantine/core';
-import {
-  IconChartBar,
-  IconClock,
-  IconCoin,
-  IconInfoCircle,
-  IconPlayerPlay,
-  IconRoute,
-} from '@tabler/icons-react';
+import { IconChartBar, IconClock, IconCoin, IconInfoCircle, IconPlayerPlay, IconRoute } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useMemo } from 'react';
 import {
@@ -296,7 +289,10 @@ function ProjectBreakdownPanel() {
                   {p.projectName}
                 </Text>
               </Group>
-              <Box mt={4} style={{ width: '80%', height: 4, borderRadius: 2, backgroundColor: 'var(--app-bg-elevated)' }}>
+              <Box
+                mt={4}
+                style={{ width: '80%', height: 4, borderRadius: 2, backgroundColor: 'var(--app-bg-elevated)' }}
+              >
                 <Box style={{ height: 4, borderRadius: 2, backgroundColor: color, width: `${pct}%` }} />
               </Box>
             </Box>
@@ -355,7 +351,9 @@ function AgentActivityPanel() {
               key={agent.agentType}
               gap="sm"
               py={8}
-              style={{ borderBottom: idx < sessionsByAgent.length - 1 ? '1px solid var(--app-border-default)' : undefined }}
+              style={{
+                borderBottom: idx < sessionsByAgent.length - 1 ? '1px solid var(--app-border-default)' : undefined,
+              }}
             >
               <Box w={10} h={10} style={{ borderRadius: '50%', backgroundColor: getAgentColor(idx), flexShrink: 0 }} />
               <Box style={{ flex: 1 }}>
@@ -399,8 +397,19 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `$${(v / 100).toFixed(0)}`} />
-              <RechartsTooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatCostCents(Number(v)), 'Cost']} />
-              <Area type="monotone" dataKey="costCents" name="Cost" stroke="#ff9800" fill="url(#usage-grad-cost)" strokeWidth={2} dot={false} />
+              <RechartsTooltip
+                contentStyle={chartTooltipStyle}
+                formatter={(v) => [formatCostCents(Number(v)), 'Cost']}
+              />
+              <Area
+                type="monotone"
+                dataKey="costCents"
+                name="Cost"
+                stroke="#ff9800"
+                fill="url(#usage-grad-cost)"
+                strokeWidth={2}
+                dot={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Paper>
@@ -421,8 +430,19 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
               <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={tickInterval} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => formatTokens(v)} />
-              <RechartsTooltip contentStyle={chartTooltipStyle} formatter={(v) => [formatTokens(Number(v)), 'Tokens']} />
-              <Area type="monotone" dataKey="totalTokens" name="Tokens" stroke="#00bcd4" fill="url(#usage-grad-tokens)" strokeWidth={2} dot={false} />
+              <RechartsTooltip
+                contentStyle={chartTooltipStyle}
+                formatter={(v) => [formatTokens(Number(v)), 'Tokens']}
+              />
+              <Area
+                type="monotone"
+                dataKey="totalTokens"
+                name="Tokens"
+                stroke="#00bcd4"
+                fill="url(#usage-grad-tokens)"
+                strokeWidth={2}
+                dot={false}
+              />
             </AreaChart>
           </ResponsiveContainer>
         </Paper>
@@ -558,7 +578,7 @@ const UsagePage = () => {
 
       {!viewerIsSelf && (
         <Alert icon={<IconInfoCircle size={16} />} color="blue" mb="xl">
-          Viewing {targetUser.name ?? targetUser.email}'s usage
+          Viewing {targetUser.name ?? targetUser.email}&apos;s usage
         </Alert>
       )}
 
