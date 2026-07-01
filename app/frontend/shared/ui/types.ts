@@ -62,7 +62,9 @@ export interface SharedPermissions {
 
 export interface SharedProps {
   currentUser: SharedUser | null;
-  flash: Record<string, string>;
+  // Most flash entries are strings (notice/alert). `needs_setup` is a list of
+  // "what was not copied / needs setup" messages surfaced after a catalog copy.
+  flash: Record<string, string | string[] | undefined>;
   projects?: SharedProject[];
   permissions?: SharedPermissions;
   settings: SharedSettings;
