@@ -14,6 +14,53 @@ class Web::ProfileController < Web::ApplicationController
     }
   end
 
+  def usage
+    target     = resolve_target_user
+    period     = params.fetch(:period, "30d")
+    project_id = params[:project_id].presence
+
+    render inertia: "Profile/Usage", props: {
+      period:,
+      project_id:,
+      viewer_is_self: target.id == current_user.id,
+      target_user: { id: target.id, name: target.name, email: target.email },
+      summary: InertiaRails.defer(group: "usage") {
+        r = UserAnalyticsService.new(user: target, period:, project_id:).call
+        {
+          totalSessions: r.total_sessions,
+          totalCostCents: r.total_cost_cents,
+          totalTokens: r.total_tokens,
+          avgCostCentsPerSession: r.avg_cost_cents_per_session,
+          workflowsRun: r.workflows_run,
+          projectBreakdowns: r.project_breakdowns.map { |p|
+            { projectId: p.project_id, projectName: p.project_name, sessions: p.sessions, costCents: p.cost_cents, tokens: p.tokens }
+          }
+        }
+      },
+      agent_activity: InertiaRails.defer(group: "usage") {
+        r = UserAgentActivityService.new(user: target, period:, project_id:).call
+        { sessionsByAgent: r.sessions_by_agent.map { |a| { agentType: a.agent_type, sessions: a.sessions, costCents: a.cost_cents, tokens: a.tokens } } }
+      },
+      cost_token: InertiaRails.defer(group: "usage") {
+        r = UserSessionCostTokenUsageService.new(user: target, period:, project_id:).call
+        { timeSeries: r.time_series.map { |p| { date: p.date, costCents: p.cost_cents, totalTokens: p.total_tokens } } }
+      },
+      activity_heatmap: InertiaRails.defer(group: "usage") {
+        scope = project_id ? target.terminal_sessions.where(project_id:) : target.terminal_sessions
+        { days: ActivityHeatmapService.new(scope:).call.map { |d| { date: d.date, count: d.count } } }
+      },
+      sessions: InertiaRails.defer(group: "usage") {
+        target.terminal_sessions
+              .with_cached_resource_counts
+              .includes(:user, :project, :tools, :skills, :mcp_servers, :input_assets, :repositories)
+              .where.not(session_type: "auth_setup")
+              .order(created_at: :desc)
+              .limit(per_page)
+              .map { |s| TerminalSessionResource.new(s).to_h }
+      }
+    }
+  end
+
   def update
     if current_user.update(profile_params)
       redirect_to profile_path, notice: "Profile updated successfully"
@@ -46,6 +93,14 @@ class Web::ProfileController < Web::ApplicationController
 
   def require_auth
     redirect_to login_path unless signed_in?
+  end
+
+  # Same-company scope guard (NOT admin-gated). Foreign / unknown user_id → 404.
+  # user_id absent → current_user (self-view).
+  def resolve_target_user
+    return current_user if params[:user_id].blank?
+
+    current_user.company.users.find(params[:user_id])
   end
 
   def profile_params

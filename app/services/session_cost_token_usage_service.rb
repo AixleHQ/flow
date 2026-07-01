@@ -21,7 +21,7 @@ class SessionCostTokenUsageService
   Totals = Struct.new(:total_cost_cents, :total_tokens, :avg_cost_cents_per_session, keyword_init: true)
   Result = Struct.new(:time_series, :totals, keyword_init: true)
 
-  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil)
+  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil, participant_id: nil)
     @project = project
     @user    = user
     @scope   = scope.to_s
@@ -29,6 +29,7 @@ class SessionCostTokenUsageService
     @since   = PERIOD_DAYS.fetch(@period, 30).days.ago
     @tags      = Array(tags).presence
     @task_type = task_type.presence
+    @participant_id = participant_id.presence
   end
 
   def call
@@ -69,10 +70,12 @@ class SessionCostTokenUsageService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :period, :tags, :task_type
+  attr_reader :project, :user, :scope, :since, :period, :tags, :task_type, :participant_id
 
   def base_sessions
-    scope_sessions.where(created_at: since..).then { |s| apply_task_filters(s) }
+    s = scope_sessions.where(created_at: since..)
+    s = s.where(user_id: participant_id) if participant_id
+    apply_task_filters(s)
   end
 
   def scope_sessions

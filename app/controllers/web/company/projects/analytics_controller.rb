@@ -4,15 +4,22 @@ class Web::Company::Projects::AnalyticsController < Web::Company::Projects::Appl
   def index
     scope = params.fetch(:scope, "project")
     period = params.fetch(:period, "30d")
+    participant_id = params[:participant_id].presence
     filter_opts = {
       project: current_project, user: current_user, scope: scope, period: period,
-      tags: params[:tags], task_type: params[:task_type]
+      tags: params[:tags], task_type: params[:task_type], participant_id: participant_id
     }
 
     render inertia: "Projects/Analytics/AnalyticsPage", props: {
       project: project_props,
       scope: scope,
       period: period,
+      participant_id: participant_id,
+      participants: current_project.member_users.map { |u| { id: u.id, name: u.name, email: u.email } },
+      activity_heatmap: InertiaRails.defer(group: "analytics") {
+        heatmap_scope = participant_id ? current_project.terminal_sessions.where(user_id: participant_id) : current_project.terminal_sessions
+        { days: ActivityHeatmapService.new(scope: heatmap_scope).call.map { |d| { date: d.date, count: d.count } } }
+      },
       summary: InertiaRails.defer(group: "analytics") {
         result = ProjectAnalyticsService.new(**filter_opts).call
         {

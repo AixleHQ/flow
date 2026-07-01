@@ -11,6 +11,7 @@ import {
   Modal,
   Select,
   Stack,
+  Tabs,
   Text,
   TextInput,
   ThemeIcon,
@@ -29,7 +30,12 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
-import { apiV1TerminalSessionPath, apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
+import {
+  apiV1TerminalSessionPath,
+  apiV1TerminalSessionsPath,
+  finishApiV1TerminalSessionPath,
+  usageProfilePath,
+} from 'shared/routes';
 import { type AgentCredential, type AgentType, type SharedUser, type UserRole } from 'shared/ui';
 
 import classes from './Show.module.css';
@@ -705,6 +711,19 @@ function ProfilePage({ profile, agentModels, cableStream }: Props) {
         <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={24}>
           My Profile
         </Title>
+
+        <Tabs
+          value="account"
+          onChange={(v) => {
+            if (v === 'usage') router.visit(usageProfilePath());
+          }}
+          mb="lg"
+        >
+          <Tabs.List>
+            <Tabs.Tab value="account">Account</Tabs.Tab>
+            <Tabs.Tab value="usage">Usage</Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
 
         <Card p={24}>
           <Title order={4} mb={4}>

@@ -852,6 +852,11 @@ export function termsOfServicePath(options?: object): string {
   return "/" + "terms-of-service" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/usage(.:format) */
+export function usageProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "usage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile/update_default_model(.:format) */
 export function updateDefaultModelProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "update_default_model" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
