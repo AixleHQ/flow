@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -667,6 +667,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.index ["session_type"], name: "index_terminal_sessions_on_session_type"
     t.index ["state"], name: "index_terminal_sessions_on_state"
     t.index ["temporal_workflow_id"], name: "index_terminal_sessions_on_temporal_workflow_id"
+    t.index ["user_id", "created_at"], name: "index_terminal_sessions_on_user_id_and_created_at"
     t.index ["user_id", "session_type"], name: "index_terminal_sessions_on_user_id_and_session_type"
     t.index ["user_id", "state"], name: "index_terminal_sessions_on_user_id_and_state"
     t.index ["user_id"], name: "index_terminal_sessions_on_user_id"
@@ -899,6 +900,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_28_000002) do
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
     t.index ["state"], name: "index_workflow_runs_on_state"
+    t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
     t.index ["workflow_id", "state"], name: "index_workflow_runs_on_workflow_id_and_state"
     t.index ["workflow_id"], name: "index_workflow_runs_on_workflow_id"

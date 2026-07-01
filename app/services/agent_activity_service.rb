@@ -15,7 +15,7 @@ class AgentActivityService
 
   Result = Struct.new(:agent_types, :sessions_by_agent, :activity_over_time, keyword_init: true)
 
-  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil)
+  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil, participant_id: nil)
     @project = project
     @user = user
     @scope = scope.to_s
@@ -23,6 +23,7 @@ class AgentActivityService
     @period = period.to_s
     @tags = Array(tags).presence
     @task_type = task_type.presence
+    @participant_id = participant_id.presence
   end
 
   def call
@@ -75,10 +76,12 @@ class AgentActivityService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :tags, :task_type
+  attr_reader :project, :user, :scope, :since, :tags, :task_type, :participant_id
 
   def base_sessions
-    scope_sessions.where(created_at: since..).then { |s| apply_task_filters(s) }
+    s = scope_sessions.where(created_at: since..)
+    s = s.where(user_id: participant_id) if participant_id
+    apply_task_filters(s)
   end
 
   def scope_sessions

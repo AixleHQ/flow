@@ -296,4 +296,47 @@ describe('Projects/Analytics/AnalyticsPage', () => {
     expect(screen.getByText('Workflow Costs')).toBeInTheDocument();
     expect(screen.queryByText('Workflow Breakdown')).not.toBeInTheDocument();
   });
+
+  it('renders the contribution heatmap when activityHeatmap is present', () => {
+    const isoToday = new Date().toISOString().slice(0, 10);
+    renderAuthedPage(<AnalyticsPage />, {
+      props: {
+        project,
+        scope: 'project' as const,
+        period: '30d' as const,
+        activityHeatmap: { days: [{ date: isoToday, count: 6 }] },
+      },
+    });
+
+    const cells = screen.getAllByTestId('heatmap-cell');
+    const seeded = cells.find((c) => c.getAttribute('data-date') === isoToday);
+    expect(seeded?.getAttribute('data-count')).toBe('6');
+  });
+
+  it('renders a participant select and navigates with participant_id when a participant is chosen', async () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: {
+        project,
+        scope: 'project' as const,
+        period: '30d' as const,
+        participants: [
+          { id: 3, name: 'Alice', email: 'alice@acme.test' },
+          { id: 4, name: 'Bob', email: 'bob@acme.test' },
+        ],
+      },
+    });
+
+    // The scope SegmentedControl remains (protects the "My Activity" AC).
+    expect(screen.getByText('My Activity')).toBeInTheDocument();
+
+    const participantSelect = screen.getByPlaceholderText('All participants');
+    await userEvent.click(participantSelect);
+    await userEvent.click(await screen.findByText('Alice'));
+
+    expect(router.get).toHaveBeenCalledWith(
+      window.location.pathname,
+      { scope: 'project', period: '30d', participant_id: '3' },
+      expect.objectContaining({ preserveState: true, preserveScroll: true }),
+    );
+  });
 });

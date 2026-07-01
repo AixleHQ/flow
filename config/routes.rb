@@ -184,6 +184,7 @@ Rails.application.routes.draw do
     get "terms-of-service", to: "pages#terms_of_service", as: :terms_of_service
 
     resource :profile, only: %i[show update], controller: "profile" do
+      get :usage, on: :member
       put :update_default_model, on: :member
       delete :destroy_credential, on: :member
     end

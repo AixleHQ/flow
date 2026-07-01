@@ -38,7 +38,7 @@ class WorkflowCostAnalyticsService
 
   Result = Struct.new(:workflows, :time_series, :totals, keyword_init: true)
 
-  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil)
+  def initialize(project:, user:, scope:, period:, tags: nil, task_type: nil, participant_id: nil)
     @project = project
     @user = user
     @scope = scope.to_s
@@ -47,6 +47,7 @@ class WorkflowCostAnalyticsService
     @since = @days.days.ago
     @tags = Array.wrap(tags).reject(&:blank?)
     @task_type = task_type.presence
+    @participant_id = participant_id.presence
   end
 
   def call
@@ -61,7 +62,7 @@ class WorkflowCostAnalyticsService
 
   private
 
-  attr_reader :project, :user, :scope, :since, :days, :period, :tags, :task_type
+  attr_reader :project, :user, :scope, :since, :days, :period, :tags, :task_type, :participant_id
 
   def base_workflow_runs
     runs = case scope
@@ -70,6 +71,8 @@ class WorkflowCostAnalyticsService
     else
       WorkflowRun.for_project_in_period(project, since)
     end
+
+    runs = runs.where(user_id: participant_id) if participant_id
 
     if tags.present? || task_type.present?
       runs = runs.where(board_task_id: filtered_board_tasks.select(:id))

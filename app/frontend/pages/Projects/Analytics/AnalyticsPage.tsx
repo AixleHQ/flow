@@ -18,11 +18,23 @@ import {
   YAxis,
 } from 'recharts';
 
+import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
+
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 interface Project {
   id: number;
   name: string;
+}
+
+interface Participant {
+  id: number;
+  name: string | null;
+  email: string;
+}
+
+interface HeatmapData {
+  days: { date: string; count: number }[];
 }
 
 type Scope = 'project' | 'user';
@@ -109,12 +121,15 @@ interface Props {
   project: Project;
   scope: Scope;
   period: Period;
+  participantId?: string | null;
+  participants: Participant[];
   summary?: SummaryData;
   agentActivity?: AgentActivityData;
   sources?: SourceData;
   duration?: DurationData;
   costToken?: CostTokenData;
   workflowCosts?: WorkflowCostData;
+  activityHeatmap?: HeatmapData;
 }
 
 const AGENT_COLORS = ['#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#00bcd4', '#f44336', '#795548'];
@@ -186,8 +201,12 @@ function tickIntervalForPeriod(period: Period): number {
   return days <= 7 ? 0 : days <= 30 ? 4 : days <= 90 ? 9 : 29;
 }
 
-function navigateWithFilters(scope: string, period: string) {
-  router.get(window.location.pathname, { scope, period }, { preserveState: true, preserveScroll: true });
+function navigateWithFilters(scope: string, period: string, participantId?: string | null) {
+  router.get(
+    window.location.pathname,
+    { scope, period, ...(participantId ? { participant_id: participantId } : {}) },
+    { preserveState: true, preserveScroll: true },
+  );
 }
 
 // --- Skeleton blocks for deferred fallbacks ---
@@ -816,11 +835,28 @@ function WorkflowCostsPanel() {
   );
 }
 
+function HeatmapPanel() {
+  const { activityHeatmap } = usePage<{ props: Props }>().props as unknown as Props;
+  if (!activityHeatmap) return null;
+
+  return (
+    <Paper withBorder p="md" radius="md" mb="xl">
+      <ContributionHeatmap days={activityHeatmap.days} />
+    </Paper>
+  );
+}
+
 // --- Main page ---
 
 const AnalyticsPage = () => {
-  const { project, scope, period } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, scope, period, participantId, participants } = usePage<{ props: Props }>()
+    .props as unknown as Props;
   const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
+
+  const participantOptions = (participants ?? []).map((p) => ({
+    value: String(p.id),
+    label: p.name ?? p.email,
+  }));
 
   return (
     <>
@@ -838,7 +874,7 @@ const AnalyticsPage = () => {
         <Group gap="sm">
           <SegmentedControl
             value={scope}
-            onChange={(v) => navigateWithFilters(v, period)}
+            onChange={(v) => navigateWithFilters(v, period, participantId)}
             data={[
               { label: 'Project', value: 'project' },
               { label: 'My Activity', value: 'user' },
@@ -846,14 +882,28 @@ const AnalyticsPage = () => {
             size="sm"
           />
           <Select
+            placeholder="All participants"
+            value={participantId ?? null}
+            onChange={(v) => navigateWithFilters(scope, period, v)}
+            data={participantOptions}
+            clearable
+            size="sm"
+            w={180}
+          />
+          <Select
             value={period}
-            onChange={(v) => navigateWithFilters(scope, v ?? '30d')}
+            onChange={(v) => navigateWithFilters(scope, v ?? '30d', participantId)}
             data={PERIOD_OPTIONS}
             size="sm"
             w={140}
           />
         </Group>
       </Group>
+
+      {/* Contribution heatmap */}
+      <Deferred data="activityHeatmap" fallback={<Skeleton height={140} radius="sm" mb="xl" />}>
+        <HeatmapPanel />
+      </Deferred>
 
       {/* Summary Stats */}
       <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} mb="xl" spacing="md">

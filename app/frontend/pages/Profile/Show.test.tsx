@@ -249,6 +249,18 @@ describe('Profile/Show', () => {
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
   });
 
+  it('renders Account and Usage tabs and navigates to the usage page when Usage is clicked', async () => {
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('tab', { name: 'Account' })).toBeInTheDocument();
+    const usageTab = screen.getByRole('tab', { name: 'Usage' });
+    expect(usageTab).toBeInTheDocument();
+
+    await userEvent.click(usageTab);
+    expect(router.visit).toHaveBeenCalledWith('/profile/usage');
+  });
+
   it('surfaces a server-side validation error on the display name field', () => {
     const form = pinForm('Maria Sokolova');
     form.errors = { 'profile.name': 'has already been taken' };
