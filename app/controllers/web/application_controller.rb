@@ -46,7 +46,20 @@ class Web::ApplicationController < ApplicationController
   end
 
   def redirect_super_admin_to_admin_panel
-    redirect_to admin_root_path if signed_in? && current_user.super_admin?
+    return unless signed_in? && current_user.super_admin?
+
+    # /admin is Administrate — a classic server-rendered page, not an Inertia
+    # screen. During an Inertia visit (e.g. the redirect chain right after
+    # login), a plain `redirect_to` makes the client receive a non-Inertia
+    # HTML response it can't process, so Inertia dumps it into its error modal
+    # (the admin page shown in a box over a dark backdrop, URL stuck on /login).
+    # `inertia_location` replies 409 + X-Inertia-Location so the client does a
+    # full-page visit to /admin instead.
+    if request.headers["X-Inertia"].present?
+      inertia_location(admin_root_path)
+    else
+      redirect_to admin_root_path
+    end
   end
 
   def enforce_onboarding
