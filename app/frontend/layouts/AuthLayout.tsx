@@ -28,11 +28,22 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
   useEffect(() => {
     if (flash === prevFlashRef.current) return;
     prevFlashRef.current = flash;
-    if (flash.notice) {
+    if (typeof flash.notice === 'string') {
       notifications.show({ message: flash.notice, color: 'green' });
     }
-    if (flash.alert) {
+    if (typeof flash.alert === 'string') {
       notifications.show({ message: flash.alert, color: 'red' });
+    }
+    // "Needs setup" summary after copying a workflow from the catalog: a list of
+    // resources that were not copied / need manual setup (secrets, assets, etc).
+    const needsSetup = flash.needs_setup;
+    if (Array.isArray(needsSetup) && needsSetup.length > 0) {
+      notifications.show({
+        title: 'Some resources need setup',
+        message: needsSetup.join(' '),
+        color: 'yellow',
+        autoClose: false,
+      });
     }
   }, [flash]);
 

@@ -34,6 +34,45 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
     assert_equal 2, copy.steps.count
   end
 
+  test "duplicate copies workflow dependencies into the project without copying secrets" do
+    agent = create(:agent, scope: @company, name: "helper", title: "Helper", persona: "Helps.")
+    skill = create(:skill, scope: @company)
+    mcp = create(:mcp_server, scope: @company, name: "context7",
+                              headers: { "Authorization" => "Bearer config_item:API_KEY" })
+    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    create(:step, workflow: workflow, position: 1, agent_id: agent.id,
+                  skill_ids: [ skill.id ], mcp_server_ids: [ mcp.id ])
+
+    assert_difference [ "@project.agents.count", "Skill.for_project(@project).count",
+                        "MCPServer.for_project(@project).count" ], 1 do
+      assert_no_difference "ConfigItem.count" do
+        post duplicate_company_workflow_catalog_path(workflow), params: { project_id: @project.id }
+      end
+    end
+
+    assert_response :redirect
+    copy = Workflow.last
+    copied_step = copy.steps.order(:position).first
+    assert_equal @project.id, Agent.find(copied_step.agent_id).scope_id
+    assert_equal @project.id, Skill.find(copied_step.skill_ids.first).scope_id
+    new_mcp = MCPServer.find(copied_step.mcp_server_ids.first)
+    assert_equal @project.id, new_mcp.scope_id
+    # env/headers copied verbatim — config_item:NAME reference preserved
+    assert_equal "Bearer config_item:API_KEY", new_mcp.headers["Authorization"]
+  end
+
+  test "duplicate is idempotent: posting twice does not duplicate resources or config items" do
+    agent = create(:agent, scope: @company, name: "helper", title: "Helper", persona: "Helps.")
+    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    create(:step, workflow: workflow, position: 1, agent_id: agent.id)
+
+    post duplicate_company_workflow_catalog_path(workflow), params: { project_id: @project.id }
+
+    assert_no_difference [ "@project.agents.count", "ConfigItem.count" ] do
+      post duplicate_company_workflow_catalog_path(workflow), params: { project_id: @project.id }
+    end
+  end
+
   test "duplicate rejects non-published workflow" do
     workflow = create(:workflow, scope: @company)
 

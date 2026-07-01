@@ -18,10 +18,13 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
     workflow = Workflow.published_in_company(current_company).find(params[:id])
     project = Project.for_user(current_user).find(params[:project_id])
 
-    copy = WorkflowDuplicator.new(workflow, target_scope: project).duplicate!
+    duplicator = WorkflowDuplicator.new(workflow, target_scope: project)
+    copy = duplicator.duplicate!
 
-    redirect_to builder_company_project_workflow_path(project, copy),
-                notice: "Workflow duplicated to #{project.name}"
+    flash[:notice] = "Workflow and its resources copied to #{project.name}. Assets, repositories, integrations and secrets are not copied."
+    flash[:needs_setup] = duplicator.summary[:needs_setup] if duplicator.summary
+
+    redirect_to builder_company_project_workflow_path(project, copy)
   rescue ActiveRecord::RecordNotFound
     redirect_to company_workflow_catalog_index_path, alert: "Workflow or project not found"
   end

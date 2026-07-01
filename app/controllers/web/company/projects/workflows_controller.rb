@@ -98,7 +98,9 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
 
   def duplicate
     source = Workflow.visible_for_project(current_project).find(params[:id])
-    copy = WorkflowDuplicator.new(source, target_scope: current_project).duplicate!
+    duplicator = WorkflowDuplicator.new(source, target_scope: current_project)
+    copy = duplicator.duplicate!
+    flash[:needs_setup] = duplicator.summary[:needs_setup] if duplicator.summary
     redirect_to builder_company_project_workflow_path(current_project, copy)
   end
 
