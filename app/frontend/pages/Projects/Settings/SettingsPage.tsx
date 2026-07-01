@@ -91,6 +91,7 @@ interface Project {
   boardTasksCount: number;
   repositoriesCount: number;
   integrationsCount: number;
+  canDelete: boolean;
 }
 
 interface Props {
@@ -467,28 +468,32 @@ const SettingsPage = () => {
               </Button>
             </Group>
 
-            <Divider color="red.9" />
+            {project.canDelete && (
+              <>
+                <Divider color="red.9" />
 
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <Box>
-                <Text size="sm" fw={500}>
-                  Delete this project
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Permanently remove this project and all of its data. This action cannot be undone.
-                </Text>
-              </Box>
-              <Button
-                variant="outline"
-                color="red"
-                size="compact-sm"
-                leftSection={<IconTrash size={14} />}
-                onClick={handleDelete}
-                style={{ flexShrink: 0 }}
-              >
-                Delete
-              </Button>
-            </Group>
+                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                  <Box>
+                    <Text size="sm" fw={500}>
+                      Delete this project
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Permanently remove this project and all of its data. This action cannot be undone.
+                    </Text>
+                  </Box>
+                  <Button
+                    variant="outline"
+                    color="red"
+                    size="compact-sm"
+                    leftSection={<IconTrash size={14} />}
+                    onClick={handleDelete}
+                    style={{ flexShrink: 0 }}
+                  >
+                    Delete
+                  </Button>
+                </Group>
+              </>
+            )}
           </Stack>
         </Card>
       </Box>

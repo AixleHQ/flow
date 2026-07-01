@@ -16,7 +16,9 @@ module Web
       end
 
       def destroy?
-        current_project&.accessible_by?(current_user)
+        return false unless current_project
+
+        current_project.admin?(current_user) || current_user.admin?
       end
 
       private

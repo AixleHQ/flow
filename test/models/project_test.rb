@@ -35,4 +35,20 @@ class ProjectTest < ActiveSupport::TestCase
     foreign_admin = create(:user, :admin, :onboarding_completed, company: other_company)
     assert_not @project.accessible_by?(foreign_admin)
   end
+
+  test "admin? is true for the owner" do
+    assert @project.admin?(@project_owner)
+  end
+
+  test "admin? is false for a collaborator" do
+    collaborator = create(:user, :employee, :onboarding_completed, company: @company)
+    @project.add_collaborator(collaborator)
+    assert_not @project.admin?(collaborator)
+  end
+
+  test "admin? is false for a company admin who is not the owner (owner-only)" do
+    admin = create(:user, :admin, :onboarding_completed, company: @company)
+    assert_not_equal @project.owner_id, admin.id
+    assert_not @project.admin?(admin)
+  end
 end
