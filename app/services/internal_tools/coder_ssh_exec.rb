@@ -15,6 +15,7 @@ module InternalTools
       description "Run a shell command on a Coder workspace previously allocated by this step. Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget."
       tags :coder
       managed_mcp_provider :coder
+      requires_integration :coder
       input_schema({
         type: "object",
         required: %w[workspace_name command],

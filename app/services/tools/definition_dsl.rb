@@ -72,6 +72,16 @@ module Tools
       def user_attachable(value) = @h[:user_attachable] = value
       def managed_mcp_provider(provider) = @h[:managed_mcp_provider] = provider
 
+      # MCP behavior annotations (spec 2025-03-26+): serialized on the wire so
+      # clients can drive confirmation policies. Untrusted display hints by
+      # spec — never a security control.
+      def read_only(value = true) = annotations["readOnlyHint"] = value
+      def destructive(value = true) = annotations["destructiveHint"] = value
+      def idempotent(value = true) = annotations["idempotentHint"] = value
+      def open_world(value = true) = annotations["openWorldHint"] = value
+
+      def annotations = @h[:annotations] ||= {}
+
       # Raw JSON-Schema hash, used verbatim (normalized to the JSON type
       # system — symbol keys and values become strings). For simple shapes
       # prefer the param sugar below.

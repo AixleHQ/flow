@@ -11,6 +11,7 @@ module InternalTools
       description "Allocate a Coder workspace for the current terminal session. Picks an available workspace from the integration's pool (or creates one if a default template is configured), locks it to the current terminal session, and returns the workspace identity (name, id, ssh command, lock expiry)."
       tags :coder
       managed_mcp_provider :coder
+      requires_integration :coder
       input_schema({
         type: "object",
         required: [],

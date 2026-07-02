@@ -135,6 +135,27 @@ class Tool < ApplicationRecord
     code_source? ? Tools::Registry.fetch(name) : nil
   end
 
+  # One availability predicate for every surface (tools/list hides,
+  # tools/call enforces, pickers keep the equivalent SQL clause over the
+  # reconciler-owned requires_integration column).
+  def available?(ctx)
+    return false unless enabled? && !deleted?
+
+    if (defn = definition)
+      defn.available?(ctx)
+    elsif requires_integration.present?
+      ctx.connected?(requires_integration)
+    else
+      true
+    end
+  end
+
+  def unavailable_message
+    definition&.unavailable_message ||
+      "The #{requires_integration} integration is not connected for this project. " \
+      "Connect it in Project Settings → Integrations."
+  end
+
   # Returns the shadow row for a code definition, materializing it on demand.
   # This is what makes "platform tools work without pre-created DB rows"
   # literally true: the class alone suffices; rows appear on first FK need

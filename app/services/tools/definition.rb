@@ -9,7 +9,7 @@ module Tools
   # projects into its reconciler-owned shadow row (Tools::Reconciler).
   class Definition
     ATTRS = %i[name display_name description input_schema tags inject_rules
-               requires_integration availability unavailable_message
+               requires_integration availability unavailable_message annotations
                user_attachable managed_mcp_provider handler_class_name legacy_kind].freeze
 
     attr_reader(*ATTRS)
@@ -19,6 +19,7 @@ module Tools
       @tags = Array(@tags).map(&:to_sym).freeze
       @inject_rules = Array(@inject_rules).map(&:to_sym).freeze
       @input_schema = (@input_schema || {}).freeze
+      @annotations = (@annotations || {}).freeze
       @user_attachable = true if @user_attachable.nil?
       @legacy_kind ||= derive_legacy_kind
       freeze

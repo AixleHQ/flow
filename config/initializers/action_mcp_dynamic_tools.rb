@@ -33,10 +33,19 @@ Rails.application.config.after_initialize do
       session = current_terminal_session!(request_id)
       return unless session
 
-      tools = session.available_tools.map { |tool| serialize_tool(tool) }
+      ctx = Tools::Context.for_session(session)
 
-      session.mcp_servers.where(kind: "managed", enabled: true).each do |server|
-        managed_tools_for(server).each do |tool|
+      # Availability is recomputed from per-request state on every list — the
+      # only mechanism every MCP client honors (list_changed push is
+      # best-effort ecosystem-wide). Deterministic ordering per the 2026-07-28
+      # MCP RC guidance (client caching + prompt-cache hits).
+      tools = session.available_tools
+                     .select { |tool| tool.available?(ctx) }
+                     .sort_by(&:name)
+                     .map { |tool| serialize_tool(tool) }
+
+      session.mcp_servers.where(kind: "managed", enabled: true).order(:name).each do |server|
+        managed_tools_for(server).select { |tool| tool.available?(ctx) }.each do |tool|
           tools << serialize_tool(tool, namespace: server.name)
         end
       end
@@ -68,6 +77,18 @@ Rails.application.config.after_initialize do
         return
       end
 
+      # Entitled but unavailable (integration disconnected): return an
+      # actionable in-band tool error the model can relay/self-correct on.
+      # Tools outside the session's entitlement resolve to nil above and get
+      # an opaque method_not_found — the remedy message must not leak
+      # capability existence across the entitlement boundary.
+      ctx = Tools::Context.for_session(session)
+      unless tool.available?(ctx)
+        result = { exit_code: 1, stdout: "", stderr: tool.unavailable_message }
+        send_jsonrpc_response(request_id, result: { content: build_response_content(result) })
+        return
+      end
+
       begin
         result = execute_tool(tool, arguments, session, mcp_server: mcp_server)
         content = build_response_content(result)
@@ -78,16 +99,26 @@ Rails.application.config.after_initialize do
       end
     end
 
+    # Registry-first serialization: for code-defined tools the in-code
+    # definition is authoritative, so a stale shadow row (deploy-to-reconcile
+    # window) can never serve a stale schema or description.
     def serialize_tool(tool, namespace: nil)
-      schema = tool.input_schema.presence || { "type" => "object", "properties" => {}, "required" => [] }
+      defn   = tool.definition
+      schema = (defn&.input_schema.presence || tool.input_schema.presence ||
+                { "type" => "object", "properties" => {}, "required" => [] })
       schema = schema.deep_stringify_keys if schema.respond_to?(:deep_stringify_keys)
       name   = namespace.present? ? "mcp__#{namespace}__#{tool.name}" : tool.name
 
-      {
+      serialized = {
         "name" => name,
-        "description" => tool.description || tool.display_name,
+        "description" => defn&.description || tool.description || tool.display_name,
         "inputSchema" => schema
       }
+      serialized["annotations"] = defn.annotations.deep_stringify_keys if defn&.annotations&.any?
+      # Reverse-DNS-prefixed _meta is the spec-sanctioned extension point for
+      # tags (there is no first-class tags field on the wire).
+      serialized["_meta"] = { "ai.aixle/tags" => defn.tags.map(&:to_s) } if defn&.tags&.any?
+      serialized
     end
 
     def resolve_tool_for_call(session, base_name, mcp_server)

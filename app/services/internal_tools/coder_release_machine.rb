@@ -10,6 +10,7 @@ module InternalTools
       description "Release the Coder workspace lock for the given workspace. Idempotent — returns success whether or not a lock was held. The step's teardown also auto-releases any locks held by this session."
       tags :coder
       managed_mcp_provider :coder
+      requires_integration :coder
       input_schema({
         type: "object",
         required: %w[workspace_name],
