@@ -2,6 +2,49 @@
 
 module InternalTools
   class MetaCreateTool < Base
+    tool do
+      display_name "Meta Create Tool"
+      description "Create a custom tool definition."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[name],
+        properties: {
+          name: {
+            type: "string",
+            description: "Tool name (snake_case)"
+          },
+          command: {
+            type: "string"
+          },
+          scope_type: {
+            enum: %w[Project Company],
+            type: "string"
+          },
+          description: {
+            type: "string"
+          },
+          display_name: {
+            type: "string"
+          },
+          docker_image: {
+            type: "string",
+            description: "Docker image for container execution"
+          },
+          input_schema: {
+            type: "object",
+            description: "JSON Schema for parameters"
+          },
+          execution_mode: {
+            enum: %w[app container],
+            type: "string",
+            description: "Default: container"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

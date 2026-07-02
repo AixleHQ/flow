@@ -2,6 +2,46 @@
 
 module InternalTools
   class BoardUpdateTask < Base
+    tool do
+      display_name "Board Update Task"
+      description "Update mutable task fields such as title, description, priority, tags, or task type."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id],
+        properties: {
+          tags: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Replacement tag list"
+          },
+          title: {
+            type: "string",
+            description: "Updated task title"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          },
+          priority: {
+            type: "string",
+            description: "Updated task priority"
+          },
+          task_type: {
+            type: "string",
+            description: "Updated task type"
+          },
+          description: {
+            type: "string",
+            description: "Updated task description"
+          }
+        }
+      })
+    end
+
     UPDATABLE_FIELDS = %w[title description priority tags task_type].freeze
 
     def execute

@@ -31,11 +31,11 @@ class ActionMcpPatchGuardTest < ActiveSupport::TestCase
   test "patched handler signatures match what the 0.104 dispatcher sends" do
     tools = ActionMCP::Server::Tools
 
-    assert_equal [[:req, :request_id], [:opt, :params]],
+    assert_equal [ [ :req, :request_id ], [ :opt, :params ] ],
                  tools.instance_method(:send_tools_list).parameters,
                  "send_tools_list signature drifted.\n#{UPGRADE_NOTES}"
 
-    assert_equal [[:req, :request_id], [:req, :tool_name], [:req, :arguments], [:opt, :_meta]],
+    assert_equal [ [ :req, :request_id ], [ :req, :tool_name ], [ :req, :arguments ], [ :opt, :_meta ] ],
                  tools.instance_method(:send_tools_call).parameters,
                  "send_tools_call signature drifted.\n#{UPGRADE_NOTES}"
   end

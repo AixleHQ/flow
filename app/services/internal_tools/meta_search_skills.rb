@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaSearchSkills < Base
+    tool do
+      display_name "Meta Search Skills"
+      description "Search the skills.sh registry for available agent skills."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[query],
+        properties: {
+          query: {
+            type: "string",
+            description: "Search query (e.g. mantine, react, testing)"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

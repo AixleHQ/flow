@@ -2,6 +2,108 @@
 
 module InternalTools
   class MetaCreateStep < Base
+    tool do
+      display_name "Meta Create Step"
+      description "Add a step to the target workflow. Steps are added sequentially unless position is specified."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[name],
+        properties: {
+          name: {
+            type: "string",
+            description: "Step name"
+          },
+          agent_id: {
+            type: "integer",
+            description: "Agent to run this step"
+          },
+          position: {
+            type: "integer",
+            description: "Position in workflow (0-based). Auto-assigned if omitted."
+          },
+          tool_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Tool IDs available in this step"
+          },
+          asset_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Asset IDs loaded into this step's container (in addition to workflow base assets)"
+          },
+          skill_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Skill IDs injected into context"
+          },
+          on_failure: {
+            enum: %w[retry skip fail],
+            type: "string",
+            description: "Failure behavior"
+          },
+          description: {
+            type: "string",
+            description: "Brief description for UI"
+          },
+          max_retries: {
+            type: "integer",
+            description: "Retry count on failure"
+          },
+          skip_policy: {
+            enum: %w[never if_outputs_exist manual],
+            type: "string",
+            description: "When to skip"
+          },
+          workflow_id: {
+            type: "integer",
+            description: "Target workflow ID. Defaults to last created workflow."
+          },
+          instructions: {
+            type: "string",
+            description: "Focused, task-specific instructions (markdown): what to do and what to produce. Do NOT restate session-completion rules, workspace layout, sub-step tracking, or tool availability — the platform injects those automatically."
+          },
+          mcp_server_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "MCP server IDs"
+          },
+          input_asset_specs: {
+            type: "array",
+            description: "Required input files"
+          },
+          mount_repositories: {
+            type: "boolean",
+            description: "Mount Git repos in /workspace"
+          },
+          output_asset_specs: {
+            type: "array",
+            description: "Expected output files"
+          },
+          depends_on_step_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Step IDs this step depends on (DAG)"
+          },
+          allow_non_interactive: {
+            type: "boolean",
+            description: "Can run without user interaction"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

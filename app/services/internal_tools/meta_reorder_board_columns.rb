@@ -2,6 +2,26 @@
 
 module InternalTools
   class MetaReorderBoardColumns < Base
+    tool do
+      display_name "Meta Reorder Board Columns"
+      description "Reorder all board columns by providing ordered column IDs."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[column_ids],
+        properties: {
+          column_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Ordered column IDs"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

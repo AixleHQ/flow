@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaFinalizeWorkflow < Base
+    tool do
+      display_name "Meta Finalize Workflow"
+      description "Validate and finalize a workflow. Checks: all steps have instructions, agent references are valid, dependency graph is acyclic, positions are sequential."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {
+          workflow_id: {
+            type: "integer",
+            description: "Workflow ID. Defaults to last created workflow."
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

@@ -2,6 +2,8 @@
 
 module InternalTools
   class Base
+    extend Tools::DefinitionDSL
+
     attr_reader :params, :session, :mcp_server
 
     def initialize(params:, session:, mcp_server: nil)

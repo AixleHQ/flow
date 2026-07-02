@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_02_200002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -721,12 +721,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.string "requires_integration"
     t.bigint "scope_id"
     t.string "scope_type"
+    t.string "source", default: "db", null: false
+    t.jsonb "tags", default: [], null: false
     t.datetime "updated_at", null: false
+    t.boolean "user_attachable", default: true, null: false
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
     t.index ["kind"], name: "index_tools_on_kind"
+    t.index ["name"], name: "index_tools_on_name_where_source_code", unique: true, where: "(((source)::text = 'code'::text) AND (deleted_at IS NULL))"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
+
+  add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
 
   create_table "trigger_bindings", force: :cascade do |t|
     t.integer "cooldown_seconds", default: 0, null: false
@@ -790,7 +796,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
     t.index ["event_type"], name: "index_trigger_events_on_event_type"
     t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
-    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY ((ARRAY['pending'::character varying, 'dispatching'::character varying])::text[]))"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|

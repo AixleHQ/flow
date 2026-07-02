@@ -28,11 +28,13 @@ FactoryBot.define do
 
     trait :system do
       kind { :system }
+      source { "code" }
       scope { nil }
     end
 
     trait :internal do
       kind { :internal }
+      source { "code" }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }
@@ -40,6 +42,7 @@ FactoryBot.define do
 
     trait :workflow do
       kind { :workflow }
+      source { "code" }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }
@@ -47,6 +50,7 @@ FactoryBot.define do
 
     trait :meta do
       kind { :meta }
+      source { "code" }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }

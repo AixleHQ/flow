@@ -2,6 +2,30 @@
 
 module InternalTools
   class MetaInstallSkill < Base
+    tool do
+      display_name "Meta Install Skill"
+      description "Install a skill from the skills.sh registry. Search first with meta_search_skills."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[skill_id scope_type scope_id],
+        properties: {
+          scope_id: {
+            type: "integer"
+          },
+          skill_id: {
+            type: "string",
+            description: "Registry skill ID (e.g. mantinedev/skills/mantine-form)"
+          },
+          scope_type: {
+            enum: %w[Project Company],
+            type: "string"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

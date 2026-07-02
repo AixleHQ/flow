@@ -6,6 +6,54 @@ module InternalTools
   # arrive as a SINGLE Slack message. Gated on the project having an active Slack
   # integration. Defaults the channel/thread to the message that triggered the run.
   class SlackPostMessage < Base
+    tool do
+      display_name "Slack Post Message"
+      description "Send a Slack message from this workflow. `text` and `files` are both optional but at least one is required — text only, files only, or both arrive as ONE message. Omit channel/thread to reply in the channel/thread that triggered the run. Requires a Slack integration on the project."
+      tags :messaging, :slack
+      inject_when :workflow_step_session
+      requires_integration :slack
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {
+          text: {
+            type: "string",
+            description: "Message text. Optional when files are provided."
+          },
+          files: {
+            type: "array",
+            items: {
+              type: "object",
+              required: %w[filename content],
+              properties: {
+                title: {
+                  type: "string",
+                  description: "Optional display title (defaults to filename)"
+                },
+                content: {
+                  type: "string",
+                  description: "Full text content of the file"
+                },
+                filename: {
+                  type: "string",
+                  description: "File name, e.g. fizzbuzz.rb"
+                }
+              }
+            },
+            description: "Optional file attachments, sent in the SAME message as the text."
+          },
+          channel: {
+            type: "string",
+            description: "Channel ID. Defaults to the triggering channel for Slack-started runs."
+          },
+          thread_ts: {
+            type: "string",
+            description: "Thread timestamp to reply into. Defaults to the triggering thread."
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       files = normalized_files

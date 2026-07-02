@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaSetupBoardFromPreset < Base
+    tool do
+      display_name "Meta Setup Board From Preset"
+      description "Create or reset board from a preset (simple_kanban, dev_team, full_sdlc). Only works if columns are empty."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[preset],
+        properties: {
+          preset: {
+            enum: %w[simple_kanban dev_team full_sdlc],
+            type: "string"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

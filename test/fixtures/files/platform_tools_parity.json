@@ -1,0 +1,1503 @@
+[
+  {
+    "name": "board_add_comment",
+    "kind": "workflow",
+    "display_name": "Board Add Comment",
+    "description": "Add an agent comment to a task on the current board. Markdown is supported in the body field (bold, italic, code blocks, lists, links, tables, etc.).",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "body"
+      ],
+      "properties": {
+        "body": {
+          "type": "string",
+          "description": "Comment body. Markdown is supported (e.g. **bold**, `code`, lists, headings, links)."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional comment tags"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_attach_asset",
+    "kind": "workflow",
+    "display_name": "Board Attach Asset",
+    "description": "Attach a file to a board task by reading it from a path inside the running container.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "name",
+        "file_path"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Attachment filename"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional asset tags"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        },
+        "file_path": {
+          "type": "string",
+          "description": "Path inside the running container to upload"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_create_gate",
+    "kind": "workflow",
+    "display_name": "Board Create Gate",
+    "description": "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all Gates are resolved.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "gate_type"
+      ],
+      "properties": {
+        "run_id": {
+          "type": "integer",
+          "description": "(github_workflow_completed) GitHub Actions workflow run ID"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        },
+        "gate_type": {
+          "type": "string",
+          "description": "Gate type. Supported: github_checks_completed, github_workflow_completed"
+        },
+        "pr_number": {
+          "type": "integer",
+          "description": "(github_checks_completed) Pull request number"
+        },
+        "repo_full_name": {
+          "type": "string",
+          "description": "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_create_task",
+    "kind": "workflow",
+    "display_name": "Board Create Task",
+    "description": "Create a new board task in the current board, optionally targeting a specific column.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional task tags"
+        },
+        "title": {
+          "type": "string",
+          "description": "Task title"
+        },
+        "task_type": {
+          "type": "string",
+          "description": "Task type"
+        },
+        "column_name": {
+          "type": "string",
+          "description": "Target column name. Defaults to the first column."
+        },
+        "description": {
+          "type": "string",
+          "description": "Task description"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_get_board_info",
+    "kind": "workflow",
+    "display_name": "Board Get Board Info",
+    "description": "Return the current board with its columns and related metadata for the active workflow task.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "board_get_comments",
+    "kind": "workflow",
+    "display_name": "Board Get Comments",
+    "description": "List comments for a task on the current board with optional tag or author-type filters.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Optional tag filter"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        },
+        "author_type": {
+          "enum": [
+            "user",
+            "agent"
+          ],
+          "type": "string",
+          "description": "Optional author type filter"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_get_task",
+    "kind": "workflow",
+    "display_name": "Board Get Task",
+    "description": "Return full details for a board task. Defaults to the workflow's bound board task when task_id is omitted.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID. Optional when the workflow run is already attached to a board task."
+        }
+      }
+    }
+  },
+  {
+    "name": "board_get_task_assets",
+    "kind": "workflow",
+    "display_name": "Board Get Task Assets",
+    "description": "List files attached to a board task, optionally filtered by tag.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Optional tag filter"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_list_tasks",
+    "kind": "workflow",
+    "display_name": "Board List Tasks",
+    "description": "List tasks on the current board with optional filters for column, tag, task type, or assignee.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Filter tasks by tag"
+        },
+        "task_type": {
+          "type": "string",
+          "description": "Filter tasks by task type"
+        },
+        "assignee_id": {
+          "type": "integer",
+          "description": "Filter tasks by assignee user ID"
+        },
+        "column_name": {
+          "type": "string",
+          "description": "Filter tasks to a board column by name"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_manage_tags",
+    "kind": "workflow",
+    "display_name": "Board Manage Tags",
+    "description": "Add or remove a tag on a task or comment on the current board.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "action",
+        "entity_type",
+        "entity_id",
+        "tag"
+      ],
+      "properties": {
+        "tag": {
+          "type": "string",
+          "description": "Tag value"
+        },
+        "action": {
+          "enum": [
+            "add",
+            "remove"
+          ],
+          "type": "string",
+          "description": "Whether to add or remove the tag"
+        },
+        "entity_id": {
+          "type": "integer",
+          "description": "Target task or comment ID"
+        },
+        "entity_type": {
+          "enum": [
+            "task",
+            "comment"
+          ],
+          "type": "string",
+          "description": "Entity type to modify"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_move_task",
+    "kind": "workflow",
+    "display_name": "Board Move Task",
+    "description": "Move a task to another board column by name.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id",
+        "column_name"
+      ],
+      "properties": {
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        },
+        "column_name": {
+          "type": "string",
+          "description": "Destination column name"
+        }
+      }
+    }
+  },
+  {
+    "name": "board_update_task",
+    "kind": "workflow",
+    "display_name": "Board Update Task",
+    "description": "Update mutable task fields such as title, description, priority, tags, or task type.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "task_id"
+      ],
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Replacement tag list"
+        },
+        "title": {
+          "type": "string",
+          "description": "Updated task title"
+        },
+        "task_id": {
+          "type": "integer",
+          "description": "Board task ID"
+        },
+        "priority": {
+          "type": "string",
+          "description": "Updated task priority"
+        },
+        "task_type": {
+          "type": "string",
+          "description": "Updated task type"
+        },
+        "description": {
+          "type": "string",
+          "description": "Updated task description"
+        }
+      }
+    }
+  },
+  {
+    "name": "coder_allocate_machine",
+    "kind": "system",
+    "display_name": "Coder: Allocate Machine",
+    "description": "Allocate a Coder workspace for the current terminal session. Picks an available workspace from the integration's pool (or creates one if a default template is configured), locks it to the current terminal session, and returns the workspace identity (name, id, ssh command, lock expiry).",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "Optional free-form note recorded on the workspace lock (audit / debug aid). Do NOT include the task id or task link — task context is derived server-side."
+        }
+      }
+    }
+  },
+  {
+    "name": "coder_release_machine",
+    "kind": "system",
+    "display_name": "Coder: Release Machine",
+    "description": "Release the Coder workspace lock for the given workspace. Idempotent — returns success whether or not a lock was held. The step's teardown also auto-releases any locks held by this session.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "workspace_name"
+      ],
+      "properties": {
+        "workspace_name": {
+          "type": "string",
+          "description": "Workspace name returned by coder_allocate_machine."
+        }
+      }
+    }
+  },
+  {
+    "name": "coder_ssh_exec",
+    "kind": "system",
+    "display_name": "Coder: Run Command (SSH)",
+    "description": "Run a shell command on a Coder workspace previously allocated by this step. Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "workspace_name",
+        "command"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute (run via sh -c)."
+        },
+        "workspace_name": {
+          "type": "string",
+          "description": "Workspace name returned by coder_allocate_machine."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "description": "Per-call timeout in seconds. Default 60, max 600."
+        }
+      }
+    }
+  },
+  {
+    "name": "fail_session",
+    "kind": "internal",
+    "display_name": "Fail Session",
+    "description": "Signal that a non-interactive session has failed. This terminates the session with an error. Use when the task cannot be completed.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "reason"
+      ],
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "Optional note with details (saved to step if in workflow context)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why the session failed"
+        }
+      }
+    }
+  },
+  {
+    "name": "finish_session",
+    "kind": "internal",
+    "display_name": "Finish Session",
+    "description": "Signal successful completion of a non-interactive session. This terminates the session. Call only after ALL work is done and output files are saved.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "note": {
+          "type": "string",
+          "description": "Optional final note (saved to step if in workflow context)"
+        }
+      }
+    }
+  },
+  {
+    "name": "list_sub_steps",
+    "kind": "workflow",
+    "display_name": "List Sub-Steps",
+    "description": "List current step's sub-steps with their statuses. Only available during workflow execution.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "mark_sub_step",
+    "kind": "workflow",
+    "display_name": "Mark Sub-Step",
+    "description": "Update sub-step status with optional note and structured data. Only available during workflow execution.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "id",
+        "status"
+      ],
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Sub-step run ID"
+        },
+        "data": {
+          "type": "object",
+          "description": "Structured data — decisions, metrics, findings"
+        },
+        "note": {
+          "type": "string",
+          "description": "What was done, decisions made"
+        },
+        "status": {
+          "enum": [
+            "in_progress",
+            "completed",
+            "skipped"
+          ],
+          "type": "string",
+          "description": "New status"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_agent",
+    "kind": "meta",
+    "display_name": "Meta Create Agent",
+    "description": "Create a new agent (LLM persona) in the target scope. Returns agent ID for use in steps.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "title",
+        "persona"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Agent identifier (snake_case, auto-generated if omitted)"
+        },
+        "title": {
+          "type": "string",
+          "description": "Display name (e.g. 'Product Manager')"
+        },
+        "persona": {
+          "type": "string",
+          "description": "Core system prompt — defines who the agent IS"
+        },
+        "scope_id": {
+          "type": "integer",
+          "description": "Scope ID. Default: current project or company"
+        },
+        "principles": {
+          "type": "string",
+          "description": "Guiding principles and constraints"
+        },
+        "scope_type": {
+          "enum": [
+            "Project",
+            "Company"
+          ],
+          "type": "string",
+          "description": "Scope type. Default: Project"
+        },
+        "communication_style": {
+          "type": "string",
+          "description": "HOW the agent communicates (tone, format)"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_board_column",
+    "kind": "meta",
+    "display_name": "Meta Create Board Column",
+    "description": "Create a new column on the project board.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Column name"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "What this column represents"
+        },
+        "position": {
+          "type": "integer",
+          "description": "Position (auto-assigned if omitted)"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_column_binding",
+    "kind": "meta",
+    "display_name": "Meta Create Column Binding",
+    "description": "Bind a workflow to a board column for auto or manual triggering.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "column_id",
+        "workflow_id"
+      ],
+      "properties": {
+        "column_id": {
+          "type": "integer"
+        },
+        "workflow_id": {
+          "type": "integer"
+        },
+        "trigger_mode": {
+          "enum": [
+            "manual",
+            "auto"
+          ],
+          "type": "string",
+          "description": "Default: manual"
+        },
+        "cooldown_seconds": {
+          "type": "integer",
+          "description": "Min gap between auto-triggers. Default: 5"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_mcp_server",
+    "kind": "meta",
+    "display_name": "Meta Create MCP Server",
+    "description": "Register an MCP (Model Context Protocol) server for external tool access.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "env": {
+          "type": "object"
+        },
+        "url": {
+          "type": "string",
+          "description": "Server endpoint URL"
+        },
+        "name": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string",
+          "description": "Command for stdio transport"
+        },
+        "headers": {
+          "type": "object"
+        },
+        "scope_id": {
+          "type": "integer"
+        },
+        "transport": {
+          "enum": [
+            "http",
+            "sse",
+            "stdio"
+          ],
+          "type": "string",
+          "description": "Default: http"
+        },
+        "scope_type": {
+          "enum": [
+            "Project",
+            "Company"
+          ],
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_step",
+    "kind": "meta",
+    "display_name": "Meta Create Step",
+    "description": "Add a step to the target workflow. Steps are added sequentially unless position is specified.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Step name"
+        },
+        "agent_id": {
+          "type": "integer",
+          "description": "Agent to run this step"
+        },
+        "position": {
+          "type": "integer",
+          "description": "Position in workflow (0-based). Auto-assigned if omitted."
+        },
+        "tool_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Tool IDs available in this step"
+        },
+        "asset_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Asset IDs loaded into this step's container (in addition to workflow base assets)"
+        },
+        "skill_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Skill IDs injected into context"
+        },
+        "on_failure": {
+          "enum": [
+            "retry",
+            "skip",
+            "fail"
+          ],
+          "type": "string",
+          "description": "Failure behavior"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description for UI"
+        },
+        "max_retries": {
+          "type": "integer",
+          "description": "Retry count on failure"
+        },
+        "skip_policy": {
+          "enum": [
+            "never",
+            "if_outputs_exist",
+            "manual"
+          ],
+          "type": "string",
+          "description": "When to skip"
+        },
+        "workflow_id": {
+          "type": "integer",
+          "description": "Target workflow ID. Defaults to last created workflow."
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Focused, task-specific instructions (markdown): what to do and what to produce. Do NOT restate session-completion rules, workspace layout, sub-step tracking, or tool availability — the platform injects those automatically."
+        },
+        "mcp_server_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "MCP server IDs"
+        },
+        "input_asset_specs": {
+          "type": "array",
+          "description": "Required input files"
+        },
+        "mount_repositories": {
+          "type": "boolean",
+          "description": "Mount Git repos in /workspace"
+        },
+        "output_asset_specs": {
+          "type": "array",
+          "description": "Expected output files"
+        },
+        "depends_on_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Step IDs this step depends on (DAG)"
+        },
+        "allow_non_interactive": {
+          "type": "boolean",
+          "description": "Can run without user interaction"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_sub_step",
+    "kind": "meta",
+    "display_name": "Meta Create Sub-Step",
+    "description": "Add a trackable sub-step (progress milestone) to a step.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Sub-step name"
+        },
+        "step_id": {
+          "type": "integer",
+          "description": "Parent step ID"
+        },
+        "position": {
+          "type": "integer",
+          "description": "Position within step. Auto-assigned if omitted."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Must be completed for step to finish. Default: true"
+        },
+        "description": {
+          "type": "string",
+          "description": "What this unit of work involves"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "Additional guidance"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_tool",
+    "kind": "meta",
+    "display_name": "Meta Create Tool",
+    "description": "Create a custom tool definition.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name (snake_case)"
+        },
+        "command": {
+          "type": "string"
+        },
+        "scope_type": {
+          "enum": [
+            "Project",
+            "Company"
+          ],
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "display_name": {
+          "type": "string"
+        },
+        "docker_image": {
+          "type": "string",
+          "description": "Docker image for container execution"
+        },
+        "input_schema": {
+          "type": "object",
+          "description": "JSON Schema for parameters"
+        },
+        "execution_mode": {
+          "enum": [
+            "app",
+            "container"
+          ],
+          "type": "string",
+          "description": "Default: container"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_create_workflow",
+    "kind": "meta",
+    "display_name": "Meta Create Workflow",
+    "description": "Create a new workflow in the target project. Stores workflow_id in shared context for subsequent tools.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Workflow name"
+        },
+        "config": {
+          "type": "object",
+          "description": "Optional workflow config (base_tool_ids, etc.)"
+        },
+        "project_id": {
+          "type": "integer",
+          "description": "Target project ID. Defaults to current project."
+        },
+        "description": {
+          "type": "string",
+          "description": "Workflow description"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_delete_board_column",
+    "kind": "meta",
+    "display_name": "Meta Delete Board Column",
+    "description": "Delete an empty board column. Fails if column has tasks.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "column_id"
+      ],
+      "properties": {
+        "column_id": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_delete_column_binding",
+    "kind": "meta",
+    "display_name": "Meta Delete Column Binding",
+    "description": "Remove a workflow binding from a column.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "binding_id"
+      ],
+      "properties": {
+        "binding_id": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_delete_step",
+    "kind": "meta",
+    "display_name": "Meta Delete Step",
+    "description": "Delete a step from a workflow. Fails if other steps depend on it.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "step_id"
+      ],
+      "properties": {
+        "step_id": {
+          "type": "integer",
+          "description": "Step ID to delete"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_delete_workflow",
+    "kind": "meta",
+    "display_name": "Meta Delete Workflow",
+    "description": "Soft-delete a workflow. Fails if workflow has active runs or is bound to a board column.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "workflow_id"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "integer",
+          "description": "Workflow ID to delete"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_finalize_workflow",
+    "kind": "meta",
+    "display_name": "Meta Finalize Workflow",
+    "description": "Validate and finalize a workflow. Checks: all steps have instructions, agent references are valid, dependency graph is acyclic, positions are sequential.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "workflow_id": {
+          "type": "integer",
+          "description": "Workflow ID. Defaults to last created workflow."
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_get_board",
+    "kind": "meta",
+    "display_name": "Meta Get Board",
+    "description": "Get the project board with columns, purposes, task counts, and workflow bindings.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "meta_get_workflow",
+    "kind": "meta",
+    "display_name": "Meta Get Workflow",
+    "description": "Get the full definition of a workflow including all steps and sub-steps.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "workflow_id": {
+          "type": "integer",
+          "description": "Workflow ID. Defaults to last created workflow."
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_install_skill",
+    "kind": "meta",
+    "display_name": "Meta Install Skill",
+    "description": "Install a skill from the skills.sh registry. Search first with meta_search_skills.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "skill_id",
+        "scope_type",
+        "scope_id"
+      ],
+      "properties": {
+        "scope_id": {
+          "type": "integer"
+        },
+        "skill_id": {
+          "type": "string",
+          "description": "Registry skill ID (e.g. mantinedev/skills/mantine-form)"
+        },
+        "scope_type": {
+          "enum": [
+            "Project",
+            "Company"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_link_resource_to_step",
+    "kind": "meta",
+    "display_name": "Meta Link Resource to Step",
+    "description": "Link a tool, skill, MCP server, or asset to a step.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "resource_type",
+        "resource_id"
+      ],
+      "properties": {
+        "step_id": {
+          "type": "integer",
+          "description": "Step ID"
+        },
+        "resource_id": {
+          "type": "integer",
+          "description": "Resource ID to link"
+        },
+        "resource_type": {
+          "enum": [
+            "tool",
+            "skill",
+            "mcp_server",
+            "asset"
+          ],
+          "type": "string",
+          "description": "Resource type"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_list_agents",
+    "kind": "meta",
+    "display_name": "Meta List Agents",
+    "description": "List agents visible for the target project.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "meta_list_skills",
+    "kind": "meta",
+    "display_name": "Meta List Skills",
+    "description": "List installed skills (from skills.sh registry) available for the project.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "meta_list_tools",
+    "kind": "meta",
+    "display_name": "Meta List Tools",
+    "description": "List custom and system tools available for the project.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {}
+    }
+  },
+  {
+    "name": "meta_list_workflows",
+    "kind": "meta",
+    "display_name": "Meta List Workflows",
+    "description": "List all workflows visible for the target project (project + company scope).",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "project_id": {
+          "type": "integer",
+          "description": "Project ID. Defaults to current project."
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_reorder_board_columns",
+    "kind": "meta",
+    "display_name": "Meta Reorder Board Columns",
+    "description": "Reorder all board columns by providing ordered column IDs.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "column_ids"
+      ],
+      "properties": {
+        "column_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Ordered column IDs"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_reorder_steps",
+    "kind": "meta",
+    "display_name": "Meta Reorder Steps",
+    "description": "Reorder all steps in a workflow by providing ordered step IDs.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "step_ids"
+      ],
+      "properties": {
+        "step_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "Ordered array of step IDs"
+        },
+        "workflow_id": {
+          "type": "integer",
+          "description": "Workflow ID. Defaults to last created."
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_search_skills",
+    "kind": "meta",
+    "display_name": "Meta Search Skills",
+    "description": "Search the skills.sh registry for available agent skills.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "query"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query (e.g. mantine, react, testing)"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_setup_board_from_preset",
+    "kind": "meta",
+    "display_name": "Meta Setup Board From Preset",
+    "description": "Create or reset board from a preset (simple_kanban, dev_team, full_sdlc). Only works if columns are empty.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "preset"
+      ],
+      "properties": {
+        "preset": {
+          "enum": [
+            "simple_kanban",
+            "dev_team",
+            "full_sdlc"
+          ],
+          "type": "string"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_update_board_column",
+    "kind": "meta",
+    "display_name": "Meta Update Board Column",
+    "description": "Update a board column's name, purpose, or position.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "column_id"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "position": {
+          "type": "integer"
+        },
+        "column_id": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_update_column_binding",
+    "kind": "meta",
+    "display_name": "Meta Update Column Binding",
+    "description": "Update a column workflow binding's trigger mode or cooldown.",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "binding_id"
+      ],
+      "properties": {
+        "binding_id": {
+          "type": "integer"
+        },
+        "trigger_mode": {
+          "enum": [
+            "manual",
+            "auto"
+          ],
+          "type": "string"
+        },
+        "cooldown_seconds": {
+          "type": "integer"
+        }
+      }
+    }
+  },
+  {
+    "name": "meta_update_step",
+    "kind": "meta",
+    "display_name": "Meta Update Step",
+    "description": "Update an existing step's fields (name, instructions, agent_id, tool_ids, etc.).",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "step_id"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "step_id": {
+          "type": "integer",
+          "description": "Step ID to update"
+        },
+        "agent_id": {
+          "type": "integer"
+        },
+        "tool_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "asset_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "skill_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "on_failure": {
+          "enum": [
+            "retry",
+            "skip",
+            "fail"
+          ],
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "max_retries": {
+          "type": "integer"
+        },
+        "skip_policy": {
+          "enum": [
+            "never",
+            "if_outputs_exist",
+            "manual"
+          ],
+          "type": "string"
+        },
+        "instructions": {
+          "type": "string"
+        },
+        "mcp_server_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "mount_repositories": {
+          "type": "boolean"
+        },
+        "depends_on_step_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "allow_non_interactive": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_tool_result",
+    "kind": "internal",
+    "display_name": "Read Tool Result",
+    "description": "Retrieve status and download URLs for an async tool execution. Returns presigned URLs valid for 1 hour. Download files using curl: curl -o /tmp/result.json <url>",
+    "execution_mode": "app",
+    "requires_integration": null,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "tool_result_id"
+      ],
+      "properties": {
+        "tool_result_id": {
+          "type": "string",
+          "description": "Execution ID (e.g. tr-abc123...)"
+        }
+      }
+    }
+  },
+  {
+    "name": "slack_post_message",
+    "kind": "workflow",
+    "display_name": "Slack Post Message",
+    "description": "Send a Slack message from this workflow. `text` and `files` are both optional but at least one is required — text only, files only, or both arrive as ONE message. Omit channel/thread to reply in the channel/thread that triggered the run. Requires a Slack integration on the project.",
+    "execution_mode": "app",
+    "requires_integration": "slack",
+    "input_schema": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "Message text. Optional when files are provided."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "filename",
+              "content"
+            ],
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Optional display title (defaults to filename)"
+              },
+              "content": {
+                "type": "string",
+                "description": "Full text content of the file"
+              },
+              "filename": {
+                "type": "string",
+                "description": "File name, e.g. fizzbuzz.rb"
+              }
+            }
+          },
+          "description": "Optional file attachments, sent in the SAME message as the text."
+        },
+        "channel": {
+          "type": "string",
+          "description": "Channel ID. Defaults to the triggering channel for Slack-started runs."
+        },
+        "thread_ts": {
+          "type": "string",
+          "description": "Thread timestamp to reply into. Defaults to the triggering thread."
+        }
+      }
+    }
+  }
+]

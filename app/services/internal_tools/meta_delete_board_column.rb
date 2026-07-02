@@ -2,6 +2,22 @@
 
 module InternalTools
   class MetaDeleteBoardColumn < Base
+    tool do
+      display_name "Meta Delete Board Column"
+      description "Delete an empty board column. Fails if column has tasks."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[column_id],
+        properties: {
+          column_id: {
+            type: "integer"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

@@ -2,6 +2,17 @@
 
 module InternalTools
   class ListSubSteps < Base
+    tool do
+      display_name "List Sub-Steps"
+      description "List current step's sub-steps with their statuses. Only available during workflow execution."
+      tags :workflow_control
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        properties: {}
+      })
+    end
+
     def execute
       require_workflow_context!
 

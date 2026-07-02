@@ -15,4 +15,5 @@ end
 ActiveSupport::Inflector.inflections(:en) do |inflect|
   inflect.acronym "UI"
   inflect.acronym "MCP"
+  inflect.acronym "DSL"
 end

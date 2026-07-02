@@ -40,9 +40,12 @@ class Tool < ApplicationRecord
   validates :kind, presence: true
   validates :scope, presence: true, if: :custom?
   validates :docker_image, presence: true, if: :custom?
+  validate :name_outside_platform_namespace, if: -> { db_source? && (new_record? || name_changed?) }
 
   # Scopes
   scope :not_deleted, -> { where(deleted_at: nil) }
+  scope :code_source, -> { where(source: "code") }
+  scope :db_source, -> { where(source: "db") }
   scope :deleted, -> { where.not(deleted_at: nil) }
   scope :custom_tools, -> { where(kind: "custom") }
   scope :system_tools, -> { where(kind: "system") }
@@ -117,6 +120,32 @@ class Tool < ApplicationRecord
     !custom?
   end
 
+  def code_source?
+    source == "code"
+  end
+
+  def db_source?
+    source == "db"
+  end
+
+  # The in-code definition backing this shadow row (nil for user-authored
+  # custom tools). Serving paths prefer it over the row's own columns so a
+  # stale row between deploy and reconcile can never serve stale metadata.
+  def definition
+    code_source? ? Tools::Registry.fetch(name) : nil
+  end
+
+  # Returns the shadow row for a code definition, materializing it on demand.
+  # This is what makes "platform tools work without pre-created DB rows"
+  # literally true: the class alone suffices; rows appear on first FK need
+  # (session attachment, ToolResult creation) even if no reconcile ran yet.
+  def self.shadow_for(definition)
+    not_deleted.code_source.find_by(name: definition.name) || begin
+      Tools::Reconciler.run!
+      not_deleted.code_source.find_by!(name: definition.name)
+    end
+  end
+
   def soft_delete!
     update!(deleted_at: Time.current)
   end
@@ -126,6 +155,17 @@ class Tool < ApplicationRecord
   end
 
   private
+
+  # Structural anti-shadowing: a tenant-authored row must never claim a
+  # platform tool's name or the managed-MCP namespace. Grandfathered rows are
+  # reported by tools:check; this guards creates and renames going forward.
+  def name_outside_platform_namespace
+    if name&.start_with?("mcp__")
+      errors.add(:name, "cannot use the reserved mcp__ namespace")
+    elsif Tools::Registry.fetch(name)
+      errors.add(:name, "collides with the platform tool '#{name}'")
+    end
+  end
 
   def start_container_execution(parameters:, project:, session:, timeout:, tool_result_id:)
     strategy = build_strategy(

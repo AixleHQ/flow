@@ -2,6 +2,27 @@
 
 module InternalTools
   class BoardMoveTask < Base
+    tool do
+      display_name "Board Move Task"
+      description "Move a task to another board column by name."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id column_name],
+        properties: {
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          },
+          column_name: {
+            type: "string",
+            description: "Destination column name"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

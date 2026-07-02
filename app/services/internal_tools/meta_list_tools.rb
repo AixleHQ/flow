@@ -2,6 +2,18 @@
 
 module InternalTools
   class MetaListTools < Base
+    tool do
+      display_name "Meta List Tools"
+      description "List custom and system tools available for the project."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {}
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

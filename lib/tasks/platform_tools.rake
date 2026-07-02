@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 namespace :platform_tools do
-  desc "Seed platform tools into the database (idempotent — safe to re-run)"
+  desc "Reconcile code-defined platform tools into shadow rows (idempotent — safe to re-run)"
   task seed: :environment do
-    require Rails.root.join("db/seeds/platform_tools")
-    Seeds::PlatformTools.seed!
+    Tools::Reconciler.run!
+    puts "Reconciled #{Tools::Registry.names.size} platform tools." unless Rails.env.test?
   end
 end

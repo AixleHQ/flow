@@ -2,6 +2,82 @@
 
 module InternalTools
   class MetaUpdateStep < Base
+    tool do
+      display_name "Meta Update Step"
+      description "Update an existing step's fields (name, instructions, agent_id, tool_ids, etc.)."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[step_id],
+        properties: {
+          name: {
+            type: "string"
+          },
+          step_id: {
+            type: "integer",
+            description: "Step ID to update"
+          },
+          agent_id: {
+            type: "integer"
+          },
+          tool_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
+          },
+          asset_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
+          },
+          skill_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
+          },
+          on_failure: {
+            enum: %w[retry skip fail],
+            type: "string"
+          },
+          description: {
+            type: "string"
+          },
+          max_retries: {
+            type: "integer"
+          },
+          skip_policy: {
+            enum: %w[never if_outputs_exist manual],
+            type: "string"
+          },
+          instructions: {
+            type: "string"
+          },
+          mcp_server_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
+          },
+          mount_repositories: {
+            type: "boolean"
+          },
+          depends_on_step_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
+          },
+          allow_non_interactive: {
+            type: "boolean"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

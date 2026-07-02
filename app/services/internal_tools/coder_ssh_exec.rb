@@ -10,6 +10,31 @@ module InternalTools
   # one that holds the workspace lock (DD-5). Output is bounded by a
   # single total-response budget (DD-15).
   class CoderSshExec < Base
+    tool do
+      display_name "Coder: Run Command (SSH)"
+      description "Run a shell command on a Coder workspace previously allocated by this step. Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget."
+      tags :coder
+      managed_mcp_provider :coder
+      input_schema({
+        type: "object",
+        required: %w[workspace_name command],
+        properties: {
+          command: {
+            type: "string",
+            description: "Shell command to execute (run via sh -c)."
+          },
+          workspace_name: {
+            type: "string",
+            description: "Workspace name returned by coder_allocate_machine."
+          },
+          timeout_seconds: {
+            type: "integer",
+            description: "Per-call timeout in seconds. Default 60, max 600."
+          }
+        }
+      })
+    end
+
     include Concerns::CoderResolver
 
     def execute

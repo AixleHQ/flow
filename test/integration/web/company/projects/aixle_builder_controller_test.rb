@@ -52,7 +52,7 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     # Regression: meta_* tools were moved from kind :workflow to :meta by
     # migration 20260627000002, but the controller kept querying :workflow,
     # so Builder sessions were created with zero tools.
-    assert_equal [meta_tool.id], captured[:params][:tool_ids]
+    assert_equal [ meta_tool.id ], captured[:params][:tool_ids]
   end
 
   test "start redirects back with flash alert when session save fails" do

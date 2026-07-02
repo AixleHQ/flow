@@ -2,6 +2,38 @@
 
 module InternalTools
   class BoardAttachAsset < Base
+    tool do
+      display_name "Board Attach Asset"
+      description "Attach a file to a board task by reading it from a path inside the running container."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id name file_path],
+        properties: {
+          name: {
+            type: "string",
+            description: "Attachment filename"
+          },
+          tags: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Optional asset tags"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          },
+          file_path: {
+            type: "string",
+            description: "Path inside the running container to upload"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

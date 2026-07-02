@@ -2,6 +2,35 @@
 
 module InternalTools
   class MetaCreateWorkflow < Base
+    tool do
+      display_name "Meta Create Workflow"
+      description "Create a new workflow in the target project. Stores workflow_id in shared context for subsequent tools."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[name],
+        properties: {
+          name: {
+            type: "string",
+            description: "Workflow name"
+          },
+          config: {
+            type: "object",
+            description: "Optional workflow config (base_tool_ids, etc.)"
+          },
+          project_id: {
+            type: "integer",
+            description: "Target project ID. Defaults to current project."
+          },
+          description: {
+            type: "string",
+            description: "Workflow description"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

@@ -20,9 +20,10 @@ super_admin = User.find_or_create_by!(email: super_admin_email) do |user|
   user.state = :active
 end
 
-require_relative "seeds/platform_tools"
-Seeds::PlatformTools.seed!
-
+# Platform tools are code-defined (InternalTools::* `tool do` blocks) and
+# reconciled into shadow rows — see Tools::Reconciler.
+puts "Reconciling platform tools..."
+Tools::Reconciler.run!
 
 require_relative "seeds/aixle_builder"
 Seeds::AixleBuilder.seed!
@@ -189,7 +190,7 @@ puts "Board seeded: #{demo_board.name} (#{demo_board.board_columns.count} column
 # NOTE: Company-scoped demo seeds (Context7 MCP server, Semgrep tool, Code Report
 # agent/workflow) were removed along with the company-level entity screens —
 # these resources now live at the project level. System-scoped platform tools are
-# still seeded above via Seeds::PlatformTools.
+# still reconciled above via Tools::Reconciler.
 
 puts "Seed data created successfully!"
 puts ""

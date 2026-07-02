@@ -2,6 +2,18 @@
 
 module InternalTools
   class MetaListSkills < Base
+    tool do
+      display_name "Meta List Skills"
+      description "List installed skills (from skills.sh registry) available for the project."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {}
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

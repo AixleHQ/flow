@@ -2,6 +2,31 @@
 
 module InternalTools
   class MetaUpdateBoardColumn < Base
+    tool do
+      display_name "Meta Update Board Column"
+      description "Update a board column's name, purpose, or position."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[column_id],
+        properties: {
+          name: {
+            type: "string"
+          },
+          purpose: {
+            type: "string"
+          },
+          position: {
+            type: "integer"
+          },
+          column_id: {
+            type: "integer"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

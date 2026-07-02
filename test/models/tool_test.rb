@@ -11,7 +11,7 @@ class ToolTest < ActiveSupport::TestCase
 
   def gated_tool
     Tool.create!(name: "slack_post_message", display_name: "Slack Post Message",
-      kind: "workflow", execution_mode: "app",
+      kind: "workflow", source: "code", execution_mode: "app",
       enabled: true, requires_integration: "slack", input_schema: {})
   end
 
@@ -38,16 +38,40 @@ class ToolTest < ActiveSupport::TestCase
 
   test "ungated platform tools are always visible" do
     tool = Tool.create!(name: "board_list_tasks", display_name: "Board List Tasks",
-      kind: "workflow", execution_mode: "app", enabled: true, input_schema: {})
+      kind: "workflow", source: "code", execution_mode: "app", enabled: true, input_schema: {})
 
     assert_includes Tool.visible_for_project(@project).pluck(:id), tool.id
   end
 
   test "visible_for_project hides meta tools even though they are persisted" do
     tool = Tool.create!(name: "meta_create_workflow", display_name: "Meta Create Workflow",
-      kind: "meta", execution_mode: "app", enabled: true, input_schema: {})
+      kind: "meta", source: "code", execution_mode: "app", enabled: true, input_schema: {})
 
     assert tool.persisted?
     assert_not_includes Tool.visible_for_project(@project).pluck(:id), tool.id
+  end
+
+  # ── platform-namespace protection (code-first registry) ──
+
+  test "custom tool cannot claim a platform tool name" do
+    company = create(:company)
+    tool = build(:tool, name: "slack_post_message", scope: company)
+
+    assert_not tool.valid?
+    assert_match(/collides with the platform tool/, tool.errors[:name].first)
+  end
+
+  test "custom tool cannot use the reserved mcp__ namespace" do
+    company = create(:company)
+    tool = build(:tool, name: "mcp__coder_1__coder_ssh_exec", scope: company)
+
+    assert_not tool.valid?
+    assert_match(/reserved mcp__ namespace/, tool.errors[:name].first)
+  end
+
+  test "reconciler-owned code rows are exempt from the namespace validation" do
+    row = build(:tool, :meta, name: "meta_create_tool", source: "code")
+
+    assert row.valid?, row.errors.full_messages.to_sentence
   end
 end

@@ -18,8 +18,7 @@ class MetaToolsSeedTest < ActiveSupport::TestCase
   ].freeze
 
   setup do
-    load Rails.root.join("db/seeds/platform_tools.rb")
-    Seeds::PlatformTools.seed!
+    Tools::Reconciler.run!
   end
 
   test "all 28 aixle builder tool names exist as workflow tools" do

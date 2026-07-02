@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaDeleteStep < Base
+    tool do
+      display_name "Meta Delete Step"
+      description "Delete a step from a workflow. Fails if other steps depend on it."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[step_id],
+        properties: {
+          step_id: {
+            type: "integer",
+            description: "Step ID to delete"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

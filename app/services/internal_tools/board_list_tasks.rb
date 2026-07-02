@@ -2,6 +2,35 @@
 
 module InternalTools
   class BoardListTasks < Base
+    tool do
+      display_name "Board List Tasks"
+      description "List tasks on the current board with optional filters for column, tag, task type, or assignee."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {
+          tag: {
+            type: "string",
+            description: "Filter tasks by tag"
+          },
+          task_type: {
+            type: "string",
+            description: "Filter tasks by task type"
+          },
+          assignee_id: {
+            type: "integer",
+            description: "Filter tasks by assignee user ID"
+          },
+          column_name: {
+            type: "string",
+            description: "Filter tasks to a board column by name"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

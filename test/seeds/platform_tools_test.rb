@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require Rails.root.join("db/seeds/platform_tools")
-
-class Seeds::PlatformToolsTest < ActiveSupport::TestCase
+class PlatformToolsReconcileTest < ActiveSupport::TestCase
   test "seed creates board workflow tools" do
-    Seeds::PlatformTools.seed!
+    Tools::Reconciler.run!
 
     %w[
       board_get_board_info
@@ -29,7 +27,7 @@ class Seeds::PlatformToolsTest < ActiveSupport::TestCase
   end
 
   test "seed creates the three Coder MCP system tools" do
-    Seeds::PlatformTools.seed!
+    Tools::Reconciler.run!
 
     %w[coder_allocate_machine coder_ssh_exec coder_release_machine].each do |tool_name|
       tool = Tool.find_by(name: tool_name)
@@ -40,7 +38,7 @@ class Seeds::PlatformToolsTest < ActiveSupport::TestCase
   end
 
   test "board_add_comment tool description mentions markdown support" do
-    Seeds::PlatformTools.seed!
+    Tools::Reconciler.run!
 
     tool = Tool.find_by(name: "board_add_comment")
     assert_not_nil tool

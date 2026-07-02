@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaDeleteWorkflow < Base
+    tool do
+      display_name "Meta Delete Workflow"
+      description "Soft-delete a workflow. Fails if workflow has active runs or is bound to a board column."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[workflow_id],
+        properties: {
+          workflow_id: {
+            type: "integer",
+            description: "Workflow ID to delete"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

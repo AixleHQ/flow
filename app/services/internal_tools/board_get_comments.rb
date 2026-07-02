@@ -2,6 +2,32 @@
 
 module InternalTools
   class BoardGetComments < Base
+    tool do
+      display_name "Board Get Comments"
+      description "List comments for a task on the current board with optional tag or author-type filters."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id],
+        properties: {
+          tag: {
+            type: "string",
+            description: "Optional tag filter"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          },
+          author_type: {
+            enum: %w[user agent],
+            type: "string",
+            description: "Optional author type filter"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

@@ -2,6 +2,54 @@
 
 module InternalTools
   class MetaCreateMCPServer < Base
+    tool do
+      display_name "Meta Create MCP Server"
+      description "Register an MCP (Model Context Protocol) server for external tool access."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[name],
+        properties: {
+          env: {
+            type: "object"
+          },
+          url: {
+            type: "string",
+            description: "Server endpoint URL"
+          },
+          name: {
+            type: "string"
+          },
+          command: {
+            type: "string",
+            description: "Command for stdio transport"
+          },
+          headers: {
+            type: "object"
+          },
+          scope_id: {
+            type: "integer"
+          },
+          transport: {
+            enum: %w[http sse stdio],
+            type: "string",
+            description: "Default: http"
+          },
+          scope_type: {
+            enum: %w[Project Company],
+            type: "string"
+          },
+          description: {
+            type: "string"
+          },
+          display_name: {
+            type: "string"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute
