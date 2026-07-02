@@ -45,7 +45,7 @@ class ToolTest < ActiveSupport::TestCase
 
   test "visible_for_project hides meta tools even though they are persisted" do
     tool = Tool.create!(name: "meta_create_workflow", display_name: "Meta Create Workflow",
-      kind: "meta", source: "code", execution_mode: "app", enabled: true, input_schema: {})
+      kind: "meta", source: "code", user_attachable: false, execution_mode: "app", enabled: true, input_schema: {})
 
     assert tool.persisted?
     assert_not_includes Tool.visible_for_project(@project).pluck(:id), tool.id

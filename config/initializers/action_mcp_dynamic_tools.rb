@@ -121,11 +121,16 @@ Rails.application.config.after_initialize do
       serialized
     end
 
+    # Resolution order is structural anti-shadowing: a managed-namespace name
+    # resolves only inside its server's registry-declared tool list, and bare
+    # names resolve against the session's entitled set (platform shadow rows
+    # before the project custom fallback, per available_tools ordering) — a
+    # tenant row can never answer a managed name.
     def resolve_tool_for_call(session, base_name, mcp_server)
       if mcp_server&.managed?
-        names = Integrations::ManagedMCPToolRegistry.tool_names_for(mcp_server.integration&.provider)
+        names = Tools::Registry.managed_tool_names(mcp_server.integration&.provider)
         return nil unless names.include?(base_name)
-        Tool.system_tools.enabled.not_deleted.find_by(name: base_name)
+        Tool.code_source.enabled.not_deleted.find_by(name: base_name)
       else
         session.available_tools.detect { |t| t.name == base_name }
       end
@@ -147,10 +152,10 @@ Rails.application.config.after_initialize do
     end
 
     def managed_tools_for(server)
-      names = Integrations::ManagedMCPToolRegistry.tool_names_for(server.integration&.provider)
+      names = Tools::Registry.managed_tool_names(server.integration&.provider)
       return [] if names.empty?
 
-      Tool.system_tools.enabled.not_deleted.where(name: names).to_a
+      Tool.shadow_rows_for_names(names).select(&:enabled?)
     end
 
     private

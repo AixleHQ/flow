@@ -127,32 +127,52 @@ class TerminalSession < ApplicationRecord
     end
   end
 
-  def available_tools
-    result = []
+  # The session's entitled tool set: explicitly attached tools, the project
+  # custom-tool fallback, plus code-defined platform tools whose injection
+  # rules match this session (Tools::InjectionRules — replaces the legacy
+  # kind-driven branches, kept below behind an env kill switch for one
+  # release). Availability (integration gating) is deliberately NOT applied
+  # here: serving surfaces filter with Tool#available?(ctx) so tools/call can
+  # distinguish entitled-but-disconnected from not-entitled.
+  def available_tools(ctx: nil)
+    return legacy_available_tools if ENV["AIXLE_LEGACY_AVAILABLE_TOOLS"] == "1"
 
-    if session_type == "workflow_step"
-      result += Tool.workflow_tools.enabled.to_a
+    ctx ||= Tools::Context.for_session(self)
+
+    base = tools.enabled.to_a
+    if base.none?(&:db_source?) && project.present?
+      base += Tool.for_project(project).enabled.to_a
     end
 
-    result += tools.enabled.to_a
+    ctx.candidate_tools = base
+    injected = Tools::Registry.injectable.select { |d| d.inject?(ctx) }.map(&:name)
+    base += Tool.shadow_rows_for_names(injected).select(&:enabled?)
 
-    if result.select(&:custom?).empty? && project.present?
-      result += Tool.for_project(project).custom_tools.enabled.to_a
-    end
-
-    has_container_tools = result.any? { |t| t.execution_mode.container? }
-    if has_container_tools
-      result += Tool.internal_tools.enabled.to_a
-    end
-
-    if mode == "non_interactive"
-      result += Tool.session_lifecycle_tools.to_a
-    end
-
-    result.uniq
+    base.uniq
   end
 
   private
+
+  # Pre-registry behavior, byte-for-byte. Kill switch: set
+  # AIXLE_LEGACY_AVAILABLE_TOOLS=1 to route the serving path through the old
+  # kind-based branches. Delete together with the kind column (Stage 4).
+  def legacy_available_tools
+    result = []
+    result += Tool.where(kind: "workflow").enabled.to_a if session_type == "workflow_step"
+    result += tools.enabled.to_a
+
+    if result.select(&:custom?).empty? && project.present?
+      result += Tool.for_project(project).enabled.to_a
+    end
+
+    if result.any? { |t| t.execution_mode.container? }
+      result += Tool.where(kind: "internal").enabled.to_a
+    end
+
+    result += Tool.where(name: %w[finish_session fail_session]).enabled.to_a if mode == "non_interactive"
+
+    result.uniq
+  end
 
   # == State machine callbacks ==
 

@@ -36,10 +36,7 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_match %r{/aixle_builder/\d+/session}, response.location
   end
 
-  test "start attaches existing meta tools to the session" do
-    meta_tool = create(:tool, :meta, name: "meta_create_workflow")
-    create(:tool, :workflow, name: "board_list_tasks") # must NOT be attached
-
+  test "start attaches every builder meta tool to the session" do
     captured = nil
     SessionService.stubs(:create_and_start).with do |**kwargs|
       captured = kwargs
@@ -49,10 +46,13 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     post company_project_aixle_builder_start_path(@project), params: { agent_runtime: "claude_code" }
 
     assert_response :redirect
-    # Regression: meta_* tools were moved from kind :workflow to :meta by
-    # migration 20260627000002, but the controller kept querying :workflow,
-    # so Builder sessions were created with zero tools.
-    assert_equal [ meta_tool.id ], captured[:params][:tool_ids]
+    # Regression: Builder sessions were once created with zero tools (the
+    # controller queried a stale kind after migration 20260627000002). Meta
+    # tools now come from the code registry, materialized as shadow rows on
+    # demand — no pre-seeded rows required.
+    attached = Tool.where(id: captured[:params][:tool_ids])
+    assert_equal Tools::Registry.tagged(:builder).map(&:name).sort, attached.pluck(:name).sort
+    assert_equal 28, attached.count
   end
 
   test "start redirects back with flash alert when session save fails" do

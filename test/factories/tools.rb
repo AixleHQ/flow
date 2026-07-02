@@ -51,6 +51,7 @@ FactoryBot.define do
     trait :meta do
       kind { :meta }
       source { "code" }
+      user_attachable { false }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }

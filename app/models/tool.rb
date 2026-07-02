@@ -47,22 +47,20 @@ class Tool < ApplicationRecord
   scope :code_source, -> { where(source: "code") }
   scope :db_source, -> { where(source: "db") }
   scope :deleted, -> { where.not(deleted_at: nil) }
-  scope :custom_tools, -> { where(kind: "custom") }
-  scope :system_tools, -> { where(kind: "system") }
-  scope :internal_tools, -> { where(kind: "internal") }
-  scope :workflow_tools, -> { where(kind: "workflow") }
-  scope :session_lifecycle_tools, -> { where(name: %w[finish_session fail_session]).enabled }
 
-  scope :for_company, ->(company) { not_deleted.custom_tools.where(scope_type: "Company", scope_id: company.id) }
-  scope :for_project, ->(project) { not_deleted.custom_tools.where(scope_type: "Project", scope_id: project.id) }
+  scope :for_company, ->(company) { not_deleted.db_source.where(scope_type: "Company", scope_id: company.id) }
+  scope :for_project, ->(project) { not_deleted.db_source.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Tools visible in UI management (system + custom, not internal/workflow)
+  # Tools visible in UI management (custom + the big attachable platform
+  # tools). Still expressed via kind until the column drop (Stage 4) — the
+  # reconciler keeps writing it.
   scope :ui_visible, -> { where(kind: %w[custom system]) }
-  # NOTE: only system/internal/workflow platform kinds are listed here, so :meta
-  # tools (Aixle Builder meta_* tools) are intentionally excluded from pickers.
+  # Pickers: attachable platform tools (user_attachable false hides the Aixle
+  # Builder meta_* tools) plus in-scope custom tools, gated on the
+  # reconciler-owned requires_integration projection.
   scope :visible_for_project, ->(project) {
-    not_deleted.enabled.where(kind: %w[system internal workflow])
+    not_deleted.enabled.where(source: "code", user_attachable: true)
                .or(not_deleted.enabled.where(scope_type: "Company", scope_id: project.company_id))
                .or(not_deleted.enabled.where(scope_type: "Project", scope_id: project.id))
                .where("tools.requires_integration IS NULL OR tools.requires_integration IN (?)",
@@ -80,9 +78,9 @@ class Tool < ApplicationRecord
                       pid: project.id, cid: project.company_id)
                .distinct.pluck(:provider)
   end
-  # Like visible_for_project, :meta tools are excluded (only system/internal/workflow).
+  # Like visible_for_project, Builder meta_* tools are excluded via user_attachable.
   scope :visible_for_company, ->(company) {
-    not_deleted.enabled.where(kind: %w[system internal workflow])
+    not_deleted.enabled.where(source: "code", user_attachable: true)
                .or(not_deleted.enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
@@ -115,9 +113,9 @@ class Tool < ApplicationRecord
     end
   end
 
-  # True for kinds not owned by users (system, internal, workflow)
+  # True for reconciler-owned shadow rows of code-defined tools.
   def platform_tool?
-    !custom?
+    code_source?
   end
 
   def code_source?
@@ -161,10 +159,21 @@ class Tool < ApplicationRecord
   # literally true: the class alone suffices; rows appear on first FK need
   # (session attachment, ToolResult creation) even if no reconcile ran yet.
   def self.shadow_for(definition)
-    not_deleted.code_source.find_by(name: definition.name) || begin
+    shadow_rows_for_names([ definition.name ]).first ||
+      raise(ActiveRecord::RecordNotFound, "No shadow row for tool definition '#{definition.name}'")
+  end
+
+  # Batch variant: one query for the common case, one reconcile + refetch
+  # when any row hasn't been materialized yet.
+  def self.shadow_rows_for_names(names)
+    return [] if names.empty?
+
+    rows = not_deleted.code_source.where(name: names).to_a
+    if (names - rows.map(&:name)).any?
       Tools::Reconciler.run!
-      not_deleted.code_source.find_by!(name: definition.name)
+      rows = not_deleted.code_source.where(name: names).to_a
     end
+    rows
   end
 
   def soft_delete!
