@@ -10,7 +10,7 @@ module Tools
   class Definition
     ATTRS = %i[name display_name description input_schema tags inject_rules
                requires_integration availability unavailable_message annotations
-               user_attachable managed_mcp_provider handler_class_name legacy_kind].freeze
+               user_attachable managed_mcp_provider handler_class_name].freeze
 
     attr_reader(*ATTRS)
 
@@ -21,7 +21,6 @@ module Tools
       @input_schema = (@input_schema || {}).freeze
       @annotations = (@annotations || {}).freeze
       @user_attachable = true if @user_attachable.nil?
-      @legacy_kind ||= derive_legacy_kind
       freeze
     end
 
@@ -48,9 +47,7 @@ module Tools
         "Connect it in Project Settings → Integrations."
     end
 
-    # Projection into the shadow row. The legacy `kind` column keeps being
-    # written through the taxonomy cutover so a rollback lands on rows the
-    # previous release fully understands.
+    # Projection into the shadow row.
     def to_row_attributes
       {
         name: name.to_s,
@@ -62,24 +59,10 @@ module Tools
         user_attachable: user_attachable,
         execution_mode: "app",
         source: "code",
-        kind: legacy_kind.to_s,
         deleted_at: nil,
         scope_type: nil,
         scope_id: nil
       }
-    end
-
-    private
-
-    # Mechanical mapping of the new axes back onto the legacy kind enum,
-    # verified against every current platform tool (see the registry research
-    # report, Architectural Patterns section).
-    def derive_legacy_kind
-      return :meta if tags.include?(:builder)
-      return :workflow if inject_rules.include?(:workflow_step_session)
-      return :internal if inject_rules.intersect?(%i[container_tools_present non_interactive_session])
-
-      :system
     end
   end
 end

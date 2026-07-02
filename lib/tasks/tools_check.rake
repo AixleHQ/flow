@@ -31,8 +31,7 @@ namespace :tools do
          row.display_name != desired[:display_name] ||
          row.description != desired[:description] ||
          row.tags != desired[:tags] ||
-         row.requires_integration != desired[:requires_integration] ||
-         row.kind.to_s != desired[:kind]
+         row.requires_integration != desired[:requires_integration]
         findings[:definition_mismatch] << d.name
       end
     end

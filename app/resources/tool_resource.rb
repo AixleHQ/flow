@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class ToolResource < ApplicationResource
-  attributes :id, :name, :display_name, :description, :kind, :scope_type, :scope_id,
+  attributes :id, :name, :display_name, :description, :source, :scope_type, :scope_id,
              :docker_image, :command,
              :enabled, :created_at, :updated_at
 

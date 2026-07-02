@@ -48,14 +48,6 @@ class Tools::DefinitionDSLTest < ActiveSupport::TestCase
     assert_match(/on_full_moon/, error.message)
   end
 
-  test "legacy kind derivation covers all four groupings" do
-    assert_equal :workflow, build_definition { inject_when :workflow_step_session }.legacy_kind
-    assert_equal :internal, build_definition { inject_when :non_interactive_session }.legacy_kind
-    assert_equal :internal, build_definition { inject_when :container_tools_present }.legacy_kind
-    assert_equal :meta, build_definition { tags :builder }.legacy_kind
-    assert_equal :system, build_definition { tags :coder }.legacy_kind
-  end
-
   test "definitions are frozen and reload-safe (class name string, not class object)" do
     definition = build_definition { display_name "Sample" }
 

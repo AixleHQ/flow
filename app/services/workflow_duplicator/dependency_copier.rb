@@ -158,7 +158,7 @@ class WorkflowDuplicator
       return existing.id if existing
 
       MCPServer.create!(
-        scope: @project, kind: "custom",
+        scope: @project,
         name: server.name, display_name: server.display_name,
         url: server.url, transport: server.transport, description: server.description,
         command: server.command, args: server.args, enabled: server.enabled,
@@ -182,7 +182,7 @@ class WorkflowDuplicator
       return existing.id if existing
 
       new_tool = Tool.create!(
-        scope: @project, kind: "custom",
+        scope: @project,
         name: tool.name, display_name: tool.display_name, description: tool.description,
         docker_image: tool.docker_image, command: tool.command,
         execution_mode: tool.execution_mode, input_schema: tool.input_schema,

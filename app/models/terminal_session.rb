@@ -129,14 +129,11 @@ class TerminalSession < ApplicationRecord
 
   # The session's entitled tool set: explicitly attached tools, the project
   # custom-tool fallback, plus code-defined platform tools whose injection
-  # rules match this session (Tools::InjectionRules — replaces the legacy
-  # kind-driven branches, kept below behind an env kill switch for one
-  # release). Availability (integration gating) is deliberately NOT applied
-  # here: serving surfaces filter with Tool#available?(ctx) so tools/call can
-  # distinguish entitled-but-disconnected from not-entitled.
+  # rules match this session (Tools::InjectionRules). Availability
+  # (integration gating) is deliberately NOT applied here: serving surfaces
+  # filter with Tool#available?(ctx) so tools/call can distinguish
+  # entitled-but-disconnected from not-entitled.
   def available_tools(ctx: nil)
-    return legacy_available_tools if ENV["AIXLE_LEGACY_AVAILABLE_TOOLS"] == "1"
-
     ctx ||= Tools::Context.for_session(self)
 
     base = tools.enabled.to_a
@@ -152,27 +149,6 @@ class TerminalSession < ApplicationRecord
   end
 
   private
-
-  # Pre-registry behavior, byte-for-byte. Kill switch: set
-  # AIXLE_LEGACY_AVAILABLE_TOOLS=1 to route the serving path through the old
-  # kind-based branches. Delete together with the kind column (Stage 4).
-  def legacy_available_tools
-    result = []
-    result += Tool.where(kind: "workflow").enabled.to_a if session_type == "workflow_step"
-    result += tools.enabled.to_a
-
-    if result.select(&:custom?).empty? && project.present?
-      result += Tool.for_project(project).enabled.to_a
-    end
-
-    if result.any? { |t| t.execution_mode.container? }
-      result += Tool.where(kind: "internal").enabled.to_a
-    end
-
-    result += Tool.where(name: %w[finish_session fail_session]).enabled.to_a if mode == "non_interactive"
-
-    result.uniq
-  end
 
   # == State machine callbacks ==
 

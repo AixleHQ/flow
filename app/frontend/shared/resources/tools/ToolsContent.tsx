@@ -19,7 +19,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { DeleteToolModal } from './DeleteToolModal';
 import { ToolFormModal } from './ToolFormModal';
 
-type ToolKind = 'custom' | 'system' | 'internal' | 'workflow';
+type ToolSource = 'code' | 'db';
 type ScopeIndicator = 'system' | 'company' | 'project' | 'overrides_company';
 
 interface ToolFile {
@@ -36,7 +36,7 @@ export interface Tool {
   name: string;
   displayName: string;
   description: string | null;
-  kind: ToolKind;
+  source: ToolSource;
   scopeType: string | null;
   scopeId: number | null;
   dockerImage: string | null;
@@ -77,7 +77,7 @@ export function ToolsContent({
 }: ToolsContentProps) {
   const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState('custom');
+  const [sourceFilter, setSourceFilter] = useState('db');
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editTool, setEditTool] = useState<Tool | null>(null);
   const [deleteTool, setDeleteTool] = useState<Tool | null>(null);
@@ -90,12 +90,12 @@ export function ToolsContent({
       result = result.filter((t) => t.name.toLowerCase().includes(q) || t.displayName.toLowerCase().includes(q));
     }
 
-    if (kindFilter !== 'all') {
-      result = result.filter((t) => t.kind === kindFilter);
+    if (sourceFilter !== 'all') {
+      result = result.filter((t) => t.source === sourceFilter);
     }
 
     return result;
-  }, [tools, search, kindFilter]);
+  }, [tools, search, sourceFilter]);
 
   const canEdit = (tool: Tool) => !tool.platformTool && tool.scopeIndicator === editableScopeIndicator;
   const canDelete = canEdit;
@@ -110,7 +110,7 @@ export function ToolsContent({
     setEditTool(null);
   };
 
-  const hasFilters = !!search || kindFilter !== 'all';
+  const hasFilters = !!search || sourceFilter !== 'all';
 
   return (
     <Box>
@@ -139,12 +139,12 @@ export function ToolsContent({
           maw={300}
         />
         <SegmentedControl
-          value={kindFilter}
-          onChange={setKindFilter}
+          value={sourceFilter}
+          onChange={setSourceFilter}
           data={[
             { label: 'All', value: 'all' },
-            { label: 'System', value: 'system' },
-            { label: 'Custom', value: 'custom' },
+            { label: 'Platform', value: 'code' },
+            { label: 'Custom', value: 'db' },
           ]}
           size="sm"
         />

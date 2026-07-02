@@ -10,7 +10,6 @@ class Tools::ReconcilerTest < ActiveSupport::TestCase
 
     assert_equal Tools::Registry.names.sort, Tool.code_source.not_deleted.pluck(:name).sort
     slack = Tool.code_source.find_by!(name: "slack_post_message")
-    assert_equal "workflow", slack.kind.to_s
     assert_equal "app", slack.execution_mode.to_s
     assert_equal "slack", slack.requires_integration
     assert_equal %w[messaging slack], slack.tags

@@ -11,7 +11,7 @@ class ToolTest < ActiveSupport::TestCase
 
   def gated_tool
     Tool.create!(name: "slack_post_message", display_name: "Slack Post Message",
-      kind: "workflow", source: "code", execution_mode: "app",
+      source: "code", execution_mode: "app",
       enabled: true, requires_integration: "slack", input_schema: {})
   end
 
@@ -38,14 +38,14 @@ class ToolTest < ActiveSupport::TestCase
 
   test "ungated platform tools are always visible" do
     tool = Tool.create!(name: "board_list_tasks", display_name: "Board List Tasks",
-      kind: "workflow", source: "code", execution_mode: "app", enabled: true, input_schema: {})
+      source: "code", execution_mode: "app", enabled: true, input_schema: {})
 
     assert_includes Tool.visible_for_project(@project).pluck(:id), tool.id
   end
 
   test "visible_for_project hides meta tools even though they are persisted" do
     tool = Tool.create!(name: "meta_create_workflow", display_name: "Meta Create Workflow",
-      kind: "meta", source: "code", user_attachable: false, execution_mode: "app", enabled: true, input_schema: {})
+      source: "code", user_attachable: false, execution_mode: "app", enabled: true, input_schema: {})
 
     assert tool.persisted?
     assert_not_includes Tool.visible_for_project(@project).pluck(:id), tool.id
@@ -73,5 +73,22 @@ class ToolTest < ActiveSupport::TestCase
     row = build(:tool, :meta, name: "meta_create_tool", source: "code")
 
     assert row.valid?, row.errors.full_messages.to_sentence
+  end
+
+  # ── ui_visible (management UI list) ──
+
+  test "ui_visible shows custom tools and managed platform tools only" do
+    company = create(:company)
+    custom = create(:tool, scope: company, name: "my_linter")
+    Tools::Reconciler.run!
+
+    visible = Tool.ui_visible.pluck(:name)
+
+    assert_includes visible, "my_linter"
+    assert_includes visible, "coder_ssh_exec"
+    refute_includes visible, "board_list_tasks"
+    refute_includes visible, "meta_create_tool"
+    refute_includes visible, "read_tool_result"
+    assert custom.persisted?
   end
 end

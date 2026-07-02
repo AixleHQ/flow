@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_02_200002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_02_300001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -715,7 +715,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_200002) do
     t.boolean "enabled", default: true
     t.string "execution_mode", default: "container", null: false
     t.jsonb "input_schema", default: {}
-    t.string "kind", default: "custom", null: false
     t.string "name", null: false
     t.jsonb "required_config_items", default: []
     t.string "requires_integration"
@@ -726,7 +725,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_200002) do
     t.datetime "updated_at", null: false
     t.boolean "user_attachable", default: true, null: false
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
-    t.index ["kind"], name: "index_tools_on_kind"
     t.index ["name"], name: "index_tools_on_name_where_source_code", unique: true, where: "(((source)::text = 'code'::text) AND (deleted_at IS NULL))"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type"], name: "index_tools_on_scope_type"

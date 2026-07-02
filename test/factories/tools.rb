@@ -8,7 +8,6 @@ FactoryBot.define do
     enabled { true }
     required_config_items { [] }
     input_schema { {} }
-    kind { :custom }
     scope { nil }  # Default: no scope (requires explicit scope:)
 
     # == Association Traits ==
@@ -27,30 +26,30 @@ FactoryBot.define do
     # == Kind Traits ==
 
     trait :system do
-      kind { :system }
       source { "code" }
+      tags { %w[coder] }
       scope { nil }
     end
 
     trait :internal do
-      kind { :internal }
       source { "code" }
+      tags { %w[async_results] }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }
     end
 
     trait :workflow do
-      kind { :workflow }
       source { "code" }
+      tags { %w[board] }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }
     end
 
     trait :meta do
-      kind { :meta }
       source { "code" }
+      tags { %w[builder] }
       user_attachable { false }
       execution_mode { :app }
       scope { nil }

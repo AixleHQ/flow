@@ -1,24 +1,23 @@
 # frozen_string_literal: true
 
-# Tool — definition for executable tools
+# Tool — one row per callable tool.
 #
-# kind:
-# - custom:   user-created, scoped to Company or Project
-# - system:   platform-provided "big" tools, visible in UI, attached explicitly
-# - internal: invisible helpers, auto-injected when session has container tools (read_tool_result)
-# - workflow: invisible, auto-injected only in workflow_step sessions (list_sub_steps, mark_sub_step)
-# - meta:     meta-workflow tools (meta_*) used ONLY by the Aixle Builder; hidden from
-#             normal tool pickers (excluded from visible_for_project/visible_for_company)
+# source:
+# - db:   user-created custom tool (docker_image + command), scoped to a
+#         Company or Project, authored via the UI or meta_create_tool
+# - code: reconciler-owned shadow row of a code-defined platform tool; the
+#         definition (schema, tags, availability, injection) lives on the
+#         InternalTools::* class — see Tools::Registry / Tools::Reconciler
+#
+# Grouping is via `tags` (closed vocabulary in the tool DSL); picker
+# visibility via `user_attachable`; auto-injection rules are code-only.
 #
 # execution_mode: app | container
 # - app:       executes in Rails process (InternalToolExecutor), synchronous
 # - container: runs in Docker via Temporal workflow, async
-#
-# scope: Company | Project (polymorphic, null for system/internal/workflow)
 class Tool < ApplicationRecord
   extend Enumerize
 
-  enumerize :kind, in: %i[custom system internal workflow meta], default: :custom, predicates: true
   enumerize :execution_mode, in: %i[app container], default: :container, predicates: true
 
   belongs_to :scope, polymorphic: true, optional: true
@@ -37,9 +36,8 @@ class Tool < ApplicationRecord
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
                                  message: "already exists in this scope" }
   validates :display_name, presence: true
-  validates :kind, presence: true
-  validates :scope, presence: true, if: :custom?
-  validates :docker_image, presence: true, if: :custom?
+  validates :scope, presence: true, if: :db_source?
+  validates :docker_image, presence: true, if: :db_source?
   validate :name_outside_platform_namespace, if: -> { db_source? && (new_record? || name_changed?) }
 
   # Scopes
@@ -52,10 +50,13 @@ class Tool < ApplicationRecord
   scope :for_project, ->(project) { not_deleted.db_source.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Tools visible in UI management (custom + the big attachable platform
-  # tools). Still expressed via kind until the column drop (Stage 4) — the
-  # reconciler keeps writing it.
-  scope :ui_visible, -> { where(kind: %w[custom system]) }
+  # Tools shown in UI management: custom tools plus the "big" platform tools
+  # surfaced through a managed MCP server (registry is the source of truth
+  # for which those are — currently the coder_* trio).
+  scope :ui_visible, -> {
+    managed = Tools::Registry.definitions.values.select(&:managed_mcp_provider).map(&:name)
+    db_source.or(where(source: "code", name: managed))
+  }
   # Pickers: attachable platform tools (user_attachable false hides the Aixle
   # Builder meta_* tools) plus in-scope custom tools, gated on the
   # reconciler-owned requires_integration projection.
@@ -234,7 +235,7 @@ class Tool < ApplicationRecord
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
-    %w[name display_name kind scope_type enabled deleted_at created_at updated_at]
+    %w[name display_name source scope_type enabled deleted_at created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)

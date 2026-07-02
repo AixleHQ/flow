@@ -20,7 +20,7 @@ class PlatformToolsReconcileTest < ActiveSupport::TestCase
     ].each do |tool_name|
       tool = Tool.find_by(name: tool_name)
       assert_not_nil tool, "expected #{tool_name} to be seeded"
-      assert_equal "workflow", tool.kind.to_s
+      assert_equal "code", tool.source
       assert_equal "app", tool.execution_mode.to_s
       assert tool.enabled?
     end
@@ -32,7 +32,7 @@ class PlatformToolsReconcileTest < ActiveSupport::TestCase
     %w[coder_allocate_machine coder_ssh_exec coder_release_machine].each do |tool_name|
       tool = Tool.find_by(name: tool_name)
       assert_not_nil tool, "expected #{tool_name} to be seeded"
-      assert_equal "system", tool.kind.to_s
+      assert_equal "code", tool.source
       assert_equal "app", tool.execution_mode.to_s
     end
   end

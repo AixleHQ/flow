@@ -9,7 +9,6 @@ class ToolDashboard < Administrate::BaseDashboard
     display_name: Field::String,
     source: Field::String,
     tags: Field::JSONB,
-    kind: Field::String,
     execution_mode: Field::String,
     user_attachable: Field::Boolean,
     requires_integration: Field::String,
@@ -46,7 +45,6 @@ class ToolDashboard < Administrate::BaseDashboard
     tags
     user_attachable
     requires_integration
-    kind
     execution_mode
     description
     docker_image
@@ -66,7 +64,7 @@ class ToolDashboard < Administrate::BaseDashboard
 
   # platform = reconciler-owned shadow rows of code-defined tools (source: code);
   # custom = user-authored docker tools (source: db). Tag filters follow the
-  # closed vocabulary in the tool DSL. kind is legacy — dropped in Stage 4.
+  # closed vocabulary in the tool DSL.
   COLLECTION_FILTERS = {
     platform: ->(resources) { resources.where(source: "code") },
     custom: ->(resources) { resources.where(source: "db") },

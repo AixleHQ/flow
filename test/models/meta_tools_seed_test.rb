@@ -21,14 +21,14 @@ class MetaToolsSeedTest < ActiveSupport::TestCase
     Tools::Reconciler.run!
   end
 
-  test "all 28 aixle builder tool names exist as workflow tools" do
-    found = Tool.where(kind: :meta, name: AIXLE_BUILDER_TOOL_NAMES).pluck(:name).sort
+  test "all 28 aixle builder tool names exist as platform tools" do
+    found = Tool.code_source.where(name: AIXLE_BUILDER_TOOL_NAMES).pluck(:name).sort
     assert_equal AIXLE_BUILDER_TOOL_NAMES.sort, found,
       "Missing tools: #{(AIXLE_BUILDER_TOOL_NAMES - found).inspect}"
   end
 
   test "all seeded tools have a valid input_schema with type key" do
-    tools = Tool.where(kind: :meta, name: AIXLE_BUILDER_TOOL_NAMES)
+    tools = Tool.code_source.where(name: AIXLE_BUILDER_TOOL_NAMES)
     tools.each do |tool|
       assert_not_nil tool.input_schema, "#{tool.name} has nil input_schema"
       assert tool.input_schema.key?("type"), "#{tool.name} input_schema missing 'type' key"
@@ -41,7 +41,7 @@ class MetaToolsSeedTest < ActiveSupport::TestCase
                       .map { |f| File.basename(f, ".rb") }
                       .reject { |n| n == "meta_tool_helpers" }
 
-    seeded_names = Tool.where(kind: :meta).where("name LIKE 'meta_%'").pluck(:name)
+    seeded_names = Tool.code_source.where("tools.tags @> ?", %w[builder].to_json).pluck(:name)
 
     service_names.each do |service_name|
       assert_includes seeded_names, service_name,

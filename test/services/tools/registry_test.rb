@@ -48,10 +48,12 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert_empty Tools::Registry.managed_tool_names(nil)
   end
 
-  test "legacy kind derivation matches every current grouping" do
-    kinds = Tools::Registry.definitions.values.group_by { |d| d.legacy_kind.to_s }
-                           .transform_values(&:size)
+  test "grouping axes cover every definition" do
+    defs = Tools::Registry.definitions.values
 
-    assert_equal({ "workflow" => 15, "meta" => 28, "internal" => 3, "system" => 3 }, kinds)
+    assert_equal 28, defs.count { |d| d.tags.include?(:builder) }
+    assert_equal 3, defs.count { |d| d.managed_mcp_provider }
+    assert_equal 15, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
+    assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
   end
 end

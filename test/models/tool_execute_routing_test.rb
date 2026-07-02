@@ -32,7 +32,7 @@ class ToolExecuteRoutingTest < ActiveSupport::TestCase
   end
 
   test "container-mode tool routes to Temporal via start_container_execution" do
-    tool = create(:tool, scope: @company, kind: :custom,
+    tool = create(:tool, scope: @company,
       docker_image: "alpine:latest", command: "echo hi", execution_mode: :container)
 
     mock_strategy = mock("strategy")
@@ -71,7 +71,7 @@ class ToolExecuteRoutingTest < ActiveSupport::TestCase
   end
 
   test "container tool passes tool_result_id to strategy" do
-    tool = create(:tool, scope: @company, kind: :custom,
+    tool = create(:tool, scope: @company,
       docker_image: "alpine:latest", command: "echo hi", execution_mode: :container)
 
     mock_strategy = mock("strategy")
