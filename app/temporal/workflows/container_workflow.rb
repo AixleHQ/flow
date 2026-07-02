@@ -105,6 +105,12 @@ module Workflows
     def run_phase(phase, error: nil, timeout: 300, retry_policy: nil)
       kwargs = { start_to_close_timeout: timeout }
       kwargs[:retry_policy] = retry_policy if retry_policy
+      # Only tool executions heartbeat during exec (ToolStrategy waits for the
+      # container in heartbeat slices, which is also what makes cancellation
+      # deliverable). Agent-session exec phases are quick and don't heartbeat,
+      # and a heartbeat timeout on a non-heartbeating activity would kill
+      # healthy work — so scope it to tool runs.
+      kwargs[:heartbeat_timeout] = 60 if phase.to_s == "exec" && tool_execution?
 
       execute_activity(
         activities.container_phase_activity,
@@ -132,6 +138,10 @@ module Workflows
     end
 
     # --- Helpers ---
+
+    def tool_execution?
+      @input.respond_to?(:tool_id) && @input.tool_id
+    end
 
     def phase_config(phase)
       return {} unless @manifest.respond_to?(:[])
