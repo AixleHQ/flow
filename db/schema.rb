@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_02_300003) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_02_300005) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -624,10 +624,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300003) do
   create_table "tools", force: :cascade do |t|
     t.text "command"
     t.datetime "created_at", null: false
+    t.string "definition_digest"
     t.datetime "deleted_at"
     t.text "description"
     t.string "display_name", null: false
     t.string "docker_image"
+    t.string "docker_image_digest"
     t.boolean "enabled", default: true
     t.string "execution_mode", default: "container", null: false
     t.jsonb "input_schema", default: {}

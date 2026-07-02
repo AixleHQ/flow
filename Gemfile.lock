@@ -760,6 +760,7 @@ DEPENDENCIES
   image_processing (~> 1.14)
   inertia_cable
   inertia_rails
+  json_schemer
   jwt
   kramdown
   kramdown-parser-gfm

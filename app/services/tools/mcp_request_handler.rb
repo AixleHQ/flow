@@ -49,7 +49,7 @@ module Tools
 
     def tool_classes
       entitled = session.available_tools(ctx: ctx)
-      available = entitled.select { |t| t.available?(ctx) }.sort_by(&:name)
+      available = entitled.select { |t| t.available?(ctx) && digest_intact?(t) }.sort_by(&:name)
       classes = available.map { |row| define_tool(row) }
 
       session.mcp_servers.where(kind: "managed", enabled: true).order(:name).each do |server_row|
@@ -59,6 +59,19 @@ module Tools
       end
 
       classes
+    end
+
+    # Fail closed on tampered custom definitions: a tools row written past the
+    # model's validation+digest pipeline (update_columns, raw SQL) is a
+    # potential rug pull — drop it from serving and make noise.
+    def digest_intact?(tool)
+      return true if tool.definition_digest_intact?
+
+      Rails.logger.error(
+        "[MCP] Custom tool ##{tool.id} (#{tool.name}) failed the definition digest check — " \
+        "hidden from serving. Re-save it through validations to re-publish."
+      )
+      false
     end
 
     def managed_rows_for(server_row)

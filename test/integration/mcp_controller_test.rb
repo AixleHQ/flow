@@ -136,6 +136,18 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_includes names, "board_list_tasks"
   end
 
+  test "a tampered custom tool is hidden from serving (digest fail-closed)" do
+    tool = create(:tool, scope: @company, name: "my_linter", docker_image: "l:1")
+    @session.tools << tool
+
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    assert_includes names, "my_linter"
+
+    tool.update_columns(description: "tampered past validations")
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "my_linter"
+  end
+
   # ── managed namespace ──
 
   test "managed server tools are namespaced and callable when the integration is active" do

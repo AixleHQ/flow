@@ -39,6 +39,9 @@ class Tool < ApplicationRecord
   validates :scope, presence: true, if: :db_source?
   validates :docker_image, presence: true, if: :db_source?
   validate :name_outside_platform_namespace, if: -> { db_source? && (new_record? || name_changed?) }
+  validate :custom_definition_hygiene, if: :db_source?
+  before_save :reset_image_digest, if: -> { db_source? && docker_image_changed? }
+  before_save :stamp_definition_digest, if: :db_source?
 
   # Scopes
   scope :not_deleted, -> { where(deleted_at: nil) }
@@ -187,7 +190,105 @@ class Tool < ApplicationRecord
     deleted_at.present?
   end
 
+  # Rug-pull check: true when the stored digest matches the current
+  # definition. A write that bypassed validations (update_columns, raw SQL,
+  # a compromised console) leaves a mismatch and serving fails closed.
+  # Platform rows are code-defined and reconciler-owned — always intact.
+  def definition_digest_intact?
+    return true if code_source?
+
+    definition_digest.present? && definition_digest == compute_definition_digest
+  end
+
+  def compute_definition_digest
+    payload = {
+      "name" => name,
+      "display_name" => display_name,
+      "description" => description,
+      "command" => command,
+      "docker_image" => docker_image,
+      "input_schema" => input_schema.as_json,
+      "required_config_items" => required_config_items.as_json
+    }
+    Digest::SHA256.hexdigest(JSON.dump(payload))
+  end
+
   private
+
+  SCHEMA_MAX_BYTES = 64_000
+  SCHEMA_MAX_DEPTH = 12
+  FORBIDDEN_SCHEMA_KEYS = %w[$ref $defs $dynamicRef $dynamicAnchor].freeze
+  INJECTION_PATTERN = /<\s*(important|system|instructions?)\b|ignore\s+(all\s+)?previous\s+instructions/i
+
+  # Publisher-grade hygiene for tenant-authored definitions (they share one
+  # tools/list with platform tools — see the registry research, metadata-trust
+  # section): meta-valid JSON Schema 2020-12, no $ref family (client-breaking
+  # and a DoS surface), bounded size/depth, and no prompt-injection markers in
+  # any free-text field the model reads.
+  def custom_definition_hygiene
+    schema = input_schema.as_json
+    return if schema.blank? && description.blank?
+
+    if schema.present?
+      errors.add(:input_schema, "exceeds #{SCHEMA_MAX_BYTES} bytes") if JSON.dump(schema).bytesize > SCHEMA_MAX_BYTES
+      errors.add(:input_schema, "nests deeper than #{SCHEMA_MAX_DEPTH} levels") if json_depth(schema) > SCHEMA_MAX_DEPTH
+      if (bad_key = forbidden_schema_key(schema))
+        errors.add(:input_schema, "uses unsupported keyword #{bad_key}")
+      end
+      errors.add(:input_schema, "is not a valid JSON Schema") if errors[:input_schema].empty? && !JSONSchemer.valid_schema?(schema)
+    end
+
+    ([ description ] + schema_texts(schema)).compact.each do |text|
+      if text.match?(INJECTION_PATTERN)
+        errors.add(:base, "description text contains disallowed instruction-like content")
+        break
+      end
+    end
+  end
+
+  def json_depth(value, depth = 1)
+    case value
+    when Hash then value.values.map { |v| json_depth(v, depth + 1) }.max || depth
+    when Array then value.map { |v| json_depth(v, depth + 1) }.max || depth
+    else depth
+    end
+  end
+
+  def forbidden_schema_key(value)
+    case value
+    when Hash
+      value.each do |k, v|
+        return k if FORBIDDEN_SCHEMA_KEYS.include?(k.to_s)
+        found = forbidden_schema_key(v)
+        return found if found
+      end
+      nil
+    when Array
+      value.each { |v| (found = forbidden_schema_key(v)) and return found }
+      nil
+    end
+  end
+
+  def schema_texts(value)
+    case value
+    when Hash
+      value.flat_map { |k, v| %w[description title].include?(k.to_s) && v.is_a?(String) ? [ v ] : schema_texts(v) }
+    when Array
+      value.flat_map { |v| schema_texts(v) }
+    else
+      []
+    end
+  end
+
+  def stamp_definition_digest
+    self.definition_digest = compute_definition_digest
+  end
+
+  # A changed image invalidates the pinned digest; it re-pins on the next
+  # execution (ContainerStrategies::CustomToolStrategy).
+  def reset_image_digest
+    self.docker_image_digest = nil
+  end
 
   # Structural anti-shadowing: a tenant-authored row must never claim a
   # platform tool's name or the managed-MCP namespace. Grandfathered rows are

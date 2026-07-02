@@ -87,6 +87,10 @@ gem "typelizer"
 
 # gem "image_processing", "~> 1.2"
 
+# JSON Schema 2020-12 meta-validation of tenant-authored tool schemas
+# (Tool#custom_definition_hygiene). Also an mcp-gem dependency.
+gem "json_schemer"
+
 # Feature flags: per-company tool kill switches and gradual rollout
 # (Tools::Policy), AND-ed into tool availability.
 gem "flipper"
