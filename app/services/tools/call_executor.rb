@@ -20,23 +20,25 @@ module Tools
             mcp_server: mcp_server
           )
         else
-          tool_result = ToolResult.create!(
-            tool: tool,
-            terminal_session: session,
-            step_run: session.step_run,
-            execution_id: ToolResult.generate_id,
-            state: "processing"
-          )
+          ExecutionQuota.with_slot(session.project&.company) do
+            tool_result = ToolResult.create!(
+              tool: tool,
+              terminal_session: session,
+              step_run: session.step_run,
+              execution_id: ToolResult.generate_id,
+              state: "processing"
+            )
 
-          tool.execute(
-            parameters: params,
-            project: session.project,
-            session: session,
-            timeout: CONTAINER_CALL_TIMEOUT,
-            tool_result_id: tool_result.id
-          )
+            tool.execute(
+              parameters: params,
+              project: session.project,
+              session: session,
+              timeout: CONTAINER_CALL_TIMEOUT,
+              tool_result_id: tool_result.id
+            )
 
-          { exit_code: 0, stdout: tool_result.execution_id }
+            { exit_code: 0, stdout: tool_result.execution_id }
+          end
         end
       end
 
