@@ -6,9 +6,10 @@ module Tools
   # per-tenant concurrency limit). Checked under a per-company advisory lock
   # so concurrent dispatches can't leak past the cap. At capacity the agent
   # gets a fast structured error (agents degrade badly on unbounded queueing)
-  # rather than a parked execution.
+  # rather than a parked execution. Off by default (0) — opt in by setting
+  # AIXLE_MAX_CONCURRENT_TOOL_EXECUTIONS_PER_COMPANY.
   module ExecutionQuota
-    DEFAULT_LIMIT = 5
+    DEFAULT_LIMIT = 0
 
     class << self
       # Yields inside the lock when a slot is free; returns the at-capacity
