@@ -87,15 +87,10 @@ gem "typelizer"
 
 # gem "image_processing", "~> 1.2"
 
-# MCP (Model Context Protocol) server.
-# PINNED: config/initializers/action_mcp_dynamic_tools.rb replaces
-# ActionMCP::Server::Tools#send_tools_list/#send_tools_call wholesale. In
-# actionmcp 0.105+ the internals change (send_tools_call grows a 5th
-# task_params argument in 0.111, tools/list gains cursor pagination in 0.109),
-# so a silent bundle update would break the MCP server at runtime. Upgrading
-# requires rewriting the patch — see test/initializers/action_mcp_patch_guard_test.rb.
-gem "actionmcp", "~> 0.104.0"
-gem "solid_mcp"
+# MCP (Model Context Protocol) server — official Ruby SDK. A stateless
+# MCP::Server is built per request from the authenticated TerminalSession
+# (McpController + Tools::McpRequestHandler).
+gem "mcp"
 
 group :development, :test do
   # Testing tools

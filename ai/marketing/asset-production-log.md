@@ -91,6 +91,26 @@ Location: `~/Movies/aixle-promo/batch-3-ui/` (4 mp4). Refs: `~/Movies/aixle-prom
 2. **Large displacement motion** (card drags, page transitions) → NO AI: animate in CSS/JS in the HTML ref itself and screen-record with Playwright — pixel-perfect, free, reproducible. (Also exactly the pipeline the README hero GIF needs.)
 3. **Non-UI cinematic/b-roll** → Kling t2v in the approved styles (isometric-matte, blueprint).
 
+## Batch 4 — Claude Design motion pipeline (2026-07-02) — NEW PRIMARY VIDEO PATH
+
+`~/Movies/aixle-promo/batch-4-design/browser-triggers-1080x1920.mp4` — 20 s vertical (1080×1920) social ad rendered from the user's claude.ai/design project "Браузер с AI триггерами" (project 48745c1f-361d-4f1b-a213-9ee00eaa0dcd). Camera moves, cursor with click rings, trigger picker → workflow build → live run with status chips → Aixle endcard. Crisp text, exact brand tokens, no watermark, $0.
+
+**Pipeline (tools in `ai/marketing/dc-render/`):**
+1. Author/iterate scene in Claude Design (JSX Stage/Sprite engine: interpolate/easing/camera World).
+2. Pull files via DesignSync tool (animations.jsx, scene.jsx, assets).
+3. Local harness (index.html: React+Babel UMD + Google Fonts) served over localhost.
+4. `render.js` (playwright-core + ms-playwright Chromium at `chromium-*/chrome-mac-arm64/Google Chrome for Testing.app/...`) drives the engine's `data-om-seek-to-time-frame` event per frame → PNG per frame.
+5. ffmpeg assemble; ALWAYS pass `-vf scale=W:H` (element screenshots can be 1px off; yuv420p needs even dims).
+
+Gotchas: DesignSync get_file caps at 256 KiB → large binary assets (Ring_Orange.png) come back truncated; regenerate locally (gen-ring.js draws the torus via canvas) or keep masters outside the project.
+
+Batch 4 assets:
+- `browser-triggers-1080x1920.mp4` — 20 s, trigger picker → Slack-triage run → endcard (scene from the user's Design project).
+- `sandbox-isolation-1080x1920.mp4` — 20 s, message pillar #1: card → live docker terminal → 3 parallel isolated sandboxes → "Full isolation by default" → endcard. Authored fully locally (scene-sandbox.jsx) — Claude Design NOT required for authoring, only for the user's visual iteration; DesignSync write path available when the user wants scenes in the project.
+- Scene prompt backlog: `ai/marketing/design-scene-prompts.md` (8 scenes mapped to the message hierarchy; sandbox #1 done, next: triggers anthology, durable runs).
+
+**Video tiering (final):** 1) Claude Design scenes → this pipeline = PRIMARY for all product/UI motion and social ads. 2) Kling i2v from HTML refs = quick subtle-motion drafts. 3) Kling t2v (isometric-matte/blueprint) = cinematic b-roll garnish. 4) Playwright screencasts of the real app = README hero / honest demos.
+
 ## Next production steps
 
 1. Post-production layer (video skill pipeline): Remotion/Hyperframes brand titles + captions over selected clips; ffmpeg crops/exports per platform; watermark handling for hero assets.
