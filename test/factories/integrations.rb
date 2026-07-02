@@ -5,8 +5,8 @@ FactoryBot.define do
     sequence(:name) { |n| "org-#{n}" }
     provider { :github }
     status { :inactive }
-    association :company
-    association :connected_by, factory: :user
+    company
+    connected_by factory: %i[user]
 
     after(:build) do |integration|
       integration.credentials_data = { installation_id: rand(10_000..99_999).to_s }

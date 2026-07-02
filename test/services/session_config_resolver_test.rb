@@ -332,7 +332,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   test "inherit_all default is false when missing from config" do
     workflow = create(:workflow, :with_company_scope, config: {})
 
-    assert_equal false, workflow.inherit_all_project_resources
+    refute workflow.inherit_all_project_resources
   end
 
   test "inherit_all with step tools are additive" do
@@ -594,6 +594,50 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_includes result[:input_asset_ids], asset.id
   end
 
+  # --- BMAD Enabled Resolution ---
+
+  test "resolve_bmad_enabled returns true for standalone session with bmad_enabled" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+                     session_config: { "bmad_enabled" => true })
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert result[:bmad_enabled]
+  end
+
+  test "resolve_bmad_enabled returns false for standalone session without bmad_enabled" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    result = SessionConfigResolver.resolve(session)
+
+    refute result[:bmad_enabled]
+  end
+
+  test "resolve_bmad_enabled returns true for workflow step with bmad_enabled" do
+    session = build_workflow_session(step_bmad_enabled: true)
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert result[:bmad_enabled]
+  end
+
+  test "resolve_bmad_enabled returns false for workflow step without bmad_enabled" do
+    session = build_workflow_session
+
+    result = SessionConfigResolver.resolve(session)
+
+    refute result[:bmad_enabled]
+  end
+
+  test "resolve_bmad_enabled included in resolve_with_breakdown" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+                     session_config: { "bmad_enabled" => true })
+
+    breakdown = SessionConfigResolver.resolve_with_breakdown(session)
+
+    assert breakdown[:bmad_enabled]
+  end
+
   private
 
   def build_workflow_session(step_tool_ids: [], step_skill_ids: [], step_mcp_server_ids: [],
@@ -621,52 +665,6 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
 
     session
   end
-
-  # --- BMAD Enabled Resolution ---
-
-  test "resolve_bmad_enabled returns true for standalone session with bmad_enabled" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project,
-                     session_config: { "bmad_enabled" => true })
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal true, result[:bmad_enabled]
-  end
-
-  test "resolve_bmad_enabled returns false for standalone session without bmad_enabled" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project)
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal false, result[:bmad_enabled]
-  end
-
-  test "resolve_bmad_enabled returns true for workflow step with bmad_enabled" do
-    session = build_workflow_session(step_bmad_enabled: true)
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal true, result[:bmad_enabled]
-  end
-
-  test "resolve_bmad_enabled returns false for workflow step without bmad_enabled" do
-    session = build_workflow_session
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal false, result[:bmad_enabled]
-  end
-
-  test "resolve_bmad_enabled included in resolve_with_breakdown" do
-    session = create(:terminal_session, :agent_session, user: @user, project: @project,
-                     session_config: { "bmad_enabled" => true })
-
-    breakdown = SessionConfigResolver.resolve_with_breakdown(session)
-
-    assert_equal true, breakdown[:bmad_enabled]
-  end
-
-  private
 
   def build_board_triggered_session(**opts)
     board = create(:board, project: @project)

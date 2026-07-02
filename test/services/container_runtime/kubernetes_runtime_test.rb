@@ -39,7 +39,7 @@ module ContainerRuntime
 
       result = @runtime.resolve_container(handle)
 
-      assert result.respond_to?(:pod_name)
+      assert_respond_to result, :pod_name
       assert_equal "my-pod", result.pod_name
     end
 
@@ -80,8 +80,8 @@ module ContainerRuntime
     end
 
     test "write_file returns false when path blank" do
-      assert_equal false, @runtime.write_file("id", "", "content")
-      assert_equal false, @runtime.write_file("id", nil, "content")
+      refute @runtime.write_file("id", "", "content")
+      refute @runtime.write_file("id", nil, "content")
     end
 
     test "read_file returns nil when path blank" do

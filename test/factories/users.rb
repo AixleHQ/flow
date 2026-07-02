@@ -3,7 +3,7 @@
 FactoryBot.define do
   factory :user do
     name
-    password { generate :password }
+    password { generate(:password) }
     password_confirmation { password }
     onboarding_state { "step1" }
     position { nil }
@@ -27,7 +27,7 @@ FactoryBot.define do
     # == Association Traits ==
 
     trait :with_company do
-      association :company
+      company
     end
 
     # == Role Traits ==

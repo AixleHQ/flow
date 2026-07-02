@@ -2,8 +2,8 @@
 
 FactoryBot.define do
   factory :step_run do
-    association :workflow_run
-    association :step
+    workflow_run
+    step
     state { "pending" }
 
     trait :running do
@@ -32,7 +32,7 @@ FactoryBot.define do
     end
 
     trait :with_terminal_session do
-      association :terminal_session
+      terminal_session
     end
   end
 end

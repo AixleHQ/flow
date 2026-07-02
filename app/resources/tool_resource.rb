@@ -19,6 +19,11 @@ class ToolResource < ApplicationResource
     tool.input_schema
   end
 
+  typelize "string[]"
+  attribute :tags do |tool|
+    tool.tags
+  end
+
   typelize :boolean
   attribute :platform_tool do |tool|
     tool.platform_tool?

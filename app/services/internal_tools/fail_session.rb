@@ -7,6 +7,7 @@ module InternalTools
       description "Signal that a non-interactive session has failed. This terminates the session with an error. Use when the task cannot be completed."
       tags :session_lifecycle
       inject_when :non_interactive_session
+      user_attachable false
       input_schema({
         type: "object",
         required: %w[reason],

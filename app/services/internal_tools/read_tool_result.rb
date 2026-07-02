@@ -7,6 +7,7 @@ module InternalTools
       description "Retrieve status and download URLs for an async tool execution. Returns presigned URLs valid for 1 hour. Download files using curl: curl -o /tmp/result.json <url>"
       tags :async_results
       inject_when :container_tools_present
+      user_attachable false
       input_schema({
         type: "object",
         required: %w[tool_result_id],

@@ -34,7 +34,7 @@ module ContainerRuntime
 
       assert_equal :pulled, result[:status]
       assert_equal "alpine:latest", result[:image]
-      assert result[:duration_seconds].is_a?(Integer)
+      assert_kind_of Integer, result[:duration_seconds]
     end
 
     test "create_container builds config from spec" do

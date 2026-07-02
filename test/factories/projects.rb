@@ -12,11 +12,11 @@ FactoryBot.define do
     # == Association Traits ==
 
     trait :with_company do
-      association :company
+      company
     end
 
     trait :with_owner do
-      association :owner, factory: :user
+      owner factory: %i[user]
     end
 
     # Note: For most tests, pass company: and owner: explicitly:

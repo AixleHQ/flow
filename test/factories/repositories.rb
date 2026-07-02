@@ -7,15 +7,15 @@ FactoryBot.define do
     clone_url { "https://github.com/#{full_name}.git" }
     is_private { false }
     description { "Repository #{full_name}" }
-    association :integration
+    integration
     scope { nil }
 
     trait :company_scope do
-      association :scope, factory: :company
+      scope factory: %i[company]
     end
 
     trait :project_scope do
-      association :scope, factory: :project
+      scope factory: %i[project]
     end
 
     trait :private do

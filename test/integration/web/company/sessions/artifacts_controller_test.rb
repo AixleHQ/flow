@@ -59,7 +59,7 @@ class Web::Company::Sessions::ArtifactsControllerTest < ActionDispatch::Integrat
     artifact.reload
     assert_equal "active", artifact.status
     assert_nil artifact.folder
-    assert Asset.accessible_from_project(@project).include?(artifact)
+    assert_includes Asset.accessible_from_project(@project), artifact
   end
 
   test "review save activates existing dismissed asset" do
@@ -90,6 +90,6 @@ class Web::Company::Sessions::ArtifactsControllerTest < ActionDispatch::Integrat
     artifact.reload
     assert_equal "active", dismissed.status
     assert_equal "dismissed", artifact.status
-    assert Asset.accessible_from_project(@project).include?(dismissed)
+    assert_includes Asset.accessible_from_project(@project), dismissed
   end
 end

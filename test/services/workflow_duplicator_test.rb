@@ -120,7 +120,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal sys_agent.id, new_step.agent_id
     assert_equal [ sys_tool.id ], new_step.tool_ids
     assert_equal [ internal_mcp.id ], new_step.mcp_server_ids
-    refute Agent.for_project(@project).exists?
+    refute_predicate Agent.for_project(@project), :exists?
   end
 
   test "managed MCP that stays visible in target is kept by ID and not copied" do

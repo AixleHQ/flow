@@ -19,19 +19,19 @@ class BoardColumnTest < ActiveSupport::TestCase
 
   test "invalid without name" do
     column = BoardColumn.new(board: @board)
-    refute column.valid?
+    refute_predicate column, :valid?
     assert column.errors[:name].present?
   end
 
   test "invalid without board" do
     column = BoardColumn.new(name: "Backlog")
-    refute column.valid?
+    refute_predicate column, :valid?
   end
 
   test "position uniqueness scoped to board" do
     BoardColumn.create!(name: "Backlog", board: @board, position: 1)
     duplicate = BoardColumn.new(name: "Todo", board: @board, position: 1)
-    refute duplicate.valid?
+    refute_predicate duplicate, :valid?
     assert duplicate.errors[:position].present?
   end
 

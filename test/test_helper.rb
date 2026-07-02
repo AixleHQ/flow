@@ -6,6 +6,11 @@ SimpleCov.start("rails") do
   primary_coverage :line
 end
 
+# Coverage floor is opt-in (COVERAGE_MIN is set by `make be_check`/`be_check_all`):
+# enforcing it on partial runs (`rails test test/models/foo_test.rb`) would always fail.
+# Ratchet the floor in the Makefile as coverage grows — never lower it.
+SimpleCov.minimum_coverage Float(ENV["COVERAGE_MIN"]) if ENV["COVERAGE_MIN"]
+
 require_relative "../config/environment"
 require "rails/test_help"
 require "minitest/autorun"

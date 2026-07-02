@@ -32,6 +32,18 @@ module Tools
         definitions.values.select { |d| d.tags.include?(tag.to_sym) }
       end
 
+      # Tags the UI offers as one-click tool groups in pickers (attach the
+      # whole group to a session/step). Service tags (workflow_control,
+      # async_results, session_lifecycle, builder) auto-inject or are
+      # builder-bound and stay out of the UI entirely.
+      UI_GROUPS = { board: "Board management" }.freeze
+
+      def ui_groups
+        UI_GROUPS.map do |tag, label|
+          { tag: tag.to_s, label: label, tool_names: tagged(tag).select(&:user_attachable).map(&:name).sort }
+        end
+      end
+
       def injectable
         definitions.values.reject { |d| d.inject_rules.empty? }
       end

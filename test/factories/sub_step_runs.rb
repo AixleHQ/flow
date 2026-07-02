@@ -2,8 +2,8 @@
 
 FactoryBot.define do
   factory :sub_step_run do
-    association :step_run
-    association :sub_step
+    step_run
+    sub_step
     state { "pending" }
 
     trait :in_progress do

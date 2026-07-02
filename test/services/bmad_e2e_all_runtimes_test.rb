@@ -107,7 +107,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       vscode_settings = capture_vscode_settings(session)
 
       BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
-        assert_equal true, vscode_settings.dig("files.exclude", path),
+        assert vscode_settings.dig("files.exclude", path),
           "#{agent_type}: Expected files.exclude to contain #{path}"
       end
     end
@@ -427,7 +427,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
     fresh_session = create_bmad_session(agent_type)
     vscode_settings = capture_vscode_settings(fresh_session)
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
-      assert_equal true, vscode_settings.dig("files.exclude", path),
+      assert vscode_settings.dig("files.exclude", path),
         "Expected files.exclude to contain #{path}"
     end
 

@@ -69,7 +69,7 @@ class Activities::BaseTest < ActiveSupport::TestCase
     end
 
     assert_includes error.message, "Record not found"
-    refute error.non_retryable.nil?
+    refute_nil error.non_retryable
   end
 
   test "execute wraps RecordInvalid in non-retryable exception" do
@@ -79,7 +79,7 @@ class Activities::BaseTest < ActiveSupport::TestCase
       activity.execute({})
     end
 
-    refute error.non_retryable.nil?
+    refute_nil error.non_retryable
   end
 
   test "log does not log in test environment" do

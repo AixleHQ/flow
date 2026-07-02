@@ -7,6 +7,7 @@ module InternalTools
       description "Signal successful completion of a non-interactive session. This terminates the session. Call only after ALL work is done and output files are saved."
       tags :session_lifecycle
       inject_when :non_interactive_session
+      user_attachable false
       input_schema({
         type: "object",
         required: [],

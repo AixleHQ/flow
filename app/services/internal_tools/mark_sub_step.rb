@@ -7,6 +7,7 @@ module InternalTools
       description "Update sub-step status with optional note and structured data. Only available during workflow execution."
       tags :workflow_control
       inject_when :workflow_step_session
+      user_attachable false
       input_schema({
         type: "object",
         required: %w[id status],

@@ -39,7 +39,7 @@ module Api
 
           assert_response :success
           @workflow.reload
-          assert_equal true, @workflow.config["inherit_all_project_resources"]
+          assert @workflow.config["inherit_all_project_resources"]
         end
 
         test "update can disable inherit_all_project_resources" do
@@ -53,7 +53,7 @@ module Api
 
           assert_response :success
           @workflow.reload
-          assert_equal false, @workflow.config["inherit_all_project_resources"]
+          refute @workflow.config["inherit_all_project_resources"]
         end
 
         test "update persists multiple config keys together" do
@@ -66,7 +66,7 @@ module Api
           assert_response :success
           @workflow.reload
           assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
-          assert_equal true, @workflow.config["inherit_all_project_resources"]
+          assert @workflow.config["inherit_all_project_resources"]
         end
 
         test "update preserves pre-existing config keys when only one config key is updated" do
@@ -81,7 +81,7 @@ module Api
           assert_response :success
           @workflow.reload
           assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
-          assert_equal true, @workflow.config["inherit_all_project_resources"]
+          assert @workflow.config["inherit_all_project_resources"]
         end
 
         test "destroy soft-deletes workflow" do
