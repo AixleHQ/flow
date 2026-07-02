@@ -42,7 +42,7 @@ jobs:
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-7)"
           cache_ref="${ECR_REGISTRY}/aixle-app-web:buildcache-dev"
-          asset_host="https://static.aixle.com"
+          asset_host="https://static.flow.aixle.com"
           raw_tag="latest"
           sha_prefix=""
           ci_runner="$DEFAULT_CI_RUNNER"
