@@ -91,11 +91,6 @@ gem "typelizer"
 # (Tool#custom_definition_hygiene). Also an mcp-gem dependency.
 gem "json_schemer"
 
-# Feature flags: per-company tool kill switches and gradual rollout
-# (Tools::Policy), AND-ed into tool availability.
-gem "flipper"
-gem "flipper-active_record"
-
 # MCP (Model Context Protocol) server — official Ruby SDK. A stateless
 # MCP::Server is built per request from the authenticated TerminalSession
 # (McpController + Tools::McpRequestHandler).

@@ -139,11 +139,9 @@ class Tool < ApplicationRecord
 
   # One availability predicate for every surface (tools/list hides,
   # tools/call enforces, pickers keep the equivalent SQL clause over the
-  # reconciler-owned requires_integration column). Capability (integration
-  # presence) AND policy (Flipper kill switch / rollout) — kept orthogonal.
+  # reconciler-owned requires_integration column).
   def available?(ctx)
     return false unless enabled? && !deleted?
-    return false unless Tools::Policy.allowed?(name, ctx.company)
 
     if (defn = definition)
       defn.available?(ctx)

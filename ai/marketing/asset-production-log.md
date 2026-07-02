@@ -104,6 +104,10 @@ Location: `~/Movies/aixle-promo/batch-3-ui/` (4 mp4). Refs: `~/Movies/aixle-prom
 
 Gotchas: DesignSync get_file caps at 256 KiB → large binary assets (Ring_Orange.png) come back truncated; regenerate locally (gen-ring.js draws the torus via canvas) or keep masters outside the project.
 
+**Format matrix (canon):** every scene ships in two authored layouts — 9:16 1080×1920 (Reels/Shorts/TikTok/Stories) and 16:9 1920×1080 (YouTube, X timeline, PH gallery, README/landing embeds). 1:1 and GIF (<10MB, palettegen) derive from 16:9. Vertical is NEVER cropped to wide — separate composition (~10 min extra per scene).
+
+**Brand ring assets:** real Ring_White.png fetched whole (147KB < API cap); Ring_Orange from API is truncated → rebuilt from white via per-pixel luminance→alpha tint (black backing removed, highlights pushed to orangeHi). Both + Ring_White_alpha in dc-render/assets/. Never use rotate on assets with opaque backings.
+
 Batch 4 assets:
 - `browser-triggers-1080x1920.mp4` — 20 s, trigger picker → Slack-triage run → endcard (scene from the user's Design project).
 - `sandbox-isolation-1080x1920.mp4` — 20 s, message pillar #1: card → live docker terminal → 3 parallel isolated sandboxes → "Full isolation by default" → endcard. Authored fully locally (scene-sandbox.jsx) — Claude Design NOT required for authoring, only for the user's visual iteration; DesignSync write path available when the user wants scenes in the project.
