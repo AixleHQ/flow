@@ -110,12 +110,12 @@ module Tools
       return nil if defn.nil? || defn.annotations.blank?
 
       a = defn.annotations
-      MCP::Tool::Annotations.new(
+      {
         read_only_hint: a.fetch("readOnlyHint", false),
         destructive_hint: a.fetch("destructiveHint", true),
         idempotent_hint: a.fetch("idempotentHint", false),
         open_world_hint: a.fetch("openWorldHint", true)
-      )
+      }
     end
 
     # Entitled-but-unavailable tools are hidden from the per-request server,

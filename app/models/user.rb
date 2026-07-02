@@ -8,6 +8,33 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
+  # ── Personal MCP token ──
+  # One opt-in token per user for the global MCP server (MCPController):
+  # grants exactly the user's own access level, enforced per tool through the
+  # same Pundit policies the UI uses. Digest-only storage; plaintext is
+  # returned once from regenerate_mcp_token! and never persisted.
+  MCP_TOKEN_PREFIX = "amcp_"
+
+  def self.find_by_mcp_token(token)
+    return nil unless token.is_a?(String) && token.start_with?(MCP_TOKEN_PREFIX)
+
+    find_by(mcp_token_digest: Digest::SHA256.hexdigest(token))
+  end
+
+  def regenerate_mcp_token!
+    token = "#{MCP_TOKEN_PREFIX}#{SecureRandom.urlsafe_base64(32)}"
+    update!(mcp_token_digest: Digest::SHA256.hexdigest(token), mcp_token_last_used_at: nil)
+    token
+  end
+
+  def disable_mcp_token!
+    update!(mcp_token_digest: nil, mcp_token_last_used_at: nil)
+  end
+
+  def mcp_enabled?
+    mcp_token_digest.present?
+  end
+
   # Virtual attribute for invitation flow
   attr_accessor :inviter
 

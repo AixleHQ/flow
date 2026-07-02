@@ -16,7 +16,7 @@ Support:
 7. Trackable artifacts + compliance — prompts & session logs stored (audit trail).
 8. Triggers — demo format, not a message: board / Slack / webhook / cron.
 
-Never claim: AGPL as "MIT-style"; "fully self-hosted AI" (models are vendor APIs); integration parity with n8n/Zapier.
+URL rule: demo URLs are flow.aixle.com. Never claim: AGPL as "MIT-style"; "fully self-hosted AI" (models are vendor APIs); integration parity with n8n/Zapier.
 
 ## Scene prompts
 

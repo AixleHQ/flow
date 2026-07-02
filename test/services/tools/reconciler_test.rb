@@ -8,7 +8,8 @@ class Tools::ReconcilerTest < ActiveSupport::TestCase
 
     assert Tools::Reconciler.run!
 
-    assert_equal Tools::Registry.names.sort, Tool.code_source.not_deleted.pluck(:name).sort
+    session_names = Tools::Registry.for_audience(:session).map(&:name)
+    assert_equal session_names.sort, Tool.code_source.not_deleted.pluck(:name).sort
     slack = Tool.code_source.find_by!(name: "slack_post_message")
     assert_equal "app", slack.execution_mode.to_s
     assert_equal "slack", slack.requires_integration

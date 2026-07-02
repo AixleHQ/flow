@@ -7,24 +7,37 @@
 # MCP::Server (Tools::MCPRequestHandler).
 class MCPController < ActionController::API
   def handle
-    session = authenticate_terminal_session
-    return unauthorized_response if session.nil?
+    handler = resolve_handler
+    return unauthorized_response if handler.nil?
 
-    status, headers, body = Tools::MCPRequestHandler.new(session).call(request)
+    status, headers, body = handler.call(request)
     headers.each { |k, v| response.set_header(k, v) }
     render plain: Array(body).join, status: status
   end
 
   private
 
-  def authenticate_terminal_session
+  # Two principals on one endpoint, split by credential shape: an
+  # amcp_-prefixed personal token serves the user-level server; anything else
+  # is a terminal session's mcp_key serving the session-scoped server.
+  def resolve_handler
     key = request.headers["X-Session-Key"].presence ||
           bearer_token.presence ||
           params[:session_key].presence
     return nil if key.blank?
 
-    session = TerminalSession.find_by(mcp_key: key)
-    session if session&.active?
+    if key.start_with?(User::MCP_TOKEN_PREFIX)
+      user = User.find_by_mcp_token(key)
+      return nil if user.nil?
+
+      user.update_columns(mcp_token_last_used_at: Time.current)
+      Tools::PersonalMCPRequestHandler.new(user)
+    else
+      session = TerminalSession.find_by(mcp_key: key)
+      return nil unless session&.active?
+
+      Tools::MCPRequestHandler.new(session)
+    end
   end
 
   def bearer_token

@@ -36,6 +36,10 @@ module Tools
         definitions.values.reject { |d| d.inject_rules.empty? }
       end
 
+      def for_audience(audience)
+        definitions.values.select { |d| d.audience == audience.to_sym }
+      end
+
       def managed_tool_names(provider)
         return [] if provider.blank?
 
@@ -51,9 +55,13 @@ module Tools
       private
 
       def build
-        Rails.autoloaders.main.eager_load_namespace(InternalTools) unless Rails.application.config.eager_load
+        unless Rails.application.config.eager_load
+          Rails.autoloaders.main.eager_load_namespace(InternalTools)
+          Rails.autoloaders.main.eager_load_namespace(PersonalTools)
+        end
 
-        defs = InternalTools::Base.descendants.select(&:tool_defined?).map(&:tool_definition)
+        defs = (InternalTools::Base.descendants + PersonalTools::Base.descendants)
+               .select(&:tool_defined?).map(&:tool_definition)
         duplicates = defs.group_by(&:name).select { |_, group| group.size > 1 }.keys
         raise DuplicateToolError, "Duplicate tool definitions: #{duplicates.join(', ')}" if duplicates.any?
 

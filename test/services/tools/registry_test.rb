@@ -8,8 +8,9 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   # versa. Catches a silent eager_load_namespace miss — Zeitwerk deliberately
   # does nothing when a namespace isn't managed.
   test "discovers exactly the handler files that declare tool blocks" do
-    handler_files = Dir[Rails.root.join("app/services/internal_tools/*.rb")]
-    declared = handler_files.select { |f| File.read(f).include?("tool do") }
+    handler_files = Dir[Rails.root.join("app/services/internal_tools/*.rb")] +
+                    Dir[Rails.root.join("app/services/personal_tools/*.rb")]
+    declared = handler_files.select { |f| File.read(f).match?(/^\s+tool do$/) }
                             .map { |f| File.basename(f, ".rb") }
 
     assert_equal declared.sort, Tools::Registry.names.sort

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_02_300005) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -728,6 +728,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300005) do
     t.string "google_token"
     t.datetime "invited_at"
     t.bigint "invited_by_id"
+    t.string "mcp_token_digest"
+    t.datetime "mcp_token_last_used_at"
     t.string "name", null: false
     t.datetime "onboarding_completed_at"
     t.string "onboarding_state", default: "step1", null: false
@@ -745,6 +747,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300005) do
     t.index ["default_agent_credential_id"], name: "index_users_on_default_agent_credential_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
+    t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
     t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"

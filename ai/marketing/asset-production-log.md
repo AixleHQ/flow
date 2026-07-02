@@ -108,6 +108,19 @@ Gotchas: DesignSync get_file caps at 256 KiB → large binary assets (Ring_Orang
 
 **Brand ring assets:** real Ring_White.png fetched whole (147KB < API cap); Ring_Orange from API is truncated → rebuilt from white via per-pixel luminance→alpha tint (black backing removed, highlights pushed to orangeHi). Both + Ring_White_alpha in dc-render/assets/. Never use rotate on assets with opaque backings.
 
+**Branding rule:** product name is ALWAYS "Aixle Flow" (never bare "Aixle") — browser-tab titles, bot names, endcards; demo app URL is ALWAYS flow.aixle.com (never app.aixle.com). Endcard lockup = Aixle wordmark SVG + orange letterspaced "FLOW" beneath (FDISP 700, ls 0.42em).
+
+Batch 4 final library (9 videos, all rebranded, `~/Movies/aixle-promo/batch-4-design/`):
+| Scene | 9:16 | 16:9 |
+|---|---|---|
+| browser-triggers (user's Design scene) | ✅ | — |
+| sandbox-isolation (pillar 1) | ✅ | ✅ |
+| triggers anthology (board/slack/webhook/cron) | ✅ | ✅ |
+| durable-runs (worker-lost → resume, gate approve; wide has temporal event-history sidebar) | ✅ | ✅ |
+| the-bill (counting $ tiles, daily bars, runtime shares, session receipt) | ✅ | ✅ |
+
+Scene sources: scratchpad dc-render/scene-*.jsx (authored: sandbox by main loop; triggers/durable/bill by 3 parallel workflow agents against reference contract — all passed QA first try). Remaining prompt backlog: favourite-agent, compliance, human-in-loop, self-hosted.
+
 Batch 4 assets:
 - `browser-triggers-1080x1920.mp4` — 20 s, trigger picker → Slack-triage run → endcard (scene from the user's Design project).
 - `sandbox-isolation-1080x1920.mp4` — 20 s, message pillar #1: card → live docker terminal → 3 parallel isolated sandboxes → "Full isolation by default" → endcard. Authored fully locally (scene-sandbox.jsx) — Claude Design NOT required for authoring, only for the user's visual iteration; DesignSync write path available when the user wants scenes in the project.

@@ -61,6 +61,10 @@ aws:
 mcp:
   name: aixle-mcp-server
   server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
+  # The URL users configure their own MCP clients with (personal token) —
+  # public host, unlike server_url which agent containers reach over the
+  # docker network.
+  public_server_url: <%= ENV['MCP_PUBLIC_SERVER_URL'] || "http://#{ENV['DOMAIN'] || 'localhost:4000'}/mcp" %>
 
 otel:
   endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>

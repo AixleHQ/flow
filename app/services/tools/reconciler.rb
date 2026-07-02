@@ -73,6 +73,11 @@ module Tools
 
       def upsert_definitions(existing)
         Registry.definitions.each_value do |definition|
+          # :user-audience tools are served straight from the registry by the
+          # personal MCP server — no session attachment, no ToolResult FK, so
+          # no shadow row to maintain.
+          next unless definition.audience == :session
+
           desired = definition.to_row_attributes
           row = existing[definition.name]
 
@@ -107,7 +112,10 @@ module Tools
       end
 
       def soft_delete_stale(existing)
-        stale = existing.values.select { |row| row.deleted_at.nil? && !Registry.fetch(row.name) }
+        stale = existing.values.select do |row|
+          defn = Registry.fetch(row.name)
+          row.deleted_at.nil? && (defn.nil? || defn.audience != :session)
+        end
         stale.each { |row| row.update!(deleted_at: Time.current, enabled: false) }
       end
     end

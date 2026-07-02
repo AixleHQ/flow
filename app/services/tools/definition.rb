@@ -10,7 +10,7 @@ module Tools
   class Definition
     ATTRS = %i[name display_name description input_schema tags inject_rules
                requires_integration availability unavailable_message annotations
-               user_attachable managed_mcp_provider handler_class_name].freeze
+               user_attachable managed_mcp_provider handler_class_name audience].freeze
 
     attr_reader(*ATTRS)
 
@@ -21,6 +21,7 @@ module Tools
       @input_schema = (@input_schema || {}).freeze
       @annotations = (@annotations || {}).freeze
       @user_attachable = true if @user_attachable.nil?
+      @audience = (@audience || :session).to_sym
       freeze
     end
 

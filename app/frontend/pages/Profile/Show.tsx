@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Card,
+  Code,
   Center,
   Divider,
   Group,
@@ -33,7 +34,9 @@ import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   apiV1TerminalSessionPath,
   apiV1TerminalSessionsPath,
+  disableMCPTokenProfilePath,
   finishApiV1TerminalSessionPath,
+  regenerateMCPTokenProfilePath,
   usageProfilePath,
 } from 'shared/routes';
 import { type AgentCredential, type AgentType, type SharedUser, type UserRole } from 'shared/ui';
@@ -124,11 +127,19 @@ interface AgentModelsEntry {
   models: AgentModel[];
 }
 
+interface McpProps {
+  enabled: boolean;
+  lastUsedAt: string | null;
+  serverUrl: string;
+  token: string | null;
+}
+
 interface Props {
   profile: SharedUser;
   languageOptions: string[];
   agentModels: AgentModelsEntry[];
   cableStream?: string;
+  mcp: McpProps;
 }
 
 function DefaultAgentSelector({ profile }: { profile: SharedUser }) {
@@ -664,7 +675,67 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
   );
 }
 
-function ProfilePage({ profile, agentModels, cableStream }: Props) {
+function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
+  const claudeCommand = mcp.token
+    ? `claude mcp add aixle --transport http ${mcp.serverUrl} --header "Authorization: Bearer ${mcp.token}"`
+    : null;
+
+  return (
+    <Card p={24} mt={24}>
+      <Title order={4} mb={4}>
+        Personal MCP
+      </Title>
+      <Text fz={14} c="dimmed" mb="md">
+        Connect your AI agent (Claude Code, Cursor, ...) to Aixle: list your projects, manage board
+        tasks and build workflows — with exactly your access level.
+      </Text>
+
+      {mcp.token && (
+        <Box mb="md">
+          <Text fz={14} fw={600} c="var(--app-text-primary)">
+            Your token — copy it now, it will not be shown again:
+          </Text>
+          <Code block my={8} data-testid="mcp-token">
+            {mcp.token}
+          </Code>
+          <Text fz={13} c="dimmed" mb={4}>
+            Add to Claude Code:
+          </Text>
+          <Code block data-testid="mcp-claude-command">
+            {claudeCommand}
+          </Code>
+        </Box>
+      )}
+
+      {mcp.enabled && !mcp.token && (
+        <Text fz={13} c="dimmed" mb="md">
+          MCP access is enabled.
+          {mcp.lastUsedAt ? ` Last used ${new Date(mcp.lastUsedAt).toLocaleString()}.` : ' Not used yet.'}
+        </Text>
+      )}
+
+      <Group gap="sm">
+        <Button
+          variant={mcp.enabled ? 'default' : 'filled'}
+          onClick={() => router.post(regenerateMCPTokenProfilePath(), {}, { preserveScroll: true })}
+        >
+          {mcp.enabled ? 'Regenerate token' : 'Enable MCP'}
+        </Button>
+        {mcp.enabled && (
+          <Button
+            variant="subtle"
+            color="red"
+            onClick={() => router.delete(disableMCPTokenProfilePath(), { preserveScroll: true })}
+          >
+            Disable
+          </Button>
+        )}
+      </Group>
+    </Card>
+  );
+}
+
+function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
   useInertiaCableStream(cableStream, { only: ['profile', 'agentModels'] });
 
   const { data, setData, patch, processing, errors, isDirty } = useForm({
@@ -808,6 +879,7 @@ function ProfilePage({ profile, agentModels, cableStream }: Props) {
         <DefaultAgentSelector profile={profile} />
         <DefaultModelSelector profile={profile} agentModels={agentModels} />
         <AgentRuntimesSection profile={profile} />
+        <PersonalMcpSection mcp={mcp} />
       </Box>
     </AuthLayout>
   );

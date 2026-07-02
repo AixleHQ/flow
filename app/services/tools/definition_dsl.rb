@@ -45,6 +45,7 @@ module Tools
           name: name,
           tags: [],
           inject_rules: [],
+          audience: :session,
           user_attachable: true,
           input_schema: { "type" => "object", "properties" => {}, "required" => [] }
         }
@@ -63,6 +64,11 @@ module Tools
       end
 
       def requires_integration(provider) = @h[:requires_integration] = provider
+
+      # :session (default) — served inside terminal sessions, materialized as
+      # a shadow row. :user — served only by the personal (token) MCP server,
+      # never materialized, never injected, never in pickers.
+      def audience(value) = @h[:audience] = value.to_sym
 
       # Escape hatch for availability conditions beyond integration presence;
       # AND-ed after the requires_integration check.
