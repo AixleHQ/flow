@@ -62,7 +62,9 @@ class RecentActivityService
     scope = if project
       scope.where(project_id: project.id)
     else
-      scope.where(users: { company_id: company.id })
+      # agent_session rows are always project-bound; scope by the project's
+      # company (users no longer carry a company_id).
+      scope.joins(:project).where(projects: { company_id: company.id })
     end
 
     scope.map { |s| build_session_item(s) }

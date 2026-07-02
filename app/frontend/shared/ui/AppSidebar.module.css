@@ -170,6 +170,47 @@
   padding: 10px 0 8px;
 }
 
+/* Company switcher row (only rendered for users with >1 active membership) */
+.coBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.coBtn:hover {
+  background: var(--app-action-hover);
+}
+
+.coName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.coItemName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  line-height: 1.3;
+}
+
+.coItemRole {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  line-height: 1.3;
+}
+
 .swBtn {
   display: flex;
   align-items: center;

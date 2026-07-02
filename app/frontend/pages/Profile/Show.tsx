@@ -34,12 +34,13 @@ import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   apiV1TerminalSessionPath,
   apiV1TerminalSessionsPath,
+  companyMembershipPath,
   disableMCPTokenProfilePath,
   finishApiV1TerminalSessionPath,
   regenerateMCPTokenProfilePath,
   usageProfilePath,
 } from 'shared/routes';
-import { type AgentCredential, type AgentType, type SharedUser, type UserRole } from 'shared/ui';
+import { type AgentCredential, type AgentType, type SharedMembership, type SharedUser, type UserRole } from 'shared/ui';
 
 import classes from './Show.module.css';
 
@@ -292,6 +293,77 @@ function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; a
           <CredentialModelRow key={cred.id} credential={cred} models={modelsMap[cred.agentType] ?? []} />
         ))}
       </Stack>
+    </Card>
+  );
+}
+
+function CompaniesSection({ profile }: { profile: SharedUser }) {
+  const memberships = profile.memberships ?? [];
+  const [leaving, setLeaving] = useState<SharedMembership | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const confirmLeave = () => {
+    if (!leaving) return;
+    setProcessing(true);
+    // Self-removal revokes the membership. Server-side edge cases: the
+    // last-admin guard surfaces as a flash alert; leaving the last company
+    // signs the user out and redirects to the login page.
+    router.delete(companyMembershipPath(leaving.id), {
+      preserveScroll: true,
+      onFinish: () => {
+        setProcessing(false);
+        setLeaving(null);
+      },
+    });
+  };
+
+  return (
+    <Card p={24} mt={24}>
+      <Title order={5} mb={4}>
+        Companies
+      </Title>
+      <Text size="sm" c="dimmed" mb="md">
+        Companies you are a member of. Company assignment is managed by administrators.
+      </Text>
+
+      {memberships.length === 0 && (
+        <Text size="sm" c="dimmed">
+          {profile.currentRole === 'super_admin' ? 'Platform Administrator' : 'No company memberships'}
+        </Text>
+      )}
+
+      <Stack gap="sm">
+        {memberships.map((membership) => (
+          <Group key={membership.id} justify="space-between" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap" miw={0}>
+              <Text fw={500} truncate>
+                {membership.company.name}
+              </Text>
+              <Badge color={ROLE_COLORS[membership.role]} size="sm" variant="light">
+                {ROLE_LABELS[membership.role]}
+              </Badge>
+            </Group>
+            <Button variant="subtle" color="red" size="xs" onClick={() => setLeaving(membership)}>
+              Leave company
+            </Button>
+          </Group>
+        ))}
+      </Stack>
+
+      <Modal opened={leaving !== null} onClose={() => setLeaving(null)} title="Leave company" centered>
+        <Text size="sm" mb="md">
+          Are you sure you want to leave {leaving?.company.name}? You will lose access to its projects and data. You
+          will need a new invitation to rejoin.
+        </Text>
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setLeaving(null)} disabled={processing}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={confirmLeave} loading={processing}>
+            Leave company
+          </Button>
+        </Group>
+      </Modal>
     </Card>
   );
 }
@@ -815,8 +887,6 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
     );
   }
 
-  const companyDisplayName = profile.company?.name ?? 'Platform Administrator';
-
   return (
     <AuthLayout>
       <Box maw={600} mx="auto">
@@ -888,33 +958,13 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
               />
             </Box>
 
-            <Box mb="lg">
-              <Box className={classes.fieldLabel}>
-                <Text size="sm" fw={500} c="dimmed">
-                  Company
-                </Text>
-                <Tooltip label="Company assignment is managed by administrators">
-                  <IconLock size={16} color="var(--mantine-color-dimmed)" />
-                </Tooltip>
-              </Box>
-              <Text>{companyDisplayName}</Text>
-            </Box>
-
-            <Box mb="lg">
-              <Text size="sm" fw={500} c="dimmed" mb={4}>
-                Role
-              </Text>
-              <Badge color={ROLE_COLORS[profile.role]} size="sm">
-                {ROLE_LABELS[profile.role]}
-              </Badge>
-            </Box>
-
             <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>
               Save Changes
             </Button>
           </form>
         </Card>
 
+        <CompaniesSection profile={profile} />
         <DefaultAgentSelector profile={profile} />
         <DefaultModelSelector profile={profile} agentModels={agentModels} />
         <AgentRuntimesSection profile={profile} />

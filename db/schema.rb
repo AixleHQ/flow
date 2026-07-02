@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_27_100004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -221,6 +221,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
+  end
+
+  create_table "company_memberships", force: :cascade do |t|
+    t.datetime "accepted_at"
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "invited_at"
+    t.bigint "invited_by_id"
+    t.string "role", default: "employee", null: false
+    t.string "state", default: "invited", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["company_id"], name: "index_company_memberships_on_company_id"
+    t.index ["invited_by_id"], name: "index_company_memberships_on_invited_by_id"
+    t.index ["state"], name: "index_company_memberships_on_state"
+    t.index ["user_id", "company_id"], name: "index_company_memberships_on_user_id_and_company_id", unique: true
   end
 
   create_table "config_items", force: :cascade do |t|
@@ -783,13 +799,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
 
   create_table "users", force: :cascade do |t|
     t.string "avatar_url"
-    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.bigint "default_agent_credential_id"
     t.datetime "deleted_at"
     t.citext "email", null: false
-    t.datetime "invited_at"
-    t.bigint "invited_by_id"
     t.string "mcp_token_digest"
     t.datetime "mcp_token_last_used_at"
     t.string "name", null: false
@@ -799,21 +812,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
     t.string "position"
     t.string "preferred_agent_language", default: "en"
     t.string "provider"
-    t.string "role", null: false
     t.text "selected_agents", default: [], array: true
     t.string "state", null: false
+    t.boolean "super_admin", default: false, null: false
     t.string "uid"
     t.datetime "updated_at", null: false
-    t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
-    t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["default_agent_credential_id"], name: "index_users_on_default_agent_credential_id"
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
     t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
     t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
-    t.index ["role"], name: "index_users_on_role"
     t.index ["state"], name: "index_users_on_state"
   end
 
@@ -920,6 +929,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
   add_foreign_key "column_transitions", "workflow_runs"
   add_foreign_key "column_workflow_bindings", "board_columns"
   add_foreign_key "column_workflow_bindings", "workflows"
+  add_foreign_key "company_memberships", "companies"
+  add_foreign_key "company_memberships", "users"
+  add_foreign_key "company_memberships", "users", column: "invited_by_id"
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id"
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
@@ -976,8 +988,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
   add_foreign_key "trigger_events", "users", column: "actor_id"
   add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "users", "agent_credentials", column: "default_agent_credential_id"
-  add_foreign_key "users", "companies"
-  add_foreign_key "users", "users", column: "invited_by_id"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify

@@ -5,9 +5,9 @@ module Web
     module Projects
       class RepositoriesPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
-        def create? = project_writable? && current_user.admin?
-        def update? = project_writable? && current_user.admin?
-        def destroy? = project_writable? && current_user.admin?
+        def create? = project_writable? && admin?
+        def update? = project_writable? && admin?
+        def destroy? = project_writable? && admin?
       end
     end
   end

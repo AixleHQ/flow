@@ -14,11 +14,19 @@ module Tools
     def self.for_session(session)
       new(
         project: session.project,
-        company: session.project&.company || session.user&.company,
+        company: session.project&.company || first_membership_company(session.user),
         session: session,
         mode: session.mode,
         session_type: session.session_type
       )
+    end
+
+    # Company comes from the PROJECT wherever there is one. Only project-less
+    # sessions (auth_setup) fall back to the user's oldest active membership —
+    # mirrors SessionService#first_membership_company. There is no session-based
+    # "current company" reachable from here.
+    def self.first_membership_company(user)
+      user&.company_memberships&.active&.order(:accepted_at, :created_at)&.first&.company
     end
 
     # Pickers / config resolution: no session yet.

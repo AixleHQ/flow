@@ -9,7 +9,7 @@ class Webhooks::SlackControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, owner: @user, company: @company)
     @integration = Integration.create!(
       provider: :slack, company: @company, project: @project, connected_by: @user,

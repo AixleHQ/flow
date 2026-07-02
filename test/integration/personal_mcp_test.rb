@@ -8,7 +8,7 @@ require "test_helper"
 class PersonalMCPTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @token = @user.regenerate_mcp_token!
   end
@@ -57,7 +57,7 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
 
   test "list_companies and list_projects answer with the user's own scope" do
     other = create(:user, :with_company)
-    create(:project, company: other.company, owner: other)
+    create(:project, company: other.companies.first, owner: other)
 
     body = rpc("tools/call", { name: "list_companies", arguments: {} })
     companies = JSON.parse(body.dig("result", "content").first["text"])["companies"]

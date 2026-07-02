@@ -7,18 +7,29 @@ class UserTest < ActiveSupport::TestCase
     @company = create(:company)
   end
 
-  # === role predicates ===
+  # === membership-derived predicates ===
 
-  test "viewer? and read_only? are true for viewer" do
-    user = build(:user, :viewer, company: @company)
-    assert user.viewer?
-    assert user.read_only?
+  test "viewer_everywhere? is true when every active membership is viewer" do
+    user = create(:user, :viewer, company: @company)
+    assert user.viewer_everywhere?
   end
 
-  test "read_only? is false for employee/admin/super_admin" do
-    assert_not build(:user, :employee, company: @company).read_only?
-    assert_not build(:user, :admin, company: @company).read_only?
-    assert_not build(:user, :super_admin).read_only?
+  test "viewer_everywhere? is false for employee/admin/super_admin" do
+    assert_not create(:user, :employee, company: @company).viewer_everywhere?
+    assert_not create(:user, :admin, company: @company).viewer_everywhere?
+    assert_not create(:user, :super_admin).viewer_everywhere?
+  end
+
+  test "viewer_everywhere? is false with no memberships and false for mixed roles" do
+    user = create(:user)
+    assert_not user.viewer_everywhere?
+
+    create(:company_membership, :viewer, user: user, company: @company)
+    # viewer_everywhere? is memoized per instance — reload clears it.
+    assert user.reload.viewer_everywhere?
+
+    create(:company_membership, :admin, user: user, company: create(:company))
+    assert_not user.reload.viewer_everywhere?
   end
 
   # === onboarding helpers ===
@@ -53,23 +64,18 @@ class UserTest < ActiveSupport::TestCase
     assert user.reload.can_advance_to_authenticated?
   end
 
-  # === email domain matching exemption (constraint b) ===
+  # === email domain no longer constrains identity (invite-any-domain) ===
 
-  test "viewer with mismatched email domain saves" do
-    user = build(:user, :viewer, company: @company, email: "client@external-domain.com")
+  test "any-role user with mismatched email domain saves" do
+    user = build(:user, email: "client@external-domain.com")
     assert user.valid?, user.errors.full_messages.to_sentence
+    create(:company_membership, user: user.tap(&:save!), company: @company)
+    assert user.reload.valid?
   end
 
-  test "non-viewer with mismatched email domain fails" do
-    user = build(:user, :employee, company: @company, email: "someone@external-domain.com")
-    assert_not user.valid?
-    assert_includes user.errors[:email].to_sentence, "domain"
-  end
-
-  test "viewer still requires company_id" do
-    user = build(:user, :viewer, company: nil)
-    assert_not user.valid?
-    assert user.errors[:company_id].present?
+  test "user is valid with zero memberships" do
+    user = build(:user)
+    assert user.valid?
   end
 
   # === soft delete ===

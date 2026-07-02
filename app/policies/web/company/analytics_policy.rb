@@ -3,7 +3,7 @@
 module Web
   module Company
     class AnalyticsPolicy < ApplicationPolicy
-      def index? = current_user.admin?
+      def index? = admin?
     end
   end
 end

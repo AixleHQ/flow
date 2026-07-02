@@ -18,11 +18,21 @@ export interface AgentCredential {
   updatedAt: string;
 }
 
+// A membership role is always company-scoped — super_admin is platform-level
+// and only ever appears in SharedUser.currentRole.
+export type MembershipRole = Exclude<UserRole, 'super_admin'>;
+
+export interface SharedMembership {
+  id: number;
+  role: MembershipRole;
+  state: string;
+  company: SharedCompany;
+}
+
 export interface SharedUser {
   id: number;
   email: string;
   name: string;
-  role: UserRole;
   state: string;
   position: string | null;
   preferredAgentLanguage: string;
@@ -33,7 +43,11 @@ export interface SharedUser {
   defaultAgentRuntime: AgentType | null;
   configuredAgents: AgentType[];
   agentCredentials: AgentCredential[];
-  company: SharedCompany | null;
+  // Request-scoped: the company/role of the session's current membership.
+  currentCompany: SharedCompany | null;
+  currentRole: UserRole | null;
+  // Active memberships only (drives the sidebar switcher + profile Companies card).
+  memberships: SharedMembership[];
 }
 
 export interface SharedCompany {

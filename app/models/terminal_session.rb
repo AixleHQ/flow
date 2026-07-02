@@ -221,11 +221,18 @@ class TerminalSession < ApplicationRecord
   end
 
   def broadcast_session_list_update
-    company_id = project&.company_id || user&.company_id
-    return unless company_id
+    # Project sessions go to the project's company; project-less sessions go to
+    # EVERY company where the user is an active member — matching the listing
+    # rule in Web::Company::ApplicationController#company_sessions_scope.
+    company_ids = if project&.company_id
+      [ project.company_id ]
+    else
+      user&.company_memberships&.active&.pluck(:company_id) || []
+    end
+    return if company_ids.empty?
 
     payload = { type: "session_update", session: TerminalSessionResource.new(self).to_h }
-    ActionCable.server.broadcast("session_list:company:#{company_id}", payload)
+    company_ids.each { |cid| ActionCable.server.broadcast("session_list:company:#{cid}", payload) }
     ActionCable.server.broadcast("session_list:project:#{project_id}", payload) if project_id.present?
   end
 end

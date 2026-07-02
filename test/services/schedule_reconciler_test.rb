@@ -5,7 +5,7 @@ require "test_helper"
 class ScheduleReconcilerTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @project = create(:project, owner: @user, company: @user.company)
+    @project = create(:project, owner: @user, company: @user.companies.first)
     @workflow = create(:workflow, scope: @project)
   end
 

@@ -3,114 +3,78 @@
 require "test_helper"
 
 class GoogleOmniAuthServiceTest < ActiveSupport::TestCase
-  # Build a realistic OmniAuth auth hash (same shape the sessions controller
-  # passes in from `request.env["omniauth.auth"]`).
-  def build_auth_hash(email:, uid:, name: "Jane Doe", provider: "google_oauth2",
-                      token: "ya29.access-token", refresh_token: "1//refresh-token",
-                      image: "https://lh3.googleusercontent.com/a/avatar.png")
-    info = { email: email, name: name }
-    info[:image] = image unless image.nil?
-
-    credentials = { token: token }
-    credentials[:refresh_token] = refresh_token unless refresh_token.nil?
-
+  def auth_hash(email:, name: "OAuth User", uid: "google-uid-1", image: "https://example.com/avatar.png")
     OmniAuth::AuthHash.new(
-      provider: provider,
+      provider: "google",
       uid: uid,
-      info: info,
-      credentials: credentials
+      info: { email: email, name: name, image: image },
+      credentials: { token: "mock-token", refresh_token: "mock-refresh-token" }
     )
   end
 
-  test "creates an active user when the matching company auto-accepts" do
-    company = create(:company, :auto_accept)
-    email = "new.hire@#{company.email_domain}"
-    auth_hash = build_auth_hash(email: email, uid: "google-uid-active")
+  test "fresh domain user joins an auto-accept company with an ACTIVE membership" do
+    company = create(:company, :auto_accept, email_domain: "acme-auto.io")
 
-    user = nil
-    assert_difference("User.count", 1) do
-      user = GoogleOmniAuthService.new(auth_hash).authenticate
-    end
+    user = GoogleOmniAuthService.new(auth_hash(email: "new@acme-auto.io")).authenticate
 
-    assert user.persisted?, user.errors.full_messages.to_sentence
-    assert_equal company, user.company
-    assert_equal "active", user.state
-    assert_equal "employee", user.role
-    assert_equal "en", user.preferred_agent_language
-    assert_nil user.position
-
-    # OAuth attributes persisted from the auth hash.
-    assert_equal email, user.email
-    assert_equal "Jane Doe", user.name
-    assert_equal "google_oauth2", user.provider
-    assert_equal "google-uid-active", user.uid
-    assert_equal "https://lh3.googleusercontent.com/a/avatar.png", user.avatar_url
-    # Google tokens are login-only and no longer persisted (columns dropped, §7).
-    assert_not user.respond_to?(:google_token)
+    assert user.persisted?
+    membership = user.company_memberships.sole
+    assert_equal company, membership.company
+    assert membership.active?
+    assert membership.accepted_at.present?
+    assert_equal "employee", membership.role
   end
 
-  test "creates a pending user when the matching company does not auto-accept" do
-    company = create(:company) # auto_accept_users defaults to false
-    email = "pending.hire@#{company.email_domain}"
-    auth_hash = build_auth_hash(email: email, uid: "google-uid-pending")
+  test "fresh domain user joins an approval-required company with an INVITED membership" do
+    company = create(:company, email_domain: "acme-gated.io") # auto_accept_users: false
 
-    user = nil
-    assert_difference("User.count", 1) do
-      user = GoogleOmniAuthService.new(auth_hash).authenticate
-    end
+    user = GoogleOmniAuthService.new(auth_hash(email: "new@acme-gated.io")).authenticate
 
-    assert user.persisted?, user.errors.full_messages.to_sentence
-    assert_equal company, user.company
-    assert_equal "pending", user.state
-    assert_equal "employee", user.role
+    membership = user.company_memberships.sole
+    assert_equal company, membership.company
+    assert membership.invited?
+    assert_nil membership.accepted_at
+  end
+
+  test "a user with an existing membership of ANY state is never domain-auto-joined" do
+    inviting_company = create(:company)
+    domain_company = create(:company, :auto_accept, email_domain: "acme-auto.io")
+    invitee = User.create!(email: "invited@acme-auto.io", name: "Invited Externally")
+    create(:company_membership, :invited, user: invitee, company: inviting_company)
+
+    user = GoogleOmniAuthService.new(auth_hash(email: "invited@acme-auto.io")).authenticate
+
+    assert_equal invitee.id, user.id
+    assert_equal 1, user.company_memberships.count
+    assert_not user.company_memberships.exists?(company_id: domain_company.id)
+  end
+
+  test "unknown email domain creates the user with no memberships at all" do
+    user = GoogleOmniAuthService.new(auth_hash(email: "solo@nowhere-known.dev")).authenticate
+
+    assert user.persisted?
+    assert_equal "google", user.provider
+    assert user.company_memberships.none?
+  end
+
+  test "existing user identity is updated (uid/avatar), never duplicated" do
+    existing = create(:user, email: "known@example.com")
+
+    user = GoogleOmniAuthService.new(auth_hash(email: "known@example.com", uid: "fresh-uid")).authenticate
+
+    assert_equal existing.id, user.id
+    assert_equal "fresh-uid", user.uid
+    assert_equal "https://example.com/avatar.png", user.avatar_url
   end
 
   test "persists a nil avatar when the auth hash omits it" do
     company = create(:company, :auto_accept)
-    email = "minimal@#{company.email_domain}"
-    auth_hash = build_auth_hash(
-      email: email,
-      uid: "google-uid-minimal",
-      refresh_token: nil,
-      image: nil
-    )
 
-    user = GoogleOmniAuthService.new(auth_hash).authenticate
+    user = GoogleOmniAuthService.new(
+      auth_hash(email: "minimal@#{company.email_domain}", uid: "google-uid-minimal", image: nil)
+    ).authenticate
 
     assert user.persisted?, user.errors.full_messages.to_sentence
     assert_nil user.avatar_url
-  end
-
-  test "updates identity for an existing user without changing state, role or company" do
-    company = create(:company)
-    existing = create(:user, :admin, :pending, company: company)
-    original_state = existing.state
-    auth_hash = build_auth_hash(
-      email: existing.email,
-      uid: "google-uid-returning",
-      name: "Renamed User",
-      image: "https://lh3.googleusercontent.com/a/new-avatar.png"
-    )
-
-    user = nil
-    assert_no_difference("User.count") do
-      user = GoogleOmniAuthService.new(auth_hash).authenticate
-    end
-
-    assert_equal existing.id, user.id
-
-    # Identity attributes were refreshed from the auth hash.
-    assert_equal "Renamed User", user.name
-    assert_equal "https://lh3.googleusercontent.com/a/new-avatar.png", user.avatar_url
-    assert_equal "google_oauth2", user.provider
-    assert_equal "google-uid-returning", user.uid
-
-    # Pre-existing account attributes were preserved (only new users get these set).
-    assert_equal company, user.company
-    assert_equal "admin", user.role
-    assert_equal original_state, user.state
-
-    # Changes are persisted, not just in-memory.
-    assert_equal "Renamed User", user.reload.name
   end
 end

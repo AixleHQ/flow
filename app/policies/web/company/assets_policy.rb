@@ -3,11 +3,11 @@
 module Web
   module Company
     class AssetsPolicy < ApplicationPolicy
-      def index? = current_user.admin?
-      def create? = current_user.admin?
-      def destroy? = current_user.admin?
-      def versions? = current_user.admin?
-      def download? = current_user.admin?
+      def index? = admin?
+      def create? = admin?
+      def destroy? = admin?
+      def versions? = admin?
+      def download? = admin?
     end
   end
 end

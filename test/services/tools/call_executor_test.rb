@@ -5,7 +5,7 @@ require "test_helper"
 class Tools::CallExecutorTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @project = create(:project, company: @user.company, owner: @user)
+    @project = create(:project, company: @user.companies.first, owner: @user)
     @session = create(:terminal_session, :agent_session, user: @user, project: @project)
   end
 
@@ -40,7 +40,7 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
   end
 
   test "repository_id resolves REPO, GITHUB_TOKEN and BRANCH from the attached repository" do
-    integration = create(:integration, company: @user.company, provider: :github,
+    integration = create(:integration, company: @user.companies.first, provider: :github,
                          status: :active, connected_by: @user)
     repo = create(:repository, integration: integration, scope: @project)
     @session.repositories << repo

@@ -92,7 +92,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   def unpublish
     workflow = current_project.workflows.find(params[:id])
 
-    unless current_user.admin? || workflow.published_by_id == current_user.id
+    unless current_project_membership&.admin? || workflow.published_by_id == current_user.id
       redirect_to company_project_workflows_path(current_project), alert: "Only the publisher or an admin can unpublish"
       return
     end

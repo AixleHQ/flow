@@ -183,17 +183,24 @@ class SessionService
       session.input_assets = scoped_resources(Asset, config[:input_asset_ids], session) if config[:input_asset_ids].present?
     end
 
+    # Resources resolve against the session's PROJECT company; project-less
+    # sessions fall back to the user's first active membership's company.
     def scoped_resources(klass, ids, session)
       base = if session.project
                klass.visible_for_project(session.project)
       elsif klass.respond_to?(:visible_for_company)
-               klass.visible_for_company(session.user.company)
+               company = first_membership_company(session.user)
+               company ? klass.visible_for_company(company) : klass.none
       else
                # Project-only resources (Skill, MCPServer) have nothing to attach
                # to a projectless session; internal MCP still arrives separately.
                klass.none
       end
       base.where(id: ids)
+    end
+
+    def first_membership_company(user)
+      user.company_memberships.active.order(:accepted_at, :created_at).first&.company
     end
   end
 end

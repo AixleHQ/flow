@@ -10,8 +10,9 @@ class UserAgentActivityService
 
   Result = Struct.new(:sessions_by_agent, keyword_init: true)
 
-  def initialize(user:, period:, project_id: nil)
+  def initialize(user:, company:, period:, project_id: nil)
     @user       = user
+    @company    = company
     @period     = period.to_s
     @since      = PERIOD_DAYS.fetch(@period, 30).days.ago
     @project_id = project_id.presence
@@ -38,10 +39,15 @@ class UserAgentActivityService
 
   private
 
-  attr_reader :user, :since, :project_id
+  attr_reader :user, :company, :since, :project_id
 
+  # Company isolation: usage sessions are always project-bound, so the inner
+  # project join scopes the slice to the given company without a company_id
+  # column on terminal_sessions.
   def base_sessions
     scope = user.terminal_sessions
+                .joins(:project)
+                .where(projects: { company_id: company.id })
                 .where(created_at: since.., session_type: USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end

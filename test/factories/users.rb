@@ -8,14 +8,18 @@ FactoryBot.define do
     onboarding_state { "step1" }
     position { nil }
     preferred_agent_language { "en" }
-    company { nil }  # Default: no company (requires :with_company trait or explicit company:)
-    role { "employee" }
+    super_admin { false }
 
-    # Generate email based on company domain if company exists, otherwise use example.com
+    # Company/role now live on CompanyMembership. Pass a transient `company:`
+    # (or use a role trait) to get an active membership created after :create.
     transient do
       email_sequence { SecureRandom.hex(4) }
+      company { nil }
+      membership_role { nil }
+      membership_state { "active" }
     end
 
+    # Generate email based on the (transient) company domain if present
     email do
       if company.present?
         "user-#{email_sequence}@#{company.email_domain}"
@@ -24,29 +28,41 @@ FactoryBot.define do
       end
     end
 
+    after(:create) do |user, evaluator|
+      next if user.super_admin?
+      next if evaluator.company.blank? && evaluator.membership_role.blank?
+
+      create(
+        :company_membership,
+        user: user,
+        company: evaluator.company || create(:company),
+        role: evaluator.membership_role || "employee",
+        state: evaluator.membership_state
+      )
+    end
+
     # == Association Traits ==
 
     trait :with_company do
-      company
+      company { association(:company) }
     end
 
-    # == Role Traits ==
+    # == Role Traits (membership-level; super_admin is platform-level) ==
 
     trait :super_admin do
-      role { "super_admin" }
-      company { nil }
+      super_admin { true }
     end
 
     trait :employee do
-      role { "employee" }
+      membership_role { "employee" }
     end
 
     trait :admin do
-      role { "admin" }
+      membership_role { "admin" }
     end
 
     trait :viewer do
-      role { "viewer" }
+      membership_role { "viewer" }
     end
 
     # == State Traits ==
@@ -60,6 +76,7 @@ FactoryBot.define do
 
     trait :pending do
       state { "pending" }
+      membership_state { "invited" }
     end
 
     # == Nested Associations ==

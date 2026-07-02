@@ -7,7 +7,7 @@ require "test_helper"
 class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @board = create(:board, project: @project)
     @todo = create(:board_column, board: @board, name: "To Do", position: 1)
@@ -114,7 +114,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
 
   test "unknown / inaccessible project is not found" do
     other = create(:user, :with_company)
-    other_project = create(:project, company: other.company, owner: other)
+    other_project = create(:project, company: other.companies.first, owner: other)
 
     body = call_tool("list_board_columns", { project_id: other_project.id })
     assert tool_error?(body)

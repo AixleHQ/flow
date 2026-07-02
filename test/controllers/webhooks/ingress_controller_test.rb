@@ -9,7 +9,7 @@ class Webhooks::IngressControllerTest < ActionDispatch::IntegrationTest
 
   setup do
     @user = create(:user, :with_company)
-    @project = create(:project, owner: @user, company: @user.company)
+    @project = create(:project, owner: @user, company: @user.companies.first)
     @endpoint = create(:webhook_endpoint,
       slug: "slack-test", provider: :slack, verification_strategy: :slack_v0,
       secret: SECRET, project: @project)

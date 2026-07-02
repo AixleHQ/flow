@@ -433,8 +433,8 @@ const OnboardingPage = () => {
 
   useInertiaCableStream(cableStream);
 
-  const company = currentUser?.company ?? null;
-  const isViewer = currentUser?.role === 'viewer';
+  const company = currentUser?.currentCompany ?? null;
+  const isViewer = currentUser?.currentRole === 'viewer';
   const serverStep = stateToStep[currentUser?.onboardingState ?? ''] ?? 0;
   // Viewers (external clients) never configure/authenticate agents, so their
   // onboarding collapses to Profile → Complete. The server still walks the

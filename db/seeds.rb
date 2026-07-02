@@ -15,8 +15,7 @@ super_admin = User.find_or_create_by!(email: super_admin_email) do |user|
   user.name = "Super Admin"
   user.password = super_admin_password
   user.password_confirmation = super_admin_password
-  user.role = :super_admin
-  user.company = nil # Super admin is platform-level, not company-scoped
+  user.super_admin = true # Platform-level admin, no company membership
   user.state = :active
 end
 
@@ -46,6 +45,24 @@ end
 
 puts "Test company created: #{test_company.name} (#{test_company.email_domain})"
 
+# Second company with a different domain — demo for multi-company membership
+puts "Creating client company..."
+client_company = Company.find_or_create_by!(slug: "client-co") do |company|
+  company.name = "Client Co"
+  company.email_domain = "client-co.example"
+  company.state = :active
+  company.auto_accept_users = false
+end
+puts "Client company created: #{client_company.name} (#{client_company.email_domain})"
+
+ensure_membership = lambda do |user, company, role|
+  CompanyMembership.find_or_create_by!(user: user, company: company) do |membership|
+    membership.role = role
+    membership.state = :active
+    membership.accepted_at = Time.current
+  end
+end
+
 puts "Creating test users..."
 test_password = Settings.admin.password
 seed_company_admin_email = ENV.fetch("SEED_COMPANY_ADMIN_EMAIL", "admin@#{seed_company_email_domain}")
@@ -55,12 +72,11 @@ company_admin = User.find_or_create_by!(email: seed_company_admin_email) do |use
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.role = :admin
-  user.company = test_company
   user.position = :pm_po_ba
   user.preferred_agent_language = "en"
   user.onboarding_completed_at = Time.current
 end
+ensure_membership.call(company_admin, test_company, :admin)
 puts "User created: #{company_admin.email} (company admin)"
 
 # Company users with onboarding completed
@@ -69,23 +85,25 @@ john = User.find_or_create_by!(email: "john@#{seed_company_email_domain}") do |u
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.company = test_company
   user.position = :dev
   user.preferred_agent_language = "en"
   user.onboarding_completed_at = Time.current
 end
-puts "User created: #{john.email}"
+ensure_membership.call(john, test_company, :employee)
+# Dual-membership demo: John is also a viewer in Client Co
+ensure_membership.call(john, client_company, :viewer)
+puts "User created: #{john.email} (also viewer in #{client_company.name})"
 
 joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do |user|
   user.name = "Joane"
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.company = test_company
   user.position = :dev
   user.preferred_agent_language = "ru"
   user.onboarding_completed_at = Time.current
 end
+ensure_membership.call(joane, test_company, :employee)
 puts "User created: #{joane.email}"
 
 ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |user|
@@ -93,11 +111,11 @@ ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |u
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.company = test_company
   user.position = :qa
   user.preferred_agent_language = "en"
   user.onboarding_completed_at = Time.current
 end
+ensure_membership.call(ivan, test_company, :employee)
 puts "User created: #{ivan.email}"
 
 # Create agent credentials for test users

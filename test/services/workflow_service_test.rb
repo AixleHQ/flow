@@ -5,7 +5,7 @@ require "test_helper"
 class WorkflowServiceTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, owner: @user, company: @company)
     @workflow = create(:workflow, scope: @project)
     @step1 = create(:step, workflow: @workflow, position: 1, name: "Step 1")

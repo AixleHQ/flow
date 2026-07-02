@@ -49,7 +49,9 @@ public/cache
 public/store
 
 # Node modules (all levels)
-node_modules/
+# No trailing slash: worktrees symlink node_modules at the repo root, and a
+# `node_modules/` pattern matches directories only, so the symlink got committed.
+node_modules
 # Vite uses dotenv and suggests to ignore local-only env files. See
 # https://vitejs.dev/guide/env-and-mode.html#env-files
 *.local

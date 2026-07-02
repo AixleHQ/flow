@@ -6,9 +6,9 @@ module Slack
   class FileIngestorTest < ActiveSupport::TestCase
     setup do
       @user = create(:user, :with_company)
-      @project = create(:project, owner: @user, company: @user.company)
+      @project = create(:project, owner: @user, company: @user.companies.first)
       @integration = Integration.create!(
-        provider: :slack, company: @user.company, project: @project, connected_by: @user,
+        provider: :slack, company: @user.companies.first, project: @project, connected_by: @user,
         name: "Acme", status: :active
       )
       @integration.update!(credentials_data: { "bot_token" => "xoxb-1", "team_id" => "T1" })

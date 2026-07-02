@@ -15,6 +15,29 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     assert_inertia_page "Projects/Members/MembersPage"
   end
 
+  test "the collaborator picker only offers ACTIVE members (no invited/revoked leakage)" do
+    active = create(:user, :employee, company: @company)
+    invited = create(:user, :employee, company: @company, membership_state: "invited")
+    revoked = create(:user, :employee, company: @company)
+    @company.company_memberships.find_by!(user: revoked).revoke!
+
+    get company_project_members_path(@project)
+
+    ids = inertia.props[:companyUsers].map { |u| u[:id] }
+    assert_includes ids, active.id
+    assert_not_includes ids, invited.id
+    assert_not_includes ids, revoked.id
+  end
+
+  test "a non-active member cannot be added as collaborator" do
+    invited = create(:user, :employee, company: @company, membership_state: "invited")
+
+    post company_project_members_path(@project), params: { collaborator: { user_id: invited.id } }
+
+    assert_response :not_found
+    assert_not @project.project_collaborators.exists?(user_id: invited.id)
+  end
+
   test "create adds collaborator and redirects" do
     member = create(:user, company: @company)
 

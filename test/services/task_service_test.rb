@@ -5,7 +5,7 @@ require "test_helper"
 class TaskServiceTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, owner: @user, company: @company)
     @board = create(:board, project: @project)
     @column = create(:board_column, board: @board)

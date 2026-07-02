@@ -35,22 +35,17 @@ class User < ApplicationRecord
     mcp_token_digest.present?
   end
 
-  # Virtual attribute for invitation flow
-  attr_accessor :inviter
-
   # Constants
   AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
   POSITIONS = %w[qa pm_po_ba dev designer cto].freeze
   AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
 
-  # Enumerize for roles and positions (not state machines)
-  enumerize :role, in: %i[employee admin super_admin viewer], default: :employee, predicates: true, scope: true
+  # Enumerize for positions (roles live on CompanyMembership; super_admin is a boolean)
   enumerize :position, in: POSITIONS, predicates: true
 
   # Associations
-  belongs_to :company, optional: true
-  belongs_to :invited_by, class_name: "User", optional: true
-  has_many :invited_users, class_name: "User", foreign_key: :invited_by_id, dependent: :nullify, inverse_of: :invited_by
+  has_many :company_memberships, dependent: :destroy
+  has_many :companies, through: :company_memberships
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
@@ -66,18 +61,15 @@ class User < ApplicationRecord
   validates :name, presence: true
   validates :password, length: { minimum: 8 }, if: :password_digest_changed?, allow_blank: true
   validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
-  validates :company_id, presence: true, unless: :super_admin?
-  validate :super_admin_company_validation
   validate :selected_agents_valid
-  validate :email_domain_matches_company, on: :create
-  validate :cannot_demote_last_admin, on: :update
   validate :default_agent_credential_belongs_to_user
 
   broadcasts_to ->(user) { user }, on: :update
 
   # Scopes
-  scope :for_company, ->(company) { where(company: company) }
-  scope :invited, -> { where.not(invited_by_id: nil) }
+  scope :for_company, ->(company) {
+    joins(:company_memberships).where(company_memberships: { company_id: company.id })
+  }
   # Soft-delete scopes. NOTE: we deliberately do NOT name the positive scope
   # `active` (as Asset/Workflow/Tool do) because AASM already generates an
   # `active` scope for the :active account state, which authentication relies on
@@ -105,7 +97,8 @@ class User < ApplicationRecord
 
   # Ransack configuration
   def self.ransackable_attributes(_auth_object = nil)
-    %w[email name role state deleted_at]
+    # `role` is gone from users — the per-company role lives on CompanyMembership.
+    %w[email name state deleted_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)
@@ -138,14 +131,59 @@ class User < ApplicationRecord
     agent_credentials.exists?
   end
 
-  # A "client" (external observer) account: read-only everywhere, cannot run/mutate.
-  def read_only?
-    viewer?
+  # Active memberships, loaded once per User instance. Every company-scoped
+  # request goes through this: AuthConcern#current_membership, BaseContext,
+  # project permissions, Project#accessible_by? and the current-user props.
+  # No :company here — see #active_memberships_with_company.
+  def active_memberships
+    @active_memberships ||= company_memberships.active.to_a
   end
 
-  # Clients never connect/run an agent, so onboarding must not require one.
+  # The same memoized list with :company preloaded, done on FIRST DEREFERENCE
+  # rather than up front. Bullet gates this from both sides: eager-loading
+  # unconditionally trips "AVOID eager loading" on the many requests that only
+  # need role predicates, while lazily loading :company off an already-loaded
+  # collection trips "USE eager loading". Preloading on demand satisfies both —
+  # zero companies queries when no company is dereferenced, exactly one when any
+  # is. Callers that read `membership.company` MUST come through here.
+  def active_memberships_with_company
+    unless @active_memberships_company_preloaded
+      list = active_memberships
+      ActiveRecord::Associations::Preloader.new(records: list, associations: :company).call if list.any?
+      @active_memberships_company_preloaded = true
+    end
+
+    active_memberships
+  end
+
+  # Drop the memoized list when a membership changes mid-request (leaving a
+  # company, accepting an invitation) — cheaper than a full record reload, and
+  # the request must not keep serving the pre-change membership set.
+  def reload_active_memberships
+    @active_memberships = nil
+    @active_memberships_company_preloaded = false
+    remove_instance_variable(:@viewer_everywhere) if defined?(@viewer_everywhere)
+    self
+  end
+
+  def reload(...)
+    reload_active_memberships
+    super
+  end
+
+  # A pure external observer: every active membership is a viewer membership.
+  # Used by onboarding guards — such users never connect/run an agent.
+  # NOTE: false for zero memberships — callers gating writes must fail closed
+  # on `active_memberships.none?` separately (see Api::V1::ApplicationPolicy).
+  def viewer_everywhere?
+    return @viewer_everywhere if defined?(@viewer_everywhere)
+
+    @viewer_everywhere = active_memberships.any? && active_memberships.all?(&:viewer?)
+  end
+
+  # Viewers-everywhere never connect/run an agent, so onboarding must not require one.
   def onboarding_requires_agent?
-    !read_only?
+    !viewer_everywhere?
   end
 
   def can_advance_to_authenticated?
@@ -171,15 +209,7 @@ class User < ApplicationRecord
   def can_complete_onboarding?
     position.present? &&
       preferred_agent_language.present? &&
-      (read_only? || has_configured_agents?)
-  end
-
-  # Setter for invitation flow - sets invited_by and invited_at
-  def inviter=(user)
-    return unless user.present?
-
-    self.invited_by = user
-    self.invited_at = Time.current
+      (viewer_everywhere? || has_configured_agents?)
   end
 
   private
@@ -211,18 +241,6 @@ class User < ApplicationRecord
     self.onboarding_completed_at = Time.current
   end
 
-  # Validation: email domain must match company domain
-  def email_domain_matches_company
-    return if company.blank? || email.blank?
-    return if super_admin?
-    return if read_only? # external clients have their own email domain
-
-    domain = email.split("@").last
-    return if domain == company.email_domain
-
-    errors.add(:email, "domain must match company domain (#{company.email_domain})")
-  end
-
   def selected_agents_valid
     return if selected_agents.blank?
 
@@ -232,30 +250,10 @@ class User < ApplicationRecord
     errors.add(:selected_agents, "contains invalid agents: #{invalid_agents.join(', ')}")
   end
 
-  def super_admin_company_validation
-    if super_admin?
-      errors.add(:company_id, "must be nil for super_admin users") if company_id.present?
-    else
-      errors.add(:company_id, "must be present for non-super_admin users") if company_id.nil?
-    end
-  end
-
   def default_agent_credential_belongs_to_user
     return if default_agent_credential_id.blank?
     return if agent_credentials.exists?(id: default_agent_credential_id)
 
     errors.add(:default_agent_credential_id, "must belong to this user")
-  end
-
-  def cannot_demote_last_admin
-    return unless company.present?
-    return unless role_changed?
-    return unless role_was == "admin" && role != "admin"
-
-    admin_count = company.users.where(role: "admin").count
-    # If we're the last admin and trying to demote, block it
-    if admin_count <= 1
-      errors.add(:role, "Cannot demote the last admin")
-    end
   end
 end

@@ -28,27 +28,47 @@ module PersonalTools
     # Policy gate, UI-equivalent: same policy classes and context objects the
     # controllers use. Raises UnauthorizedError (mapped to an in-band tool
     # error by the MCP handler) when the policy denies.
-    def authorize!(record, query, policy:, project: nil)
-      ctx = project ? ProjectContext.new(user, {}, project: project) : BaseContext.new(user, {})
+    # `project:` derives the company from the project (ProjectContext); pass
+    # `company:` for the rare company-scoped tool that has no project. Never
+    # a "current company" — see #membership_company_ids.
+    def authorize!(record, query, policy:, project: nil, company: nil)
+      ctx = project ? ProjectContext.new(user, {}, project: project) : BaseContext.new(user, {}, company: company)
       raise UnauthorizedError, "Not allowed to #{query.to_s.delete_suffix('?')} this resource" \
         unless policy.new(ctx, record).public_send(query)
 
       record
     end
 
-    # Projects the user can actually reach: their company's, filtered by the
-    # same accessibility rule the UI uses.
+    # A personal-MCP call carries no web session, so there is no
+    # `session[:current_company_id]` to lean on: the company is always derived
+    # from the target resource, across every company the user actively belongs
+    # to. An empty list yields `where(company_id: [])` — i.e. nothing.
+    def membership_company_ids
+      @membership_company_ids ||= user.company_memberships.active.pluck(:company_id)
+    end
+
+    # The single company to act in when a tool has no project to derive one
+    # from. Unambiguous only with exactly one active membership; otherwise the
+    # caller must name it explicitly.
+    def resolve_company!(id = params[:company_id])
+      memberships = user.company_memberships.active
+      membership = id.present? ? memberships.find_by(company_id: id) : sole_membership!(memberships)
+      raise NotFoundError, "You are not an active member of company #{id}" unless membership
+
+      membership.company
+    end
+
+    # Projects the user can actually reach, in ANY of their companies, filtered
+    # by the same accessibility rule the UI uses.
     def find_project!(id = params[:project_id])
-      project = user.company && Project.where(company: user.company).find_by(id: id)
+      project = Project.where(company_id: membership_company_ids).find_by(id: id)
       raise NotFoundError, "Project #{id} not found" unless project&.accessible_by?(user)
 
       project
     end
 
     def accessible_projects
-      return Project.none if user.company.nil?
-
-      Project.where(company: user.company).select { |p| p.accessible_by?(user) }
+      Project.where(company_id: membership_company_ids).select { |p| p.accessible_by?(user) }
     end
 
     # A workflow scoped to the project — never a global Workflow.find, so a
@@ -65,6 +85,18 @@ module PersonalTools
       raise NotFoundError, "Step #{id} not found in this workflow" unless step
 
       step
+    end
+
+    # Ambiguity is an error, never a silent pick: a multi-company user writing
+    # into the wrong company is not recoverable from the agent's side.
+    def sole_membership!(memberships)
+      loaded = memberships.to_a
+      return loaded.first if loaded.one?
+
+      raise NotFoundError, "You belong to no company" if loaded.empty?
+
+      raise NotFoundError,
+            "You belong to #{loaded.size} companies — pass company_id (see list_companies)"
     end
 
     def success(payload)

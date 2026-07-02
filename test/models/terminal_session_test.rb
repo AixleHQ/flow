@@ -291,6 +291,32 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_raises(ArgumentError) { session.strategy }
   end
 
+  # == session-list broadcasts ==
+
+  test "project session updates broadcast only to the project's company" do
+    session = create(:terminal_session, user: @user, project: @project)
+
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:project:#{@project.id}", anything)
+
+    session.send(:broadcast_session_list_update)
+  end
+
+  test "project-less session updates broadcast to EVERY company with an active membership" do
+    company_b = create(:company)
+    create(:company_membership, user: @user, company: company_b)
+    revoked_company = create(:company)
+    create(:company_membership, :revoked, user: @user, company: revoked_company)
+
+    session = create(:terminal_session, :auth_setup, user: @user, project: nil)
+
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{company_b.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{revoked_company.id}", anything).never
+
+    session.send(:broadcast_session_list_update)
+  end
+
   # == backwards compatibility ==
 
   test "auth_setup sessions work with defaults" do

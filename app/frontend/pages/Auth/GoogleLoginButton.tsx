@@ -1,4 +1,5 @@
 import { Button, type ButtonProps } from '@mantine/core';
+import type { ReactNode } from 'react';
 
 import classes from './LoginPage.module.css';
 
@@ -29,7 +30,13 @@ function getCsrfToken(): string {
   return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
 }
 
-export const GoogleLoginButton = (props: Omit<ButtonProps, 'component'>) => (
+// POST + CSRF token, never a plain GET link: a GET /auth/google can be triggered
+// on a victim's session from an external page (see config/initializers/omniauth.rb).
+// `children` lets the invitation page relabel it ("Continue with Google").
+export const GoogleLoginButton = ({
+  children = 'Sign in with Google',
+  ...props
+}: Omit<ButtonProps, 'component'> & { children?: ReactNode }) => (
   <form method="post" action={GOOGLE_AUTH_PATH}>
     <input type="hidden" name="authenticity_token" value={getCsrfToken()} />
     <Button
@@ -41,7 +48,7 @@ export const GoogleLoginButton = (props: Omit<ButtonProps, 'component'>) => (
       classNames={{ root: classes.googleButton }}
       {...props}
     >
-      Sign in with Google
+      {children}
     </Button>
   </form>
 );

@@ -21,7 +21,12 @@ class RecentActivityServiceTest < ActiveSupport::TestCase
     )
   end
 
-  def create_agent_session(state:, user: @user, project: nil, agent_type: "claude_code",
+  # Agent sessions are always project-bound in production (project-less starts
+  # are disabled; only auth_setup rows have no project). The company-level
+  # activity feed reaches them through projects.company_id, so a project-less
+  # agent_session would be invisible — and for a multi-company user there is no
+  # non-arbitrary company to attribute it to anyway.
+  def create_agent_session(state:, user: @user, project: @project, agent_type: "claude_code",
                            created_at: Time.current)
     create(
       :terminal_session, :agent_session,
@@ -218,7 +223,9 @@ class RecentActivityServiceTest < ActiveSupport::TestCase
     other_board = create(:board, project: other_project)
 
     create_board_activity(event_type: "task_created", board: other_board, actor: other_user)
-    create_agent_session(state: "running", user: other_user)
+    # Explicit project: the session's company is derived from its project, so
+    # this must sit in the OTHER company's project to be out of scope.
+    create_agent_session(state: "running", user: other_user, project: other_project)
     create_run(state: "completed", project: other_project, user: other_user)
 
     # In-company activity that SHOULD appear.

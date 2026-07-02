@@ -53,12 +53,13 @@ import {
   companyProjectWorkflowsPath,
   companyProjectsPath,
   companySessionsPath,
+  companySwitchPath,
   companyWorkflowCatalogIndexPath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
-import type { SharedPermissions, SharedProject, SharedProps } from './types';
+import type { SharedMembership, SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED_WIDTH = 52;
@@ -354,11 +355,19 @@ function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps)
 
 // ─── SidebarWorkspaceSwitcher ─────────────────────────────────────────────────
 
+const MEMBERSHIP_ROLE_LABELS: Record<SharedMembership['role'], string> = {
+  admin: 'Admin',
+  employee: 'Employee',
+  viewer: 'Viewer',
+};
+
 interface SidebarWorkspaceSwitcherProps {
   collapsed: boolean;
   projects: SharedProject[];
   currentProjectId: string | null;
   companyName: string;
+  memberships: SharedMembership[];
+  currentCompanyId: number | null;
   context: 'project' | 'company';
   onExpand: () => void;
 }
@@ -368,10 +377,25 @@ function SidebarWorkspaceSwitcher({
   projects,
   currentProjectId,
   companyName,
+  memberships,
+  currentCompanyId,
   context,
   onExpand,
 }: SidebarWorkspaceSwitcherProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
+
+  // Single-company users get the same static display as before — the company
+  // switcher only appears with more than one active membership.
+  const multiCompany = memberships.length > 1;
+
+  const handleCompanySwitch = (companyId: number) => {
+    setCompanyMenuOpen(false);
+    if (companyId === currentCompanyId) return;
+    // The server validates membership, stores the company in the session and
+    // redirects to the company projects page with all props re-scoped.
+    router.post(companySwitchPath(), { company_id: companyId });
+  };
   const [search, setSearch] = useState('');
   const [createModalOpened, setCreateModalOpened] = useState(false);
 
@@ -412,6 +436,44 @@ function SidebarWorkspaceSwitcher({
 
   return (
     <div className={`${classes.swArea} ${collapsed ? classes.swAreaCollapsed : ''}`}>
+      {multiCompany && !collapsed && (
+        <Menu
+          opened={companyMenuOpen}
+          onChange={setCompanyMenuOpen}
+          position="bottom-start"
+          width={200}
+          shadow="md"
+          offset={2}
+        >
+          <Menu.Target>
+            <UnstyledButton className={classes.coBtn} aria-label="Switch company">
+              <span className={classes.coName}>{companyName}</span>
+              <IconChevronDown
+                size={11}
+                className={`${classes.swCaret} ${companyMenuOpen ? classes.swCaretOpen : ''}`}
+              />
+            </UnstyledButton>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Label>Companies</Menu.Label>
+            {memberships.map((membership) => (
+              <Menu.Item
+                key={membership.id}
+                onClick={() => handleCompanySwitch(membership.company.id)}
+                rightSection={
+                  membership.company.id === currentCompanyId ? (
+                    <IconCheck size={13} className={classes.dpCheck} />
+                  ) : undefined
+                }
+              >
+                <div className={classes.coItemName}>{membership.company.name}</div>
+                <div className={classes.coItemRole}>{MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role}</div>
+              </Menu.Item>
+            ))}
+          </Menu.Dropdown>
+        </Menu>
+      )}
+
       <Popover
         opened={popoverOpen && !collapsed}
         onChange={setPopoverOpen}
@@ -443,7 +505,8 @@ function SidebarWorkspaceSwitcher({
             )}
             <div className={`${classes.swText} ${collapsed ? classes.swTextCollapsed : ''}`}>
               <div className={classes.swName}>{displayName}</div>
-              <div className={classes.swSub}>{companyName}</div>
+              {/* Multi-company users see the company in the switcher row above. */}
+              {!multiCompany && <div className={classes.swSub}>{companyName}</div>}
             </div>
             <IconChevronDown
               size={12}
@@ -589,7 +652,9 @@ function SidebarContent({
 }) {
   const { currentUser } = usePage<SharedProps>().props;
   const isAdmin = permissions?.isAdmin ?? false;
-  const companyName = currentUser?.company?.name ?? '';
+  const companyName = currentUser?.currentCompany?.name ?? '';
+  const memberships = currentUser?.memberships ?? [];
+  const currentCompanyId = currentUser?.currentCompany?.id ?? null;
 
   const navGroups = context === 'project' && projectId ? buildProjectNavGroups(projectId) : companyNavGroups;
 
@@ -600,6 +665,8 @@ function SidebarContent({
         projects={projects}
         currentProjectId={currentProjectId}
         companyName={companyName}
+        memberships={memberships}
+        currentCompanyId={currentCompanyId}
         context={context}
         onExpand={onExpand}
       />

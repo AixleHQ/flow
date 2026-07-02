@@ -11,11 +11,13 @@ import classes from './LoginPage.module.css';
 
 interface PageProps {
   error?: string;
+  email?: string;
   [key: string]: unknown;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
   pending_approval: 'Your account is pending approval. Please contact your company administrator.',
+  no_active_membership: 'You no longer have access to any workspace. Please contact your company administrator.',
   deactivated: 'Your account has been deactivated. Please contact your company administrator.',
   oauth_failed: 'Failed to authenticate with Google. Please try again.',
   oauth_error: 'An error occurred during authentication. Please try again.',
@@ -28,12 +30,14 @@ const loginSchema = z.object({
 });
 
 const LoginPage = () => {
-  const { error } = usePage<PageProps>().props;
+  const { error, email: prefillEmail } = usePage<PageProps>().props;
   const errorShownRef = useRef(false);
   const [clientErrors, setClientErrors] = useState<Record<string, string | undefined>>({});
 
+  // The invitation flow links here as /login?email=... (echoed back by
+  // sessions#new) so the invitee only has to type their password.
   const { data, setData, post, processing, errors } = useForm({
-    email: '',
+    email: prefillEmail ?? '',
     password: '',
     rememberMe: false,
   });

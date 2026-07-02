@@ -3,6 +3,8 @@
 require "test_helper"
 
 class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
+  include OmniAuthHelper
+
   setup do
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
@@ -41,6 +43,73 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
 
     delete logout_path
     assert_redirected_to login_path
+  end
+
+  test "new echoes a valid email param for pre-filling (invitation flow) and drops junk" do
+    get login_path(email: "invitee@client.test")
+    assert_inertia_props email: "invitee@client.test"
+
+    get login_path(email: "<script>not-an-email</script>")
+    assert_inertia_props email: nil
+  end
+
+  # === Google OAuth callback (mocked via OmniAuth test mode) ===
+
+  test "omniauth: fresh user in an auto-accept domain gets an active membership and signs in" do
+    company = create(:company, :auto_accept, email_domain: "open-doors.io")
+
+    with_mocked_google_auth(email: "new@open-doors.io") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to onboarding_path
+    user = User.find_by!(email: "new@open-doors.io")
+    membership = user.company_memberships.sole
+    assert_equal company, membership.company
+    assert membership.active?
+
+    # Signed in: onboarding is reachable.
+    get onboarding_path
+    assert_response :success
+  end
+
+  test "omniauth: fresh user in an approval-required domain is gated and NOT signed in" do
+    create(:company, email_domain: "gated-corp.io") # auto_accept_users: false
+
+    with_mocked_google_auth(email: "new@gated-corp.io") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to login_path(error: "pending_approval")
+    membership = User.find_by!(email: "new@gated-corp.io").company_memberships.sole
+    assert membership.invited?
+
+    # No session was established.
+    get company_projects_path
+    assert_redirected_to login_path
+  end
+
+  test "omniauth: fresh user with an unknown domain gets no membership and is gated" do
+    with_mocked_google_auth(email: "solo@nowhere-known.dev") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to login_path(error: "pending_approval")
+    assert User.find_by!(email: "solo@nowhere-known.dev").company_memberships.none?
+  end
+
+  test "omniauth: an existing member is signed in without any new membership" do
+    membership_count = -> { @user.company_memberships.count }
+
+    assert_no_difference membership_count do
+      with_mocked_google_auth(email: @user.email, name: @user.name) do
+        get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+      end
+    end
+
+    assert_redirected_to onboarding_path
+    get company_projects_path
+    assert_response :success
   end
 
   test "failure redirects to login with error" do

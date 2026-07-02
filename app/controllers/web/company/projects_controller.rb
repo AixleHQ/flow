@@ -2,10 +2,13 @@
 
 class Web::Company::ProjectsController < Web::Company::ApplicationController
   def index
+    # Current-company slice only: a dual-membership user must not see their
+    # other companies' projects here (for_user alone spans all memberships).
     projects = Project.for_user(current_user)
-                      .includes(:project_collaborators)
+                      .for_company(current_company)
                       .select(
                         "projects.*",
+                        "(SELECT COUNT(*) FROM project_collaborators WHERE project_collaborators.project_id = projects.id) AS cached_collaborators_count",
                         "(SELECT MAX(terminal_sessions.started_at) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_last_activity_at",
                         "(SELECT COUNT(*) FROM terminal_sessions WHERE terminal_sessions.project_id = projects.id) AS cached_sessions_count",
                         "(SELECT COUNT(*) FROM workflows WHERE workflows.scope_type = 'Project' AND workflows.scope_id = projects.id AND workflows.deleted_at IS NULL) AS cached_workflows_count",

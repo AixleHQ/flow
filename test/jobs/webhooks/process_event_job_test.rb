@@ -6,10 +6,10 @@ module Webhooks
   class ProcessEventJobTest < ActiveJob::TestCase
     setup do
       @user = create(:user, :with_company)
-      @project = create(:project, owner: @user, company: @user.company)
+      @project = create(:project, owner: @user, company: @user.companies.first)
       @workflow = create(:workflow, scope: @project)
       # Slack endpoints are company-scoped (one workspace serves every project).
-      @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.company)
+      @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.companies.first)
       @binding = create(:trigger_binding,
         project: @project, workflow: @workflow, created_by: @user,
         event_type: "slack.message", filter_predicate: { "channel" => "C1" })
@@ -41,7 +41,7 @@ module Webhooks
     end
 
     test "a company-scoped Slack event fans out to bindings across the company's projects" do
-      project_b = create(:project, owner: @user, company: @user.company)
+      project_b = create(:project, owner: @user, company: @user.companies.first)
       workflow_b = create(:workflow, scope: project_b)
       create(:trigger_binding, project: project_b, workflow: workflow_b, created_by: @user,
         event_type: "slack.message", filter_predicate: { "channel" => "C1" })
@@ -88,7 +88,7 @@ module Webhooks
 
     test "threads Slack reply context and the message into shared_context; whitelists attachments" do
       integration = Integration.create!(
-        provider: :slack, company: @user.company, project: @project, connected_by: @user,
+        provider: :slack, company: @user.companies.first, project: @project, connected_by: @user,
         name: "Acme", status: :active, settings: { "team_id" => "T1" }
       )
       @endpoint.update!(config: { "integration_id" => integration.id })
@@ -126,7 +126,7 @@ module Webhooks
 
     test "ingests Slack attachments into the matching binding's project at fire time" do
       integration = Integration.create!(
-        provider: :slack, company: @user.company, project: nil, connected_by: @user,
+        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
         name: "Acme", status: :active
       )
       integration.update!(credentials_data: { "bot_token" => "xoxb-1" })

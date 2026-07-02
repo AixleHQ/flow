@@ -8,7 +8,7 @@ class Web::Company::AnalyticsPolicyTest < ActiveSupport::TestCase
   end
 
   def policy_for(user)
-    Web::Company::AnalyticsPolicy.new(BaseContext.new(user, ActionController::Parameters.new), nil)
+    Web::Company::AnalyticsPolicy.new(BaseContext.new(user, ActionController::Parameters.new, company: @company), nil)
   end
 
   test "index? is true for an admin" do

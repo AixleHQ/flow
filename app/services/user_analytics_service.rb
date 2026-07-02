@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Per-user cross-project usage analytics. Mirrors CompanyAnalyticsService but keys
-# off a resolved TARGET user (session ownership), not a company. Reads the user's
-# terminal_sessions directly, so it must handle project-less sessions explicitly.
+# Per-user usage analytics, ALWAYS scoped to one company (multi-membership users
+# must never see cross-company aggregates). Mirrors CompanyAnalyticsService but
+# keys off a resolved TARGET user (session ownership) within the given company.
 #
-# Reconciliation invariant: build_project_breakdowns uses left_joins(:project) + a
-# "(No project)" bucket so sum(project_breakdowns.{sessions,cost_cents,tokens}) always
-# equals the summary totals, even for project-less agent_session/workflow_step rows.
+# Reconciliation invariant: base_sessions inner-joins projects (the company
+# scope), and build_project_breakdowns groups over the same join, so
+# sum(project_breakdowns.{sessions,cost_cents,tokens}) equals the summary totals.
 class UserAnalyticsService
   PERIOD_DAYS = { "7d" => 7, "30d" => 30, "90d" => 90, "1y" => 365 }.freeze
   # Session types that represent real, billable usage (exclude auth_setup / tool_setup).
@@ -20,8 +20,9 @@ class UserAnalyticsService
     keyword_init: true
   )
 
-  def initialize(user:, period:, project_id: nil)
+  def initialize(user:, company:, period:, project_id: nil)
     @user       = user
+    @company    = company
     @period     = period.to_s
     @since      = PERIOD_DAYS.fetch(@period, 30).days.ago
     @project_id = project_id.presence
@@ -44,10 +45,15 @@ class UserAnalyticsService
 
   private
 
-  attr_reader :user, :period, :since, :project_id
+  attr_reader :user, :company, :period, :since, :project_id
 
+  # Company isolation: usage sessions are always project-bound, so the inner
+  # project join scopes the slice to the given company without a company_id
+  # column on terminal_sessions.
   def base_sessions
     scope = user.terminal_sessions
+                .joins(:project)
+                .where(projects: { company_id: company.id })
                 .where(created_at: since.., session_type: USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end
@@ -65,15 +71,17 @@ class UserAnalyticsService
 
   def base_workflow_runs
     runs = WorkflowRun.for_user_in_period(user, since)
+                      .joins(:project)
+                      .where(projects: { company_id: company.id })
     project_id ? runs.where(project_id:) : runs
   end
 
-  # CRITICAL difference from CompanyAnalyticsService: LEFT JOIN (not inner join) so
-  # project-less billable sessions are grouped into a single "(No project)" bucket
-  # (projects.id IS NULL), preserving the reconciliation invariant.
+  # base_sessions already inner-joins projects (company scoping), so the
+  # breakdown groups over that same join — project-less rows cannot appear in a
+  # company-scoped slice, which keeps the reconciliation invariant with the
+  # summary totals.
   def build_project_breakdowns(sessions)
     sessions
-      .left_joins(:project)
       .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
       .group("projects.id", "projects.name")
       .order(Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0) DESC"))
@@ -87,7 +95,7 @@ class UserAnalyticsService
       .map do |(id, name, sess_count, cost, tokens)|
         ProjectBreakdown.new(
           project_id: id,
-          project_name: name || "(No project)",
+          project_name: name,
           sessions: sess_count.to_i,
           cost_cents: cost.to_i,
           tokens: tokens.to_i

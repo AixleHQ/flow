@@ -6,7 +6,7 @@ module Slack
   class OauthTest < ActiveSupport::TestCase
     setup do
       @user = create(:user, :with_company)
-      @project = create(:project, owner: @user, company: @user.company)
+      @project = create(:project, owner: @user, company: @user.companies.first)
     end
 
     test "sign_state / verify_state round-trips the project id and user id" do

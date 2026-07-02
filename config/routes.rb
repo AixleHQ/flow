@@ -198,6 +198,15 @@ Rails.application.routes.draw do
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
 
+    # Invitation acceptance (public — the signed token is the credential).
+    # Tokens can contain dots, which format negotiation would otherwise eat.
+    scope constraints: { token: /[^\/]+/ } do
+      get "invitations/:token", to: "invitations#show", as: :invitation
+      post "invitations/:token/accept", to: "invitations#accept", as: :accept_invitation
+      post "invitations/:token/decline", to: "invitations#decline", as: :decline_invitation
+      post "invitations/:token/signup", to: "invitations#signup", as: :signup_invitation
+    end
+
     get "privacy-policy", to: "pages#privacy_policy", as: :privacy_policy
     get "terms-of-service", to: "pages#terms_of_service", as: :terms_of_service
 
@@ -228,7 +237,13 @@ Rails.application.routes.draw do
     get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
 
     namespace :company do
-      resources :members, only: %i[index create update destroy]
+      post "switch", to: "switch#create", as: :switch
+      # Self-removal ("Leave company" on the profile page) — id is the
+      # MEMBERSHIP id, and it may belong to any of the user's companies.
+      resources :memberships, only: %i[destroy]
+      resources :members, only: %i[index create update destroy] do
+        post :resend, on: :member
+      end
       # Config items are Project-scoped only — managed under company/projects/:id/config_items.
       # GitHub App setup callback (single global endpoint; project target carried in `state`).
       # Company-level integration management has been removed — integrations are project-scoped.
