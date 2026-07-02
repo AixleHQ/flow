@@ -751,7 +751,7 @@ PLATFORMS
 
 DEPENDENCIES
   aasm
-  actionmcp (~> 0.100)
+  actionmcp (~> 0.104.0)
   administrate
   administrate-field-jsonb
   administrate-field-shrine

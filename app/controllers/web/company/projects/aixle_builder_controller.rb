@@ -21,7 +21,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
   end
 
   def start
-    meta_tool_ids = Tool.where(kind: :workflow, name: aixle_builder_tool_names).pluck(:id)
+    meta_tool_ids = Tool.where(kind: :meta, name: aixle_builder_tool_names).pluck(:id)
 
     session = SessionService.create_and_start(
       user: current_user,

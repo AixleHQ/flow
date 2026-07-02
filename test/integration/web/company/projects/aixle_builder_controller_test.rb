@@ -36,6 +36,25 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_match %r{/aixle_builder/\d+/session}, response.location
   end
 
+  test "start attaches existing meta tools to the session" do
+    meta_tool = create(:tool, :meta, name: "meta_create_workflow")
+    create(:tool, :workflow, name: "board_list_tasks") # must NOT be attached
+
+    captured = nil
+    SessionService.stubs(:create_and_start).with do |**kwargs|
+      captured = kwargs
+      true
+    end.returns(create(:terminal_session, :aixle_builder, :started, user: @user, project: @project))
+
+    post company_project_aixle_builder_start_path(@project), params: { agent_runtime: "claude_code" }
+
+    assert_response :redirect
+    # Regression: meta_* tools were moved from kind :workflow to :meta by
+    # migration 20260627000002, but the controller kept querying :workflow,
+    # so Builder sessions were created with zero tools.
+    assert_equal [meta_tool.id], captured[:params][:tool_ids]
+  end
+
   test "start redirects back with flash alert when session save fails" do
     unsaved = TerminalSession.new
     unsaved.errors.add(:base, "Test validation failure")
