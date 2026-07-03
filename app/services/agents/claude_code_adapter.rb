@@ -43,7 +43,7 @@ module Agents
     end
 
     # Built-in Claude Code tools (always allowed). DesignSync is an aixle-provided
-    # tool — it must be allow-listed or dontAsk mode denies it outright.
+    # tool that must be allow-listed so it runs without a prompt.
     BUILTIN_TOOLS = %w[Task Bash Glob Grep LS Read Edit MultiEdit Write WebFetch WebSearch DesignSync].freeze
 
     def allowed_tools(mcp_server_names = [])
@@ -108,12 +108,11 @@ module Agents
     def config_files(credentials, workflow_config = {})
       mcp_names = workflow_config[:enabled_mcp_servers] || []
       model = workflow_config[:model]
-      mode = workflow_config[:mode]
       files = {
         # Main config (includes primaryApiKey for API-key path users)
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings with permissions and optional model override
-        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model, mode: mode).to_json
+        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
       }
 
       oauth = credentials["claudeAiOauth"]
@@ -431,19 +430,20 @@ module Agents
       end
     end
 
-    # Permission mode by session mode:
-    #   interactive     → "auto"    (a human is at the terminal; auto-accept edits)
-    #   non_interactive → "dontAsk" (autonomous; deny unlisted tools outright rather
-    #                                than block on a prompt nobody can answer)
-    def permission_default_mode(mode)
-      mode.to_s == "interactive" ? "auto" : "dontAsk"
-    end
+    # Permission mode is always "auto". Both interactive and non_interactive
+    # sessions run headless in a container, so there is nobody to answer a
+    # permission prompt. Earlier the non_interactive path used "dontAsk", but
+    # that mode denies any tool that isn't explicitly allow-listed — which
+    # silently blocked useful tools (e.g. the DesignSync skill). "auto" runs
+    # the same way regardless of session mode and only prompts for tools in
+    # the "ask" list, which we keep empty.
+    PERMISSION_DEFAULT_MODE = "auto"
 
-    def generate_settings(mcp_server_names = [], model: nil, mode: nil)
+    def generate_settings(mcp_server_names = [], model: nil)
       settings = {
         # Auto-accept the bypass permissions warning
         "permissions" => {
-          "defaultMode" => permission_default_mode(mode),
+          "defaultMode" => PERMISSION_DEFAULT_MODE,
           "allow" => allowed_tools(mcp_server_names),
           "deny" => [],
           "ask" => []

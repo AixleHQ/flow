@@ -100,7 +100,7 @@ module Agents
       main = JSON.parse(files["/home/claude/.claude.json"])
       assert_equal "sk-xxx", main["primaryApiKey"]
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+      assert_equal "auto", settings.dig("permissions", "defaultMode")
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
@@ -135,10 +135,10 @@ module Agents
       refute files.key?("/home/claude/.claude/.credentials.json")
     end
 
-    test "config_files defaultMode is dontAsk for non_interactive sessions" do
+    test "config_files defaultMode is auto for non_interactive sessions" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+      assert_equal "auto", settings.dig("permissions", "defaultMode")
     end
 
     test "config_files defaultMode is auto for interactive sessions" do
@@ -147,13 +147,13 @@ module Agents
       assert_equal "auto", settings.dig("permissions", "defaultMode")
     end
 
-    test "config_files defaults to dontAsk when mode is absent" do
+    test "config_files defaults to auto when mode is absent" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "dontAsk", settings.dig("permissions", "defaultMode")
+      assert_equal "auto", settings.dig("permissions", "defaultMode")
     end
 
-    test "DesignSync is allow-listed so dontAsk mode does not deny it" do
+    test "DesignSync is allow-listed so it runs without a prompt" do
       assert_includes @adapter.allowed_tools([]), "DesignSync"
 
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
