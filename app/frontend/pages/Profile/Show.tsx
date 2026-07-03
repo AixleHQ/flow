@@ -686,8 +686,8 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
         Personal MCP
       </Title>
       <Text fz={14} c="dimmed" mb="md">
-        Connect your AI agent (Claude Code, Cursor, ...) to Aixle: list your projects, manage board
-        tasks and build workflows — with exactly your access level.
+        Connect your AI agent (Claude Code, Cursor, ...) to Aixle: list your projects, manage board tasks and build
+        workflows — with exactly your access level.
       </Text>
 
       {mcp.token && (
