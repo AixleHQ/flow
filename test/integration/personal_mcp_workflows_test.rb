@@ -58,6 +58,58 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_equal "pending", detail["state"]
   end
 
+  test "sub-steps, update, reorder and delete round-trip through workflow authoring tools" do
+    s1 = payload(call_tool("create_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, name: "S1" }))
+    s2 = payload(call_tool("create_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, name: "S2" }))
+
+    sub = call_tool("create_sub_step",
+                    { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"], name: "check A" })
+    assert_not error?(sub)
+
+    upd = call_tool("update_workflow_step",
+                    { project_id: @project.id, workflow_id: @workflow.id, step_id: s2["id"],
+                      depends_on_step_ids: [ s1["id"] ] })
+    assert_not error?(upd)
+
+    reordered = call_tool("reorder_workflow_steps",
+                          { project_id: @project.id, workflow_id: @workflow.id, step_ids: [ s2["id"], s1["id"] ] })
+    assert_not error?(reordered)
+
+    # s1 has a dependent (s2) → delete rejected
+    blocked = call_tool("delete_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"] })
+    assert error?(blocked)
+    assert_match(/depend on it/i, blocked.dig("result", "content").map { |c| c["text"] }.join(" "))
+
+    ok = call_tool("delete_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, step_id: s2["id"] })
+    assert_not error?(ok)
+  end
+
+  test "cancel_workflow_run delegates to WorkflowService.cancel" do
+    run = @workflow.runs.create!(project: @project, user: @user, state: "running")
+    WorkflowService.expects(:cancel).with(run: run)
+
+    body = call_tool("cancel_workflow_run", { project_id: @project.id, run_id: run.id })
+    assert_not error?(body)
+  end
+
+  test "list_agents lists project agents" do
+    assert_not error?(call_tool("list_agents", { project_id: @project.id }))
+  end
+
+  test "delete_workflow soft-deletes and cannot cross into another project" do
+    other = create(:user, :with_company)
+    other_project = create(:project, company: other.company, owner: other)
+    other_wf = create(:workflow, scope: other_project)
+
+    denied = call_tool("delete_workflow", { project_id: @project.id, workflow_id: other_wf.id })
+    assert error?(denied)
+    assert_match(/not found/i, denied.dig("result", "content").first["text"])
+
+    ok = call_tool("delete_workflow", { project_id: @project.id, workflow_id: @workflow.id })
+    assert_not error?(ok)
+    assert @workflow.reload.deleted_at.present?
+  end
+
   test "a read-only viewer can list but not create workflows" do
     viewer = create(:user, :viewer, company: @company)
     @project.add_collaborator(viewer)

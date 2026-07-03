@@ -51,6 +51,22 @@ module PersonalTools
       Project.where(company: user.company).select { |p| p.accessible_by?(user) }
     end
 
+    # A workflow scoped to the project — never a global Workflow.find, so a
+    # user can't reach another project's workflow by id.
+    def find_workflow!(project, id = params[:workflow_id])
+      workflow = Workflow.visible_for_project(project).find_by(id: id)
+      raise NotFoundError, "Workflow #{id} not found in this project" unless workflow
+
+      workflow
+    end
+
+    def find_step!(workflow, id = params[:step_id])
+      step = workflow.steps.not_deleted.find_by(id: id)
+      raise NotFoundError, "Step #{id} not found in this workflow" unless step
+
+      step
+    end
+
     def success(payload)
       text = payload.is_a?(String) ? payload : JSON.pretty_generate(payload.as_json)
       { exit_code: 0, stdout: text, stderr: "" }
