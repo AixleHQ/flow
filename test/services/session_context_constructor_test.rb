@@ -34,7 +34,7 @@ class SessionContextConstructorTest < ActiveSupport::TestCase
 
     assert_not_nil critical_pos
     assert_not_nil output_pos
-    assert_operator critical_pos, :<, output_pos, "critical-rules must appear before output-rules"
+    assert critical_pos < output_pos, "critical-rules must appear before output-rules"
   end
 
   test "build_result returns ContextResult" do
@@ -43,10 +43,10 @@ class SessionContextConstructorTest < ActiveSupport::TestCase
 
     result = SessionContextConstructor.build_result(session)
     assert_kind_of ContextResult, result
-    assert_kind_of String, result.render
-    assert_kind_of Array, result.applied_builders
-    assert_kind_of Array, result.skipped_builders
-    assert_operator result.build_time_ms, :>, 0
+    assert result.render.is_a?(String)
+    assert result.applied_builders.is_a?(Array)
+    assert result.skipped_builders.is_a?(Array)
+    assert result.build_time_ms > 0
   end
 
   test "skipped builders tracked when agent not configured" do

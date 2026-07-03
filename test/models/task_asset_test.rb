@@ -19,13 +19,13 @@ class TaskAssetTest < ActiveSupport::TestCase
 
   test "invalid without name" do
     asset = TaskAsset.new(board_task: @task, author: @owner)
-    refute_predicate asset, :valid?
+    refute asset.valid?
     assert asset.errors[:name].present?
   end
 
   test "invalid without author" do
     asset = TaskAsset.new(name: "doc.pdf", board_task: @task)
-    refute_predicate asset, :valid?
+    refute asset.valid?
   end
 
   test "author_type defaults to human" do

@@ -265,8 +265,8 @@ module ContainerStrategies
 
       assert_equal "abc123def456", result[:container_id]
       assert_equal "terminal-#{@session.route_token}", result[:container_name]
-      assert_includes result[:websocket_url], @session.route_token
-      assert_includes result[:watcher_url], @session.route_token
+      assert result[:websocket_url].include?(@session.route_token)
+      assert result[:watcher_url].include?(@session.route_token)
     end
 
     test "exec returns ide_url with trailing slash" do
@@ -281,7 +281,7 @@ module ContainerStrategies
 
       result = strategy.exec(container_id: "abc123")
 
-      assert_includes result[:ide_url], @session.route_token
+      assert result[:ide_url].include?(@session.route_token)
       assert result[:ide_url].end_with?("/ide/")
     end
 
@@ -325,7 +325,7 @@ module ContainerStrategies
 
       # Gemini adapter returns GOOGLE_CLOUD_PROJECT from metadata
       # This may or may not be present depending on adapter implementation
-      assert_kind_of Array, env_vars
+      assert env_vars.is_a?(Array)
     end
 
     # == before_cleanup: credential persistence ==
@@ -343,7 +343,7 @@ module ContainerStrategies
 
       assert_no_difference "AgentCredential.count" do
         result = strategy.before_cleanup(container_id: "abc", session_id: @session.id)
-        refute result[:auth_completed]
+        assert_equal false, result[:auth_completed]
         refute result.key?(:credential_id)
       end
     end

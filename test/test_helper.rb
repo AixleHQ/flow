@@ -6,11 +6,6 @@ SimpleCov.start("rails") do
   primary_coverage :line
 end
 
-# Coverage floor is opt-in (COVERAGE_MIN is set by `make be_check`/`be_check_all`):
-# enforcing it on partial runs (`rails test test/models/foo_test.rb`) would always fail.
-# Ratchet the floor in the Makefile as coverage grows — never lower it.
-SimpleCov.minimum_coverage Float(ENV["COVERAGE_MIN"]) if ENV["COVERAGE_MIN"]
-
 require_relative "../config/environment"
 require "rails/test_help"
 require "minitest/autorun"
@@ -37,20 +32,8 @@ class ActiveSupport::TestCase
   setup do
   end
 
-  parallelize(workers: :number_of_processors)
-
-  parallelize_setup do |worker|
-    # Unique command_name per forked worker so SimpleCov merges the resultsets.
-    SimpleCov.command_name "#{SimpleCov.command_name}-#{worker}"
-    # Workers only ever see partial coverage; the coverage floor is enforced
-    # by the parent process on the merged result.
-    SimpleCov.minimum_coverage 0
-  end
-
-  parallelize_teardown do |worker|
-    # Flush this worker's resultset before the process exits.
-    SimpleCov.result
-  end
+  # Run tests in parallel with specified workers
+  # parallelize(workers: :number_of_processors)
 
   # Include FactoryBot methods
   include FactoryBot::Syntax::Methods

@@ -68,9 +68,9 @@ module Agents
       assert files.key?("/home/gemini/.gemini/settings.json")
       settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
       assert_equal "gemini-api-key", settings.dig("security", "auth", "selectedType")
-      refute settings.dig("security", "folderTrust", "enabled")
+      assert_equal false, settings.dig("security", "folderTrust", "enabled")
       assert_equal "auto_edit", settings.dig("tools", "approvalMode")
-      assert settings.dig("tools", "autoAccept")
+      assert_equal true, settings.dig("tools", "autoAccept")
     end
 
     test "auth_setup_files pre-trusts the workspace so auth does not prompt" do

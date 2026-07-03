@@ -191,7 +191,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
 
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
-    assert_operator data["workflows_count"], :>=, 2
+    assert data["workflows_count"] >= 2
     names = data["workflows"].map { |w| w["name"] }
     assert_includes names, "Project WF"
     assert_includes names, "Company WF"

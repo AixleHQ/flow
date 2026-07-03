@@ -55,7 +55,7 @@ module Api
         }.to_json, as: :json
 
         assert_response :created
-        assert captured[:session_config]["bmad_enabled"]
+        assert_equal true, captured[:session_config]["bmad_enabled"]
         assert_equal %w[bmm cis], captured[:session_config]["bmad_modules"]
       end
 

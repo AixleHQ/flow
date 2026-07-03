@@ -2,9 +2,9 @@
 
 FactoryBot.define do
   factory :workflow_run do
-    workflow factory: %i[workflow with_company_scope]
-    project
-    user
+    association :workflow, factory: [ :workflow, :with_company_scope ]
+    association :project
+    association :user
     state { "pending" }
     mode { "interactive" }
     input_asset_ids { [] }

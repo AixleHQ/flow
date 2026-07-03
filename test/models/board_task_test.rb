@@ -21,7 +21,7 @@ class BoardTaskTest < ActiveSupport::TestCase
 
   test "invalid without title" do
     task = BoardTask.new(board: @board, board_column: @col1)
-    refute_predicate task, :valid?
+    refute task.valid?
     assert task.errors[:title].present?
   end
 
@@ -31,7 +31,7 @@ class BoardTaskTest < ActiveSupport::TestCase
     other_col = BoardColumn.create!(name: "X", board: other_board, position: 1)
 
     task = BoardTask.new(title: "Bad", board: @board, board_column: other_col)
-    refute_predicate task, :valid?
+    refute task.valid?
     assert task.errors[:board_column].present?
   end
 
@@ -128,7 +128,7 @@ class BoardTaskTest < ActiveSupport::TestCase
   test "parent task that is not epic is rejected" do
     non_epic = BoardTask.create!(title: "Bug", board: @board, board_column: @col1, task_type: :bug)
     task = BoardTask.new(title: "Child", board: @board, board_column: @col1, parent_task: non_epic)
-    refute_predicate task, :valid?
+    refute task.valid?
     assert task.errors[:parent_task].present?
   end
 
@@ -139,16 +139,16 @@ class BoardTaskTest < ActiveSupport::TestCase
     other_epic = BoardTask.create!(title: "Epic", board: other_board, board_column: other_col, task_type: :epic)
 
     task = BoardTask.new(title: "Child", board: @board, board_column: @col1, parent_task: other_epic)
-    refute_predicate task, :valid?
-    assert_includes task.errors[:parent_task], "must belong to the same board"
+    refute task.valid?
+    assert task.errors[:parent_task].include?("must belong to the same board")
   end
 
   test "max one level nesting" do
     epic = BoardTask.create!(title: "Epic", board: @board, board_column: @col1, task_type: :epic)
     story = BoardTask.create!(title: "Story", board: @board, board_column: @col1, parent_task: epic, task_type: :epic)
     grandchild = BoardTask.new(title: "GC", board: @board, board_column: @col1, parent_task: story)
-    refute_predicate grandchild, :valid?
-    assert_includes grandchild.errors[:parent_task], "cannot nest more than one level deep"
+    refute grandchild.valid?
+    assert grandchild.errors[:parent_task].include?("cannot nest more than one level deep")
   end
 
   test "deleting epic nullifies children parent_task_id" do
@@ -165,7 +165,7 @@ class BoardTaskTest < ActiveSupport::TestCase
   test "assignee must be project member" do
     outsider = create(:user, :employee, company: @company)
     task = BoardTask.new(title: "T", board: @board, board_column: @col1, assignee: outsider)
-    refute_predicate task, :valid?
+    refute task.valid?
     assert task.errors[:assignee].present?
   end
 

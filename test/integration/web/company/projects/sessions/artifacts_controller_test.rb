@@ -59,7 +59,7 @@ class Web::Company::Projects::Sessions::ArtifactsControllerTest < ActionDispatch
     artifact.reload
     assert_equal "active", artifact.status
     assert_nil artifact.folder
-    assert_includes Asset.accessible_from_project(@project), artifact
+    assert Asset.accessible_from_project(@project).include?(artifact)
   end
 
   test "review save activates existing dismissed asset and merges content" do
@@ -90,6 +90,6 @@ class Web::Company::Projects::Sessions::ArtifactsControllerTest < ActionDispatch
     artifact.reload
     assert_equal "active", dismissed.status
     assert_equal "dismissed", artifact.status
-    assert_includes Asset.accessible_from_project(@project), dismissed
+    assert Asset.accessible_from_project(@project).include?(dismissed)
   end
 end

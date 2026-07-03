@@ -12,11 +12,11 @@ FactoryBot.define do
     scope { nil }
 
     trait :with_company_scope do
-      scope factory: %i[company]
+      association :scope, factory: :company
     end
 
     trait :with_project_scope do
-      scope factory: %i[project]
+      association :scope, factory: :project
     end
 
     trait :system do

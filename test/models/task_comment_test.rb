@@ -19,13 +19,13 @@ class TaskCommentTest < ActiveSupport::TestCase
 
   test "invalid without body" do
     comment = TaskComment.new(board_task: @task, author: @owner)
-    refute_predicate comment, :valid?
+    refute comment.valid?
     assert comment.errors[:body].present?
   end
 
   test "invalid without author" do
     comment = TaskComment.new(body: "Hello", board_task: @task)
-    refute_predicate comment, :valid?
+    refute comment.valid?
   end
 
   test "sets created_at on create" do
@@ -34,7 +34,7 @@ class TaskCommentTest < ActiveSupport::TestCase
   end
 
   test "does not have updated_at column" do
-    refute_includes TaskComment.column_names, "updated_at"
+    refute TaskComment.column_names.include?("updated_at")
   end
 
   test "author_type defaults to human" do

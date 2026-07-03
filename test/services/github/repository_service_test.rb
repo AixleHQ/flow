@@ -27,9 +27,9 @@ module Github
       result = Github::RepositoryService.new(@integration).list_available
       assert_equal 2, result.length
       assert_equal "org/app", result[0][:full_name]
-      refute result[0][:is_private]
+      assert_equal false, result[0][:is_private]
       assert_equal "org/lib", result[1][:full_name]
-      assert result[1][:is_private]
+      assert_equal true, result[1][:is_private]
     end
 
     test "list_available returns empty array on error" do

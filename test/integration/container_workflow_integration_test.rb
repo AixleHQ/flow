@@ -193,7 +193,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
     credential = AgentCredential.find_by(user_id: session.user_id, agent_type: agent_type)
     assert credential.present?, "Expected AgentCredential for #{agent_type}"
     data = credential.config_data
-    assert_kind_of Hash, data, "Expected config_data to be a Hash"
+    assert data.is_a?(Hash), "Expected config_data to be a Hash"
 
     case agent_type
     when "claude_code"

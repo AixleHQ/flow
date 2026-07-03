@@ -19,7 +19,7 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
     )
 
     assert_not_nil session.mcp_key
-    assert_operator session.mcp_key.length, :>, 20
+    assert session.mcp_key.length > 20
   end
 
   test "mcp_key is unique" do

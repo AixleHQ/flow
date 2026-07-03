@@ -36,9 +36,9 @@ module Gitlab
 
       assert_equal 2, result.length
       assert_equal "group/app", result[0][:full_name]
-      assert result[0][:is_private]
+      assert_equal true, result[0][:is_private]
       assert_equal "group/lib", result[1][:full_name]
-      refute result[1][:is_private]
+      assert_equal false, result[1][:is_private]
     end
 
     test "list_available returns empty array on error" do

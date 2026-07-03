@@ -199,7 +199,7 @@ class MCPServerTest < ActiveSupport::TestCase
 
   test "visible_for_project returns ActiveRecord::Relation" do
     result = MCPServer.visible_for_project(@project)
-    assert_kind_of ActiveRecord::Relation, result
+    assert result.is_a?(ActiveRecord::Relation)
   end
 
   # ====================================================================

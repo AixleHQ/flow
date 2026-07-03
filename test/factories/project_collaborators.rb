@@ -8,11 +8,11 @@ FactoryBot.define do
     # == Association Traits ==
 
     trait :with_project do
-      project
+      association :project
     end
 
     trait :with_user do
-      user
+      association :user
     end
 
     # Note: For most tests, pass both explicitly:

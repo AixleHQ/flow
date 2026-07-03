@@ -61,14 +61,13 @@ class ContainerStrategies::CustomToolStrategyTest < ActiveSupport::TestCase
     hc = strategy.build_host_config
     assert hc["Memory"].present?
     assert hc["CpuQuota"].present?
-    refute hc["AutoRemove"]
+    assert_equal false, hc["AutoRemove"]
   end
 
   test "before_create_container raises without docker_image" do
     @tool.update_column(:docker_image, nil)
     strategy = build_strategy
-    error = assert_raises(ArgumentError) { strategy.before_create_container }
-    assert_match(/docker_image/, error.message)
+    assert_raises(ArgumentError, /docker_image/) { strategy.before_create_container }
   end
 
   private

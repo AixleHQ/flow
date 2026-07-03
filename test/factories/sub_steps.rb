@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :sub_step do
-    step
+    association :step
     sequence(:name) { |n| "SubStep #{n}" }
     sequence(:position) { |n| n }
     description { "A test sub-step" }

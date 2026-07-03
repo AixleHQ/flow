@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :step do
-    workflow
+    association :workflow
     sequence(:name) { |n| "Step #{n}" }
     sequence(:position) { |n| n }
     description { "A test step" }
@@ -20,7 +20,7 @@ FactoryBot.define do
     agent { nil }
 
     trait :with_agent do
-      agent
+      association :agent
     end
 
     trait :non_interactive do

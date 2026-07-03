@@ -67,7 +67,7 @@ module Coder
       assert_equal "aixle-prod-1", result[:workspace_name]
       assert_equal "running", result[:status]
       assert_equal "coder ssh aixle-prod-1", result[:ssh_command]
-      assert_empty ws.started_ids, "expected not to call start when workspace is already running"
+      assert ws.started_ids.empty?, "expected not to call start when workspace is already running"
     end
 
     test "starts a stopped workspace when there is no running one" do
@@ -96,7 +96,7 @@ module Coder
 
       assert_equal "aixle-prod-1", result[:workspace_name]
       assert_equal "running", result[:status]
-      assert_empty ws.started_ids, "expected not to call start while a build is in flight"
+      assert ws.started_ids.empty?, "expected not to call start while a build is in flight"
       assert_includes ws.awaited_ids, "build-pending-1"
     end
 
@@ -112,7 +112,7 @@ module Coder
       result = allocator.allocate
 
       assert_equal "running", result[:status]
-      assert_empty ws.started_ids
+      assert ws.started_ids.empty?
       assert_includes ws.awaited_ids, "build-running-1"
     end
 

@@ -53,7 +53,7 @@ class ContextResultTest < ActiveSupport::TestCase
     assert_equal "standalone", hash[:session_type]
     assert_equal @project.id, hash[:project_id]
     assert_equal built_at.iso8601, hash[:built_at]
-    assert_in_delta(2.5, hash[:build_time_ms])
+    assert_equal 2.5, hash[:build_time_ms]
     assert_equal 5, hash[:total_content_length]
     assert_equal [ "test_builder" ], hash[:applied_builders]
     assert_equal [ "skipped_one" ], hash[:skipped_builders]

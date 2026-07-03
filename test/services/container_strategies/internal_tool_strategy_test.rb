@@ -41,12 +41,11 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
   end
 
   test "build_for raises for unknown definition" do
-    error = assert_raises(ArgumentError) do
+    assert_raises(ArgumentError, /No internal tool definition/) do
       ContainerStrategies::InternalToolStrategy.build_for(
         :nonexistent, params: {}, session: nil, tool_result_id: 1
       )
     end
-    assert_match(/No internal tool definition/, error.message)
   end
 
   test "build_for runs prepare block and merges results" do

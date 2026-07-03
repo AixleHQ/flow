@@ -240,7 +240,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     tools_idx = builders.index(ContextBuilders::Tools)
 
     assert_not_nil bc_idx, "BoardContext must be in BUILDERS"
-    assert_operator bc_idx, :>, wf_idx, "BoardContext must be after WorkflowContext"
-    assert_operator bc_idx, :<, tools_idx, "BoardContext must be before Tools"
+    assert bc_idx > wf_idx, "BoardContext must be after WorkflowContext"
+    assert bc_idx < tools_idx, "BoardContext must be before Tools"
   end
 end

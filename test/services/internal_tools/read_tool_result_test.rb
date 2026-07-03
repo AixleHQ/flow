@@ -54,7 +54,7 @@ class InternalTools::ReadToolResultTest < ActiveSupport::TestCase
     result = handler.execute
 
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "not found"
+    assert result[:stderr].include?("not found")
   end
 
   test "returns failed state with error field" do

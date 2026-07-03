@@ -114,7 +114,7 @@ module Coder
         Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "true")
       end
 
-      assert captured_opts[:pgroup]
+      assert_equal true, captured_opts[:pgroup]
     end
 
     test "returns stdout, stderr, exit_code on a normal run" do
@@ -123,7 +123,7 @@ module Coder
         assert_equal 0, result[:exit_code]
         assert_equal "hi", result[:stdout]
         assert_equal "warn", result[:stderr]
-        refute result[:truncated]
+        assert_equal false, result[:truncated]
       end
     end
 
@@ -141,7 +141,7 @@ module Coder
         result = Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "noop", max_bytes: 128)
         assert result[:truncated]
         assert_equal 1024, result[:stdout_bytes_total]
-        assert_operator result[:stdout].bytesize, :<=, 128
+        assert result[:stdout].bytesize <= 128
       end
     end
 
@@ -177,7 +177,7 @@ module Coder
       Open3.stub(:popen3, stub) do
         result = Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "yes", max_bytes: cap)
         assert result[:truncated]
-        assert_operator result[:stdout].bytesize, :<=, cap, "stdout slice must respect max_bytes"
+        assert result[:stdout].bytesize <= cap, "stdout slice must respect max_bytes"
       end
 
       # The bounded reader should have stopped well under the source size — a

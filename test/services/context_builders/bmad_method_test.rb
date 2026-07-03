@@ -121,8 +121,8 @@ class ContextBuilders::BmadMethodTest < ActiveSupport::TestCase
     output_idx = builders.index(ContextBuilders::OutputRules)
 
     assert_not_nil bmad_idx, "BmadMethod must be in BUILDERS"
-    assert_operator bmad_idx, :>, resources_idx, "BmadMethod must be after Resources"
-    assert_operator bmad_idx, :<, output_idx, "BmadMethod must be before OutputRules"
+    assert bmad_idx > resources_idx, "BmadMethod must be after Resources"
+    assert bmad_idx < output_idx, "BmadMethod must be before OutputRules"
   end
 
   # -- AC #5: applicable? returns false when bmad_install_status is "failed" --

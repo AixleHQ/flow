@@ -25,7 +25,7 @@ class WorkflowConfigTest < ActiveSupport::TestCase
   end
 
   test "inherit_all_project_resources returns false by default" do
-    refute @workflow.inherit_all_project_resources
+    assert_equal false, @workflow.inherit_all_project_resources
   end
 
   test "config round-trip preserves base_tool_ids" do
@@ -48,7 +48,7 @@ class WorkflowConfigTest < ActiveSupport::TestCase
     @workflow.merge_config!("inherit_all_project_resources" => true)
     @workflow.reload
 
-    assert @workflow.inherit_all_project_resources
+    assert_equal true, @workflow.inherit_all_project_resources
   end
 
   test "empty config returns safe defaults" do
@@ -59,6 +59,6 @@ class WorkflowConfigTest < ActiveSupport::TestCase
     assert_equal [], @workflow.base_skill_ids
     assert_equal [], @workflow.base_mcp_server_ids
     assert_equal [], @workflow.base_asset_ids
-    refute @workflow.inherit_all_project_resources
+    assert_equal false, @workflow.inherit_all_project_resources
   end
 end

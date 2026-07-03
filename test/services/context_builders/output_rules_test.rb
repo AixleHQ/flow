@@ -64,6 +64,6 @@ class ContextBuilders::OutputRulesTest < ActiveSupport::TestCase
     critical_pos = rendered.index("<critical-rules")
     output_pos = rendered.index("<output-rules")
 
-    assert_operator critical_pos, :<, output_pos, "critical-rules must appear before output-rules"
+    assert critical_pos < output_pos, "critical-rules must appear before output-rules"
   end
 end

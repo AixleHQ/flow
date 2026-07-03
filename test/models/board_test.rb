@@ -18,20 +18,20 @@ class BoardTest < ActiveSupport::TestCase
 
   test "invalid without name" do
     board = Board.new(project: @project)
-    refute_predicate board, :valid?
+    refute board.valid?
     assert board.errors[:name].present?
   end
 
   test "invalid without project" do
     board = Board.new(name: "Board")
-    refute_predicate board, :valid?
+    refute board.valid?
     assert board.errors[:project].present?
   end
 
   test "enforces one board per project" do
     Board.create!(name: "First", project: @project)
     duplicate = Board.new(name: "Second", project: @project)
-    refute_predicate duplicate, :valid?
+    refute duplicate.valid?
     assert duplicate.errors[:project_id].present?
   end
 
@@ -59,7 +59,7 @@ class BoardTest < ActiveSupport::TestCase
   test "has_many board_columns ordered by position" do
     board = Board.create!(name: "Board", project: @project)
     assert_equal [], board.board_columns.to_a
-    assert_respond_to board, :board_columns
+    assert board.respond_to?(:board_columns)
   end
 
   # == create_from_preset ==

@@ -18,7 +18,7 @@ module ContainerStrategies
     # == Inheritance Tests ==
 
     test "inherits from AgentBaseStrategy" do
-      assert_operator AgentSessionStrategy, :<, AgentBaseStrategy
+      assert AgentSessionStrategy < AgentBaseStrategy
     end
 
     # == Environment Variables Tests ==

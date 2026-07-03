@@ -22,7 +22,7 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     collection = TemporalWorkflowRegistry::ActivitiesCollection.new(activities_data)
 
-    assert_kind_of TemporalWorkflowRegistry::ActivityDef, collection.pull_agent_image_activity
+    assert collection.pull_agent_image_activity.is_a?(TemporalWorkflowRegistry::ActivityDef)
     assert_equal "container-queue", collection.pull_agent_image_activity.task_queue
   end
 
@@ -38,8 +38,8 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
     activities_data = [ { "name" => "my_activity", "task_queue" => "queue" } ]
     collection = TemporalWorkflowRegistry::ActivitiesCollection.new(activities_data)
 
-    assert_respond_to collection, :my_activity
-    refute_respond_to collection, :unknown_activity
+    assert collection.respond_to?(:my_activity)
+    refute collection.respond_to?(:unknown_activity)
   end
 
   test "ActivitiesCollection to_h returns activities hash" do
@@ -48,7 +48,7 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     hash = collection.to_h
 
-    assert_kind_of Hash, hash
+    assert hash.is_a?(Hash)
     assert hash.key?("my_activity")
   end
 
@@ -63,7 +63,7 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     assert_equal "AgentContainerWorkflow", workflow.name
     assert_equal "web", workflow.owner
-    assert_kind_of TemporalWorkflowRegistry::ActivitiesCollection, workflow.activities
+    assert workflow.activities.is_a?(TemporalWorkflowRegistry::ActivitiesCollection)
   end
 
   # == WorkflowsCollection Tests ==
@@ -79,7 +79,7 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
-    assert_kind_of TemporalWorkflowRegistry::WorkflowDef, collection.container_workflow
+    assert collection.container_workflow.is_a?(TemporalWorkflowRegistry::WorkflowDef)
     assert_equal "web", collection.container_workflow.owner
   end
 
@@ -87,7 +87,7 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
     workflows_data = [ { "name" => "test_workflow", "owner" => "queue", "activities" => [] } ]
     collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
-    assert_kind_of TemporalWorkflowRegistry::WorkflowDef, collection["test_workflow"]
+    assert collection["test_workflow"].is_a?(TemporalWorkflowRegistry::WorkflowDef)
   end
 
   test "WorkflowsCollection all returns all workflows" do
@@ -120,8 +120,8 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
     workflows_data = [ { "name" => "my_workflow", "owner" => "queue", "activities" => [] } ]
     collection = TemporalWorkflowRegistry::WorkflowsCollection.new(workflows_data)
 
-    assert_respond_to collection, :my_workflow
-    refute_respond_to collection, :unknown_workflow
+    assert collection.respond_to?(:my_workflow)
+    refute collection.respond_to?(:unknown_workflow)
   end
 
   # == Class Methods Tests ==
@@ -129,13 +129,13 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
   test "workflows returns WorkflowsCollection" do
     workflows = TemporalWorkflowRegistry.workflows
 
-    assert_kind_of TemporalWorkflowRegistry::WorkflowsCollection, workflows
+    assert workflows.is_a?(TemporalWorkflowRegistry::WorkflowsCollection)
   end
 
   test "workflows_data loads from YAML" do
     data = TemporalWorkflowRegistry.workflows_data
 
-    assert_kind_of Hash, data
+    assert data.is_a?(Hash)
     assert data.key?("workflows")
   end
 
@@ -145,6 +145,6 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     workflow = TemporalWorkflowRegistry.container_workflow
 
-    assert_kind_of TemporalWorkflowRegistry::WorkflowDef, workflow
+    assert workflow.is_a?(TemporalWorkflowRegistry::WorkflowDef)
   end
 end

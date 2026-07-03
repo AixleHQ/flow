@@ -365,7 +365,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     settings = JSON.parse(captured_content)
     assert_equal 5, settings["files.exclude"].size
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
-      assert settings.dig("files.exclude", path), "Expected #{path} to be excluded"
+      assert_equal true, settings.dig("files.exclude", path), "Expected #{path} to be excluded"
     end
   end
 
@@ -396,9 +396,9 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
 
     settings = JSON.parse(captured_content)
     assert_equal 14, settings["editor.fontSize"]
-    assert settings.dig("files.exclude", "node_modules")
+    assert_equal true, settings.dig("files.exclude", "node_modules")
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
-      assert settings.dig("files.exclude", path), "Expected #{path} to be excluded"
+      assert_equal true, settings.dig("files.exclude", path), "Expected #{path} to be excluded"
     end
   end
 

@@ -93,8 +93,8 @@ module Agents
       assert files.key?("/home/cursor/.cursor/cli-config.json")
       cli_config = JSON.parse(files["/home/cursor/.cursor/cli-config.json"])
       assert_equal 1, cli_config["version"]
-      assert_includes cli_config["permissions"]["allow"], "Shell(git)"
-      assert_includes cli_config["permissions"]["deny"], "Shell(sudo)"
+      assert cli_config["permissions"]["allow"].include?("Shell(git)")
+      assert cli_config["permissions"]["deny"].include?("Shell(sudo)")
       assert cli_config.dig("network", "useHttp1ForAgent")
 
       # Workspace trust

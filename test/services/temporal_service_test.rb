@@ -43,25 +43,25 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
   test "enabled? returns false when setting is false" do
     Settings.temporal.stubs(:enabled).returns("false")
-    refute_predicate TemporalService, :enabled?
+    refute TemporalService.enabled?
   end
 
   test "enabled? returns false when setting is nil" do
     Settings.temporal.stubs(:enabled).returns(nil)
-    refute_predicate TemporalService, :enabled?
+    refute TemporalService.enabled?
   end
 
   # == Activities & Workflows Loading ==
 
   test "activities returns descendants of Activities::Base" do
     activities = TemporalService.activities
-    assert_kind_of Array, activities
+    assert activities.is_a?(Array)
     assert activities.all? { |a| a < Activities::Base }
   end
 
   test "workflows returns descendants of Workflows::Base" do
     workflows = TemporalService.workflows
-    assert_kind_of Array, workflows
+    assert workflows.is_a?(Array)
     assert workflows.all? { |w| w < Workflows::Base }
   end
 
@@ -95,7 +95,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     # start_local returns nil (stubbed)
     result = TemporalService.start_workflow(workflow, { test: true })
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_equal "Temporal is disabled", result[:error]
   end
 
@@ -118,7 +118,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.start_workflow(workflow, { test: true }, id: "custom-id", execution_timeout: 3600)
 
-    assert result[:ok]
+    assert_equal true, result[:ok]
     assert_equal "custom-id", result[:workflow_id]
     assert_equal "run-123", result[:run_id]
   end
@@ -132,7 +132,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.start_workflow(workflow, { test: true })
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_match(/Connection refused/, result[:error])
   end
 
@@ -183,7 +183,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.send_signal("workflow-123", "container_finished")
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_equal "Temporal is disabled", result[:error]
   end
 
@@ -201,7 +201,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.send_signal("workflow-123", "container_finished")
 
-    assert result[:ok]
+    assert_equal true, result[:ok]
   end
 
   test "send_signal handles temporal errors" do
@@ -213,7 +213,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.send_signal("workflow-123", "test_signal")
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_match(/Connection failed/, result[:error])
   end
 
@@ -224,7 +224,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.cancel_workflow("workflow-123")
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_equal "Temporal is disabled", result[:error]
   end
 
@@ -242,7 +242,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.cancel_workflow("workflow-123")
 
-    assert result[:ok]
+    assert_equal true, result[:ok]
   end
 
   test "cancel_workflow handles temporal errors" do
@@ -254,7 +254,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     result = TemporalService.cancel_workflow("workflow-123")
 
-    refute result[:ok]
+    assert_equal false, result[:ok]
     assert_match(/Workflow not found/, result[:error])
   end
 
@@ -266,7 +266,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     definitions = TemporalService.schedule_definitions
 
-    assert_kind_of Array, definitions
+    assert definitions.is_a?(Array)
   end
 
   test "create_schedule creates schedule when enabled" do

@@ -456,9 +456,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     assert_not_nil session.context_metadata
     assert_equal session.id, session.context_metadata["session_id"]
-    assert_kind_of Array, session.context_metadata["applied_builders"]
-    assert_kind_of Array, session.context_metadata["sections"]
-    assert_kind_of Numeric, session.context_metadata["build_time_ms"]
+    assert session.context_metadata["applied_builders"].is_a?(Array)
+    assert session.context_metadata["sections"].is_a?(Array)
+    assert session.context_metadata["build_time_ms"].is_a?(Numeric)
   end
 
   test "inject_context_file writes to correct path per agent type" do
@@ -992,8 +992,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not_nil repo_idx, "repositories step should be logged"
     assert_not_nil bmad_idx, "bmad_method step should be logged"
     assert_not_nil ctx_idx, "context_file step should be logged"
-    assert_operator bmad_idx, :>, repo_idx, "bmad_method should run after repositories"
-    assert_operator bmad_idx, :<, ctx_idx, "bmad_method should run before context_file"
+    assert bmad_idx > repo_idx, "bmad_method should run after repositories"
+    assert bmad_idx < ctx_idx, "bmad_method should run before context_file"
   end
 
   test "assemble_session_context records bmad_method in context_log" do

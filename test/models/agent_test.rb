@@ -23,7 +23,7 @@ class AgentTest < ActiveSupport::TestCase
 
   test "invalid without name" do
     agent = Agent.new(title: "Test", persona: "Test", scope: @company)
-    refute_predicate agent, :valid?
+    refute agent.valid?
     assert agent.errors[:name].present?
   end
 
@@ -36,7 +36,7 @@ class AgentTest < ActiveSupport::TestCase
 
   test "invalid with name starting with number" do
     agent = Agent.new(name: "1agent", title: "Test", persona: "Test", scope: @company)
-    refute_predicate agent, :valid?
+    refute agent.valid?
   end
 
   test "name is auto-downcased and sanitized" do
@@ -54,7 +54,7 @@ class AgentTest < ActiveSupport::TestCase
 
     # Same name in same scope is NOT OK
     agent_dup = Agent.new(name: "shared", title: "T3", persona: "P3", scope: @company)
-    refute_predicate agent_dup, :valid?
+    refute agent_dup.valid?
     assert agent_dup.errors[:name].any? { |e| e.include?("already exists") }
   end
 
@@ -105,7 +105,7 @@ class AgentTest < ActiveSupport::TestCase
 
   test "visible_for_project returns ActiveRecord::Relation" do
     result = Agent.visible_for_project(@project)
-    assert_kind_of ActiveRecord::Relation, result
+    assert result.is_a?(ActiveRecord::Relation)
   end
 
   # == scope_indicator ==
