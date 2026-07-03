@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :session_log do
-    association :terminal_session
+    terminal_session
     name { "session.log" }
     file_size { 2048 }
     content_type { "text/plain" }

@@ -12,8 +12,8 @@ class TarGzPackerTest < ActiveSupport::TestCase
     }
 
     archive = TarGzPacker.pack(files)
-    assert archive.is_a?(String)
-    assert archive.bytesize > 0
+    assert_kind_of String, archive
+    assert_operator archive.bytesize, :>, 0
 
     extracted = {}
     io = StringIO.new(archive)
@@ -31,7 +31,7 @@ class TarGzPackerTest < ActiveSupport::TestCase
 
   test "pack with empty files hash produces valid empty archive" do
     archive = TarGzPacker.pack({})
-    assert archive.is_a?(String)
-    assert archive.bytesize > 0
+    assert_kind_of String, archive
+    assert_operator archive.bytesize, :>, 0
   end
 end

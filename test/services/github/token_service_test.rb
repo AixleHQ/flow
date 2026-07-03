@@ -14,8 +14,10 @@ module Github
       @pem_path = Rails.root.join("tmp", "test-github-app.pem")
       generate_test_pem(@pem_path)
 
-      Settings.github.app_id = "999"
-      Settings.github.private_key_path = @pem_path.to_s
+      # Stub, don't assign: assigning mutates the process-global Settings and
+      # leaks a path to a deleted pem into every later test in this process.
+      Settings.github.stubs(:app_id).returns("999")
+      Settings.github.stubs(:private_key_path).returns(@pem_path.to_s)
     end
 
     teardown do
@@ -69,7 +71,7 @@ module Github
     end
 
     test "raises ConfigurationError when app_id is blank" do
-      Settings.github.app_id = nil
+      Settings.github.stubs(:app_id).returns(nil)
 
       assert_raises(Github::TokenService::ConfigurationError) do
         Github::TokenService.new(@integration)

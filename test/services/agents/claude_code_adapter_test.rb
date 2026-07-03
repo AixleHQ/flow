@@ -84,7 +84,7 @@ module Agents
 
       assert_equal "sk-xxx", config["primaryApiKey"]
       assert_equal "u1", config["userID"]
-      assert_equal true, config["hasCompletedOnboarding"]
+      assert config["hasCompletedOnboarding"]
       assert_equal "2.1.14", config["lastOnboardingVersion"]
       assert config["projects"].present?
     end

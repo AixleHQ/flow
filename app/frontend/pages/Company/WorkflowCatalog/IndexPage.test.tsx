@@ -55,7 +55,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zzz');
 
     // The search value is debounced (300ms) before the empty state appears.
-    await waitFor(() => expect(screen.getByText('No workflows match your search')).toBeInTheDocument());
+    expect(await screen.findByText('No workflows match your search')).toBeInTheDocument();
   });
 
   it('opens the duplicate modal for the chosen workflow', async () => {

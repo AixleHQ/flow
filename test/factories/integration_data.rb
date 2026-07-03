@@ -2,7 +2,7 @@
 
 FactoryBot.define do
   factory :integration_data do
-    association :integration
+    integration
     sequence(:key) { |n| "key-#{n}" }
     value { {} }
     expires_at { nil }

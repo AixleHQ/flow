@@ -68,9 +68,11 @@ module Agents
       assert files.key?("/home/gemini/.gemini/settings.json")
       settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
       assert_equal "gemini-api-key", settings.dig("security", "auth", "selectedType")
-      assert_equal false, settings.dig("security", "folderTrust", "enabled")
+      # Exact JSON booleans are the contract: the adapter deliberately writes
+      # `false`/`true` into settings.json; a missing key (nil) must fail here.
+      assert_equal false, settings.dig("security", "folderTrust", "enabled") # rubocop:disable Minitest/RefuteFalse
       assert_equal "auto_edit", settings.dig("tools", "approvalMode")
-      assert_equal true, settings.dig("tools", "autoAccept")
+      assert_equal true, settings.dig("tools", "autoAccept") # rubocop:disable Minitest/AssertTruthy
     end
 
     test "auth_setup_files pre-trusts the workspace so auth does not prompt" do

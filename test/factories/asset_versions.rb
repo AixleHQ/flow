@@ -2,8 +2,8 @@
 
 FactoryBot.define do
   factory :asset_version do
-    association :asset
-    association :uploaded_by, factory: :user
+    asset
+    uploaded_by factory: %i[user]
     version { 1 }
     content_type { "text/markdown" }
     file_size { 1024 }

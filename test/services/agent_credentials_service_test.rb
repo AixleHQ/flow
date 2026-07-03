@@ -73,14 +73,14 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
   test "delegates config_path to adapter" do
     service = AgentCredentialsService.new("claude_code")
 
-    assert service.config_path.is_a?(String)
-    assert service.config_path.include?(".claude")
+    assert_kind_of String, service.config_path
+    assert_includes service.config_path, ".claude"
   end
 
   test "delegates home_dir to adapter" do
     service = AgentCredentialsService.new("claude_code")
 
-    assert service.home_dir.is_a?(String)
+    assert_kind_of String, service.home_dir
   end
 
   # == Extract from Container Tests ==
@@ -100,7 +100,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
     credentials = service.extract_from_container("container123")
 
-    assert credentials.is_a?(Hash)
+    assert_kind_of Hash, credentials
     assert credentials[:api_key].present? || credentials["primaryApiKey"].present?
   end
 
@@ -166,12 +166,11 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     runtime_mock = mock("runtime")
     service.instance_variable_set(:@runtime, runtime_mock)
 
-    runtime_mock.stubs(:write_file).returns(true)
+    runtime_mock.expects(:write_file).at_least_once.returns(true)
 
     credentials = { api_key: "test-key", account_id: "user-123" }
 
     service.write_to_container("container123", credentials)
-    assert true
   end
 
   test "write_to_container raises on runtime error" do

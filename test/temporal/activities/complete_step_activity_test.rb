@@ -31,9 +31,9 @@ module Activities
 
         result = @activity.execute({ "step_run_id" => step_run.id })
 
-        assert_equal true, result["quota_error"]
-        assert_equal true, result["failed"]
-        assert_equal false, result["valid"]
+        assert result["quota_error"]
+        assert result["failed"]
+        refute result["valid"]
 
         step_run.reload
         assert_equal "failed", step_run.state
@@ -54,7 +54,7 @@ module Activities
         result = @activity.execute({ "step_run_id" => step_run.id })
 
         assert_nil result["quota_error"]
-        assert_equal true, result["failed"]
+        assert result["failed"]
 
         step_run.reload
         assert_nil step_run.error_category
@@ -82,7 +82,7 @@ module Activities
 
         result = @activity.execute({ "step_run_id" => step_run.id })
 
-        assert_equal true, result["quota_error"]
+        assert result["quota_error"]
         step_run.reload
         assert_equal "failed", step_run.state
         assert_equal "quota_exceeded", step_run.error_category
@@ -100,7 +100,7 @@ module Activities
 
         result = @activity.execute({ "step_run_id" => step_run.id })
 
-        assert_equal true, result["quota_error"]
+        assert result["quota_error"]
         @run.reload
         assert_equal "quota_exceeded", @run.failure_reason
         assert_nil @run.failed_agent_credential_id

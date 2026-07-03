@@ -28,10 +28,22 @@ check: be_check fe_check
 # `check_all` keeps the combined one-command run for local use.
 CHECK_RESULTS := tmp/check_results
 
+# Backend coverage floor, enforced only on full-suite runs (see test/test_helper.rb).
+# Ratchet upward as coverage grows — never lower it. Measured 78.15% on 2026-07-03.
+COVERAGE_MIN := 77
+
+# Two concurrent `rails test` invocations are mutually destructive: parallel test
+# workers drop/recreate the shared aixle_test_N databases, so overlapping runs
+# corrupt each other's schemas (observed 2026-07-03: pg_class duplicate-key storms).
+# flock serializes make-driven suite runs (BusyBox flock: blocking exclusive lock,
+# no timeout flag); runs started outside make must still never overlap — coordinate
+# agent sessions working in the same checkout/worktrees.
+TEST_LOCK := flock tmp/.rails-test.lock
+
 # Backend (Ruby) checks, in parallel. Each subshell records its own exit code, so `wait` never aborts.
 define run_be_checks
 	@echo "Running rails-test, rubocop, brakeman in parallel..."
-	@( bundle exec rails test                                       > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
+	@( COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
 	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
 	 wait
@@ -69,7 +81,11 @@ define summarize_checks
 	echo "=== Coverage (line %) ==="; \
 	if [ -f coverage/.last_run.json ]; then \
 	  be=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/.last_run.json"))["result"]["line"]; rescue; puts "n/a"; end' 2>/dev/null); \
-	  printf "  backend  (rails / simplecov): %s%%\n" "$$be"; \
+	  stale=""; \
+	  if [ -f $(CHECK_RESULTS)/rails-test.status ] && [ "$$(cat $(CHECK_RESULTS)/rails-test.status)" != "0" ]; then \
+	    stale=" (may be stale: simplecov rewrites .last_run.json only on a passing run — real value is in rails-test.log)"; \
+	  fi; \
+	  printf "  backend  (rails / simplecov): %s%%%s\n" "$$be" "$$stale"; \
 	fi; \
 	if [ -f coverage/frontend/coverage-summary.json ]; then \
 	  fe=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/frontend/coverage-summary.json"))["total"]["lines"]["pct"]; rescue; puts "n/a"; end' 2>/dev/null); \
@@ -127,9 +143,9 @@ typescript:
 # Run all tests
 test: rails-test
 
-# Run Rails tests
+# Run Rails tests (full suite → coverage floor applies; lock prevents overlapping suite runs)
 rails-test:
-	bundle exec rails test
+	COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test
 
 # Run frontend tests (Vitest, node-only — no backend). Runs inside the web container; also part of check_all.
 fe-test:

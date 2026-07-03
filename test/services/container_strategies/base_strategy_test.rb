@@ -236,7 +236,7 @@ module ContainerStrategies
       config = strategy.build_host_config
 
       assert_equal Settings.docker.network, config["NetworkMode"]
-      assert_equal false, config["AutoRemove"]
+      refute config["AutoRemove"]
     end
 
     test "build_exposed_ports returns nil by default" do

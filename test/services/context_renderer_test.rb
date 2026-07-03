@@ -42,9 +42,9 @@ class ContextRendererTest < ActiveSupport::TestCase
     mi_pos = output.index("<mi ")
     bc_pos = output.index("<bc ")
 
-    assert tc_pos < ti_pos, "top/critical should come before top/info"
-    assert ti_pos < mi_pos, "top/info should come before middle/important"
-    assert mi_pos < bc_pos, "middle/important should come before bottom/critical"
+    assert_operator tc_pos, :<, ti_pos, "top/critical should come before top/info"
+    assert_operator ti_pos, :<, mi_pos, "top/info should come before middle/important"
+    assert_operator mi_pos, :<, bc_pos, "middle/important should come before bottom/critical"
   end
 
   test "multiple sections are joined by double newlines" do
@@ -91,7 +91,7 @@ class ContextRendererTest < ActiveSupport::TestCase
       ContextSection.new(tag: "previous-steps", priority: :info, content: build_previous_steps_content(large_content))
     ]
     output = ContextRenderer.render(sections)
-    assert output.length < large_content.length + 500
+    assert_operator output.length, :<, large_content.length + 500
   end
 
   test "critical sections never compressed" do
@@ -143,7 +143,7 @@ class ContextRendererTest < ActiveSupport::TestCase
     output = ContextRenderer.render(sections)
 
     comment_matches = output.scan(/\*\*Author\d+\*\*/)
-    assert comment_matches.length <= 3
+    assert_operator comment_matches.length, :<=, 3
   end
 
   private

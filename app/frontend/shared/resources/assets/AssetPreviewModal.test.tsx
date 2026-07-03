@@ -102,7 +102,7 @@ describe('AssetPreviewModal', () => {
 
     renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/txt" />);
 
-    await waitFor(() => expect(screen.getByText('hello inline preview')).toBeInTheDocument());
+    expect(await screen.findByText('hello inline preview')).toBeInTheDocument();
     expect(fetchSpy).toHaveBeenCalledWith(
       'https://files.example/notes.txt',
       expect.objectContaining({ credentials: 'include' }),
@@ -270,7 +270,7 @@ describe('AssetPreviewModal', () => {
 
     renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/readme" />);
 
-    await waitFor(() => expect(screen.getByText(/preview not available/i)).toBeInTheDocument());
+    expect(await screen.findByText(/preview not available/i)).toBeInTheDocument();
     expect(screen.queryByText('should not be shown')).not.toBeInTheDocument();
 
     fetchSpy.mockRestore();
@@ -365,9 +365,11 @@ describe('AssetPreviewModal', () => {
         createdAt: null,
       },
     });
-    const second = renderPage(<AssetPreviewModal asset={gbAsset} onClose={vi.fn()} downloadUrl="/download/movie" />);
+    const { unmount: unmountGb } = renderPage(
+      <AssetPreviewModal asset={gbAsset} onClose={vi.fn()} downloadUrl="/download/movie" />,
+    );
     expect(screen.getAllByText('2.0 GB').length).toBeGreaterThan(0);
-    second.unmount();
+    unmountGb();
 
     const noSizeAsset = makeAsset({ latestVersion: null });
     renderPage(<AssetPreviewModal asset={noSizeAsset} onClose={vi.fn()} downloadUrl="/download/none" />);

@@ -156,13 +156,13 @@ module Agents
         end
       end.new
 
-      refute adapter_with_optional.requires_env_fields?
+      refute_predicate adapter_with_optional, :requires_env_fields?
     end
 
     test "requires_env_fields? returns false when empty" do
       base = BaseAdapter.new
 
-      refute base.requires_env_fields?
+      refute_predicate base, :requires_env_fields?
     end
 
     # == JSON Parsing Tests ==

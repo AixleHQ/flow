@@ -119,6 +119,8 @@ group :development do
 
   # Rubocop and related gems
   gem "rubocop"
+  gem "rubocop-factory_bot"
+  gem "rubocop-minitest"
   gem "rubocop-performance"
   gem "rubocop-rails"
   gem "rubocop-rails-omakase"
