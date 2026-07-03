@@ -77,6 +77,13 @@ interface NamedItem {
   id: number;
   name: string;
 }
+
+// A tool tag the picker shows as one labeled group (e.g. "Board management").
+interface ToolGroup {
+  tag: string;
+  label: string;
+  toolIds: number[];
+}
 interface SubStep {
   id: number;
   name: string;
@@ -143,6 +150,7 @@ interface Props {
   steps: Step[];
   agents?: NamedItem[];
   tools?: NamedItem[];
+  toolGroups?: ToolGroup[];
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   assets?: NamedItem[];
@@ -409,6 +417,7 @@ const BuilderPage = () => {
     steps: initialSteps,
     agents: rawAgents,
     tools: rawTools,
+    toolGroups: rawToolGroups,
     skills: rawSkills,
     mcpServers: rawMcpServers,
     assets: rawAssets,
@@ -421,6 +430,7 @@ const BuilderPage = () => {
 
   const agents = rawAgents ?? [];
   const tools = rawTools ?? [];
+  const toolGroups = rawToolGroups ?? [];
   const skills = rawSkills ?? [];
   const mcpServers = rawMcpServers ?? [];
   const assets = rawAssets ?? [];
@@ -711,6 +721,34 @@ const BuilderPage = () => {
     Array.isArray(items)
       ? items.filter((i) => i?.id != null).map((i) => ({ value: String(i.id), label: i.name ?? '' }))
       : [];
+
+  // Tool options grouped by tag catalog: tools in a group (e.g. board) render
+  // under that group's label; everything else stays ungrouped. Mantine renders
+  // `{ group, items }` entries as labeled sections.
+  const toGroupedToolData = (items: NamedItem[], groups: ToolGroup[]) => {
+    const labelByToolId = new Map<number, string>();
+    groups.forEach((g) => g.toolIds.forEach((id) => labelByToolId.set(id, g.label)));
+
+    const grouped = new Map<string, { value: string; label: string }[]>();
+    const ungrouped: { value: string; label: string }[] = [];
+
+    (Array.isArray(items) ? items : [])
+      .filter((i) => i?.id != null)
+      .forEach((i) => {
+        const opt = { value: String(i.id), label: i.name ?? '' };
+        const groupLabel = labelByToolId.get(i.id);
+        if (groupLabel) {
+          if (!grouped.has(groupLabel)) grouped.set(groupLabel, []);
+          grouped.get(groupLabel)!.push(opt);
+        } else {
+          ungrouped.push(opt);
+        }
+      });
+
+    return [...Array.from(grouped, ([group, groupItems]) => ({ group, items: groupItems })), ...ungrouped];
+  };
+
+  const toolSelectData = toGroupedToolData(tools, toolGroups);
   const toStringArr = (ids: number[]) => (Array.isArray(ids) ? ids : []).map(String);
   const toNumberArr = (vals: string[]) => (Array.isArray(vals) ? vals : []).map(Number);
 
@@ -936,7 +974,7 @@ const BuilderPage = () => {
                     <MultiSelect
                       label="Tools"
                       size="xs"
-                      data={toSelectData(tools)}
+                      data={toolSelectData}
                       value={toStringArr(workflow.baseToolIds)}
                       onChange={(v) => updateWorkflowField('baseToolIds', toNumberArr(v))}
                       disabled={readOnly || workflow.inheritAllProjectResources}
@@ -1233,7 +1271,7 @@ const BuilderPage = () => {
                         <MultiSelect
                           label="Tools"
                           size="sm"
-                          data={toSelectData(tools)}
+                          data={toolSelectData}
                           value={toStringArr(selectedStep.toolIds)}
                           onChange={(v) => updateStepField(selectedStep.id, 'toolIds', toNumberArr(v), true)}
                           placeholder="Select tools..."

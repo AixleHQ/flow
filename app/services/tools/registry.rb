@@ -32,15 +32,15 @@ module Tools
         definitions.values.select { |d| d.tags.include?(tag.to_sym) }
       end
 
-      # Tags the UI offers as one-click tool groups in pickers (attach the
-      # whole group to a session/step). Service tags (workflow_control,
-      # async_results, session_lifecycle, builder) auto-inject or are
-      # builder-bound and stay out of the UI entirely.
-      UI_GROUPS = { board: "Board management" }.freeze
-
+      # Groups the tool picker offers as one-click attach ("Board management"
+      # attaches every board tool). Driven by TagCatalog — a group entry with
+      # its user-attachable tool names.
       def ui_groups
-        UI_GROUPS.map do |tag, label|
-          { tag: tag.to_s, label: label, tool_names: tagged(tag).select(&:user_attachable).map(&:name).sort }
+        TagCatalog.ui_entries.select { |e| e.presentation == :group }.filter_map do |e|
+          names = tagged(e.tag).select(&:user_attachable).map(&:name).sort
+          next if names.empty?
+
+          { tag: e.tag.to_s, label: e.label, tool_names: names }
         end
       end
 
