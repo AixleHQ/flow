@@ -28,7 +28,7 @@ module Tools
       MCP::Server.new(
         name: "aixle",
         tools: Registry.for_audience(:user).sort_by(&:name).map { |defn| define_tool(defn) },
-        prompts: [ build_workflow_prompt ],
+        prompts: [ build_workflow_prompt, author_step_prompt ],
         server_context: { user: user }
       )
     end
@@ -69,22 +69,32 @@ module Tools
       }
     end
 
-    # Complex flows (building a workflow) need more guidance than tool
-    # descriptions can carry — served as an MCP prompt the client can pull in.
+    # Complex flows need more guidance than tool descriptions can carry —
+    # served as MCP prompts the client can pull in on demand.
     def build_workflow_prompt
+      text = PersonalMCPRequestHandler.workflow_guide
       MCP::Prompt.define(
         name: "build_workflow",
-        description: "Guide for building an Aixle workflow end-to-end with the workflow tools: " \
-                     "platform concepts, step/sub-step structure, boards and triggers."
+        description: "How to build an Aixle workflow end-to-end: concepts, the order to call the " \
+                     "workflow tools, step/sub-step structure, running and inspecting runs."
       ) do |_args, server_context: nil|
         MCP::Prompt::Result.new(
           description: "Aixle workflow building guide",
-          messages: [
-            MCP::Prompt::Message.new(
-              role: "user",
-              content: { type: "text", text: PersonalMCPRequestHandler.workflow_guide }
-            )
-          ]
+          messages: [ MCP::Prompt::Message.new(role: "user", content: { type: "text", text: text }) ]
+        )
+      end
+    end
+
+    def author_step_prompt
+      text = PersonalMCPRequestHandler.step_guide
+      MCP::Prompt.define(
+        name: "author_step",
+        description: "How to write a good Aixle workflow step: instructions, agent/tools/skills, " \
+                     "sub-steps, dependencies, and failure handling."
+      ) do |_args, server_context: nil|
+        MCP::Prompt::Result.new(
+          description: "Aixle step authoring guide",
+          messages: [ MCP::Prompt::Message.new(role: "user", content: { type: "text", text: text }) ]
         )
       end
     end
@@ -93,14 +103,77 @@ module Tools
 
     def self.workflow_guide
       path = Rails.root.join(GUIDE_PATH)
-      base = path.exist? ? path.read : "Aixle system reference is unavailable in this environment."
+      reference = path.exist? ? path.read : "(Aixle system reference is unavailable in this environment.)"
       <<~GUIDE
-        You are building an Aixle workflow through the personal MCP tools.
-        Work top-down: pick the project (list_projects), understand its board
-        (board tools), then create the workflow, its steps and sub-steps, and
-        only then wire triggers. Ask the user before destructive changes.
+        # Building an Aixle workflow
 
-        #{base}
+        A workflow is an ordered set of steps. Each step runs an agent in a
+        container with the tools, skills, MCP servers and files you give it.
+        Steps can depend on other steps (a DAG), and each step can carry
+        sub-steps — a checklist the agent ticks off as it works.
+
+        Build top-down, and prefer inspecting before mutating:
+
+        1. `list_projects` — pick the project; every workflow tool takes its `project_id`.
+        2. `list_workflows` / `get_workflow` — see what already exists before adding.
+        3. `create_workflow` — name + description. Returns the `workflow_id`.
+        4. For each step: `list_agents` to choose an agent, then `create_workflow_step`
+           (name, instructions, agent_id, position). Set `depends_on_step_ids`
+           later with `update_workflow_step` once the steps it needs exist.
+        5. `create_sub_step` — break a step into a checklist when it has several
+           distinct deliverables. See the `author_step` prompt for how to write
+           a good step.
+        6. `reorder_workflow_steps` — fix execution order by passing step ids.
+        7. `trigger_workflow` — start a run (interactive or non_interactive).
+           Track it with `list_workflow_runs` / `get_workflow_run`; stop one with
+           `cancel_workflow_run`.
+
+        Rules:
+        - Ask the user before destructive actions (`delete_workflow`,
+          `delete_workflow_step`).
+        - Everything is scoped to what your account can access — a tool that
+          returns "not allowed" means your role can't do that in this project.
+
+        ---
+
+        Platform reference:
+
+        #{reference}
+      GUIDE
+    end
+
+    def self.step_guide
+      <<~GUIDE
+        # Writing a good Aixle workflow step
+
+        A step is one unit of agent work. Use `create_workflow_step` /
+        `update_workflow_step`; break it into `create_sub_step` items when it has
+        multiple deliverables.
+
+        Instructions (the `instructions` field, markdown):
+        - Say WHAT to do and WHAT to produce — the concrete deliverable and where
+          it goes. Be specific about output files/paths.
+        - Do NOT restate platform mechanics: session-completion rules, /workspace
+          layout, sub-step tracking, or which tools are available. The platform
+          injects those automatically — repeating them wastes context.
+        - Keep it focused on this step alone; earlier steps' outputs are available
+          to later steps that depend on them.
+
+        Wiring:
+        - `agent_id` (from `list_agents`) picks who runs the step.
+        - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
+          only what the step needs (list them with list_project_tools / list_skills /
+          list_mcp_servers).
+        - `depends_on_step_ids` builds the DAG: a step runs after every step it
+          depends on. A step can't be deleted while others depend on it.
+
+        Sub-steps:
+        - One `create_sub_step` per distinct, checkable deliverable.
+        - `required: false` for optional work.
+        - The running agent marks them off, giving progress visibility.
+
+        Prefer `get_workflow` to inspect the current shape before editing, and
+        make one focused change per tool call.
       GUIDE
     end
   end

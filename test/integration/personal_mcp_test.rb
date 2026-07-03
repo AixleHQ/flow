@@ -68,15 +68,20 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_equal [ @project.id ], projects.map { |p| p["id"] }
   end
 
-  test "the build_workflow prompt is served" do
-    body = rpc("prompts/list")
-    names = body.dig("result", "prompts").map { |p| p["name"] }
+  test "the build_workflow and author_step prompts are served" do
+    names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
     assert_includes names, "build_workflow"
+    assert_includes names, "author_step"
 
-    body = rpc("prompts/get", { name: "build_workflow", arguments: {} })
-    text = body.dig("result", "messages").first.dig("content", "text")
-    assert_match(/Aixle/, text)
-    assert_match(/workflow/i, text)
+    wf = rpc("prompts/get", { name: "build_workflow", arguments: {} })
+                   .dig("result", "messages").first.dig("content", "text")
+    assert_match(/create_workflow/, wf)
+    assert_match(/trigger_workflow/, wf)
+
+    step = rpc("prompts/get", { name: "author_step", arguments: {} })
+                     .dig("result", "messages").first.dig("content", "text")
+    assert_match(/instructions/i, step)
+    assert_match(/depends_on_step_ids/, step)
   end
 
   test "the last-used timestamp is touched on requests" do
