@@ -92,6 +92,19 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_not error?(body)
   end
 
+  test "run control: approve / retry / skip delegate to WorkflowService" do
+    run = @workflow.runs.create!(project: @project, user: @user, state: "running")
+    sr = run.step_runs.create!(step: @workflow.steps.create!(name: "S", position: 1), state: "pending")
+    run.stubs(:current_step_run).returns(sr)
+    WorkflowRun.any_instance.stubs(:current_step_run).returns(sr)
+
+    WorkflowService.expects(:approve_step).with(step_run: sr)
+    assert_not error?(call_tool("approve_step_run", { project_id: @project.id, run_id: run.id }))
+
+    WorkflowService.expects(:skip_step).with(step_run: sr, reason: "n/a")
+    assert_not error?(call_tool("skip_step_run", { project_id: @project.id, run_id: run.id, reason: "n/a" }))
+  end
+
   test "list_agents lists project agents" do
     assert_not error?(call_tool("list_agents", { project_id: @project.id }))
   end

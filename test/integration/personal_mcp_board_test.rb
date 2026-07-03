@@ -79,6 +79,39 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal "human", comments.first["author_type"]
   end
 
+  test "board column create / update / reorder / delete" do
+    created = payload(call_tool("create_board_column", { project_id: @project.id, name: "Review", purpose: "PRs" }))
+    cid = created["id"]
+    assert BoardColumn.exists?(cid)
+
+    assert_not error?(call_tool("update_board_column", { project_id: @project.id, column_id: cid, name: "In Review" }))
+    assert_equal "In Review", BoardColumn.find(cid).name
+
+    reordered = call_tool("reorder_board_columns",
+                          { project_id: @project.id, column_ids: [ @done.id, cid, @todo.id ] })
+    assert_not error?(reordered)
+    assert_equal [ @done.id, cid, @todo.id ], @board.board_columns.order(:position).pluck(:id)
+
+    assert_not error?(call_tool("delete_board_column", { project_id: @project.id, column_id: cid }))
+    assert_not BoardColumn.exists?(cid)
+  end
+
+  test "delete_board_column is rejected when the column has tasks" do
+    body = call_tool("delete_board_column", { project_id: @project.id, column_id: @todo.id })
+    assert error?(body)
+    assert_match(/has tasks/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+  end
+
+  test "column management requires project admin (owner)" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    mtoken = member.regenerate_mcp_token!
+
+    body = call_tool("create_board_column", { project_id: @project.id, name: "X" }, token: mtoken)
+    assert error?(body)
+    assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+  end
+
   test "unknown / inaccessible project is not found" do
     other = create(:user, :with_company)
     other_project = create(:project, company: other.company, owner: other)
