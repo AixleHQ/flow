@@ -465,25 +465,30 @@ module Agents
       end
     end
 
-    # Permission mode is always "auto". Both interactive and non_interactive
-    # sessions run headless in a container, so there is nobody to answer a
-    # permission prompt. Earlier the non_interactive path used "dontAsk", but
-    # that mode denies any tool that isn't explicitly allow-listed — which
-    # silently blocked useful tools (e.g. the DesignSync skill). "auto" runs
-    # the same way regardless of session mode and only prompts for tools in
-    # the "ask" list, which we keep empty.
-    PERMISSION_DEFAULT_MODE = "auto"
+    # Permission mode is always bypassPermissions. Both interactive and
+    # non_interactive sessions run headless in a sandbox container, so there is
+    # nobody to answer a permission prompt. "auto" and "dontAsk" both still block
+    # or deny tools that need a scope grant (e.g. DesignSync — "Permission to use
+    # DesignSync has been denied because Claude Code is running in don't ask mode").
+    # bypassPermissions never prompts/denies; the startup warning is pre-accepted
+    # via skipDangerousModePermissionPrompt (see generate_settings).
+    PERMISSION_DEFAULT_MODE = "bypassPermissions"
 
     def generate_settings(mcp_server_names = [], model: nil)
       settings = {
-        # Auto-accept the bypass permissions warning
         "permissions" => {
           "defaultMode" => PERMISSION_DEFAULT_MODE,
           "allow" => allowed_tools(mcp_server_names),
           "deny" => [],
           "ask" => []
         },
+        # Pre-accept the "Bypass Permissions mode" startup warning so a headless
+        # container session never blocks on it. The operative key is
+        # skipDangerousModePermissionPrompt — it is exactly what Claude Code writes
+        # to settings.json when a user clicks through the warning once.
+        # bypassPermissionsWarningAccepted alone does NOT suppress the prompt.
         "bypassPermissionsWarningAccepted" => true,
+        "skipDangerousModePermissionPrompt" => true,
         "enableAllProjectMcpServers" => true,
         "env" => {
           "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s

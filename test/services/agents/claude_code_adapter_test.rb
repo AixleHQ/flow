@@ -100,7 +100,7 @@ module Agents
       main = JSON.parse(files["/home/claude/.claude.json"])
       assert_equal "sk-xxx", main["primaryApiKey"]
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "auto", settings.dig("permissions", "defaultMode")
+      assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
@@ -206,30 +206,41 @@ module Agents
       assert_equal({ "e" => 5 }, base.merge_refreshed_credentials({ "e" => 5 }, { "e" => 3 }))
     end
 
-    test "config_files defaultMode is auto for non_interactive sessions" do
+    test "config_files defaultMode is bypassPermissions for non_interactive sessions" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "auto", settings.dig("permissions", "defaultMode")
+      assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
     end
 
-    test "config_files defaultMode is auto for interactive sessions" do
+    test "config_files defaultMode is bypassPermissions for interactive sessions" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "auto", settings.dig("permissions", "defaultMode")
+      assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
     end
 
-    test "config_files defaults to auto when mode is absent" do
+    test "settings pre-accept the bypass-permissions startup warning" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      # skipDangerousModePermissionPrompt is the key Claude Code writes when the
+      # user clicks through the warning; without it, bypassPermissions still blocks.
+      assert_equal true, settings["skipDangerousModePermissionPrompt"]
+      assert_equal true, settings["bypassPermissionsWarningAccepted"]
+    end
+
+    test "config_files defaults to bypassPermissions when mode is absent" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_equal "auto", settings.dig("permissions", "defaultMode")
+      assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
     end
 
-    test "DesignSync is allow-listed so it runs without a prompt" do
+    test "DesignSync is allow-listed in both session modes" do
       assert_includes @adapter.allowed_tools([]), "DesignSync"
 
-      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
-      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
-      assert_includes settings.dig("permissions", "allow"), "DesignSync"
+      %w[interactive non_interactive].each do |mode|
+        files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: mode })
+        settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+        assert_includes settings.dig("permissions", "allow"), "DesignSync"
+      end
     end
 
     test "config_files includes MCP permissions when enabled_mcp_servers provided" do
