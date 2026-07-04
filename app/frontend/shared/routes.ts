@@ -62,29 +62,14 @@ function $hasPresentOwnProperty(options: any, key: string): boolean {
   return options && options.hasOwnProperty(key) && $isPresent(options[key]);
 }
 
-/** /action_mcp */
+/** /action_mcp(.:format) */
 export function actionMCPPath(options?: object): string {
-  return "/" + "action_mcp" + $buildOptions(options, []);
+  return "/" + "action_mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /action_mcp/up(.:format) */
-export function actionMCPActionMCPHealthCheckPath(options?: object): string {
-  return "/" + "action_mcp" + "/" + "up" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /action_mcp/ */
-export function actionMCPMCPGetPath(options?: object): string {
-  return "/" + "action_mcp" + "/" + $buildOptions(options, []);
-}
-
-/** /action_mcp/ */
-export function actionMCPMCPPostPath(options?: object): string {
-  return "/" + "action_mcp" + "/" + $buildOptions(options, []);
-}
-
-/** /action_mcp/ */
-export function actionMCPMCPDeletePath(options?: object): string {
-  return "/" + "action_mcp" + "/" + $buildOptions(options, []);
+/** /mcp(.:format) */
+export function mcpPath(options?: object): string {
+  return "/" + "mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /webhooks/github(.:format) */
@@ -865,6 +850,16 @@ export function updateDefaultModelProfilePath(options?: object): string {
 /** /profile/destroy_credential(.:format) */
 export function destroyCredentialProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "destroy_credential" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/regenerate_mcp_token(.:format) */
+export function regenerateMCPTokenProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "regenerate_mcp_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/disable_mcp_token(.:format) */
+export function disableMCPTokenProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "disable_mcp_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /profile(.:format) */

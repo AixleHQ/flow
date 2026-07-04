@@ -2,6 +2,34 @@
 
 module InternalTools
   class BoardAddComment < Base
+    tool do
+      display_name "Board Add Comment"
+      description "Add an agent comment to a task on the current board. Markdown is supported in the body field (bold, italic, code blocks, lists, links, tables, etc.)."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id body],
+        properties: {
+          body: {
+            type: "string",
+            description: "Comment body. Markdown is supported (e.g. **bold**, `code`, lists, headings, links)."
+          },
+          tags: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Optional comment tags"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

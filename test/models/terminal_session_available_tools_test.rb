@@ -8,24 +8,17 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
 
-    @workflow_tool1 = create(:tool, :workflow, name: "list_sub_steps",
-      display_name: "List Sub-Steps")
-    @workflow_tool2 = create(:tool, :workflow, name: "mark_sub_step",
-      display_name: "Mark Sub-Step")
-    @workflow_tool3 = create(:tool, :workflow, name: "finish_step",
-      display_name: "Finish Step")
-    @workflow_tool4 = create(:tool, :workflow, name: "fail_step",
-      display_name: "Fail Step")
-    @system_tool = create(:tool, :system, name: "static_analyzer",
+    # Platform tools come from the code registry; shadow rows materialize on
+    # demand. static_analyzer stands in for an explicitly attached container
+    # tool (a custom docker tool row).
+    @system_tool = create(:tool, name: "static_analyzer", scope: @company,
       display_name: "Static Analyzer", docker_image: "analyzer:latest",
       execution_mode: :container)
-    @read_tool_result = create(:tool, :internal, name: "read_tool_result",
-      display_name: "Read Tool Result")
   end
 
   # == Workflow tools: auto-injected for workflow_step sessions ==
 
-  test "workflow tools are included for workflow_step sessions" do
+  test "registry workflow tools are injected for workflow_step sessions without pre-seeded rows" do
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
 
@@ -33,8 +26,30 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     assert_includes names, "list_sub_steps"
     assert_includes names, "mark_sub_step"
-    assert_includes names, "finish_step"
-    assert_includes names, "fail_step"
+    assert_includes names, "board_list_tasks"
+    assert_includes names, "slack_post_message"
+    # DB rows cannot opt into auto-injection anymore — injection rules are
+    # declared in code only.
+    refute_includes names, "static_analyzer"
+  end
+
+  test "non_interactive sessions get session lifecycle tools injected" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+      mode: "non_interactive", initial_prompt: "run")
+
+    names = session.available_tools.map(&:name)
+
+    assert_includes names, "finish_session"
+    assert_includes names, "fail_session"
+  end
+
+  test "interactive sessions do not get session lifecycle tools" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    names = session.available_tools.map(&:name)
+
+    refute_includes names, "finish_session"
+    refute_includes names, "fail_session"
   end
 
   test "workflow tools are NOT included for agent_session" do
@@ -44,8 +59,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     refute_includes names, "list_sub_steps"
     refute_includes names, "mark_sub_step"
-    refute_includes names, "finish_step"
-    refute_includes names, "fail_step"
+    refute_includes names, "slack_post_message"
   end
 
   test "workflow tools are NOT included for auth_setup" do
@@ -182,16 +196,17 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_empty session.available_tools
   end
 
-  test "disabled workflow tools are not included" do
-    create(:tool, :workflow, :disabled, name: "disabled_wf_tool",
-      display_name: "Disabled WF Tool")
+  test "a disabled shadow row keeps its tool out of the injected set" do
+    Tools::Reconciler.run!
+    Tool.code_source.find_by!(name: "mark_sub_step").update_columns(enabled: false)
 
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
 
     names = session.available_tools.map(&:name)
 
-    refute_includes names, "disabled_wf_tool"
+    refute_includes names, "mark_sub_step"
+    assert_includes names, "list_sub_steps"
   end
 
   test "returns array that supports detect for MCP lookup" do
@@ -203,10 +218,10 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_equal "list_sub_steps", found.name
   end
 
-  test "no duplicates when workflow tool is also in session.tools" do
+  test "no duplicates when an injected tool is also in session.tools" do
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
-    session.tools << @workflow_tool1
+    session.tools << Tool.shadow_for(Tools::Registry.fetch("list_sub_steps"))
 
     tools = session.available_tools
     names = tools.map(&:name)

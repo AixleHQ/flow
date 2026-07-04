@@ -2,6 +2,18 @@
 
 module InternalTools
   class MetaListAgents < Base
+    tool do
+      display_name "Meta List Agents"
+      description "List agents visible for the target project."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {}
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

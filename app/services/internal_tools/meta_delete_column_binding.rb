@@ -2,6 +2,22 @@
 
 module InternalTools
   class MetaDeleteColumnBinding < Base
+    tool do
+      display_name "Meta Delete Column Binding"
+      description "Remove a workflow binding from a column."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[binding_id],
+        properties: {
+          binding_id: {
+            type: "integer"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

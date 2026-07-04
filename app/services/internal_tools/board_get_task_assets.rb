@@ -2,6 +2,27 @@
 
 module InternalTools
   class BoardGetTaskAssets < Base
+    tool do
+      display_name "Board Get Task Assets"
+      description "List files attached to a board task, optionally filtered by tag."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id],
+        properties: {
+          tag: {
+            type: "string",
+            description: "Optional tag filter"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

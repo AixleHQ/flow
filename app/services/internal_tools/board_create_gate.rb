@@ -2,6 +2,39 @@
 
 module InternalTools
   class BoardCreateGate < Base
+    tool do
+      display_name "Board Create Gate"
+      description "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all Gates are resolved."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[task_id gate_type],
+        properties: {
+          run_id: {
+            type: "integer",
+            description: "(github_workflow_completed) GitHub Actions workflow run ID"
+          },
+          task_id: {
+            type: "integer",
+            description: "Board task ID"
+          },
+          gate_type: {
+            type: "string",
+            description: "Gate type. Supported: github_checks_completed, github_workflow_completed"
+          },
+          pr_number: {
+            type: "integer",
+            description: "(github_checks_completed) Pull request number"
+          },
+          repo_full_name: {
+            type: "string",
+            description: "(github_checks_completed, github_workflow_completed) Full repo name, e.g. owner/repo"
+          }
+        }
+      })
+    end
+
     SUPPORTED_GATE_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
 
     def execute

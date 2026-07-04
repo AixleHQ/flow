@@ -224,6 +224,22 @@ module Agents
       nil
     end
 
+    # Merge freshly-collected credentials (from a live session's container) onto the
+    # stored blob before persisting. Default: replace wholesale, but keep the stored
+    # blob when the incoming token is older (refresh-token rotation guard). Adapters
+    # whose credentials hold multiple independently-rotating token blocks override this
+    # to merge per block.
+    # @param current [Hash] currently-stored credential data
+    # @param incoming [Hash] credentials collected from the session container
+    # @return [Hash] the blob to persist
+    def merge_refreshed_credentials(current, incoming)
+      new_exp = token_expires_at(incoming)
+      old_exp = token_expires_at(current)
+      return current if new_exp && old_exp && new_exp.to_i <= old_exp.to_i
+
+      incoming
+    end
+
     # =================================================================
     # Usage Collection (called once at session cleanup)
     # =================================================================

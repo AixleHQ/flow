@@ -15,7 +15,7 @@ const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   name: 'pdf_extractor',
   displayName: 'PDF Extractor',
   description: 'Extract text from PDF files',
-  kind: 'custom',
+  source: 'db',
   scopeType: 'project',
   scopeId: 7,
   dockerImage: 'registry.example.com/pdf:latest',
@@ -31,7 +31,7 @@ const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   ...overrides,
 });
 
-// kindFilter defaults to 'custom', so only custom-kind tools render initially.
+// sourceFilter defaults to 'db', so only custom tools render initially.
 const tools: Tool[] = [
   makeTool({ id: 1, name: 'pdf_extractor', displayName: 'PDF Extractor' }),
   makeTool({
@@ -64,7 +64,7 @@ describe('Projects/Tools/ToolsPage', () => {
   });
 
   it('shows the empty state when there are no tools', () => {
-    // kindFilter defaults to 'custom', so hasFilters is true even before the user touches
+    // sourceFilter defaults to 'db', so hasFilters is true even before the user touches
     // anything; the empty state therefore shows the filtered message.
     renderAuthedPage(<ToolsPage />, { props: { project, tools: [], configItemNames: [] } });
 

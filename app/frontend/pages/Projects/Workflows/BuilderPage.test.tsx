@@ -59,6 +59,7 @@ const projectProps = (overrides: Record<string, unknown> = {}) => ({
   steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 }), makeStep({ id: 2, name: 'Implement', position: 2 })],
   agents: [],
   tools: [],
+  toolGroups: [],
   skills: [],
   mcpServers: [],
   assets: [],
@@ -413,6 +414,30 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(
       screen.getByText('No dependencies — this step can run in parallel with other root steps'),
     ).toBeInTheDocument();
+  });
+
+  it('offers a tool group as one entry and selects it whole (not each member)', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        tools: [
+          { id: 10, name: 'Board List Tasks' },
+          { id: 11, name: 'Board Move Task' },
+          { id: 20, name: 'Echo Greeter' },
+        ],
+        toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
+        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+      }),
+    });
+
+    // Open the base-resources Tools picker.
+    await userEvent.click(screen.getAllByLabelText('Tools')[0]);
+
+    // The group shows as an option; its member tools are not listed individually.
+    expect((await screen.findAllByText('Board management')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Board List Tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Board Move Task')).not.toBeInTheDocument();
+    // Ungrouped custom tool stays individual.
+    expect(screen.getAllByText('Echo Greeter').length).toBeGreaterThan(0);
   });
 
   it('renders the workflow scope indicator badge in the header', () => {

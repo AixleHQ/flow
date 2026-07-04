@@ -10,100 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
-
-  create_table "action_mcp_session_messages", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.string "direction", default: "client", null: false, comment: "The message recipient"
-    t.boolean "is_ping", default: false, null: false, comment: "Whether the message is a ping"
-    t.string "jsonrpc_id"
-    t.json "message_json"
-    t.string "message_type", null: false, comment: "The type of the message"
-    t.boolean "request_acknowledged", default: false, null: false
-    t.boolean "request_cancelled", default: false, null: false
-    t.string "session_id", null: false
-    t.datetime "updated_at", null: false
-    t.index ["session_id"], name: "index_action_mcp_session_messages_on_session_id"
-  end
-
-  create_table "action_mcp_session_resources", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.boolean "created_by_tool", default: false
-    t.text "description"
-    t.datetime "last_accessed_at"
-    t.json "metadata"
-    t.string "mime_type", null: false
-    t.string "name"
-    t.string "session_id", null: false
-    t.datetime "updated_at", null: false
-    t.string "uri", null: false
-    t.index ["session_id"], name: "index_action_mcp_session_resources_on_session_id"
-  end
-
-  create_table "action_mcp_session_subscriptions", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.datetime "last_notification_at"
-    t.string "session_id", null: false
-    t.datetime "updated_at", null: false
-    t.string "uri", null: false
-    t.index ["session_id"], name: "index_action_mcp_session_subscriptions_on_session_id"
-  end
-
-  create_table "action_mcp_session_tasks", id: :string, force: :cascade do |t|
-    t.json "continuation_state", default: {}
-    t.datetime "created_at", null: false
-    t.datetime "last_step_at"
-    t.datetime "last_updated_at", null: false
-    t.integer "poll_interval", comment: "Suggested polling interval in milliseconds"
-    t.string "progress_message"
-    t.integer "progress_percent"
-    t.string "request_method", comment: "e.g., tools/call, prompts/get"
-    t.string "request_name", comment: "e.g., tool name, prompt name"
-    t.json "request_params", comment: "Original request params"
-    t.json "result_payload", comment: "Final result data"
-    t.string "session_id", null: false
-    t.string "status", default: "working", null: false
-    t.string "status_message"
-    t.integer "ttl", comment: "Time to live in milliseconds"
-    t.datetime "updated_at", null: false
-    t.index ["created_at"], name: "index_action_mcp_session_tasks_on_created_at"
-    t.index ["session_id", "status"], name: "index_action_mcp_session_tasks_on_session_id_and_status"
-    t.index ["session_id"], name: "index_action_mcp_session_tasks_on_session_id"
-    t.index ["status"], name: "index_action_mcp_session_tasks_on_status"
-  end
-
-  create_table "action_mcp_sessions", id: :string, force: :cascade do |t|
-    t.json "client_capabilities", comment: "The capabilities of the client"
-    t.json "client_info", comment: "The information about the client"
-    t.json "consents", default: {}, null: false
-    t.datetime "created_at", null: false
-    t.datetime "ended_at", comment: "The time the session ended"
-    t.boolean "initialized", default: false, null: false
-    t.integer "messages_count", default: 0, null: false
-    t.json "prompt_registry", default: []
-    t.string "protocol_version"
-    t.json "resource_registry", default: []
-    t.string "role", default: "server", null: false, comment: "The role of the session"
-    t.json "server_capabilities", comment: "The capabilities of the server"
-    t.json "server_info", comment: "The information about the server"
-    t.string "status", default: "pre_initialize", null: false
-    t.json "tool_registry", default: []
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "action_mcp_sse_events", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.text "data", null: false
-    t.integer "event_id", null: false
-    t.string "session_id", null: false
-    t.datetime "updated_at", null: false
-    t.index ["created_at"], name: "index_action_mcp_sse_events_on_created_at"
-    t.index ["session_id", "event_id"], name: "index_action_mcp_sse_events_on_session_id_and_event_id", unique: true
-    t.index ["session_id"], name: "index_action_mcp_sse_events_on_session_id"
-  end
 
   create_table "agent_credentials", force: :cascade do |t|
     t.string "agent_type", null: false
@@ -510,16 +420,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
   end
 
-  create_table "solid_mcp_messages", force: :cascade do |t|
-    t.datetime "created_at", null: false
-    t.text "data"
-    t.datetime "delivered_at"
-    t.string "event_type", limit: 50, null: false
-    t.string "session_id", limit: 36, null: false
-    t.index ["delivered_at", "created_at"], name: "idx_solid_mcp_messages_on_delivered_and_created"
-    t.index ["session_id", "id"], name: "idx_solid_mcp_messages_on_session_and_id"
-  end
-
   create_table "step_runs", force: :cascade do |t|
     t.datetime "completed_at"
     t.datetime "created_at", null: false
@@ -708,25 +608,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
   create_table "tools", force: :cascade do |t|
     t.text "command"
     t.datetime "created_at", null: false
+    t.string "definition_digest"
     t.datetime "deleted_at"
     t.text "description"
     t.string "display_name", null: false
     t.string "docker_image"
+    t.string "docker_image_digest"
     t.boolean "enabled", default: true
     t.string "execution_mode", default: "container", null: false
     t.jsonb "input_schema", default: {}
-    t.string "kind", default: "custom", null: false
     t.string "name", null: false
     t.jsonb "required_config_items", default: []
     t.string "requires_integration"
     t.bigint "scope_id"
     t.string "scope_type"
+    t.string "source", default: "db", null: false
+    t.jsonb "tags", default: [], null: false
     t.datetime "updated_at", null: false
+    t.boolean "user_attachable", default: true, null: false
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
-    t.index ["kind"], name: "index_tools_on_kind"
+    t.index ["name"], name: "index_tools_on_name_where_source_code", unique: true, where: "(((source)::text = 'code'::text) AND (deleted_at IS NULL))"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
     t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
+
+  add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
 
   create_table "trigger_bindings", force: :cascade do |t|
     t.integer "cooldown_seconds", default: 0, null: false
@@ -790,7 +696,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.index ["dedup_key"], name: "index_trigger_events_on_dedup_key_unique", unique: true, where: "(dedup_key IS NOT NULL)"
     t.index ["event_type"], name: "index_trigger_events_on_event_type"
     t.index ["project_id", "event_type"], name: "index_trigger_events_on_project_id_and_event_type"
-    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY ((ARRAY['pending'::character varying, 'dispatching'::character varying])::text[]))"
+    t.index ["relay_state", "created_at"], name: "index_trigger_events_pending_relay", where: "((relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text]))"
   end
 
   create_table "usage_statistics", force: :cascade do |t|
@@ -822,6 +728,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.string "google_token"
     t.datetime "invited_at"
     t.bigint "invited_by_id"
+    t.string "mcp_token_digest"
+    t.datetime "mcp_token_last_used_at"
     t.string "name", null: false
     t.datetime "onboarding_completed_at"
     t.string "onboarding_state", default: "step1", null: false
@@ -839,6 +747,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.index ["default_agent_credential_id"], name: "index_users_on_default_agent_credential_id"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
+    t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
     t.index ["onboarding_state"], name: "index_users_on_onboarding_state"
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["role"], name: "index_users_on_role"
@@ -925,11 +834,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_01_000001) do
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
   end
 
-  add_foreign_key "action_mcp_session_messages", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_messages_session_id", on_update: :cascade, on_delete: :cascade
-  add_foreign_key "action_mcp_session_resources", "action_mcp_sessions", column: "session_id", on_delete: :cascade
-  add_foreign_key "action_mcp_session_subscriptions", "action_mcp_sessions", column: "session_id", on_delete: :cascade
-  add_foreign_key "action_mcp_session_tasks", "action_mcp_sessions", column: "session_id", name: "fk_action_mcp_session_tasks_session_id", on_update: :cascade, on_delete: :cascade
-  add_foreign_key "action_mcp_sse_events", "action_mcp_sessions", column: "session_id"
   add_foreign_key "agent_credentials", "users"
   add_foreign_key "asset_versions", "assets"
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"

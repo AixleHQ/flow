@@ -87,9 +87,14 @@ gem "typelizer"
 
 # gem "image_processing", "~> 1.2"
 
-# MCP (Model Context Protocol) server
-gem "actionmcp", "~> 0.100"
-gem "solid_mcp"
+# JSON Schema 2020-12 meta-validation of tenant-authored tool schemas
+# (Tool#custom_definition_hygiene). Also an mcp-gem dependency.
+gem "json_schemer"
+
+# MCP (Model Context Protocol) server — official Ruby SDK. A stateless
+# MCP::Server is built per request from the authenticated TerminalSession
+# (McpController + Tools::McpRequestHandler).
+gem "mcp"
 
 group :development, :test do
   # Testing tools

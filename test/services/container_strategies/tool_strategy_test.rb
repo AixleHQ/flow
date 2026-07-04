@@ -81,4 +81,59 @@ class ContainerStrategies::ToolStrategyTest < ActiveSupport::TestCase
         exit_code: 0, stdout: "ok", stderr: "", duration_ms: 10)
     end
   end
+
+  # ── heartbeat-sliced wait (Temporal cancellation delivery) ──
+
+  class FakeCancellation
+    def initialize(canceled: false) = @canceled = canceled
+    def check!
+      raise Temporalio::Error::CanceledError, "Canceled" if @canceled
+    end
+  end
+
+  FakeActivityContext = Struct.new(:cancellation) do
+    def heartbeat(*) = true
+  end
+
+  test "wait_with_heartbeat retries slices until the container exits" do
+    strategy = ContainerStrategies::ToolStrategy.new(timeout: 60)
+    runtime = mock
+    runtime.expects(:wait_container).twice
+           .raises(Docker::Error::TimeoutError).then
+           .returns({ "StatusCode" => 0 })
+    strategy.stubs(:runtime).returns(runtime)
+    strategy.stubs(:activity_context).returns(nil)
+
+    assert_equal 0, strategy.send(:wait_with_heartbeat, "cid", 60)
+  end
+
+  test "wait_with_heartbeat returns nil once the overall timeout elapses" do
+    strategy = ContainerStrategies::ToolStrategy.new(timeout: 60)
+    runtime = mock
+    runtime.stubs(:wait_container).raises(Docker::Error::TimeoutError)
+    strategy.stubs(:runtime).returns(runtime)
+    strategy.stubs(:activity_context).returns(nil)
+
+    assert_nil strategy.send(:wait_with_heartbeat, "cid", 0)
+  end
+
+  test "exec kills the container and finalizes the tool result on Temporal cancellation" do
+    strategy = ContainerStrategies::ToolStrategy.new(
+      tool_result_id: @tool_result.id, timeout: 60
+    )
+    ctx = FakeActivityContext.new(FakeCancellation.new(canceled: true))
+    strategy.stubs(:activity_context).returns(ctx)
+    strategy.stubs(:resolve_container).returns("cid")
+    runtime = mock
+    runtime.expects(:stop_container).with("cid", 5)
+    strategy.stubs(:runtime).returns(runtime)
+
+    assert_raises(Temporalio::Error::CanceledError) do
+      strategy.exec(container_id: "cid")
+    end
+
+    @tool_result.reload
+    assert_equal "failed", @tool_result.state
+    assert_equal "Execution cancelled", @tool_result.error
+  end
 end

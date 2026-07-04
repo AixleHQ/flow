@@ -77,6 +77,13 @@ interface NamedItem {
   id: number;
   name: string;
 }
+
+// A tool tag the picker shows as one labeled group (e.g. "Board management").
+interface ToolGroup {
+  tag: string;
+  label: string;
+  toolIds: number[];
+}
 interface SubStep {
   id: number;
   name: string;
@@ -143,6 +150,7 @@ interface Props {
   steps: Step[];
   agents?: NamedItem[];
   tools?: NamedItem[];
+  toolGroups?: ToolGroup[];
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   assets?: NamedItem[];
@@ -409,6 +417,7 @@ const BuilderPage = () => {
     steps: initialSteps,
     agents: rawAgents,
     tools: rawTools,
+    toolGroups: rawToolGroups,
     skills: rawSkills,
     mcpServers: rawMcpServers,
     assets: rawAssets,
@@ -421,6 +430,7 @@ const BuilderPage = () => {
 
   const agents = rawAgents ?? [];
   const tools = rawTools ?? [];
+  const toolGroups = rawToolGroups ?? [];
   const skills = rawSkills ?? [];
   const mcpServers = rawMcpServers ?? [];
   const assets = rawAssets ?? [];
@@ -711,6 +721,49 @@ const BuilderPage = () => {
     Array.isArray(items)
       ? items.filter((i) => i?.id != null).map((i) => ({ value: String(i.id), label: i.name ?? '' }))
       : [];
+
+  // Tool options grouped by tag catalog: tools in a group (e.g. board) render
+  // under that group's label; everything else stays ungrouped. Mantine renders
+  // `{ group, items }` entries as labeled sections.
+  // Tools picker collapses each tag group (e.g. board) into ONE selectable
+  // entry ("Board management") standing in for all its tools — member tools
+  // are removed from the individual list, so a group is all-or-nothing.
+  // Custom / ungrouped tools stay individual. Group values are `grp:<tag>`
+  // tokens; everything else is a stringified tool id.
+  const GROUP_PREFIX = 'grp:';
+  const groupedToolIds = new Set(toolGroups.flatMap((g) => g.toolIds));
+
+  const toolSelectData = [
+    ...toolGroups.map((g) => ({ value: `${GROUP_PREFIX}${g.tag}`, label: g.label })),
+    ...(Array.isArray(tools) ? tools : [])
+      .filter((i) => i?.id != null && !groupedToolIds.has(i.id))
+      .map((i) => ({ value: String(i.id), label: i.name ?? '' })),
+  ];
+
+  // toolIds (numbers) → picker values: a group token when any of its tools is
+  // selected, plus individual ids for ungrouped tools.
+  const toToolValue = (ids: number[]) => {
+    const set = new Set(Array.isArray(ids) ? ids : []);
+    const groupTokens = toolGroups
+      .filter((g) => g.toolIds.some((id) => set.has(id)))
+      .map((g) => `${GROUP_PREFIX}${g.tag}`);
+    const individual = [...set].filter((id) => !groupedToolIds.has(id)).map(String);
+    return [...groupTokens, ...individual];
+  };
+
+  // Picker values → toolIds: expand each group token to its member ids.
+  const fromToolValue = (values: string[]): number[] => {
+    const ids = new Set<number>();
+    (Array.isArray(values) ? values : []).forEach((v) => {
+      if (v.startsWith(GROUP_PREFIX)) {
+        const group = toolGroups.find((g) => `${GROUP_PREFIX}${g.tag}` === v);
+        group?.toolIds.forEach((id) => ids.add(id));
+      } else {
+        ids.add(Number(v));
+      }
+    });
+    return [...ids];
+  };
   const toStringArr = (ids: number[]) => (Array.isArray(ids) ? ids : []).map(String);
   const toNumberArr = (vals: string[]) => (Array.isArray(vals) ? vals : []).map(Number);
 
@@ -936,9 +989,9 @@ const BuilderPage = () => {
                     <MultiSelect
                       label="Tools"
                       size="xs"
-                      data={toSelectData(tools)}
-                      value={toStringArr(workflow.baseToolIds)}
-                      onChange={(v) => updateWorkflowField('baseToolIds', toNumberArr(v))}
+                      data={toolSelectData}
+                      value={toToolValue(workflow.baseToolIds)}
+                      onChange={(v) => updateWorkflowField('baseToolIds', fromToolValue(v))}
                       disabled={readOnly || workflow.inheritAllProjectResources}
                       searchable
                     />
@@ -1233,9 +1286,9 @@ const BuilderPage = () => {
                         <MultiSelect
                           label="Tools"
                           size="sm"
-                          data={toSelectData(tools)}
-                          value={toStringArr(selectedStep.toolIds)}
-                          onChange={(v) => updateStepField(selectedStep.id, 'toolIds', toNumberArr(v), true)}
+                          data={toolSelectData}
+                          value={toToolValue(selectedStep.toolIds)}
+                          onChange={(v) => updateStepField(selectedStep.id, 'toolIds', fromToolValue(v), true)}
                           placeholder="Select tools..."
                           disabled={readOnly}
                           searchable

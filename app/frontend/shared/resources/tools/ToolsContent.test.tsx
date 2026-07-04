@@ -12,7 +12,7 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
     name: 'pdf_reader',
     displayName: 'PDF Reader',
     description: 'Reads PDFs',
-    kind: 'custom',
+    source: 'db',
     scopeType: 'Company',
     scopeId: 10,
     dockerImage: 'python:3.11-slim',
@@ -56,11 +56,30 @@ describe('ToolsContent', () => {
   });
 
   it('shows the no-results empty state when no tool matches the active filter', () => {
-    // Default kindFilter is 'custom', so a 'system' tool is filtered out -> empty list with a
+    // Default sourceFilter is 'db', so a platform tool is filtered out -> empty list with a
     // filter active, which renders the "no tools match your filters" message.
-    renderPage(<ToolsContent {...baseProps} tools={[makeTool({ kind: 'system' })]} />);
+    renderPage(<ToolsContent {...baseProps} tools={[makeTool({ source: 'code' })]} />);
 
     expect(screen.getByText('No tools match your filters')).toBeInTheDocument();
+  });
+
+  it('shows platform tools when the Platform filter is selected', async () => {
+    renderPage(
+      <ToolsContent
+        {...baseProps}
+        tools={[
+          makeTool({ source: 'code', displayName: 'Coder SSH Exec' }),
+          makeTool({ id: 2, displayName: 'My Linter' }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText('Coder SSH Exec')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Platform' }));
+
+    expect(screen.getByText('Coder SSH Exec')).toBeInTheDocument();
+    expect(screen.queryByText('My Linter')).not.toBeInTheDocument();
   });
 
   it('narrows the list as the user searches by name', async () => {

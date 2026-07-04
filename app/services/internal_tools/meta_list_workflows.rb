@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaListWorkflows < Base
+    tool do
+      display_name "Meta List Workflows"
+      description "List all workflows visible for the target project (project + company scope)."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {
+          project_id: {
+            type: "integer",
+            description: "Project ID. Defaults to current project."
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

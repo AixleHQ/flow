@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class ToolResource < ApplicationResource
-  attributes :id, :name, :display_name, :description, :kind, :scope_type, :scope_id,
+  attributes :id, :name, :display_name, :description, :source, :scope_type, :scope_id,
              :docker_image, :command,
              :enabled, :created_at, :updated_at
 
@@ -17,6 +17,11 @@ class ToolResource < ApplicationResource
   typelize "Record<string, unknown>"
   attribute :input_schema do |tool|
     tool.input_schema
+  end
+
+  typelize "string[]"
+  attribute :tags do |tool|
+    tool.tags
   end
 
   typelize :boolean

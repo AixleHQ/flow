@@ -2,6 +2,31 @@
 
 module InternalTools
   class MetaCreateBoardColumn < Base
+    tool do
+      display_name "Meta Create Board Column"
+      description "Create a new column on the project board."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[name],
+        properties: {
+          name: {
+            type: "string",
+            description: "Column name"
+          },
+          purpose: {
+            type: "string",
+            description: "What this column represents"
+          },
+          position: {
+            type: "integer",
+            description: "Position (auto-assigned if omitted)"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

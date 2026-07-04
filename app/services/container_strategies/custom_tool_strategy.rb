@@ -13,10 +13,17 @@ module ContainerStrategies
     def before_create_container(**)
       tool = input[:tool]
       raise ArgumentError, "Tool requires docker_image" if tool.docker_image.blank?
+      pin_image_digest!(tool)
       super
     end
 
-    def resolve_image = input[:tool].docker_image
+    # Digest-pinned once resolved: a mutable tag (":latest") can't silently
+    # swap the code a published tool runs. The pin resets when the user
+    # legitimately changes docker_image (Tool#reset_image_digest).
+    def resolve_image
+      tool = input[:tool]
+      tool.docker_image_digest.presence || tool.docker_image
+    end
     def build_working_dir = "/workspace"
 
     def build_cmd
@@ -49,6 +56,20 @@ module ContainerStrategies
     def build_host_config = build_host_config_with_limits
 
     private
+
+    # Best-effort: resolve the pulled image's repo digest and store it on the
+    # tool row (update_columns on purpose — a digest stamp is not a definition
+    # change). Runs where Docker is actually reachable (the Temporal worker),
+    # never blocks execution on failure.
+    def pin_image_digest!(tool)
+      return if tool.docker_image_digest.present?
+
+      repo_digests = Docker::Image.get(tool.docker_image).info["RepoDigests"]
+      digest = Array(repo_digests).first
+      tool.update_columns(docker_image_digest: digest) if digest.present?
+    rescue StandardError => e
+      Rails.logger.warn("[CustomToolStrategy] image digest pin skipped for tool ##{tool.id}: #{e.message}")
+    end
 
     def interpolate_command(template, params)
       result = template.dup

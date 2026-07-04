@@ -1,6 +1,8 @@
 import { Link } from '@inertiajs/react';
 import { IconBrandGithub, IconMenu2, IconSearch } from '@tabler/icons-react';
 
+import { Logo } from 'shared/ui/Logo';
+
 import classes from '../DocsPage.module.css';
 
 interface Props {
@@ -15,8 +17,9 @@ export function DocsNavBar({ onMenuClick, onSearchClick }: Props) {
         <IconMenu2 size={18} />
       </button>
 
-      <Link href="/docs" className={classes.navLogo}>
-        aix<span className={classes.navLogoAccent}>le</span>
+      <Link href="/docs" className={classes.navLogo} aria-label="Aixle Flow docs">
+        <Logo width={60} colorScheme="dark" />
+        <span className={classes.navBrandFlow}>Flow</span>
       </Link>
 
       <nav className={classes.navLinks}>

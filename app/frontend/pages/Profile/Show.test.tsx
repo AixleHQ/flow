@@ -49,6 +49,7 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
 const baseProps = (profile: SharedUser) => ({
   profile,
   languageOptions: ['en', 'es'],
+  mcp: { enabled: false, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
   agentModels: [],
 });
 

@@ -4,8 +4,11 @@ Rails.application.routes.draw do
   # ActionCable WebSocket endpoint
   mount ActionCable.server => "/cable"
 
-  # ActionMCP server endpoint (Model Context Protocol for agent containers)
-  mount ActionMCP::Engine => "/action_mcp"
+  # Aixle MCP server endpoint (Model Context Protocol for agent containers).
+  # /action_mcp is the legacy path agent containers are configured with
+  # (Settings.mcp.server_url); /mcp is the forward-looking alias.
+  match "/action_mcp", to: "mcp#handle", via: %i[get post delete]
+  match "/mcp", to: "mcp#handle", via: %i[get post delete]
 
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
@@ -187,6 +190,8 @@ Rails.application.routes.draw do
       get :usage, on: :member
       put :update_default_model, on: :member
       delete :destroy_credential, on: :member
+      post :regenerate_mcp_token, on: :member
+      delete :disable_mcp_token, on: :member
     end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 

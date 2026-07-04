@@ -2,6 +2,30 @@
 
 module InternalTools
   class MetaReorderSteps < Base
+    tool do
+      display_name "Meta Reorder Steps"
+      description "Reorder all steps in a workflow by providing ordered step IDs."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[step_ids],
+        properties: {
+          step_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Ordered array of step IDs"
+          },
+          workflow_id: {
+            type: "integer",
+            description: "Workflow ID. Defaults to last created."
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

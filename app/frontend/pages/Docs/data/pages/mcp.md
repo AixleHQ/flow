@@ -35,6 +35,29 @@ Add custom MCP servers under **Company → MCP Servers** or **Project →
 MCP Servers**. They resolve additively into a session alongside the
 internal server (see resource resolution on the Tools page).
 
+## Personal MCP (connect your own agent)
+
+You can point your own agent (Claude Code, Cursor, …) at Aixle directly —
+no session, no container. Enable **Personal MCP** on your profile to get a
+personal token; the profile page shows the exact command to add it, e.g.:
+
+```
+claude mcp add aixle --transport http https://<your-aixle-host>/mcp \
+  --header "Authorization: Bearer amcp_…"
+```
+
+This server is **session-less** and grants **exactly your own access
+level** — every action runs through the same permission checks as the UI,
+so you can only do in a project what you could do by hand. It exposes the
+things you do in the app: list your companies and projects, manage board
+tasks and columns, build and run workflows (steps, sub-steps, triggers,
+runs), manage agents, custom tools, skills, MCP servers, config items and
+repositories, and update project settings. Two built-in prompts,
+`build_workflow` and `author_step`, guide multi-step construction.
+
+The token is shown once — regenerate or disable it any time from your
+profile. Regenerating immediately invalidates the old token.
+
 ## Transports
 
 | Transport | When to use                                                    |

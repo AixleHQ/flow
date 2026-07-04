@@ -127,29 +127,25 @@ class TerminalSession < ApplicationRecord
     end
   end
 
-  def available_tools
-    result = []
+  # The session's entitled tool set: explicitly attached tools, the project
+  # custom-tool fallback, plus code-defined platform tools whose injection
+  # rules match this session (Tools::InjectionRules). Availability
+  # (integration gating) is deliberately NOT applied here: serving surfaces
+  # filter with Tool#available?(ctx) so tools/call can distinguish
+  # entitled-but-disconnected from not-entitled.
+  def available_tools(ctx: nil)
+    ctx ||= Tools::Context.for_session(self)
 
-    if session_type == "workflow_step"
-      result += Tool.workflow_tools.enabled.to_a
+    base = tools.enabled.to_a
+    if base.none?(&:db_source?) && project.present?
+      base += Tool.for_project(project).enabled.to_a
     end
 
-    result += tools.enabled.to_a
+    ctx.candidate_tools = base
+    injected = Tools::Registry.injectable.select { |d| d.inject?(ctx) }.map(&:name)
+    base += Tool.shadow_rows_for_names(injected).select(&:enabled?)
 
-    if result.select(&:custom?).empty? && project.present?
-      result += Tool.for_project(project).custom_tools.enabled.to_a
-    end
-
-    has_container_tools = result.any? { |t| t.execution_mode.container? }
-    if has_container_tools
-      result += Tool.internal_tools.enabled.to_a
-    end
-
-    if mode == "non_interactive"
-      result += Tool.session_lifecycle_tools.to_a
-    end
-
-    result.uniq
+    base.uniq
   end
 
   private

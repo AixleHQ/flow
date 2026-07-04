@@ -10,8 +10,27 @@ class Web::ProfileController < Web::ApplicationController
       profile: CurrentUserResource.new(current_user).to_h,
       language_options: User::AGENT_LANGUAGES,
       agent_models: current_user.agent_models_for_props,
-      cable_stream: inertia_cable_stream(current_user)
+      cable_stream: inertia_cable_stream(current_user),
+      mcp: {
+        enabled: current_user.mcp_enabled?,
+        last_used_at: current_user.mcp_token_last_used_at,
+        server_url: Settings.mcp.public_server_url,
+        # Present only right after regeneration — shown once, never persisted.
+        token: session.delete(:mcp_token_plaintext)
+      }
     }
+  end
+
+  # Enable / rotate in one action: the previous token stops working the
+  # moment a new digest lands.
+  def regenerate_mcp_token
+    session[:mcp_token_plaintext] = current_user.regenerate_mcp_token!
+    redirect_to profile_path, notice: "MCP token generated — copy it now, it won't be shown again"
+  end
+
+  def disable_mcp_token
+    current_user.disable_mcp_token!
+    redirect_to profile_path, notice: "MCP access disabled"
   end
 
   def usage

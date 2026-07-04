@@ -2,6 +2,18 @@
 
 module InternalTools
   class MetaGetBoard < Base
+    tool do
+      display_name "Meta Get Board"
+      description "Get the project board with columns, purposes, task counts, and workflow bindings."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {}
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

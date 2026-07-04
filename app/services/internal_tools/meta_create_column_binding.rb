@@ -2,6 +2,34 @@
 
 module InternalTools
   class MetaCreateColumnBinding < Base
+    tool do
+      display_name "Meta Create Column Binding"
+      description "Bind a workflow to a board column for auto or manual triggering."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[column_id workflow_id],
+        properties: {
+          column_id: {
+            type: "integer"
+          },
+          workflow_id: {
+            type: "integer"
+          },
+          trigger_mode: {
+            enum: %w[manual auto],
+            type: "string",
+            description: "Default: manual"
+          },
+          cooldown_seconds: {
+            type: "integer",
+            description: "Min gap between auto-triggers. Default: 5"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute

@@ -2,6 +2,37 @@
 
 module InternalTools
   class BoardManageTags < Base
+    tool do
+      display_name "Board Manage Tags"
+      description "Add or remove a tag on a task or comment on the current board."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[action entity_type entity_id tag],
+        properties: {
+          tag: {
+            type: "string",
+            description: "Tag value"
+          },
+          action: {
+            enum: %w[add remove],
+            type: "string",
+            description: "Whether to add or remove the tag"
+          },
+          entity_id: {
+            type: "integer",
+            description: "Target task or comment ID"
+          },
+          entity_type: {
+            enum: %w[task comment],
+            type: "string",
+            description: "Entity type to modify"
+          }
+        }
+      })
+    end
+
     ALLOWED_ACTIONS = %w[add remove].freeze
     ALLOWED_ENTITY_TYPES = %w[task comment].freeze
 

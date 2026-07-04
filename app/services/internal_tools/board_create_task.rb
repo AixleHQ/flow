@@ -2,6 +2,42 @@
 
 module InternalTools
   class BoardCreateTask < Base
+    tool do
+      display_name "Board Create Task"
+      description "Create a new board task in the current board, optionally targeting a specific column."
+      tags :board
+      inject_when :workflow_step_session
+      input_schema({
+        type: "object",
+        required: %w[title],
+        properties: {
+          tags: {
+            type: "array",
+            items: {
+              type: "string"
+            },
+            description: "Optional task tags"
+          },
+          title: {
+            type: "string",
+            description: "Task title"
+          },
+          task_type: {
+            type: "string",
+            description: "Task type"
+          },
+          column_name: {
+            type: "string",
+            description: "Target column name. Defaults to the first column."
+          },
+          description: {
+            type: "string",
+            description: "Task description"
+          }
+        }
+      })
+    end
+
     def execute
       require_workflow_context!
       board = BoardContextResolver.resolve(session)

@@ -2,6 +2,32 @@
 
 module InternalTools
   class MetaLinkResourceToStep < Base
+    tool do
+      display_name "Meta Link Resource to Step"
+      description "Link a tool, skill, MCP server, or asset to a step."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: %w[step_id resource_type resource_id],
+        properties: {
+          step_id: {
+            type: "integer",
+            description: "Step ID"
+          },
+          resource_id: {
+            type: "integer",
+            description: "Resource ID to link"
+          },
+          resource_type: {
+            enum: %w[tool skill mcp_server asset],
+            type: "string",
+            description: "Resource type"
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     RESOURCE_FIELDS = {

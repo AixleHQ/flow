@@ -55,21 +55,25 @@
 }
 
 .navLogo {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--app-text-primary);
-  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin-right: 24px;
   cursor: pointer;
   text-decoration: none;
+}
+
+.navBrandFlow {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--app-text-primary);
   transition: color 0.15s;
 }
 
-.navLogo:hover { color: var(--mantine-color-brand-4); }
-
-.navLogoAccent {
-  color: var(--mantine-color-brand-4);
-}
+.navLogo:hover .navBrandFlow { color: var(--mantine-color-brand-4); }
 
 .navLinks {
   display: flex;

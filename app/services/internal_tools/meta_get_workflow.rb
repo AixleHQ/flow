@@ -2,6 +2,23 @@
 
 module InternalTools
   class MetaGetWorkflow < Base
+    tool do
+      display_name "Meta Get Workflow"
+      description "Get the full definition of a workflow including all steps and sub-steps."
+      tags :builder
+      user_attachable false
+      input_schema({
+        type: "object",
+        required: [],
+        properties: {
+          workflow_id: {
+            type: "integer",
+            description: "Workflow ID. Defaults to last created workflow."
+          }
+        }
+      })
+    end
+
     include MetaToolHelpers
 
     def execute
