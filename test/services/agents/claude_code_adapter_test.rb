@@ -135,6 +135,77 @@ module Agents
       refute files.key?("/home/claude/.claude/.credentials.json")
     end
 
+    test "designOauth is extracted and written to .credentials.json, never to .claude.json" do
+      config = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base", "scopes" => %w[user:inference] },
+        "designOauth" => {
+          "accessToken" => "sk-ant-oat01-design",
+          "refreshToken" => "sk-ant-ort01-d",
+          "scopes" => %w[user:design:read user:design:write]
+        }
+      }.to_json
+
+      extracted = @adapter.extract_credentials(config)
+      assert extracted.key?("designOauth"), "designOauth must be persisted from the container config"
+
+      files = @adapter.config_files(extracted)
+      creds = JSON.parse(files["/home/claude/.claude/.credentials.json"])
+      assert_equal "sk-ant-oat01-design", creds.dig("designOauth", "accessToken")
+      assert_equal %w[user:design:read user:design:write], creds.dig("designOauth", "scopes")
+      assert_equal "sk-ant-oat01-base", creds.dig("claudeAiOauth", "accessToken")
+
+      # designOauth (like claudeAiOauth) must NOT leak into ~/.claude.json
+      main = JSON.parse(files["/home/claude/.claude.json"])
+      refute main.key?("designOauth")
+      refute main.key?("claudeAiOauth")
+    end
+
+    test "merge_refreshed_credentials adds designOauth even when claudeAiOauth is unchanged" do
+      current  = { "claudeAiOauth" => { "accessToken" => "base", "expiresAt" => 1000 } }
+      incoming = { "claudeAiOauth" => { "accessToken" => "base", "expiresAt" => 1000 },
+                   "designOauth" => { "accessToken" => "design", "expiresAt" => 2000 } }
+
+      merged = @adapter.merge_refreshed_credentials(current, incoming)
+
+      assert_equal "design", merged.dig("designOauth", "accessToken")
+      assert_equal "base", merged.dig("claudeAiOauth", "accessToken")
+    end
+
+    test "merge_refreshed_credentials never wipes a stored designOauth the session lacks" do
+      current  = { "claudeAiOauth" => { "accessToken" => "base", "expiresAt" => 1000 },
+                   "designOauth" => { "accessToken" => "design", "expiresAt" => 2000 } }
+      # A session without /design-login refreshes only the base token.
+      incoming = { "claudeAiOauth" => { "accessToken" => "base2", "expiresAt" => 3000 } }
+
+      merged = @adapter.merge_refreshed_credentials(current, incoming)
+
+      assert_equal "base2", merged.dig("claudeAiOauth", "accessToken") # newer base wins
+      assert_equal "design", merged.dig("designOauth", "accessToken")  # stored design preserved
+    end
+
+    test "merge_refreshed_credentials keeps the fresher token per block (no rotation downgrade)" do
+      current  = { "claudeAiOauth" => { "accessToken" => "new", "expiresAt" => 5000 },
+                   "designOauth" => { "accessToken" => "d-new", "expiresAt" => 5000 } }
+      incoming = { "claudeAiOauth" => { "accessToken" => "old", "expiresAt" => 1000 },
+                   "designOauth" => { "accessToken" => "d-old", "expiresAt" => 1000 } }
+
+      merged = @adapter.merge_refreshed_credentials(current, incoming)
+
+      assert_equal "new", merged.dig("claudeAiOauth", "accessToken")
+      assert_equal "d-new", merged.dig("designOauth", "accessToken")
+    end
+
+    test "base adapter merge_refreshed_credentials guards on token_expires_at (wholesale replace)" do
+      base = Agents::BaseAdapter.new # default token_expires_at is nil
+      # No expiry info => replace wholesale with incoming.
+      assert_equal({ "a" => 2 }, base.merge_refreshed_credentials({ "a" => 1 }, { "a" => 2 }))
+
+      # With expiries: keep current when incoming is not newer.
+      base.stubs(:token_expires_at).with({ "e" => 5 }).returns(5)
+      base.stubs(:token_expires_at).with({ "e" => 3 }).returns(3)
+      assert_equal({ "e" => 5 }, base.merge_refreshed_credentials({ "e" => 5 }, { "e" => 3 }))
+    end
+
     test "config_files defaultMode is auto for non_interactive sessions" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])

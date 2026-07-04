@@ -256,19 +256,16 @@ module ContainerStrategies
       return if credential.config_data == config_data # cheap pre-check, avoids locking on no-op
 
       adapter = agent_service.adapter
-      # Lock the row so concurrent sessions can't race the read-compare-write, and
-      # refuse to overwrite a newer stored token with an older one — refresh-token
-      # rotation means the last session to clean up could otherwise persist a
-      # already-revoked token.
+      # Lock the row so concurrent sessions can't race the read-merge-write. The adapter
+      # merges per token block and refuses to downgrade a newer stored token to an older
+      # one — refresh-token rotation means a late-cleaning session could otherwise persist
+      # an already-revoked token or wipe a token block (e.g. designOauth) it never touched.
       credential.with_lock do
         current = credential.config_data
-        next if current == config_data
+        merged = adapter.merge_refreshed_credentials(current, config_data)
+        next if merged == current
 
-        new_exp = adapter.token_expires_at(config_data)
-        old_exp = adapter.token_expires_at(current)
-        next if new_exp && old_exp && new_exp.to_i <= old_exp.to_i
-
-        AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)
+        AgentCredential.from_artifacts(session.user_id, input[:agent_type], merged)
         Rails.logger.info("[AgentSession] Persisted refreshed #{input[:agent_type]} credentials for user #{session.user_id}")
       end
     rescue StandardError => e

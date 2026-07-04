@@ -73,6 +73,25 @@ module Agents
       credentials.dig("claudeAiOauth", "expiresAt")
     end
 
+    # Claude stores two independently-rotating OAuth blocks: claudeAiOauth (base login)
+    # and designOauth (/design-login). Merge each block on its own expiry so that
+    # (a) adding designOauth isn't skipped just because claudeAiOauth didn't change, and
+    # (b) a session without design access never wipes a stored designOauth.
+    OAUTH_BLOCKS = %w[claudeAiOauth designOauth].freeze
+
+    def merge_refreshed_credentials(current, incoming)
+      merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
+      OAUTH_BLOCKS.each do |block|
+        picked = freshest_oauth_block(current[block], incoming[block])
+        if picked.present?
+          merged[block] = picked
+        else
+          merged.delete(block)
+        end
+      end
+      merged
+    end
+
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
@@ -81,15 +100,17 @@ module Agents
         "primaryApiKey",         # API key (.claude.json, platform.claude.com path)
         "customApiKeyResponses", # approved/rejected API keys (.claude.json)
         "userID",                # user identifier (.claude.json)
-        "claudeAiOauth"          # OAuth tokens (.claude/.credentials.json, claude.ai path)
+        "claudeAiOauth",         # OAuth tokens (.claude/.credentials.json, claude.ai path)
+        "designOauth"            # design tokens from /design-login (.credentials.json): user:design:read/write
       ).compact
     end
 
-    # Generate ~/.claude.json content. Excludes claudeAiOauth (lives in .credentials.json).
+    # Generate ~/.claude.json content. Excludes claudeAiOauth + designOauth
+    # (both live in .credentials.json, never in .claude.json).
     def generate_config(credentials, workflow_config = {})
       {
         # Credentials from database (API-key path fields, OAuth account metadata, userID, etc.)
-        **credentials.except("claudeAiOauth"),
+        **credentials.except("claudeAiOauth", "designOauth"),
 
         # Fixed values (skip onboarding, etc.)
         "installMethod" => "global",
@@ -115,10 +136,15 @@ module Agents
         "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
       }
 
+      # .credentials.json carries the claude.ai OAuth token and, if the user has run
+      # /design-login, the separate designOauth token (user:design:read/write). Both
+      # are written into the same file, mirroring Claude Code's own layout.
+      creds_file = {}
       oauth = credentials["claudeAiOauth"]
-      if oauth.is_a?(Hash) && oauth["accessToken"].present?
-        files["#{home_dir}/.claude/.credentials.json"] = { "claudeAiOauth" => oauth }.to_json
-      end
+      creds_file["claudeAiOauth"] = oauth if oauth.is_a?(Hash) && oauth["accessToken"].present?
+      design = credentials["designOauth"]
+      creds_file["designOauth"] = design if design.is_a?(Hash) && design["accessToken"].present?
+      files["#{home_dir}/.claude/.credentials.json"] = creds_file.to_json if creds_file.any?
 
       files
     end
@@ -261,6 +287,15 @@ module Agents
     end
 
     private
+
+    # Keep whichever OAuth block has the later expiry; never drop one that only the
+    # stored blob has (the incoming session may simply not have touched that scope).
+    def freshest_oauth_block(current_block, incoming_block)
+      return incoming_block if current_block.blank?
+      return current_block if incoming_block.blank?
+
+      incoming_block["expiresAt"].to_i >= current_block["expiresAt"].to_i ? incoming_block : current_block
+    end
 
     # Returns an array of normalized models, or [] on any non-success / empty
     # result (the caller decides whether to fall back). Exactly one of api_key /
