@@ -223,8 +223,8 @@ module Agents
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       # skipDangerousModePermissionPrompt is the key Claude Code writes when the
       # user clicks through the warning; without it, bypassPermissions still blocks.
-      assert_equal true, settings["skipDangerousModePermissionPrompt"]
-      assert_equal true, settings["bypassPermissionsWarningAccepted"]
+      assert_equal true, settings["skipDangerousModePermissionPrompt"] # rubocop:disable Minitest/AssertTruthy
+      assert_equal true, settings["bypassPermissionsWarningAccepted"] # rubocop:disable Minitest/AssertTruthy
     end
 
     test "config_files defaults to bypassPermissions when mode is absent" do
