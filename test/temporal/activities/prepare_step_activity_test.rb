@@ -11,7 +11,6 @@ module Activities
         @project = create(:project, company: @company, owner: @user)
         @workflow = create(:workflow, scope: @company)
         @run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
-        @activity = PrepareStepActivity.new
 
         Rails.logger.stubs(:info)
         Rails.logger.stubs(:warn)
@@ -25,7 +24,7 @@ module Activities
           asset_ids: [ asset.id ])
         step_run = create(:step_run, workflow_run: @run, step: step)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(PrepareStepActivity, { "step_run_id" => step_run.id })
 
         refute result["failed"]
         assert_equal "running", step_run.reload.state
@@ -38,7 +37,7 @@ module Activities
           input_asset_specs: [ { "name" => "style_guide.md", "required" => true } ])
         step_run = create(:step_run, workflow_run: @run, step: step)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(PrepareStepActivity, { "step_run_id" => step_run.id })
 
         refute result["failed"]
       end
@@ -48,7 +47,7 @@ module Activities
           input_asset_specs: [ { "name" => "nowhere.md", "required" => true } ])
         step_run = create(:step_run, workflow_run: @run, step: step)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(PrepareStepActivity, { "step_run_id" => step_run.id })
 
         assert result["failed"]
         assert_includes result["validation_errors"].join, "nowhere.md"

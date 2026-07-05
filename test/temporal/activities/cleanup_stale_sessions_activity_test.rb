@@ -8,7 +8,6 @@ module Activities
       setup do
         @company = create(:company)
         @user = create(:user, :admin, company: @company)
-        @activity = CleanupStaleActivity.new
 
         @runtime_mock = mock("runtime")
         ContainerRuntime.stubs(:build).returns(@runtime_mock)
@@ -28,7 +27,7 @@ module Activities
           started_at: 1.hour.ago, temporal_workflow_id: "wf-stale")
         @runtime_mock.stubs(:resolve_container).with(stale.container_id).returns(nil)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -41,7 +40,7 @@ module Activities
         stale = create(:terminal_session, :running, user: @user,
           started_at: nil, created_at: 1.hour.ago)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -52,7 +51,7 @@ module Activities
         recent = create(:terminal_session, :running, user: @user,
           started_at: 5.minutes.ago)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 0, result[:cleaned_running]
         recent.reload
@@ -64,7 +63,7 @@ module Activities
           state: "ready", started_at: 26.hours.ago, temporal_workflow_id: "wf-ready")
         @runtime_mock.stubs(:resolve_container).with(stale.container_id).returns(nil)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_ready]
         stale.reload
@@ -76,7 +75,7 @@ module Activities
         active = create(:terminal_session, :running, user: @user,
           state: "ready", started_at: 10.hours.ago)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 0, result[:cleaned_ready]
         active.reload
@@ -98,7 +97,7 @@ module Activities
         strategy_mock.expects(:cleanup).returns({ status: :cleaned_up })
         TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -118,7 +117,7 @@ module Activities
         strategy_mock.expects(:cleanup).returns({ status: :cleaned_up })
         TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -136,7 +135,7 @@ module Activities
         strategy_mock.stubs(:before_cleanup).raises(StandardError.new("container crashed"))
         TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -152,7 +151,7 @@ module Activities
 
         TemporalService.expects(:cancel_workflow).with("agent-session-#{stale.id}").returns({ ok: true })
 
-        @activity.run
+        run_activity(CleanupStaleActivity)
       end
 
       test "skips cancellation when no workflow_id" do
@@ -161,7 +160,7 @@ module Activities
 
         TemporalService.expects(:cancel_workflow).never
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
       end
@@ -173,7 +172,7 @@ module Activities
         TemporalService.stubs(:cancel_workflow)
           .raises(StandardError.new("workflow not found"))
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_running]
         stale.reload
@@ -197,7 +196,7 @@ module Activities
         strategy_mock.expects(:cleanup).returns({ status: :cleaned_up })
         TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 2, result[:cleaned_running]
         assert_equal 0, result[:cleaned_ready]
@@ -212,7 +211,7 @@ module Activities
         create(:terminal_session, user: @user, state: "finished")
         create(:terminal_session, :failed, user: @user)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 0, result[:cleaned_running]
         assert_equal 0, result[:cleaned_ready]
@@ -226,7 +225,7 @@ module Activities
           finishing_at: 15.minutes.ago, temporal_workflow_id: "wf-stuck")
         @runtime_mock.stubs(:resolve_container).with(stale.container_id).returns(nil)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_finishing]
         stale.reload
@@ -247,7 +246,7 @@ module Activities
         strategy_mock.expects(:cleanup).returns({ status: :cleaned_up })
         TerminalSession.any_instance.stubs(:strategy).returns(strategy_mock)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 1, result[:cleaned_finishing]
         stale.reload
@@ -259,7 +258,7 @@ module Activities
         recent = create(:terminal_session, :finishing, user: @user,
           finishing_at: 2.minutes.ago)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 0, result[:cleaned_finishing]
         recent.reload
@@ -270,7 +269,7 @@ module Activities
         recent_finishing = create(:terminal_session, :finishing, user: @user,
           started_at: 2.hours.ago, finishing_at: 1.minute.ago)
 
-        result = @activity.run
+        result = run_activity(CleanupStaleActivity)
 
         assert_equal 0, result[:cleaned_finishing]
         recent_finishing.reload
@@ -281,7 +280,7 @@ module Activities
         stale = create(:terminal_session, :running, user: @user,
           started_at: 1.hour.ago, finished_at: nil)
 
-        @activity.run
+        run_activity(CleanupStaleActivity)
 
         stale.reload
         assert_equal "failed", stale.state

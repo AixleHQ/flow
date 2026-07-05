@@ -38,8 +38,8 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 | Request (integration) | auth, authorization wiring, status, redirects, Inertia contract | `sign_in_as` through the real login POST; `assert_inertia_page` + `assert_inertia_props` for key props | re-test service logic in depth |
 | Policy | every Pundit policy | permit/forbid matrix per role (pure unit tests) | — |
 | Job | enqueue + perform | ActiveJob test helpers + boundary fakes | — |
-| Temporal workflow | orchestration logic | *today:* stub the `TemporalService` seam via `TemporalHelper` (§4); *target (Phase 4):* SDK time-skipping env + mocked activities | stub `Temporalio::Testing` itself |
-| Temporal activity | side effects | *today:* plain unit test with adapter fakes; *target (Phase 4):* `ActivityEnvironment` | — |
+| Temporal workflow | orchestration logic | stub the `TemporalService` seam via `TemporalHelper` (§4). The SDK time-skipping `WorkflowEnvironment` is deliberately **not** wired into `check_all`: its local test server boots slowly and hangs intermittently, which would make the gate flaky. | stub `Temporalio::Testing` itself (outside `temporal_service_test`, which is the seam's own contract test) |
+| Temporal activity | side effects | run the activity through `Temporalio::Testing::ActivityEnvironment` via the `run_activity` helper (serverless — no boot/hang risk); boundaries stay behind their fakes | — |
 | Adapter (one per vendor) | translation to the vendor API | WebMock `stub_request` contract tests with realistic payloads | leak vendor constants upward |
 | FE component/page | rendering + interaction given props | RTL role/label queries, `userEvent`, typed factories | `querySelector`, snapshots, style assertions |
 | FE pure lib | logic | plain Vitest, no DOM | — |
@@ -82,10 +82,10 @@ New controllers get `ActionDispatch::IntegrationTest` request tests; do not add 
 
 | Boundary | Seam to stub in callers | Backing |
 |---|---|---|
-| Temporal | `TemporalService` / `TemporalWorkflowRegistry` via `TemporalHelper` (`mock_temporal_start`) | contract pin-test (Phase 2, pending) |
-| Container runtimes | `stub_container_runtime` (`test/support/stub_support.rb`) | legacy fake; becomes `ContainerRuntime::FakeRuntime` in Phase 3 |
-| Slack | `Slack::Client` (app-owned, `app/services/slack/client.rb`) | in-memory fake + WebMock contract tests (Phase 2, pending) |
-| GitHub / GitLab | `Github::*Service` / `Gitlab::*Service` | WebMock contract tests (Phase 2, pending) |
+| Temporal | `TemporalService` / `TemporalWorkflowRegistry` via `TemporalHelper` (`mock_temporal_start`) | contract pin-test (`test/helpers/temporal_helper_contract_test.rb`) |
+| Container runtimes | `stub_container_runtime` (`test/support/stub_support.rb`) injects `ContainerRuntime::FakeRuntime` via the `ContainerRuntime.build` seam | `test/support/fakes/fake_runtime.rb` (real `BaseRuntime`, in-memory FS) |
+| Slack | `Slack::Client` (app-owned, `app/services/slack/client.rb`) | `FakeSlackClient` + `SlackTestHelper` (`stub_slack_client!`) + WebMock contract test |
+| GitHub / GitLab | `Github::*Service` / `Gitlab::*Service` | `FakeGithub`/`FakeGitlab` + WebMock contract tests |
 | HTTP in general | WebMock global fence (`disable_net_connect!`) | `stub_request` belongs in adapter contract tests only |
 | FE backend | `@inertiajs/react` + `@rails/actioncable` mocks in `setup.ts` | keep the mock surface minimal; don't extend it per-test |
 
@@ -141,8 +141,19 @@ and never swap constants at runtime.
 
 ## Roadmap after Phase 0
 
-Phase 1 — backfill Pundit policy tests (56/61 untested; the riskiest gap). Phase 2 — adapters +
-fakes + contract tests for Slack/GitHub/GitLab; Temporal pin-test. Phase 3 — re-house the
-container fake as `ContainerRuntime::FakeRuntime`. Phase 4 — Temporal tests onto the SDK
-harness. Phase 5 — FE typed-factory adoption + first Playwright critical-path specs. Details in
-the research report.
+- **Phase 1 — done.** Authorization backfill at the **request layer**: a dedicated
+  `test/integration/**/*_authorization_test.rb` per controller, driving the real endpoint as each
+  role, via the `AuthorizationMatrix` harness (`test/support/authorization_matrix.rb`).
+- **Phase 2 — done.** App-owned adapters get canonical in-memory fakes
+  (`test/support/fakes/fake_{slack_client,github_service,gitlab_service}.rb`) + WebMock contract
+  tests; Slack/GitHub/GitLab caller stubs migrated onto them; `TemporalHelper` pin-test added.
+- **Phase 3 — done.** The container fake is re-housed as `ContainerRuntime::FakeRuntime`
+  (`test/support/fakes/fake_runtime.rb`), injected via the `ContainerRuntime.build` seam;
+  `StubSupport`'s vendor-stub/monkeypatch machinery is gone.
+- **Phase 4 — activities done, workflow deferred.** Activity tests run through
+  `ActivityEnvironment` (`run_activity`). The workflow time-skipping env is intentionally not in
+  `check_all` (flaky local test server); workflows keep the `TemporalService`/`TemporalHelper`
+  seam guarded by the Phase 2 pin-test.
+- **Phase 5 — pending.** FE typed-factory adoption + first Playwright critical-path specs.
+
+Details in the research report.

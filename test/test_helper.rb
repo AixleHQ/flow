@@ -54,6 +54,7 @@ class ActiveSupport::TestCase
   include UploadSupport
   include StubSupport
   include SlackTestHelper
+  include TemporalActivityHelper
   # Add more helper methods to be used by all tests here...
 
   # Helper for parsing JSON responses as Hashie::Mash

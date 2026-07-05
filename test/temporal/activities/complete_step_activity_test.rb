@@ -13,7 +13,6 @@ module Activities
         @step = create(:step, workflow: @workflow)
         @run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
         @credential = create(:agent_credential, user: @user, agent_type: "claude_code")
-        @activity = CompleteStepActivity.new
 
         Rails.logger.stubs(:info)
         Rails.logger.stubs(:warn)
@@ -29,7 +28,7 @@ module Activities
           error_message: "Your credit balance is too low to complete this request")
         step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
 
         assert result["quota_error"]
         assert result["failed"]
@@ -51,7 +50,7 @@ module Activities
           error_message: "Container exited unexpectedly")
         step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
 
         assert_nil result["quota_error"]
         assert result["failed"]
@@ -80,7 +79,7 @@ module Activities
         credential = create(:agent_credential, user: @user, agent_type: "cursor_cli")
         step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
 
         assert result["quota_error"]
         step_run.reload
@@ -98,7 +97,7 @@ module Activities
           error_message: "You exceeded your current quota")
         step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
 
-        result = @activity.execute({ "step_run_id" => step_run.id })
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
 
         assert result["quota_error"]
         @run.reload

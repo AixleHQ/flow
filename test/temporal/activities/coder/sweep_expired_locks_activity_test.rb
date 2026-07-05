@@ -25,7 +25,7 @@ class Activities::Coder::SweepExpiredLocksActivityTest < ActiveSupport::TestCase
       integration: @integration, key: "other:thing:1"
     )
 
-    result = Activities::Coder::SweepExpiredLocksActivity.new.run
+    result = run_activity(Activities::Coder::SweepExpiredLocksActivity)
 
     assert_equal 1, result[:deleted]
     assert IntegrationData.exists?(live.id)
@@ -34,7 +34,7 @@ class Activities::Coder::SweepExpiredLocksActivityTest < ActiveSupport::TestCase
   end
 
   test "no-ops when there is nothing to sweep" do
-    result = Activities::Coder::SweepExpiredLocksActivity.new.run
+    result = run_activity(Activities::Coder::SweepExpiredLocksActivity)
     assert_equal 0, result[:deleted]
   end
 end

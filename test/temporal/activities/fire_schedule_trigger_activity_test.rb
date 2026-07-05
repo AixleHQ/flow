@@ -16,7 +16,7 @@ module Activities
       test "records a schedule.fired event and starts the bound workflow" do
         WorkflowService.expects(:start).with(has_entries(workflow: @workflow, user: @user)).once.returns(build(:workflow_run))
 
-        result = FireScheduleTriggerActivity.new.run(Hashie::Mash.new(trigger_binding_id: @binding.id))
+        result = run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: @binding.id))
 
         assert TriggerEvent.exists?(event_type: "schedule.fired", project_id: @project.id, board_task_id: nil)
         assert result.key?(:workflow_run_id)
@@ -30,7 +30,7 @@ module Activities
         WorkflowService.expects(:start).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
 
         assert_difference -> { BoardTask.count }, 1 do
-          FireScheduleTriggerActivity.new.run(Hashie::Mash.new(trigger_binding_id: @binding.id))
+          run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: @binding.id))
         end
       end
     end
