@@ -141,6 +141,12 @@ module ContainerRuntime
       end
     end
 
+    def image_digest(image)
+      return nil if image.blank?
+
+      Array(Docker::Image.get(image).info["RepoDigests"]).first
+    end
+
     def wait_for_ready(id, ports = [])
       container = resolve_container(id)
       wait_for_container_health(container)

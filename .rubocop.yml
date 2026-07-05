@@ -34,7 +34,6 @@ Testing/NoVendorStubbing:
   Exclude:
     - "test/services/container_runtime/docker_runtime_test.rb"
     - "test/services/temporal_service_test.rb"
-    - "test/support/stub_support.rb"
 
 # Explicit opt-in to every pending cop of both plugins (keeps the run
 # warning-free without enabling pending cops of rubocop core).
