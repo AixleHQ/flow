@@ -2,10 +2,13 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { buildSessionArtifact } from 'test/factories/sessionArtifact';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import SessionArtifactsPage from './Artifacts';
 
+// Session summary stays bespoke: it's UNMAPPED — the nearest generated type (TerminalSession) is far
+// heavier than this lightweight page-prop shape, so there's no clean typed factory to drift against.
 const session = {
   id: 42,
   agentType: 'researcher',
@@ -13,18 +16,6 @@ const session = {
   artifactsReviewed: false,
   projectName: 'Falcon Initiative',
 };
-
-const artifact = (overrides: Record<string, unknown> = {}) => ({
-  id: 1,
-  name: 'report.pdf',
-  folder: null,
-  status: 'pending',
-  fileSize: 2048,
-  contentType: 'application/pdf',
-  downloadUrl: 'https://example.com/report.pdf',
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
 
 describe('Company/Sessions/Artifacts', () => {
   it('renders the heading and empty state when there are no artifacts', () => {
@@ -41,8 +32,8 @@ describe('Company/Sessions/Artifacts', () => {
       props: {
         session,
         artifacts: [
-          artifact({ id: 1, name: 'report.pdf', fileSize: 2048 }),
-          artifact({ id: 2, name: 'summary.txt', fileSize: 512, contentType: 'text/plain' }),
+          buildSessionArtifact({ id: 1, name: 'report.pdf', fileSize: 2048 }),
+          buildSessionArtifact({ id: 2, name: 'summary.txt', fileSize: 512, contentType: 'text/plain' }),
         ],
         alreadyReviewed: false,
       },
@@ -58,7 +49,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'report.pdf' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'report.pdf' })],
         alreadyReviewed: true,
       },
     });
@@ -72,7 +63,10 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'report.pdf' }), artifact({ id: 2, name: 'summary.txt' })],
+        artifacts: [
+          buildSessionArtifact({ id: 1, name: 'report.pdf' }),
+          buildSessionArtifact({ id: 2, name: 'summary.txt' }),
+        ],
         alreadyReviewed: false,
       },
     });
@@ -101,8 +95,11 @@ describe('Company/Sessions/Artifacts', () => {
       props: {
         session,
         artifacts: [
-          artifact({ id: 1, name: 'video.mp4', fileSize: 3 * 1024 * 1024 }),
-          artifact({ id: 2, name: 'unknown.bin', fileSize: null, contentType: null }),
+          buildSessionArtifact({ id: 1, name: 'video.mp4', fileSize: 3 * 1024 * 1024 }),
+          // fileSize/contentType are optional-not-nullable in the generated SessionArtifact
+          // (fileSize?: number, contentType?: string); the page models them as `| null` and this test
+          // asserts the em-dash for the null case, so keep the null overrides bespoke off the typed base.
+          { ...buildSessionArtifact({ id: 2, name: 'unknown.bin' }), fileSize: null, contentType: null },
         ],
         alreadyReviewed: false,
       },
@@ -126,8 +123,8 @@ describe('Company/Sessions/Artifacts', () => {
       props: {
         session,
         artifacts: [
-          artifact({ id: 1, name: 'active.pdf', status: 'active' }),
-          artifact({ id: 2, name: 'pending.pdf', status: 'pending' }),
+          buildSessionArtifact({ id: 1, name: 'active.pdf', status: 'active' }),
+          buildSessionArtifact({ id: 2, name: 'pending.pdf', status: 'pending' }),
         ],
         alreadyReviewed: false,
       },
@@ -141,8 +138,10 @@ describe('Company/Sessions/Artifacts', () => {
       props: {
         session,
         artifacts: [
-          artifact({ id: 1, name: 'with-link.pdf', downloadUrl: 'https://example.com/file.pdf' }),
-          artifact({ id: 2, name: 'no-link.pdf', downloadUrl: null }),
+          buildSessionArtifact({ id: 1, name: 'with-link.pdf', downloadUrl: 'https://example.com/file.pdf' }),
+          // downloadUrl is optional-not-nullable in the generated type (downloadUrl?: string); the page
+          // uses `| null` and this test asserts the link is omitted for the absent case, so keep it bespoke.
+          { ...buildSessionArtifact({ id: 2, name: 'no-link.pdf' }), downloadUrl: null },
         ],
         alreadyReviewed: false,
       },
@@ -161,7 +160,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1 }), artifact({ id: 2 }), artifact({ id: 3 })],
+        artifacts: [buildSessionArtifact({ id: 1 }), buildSessionArtifact({ id: 2 }), buildSessionArtifact({ id: 3 })],
         alreadyReviewed: false,
       },
     });
@@ -174,7 +173,10 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'keep.pdf' }), artifact({ id: 2, name: 'drop.pdf' })],
+        artifacts: [
+          buildSessionArtifact({ id: 1, name: 'keep.pdf' }),
+          buildSessionArtifact({ id: 2, name: 'drop.pdf' }),
+        ],
         alreadyReviewed: false,
       },
     });
@@ -197,7 +199,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'a.pdf' }), artifact({ id: 2, name: 'b.pdf' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'a.pdf' }), buildSessionArtifact({ id: 2, name: 'b.pdf' })],
         alreadyReviewed: false,
       },
     });
@@ -215,7 +217,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'a.pdf' }), artifact({ id: 2, name: 'b.pdf' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'a.pdf' }), buildSessionArtifact({ id: 2, name: 'b.pdf' })],
         alreadyReviewed: false,
       },
     });
@@ -229,7 +231,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'a.pdf' }), artifact({ id: 2, name: 'b.pdf' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'a.pdf' }), buildSessionArtifact({ id: 2, name: 'b.pdf' })],
         alreadyReviewed: false,
       },
     });
@@ -247,7 +249,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'a.pdf' }), artifact({ id: 2, name: 'b.pdf' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'a.pdf' }), buildSessionArtifact({ id: 2, name: 'b.pdf' })],
         alreadyReviewed: false,
       },
     });
@@ -267,7 +269,7 @@ describe('Company/Sessions/Artifacts', () => {
     renderAuthedPage(<SessionArtifactsPage />, {
       props: {
         session,
-        artifacts: [artifact({ id: 1, name: 'report.pdf', status: 'active' })],
+        artifacts: [buildSessionArtifact({ id: 1, name: 'report.pdf', status: 'active' })],
         alreadyReviewed: true,
       },
     });

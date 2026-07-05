@@ -2,11 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { buildProject } from 'test/factories/project';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import WorkflowsPage from './WorkflowsPage';
 
-const project = { id: 7, name: 'Atlas Project' };
+// buildProject is the typed factory; the page only reads project.id (URL building) and project.name,
+// so a full generated Project with these overrides preserves every assertion here.
+const project = buildProject({ id: 7, name: 'Atlas Project' });
 
 const workflow = (overrides: Record<string, unknown> = {}) => ({
   id: 1,

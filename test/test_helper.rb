@@ -2,8 +2,13 @@ ENV["RAILS_ENV"] = "test"
 
 require "simplecov"
 
-SimpleCov.start("rails") do
-  primary_coverage :line
+# System tests run as a separate suite (make: system-test) after the unit run; skip
+# coverage there so its partial result doesn't clobber the unit run's .last_run.json
+# (the coverage floor is enforced on the unit `rails test`, see COVERAGE_MIN below).
+unless ENV["SKIP_COVERAGE"].to_s.strip == "1"
+  SimpleCov.start("rails") do
+    primary_coverage :line
+  end
 end
 
 # Coverage floor is opt-in (COVERAGE_MIN is set by `make be_check`/`be_check_all`):

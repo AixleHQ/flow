@@ -2,55 +2,28 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildStepRun } from 'test/factories/stepRun';
+import { buildSubStepRun } from 'test/factories/subStepRun';
+import { buildWorkflowRun } from 'test/factories/workflowRun';
+import { buildWorkflowRunAsset } from 'test/factories/workflowRunAsset';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import type WorkflowRun from 'types/generated/WorkflowRun';
 
 import ShowPage from './ShowPage';
 
 const project = { id: 7, name: 'Orbital Migration' };
 
-const baseStep = {
-  stepId: 1,
-  stepName: 'Compile Specs',
-  stepPosition: 1,
-  state: 'pending',
-  stepNote: null,
-  errorMessage: null,
-  errorCategory: null,
-  terminalSessionId: null,
-  terminalSessionState: null,
-  allowNonInteractive: false,
-  startedAt: null,
-  completedAt: null,
-  terminalUrl: null,
-  ideUrl: null,
-  dependsOnStepIds: [],
-  dependsOnNames: [],
-  subStepRuns: [],
-};
-
-function makeRun(overrides: Partial<Record<string, unknown>> = {}) {
-  return {
-    id: 42,
-    workflowId: 9,
-    workflowName: 'Nebula Pipeline',
-    state: 'running',
-    mode: 'interactive',
-    startedAt: null,
-    completedAt: null,
-    createdAt: '2026-01-01T00:00:00Z',
-    stepsCompleted: 1,
-    stepsTotal: 3,
+// Thin typed wrapper: buildWorkflowRun defaults to an empty stepRuns array, but every
+// seed()-based test relies on the two-step default the old untyped makeRun provided, so
+// re-seed it here (as typed StepRuns) and let callers override any WorkflowRun field.
+function makeRun(overrides: Partial<WorkflowRun> = {}) {
+  return buildWorkflowRun({
     stepRuns: [
-      { ...baseStep, id: 101, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, state: 'completed' },
-      { ...baseStep, id: 102, stepId: 2, stepName: 'Render Output', stepPosition: 2, state: 'pending' },
+      buildStepRun({ id: 101, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, state: 'completed' }),
+      buildStepRun({ id: 102, stepId: 2, stepName: 'Render Output', stepPosition: 2, state: 'pending' }),
     ],
-    agentType: 'codex',
-    userName: 'Dana Operator',
-    costCents: 0,
-    failureReason: null,
-    failedAccountName: null,
     ...overrides,
-  };
+  });
 }
 
 function seed(props: Record<string, unknown> = {}) {
@@ -154,15 +127,14 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('approves a step waiting for input', async () => {
-    const waiting = {
-      ...baseStep,
+    const waiting = buildStepRun({
       id: 201,
       stepId: 1,
       stepName: 'Review Plan',
       stepPosition: 1,
       state: 'waiting_input',
       startedAt: '2026-01-01T00:00:00Z',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [waiting] }) }),
     });
@@ -177,14 +149,13 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('retries a step waiting for input via the Retry action', async () => {
-    const waiting = {
-      ...baseStep,
+    const waiting = buildStepRun({
       id: 202,
       stepId: 1,
       stepName: 'Review Plan',
       stepPosition: 1,
       state: 'waiting_input',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [waiting] }) }),
     });
@@ -199,14 +170,13 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('opens the skip modal and posts skip_step with a typed reason', async () => {
-    const waiting = {
-      ...baseStep,
+    const waiting = buildStepRun({
       id: 203,
       stepId: 1,
       stepName: 'Review Plan',
       stepPosition: 1,
       state: 'waiting_input',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [waiting] }) }),
     });
@@ -226,15 +196,14 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('shows the failure card and retries a failed step', async () => {
-    const failed = {
-      ...baseStep,
+    const failed = buildStepRun({
       id: 204,
       stepId: 1,
       stepName: 'Deploy',
       stepPosition: 1,
       state: 'failed',
       errorMessage: 'Connection refused by registry',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [failed] }) }),
     });
@@ -254,8 +223,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('selecting a pending step shows the waiting-to-start detail', async () => {
-    const pending = {
-      ...baseStep,
+    const pending = buildStepRun({
       id: 205,
       stepId: 2,
       stepName: 'Render Output',
@@ -263,12 +231,12 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       state: 'pending',
       dependsOnStepIds: [1],
       dependsOnNames: ['Compile Specs'],
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({
         run: makeRun({
           stepRuns: [
-            { ...baseStep, id: 100, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, state: 'completed' },
+            buildStepRun({ id: 100, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, state: 'completed' }),
             pending,
           ],
         }),
@@ -288,10 +256,9 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       props: seed({
         run: makeRun({
           stepRuns: [
-            { ...baseStep, id: 301, stepId: 1, stepName: 'Lint', stepPosition: 1, state: 'completed' },
-            { ...baseStep, id: 302, stepId: 2, stepName: 'Typecheck', stepPosition: 2, state: 'completed' },
-            {
-              ...baseStep,
+            buildStepRun({ id: 301, stepId: 1, stepName: 'Lint', stepPosition: 1, state: 'completed' }),
+            buildStepRun({ id: 302, stepId: 2, stepName: 'Typecheck', stepPosition: 2, state: 'completed' }),
+            buildStepRun({
               id: 303,
               stepId: 3,
               stepName: 'Build',
@@ -299,7 +266,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
               state: 'pending',
               dependsOnStepIds: [1, 2],
               dependsOnNames: ['Lint', 'Typecheck'],
-            },
+            }),
           ],
         }),
       }),
@@ -312,15 +279,14 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('navigates to a terminal session from the step row chevron', async () => {
-    const stepWithSession = {
-      ...baseStep,
+    const stepWithSession = buildStepRun({
       id: 401,
       stepId: 1,
       stepName: 'Agent Step',
       stepPosition: 1,
       state: 'completed',
       terminalSessionId: 88,
-    };
+    });
     const { container } = renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [stepWithSession] }) }),
     });
@@ -336,8 +302,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('shows a finished-session banner and views the session', async () => {
-    const finishedSession = {
-      ...baseStep,
+    const finishedSession = buildStepRun({
       id: 402,
       stepId: 1,
       stepName: 'Agent Step',
@@ -345,7 +310,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       state: 'completed',
       terminalSessionId: 77,
       terminalSessionState: 'finished',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ state: 'completed', stepRuns: [finishedSession] }) }),
     });
@@ -358,8 +323,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('renders sub-step badges and the step note for the selected step', () => {
-    const stepWithSubs = {
-      ...baseStep,
+    const stepWithSubs = buildStepRun({
       id: 501,
       stepId: 1,
       stepName: 'Generate',
@@ -368,24 +332,22 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       startedAt: '2026-01-01T00:00:00Z',
       stepNote: 'Heads up: this step is flaky',
       subStepRuns: [
-        {
+        buildSubStepRun({
           id: 1,
           state: 'completed',
           subStepName: 'Fetch data',
-          subStepDescription: null,
           startedAt: '2026-01-01T00:00:00Z',
           completedAt: '2026-01-01T00:00:30Z',
-        },
-        {
+        }),
+        buildSubStepRun({
           id: 2,
           state: 'in_progress',
           subStepName: 'Transform',
-          subStepDescription: null,
           startedAt: '2026-01-01T00:00:30Z',
           completedAt: null,
-        },
+        }),
       ],
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [stepWithSubs] }) }),
     });
@@ -399,14 +361,14 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
 
   it('lists assets grouped by step with download and promote controls', async () => {
     const assets = [
-      {
+      buildWorkflowRunAsset({
         id: 11,
         name: 'report.pdf',
         contentType: 'application/pdf',
         fileSize: 2048,
         stepName: 'Compile Specs',
         downloadUrl: 'https://files.example.com/report.pdf',
-      },
+      }),
     ];
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ state: 'completed' }), assets }),
@@ -428,15 +390,16 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
+    // downloadUrl is optional-string (string | undefined), not nullable — omit it for
+    // "no download link" instead of passing null.
     const assets = [
-      {
+      buildWorkflowRunAsset({
         id: 22,
         name: 'artifact.zip',
         contentType: 'application/zip',
         fileSize: null,
         stepName: 'Build',
-        downloadUrl: null,
-      },
+      }),
     ];
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ state: 'completed' }), assets }),
@@ -470,8 +433,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
-    const runningInteractive = {
-      ...baseStep,
+    const runningInteractive = buildStepRun({
       id: 601,
       stepId: 1,
       stepName: 'Live Agent',
@@ -480,7 +442,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       startedAt: '2026-01-01T00:00:00Z',
       terminalSessionId: 99,
       terminalSessionState: 'not_started',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ mode: 'interactive', stepRuns: [runningInteractive] }) }),
     });
@@ -493,8 +455,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
   });
 
   it('shows a session-starting loader for a running interactive step', () => {
-    const starting = {
-      ...baseStep,
+    const starting = buildStepRun({
       id: 701,
       stepId: 1,
       stepName: 'Booting',
@@ -503,7 +464,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       startedAt: '2026-01-01T00:00:00Z',
       terminalSessionId: 12,
       terminalSessionState: 'running',
-    };
+    });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ stepRuns: [starting] }) }),
     });

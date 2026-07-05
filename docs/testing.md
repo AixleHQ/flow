@@ -10,7 +10,8 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 ## 1. Suite shape and budgets
 
 ```
-        Playwright e2e        ≤ 10 specs, critical paths only
+        system e2e (Capybara   ≤ 10 specs, critical paths only
+          + Cuprite/Chromium)
       ──────────────────
       FE component/page       behavior given props (Vitest + RTL, jsdom)
       request/integration     auth + policy + Inertia component/props
@@ -43,7 +44,7 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 | Adapter (one per vendor) | translation to the vendor API | WebMock `stub_request` contract tests with realistic payloads | leak vendor constants upward |
 | FE component/page | rendering + interaction given props | RTL role/label queries, `userEvent`, typed factories | `querySelector`, snapshots, style assertions |
 | FE pure lib | logic | plain Vitest, no DOM | — |
-| E2E (Playwright) | login, create project, run session/workflow — critical paths | the real stack | broad regression duty |
+| E2E (Capybara + Cuprite, SitePrism page objects in `test/system/pages/`) | login, create project, run session/workflow — critical paths | the real stack (headless Chromium against built Vite assets) | broad regression duty |
 
 New controllers get `ActionDispatch::IntegrationTest` request tests; do not add new
 `ActionController::TestCase` subclasses (legacy API tests are grandfathered).
@@ -154,6 +155,11 @@ and never swap constants at runtime.
   `ActivityEnvironment` (`run_activity`). The workflow time-skipping env is intentionally not in
   `check_all` (flaky local test server); workflows keep the `TemporalService`/`TemporalHelper`
   seam guarded by the Phase 2 pin-test.
-- **Phase 5 — pending.** FE typed-factory adoption + first Playwright critical-path specs.
+- **Phase 5 — done.** FE typed-factory adoption (`app/frontend/test/factories/`, migrated the
+  hand-rolled literal builders) + the first system e2e specs: Capybara + Cuprite (headless
+  Chromium, no chromedriver) with SitePrism page objects (`test/system/`), driving the real
+  Rails+Inertia+React stack against built Vite test assets. Run in `check_all` via `rails
+  test:system` (chromium is in the Docker image; `bin/vite build --mode test` runs first because
+  the test env now uses built assets, not a dev server).
 
 Details in the research report.

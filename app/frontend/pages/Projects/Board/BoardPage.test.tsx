@@ -2,40 +2,36 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildBoard } from 'test/factories/board';
+import { buildBoardColumn } from 'test/factories/boardColumn';
+import { buildBoardPreset } from 'test/factories/boardPreset';
+import { buildBoardTask } from 'test/factories/boardTask';
+import { buildTaskComment } from 'test/factories/taskComment';
+import { buildTaskStatistics } from 'test/factories/taskStatistics';
+import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import type BoardTask from 'types/generated/BoardTask';
 
 import BoardPage from './BoardPage';
 
 const project = { id: 7, name: 'Falcon Initiative' };
 
-const board = { id: 11, name: 'Project Board', presetOrigin: null };
+const board = buildBoard();
 
 const columns = [
-  { id: 100, name: 'Backlog', position: 0, purpose: null, workflowBinding: null },
-  { id: 200, name: 'In Progress', position: 1, purpose: null, workflowBinding: null },
+  buildBoardColumn({ id: 100, name: 'Backlog', position: 0 }),
+  buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
 ];
 
-const makeTask = (overrides: Partial<{ id: number; title: string; boardColumnId: number; position: number }> = {}) => ({
-  id: 1,
-  title: 'Untitled',
-  description: null,
-  taskType: 'story',
-  priority: null,
-  assigneeId: null,
-  assigneeName: null,
-  boardColumnId: 100,
-  position: 0,
-  parentTaskId: null,
-  tags: [],
-  commentsCount: 0,
-  childrenCount: 0,
-  assetsCount: 0,
-  recentWorkflowRuns: [],
-  pendingWaits: [],
-  createdAt: '2026-01-01T00:00:00Z',
-  updatedAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
+// buildBoardTask (typed factory) is the drift contract. This thin wrapper re-applies the
+// page-local defaults these tests were written against where they differ from the factory's:
+//   taskType 'story' (factory: 'feature'), commentsCount 0 (factory: 3), title 'Untitled'
+//   (factory: 'Task'; always overridden below anyway).
+// assigneeName: the page-local literal used `null`, but BoardTask spells assigneeName as
+// optional-not-nullable (`assigneeName?: string`), so `null` is not assignable — `undefined`
+// reproduces the same falsy "no assignee avatar" render the tests rely on.
+const makeTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
+  buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: undefined, ...overrides });
 
 const populatedProps = {
   project,
@@ -57,7 +53,7 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         project,
         board: null,
-        boardPresets: [{ key: 'simple_kanban', displayName: 'Simple Kanban', columns: ['Todo', 'Doing', 'Done'] }],
+        boardPresets: [buildBoardPreset()],
         columns: [],
         tasks: [],
         members: [],
@@ -117,14 +113,16 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         ...populatedProps,
         tasks: [
-          {
-            ...makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100 }),
+          makeTask({
+            id: 1,
+            title: 'Fix login crash',
+            boardColumnId: 100,
             taskType: 'bug',
             priority: 'high',
             tags: ['frontend', 'auth', 'urgent', 'p0'],
             commentsCount: 3,
             assigneeName: 'Dana Scout',
-          },
+          }),
         ],
       },
     });
@@ -164,8 +162,8 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         ...populatedProps,
         tasks: [
-          { ...makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100 }), taskType: 'bug' },
-          { ...makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200 }), taskType: 'story' },
+          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
+          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
         ],
       },
     });
@@ -188,8 +186,8 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         ...populatedProps,
         tasks: [
-          { ...makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100 }), taskType: 'bug' },
-          { ...makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200 }), taskType: 'story' },
+          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
+          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
         ],
       },
     });
@@ -236,11 +234,13 @@ describe('Projects/Board/BoardPage', () => {
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
-        selectedTask: {
-          ...makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
           taskType: 'bug',
           priority: 'high',
-        },
+        }),
         taskComments: [],
         taskAssets: [],
         taskActivities: [],
@@ -267,17 +267,7 @@ describe('Projects/Board/BoardPage', () => {
         taskComments: [],
         taskAssets: [],
         taskActivities: [],
-        taskWorkflowRuns: [
-          {
-            id: 55,
-            workflowName: 'Implement Feature',
-            state: 'completed',
-            mode: 'auto',
-            startedAt: null,
-            completedAt: null,
-            createdAt: '2026-01-02T00:00:00Z',
-          },
-        ],
+        taskWorkflowRuns: [buildTaskWorkflowRun()],
       },
     });
 
@@ -309,18 +299,9 @@ describe('Projects/Board/BoardPage', () => {
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
-        selectedTask: { ...makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }), commentsCount: 1 },
-        taskComments: [
-          {
-            id: 9,
-            body: 'Looks good to me',
-            authorName: 'Dana Scout',
-            authorType: 'human',
-            // Use a tag that is NOT one of the composer's quick-tag suggestions so it is unambiguous.
-            tags: ['release-blocker'],
-            createdAt: '2026-01-02T00:00:00Z',
-          },
-        ],
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, commentsCount: 1 }),
+        // Use a tag that is NOT one of the composer's quick-tag suggestions so it is unambiguous.
+        taskComments: [buildTaskComment({ tags: ['release-blocker'] })],
         taskAssets: [],
         taskActivities: [],
         taskWorkflowRuns: [],
@@ -345,13 +326,7 @@ describe('Projects/Board/BoardPage', () => {
         taskAssets: [],
         taskActivities: [],
         taskWorkflowRuns: [],
-        taskStatistics: {
-          costTotals: { totalCostCents: 250 },
-          tokenTotals: { totalTokens: 12500 },
-          timeTotals: { totalDurationSeconds: 95 },
-          gateStats: [],
-          workflowBreakdowns: [],
-        },
+        taskStatistics: buildTaskStatistics(),
       },
     });
 
@@ -370,6 +345,10 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         ...populatedProps,
         columns: [
+          // Kept bespoke: the component's Column.workflowBinding is camelCase (workflowId /
+          // workflowName / triggerMode), but Typelizer spells BoardColumn.workflowBinding's nested
+          // keys snake_case (workflow_id / trigger_mode / cooldown_seconds), so buildBoardColumn
+          // can't express this shape. Only the null-binding column goes through the factory.
           {
             id: 100,
             name: 'Backlog',
@@ -377,7 +356,7 @@ describe('Projects/Board/BoardPage', () => {
             purpose: null,
             workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement', triggerMode: 'manual' },
           },
-          { id: 200, name: 'In Progress', position: 1, purpose: null, workflowBinding: null },
+          buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
         ],
         selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
         taskComments: [],

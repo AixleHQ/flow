@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { buildSessionArtifact } from 'test/factories/sessionArtifact';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import ArtifactsPage from './ArtifactsPage';
@@ -9,22 +10,10 @@ import ArtifactsPage from './ArtifactsPage';
 const project = { id: 7, name: 'Orbital Launcher' };
 const session = { id: 42, state: 'completed', projectId: 7 };
 
-const artifact = (overrides: Record<string, unknown> = {}) => ({
-  id: 1,
-  name: 'report.pdf',
-  folder: null,
-  status: 'pending',
-  fileSize: 2048,
-  contentType: 'application/pdf',
-  downloadUrl: null,
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
-
 const baseProps = {
   project,
   session,
-  artifacts: [artifact()],
+  artifacts: [buildSessionArtifact()],
   alreadyReviewed: false,
 };
 
@@ -33,7 +22,10 @@ describe('Projects/Sessions/ArtifactsPage', () => {
     renderAuthedPage(<ArtifactsPage />, {
       props: {
         ...baseProps,
-        artifacts: [artifact({ id: 1, name: 'report.pdf' }), artifact({ id: 2, name: 'data.csv' })],
+        artifacts: [
+          buildSessionArtifact({ id: 1, name: 'report.pdf' }),
+          buildSessionArtifact({ id: 2, name: 'data.csv' }),
+        ],
       },
     });
 
@@ -61,7 +53,10 @@ describe('Projects/Sessions/ArtifactsPage', () => {
 
   it('posts the review decisions when "Save selected" is clicked', async () => {
     renderAuthedPage(<ArtifactsPage />, {
-      props: { ...baseProps, artifacts: [artifact({ id: 11, name: 'a.txt' }), artifact({ id: 22, name: 'b.txt' })] },
+      props: {
+        ...baseProps,
+        artifacts: [buildSessionArtifact({ id: 11, name: 'a.txt' }), buildSessionArtifact({ id: 22, name: 'b.txt' })],
+      },
     });
 
     // All artifacts start selected, so the counter reflects both.
@@ -78,7 +73,10 @@ describe('Projects/Sessions/ArtifactsPage', () => {
 
   it('updates the selected counter and decisions when a checkbox is unticked', async () => {
     renderAuthedPage(<ArtifactsPage />, {
-      props: { ...baseProps, artifacts: [artifact({ id: 11, name: 'a.txt' }), artifact({ id: 22, name: 'b.txt' })] },
+      props: {
+        ...baseProps,
+        artifacts: [buildSessionArtifact({ id: 11, name: 'a.txt' }), buildSessionArtifact({ id: 22, name: 'b.txt' })],
+      },
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select a.txt' }));
@@ -96,7 +94,10 @@ describe('Projects/Sessions/ArtifactsPage', () => {
 
   it('posts dismiss decisions for every artifact when "Dismiss all" is clicked', async () => {
     renderAuthedPage(<ArtifactsPage />, {
-      props: { ...baseProps, artifacts: [artifact({ id: 11, name: 'a.txt' }), artifact({ id: 22, name: 'b.txt' })] },
+      props: {
+        ...baseProps,
+        artifacts: [buildSessionArtifact({ id: 11, name: 'a.txt' }), buildSessionArtifact({ id: 22, name: 'b.txt' })],
+      },
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Dismiss all' }));
