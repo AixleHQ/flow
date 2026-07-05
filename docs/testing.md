@@ -39,7 +39,7 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 | Request (integration) | auth, authorization wiring, status, redirects, Inertia contract | `sign_in_as` through the real login POST; `assert_inertia_page` + `assert_inertia_props` for key props | re-test service logic in depth |
 | Policy | every Pundit policy | permit/forbid matrix per role (pure unit tests) | — |
 | Job | enqueue + perform | ActiveJob test helpers + boundary fakes | — |
-| Temporal workflow | orchestration logic | stub the `TemporalService` seam via `TemporalHelper` (§4). The SDK time-skipping `WorkflowEnvironment` is deliberately **not** wired into `check_all`: its local test server boots slowly and hangs intermittently, which would make the gate flaky. | stub `Temporalio::Testing` itself (outside `temporal_service_test`, which is the seam's own contract test) |
+| Temporal workflow | orchestration logic | full-execution tests run the real workflow through the SDK time-skipping `WorkflowEnvironment` with fake activities, via the `run_workflow` helper (`test/support/temporal_workflow_helper.rb`) — the in-memory test server boots ~5s once then is instant, and time-skips retry backoff; it does NOT touch the shared Postgres. White-box tests of orchestration internals (signal races, decision logic) stay plain unit tests. Callers of `TemporalService` keep the `TemporalHelper` seam. | stub `Temporalio::Testing` itself (outside `temporal_service_test`, its own contract test) |
 | Temporal activity | side effects | run the activity through `Temporalio::Testing::ActivityEnvironment` via the `run_activity` helper (serverless — no boot/hang risk); boundaries stay behind their fakes | — |
 | Adapter (one per vendor) | translation to the vendor API | WebMock `stub_request` contract tests with realistic payloads | leak vendor constants upward |
 | FE component/page | rendering + interaction given props | RTL role/label queries, `userEvent`, typed factories | `querySelector`, snapshots, style assertions |
@@ -151,10 +151,10 @@ and never swap constants at runtime.
 - **Phase 3 — done.** The container fake is re-housed as `ContainerRuntime::FakeRuntime`
   (`test/support/fakes/fake_runtime.rb`), injected via the `ContainerRuntime.build` seam;
   `StubSupport`'s vendor-stub/monkeypatch machinery is gone.
-- **Phase 4 — activities done, workflow deferred.** Activity tests run through
-  `ActivityEnvironment` (`run_activity`). The workflow time-skipping env is intentionally not in
-  `check_all` (flaky local test server); workflows keep the `TemporalService`/`TemporalHelper`
-  seam guarded by the Phase 2 pin-test.
+- **Phase 4 — done.** Activity tests run through `ActivityEnvironment` (`run_activity`).
+  Full-execution workflow tests run through the time-skipping `WorkflowEnvironment` (`run_workflow`,
+  in `check_all` — the test server proved stable, ~5s one-time boot); white-box orchestration-internal
+  workflow tests stay unit. `TemporalService` callers keep the `TemporalHelper` seam + Phase 2 pin-test.
 - **Phase 5 — done.** FE typed-factory adoption (`app/frontend/test/factories/`, migrated the
   hand-rolled literal builders) + the first system e2e specs: Capybara + Cuprite (headless
   Chromium, no chromedriver) with SitePrism page objects (`test/system/`), driving the real
