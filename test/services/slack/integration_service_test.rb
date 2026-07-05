@@ -14,18 +14,22 @@ module Slack
       Slack::IntegrationService.new(company: @company, connected_by: @user, project: @project)
     end
 
-    def oauth_response(team_id: "T123", team_name: "Acme HQ")
-      {
-        "ok" => true,
-        "access_token" => "xoxb-abc",
-        "bot_user_id" => "U999",
-        "scope" => "chat:write,files:read",
-        "team" => { "id" => team_id, "name" => team_name }
-      }
+    # Route Slack::Client onto the one canonical in-memory fake and tailor the
+    # OAuth exchange response the code under test consumes. Returns the fake so a
+    # test can assert on its recorded calls / mutate the canned values between
+    # successive exchanges.
+    def stub_slack_oauth(team_id: "T123", team_name: "Acme HQ")
+      fake = stub_slack_client!
+      fake.team_id     = team_id
+      fake.team_name   = team_name
+      fake.bot_token   = "xoxb-abc"
+      fake.bot_user_id = "U999"
+      fake.scope       = "chat:write,files:read"
+      fake
     end
 
     test "create_from_oauth persists an active install with the bot token and routable team_id" do
-      Slack::Client.expects(:exchange_code).returns(oauth_response)
+      fake = stub_slack_oauth
 
       integration = service.create_from_oauth(code: "code-1")
 
@@ -38,9 +42,14 @@ module Slack
       # team_id is mirrored into settings (non-secret) so inbound events route without decrypting.
       assert_equal "T123", integration.settings["team_id"]
       assert_equal "Acme HQ", integration.settings["team_name"]
+      # the OAuth code was exchanged through the Slack boundary exactly once
+      assert_equal 1, fake.oauth_exchanges.size
+      assert_equal "code-1", fake.oauth_exchanges.last[:code]
     end
 
     test "create_from_oauth records an error integration when Slack rejects the code" do
+      # The fake always returns a successful exchange, so the rejection path stays
+      # on a Mocha stub (the canonical fake has no seam to raise Slack::Client::Error).
       Slack::Client.expects(:exchange_code).raises(Slack::Client::Error.new("invalid_code"))
 
       integration = service.create_from_oauth(code: "bad")
@@ -51,7 +60,7 @@ module Slack
     end
 
     test "create_from_oauth errors when Slack returns no workspace id" do
-      Slack::Client.expects(:exchange_code).returns(oauth_response(team_id: ""))
+      stub_slack_oauth(team_id: "")
 
       integration = service.create_from_oauth(code: "code-1")
 
@@ -65,7 +74,7 @@ module Slack
         verification_strategy: :slack_v0, company: other.company, created_by: other,
         config: { "team_id" => "T123" })
 
-      Slack::Client.expects(:exchange_code).returns(oauth_response(team_id: "T123"))
+      stub_slack_oauth(team_id: "T123")
 
       integration = service.create_from_oauth(code: "c")
 
@@ -74,13 +83,13 @@ module Slack
     end
 
     test "reconnecting the same workspace updates the existing install instead of duplicating" do
-      Slack::Client.stubs(:exchange_code).returns(
-        oauth_response(team_id: "T1", team_name: "Acme"),
-        oauth_response(team_id: "T1", team_name: "Acme Renamed")
-      )
+      fake = stub_slack_oauth(team_id: "T1", team_name: "Acme")
 
       first = service.create_from_oauth(code: "c1")
       assert first.active?
+
+      # Same workspace reconnects with a renamed team on the next exchange.
+      fake.team_name = "Acme Renamed"
 
       assert_no_difference -> { Integration.where(provider: :slack).count } do
         second = service.create_from_oauth(code: "c2")
@@ -90,7 +99,7 @@ module Slack
     end
 
     test "the install is company-scoped (no project binding) so all projects share it" do
-      Slack::Client.expects(:exchange_code).returns(oauth_response)
+      stub_slack_oauth
 
       integration = service.create_from_oauth(code: "c")
 
@@ -102,12 +111,13 @@ module Slack
     end
 
     test "a company can connect several different workspaces" do
-      Slack::Client.stubs(:exchange_code).returns(
-        oauth_response(team_id: "T1", team_name: "WS One"),
-        oauth_response(team_id: "T2", team_name: "WS Two")
-      )
+      fake = stub_slack_oauth(team_id: "T1", team_name: "WS One")
 
-      first  = service.create_from_oauth(code: "c1")
+      first = service.create_from_oauth(code: "c1")
+
+      # A second, distinct workspace exchanges next.
+      fake.team_id   = "T2"
+      fake.team_name = "WS Two"
       second = service.create_from_oauth(code: "c2")
 
       assert_not_equal first.id, second.id

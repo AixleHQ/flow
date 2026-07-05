@@ -33,9 +33,6 @@ Testing/NoVendorStubbing:
     - "test/**/*"
   Exclude:
     - "test/services/container_runtime/docker_runtime_test.rb"
-    - "test/services/github/repository_service_test.rb"
-    - "test/services/github/token_service_test.rb"
-    - "test/services/gitlab/token_service_test.rb"
     - "test/services/temporal_service_test.rb"
     - "test/support/stub_support.rb"
 
