@@ -43,7 +43,10 @@ TEST_LOCK := flock tmp/.rails-test.lock
 # Backend (Ruby) checks, in parallel. Each subshell records its own exit code, so `wait` never aborts.
 define run_be_checks
 	@echo "Building test-mode Vite assets (required: test uses built assets, autoBuild is off)..."
-	@( bin/vite build --mode test > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
+	@# VITE_RUBY_MODE=test selects the vite-test publicOutputDir (a bare `--mode test`
+	@# only sets Vite's JS mode, NOT ViteRuby's output dir → it'd build to vite-dev).
+	@# --force so a stale last-compilation digest never skips the build (leaving no manifest).
+	@( VITE_RUBY_MODE=test bin/vite build --force > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
 	@( COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( SKIP_COVERAGE=1 $(TEST_LOCK) bundle exec rails test:system   > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
