@@ -40,12 +40,7 @@ config/master.key
 web_reference
 initializer_reference
 
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+.yarn/
 
 # Vite Ruby
 .vite
@@ -62,8 +57,10 @@ coverage
 
 .env.development
 
-# Private individual user cursor rules
-.cursor/rules/_*.mdc
+# Cursor IDE (rules, skills, local config)
+.cursor/
+.cursorignore
+.cursorindexingignore
 .byebug_history
 
 .ruby-lsp/
@@ -90,3 +87,4 @@ docker/remote/db_dumps/latest.sql.gz
 .claude/
 docker/tools/
 _bmad/
+_bmad-output/

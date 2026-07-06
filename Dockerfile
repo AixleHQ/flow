@@ -1,7 +1,7 @@
 FROM ruby:4.0.5-alpine
 
 RUN apk update && \
-    apk add --no-cache build-base postgresql-dev tzdata bash git vim curl yarn postgresql-client \
+    apk add --no-cache build-base postgresql-dev tzdata bash git vim curl nodejs npm postgresql-client \
         less vips vips-dev vips-tools gcompat build-base yaml-dev file-dev openssh-client \
         chromium ttf-freefont font-noto nss freetype harfbuzz
 
@@ -29,11 +29,14 @@ COPY Gemfile Gemfile.lock .ruby-version ./
 RUN gem install bundler -v 4.0.11
 RUN bundle config set --local frozen true && bundle install
 
-COPY package.json yarn.lock .yarnrc.yml  ./
-COPY .yarn .yarn
+# Yarn is provisioned via Corepack driven by the "packageManager" field in
+# package.json — the Yarn release is NOT vendored into the repo.
+RUN npm install -g corepack@latest && corepack enable
 
-RUN yarn set version 4.12.0
-RUN yarn install
+COPY package.json yarn.lock .yarnrc.yml ./
+
+RUN corepack install
+RUN yarn install --immutable
 
 COPY . /app
 
