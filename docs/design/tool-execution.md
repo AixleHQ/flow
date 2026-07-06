@@ -1,9 +1,8 @@
 # Tool Execution Framework
 
 **Date:** 2026-02-23 (v1)
-**Status:** Draft
+**Status:** Implemented
 **Author:** Artem Petrov + AI Analysis
-**Supersedes:** Epic 18 internal tools architecture (partially — execution & strategy layers)
 
 ---
 
@@ -11,8 +10,8 @@
 
 | Document | Description |
 |----------|-------------|
-| [Workflow Architecture](./workflow-architecture.md) | Workflow, Step, SubStep data model and execution flow |
-| [Architecture](./architecture/index.md) | Core architecture decisions, tech stack |
+| [Workflow Architecture](../architecture/workflows.md) | Workflow, Step, SubStep data model and execution flow |
+| [Architecture](../architecture/index.md) | Core architecture decisions, tech stack |
 
 ---
 
@@ -41,7 +40,7 @@ end
 | Mode | What it means | Examples |
 |------|---------------|---------|
 | `app` | Executes in Rails process, synchronous, no container | list_sub_steps, mark_sub_step, write_step_note, read_tool_result |
-| `container` | Runs in Docker via Temporal workflow, async, produces ToolResult | code_climate, semgrep, custom tools |
+| `container` | Runs in Docker via Temporal workflow, async, produces ToolResult | custom tools (user-defined Docker images); DSL-defined internal container tools |
 
 ### 1.2 Routing
 
@@ -70,27 +69,32 @@ Container tools create `ToolResult` (state: `processing`), fire Temporal `start_
 ## 2. Strategy Hierarchy
 
 ```
-ContainerStrategies::BaseStrategy          (existing — generic phases, cleanup, runtime)
+ContainerStrategies::BaseStrategy          (generic phases, cleanup, runtime)
   │
-  ├── AgentBaseStrategy                    (existing — agent containers)
+  ├── AgentBaseStrategy                    (agent containers)
   │     ├── AgentAuthStrategy
   │     └── AgentSessionStrategy
+  │           └── WorkflowStepStrategy     (non-interactive workflow step sessions)
   │
-  └── ToolStrategy                         (NEW — shared base for ALL tool execution)
+  └── ToolStrategy                         (shared base for ALL tool execution)
         │
         │  Provides: phase_config, start_container, exec,
         │            timeout handling, result persistence to ToolResult
         │
-        ├── CustomToolStrategy             (NEW — replaces ToolExecutionStrategy)
+        ├── CustomToolStrategy             (user-created container tools)
         │     Data from: Tool model (docker_image, command, tool_files)
         │     Security: sandboxed (no docker socket, limited resources)
         │     Output: stdout/stderr only
         │
-        └── InternalToolStrategy           (NEW — DSL-based definitions)
+        └── InternalToolStrategy           (DSL-based definitions)
               Data from: DSL `define` blocks
               Security: per-definition (can mount docker socket, bind paths)
               Output: stdout/stderr + files from container
 ```
+
+`WorkflowStepStrategy` (subclass of `AgentSessionStrategy`) is not part of the
+tool-execution hierarchy — it runs workflow step agent sessions — but is listed
+here for completeness of the `ContainerStrategies` tree.
 
 ### 2.1 ToolStrategy (shared base)
 
@@ -181,7 +185,7 @@ end
 
 ### 2.2 CustomToolStrategy
 
-Replaces existing `ToolExecutionStrategy`. Data comes from `Tool` model fields.
+Handles all user-created container tools. Data comes from `Tool` model fields.
 
 ```ruby
 module ContainerStrategies
@@ -227,7 +231,6 @@ module ContainerStrategies
     private
 
     # ... interpolate_command, file_setup_cmd, resolve_config_items, inject_project_env
-    # (moved from current ToolExecutionStrategy, no logic changes)
   end
 end
 ```
@@ -305,40 +308,28 @@ module ContainerStrategies
     end
 
     # --- Tool Definitions ---
-
-    define :code_climate do
-      image "codeclimate/codeclimate"
-      timeout 600
-      memory 2.gigabytes
-      cpu_quota 100_000
-      working_dir "/code"
-      docker_socket!
-
-      prepare { |input|
-        repo = input[:session].repositories.find(input[:repository_id])
-        repo_path = RepoCloneService.ensure_cloned(repo)
-        CodeClimateConfigWriter.ensure_config(repo_path, input[:engines])
-        input.merge(repo_path: repo_path)
-      }
-
-      cmd { |input|
-        c = ["analyze", "-f", input[:format] || "json"]
-        input[:engines]&.split(",")&.each { |e| c += ["-e", e.strip] }
-        c
-      }
-
-      env { |input|
-        { "CODECLIMATE_CODE" => input[:repo_path] }
-      }
-
-      binds { |input|
-        [
-          "#{input[:repo_path]}:/code:ro",
-          "/var/run/docker.sock:/var/run/docker.sock",
-          "/tmp/cc:/tmp/cc"
-        ]
-      }
-    end
+    #
+    # The registry currently ships with no `define` blocks — no internal
+    # container tools are registered yet. The DSL below shows the shape a
+    # definition takes. `prepare` runs in-process before the container starts
+    # (e.g. clone a repo, write config); `cmd`/`env`/`binds` build the
+    # container invocation; `output_files` collects artifacts back into the
+    # ToolResult. Illustrative example (a repo linter):
+    #
+    #   define :linter do
+    #     image "some-registry/linter:latest"
+    #     timeout 600
+    #     memory 2.gigabytes
+    #     working_dir "/code"
+    #
+    #     prepare { |input|
+    #       repo = input[:session].repositories.find(input[:repository_id])
+    #       input.merge(repo_path: RepoCloneService.ensure_cloned(repo))
+    #     }
+    #
+    #     cmd  { |input| ["analyze", "-f", input[:format] || "json", "/code"] }
+    #     binds { |input| ["#{input[:repo_path]}:/code:ro"] }
+    #   end
 
     # --- Phase overrides ---
 
@@ -680,7 +671,7 @@ Agent receives serialized metadata with presigned download URLs:
 ```json
 {
   "execution_id": "tr-a1b2c3d4e5f6e7a8",
-  "tool_name": "code_climate",
+  "tool_name": "linter",
   "state": "completed",
   "exit_code": 0,
   "duration_ms": 3200,
@@ -693,7 +684,7 @@ Agent receives serialized metadata with presigned download URLs:
 
 Agent then downloads via shell:
 ```bash
-curl -sS -o /workspace/code_climate.json "<result_data_url>"
+curl -sS -o /workspace/linter.json "<result_data_url>"
 ```
 
 URLs expire in 1 hour. Agent can call `read_tool_result` again to get fresh URLs.
@@ -726,7 +717,7 @@ class Tool < ApplicationRecord
     workflow_id = "tool-exec-#{id}-#{SecureRandom.hex(8)}"
 
     TemporalService.start_workflow(
-      WorkflowService.container_workflow,
+      TemporalWorkflowRegistry.container_workflow,
       { tool_id: id, tool_result_id: tool_result_id,
         parameters: parameters, project_id: project&.id,
         timeout: timeout, manifest: strategy.build_manifest },
@@ -736,15 +727,15 @@ class Tool < ApplicationRecord
   end
 
   def build_strategy(parameters:, project:, session:, timeout:, tool_result_id:)
-    if custom?
-      ContainerStrategies::CustomToolStrategy.new(
-        tool: self, parameters: parameters, project: project,
-        timeout: timeout, tool_result_id: tool_result_id
-      )
-    else
+    if ContainerStrategies::InternalToolStrategy.registered?(name)
       ContainerStrategies::InternalToolStrategy.build_for(
         name, params: parameters, session: session,
         tool_result_id: tool_result_id, timeout: timeout
+      )
+    else
+      ContainerStrategies::CustomToolStrategy.new(
+        tool: self, parameters: parameters, project: project,
+        timeout: timeout, tool_result_id: tool_result_id
       )
     end
   end
@@ -768,19 +759,16 @@ Custom tools are sandboxed: no host filesystem access, no docker socket, resourc
 
 ---
 
-## 8. What Gets Deleted
+## 8. Handler Classes
 
-After migration to this framework:
+`InternalToolExecutor` routes `app`-mode tools to Ruby handler classes.
 
-| File | Reason |
-|------|--------|
-| `app/services/container_strategies/tool_execution_strategy.rb` | Replaced by `CustomToolStrategy` |
-| `app/services/container_strategies/code_climate_strategy.rb` | Replaced by DSL definition in `InternalToolStrategy` |
-| `app/services/internal_tools/code_climate.rb` | Replaced by DSL definition + prepare block |
+`InternalTools::Base` is the base class for app-mode handlers (list_sub_steps, mark_sub_step, write_step_note, read_tool_result).
 
-`InternalToolExecutor` stays — still routes `app`-mode tools to Ruby handler classes.
-
-`InternalTools::Base` stays — base class for app-mode handlers (list_sub_steps, mark_sub_step, write_step_note, read_tool_result).
+> **Historical note:** the migration to this framework is complete. The
+> pre-framework classes (`ToolExecutionStrategy`, `CodeClimateStrategy`,
+> `InternalTools::CodeClimate`) have been removed; their responsibilities now
+> live in `CustomToolStrategy` and `InternalToolStrategy`.
 
 ---
 
@@ -842,28 +830,13 @@ All heavy data (stdout, stderr, files) goes to ToolResult → Shrine → S3. Tem
 
 ---
 
-## 11. Migration Plan
+## 11. Migration Status
 
-### Database
-
-1. Add `execution_mode` column to `tools` table
-2. Create `tool_results` table
-3. Update existing internal tool seeds: `execution_mode: :app` for workflow tools, `:container` for code_climate
-4. Seed `read_tool_result` as new internal app tool
-
-### Code
-
-1. Create `ToolResultUploader`
-2. Create `ToolResult` model
-3. Create `ToolResultSerializer`
-4. Create `ContainerStrategies::ToolStrategy` (extract shared logic)
-5. Create `ContainerStrategies::CustomToolStrategy` (move custom logic)
-6. Create `ContainerStrategies::InternalToolStrategy` (DSL + code_climate definition)
-7. Create `InternalTools::ReadToolResult`
-8. Update `Tool#execute` routing
-9. Update `action_mcp_dynamic_tools.rb` (async for container tools)
-10. Delete `ToolExecutionStrategy`, `CodeClimateStrategy`, `InternalTools::CodeClimate`
-11. Update tests
+This framework is fully implemented: the `execution_mode` column, `tool_results`
+table, `ToolResult` model + uploader + serializer, the `ToolStrategy` /
+`CustomToolStrategy` / `InternalToolStrategy` hierarchy, `InternalTools::ReadToolResult`,
+and the `Tool#execute` routing are all in place. The pre-framework strategy
+classes have been removed (see §8).
 
 ---
 

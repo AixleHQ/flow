@@ -1,7 +1,7 @@
-# Product strategy: Aixle (Palad AI) — 12-month horizon
+# Product strategy: Aixle flow — 12-month horizon
 
-> **Status:** Draft · **Version:** 0.1 · **Date:** April 2026  
-> **Market:** USA · **Horizon:** 12 months  
+> **Status:** Draft · **Version:** 0.1 · **Date:** April 2026
+> **Market:** USA · **Horizon:** 12 months
 
 ---
 
@@ -38,16 +38,16 @@
 
 ### 4 key trends
 
-**Trend 1 — Agents have moved from toy to working tool**  
+**Trend 1 — Agents have moved from toy to working tool**
 Devin ARR: $1M → $73M in 9 months (Sept 2024 — June 2025). Cursor is valued at $50B (March 2026). Cognition is raising at a $25B valuation (Apr 2026, SiliconAngle). The market is no longer experimental — companies are paying real money for AI agents right now.
 
-**Trend 2 — The agent coordination problem is becoming the critical path**  
+**Trend 2 — The agent coordination problem is becoming the critical path**
 Single agents (Claude Code, Cursor) solve an individual job. But when a team of 5+ people works, with some tasks delegated to agents, there is no tool that holds the entire context: who launched what, at what stage, what is blocked. This is an unfilled gap.
 
-**Trend 3 — Enterprise demands controllability, not autonomy**  
+**Trend 3 — Enterprise demands controllability, not autonomy**
 Goldman Sachs, Citi, Cisco (clients of Devin, Cognition 2026) don't want “magic.” They need audit trails, approval gates, cost tracking, and control over what the agent does. The market is moving from “watch how smart AI does it all” to “we control the AI workflow.”
 
-**Trend 4 — Warning signal: platform players are locking down basic orchestration**  
+**Trend 4 — Warning signal: platform players are locking down basic orchestration**
 GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent — every big cloud player is building its own orchestration layer. The window for an unfilled market is narrowing. Specialized solutions must show a defensible moat within 12–18 months.
 
 ---
@@ -67,40 +67,40 @@ GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent 
 
 ### 5 key JTBDs
 
-**JTBD 1 — The main, unfilled one**  
-*“When I want to delegate several tasks to AI agents in parallel, I want to see a single place where everything happens and where I can intervene at any moment, so I don't lose control over the project and don't have to collect results from five different terminals.”*  
-— Who experiences it: Engineering Lead, CTO at a startup, Solo DevOps  
-— Current coverage: nothing / a workaround (Notion + GitHub + manual tracking)  
-— Competitors: 0/5 cover it fully  
-— Pain intensity: **critical**  
+**JTBD 1 — The main, unfilled one**
+*“When I want to delegate several tasks to AI agents in parallel, I want to see a single place where everything happens and where I can intervene at any moment, so I don't lose control over the project and don't have to collect results from five different terminals.”*
+— Who experiences it: Engineering Lead, CTO at a startup, Solo DevOps
+— Current coverage: nothing / a workaround (Notion + GitHub + manual tracking)
+— Competitors: 0/5 cover it fully
+— Pain intensity: **critical**
 
-**JTBD 2 — Important, partially covered**  
-*“When I set up an AI agent for a recurring task (code review, test generation), I want to describe the process once and never come back to it, so my team runs it like a button without my involvement.”*  
-— Who experiences it: Staff Engineer, Engineering Manager  
-— Current coverage: GitHub Actions + prompts in a document (a brittle workaround)  
-— Competitors: 1/5 (Codegen.ai partially)  
-— Pain intensity: **important**  
+**JTBD 2 — Important, partially covered**
+*“When I set up an AI agent for a recurring task (code review, test generation), I want to describe the process once and never come back to it, so my team runs it like a button without my involvement.”*
+— Who experiences it: Staff Engineer, Engineering Manager
+— Current coverage: GitHub Actions + prompts in a document (a brittle workaround)
+— Competitors: 1/5 (Codegen.ai partially)
+— Pain intensity: **important**
 
-**JTBD 3 — Important for enterprise**  
-*“When an AI agent works on our code, I want to see a full log of exactly what it did, how much it cost, and where it made a debatable decision, so I can explain it to the team and not sign off on a \"black box.\"”*  
-— Who experiences it: CTO, Security Engineer, Compliance Lead  
-— Current coverage: nothing  
-— Competitors: 0/5  
-— Pain intensity: **critical for enterprise**  
+**JTBD 3 — Important for enterprise**
+*“When an AI agent works on our code, I want to see a full log of exactly what it did, how much it cost, and where it made a debatable decision, so I can explain it to the team and not sign off on a \"black box.\"”*
+— Who experiences it: CTO, Security Engineer, Compliance Lead
+— Current coverage: nothing
+— Competitors: 0/5
+— Pain intensity: **critical for enterprise**
 
-**JTBD 4 — Important for adoption**  
-*“When I want to start using AI agents in my workflow, I want to get a working first example in 15 minutes rather than reading documentation for 3 hours, so I can confirm it works for my tasks at all.”*  
-— Who experiences it: Solo Developer, Junior PM  
-— Current coverage: partially (Cursor onboarding is better)  
-— Competitors: 2/5  
-— Pain intensity: **important**  
+**JTBD 4 — Important for adoption**
+*“When I want to start using AI agents in my workflow, I want to get a working first example in 15 minutes rather than reading documentation for 3 hours, so I can confirm it works for my tasks at all.”*
+— Who experiences it: Solo Developer, Junior PM
+— Current coverage: partially (Cursor onboarding is better)
+— Competitors: 2/5
+— Pain intensity: **important**
 
-**JTBD 5 — Growing**  
-*“When I need to standardize AI processes across the team, I want to create templated workflows that every developer runs the same way, so the result doesn't depend on the prompting skills of a particular person.”*  
-— Who experiences it: Engineering Manager, Platform Team Lead  
-— Current coverage: nothing / Notion templates  
-— Competitors: 0/5  
-— Pain intensity: **nice to have → critical at scale**  
+**JTBD 5 — Growing**
+*“When I need to standardize AI processes across the team, I want to create templated workflows that every developer runs the same way, so the result doesn't depend on the prompting skills of a particular person.”*
+— Who experiences it: Engineering Manager, Platform Team Lead
+— Current coverage: nothing / Notion templates
+— Competitors: 0/5
+— Pain intensity: **nice to have → critical at scale**
 
 ---
 
@@ -108,77 +108,77 @@ GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent 
 
 ---
 
-**Persona 1 — Alex, 32, Engineering Lead · San Francisco**  
+**Persona 1 — Alex, 32, Engineering Lead · San Francisco**
 *Leads a team of 8 developers at a B2B SaaS startup. Personally experiments with Claude Code and Cursor, but can't “carry” the AI setup for the whole team.*
 
-- **Device:** MacBook Pro, terminal as the primary environment  
-- **Frequency:** daily  
-- **Income:** $180K+  
-- **Top 3 pains:**  
-  1. Agents are launched differently by each person — no standard, no visibility  
-  2. When an agent breaks in the middle of a task, it is unclear at which step and why  
-  3. Hard to explain the ROI of AI tools to a manager without data  
-- **Primary JTBD:** "When I scale AI workflows across the team, I want to see what the agents are doing right now and have levers of control, so the team works faster and I am not manually supervising every run."  
+- **Device:** MacBook Pro, terminal as the primary environment
+- **Frequency:** daily
+- **Income:** $180K+
+- **Top 3 pains:**
+  1. Agents are launched differently by each person — no standard, no visibility
+  2. When an agent breaks in the middle of a task, it is unclear at which step and why
+  3. Hard to explain the ROI of AI tools to a manager without data
+- **Primary JTBD:** "When I scale AI workflows across the team, I want to see what the agents are doing right now and have levers of control, so the team works faster and I am not manually supervising every run."
 - **Quote:** *"I love Claude Code but it's my personal superpower — my team doesn't use it the same way and I can't scale that."* [AI simulation]
 
 ---
 
-**Persona 2 — Sarah, 28, Full-Stack Developer (Solo/Freelance) · Austin, Texas**  
+**Persona 2 — Sarah, 28, Full-Stack Developer (Solo/Freelance) · Austin, Texas**
 *Works independently, running 3-4 client projects in parallel. Active user of Claude Code and Cursor.*
 
-- **Device:** MacBook + iPad  
-- **Frequency:** daily  
-- **Income:** $90-120K/year  
-- **Top 3 pains:**  
-  1. Switching between terminals during parallel tasks loses context  
-  2. No history of what the agent did, making it hard to hand off work to the client  
-  3. Every new project starts from scratch, with no way to reuse a configured workflow  
-- **Primary JTBD:** "When I juggle several AI tasks at once, I want a single point of control without switching tabs, so each client gets a clear trail of what was done."  
+- **Device:** MacBook + iPad
+- **Frequency:** daily
+- **Income:** $90-120K/year
+- **Top 3 pains:**
+  1. Switching between terminals during parallel tasks loses context
+  2. No history of what the agent did, making it hard to hand off work to the client
+  3. Every new project starts from scratch, with no way to reuse a configured workflow
+- **Primary JTBD:** "When I juggle several AI tasks at once, I want a single point of control without switching tabs, so each client gets a clear trail of what was done."
 - **Quote:** *"I already live in the terminal — I just want one place to see what all my agents are up to."* [AI simulation]
 
 ---
 
-**Persona 3 — Marcus, 41, CTO · New York**  
+**Persona 3 — Marcus, 41, CTO · New York**
 *Serial entrepreneur, 3rd startup. Team of 15. Tracks AI trends as a strategist but is technically behind the team.*
 
-- **Device:** MacBook, Chrome, Slack as the primary environment  
-- **Frequency:** 2-3 times per week  
-- **Income:** $250K+ + equity  
-- **Top 3 pains:**  
-  1. Does not understand the real return from AI tools — no data  
-  2. Afraid to "hand off" critical tasks to agents without visibility  
-  3. The team uses different tools — no unified picture  
-- **Primary JTBD:** "When AI agents work across the team, I want to see what is happening, how much it costs, and where the risks are, so I can make AI investment decisions based on data rather than intuition."  
+- **Device:** MacBook, Chrome, Slack as the primary environment
+- **Frequency:** 2-3 times per week
+- **Income:** $250K+ + equity
+- **Top 3 pains:**
+  1. Does not understand the real return from AI tools — no data
+  2. Afraid to "hand off" critical tasks to agents without visibility
+  3. The team uses different tools — no unified picture
+- **Primary JTBD:** "When AI agents work across the team, I want to see what is happening, how much it costs, and where the risks are, so I can make AI investment decisions based on data rather than intuition."
 - **Quote:** *"If I can't explain to the board what our AI is doing, I'm not shipping it."* [AI simulation]
 
 ---
 
-**Persona 4 — Jordan, 35, Platform/DevOps Engineer · Remote (USA)**  
+**Persona 4 — Jordan, 35, Platform/DevOps Engineer · Remote (USA)**
 *Responsible for AI pipeline infrastructure at a 50+ person company. Technically strong, skeptical of vendor lock-in.*
 
-- **Device:** Linux / multiple terminals  
-- **Frequency:** daily  
-- **Income:** $160K  
-- **Top 3 pains:**  
-  1. Every new AI tool = a new integration and a new security review  
-  2. No standard for running agents in a containerized environment  
-  3. Hard to set up approval gates without custom code  
-- **Primary JTBD:** "When I run AI agents in a production environment, I want a container-native platform with an audit log and configurable approval gates, so compliance does not turn into manual work."  
+- **Device:** Linux / multiple terminals
+- **Frequency:** daily
+- **Income:** $160K
+- **Top 3 pains:**
+  1. Every new AI tool = a new integration and a new security review
+  2. No standard for running agents in a containerized environment
+  3. Hard to set up approval gates without custom code
+- **Primary JTBD:** "When I run AI agents in a production environment, I want a container-native platform with an audit log and configurable approval gates, so compliance does not turn into manual work."
 - **Quote:** *"Show me the Temporal workflow graph and let me override steps — that's all I need."* [AI simulation]
 
 ---
 
-**Persona 5 — Priya, 30, Product Manager (AI-first company) · Seattle**  
+**Persona 5 — Priya, 30, Product Manager (AI-first company) · Seattle**
 *PM at a startup where developers actively use agents. Does not write code herself, but assigns tasks on the Board and expects results.*
 
-- **Device:** MacBook + iPhone  
-- **Frequency:** daily (as a Board user)  
-- **Income:** $130K  
-- **Top 3 pains:**  
-  1. Does not understand what is happening while the agent works — the status is opaque  
-  2. A task "flew off" to the agent — when will it come back and in what form?  
-  3. Cannot easily assign a task to AI without a developer's help  
-- **Primary JTBD:** "When I hand a task to the development team, I want to see live status without having to ping engineers, so I can plan the sprint based on the real progress of the AI workflow."  
+- **Device:** MacBook + iPhone
+- **Frequency:** daily (as a Board user)
+- **Income:** $130K
+- **Top 3 pains:**
+  1. Does not understand what is happening while the agent works — the status is opaque
+  2. A task "flew off" to the agent — when will it come back and in what form?
+  3. Cannot easily assign a task to AI without a developer's help
+- **Primary JTBD:** "When I hand a task to the development team, I want to see live status without having to ping engineers, so I can plan the sprint based on the real progress of the AI workflow."
 - **Quote:** *"I move the ticket to 'In Progress' and then... silence. I have no idea if the agent is working or stuck."* [AI simulation]
 
 ---
@@ -200,10 +200,10 @@ GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent 
 
 ### Tier 1 — Platform giants (dominant by reach)
 
-**GitHub Copilot / Copilot Workspace**  
+**GitHub Copilot / Copilot Workspace**
 Built into 150M+ GitHub accounts. Agent mode added in 2025. Strength — zero install cost, existing ecosystem. Weakness — no orchestration layer, no team workflows, no Temporal-style execution. Strategic gap: Copilot solves the problem of a single developer, not a team.
 
-**Cursor**  
+**Cursor**
 $50B valuation, ~300M ARR. IDE-first approach. Huge user base in the solo developer category. Weakness — no board, no multi-step team workflows, no approval gates, no container execution. Gap: Cursor is a personal superpower tool, not a team orchestrator.
 
 ---
@@ -284,7 +284,7 @@ Aixle is a web platform with:
 
 ### Main thesis
 
-> **Aixle is the first team orchestrator of AI agents with kanban control:**  
+> **Aixle is the first team orchestrator of AI agents with kanban control:**
 > you place a task on the Board, the agent executes it in an isolated container, the whole team sees the progress, log, and cost — without a single open terminal.
 
 This is not yet another coding assistant. It is **a level higher** — managing agents as a team's work process.
@@ -322,59 +322,59 @@ This is not yet another coding assistant. It is **a level higher** — managing 
 
 ### Stage 1 (0–3 months): Close bleeding wounds + ICP
 
-**1.1 — Choosing the ICP and focus**  
-Lock in the primary persona: Engineering Lead / Staff Engineer at a 5–30 person company, US, actively uses Claude Code or Cursor, willing to pay $50–200/mo for team-level coordination.  
+**1.1 — Choosing the ICP and focus**
+Lock in the primary persona: Engineering Lead / Staff Engineer at a 5–30 person company, US, actively uses Claude Code or Cursor, willing to pay $50–200/mo for team-level coordination.
 *Expected effect: 40% reduction in sales cycle through point messaging*
 
-**1.2 — Out-of-the-box workflow templates**  
-5 ready-made workflows for top use cases with no setup: (1) Code Review Agent, (2) Feature Spec → PR, (3) Bug Triage, (4) Test Generation, (5) Security Scan. Each launches in 1 click.  
+**1.2 — Out-of-the-box workflow templates**
+5 ready-made workflows for top use cases with no setup: (1) Code Review Agent, (2) Feature Spec → PR, (3) Bug Triage, (4) Test Generation, (5) Security Scan. Each launches in 1 click.
 *Expected effect: time to first value < 15 minutes vs the current 60+*
 
-**1.3 — Onboarding redesign**  
-A "5 steps to your first running agent" scenario: create a project → choose a workflow template → connect a GitHub repo → launch. Without reading the documentation.  
+**1.3 — Onboarding redesign**
+A "5 steps to your first running agent" scenario: create a project → choose a workflow template → connect a GitHub repo → launch. Without reading the documentation.
 *Benchmark: Cursor onboarding — first autocomplete in 3 min. Codegen — "5-minute setup"*
 
-**1.4 — Pricing page and first public monetization**  
-Publish pricing: Free tier (1 workflow, 1 user), Pro ($49/mo, 5 users, 10 workflows), Team ($149/mo, 20 users, unlimited). Add a 14-day trial.  
+**1.4 — Pricing page and first public monetization**
+Publish pricing: Free tier (1 workflow, 1 user), Pro ($49/mo, 5 users, 10 workflows), Team ($149/mo, 20 users, unlimited). Add a 14-day trial.
 *Benchmark: a 17-32 day trial converts 70% better (RevenueCat SOSA 2026)*
 
 ---
 
 ### Stage 2 (3-9 mo): Retention + AI layer
 
-**2.1 — Workflow Marketplace**  
-Community-contributed templates + a curated library from Palad AI. Users publish and fork workflows. Flywheel: more templates -> more new users who arrive via a template -> they stay.  
+**2.1 — Workflow Marketplace**
+Community-contributed templates + a curated library from Palad AI. Users publish and fork workflows. Flywheel: more templates -> more new users who arrive via a template -> they stay.
 *Expected impact: +30% activation rate through discovery*
 
-**2.2 — Team Analytics Dashboard**  
-Aggregated dashboard: how many workflow runs over a period, which agents were used, cost, success rate by step, bottlenecks. For the CTO persona, the main argument for renewal.  
+**2.2 — Team Analytics Dashboard**
+Aggregated dashboard: how many workflow runs over a period, which agents were used, cost, success rate by step, bottlenecks. For the CTO persona, the main argument for renewal.
 *Benchmark: Devin earns enterprise revenue precisely on the visibility/reporting layer*
 
-**2.3 - Agent Collaboration (parallel steps)**  
-Visual interface for building DAG workflows with parallel agents - "run 3 agents simultaneously on different branches." Simplify via a drag-and-drop builder on top of the current DAG.  
+**2.3 - Agent Collaboration (parallel steps)**
+Visual interface for building DAG workflows with parallel agents - "run 3 agents simultaneously on different branches." Simplify via a drag-and-drop builder on top of the current DAG.
 *Impact: closes JTBD 1 at 100%*
 
-**2.4 — Notification & Status layer**  
-Slack + Email: "Agent Alex finished Code Review - 3 comments need your attention." Without Slack integration, the PM persona (Priya) does not become an active user.  
+**2.4 — Notification & Status layer**
+Slack + Email: "Agent Alex finished Code Review - 3 comments need your attention." Without Slack integration, the PM persona (Priya) does not become an active user.
 
-**2.5 — GitHub PR integration deepening**  
+**2.5 — GitHub PR integration deepening**
 Automatic pull request with workflow results, link to the workflow run as a CI check. The agent worked - the PR arrived - the developer reviews. A closed loop without context switching.
 
 ---
 
 ### Stage 3 (9-12 mo): Scale and differentiation
 
-**3.1 — Enterprise tier + SSO / Audit logs**  
-SOC2-ready audit logs, SAML SSO, custom data retention. For companies of 50+ people. Pricing: $500-2000/mo.  
+**3.1 — Enterprise tier + SSO / Audit logs**
+SOC2-ready audit logs, SAML SSO, custom data retention. For companies of 50+ people. Pricing: $500-2000/mo.
 *Benchmark: Devin Team plan $500/mo flat - the precedent exists*
 
-**3.2 - Aixle Builder v2 - Workflow from a task description**  
+**3.2 - Aixle Builder v2 - Workflow from a task description**
 "We have a code review process - describe it in Russian/English -> Aixle Builder generates the workflow." Lower the barrier to creating the first workflow to zero.
 
-**3.3 — Agent Skills Marketplace**  
+**3.3 — Agent Skills Marketplace**
 Reusable Skills (like npm packages for agents): knowledge base, coding guidelines, security policies. Public registry + private company skills. The first network effect at the content level.
 
-**3.4 — API + Headless mode**  
+**3.4 — API + Headless mode**
 REST / webhook API for triggering workflows from CI/CD pipelines (GitHub Actions, GitLab CI). Platform engineers (Jordan) integrate Aixle as a step in an existing pipeline.
 
 ---
@@ -489,24 +489,24 @@ REST / webhook API for triggering workflows from CI/CD pipelines (GitHub Actions
 
 ### Placeholder: Trust funnel
 
-**Step 1 — Site / Landing**  
-Current diagnosis: Positioning is unclear. No answer to the question "who is this for and why should I switch from Claude Code".  
+**Step 1 — Site / Landing**
+Current diagnosis: Positioning is unclear. No answer to the question "who is this for and why should I switch from Claude Code".
 Trust: **critical to improve**
 
-**Step 2 — Onboarding**  
-Current diagnosis: requires configuring agents, a repository, and workflows before anything works.  
+**Step 2 — Onboarding**
+Current diagnosis: requires configuring agents, a repository, and workflows before anything works.
 Trust: **medium** (Aixle Builder exists, but it is not obvious from the start)
 
-**Step 3 — First workflow run**  
-Current diagnosis: if it succeeds — high satisfaction. If something breaks — no recovery path.  
+**Step 3 — First workflow run**
+Current diagnosis: if it succeeds — high satisfaction. If something breaks — no recovery path.
 Trust: **high on success**
 
-**Step 4 — Team adoption**  
-Current diagnosis: no explicit team invite flow and no explanation of the value for the PM persona.  
+**Step 4 — Team adoption**
+Current diagnosis: no explicit team invite flow and no explanation of the value for the PM persona.
 Trust: **medium**
 
-**Step 5 — Payment**  
-Current diagnosis: no public pricing → no trial → no conversion.  
+**Step 5 — Payment**
+Current diagnosis: no public pricing → no trial → no conversion.
 Trust: **critical to improve**
 
 ---
@@ -558,16 +558,16 @@ Trust: **critical to improve**
 
 ### Fast-growing startups (relevant for positioning)
 
-**Codegen.ai** — «OS for Code Agents»  
+**Codegen.ai** — «OS for Code Agents»
 *Growth:* 1000+ teams (website, 2026). Formula: zero-friction setup (5 minutes) + integration with Linear/Jira as a native feature. Gap: no board of their own, no container isolation, no cost tracking.
 
-**Forge** — Tickets → Merged PRs  
+**Forge** — Tickets → Merged PRs
 *Growth:* Private beta with an active waitlist (website, 2026). Formula: one super-strong job (ticket → PR) + per-step cost estimate. Gap: narrow scope, no team workflows beyond the coding PR.
 
-**Overcut** — Enterprise SDLC Orchestration  
+**Overcut** — Enterprise SDLC Orchestration
 *Growth:* No public data. Positioned as enterprise-only. Gap: closed to SMB, no public pricing.
 
-**Atum** — Ideation to Production  
+**Atum** — Ideation to Production
 *Growth:* Early access (website, 2026). Formula: full SDLC + budget tracking. Gap: immature product, no container execution.
 
 ---
@@ -603,7 +603,7 @@ Trust: **critical to improve**
 - Narrow market — ceiling $200–500M ARR
 - Large competitors could add orchestration as a feature
 
-**ARPU ceiling:** ~$200/mo per team × 10,000 teams = $24M ARR  
+**ARPU ceiling:** ~$200/mo per team × 10,000 teams = $24M ARR
 **Exit strategy:** Acquisition: GitHub, GitLab, Anthropic, JetBrains
 
 ---
@@ -637,7 +637,7 @@ Slack (notifications)           ┘
 - Competition with Linear, Jira (huge budgets)
 - Requires a sales motion and customer success
 
-**ARPU ceiling:** $500–2000/mo per team × enterprise, TAM $30B+  
+**ARPU ceiling:** $500–2000/mo per team × enterprise, TAM $30B+
 **Defensible moat:** Workflow + Agent + Board locked-in; data flywheel via usage stats
 
 ---
@@ -672,5 +672,5 @@ Slack (notifications)           ┘
 
 ---
 
-*Document created: April 2026*  
+*Document created: April 2026*
 *Next step: conduct 5 live interviews with the Engineering Lead persona to verify JTBD 1 and validate WTP*

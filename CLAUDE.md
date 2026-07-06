@@ -4,8 +4,8 @@ Guidance for AI agents working in this repository.
 
 ## Documentation index
 
-`ai/index.md` is the index of all planning/architecture docs. Whenever you add,
-remove, or move a document under `ai/`, update `ai/index.md` in the same change.
+`docs/index.md` is the index of all architecture/design/research docs. Whenever you
+add, remove, or move a document under `docs/`, update `docs/index.md` in the same change.
 
 ## Before pushing a branch or opening/updating a PR
 

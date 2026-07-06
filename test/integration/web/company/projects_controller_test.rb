@@ -57,7 +57,7 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
 
     delete company_project_path(project)
 
-    # Denial UX is a 302 redirect + not-authorized alert (see ai/research design doc, DECISION 1),
+    # Denial UX is a 302 redirect + not-authorized alert (see docs/research design doc, DECISION 1),
     # not a literal 403. The redirect_back falls back to root_path because the test sends no Referer.
     assert_response :redirect
     assert_equal "You are not authorized to perform this action.", flash[:alert]

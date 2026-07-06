@@ -1,4 +1,4 @@
-# Session Context Constructor — Architecture Design
+# Session Config & Context
 
 **Date:** 2026-02-28
 **Status:** Draft
@@ -6,17 +6,628 @@
 
 ---
 
-## Related Documents
+## Overview: A Two-Stage Pipeline
+
+Starting an agent session is a two-stage pipeline. Both stages take a single
+`TerminalSession` as input and figure everything else out themselves — the
+caller never decides which session type it is dealing with.
+
+1. **Config resolution** — `SessionConfigResolver.resolve(session)` decides
+   *what the session runs with*: which agent runtime, persona, tools, skills,
+   MCP servers, repositories, and input assets apply, and in which mode. It
+   determines the session type (standalone / workflow / board-triggered) and
+   assembles the resource set by cascading additively through the workflow,
+   step, run, and board-task layers.
+
+2. **Context construction** — `SessionContextConstructor.build(session)` decides
+   *what the agent knows*: it assembles the XML-structured context prompt (the
+   `CLAUDE.md` / `AGENTS.md` / `GEMINI.md` file and, where relevant, the
+   `AGENT_PROMPT` env var) from a pipeline of composable builders, each
+   contributing prioritized sections.
+
+The first stage feeds the second: the resolved config (runtime, persona,
+resource ids) is exactly the material the context builders describe to the
+agent. This document covers both stages — **Part 1** is the config cascade,
+**Part 2** is the context constructor.
+
+### Related Documents
 
 | Document | Description |
 |----------|-------------|
-| [Workflow Architecture](./workflow-architecture.md) | Workflow, Steps, SubSteps, execution model |
-| [BMAD Structure Analysis](./BMAD-structure-description.md) | Why XML + config + critical notes work |
-| [Architecture](./architecture/index.md) | Core architecture decisions |
+| [Workflow Architecture](../architecture/workflows.md) | Workflow, Steps, SubSteps, execution model |
+| [Architecture](../architecture/index.md) | Core architecture decisions |
+| [BMAD Structure Analysis](./bmad.md) | Why XML + config + critical notes work |
 
 ---
 
-## 1. Problem Statement
+## Table of Contents
+
+- [Part 1 — Session Config Cascade](#part-1--session-config-cascade)
+  - [1.1 Problem Statement](#11-problem-statement)
+  - [1.2 Core Principle: Additive, Not Override](#12-core-principle-additive-not-override)
+  - [1.3 Where each value comes from](#13-where-each-value-comes-from)
+  - [1.4 Full table](#14-full-table)
+  - [1.5 SessionConfigResolver](#15-sessionconfigresolver)
+  - [1.6 Required changes](#16-required-changes)
+  - [1.7 Examples](#17-examples)
+  - [1.8 UI: Workflow Builder](#18-ui-workflow-builder)
+  - [1.9 Traceability](#19-traceability)
+  - [1.10 Open Questions](#110-open-questions)
+- [Part 2 — Session Context Constructor](#part-2--session-context-constructor)
+  - [2.1 Problem Statement](#21-problem-statement)
+  - [2.2 Design Goals](#22-design-goals)
+  - [2.3 XML-Structured Context: Why and How](#23-xml-structured-context-why-and-how)
+  - [2.4 Architecture: Context Constructor Pipeline](#24-architecture-context-constructor-pipeline)
+  - [2.5 Builders: Detail Design](#25-builders-detail-design)
+  - [2.6 Renderer: XML-Markdown Format](#26-renderer-xml-markdown-format)
+  - [2.7 Session Type Matrix](#27-session-type-matrix)
+  - [2.8 Integration Plan](#28-integration-plan)
+  - [2.9 Token Budget Considerations](#29-token-budget-considerations)
+  - [2.10 Validation & Testing](#210-validation--testing)
+  - [2.11 JSON Traceability Interface](#211-json-traceability-interface)
+  - [2.12 Clean Interface Design Principles](#212-clean-interface-design-principles)
+  - [2.13 Open Questions](#213-open-questions)
+
+---
+
+# Part 1 — Session Config Cascade
+
+*How session config and resources resolve & merge (`SessionConfigResolver`).*
+
+## 1.1 Problem Statement
+
+Starting a session requires a set of parameters: agent_runtime, tools, skills, mcp_servers, repositories, assets. Right now these parameters are set in different places and it is unclear how they combine — especially on an auto-trigger of a workflow from the board.
+
+## 1.2 Core Principle: Additive, Not Override
+
+### Session-centric API
+
+A single entry point: `SessionConfigResolver.resolve(session)`. The input is a `TerminalSession`; the resolver itself determines the session type (standalone / workflow / board-triggered) and assembles the config.
+
+```ruby
+config = SessionConfigResolver.resolve(session)
+# => { session_type: :workflow, agent_runtime: "claude_code", tool_ids: [...], ... }
+```
+
+### Additivity
+
+Resources **accumulate** from top to bottom. Each level **adds to** but does not overwrite.
+
+```
+Workflow session resources = Step resources
+                           + Workflow base resources
+                           + Workflow Run inputs (user at start)
+                           + Board Task assets (on auto-trigger)
+
+Standalone session resources = what the user selected in the UI
+```
+
+The only **non-additive** value is `agent_runtime`. It is scalar and is resolved by priority.
+
+## 1.3 Where each value comes from
+
+### 1.3.1 agent_runtime
+
+A scalar value. Resolved by priority (first non-empty wins):
+
+```
+1. step.required_agent_runtime     ← the step REQUIRES a specific runtime
+2. workflow_run.agent_runtime      ← user override on a manual launch
+3. user.default_agent_runtime      ← default credential's runtime (from Profile)
+4. "claude_code"                   ← hardcoded fallback
+```
+
+**A step may require a specific runtime.** For example, the "Code Generation" step may require `claude_code`, because only it supports the needed capabilities. If `step.required_agent_runtime` is set — it overrides everything else.
+
+**New field on Step:** `required_agent_runtime` (string, nullable). If set, it is used unconditionally.
+
+On the **Profile** page the user sees the list of their AgentCredentials. One of them is marked as **default** — by default this is the last one added.
+
+**New field on User:** `default_agent_credential_id` (references, nullable). When a new `AgentCredential` is created, it is automatically set as default.
+
+```ruby
+def resolve_agent_runtime
+  step&.required_agent_runtime.presence ||
+    workflow_run&.agent_runtime.presence ||
+    user&.default_agent_runtime ||
+    user&.agent_credentials&.order(created_at: :desc)&.first&.agent_type ||
+    "claude_code"
+end
+```
+
+`User#default_agent_runtime` returns `default_agent_credential&.agent_type` (see `app/models/user.rb`).
+
+### 1.3.2 configured_agent (persona)
+
+Scalar. Set on the Step.
+
+```
+configured_agent = step.agent_id
+```
+
+Each step knows which persona it needs (Architect, PM, Analyst). Not inherited, not accumulated.
+
+### 1.3.3 tools, skills, mcp_servers — additive
+
+Each level **adds** its own. The final set is the union.
+
+```ruby
+def resolve_tool_ids(workflow, step)
+  (workflow.base_tool_ids + step.tool_ids).uniq
+end
+
+def resolve_skill_ids(workflow, step)
+  (workflow.base_skill_ids + step.skill_ids).uniq
+end
+
+def resolve_mcp_server_ids(workflow, step)
+  (workflow.base_mcp_server_ids + step.mcp_server_ids).uniq
+end
+```
+
+**Workflow** sets the "base" tools available to all steps (for example, context7 MCP for documentation). **Step** adds step-specific ones (for example, the security_scan tool for the Code Review step).
+
+### 1.3.4 Workflow: "give everything" mode
+
+A separate flag on Workflow: `inherit_all_project_resources` (boolean, default: false).
+
+If `true` — all of the project's tools, skills, mcp_servers are automatically available in all steps. Step can still add its own on top.
+
+```ruby
+def resolve_tool_ids(workflow, step, project)
+  base = workflow.inherit_all_project_resources ? project_tool_ids(project) : []
+  (base + workflow.base_tool_ids + step.tool_ids).uniq
+end
+```
+
+### 1.3.5 repositories
+
+Additive. Step controls this via `mount_repositories` (bool):
+
+```ruby
+def resolve_repository_ids(workflow_run, step, project)
+  return [] unless step.mount_repositories
+
+  (workflow_run.repository_ids.presence || project.repositories.pluck(:id))
+end
+```
+
+On a manual workflow launch the user selects repos. On an auto-trigger — all of the project's repos are taken.
+
+### 1.3.6 input_assets — additive
+
+Sources are combined:
+
+```ruby
+def resolve_input_asset_ids(workflow, workflow_run, step, board_task)
+  ids = []
+
+  # 1. Workflow-level assets (configured in the workflow builder)
+  ids += workflow.base_asset_ids
+
+  # 2. Step-level assets
+  ids += step.asset_ids
+
+  # 3. Run-level assets (user selected at manual start)
+  ids += workflow_run.input_asset_ids || []
+
+  # 4. Board task assets (on auto-trigger) — NOT YET IMPLEMENTED
+  #    TaskAsset is a Shrine-uploaded file, not a reference to Asset.
+  #    board_task_asset_ids is currently stubbed to [] with a TODO — board
+  #    assets are not yet contributed until task_assets gains an asset_id.
+
+  ids.uniq
+end
+```
+
+> **Note:** board task assets are a planned source but currently return `[]`
+> (see the `board_task_asset_ids` stub in §1.5). Workflow-base, step, and run
+> assets are the sources actually merged today.
+
+## 1.4 Full table
+
+| Parameter | Type | Source | Additivity |
+|----------|-----|----------|-------------|
+| `agent_runtime` | scalar | Step required → WorkflowRun override → User default | No, priority chain |
+| `configured_agent` | scalar | Step.agent_id | No, scalar |
+| `tools` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
+| `skills` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
+| `mcp_servers` | set | Workflow.base + Step + (Project if inherit_all) | Yes, union |
+| `repositories` | set | WorkflowRun (user) or Project (fallback) | No, fallback |
+| `input_assets` | set | Workflow.base + Step + WorkflowRun (user) [+ BoardTask, not yet impl] | Yes, union |
+| `mode` | scalar | WorkflowRun.step_auto_run? + WorkflowRun.mode + Step.allow_non_interactive | No, resolved |
+
+## 1.5 SessionConfigResolver
+
+A single entry point — `TerminalSession`. The resolver itself determines the session type and assembles the config.
+
+```ruby
+class SessionConfigResolver
+  TYPES = %i[workflow standalone].freeze
+
+  attr_reader :session
+
+  def self.resolve(session)
+    new(session).resolve
+  end
+
+  def initialize(session)
+    @session = session
+  end
+
+  def resolve
+    {
+      session_type: session_type,
+      agent_runtime: resolve_agent_runtime,
+      configured_agent_id: step&.agent_id,
+      tool_ids: resolve_tool_ids,
+      skill_ids: resolve_skill_ids,
+      mcp_server_ids: resolve_mcp_server_ids,
+      repository_ids: resolve_repository_ids,
+      input_asset_ids: resolve_input_asset_ids,
+      mode: resolve_mode
+    }
+  end
+
+  private
+
+  # --- Session navigation (same pattern as SessionContextConstructor) ---
+
+  def user            = session.user
+  def project         = session.project
+  def step_run        = session.step_run
+  def workflow_run    = step_run&.workflow_run
+  def workflow        = workflow_run&.workflow
+  def step            = step_run&.step
+  def board_task      = workflow_run&.board_task
+
+  def workflow_session? = step_run.present?
+  def board_triggered?  = workflow_session? && board_task.present?
+
+  def session_type
+    if board_triggered?
+      :board_triggered
+    elsif workflow_session?
+      :workflow
+    else
+      :standalone
+    end
+  end
+
+  # --- Scalar ---
+
+  def resolve_agent_runtime
+    return session.agent_type if standalone_session?
+
+    step&.required_agent_runtime.presence ||
+      workflow_run&.agent_runtime.presence ||
+      user&.default_agent_runtime ||
+      user&.agent_credentials&.order(created_at: :desc)&.first&.agent_type ||
+      "claude_code"
+  end
+
+  def resolve_mode
+    return session.mode if standalone_session?
+
+    auto = workflow_run.step_auto_run?(step.id)
+    return "non_interactive" if auto == true
+    return "non_interactive" if workflow_run.mode.non_interactive?
+    return "non_interactive" if workflow_run.mode.mixed? && step.allow_non_interactive && auto != false
+
+    "interactive"
+  end
+
+  # --- Additive sets ---
+
+  def resolve_tool_ids
+    return session.tool_ids unless workflow_session?
+
+    ids = []
+    ids += project_tool_ids if workflow&.inherit_all_project_resources
+    ids += workflow&.base_tool_ids || []
+    ids += step&.tool_ids || []
+    ids.uniq
+  end
+
+  def resolve_skill_ids
+    return session.skill_ids unless workflow_session?
+
+    ids = []
+    ids += project_skill_ids if workflow&.inherit_all_project_resources
+    ids += workflow&.base_skill_ids || []
+    ids += step&.skill_ids || []
+    ids.uniq
+  end
+
+  def resolve_mcp_server_ids
+    return session.mcp_server_ids unless workflow_session?
+
+    ids = []
+    ids += project_mcp_server_ids if workflow&.inherit_all_project_resources
+    ids += workflow&.base_mcp_server_ids || []
+    ids += step&.mcp_server_ids || []
+    ids.uniq
+  end
+
+  def resolve_input_asset_ids
+    ids = []
+
+    if workflow_session?
+      ids += workflow&.base_asset_ids || []
+      ids += step&.asset_ids || []
+      ids += workflow_run&.input_asset_ids || []
+    else
+      ids += session.input_asset_ids || []
+    end
+
+    ids += board_task_asset_ids # currently always [] — see stub below
+    ids.uniq
+  end
+
+  def resolve_repository_ids
+    if workflow_session?
+      return [] unless step&.mount_repositories
+      workflow_run&.repository_ids.presence || project_repository_ids
+    else
+      session.repository_ids.presence || []
+    end
+  end
+
+  # --- Helpers ---
+
+  def standalone_session? = !workflow_session?
+
+  def project_tool_ids
+    Tool.visible_for_project(project).pluck(:id)
+  end
+
+  def project_skill_ids
+    Skill.visible_for_project(project).pluck(:id)
+  end
+
+  def project_mcp_server_ids
+    MCPServer.visible_for_project(project).pluck(:id)
+  end
+
+  def project_repository_ids
+    Repository.visible_for_project(project).pluck(:id)
+  end
+
+  # NOT YET IMPLEMENTED — stubbed to [] with a TODO.
+  # TaskAsset is a Shrine-uploaded file, not a reference to Asset. Once
+  # task_assets gains an asset_id column, this will become:
+  #   board_task.task_assets.where.not(asset_id: nil).pluck(:asset_id)
+  def board_task_asset_ids
+    []
+  end
+end
+```
+
+## 1.6 Required changes
+
+### 1.6.1 User — default agent credential
+
+```ruby
+# New field:
+# default_agent_credential_id: references (nullable)
+#
+# When creating an AgentCredential:
+# after_create :set_as_default_if_first_or_latest
+```
+
+Configured on the **Profile** page. By default — the last added `AgentCredential`. The user can switch the default in the UI.
+
+### 1.6.2 Workflow — base resources + inherit_all
+
+We use the existing `config` jsonb:
+
+```ruby
+class Workflow < ApplicationRecord
+  def base_tool_ids
+    config&.dig("base_tool_ids") || []
+  end
+
+  def base_skill_ids
+    config&.dig("base_skill_ids") || []
+  end
+
+  def base_mcp_server_ids
+    config&.dig("base_mcp_server_ids") || []
+  end
+
+  def base_asset_ids
+    config&.dig("base_asset_ids") || []
+  end
+
+  def inherit_all_project_resources
+    config&.dig("inherit_all_project_resources") || false
+  end
+end
+```
+
+### 1.6.3 LaunchStepSessionActivity — use the Resolver
+
+```ruby
+# Now:
+agent_type = workflow_run.agent_runtime || "claude_code"
+# tools, skills, mcp_servers are taken only from the step
+
+# After:
+config = SessionConfigResolver.resolve(session)
+# config[:tool_ids] = workflow.base + step (union)
+# config[:session_type] = :workflow / :board_triggered / :standalone
+```
+
+## 1.7 Examples
+
+### Example 1: Manual workflow launch
+
+```
+Input: session (session.step_run → workflow_run → workflow)
+
+User: default_agent_runtime = "gemini_cli"
+User selects at start: repos=[1,3], assets=[10], does not change runtime
+
+Workflow:
+  inherit_all: false
+  base_tools: [context7_id]
+  base_assets: [template_id]
+
+Step 1 (Create Architecture):
+  agent: Architect
+  tools: [cloc_id, security_scan_id]
+  skills: [arch_skill_id]
+
+SessionConfigResolver.resolve(session):
+  session_type      = :workflow
+  agent_runtime     = gemini_cli       (user default credential)
+  configured_agent  = Architect        (step)
+  tools             = [context7, cloc, security_scan]  (workflow + step)
+  skills            = [arch_skill]     (step)
+  repositories      = [1, 3]          (user selected at run start)
+  input_assets      = [template, 10]  (workflow base + user run)
+```
+
+### Example 2: Step requires a specific runtime
+
+```
+Input: session (session.step_run → workflow_run → workflow)
+
+User: default_agent_runtime = "gemini_cli"
+
+Workflow: (the same as in example 1)
+
+Step 2 (Code Generation):
+  agent: Developer
+  required_agent_runtime: "claude_code"   ← the step REQUIRES claude_code
+  tools: [code_gen_id]
+
+SessionConfigResolver.resolve(session):
+  session_type      = :workflow
+  agent_runtime     = claude_code        (step required — overrides user default)
+  configured_agent  = Developer          (step)
+  tools             = [context7, code_gen]  (workflow + step)
+```
+
+### Example 3: Auto-trigger from the board
+
+```
+Input: session (session.step_run → workflow_run → board_task)
+
+User (task assignee): default_agent_runtime = "claude_code"
+Board task: assets attached: [doc.pdf, spec.md]
+
+Workflow:
+  inherit_all: true     ← all project resources are available
+  base_tools: []
+  base_assets: []
+
+Step 1 (Tech Design):
+  agent: Architect
+  tools: [security_scan_id]
+
+SessionConfigResolver.resolve(session):
+  session_type      = :board_triggered
+  agent_runtime     = claude_code             (user default credential)
+  configured_agent  = Architect               (step)
+  tools             = [all project tools] + [security_scan]  (inherit_all + step)
+  skills            = [all project skills]    (inherit_all)
+  mcp_servers       = [all project mcp]       (inherit_all)
+  repositories      = [all project repos]     (project fallback)
+  input_assets      = [doc.pdf, spec.md]      (board task assets)
+```
+
+### Example 4: Standalone session
+
+```
+Input: session (session.step_run = nil)
+
+On standalone start, the UI populates user.default_agent_runtime
+into the agent_type field. The user can change it, but by default it is their default.
+
+The user selects tools, repos, assets. Runtime is already prefilled.
+
+SessionConfigResolver.resolve(session):
+  session_type      = :standalone
+  agent_runtime     = gemini_cli            (session.agent_type — prefilled default, user did not change)
+  configured_agent  = nil
+  tools             = [tool1, tool2]         (session.tool_ids — selected by user)
+  skills            = [skill1]               (session.skill_ids — selected by user)
+  repositories      = [repo1]               (session.repository_ids — selected by user)
+  input_assets      = [asset1]              (session.input_asset_ids — selected by user)
+```
+
+## 1.8 UI: Workflow Builder
+
+In the Workflow Builder, the "Base Resources" section:
+
+```
+┌─ Workflow: Code Review Pipeline ──────────────────┐
+│                                                    │
+│  ☐ Inherit all project resources                   │
+│                                                    │
+│  Base Resources (available in all steps)            │
+│  Tools:       [context7]  [+ Add]                  │
+│  Skills:      []  [+ Add]                          │
+│  MCP Servers: [context7]  [+ Add]                  │
+│  Assets:      [code-standards.md]  [+ Add]         │
+│                                                    │
+│  Steps                                             │
+│  1. Security Scan  [CodeAnalyst]                   │
+│     + tools: [security_scan]                       │
+│     Effective: context7, security_scan             │
+│                                                    │
+│  2. Architecture Review  [Architect]               │
+│     + tools: [cloc]                                │
+│     Effective: context7, cloc                      │
+│                                                    │
+└────────────────────────────────────────────────────┘
+```
+
+"Effective" — a hint that shows the resulting set (base + step).
+
+## 1.9 Traceability
+
+A `config_resolution` section is added to `ContextResult.to_json_hash` (see
+[Part 2, §2.11](#211-json-traceability-interface)):
+
+```json
+{
+  "config_resolution": {
+    "agent_runtime": "claude_code",
+    "agent_runtime_source": "user_default",
+    "tools": {
+      "from_project_inherit_all": [1, 2, 3],
+      "from_workflow_base": [4],
+      "from_step": [5, 6],
+      "resolved": [1, 2, 3, 4, 5, 6]
+    },
+    "input_assets": {
+      "from_workflow_base": [10],
+      "from_run_user": [],
+      "from_board_task": [11, 12],
+      "resolved": [10, 11, 12]
+    }
+  }
+}
+```
+
+## 1.10 Open Questions
+
+| # | Question | Leaning |
+|---|----------|---------|
+| 1 | `inherit_all` — a single flag or per-resource (inherit_all_tools, inherit_all_skills...)? | A single flag — simpler. If you need all, you usually need all |
+| 2 | Can a step **exclude** a tool from the workflow base? | No. Additive = add only. If needed — do not put it in the base |
+| 3 | Are repos also additive or fallback? | Fallback: user run repos or project repos. The step only toggles on/off via mount_repositories |
+| 4 | Board task description → an addition to step instructions? | A separate story, not in scope. For now the task description lives in the board-context section (Epic 27) |
+
+---
+
+# Part 2 — Session Context Constructor
+
+*How the agent context prompt is built (`SessionContextConstructor`).*
+
+## 2.1 Problem Statement
 
 The context for agent sessions is currently assembled in **three different places**, each of which knows only about "its own" part:
 
@@ -24,7 +635,6 @@ The context for agent sessions is currently assembled in **three different place
 |-----------|-------------|----------|
 | `SessionContextService#build_context_content` | Persona, MCP, tools, skills, repos, workspace layout | Plain markdown without prioritization. No workflow/board context |
 | `WorkflowStepStrategy#build_workflow_prompt` | Step instructions, sub-steps, repos, input assets | Duplicates part of SessionContextService. Goes into `AGENT_PROMPT` separately |
-| `WorkflowContextAssembler` | Workflow name, step, sub-steps, previous steps | **Not used at all** — orphaned code |
 | `BoardContextResolver` | Board → project mapping | Used only inside the board MCP tools, not injected into the prompt |
 
 ### Key problems
@@ -35,9 +645,7 @@ The context for agent sessions is currently assembled in **three different place
 4. **Board context is invisible to the agent** — the agent does not know about the task, column, or board until it calls an MCP tool
 5. **Duplication** — repos and assets are described both in the context file and in the workflow prompt
 
----
-
-## 2. Design Goals
+## 2.2 Design Goals
 
 1. **Single constructor** — one pipeline assembles the entire context for any type of session
 2. **XML-structured sections** — the LLM follows structured tags better than plain markdown
@@ -46,11 +654,9 @@ The context for agent sessions is currently assembled in **three different place
 5. **Deterministic order** — the order of sections is predictable and optimal for attention
 6. **Testable** — each builder is tested in isolation
 
----
+## 2.3 XML-Structured Context: Why and How
 
-## 3. XML-Structured Context: Why and How
-
-### 3.1 Why XML tags in prompts
+### 2.3.1 Why XML tags in prompts
 
 From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, Gemini):
 
@@ -62,7 +668,7 @@ From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, G
 | **Less ambiguity** | A closing tag (`</step-instructions>`) explicitly signals the end of a section |
 | **Nesting** | XML allows logical grouping (workflow > step > sub-steps) without ambiguity |
 
-### 3.2 Our XML DSL convention
+### 2.3.2 Our XML DSL convention
 
 ```xml
 <section name="..." priority="critical|important|info">
@@ -75,7 +681,7 @@ From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, G
 - `important` — context that affects the quality of the work. Skipping it ≠ an error, but it degrades the result
 - `info` — reference information. Can be used as needed
 
-### 3.3 Practical tags
+### 2.3.3 Practical tags
 
 | Tag | Purpose | Priority |
 |-----|-----------|----------|
@@ -91,21 +697,21 @@ From the analysis of BMAD-METHOD (and confirmed in practice in Cursor, Claude, G
 | `<available-resources>` | Repos, assets, skills | info |
 | `<output-rules>` | Where/how to save results | critical |
 
----
+## 2.4 Architecture: Context Constructor Pipeline
 
-## 4. Architecture: Context Constructor Pipeline
-
-### 4.1 High-Level Flow
+### 2.4.1 High-Level Flow
 
 ```
 SessionContextConstructor.build(session)
   │
-  ├─→ BaseContextBuilder        (always)      → critical-rules, session-context, workspace
-  ├─→ AgentContextBuilder       (if agent)    → agent-role
-  ├─→ ToolsContextBuilder       (always)      → available-tools, available-resources
-  ├─→ WorkflowContextBuilder    (if workflow)  → workflow-context, current-step, previous-steps
-  ├─→ BoardContextBuilder       (if board)     → board-context
-  ├─→ CustomInstructionsBuilder (if present)   → user-defined sections
+  ├─→ CriticalRules             (always)      → critical-rules
+  ├─→ AixleBuilder              (if aixle)    → aixle platform context
+  ├─→ AgentRole                 (if agent)    → agent-role
+  ├─→ SessionInfo / Workspace   (always)      → session-context, workspace
+  ├─→ WorkflowContext           (if workflow)  → workflow-context, current-step, previous-steps
+  ├─→ BoardContext              (if board)     → board-context
+  ├─→ Tools / Resources         (always)      → available-tools, available-resources
+  ├─→ BmadMethod                (if bmad)      → BMAD method sections
   │
   └─→ Renderer.render(sections, format: :xml_markdown)
         │
@@ -113,7 +719,7 @@ SessionContextConstructor.build(session)
         └─→ AGENT_PROMPT env var (for non-interactive / workflow steps)
 ```
 
-### 4.2 Value Objects
+### 2.4.2 Value Objects
 
 Clean, frozen value objects with validation — no bare hashes or mutable structures.
 
@@ -150,7 +756,7 @@ class ContextSection
 end
 ```
 
-### 4.3 Builder Interface
+### 2.4.3 Builder Interface
 
 A clean abstract interface. The builder's sole responsibility is to decide `applicable?` and return `Array<ContextSection>`.
 
@@ -194,7 +800,7 @@ class ContextBuilders::Base
 end
 ```
 
-### 4.4 Constructor (Orchestrator)
+### 2.4.4 Constructor (Orchestrator)
 
 **Single entry point:** `SessionContextConstructor.build(session)` — you pass any `TerminalSession` and get a ready context. All the discovery logic (workflow? board? agent?) is inside the builders.
 
@@ -202,14 +808,16 @@ end
 class SessionContextConstructor
   BUILDERS = [
     ContextBuilders::CriticalRules,    # Always first
+    ContextBuilders::AixleBuilder,     # Aixle platform context
     ContextBuilders::AgentRole,        # Persona
     ContextBuilders::SessionInfo,      # Session metadata
     ContextBuilders::Workspace,        # Directory layout
     ContextBuilders::WorkflowContext,  # Workflow + step (if applicable)
     ContextBuilders::BoardContext,     # Board task (if applicable)
-    ContextBuilders::Tools,           # MCP servers, tools, shell tools
-    ContextBuilders::Resources,       # Repos, assets, skills
-    ContextBuilders::OutputRules,     # Always last
+    ContextBuilders::Tools,            # MCP servers, tools, shell tools
+    ContextBuilders::Resources,        # Repos, assets, skills
+    ContextBuilders::BmadMethod,       # BMAD method sections (if enabled)
+    ContextBuilders::OutputRules,      # Always last
   ].freeze
 
   # Primary API — returns rendered XML-markdown string
@@ -249,22 +857,23 @@ class SessionContextConstructor
 end
 ```
 
-### 4.5 ContextResult — a single result with two faces
+### 2.4.5 ContextResult — a single result with two faces
 
 `ContextResult` — a value object that knows both how to render XML-markdown for the agent and how to provide JSON for traceability.
 
 ```ruby
 class ContextResult
   attr_reader :session, :sections, :applied_builders, :skipped_builders,
-              :built_at, :build_time_ms
+              :built_at, :build_time_ms, :config_resolution
 
-  def initialize(session:, sections:, applied_builders:, skipped_builders:, built_at:, build_time_ms:)
+  def initialize(session:, sections:, applied_builders:, skipped_builders:, built_at:, build_time_ms:, config_resolution: nil)
     @session = session
     @sections = sections.freeze
     @applied_builders = applied_builders.freeze
     @skipped_builders = skipped_builders.freeze
     @built_at = built_at
     @build_time_ms = build_time_ms
+    @config_resolution = config_resolution
   end
 
   # For agent context file — XML-markdown string
@@ -335,11 +944,9 @@ result.applied_builders    # → ["critical_rules", "agent_role", "workflow_cont
 result.skipped_builders    # → ["board_context"]
 ```
 
----
+## 2.5 Builders: Detail Design
 
-## 5. Builders: Detail Design
-
-### 5.1 CriticalRules Builder
+### 2.5.1 CriticalRules Builder
 
 Always first. Contains the rules that MUST NOT be violated.
 
@@ -390,7 +997,7 @@ class ContextBuilders::CriticalRules < ContextBuilders::Base
 end
 ```
 
-### 5.2 AgentRole Builder
+### 2.5.2 AgentRole Builder
 
 ```ruby
 class ContextBuilders::AgentRole < ContextBuilders::Base
@@ -412,9 +1019,9 @@ class ContextBuilders::AgentRole < ContextBuilders::Base
 end
 ```
 
-### 5.3 WorkflowContext Builder
+### 2.5.3 WorkflowContext Builder
 
-The most complex builder. Replaces both `WorkflowContextAssembler` and `WorkflowStepStrategy#build_workflow_prompt`.
+The most complex builder. Replaces `WorkflowStepStrategy#build_workflow_prompt` (and the former `WorkflowContextAssembler`, since removed).
 
 ```ruby
 class ContextBuilders::WorkflowContext < ContextBuilders::Base
@@ -593,7 +1200,7 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
 end
 ```
 
-### 5.4 BoardContext Builder
+### 2.5.4 BoardContext Builder
 
 A new builder — injects board/task context if the session is linked to a board.
 
@@ -656,7 +1263,7 @@ class ContextBuilders::BoardContext < ContextBuilders::Base
 end
 ```
 
-### 5.5 Tools Builder
+### 2.5.5 Tools Builder
 
 ```ruby
 class ContextBuilders::Tools < ContextBuilders::Base
@@ -701,7 +1308,7 @@ class ContextBuilders::Tools < ContextBuilders::Base
 end
 ```
 
-### 5.6 Resources Builder
+### 2.5.6 Resources Builder
 
 ```ruby
 class ContextBuilders::Resources < ContextBuilders::Base
@@ -716,7 +1323,7 @@ class ContextBuilders::Resources < ContextBuilders::Base
 end
 ```
 
-### 5.7 OutputRules Builder
+### 2.5.7 OutputRules Builder
 
 Always last. Repeats the critical rules (sandwich pattern — the key points at the beginning AND at the end).
 
@@ -752,11 +1359,9 @@ class ContextBuilders::OutputRules < ContextBuilders::Base
 end
 ```
 
----
+## 2.6 Renderer: XML-Markdown Format
 
-## 6. Renderer: XML-Markdown Format
-
-### 6.1 Output Format
+### 2.6.1 Output Format
 
 The renderer takes `Array<ContextSection>` and renders it into an XML-Markdown hybrid:
 
@@ -786,7 +1391,7 @@ class ContextRenderer
 end
 ```
 
-### 6.2 Example Output
+### 2.6.2 Example Output
 
 Here is what the assembled context looks like for a workflow step session with a board task:
 
@@ -1003,9 +1608,7 @@ Parameters: repository_id (integer), scan_type (string)
 </output-rules>
 ```
 
----
-
-## 7. Session Type Matrix
+## 2.7 Session Type Matrix
 
 Which builders run for which types of sessions:
 
@@ -1021,11 +1624,9 @@ Which builders run for which types of sessions:
 | Resources | ✅ | ✅ | ❌ | ✅ |
 | OutputRules | ✅ | ✅ | ❌ | ✅ |
 
----
+## 2.8 Integration Plan
 
-## 8. Integration Plan
-
-### 8.1 Where the Constructor Fits
+### 2.8.1 Where the Constructor Fits
 
 ```
 Before (current):
@@ -1047,7 +1648,7 @@ After (proposed):
     → AGENT_PROMPT = step.instructions                  ← simplified, context is in file
 ```
 
-### 8.2 Context File vs AGENT_PROMPT Split
+### 2.8.2 Context File vs AGENT_PROMPT Split
 
 | Destination | What goes there | Why |
 |-------------|----------------|-----|
@@ -1056,18 +1657,16 @@ After (proposed):
 
 Key principle: **Context file = who you are + what you know + the rules. AGENT_PROMPT = what to do.**
 
-### 8.3 Migration Path
+### 2.8.3 Migration Path
 
 1. **Phase 1:** Create `SessionContextConstructor` and builders, output same markdown (no XML yet)
 2. **Phase 2:** Switch `SessionContextService#build_context_content` to use Constructor
 3. **Phase 3:** Add XML tags to renderer
 4. **Phase 4:** Move workflow context from `WorkflowStepStrategy` to `WorkflowContextBuilder`
 5. **Phase 5:** Add `BoardContextBuilder`
-6. **Phase 6:** Delete `WorkflowContextAssembler` (orphaned), clean up `WorkflowStepStrategy`
+6. **Phase 6:** ✅ Done — `WorkflowContextAssembler` has been deleted; clean up `WorkflowStepStrategy`
 
----
-
-## 9. Token Budget Considerations
+## 2.9 Token Budget Considerations
 
 XML tags add ~2-5% overhead to the context size. This is acceptable, given:
 
@@ -1075,7 +1674,7 @@ XML tags add ~2-5% overhead to the context size. This is acceptable, given:
 - XML overhead: ~100-200 tokens
 - Benefit: significantly better instruction following
 
-### 9.1 Section Compression for Large Contexts
+### 2.9.1 Section Compression for Large Contexts
 
 If the context exceeds the threshold (~6000 tokens), we apply:
 
@@ -1085,11 +1684,9 @@ If the context exceeds the threshold (~6000 tokens), we apply:
 4. **Skills** — omit content, keep names only
 5. Never truncate: critical-rules, current-step, output-rules
 
----
+## 2.10 Validation & Testing
 
-## 10. Validation & Testing
-
-### 10.1 Builder Tests
+### 2.10.1 Builder Tests
 
 Each builder is tested in isolation:
 
@@ -1112,7 +1709,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 end
 ```
 
-### 10.2 Integration Tests
+### 2.10.2 Integration Tests
 
 ```ruby
 class SessionContextConstructorTest < ActiveSupport::TestCase
@@ -1139,7 +1736,7 @@ class SessionContextConstructorTest < ActiveSupport::TestCase
 end
 ```
 
-### 10.3 XML Validation
+### 2.10.3 XML Validation
 
 ```ruby
 class ContextRendererTest < ActiveSupport::TestCase
@@ -1159,18 +1756,23 @@ class ContextRendererTest < ActiveSupport::TestCase
 end
 ```
 
----
+## 2.11 JSON Traceability Interface
 
-## 11. JSON Traceability Interface
-
-### 11.1 Why
+### 2.11.1 Why
 
 For debugging, auditing, and a future UI, we need to see exactly what the Constructor assembled for a specific session. Not just the final text, but **structured metadata**: which builders fired, which did not, how many tokens each section used, and whether compression occurred.
 
-### 11.2 API Endpoint
+### 2.11.2 API Endpoint
+
+> **Status: not yet implemented.** No `context_debug` route or controller
+> exists today. The metadata below is produced by `ContextResult#to_json_hash`
+> and persisted to `terminal_sessions.context_metadata` (JSONB, which does
+> exist); a debug endpoint like the one sketched here is still a proposal.
+
+Proposed shape:
 
 ```
-GET /api/v1/company/terminal_sessions/:id/context_debug
+GET /api/v1/company/terminal_sessions/:id/context_debug   # NOT IMPLEMENTED
 ```
 
 **Response (JSON):**
@@ -1222,7 +1824,7 @@ GET /api/v1/company/terminal_sessions/:id/context_debug
 }
 ```
 
-### 11.3 Integration
+### 2.11.3 Integration
 
 ```ruby
 # In SessionContextService#inject_context_file — save the metadata
@@ -1239,18 +1841,16 @@ end
 
 Metadata is stored in `terminal_sessions.context_metadata` (JSONB, nullable) — one migration is added, one column.
 
-### 11.4 Usage
+### 2.11.4 Usage
 
 - **Debug UI:** a "Context" tab on the session page with a table of sections, token counts, builder info
 - **Logs:** `Rails.logger.info("[SessionContext] #{result.to_json}")` — structured logging
 - **Monitoring:** alert if `build_time_ms > 100` or `total_estimated_tokens > 8000`
 - **Testing:** `assert_equal ["critical_rules", "agent_role", "output_rules"], result.applied_builders`
 
----
+## 2.12 Clean Interface Design Principles
 
-## 12. Clean Interface Design Principles
-
-### 12.1 Session-Centric API
+### 2.12.1 Session-Centric API
 
 The entire API is built around a single argument — `TerminalSession`. The calling code **never** decides which session type it is dealing with. The builders detect the context themselves:
 
@@ -1266,7 +1866,7 @@ else
 end
 ```
 
-### 12.2 Navigation Helpers in the Base Builder
+### 2.12.2 Navigation Helpers in the Base Builder
 
 Builders do not reach directly into associations. Instead of `session.step_run.workflow_run.workflow.name` they use helpers from Base:
 
@@ -1283,7 +1883,7 @@ class ContextBuilders::Base
 end
 ```
 
-### 12.3 Builder Self-Description
+### 2.12.3 Builder Self-Description
 
 Each builder is self-contained. Looking at the file, you immediately see:
 - When it fires (`applicable?`)
@@ -1317,7 +1917,7 @@ class ContextBuilders::BoardContext < ContextBuilders::Base
 end
 ```
 
-### 12.4 Convenience Method: `section(...)`
+### 2.12.4 Convenience Method: `section(...)`
 
 Instead of manually creating `ContextSection.new(tag:, priority:, content:, position_hint:, builder_name: name)` every time — the `section(...)` helper in Base:
 
@@ -1331,9 +1931,7 @@ section(tag: "board-context", priority: :important, content: text, position_hint
 
 `builder_name` is filled in automatically.
 
----
-
-## 13. Open Questions
+## 2.13 Open Questions
 
 | # | Question | Leaning |
 |---|----------|---------|
@@ -1348,4 +1946,4 @@ section(tag: "board-context", priority: :important, content: text, position_hint
 
 ---
 
-_Document updated 2026-02-28 — added ContextResult, JSON traceability, clean interface design_
+_Merged from `session-config-cascade.md` and `session-context-constructor.md` (both 2026-02-28). Config-cascade content current as of 2026-02-28; context-constructor content updated 2026-02-28 — added ContextResult, JSON traceability, clean interface design._

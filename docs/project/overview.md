@@ -25,18 +25,18 @@
 
 | Category | Technology | Version |
 |----------|------------|---------|
-| **Backend** | Ruby on Rails | 8.1.2 |
-| **Ruby** | Ruby | 3.4.0 |
-| **Frontend** | React + TypeScript | 19.0 / 5.9 |
+| **Backend** | Ruby on Rails | 8.1.3 |
+| **Ruby** | Ruby | 4.0.5 |
+| **Frontend** | React + TypeScript | 19.2 / 5.9 |
 | **Database** | PostgreSQL | 15.3 |
 | **Cache** | Redis | 7.2 |
 | **Orchestration** | Temporal | 1.29.0 |
 | **Container (Docker)** | docker-api gem | 2.3 |
 | **Container (K8s)** | kubeclient gem | 4.13 |
-| **File Storage** | Shrine + S3 | 3.6 |
-| **Build** | Vite | 7.3.1 |
-| **UI** | Material UI | 6.x |
-| **MCP** | actionmcp gem | 0.100 |
+| **File Storage** | Shrine + S3 | 3.8 |
+| **Build** | Vite | 8.1.2 |
+| **UI** | Mantine | 9.4 |
+| **MCP** | mcp gem | 0.22.0 |
 | **Auth** | OmniAuth (Google) + Pundit | — |
 
 ---
@@ -54,7 +54,8 @@ PhaseActivity → ContainerService → Strategy → Runtime
 **Strategies** (define WHAT to do):
 - `AgentAuthStrategy` — OAuth onboarding of agents (auth file watching)
 - `AgentSessionStrategy` — interactive/non-interactive sessions (credential injection, log collection, usage tracking)
-- `ToolExecutionStrategy` — running custom tools (command + parameters, wait for exit)
+- `ToolStrategy` — running tools (command + parameters, wait for exit), with subclasses `CustomToolStrategy` (Docker custom tools) and `InternalToolStrategy` (in-process platform tools)
+- `WorkflowStepStrategy` — agent sessions bound to a workflow step (subclass of `AgentSessionStrategy`)
 
 **Runtimes** (define WHERE to run):
 - `DockerRuntime` — local Docker (docker-api gem)
@@ -88,11 +89,13 @@ Adapters implement: `config_path`, `generate_config`, `extract_credentials`, `co
 | `StaleSessionCleanupWorkflow` | Hourly cron | Cleanup stuck sessions |
 | `DismissedAssetCleanupWorkflow` | Daily cron | Remove dismissed assets after 7-day grace period |
 
+(Plus additional workflows: `CoderSweepExpiredLocksWorkflow`, `OutboxRelayWorkflow`, `QuotaErrorScanWorkflow`, `ScheduledTriggerWorkflow`, `WorkflowExecutionWorkflow`.)
+
 ### Multi-tenancy & Scoping
 
 Polymorphic `scope` (Company/Project) for: Agent, Tool, MCPServer, Skill, Asset, ConfigItem, Repository.
 
-Merge logic: `merged_for_project` combines internal + company + project resources with override by name.
+Merge logic: `visible_for_project` unions code/platform + company-scoped + project-scoped rows (System-scoped and non-attachable meta/Builder rows excluded via `user_attachable`); no name-level override.
 
 ---
 

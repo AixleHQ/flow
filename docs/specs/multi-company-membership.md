@@ -5,7 +5,7 @@ created: '2026-07-02'
 baseline_commit: 'b0c38091'
 status: 'done'
 context:
-  - 'ai/research/technical-multi-company-user-membership-research-2026-07-02.md'
+  - 'docs/research/technical-multi-company-user-membership-research-2026-07-02.md'
   - 'CLAUDE.md'
 ---
 

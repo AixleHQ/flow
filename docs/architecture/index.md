@@ -4,13 +4,13 @@
 
 ## Table of Contents
 
-- [Core Architectural Decisions](./core-architectural-decisions.md)
-  - [Data Architecture](./core-architectural-decisions.md#data-architecture)
-  - [Authentication & Security](./core-architectural-decisions.md#authentication-security)
-  - [API & Communication Patterns](./core-architectural-decisions.md#api-communication-patterns)
-  - [Frontend Architecture](./core-architectural-decisions.md#frontend-architecture)
-  - [Infrastructure & Deployment](./core-architectural-decisions.md#infrastructure-deployment)
-- [Implementation Patterns & Consistency Rules](./implementation-patterns-consistency-rules.md)
+- [Core Architectural Decisions](./core-decisions.md)
+  - [Data Architecture](./core-decisions.md#data-architecture)
+  - [Authentication & Security](./core-decisions.md#authentication-security)
+  - [API & Communication Patterns](./core-decisions.md#api-communication-patterns)
+  - [Frontend Architecture](./core-decisions.md#frontend-architecture)
+  - [Infrastructure & Deployment](./core-decisions.md#infrastructure-deployment)
+- [Implementation Patterns & Consistency Rules](./implementation-patterns.md)
 
 ## Container Execution Architecture
 
@@ -24,7 +24,10 @@ Core pattern: **PhaseActivity → ContainerService → Strategy → Runtime**
 | `AgentBaseStrategy` | BaseStrategy | Shared agent logic: image resolution, env vars, ttyd, ports |
 | `AgentAuthStrategy` | AgentBaseStrategy | OAuth credential collection via file watching |
 | `AgentSessionStrategy` | AgentBaseStrategy | Interactive/non-interactive sessions, log/usage collection |
-| `ToolExecutionStrategy` | BaseStrategy | Custom tool execution: command, wait for exit, timeout |
+| `WorkflowStepStrategy` | AgentSessionStrategy | Agent session bound to a workflow step |
+| `ToolStrategy` | BaseStrategy | Base for tool execution: command, wait for exit, timeout |
+| `CustomToolStrategy` | ToolStrategy | User-defined Docker-based custom tool execution |
+| `InternalToolStrategy` | ToolStrategy | Platform-provided (code-source) tool execution |
 
 ### Runtimes (where to run)
 
@@ -71,13 +74,13 @@ ContainerService merges returned hashes into shared state between phases.
 
 ## Multi-tenancy
 
-Polymorphic `scope` (Company or Project): Agent, Tool, MCPServer, Skill, Asset, ConfigItem, Repository.
+Polymorphic `scope` (Company or Project): Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository, NamespaceResourceQuota.
 
-Merge pattern: `Model.merged_for_project(project)` → internal + company + project, project overrides company by name.
+Visibility scopes: `Model.visible_for_project(project)` and `Model.visible_for_company(company)` (plus `for_project`/`for_company` for a single scope). `visible_for_project` is a union of Company-scoped and Project-scoped rows (System-scoped rows excluded); `visible_for_company` returns Company-scoped rows. No name-based override between scopes.
 
 ## Data Model Highlights
 
-- **TerminalSession** — AASM state machine, links to User + Project + Agent + Container, stores token usage
+- **TerminalSession** — AASM state machine, links to User + Project + `configured_agent` (Agent), stores token usage
 - **AgentCredential** — encrypted config per user/agent, `config_data=` setter encrypts, `config_data` getter decrypts
 - **Tool** — custom Docker-based tools, scoped, with ToolFiles and parameters
 - **SessionLog** — Shrine-attached log files per session
@@ -85,15 +88,14 @@ Merge pattern: `Model.merged_for_project(project)` → internal + company + proj
 
 ## API Architecture
 
-- Controller patterns and authorization are documented in [Implementation Patterns](./implementation-patterns-consistency-rules.md#api-controller-patterns)
-- Controller hierarchy: `ApplicationController` → `Api::V1::ApplicationController` → `Api::V1::Company::ApplicationController`
+- Controller patterns and authorization are documented in [Implementation Patterns](./implementation-patterns.md#api-controller-patterns)
+- Controller hierarchy: `ApplicationController` → `Api::V1::ApplicationController` (declares `dynamic_authorize!`). Company controllers (e.g. `Api::V1::Company::AssetsController`) inherit directly from `Api::V1::ApplicationController` and define `current_company` inline; `current_project` lives in `Api::V1::Projects::ApplicationController`.
 - Authorization: Pundit policies + `AuthorizationConcern` (auto-matched by controller name)
 - Pagination: `PaginationConcern` with pagy
 - Serializers: ActiveModelSerializers
-- Real-time: ActionCable `TerminalSessionChannel`
+- Real-time: ActionCable `SessionListChannel` + Inertia `broadcast_refresh_to`
 
 ## Other Architecture Docs
 
-- [Container Runtime: K8s Pods (Epic 14)](./container-runtime-k8s-pods.md)
-- [Container Service Refactoring v2](./container-service-refactoring-v2.md)
-- [Workflow System](./workflow-system.md)
+- [Container Runtime & Service](./container-runtime.md) — pluggable Docker/K8s runtime + ContainerService refactoring (historical)
+- [Workflow Engine](./workflows.md) — workflow data models and execution flow

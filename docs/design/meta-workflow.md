@@ -3,7 +3,7 @@
 **Date:** 2026-02-28
 **Status:** Draft
 **Author:** Artem Petrov + AI Analysis
-**Depends on:** [workflow-architecture.md](./workflow-architecture.md), [BMAD-structure-description.md](./BMAD-structure-description.md)
+**Depends on:** [Workflow Engine](../architecture/workflows.md), [BMAD Integration](./bmad.md)
 
 ---
 
@@ -112,9 +112,9 @@ interface AixleBuilderBannerProps {
          │                    │                       │
          ▼                    ▼                       ▼
 ┌─────────────────┐  ┌───────────────────┐  ┌──────────────────┐
-│  Terminal        │  │  ActionCable      │  │  RTK Query       │
-│  Session         │  │  broadcasts       │  │  cache           │
-│  (agent runs in  │  │  (real-time       │  │  invalidation    │
+│  Terminal        │  │  ActionCable      │  │  Inertia         │
+│  Session         │  │  broadcasts       │  │  broadcast_      │
+│  (agent runs in  │  │  (real-time       │  │  refresh_to      │
 │   container)     │  │   updates)        │  │                  │
 └────────┬────────┘  └───────────────────┘  └──────────────────┘
          │
@@ -158,15 +158,29 @@ interface AixleBuilderBannerProps {
 # Workflow model — System workflows are excluded from standard scopes
 class Workflow < ApplicationRecord
   scope :visible_for_project, ->(project) {
-    where(scope_type: "Company", scope_id: project.company_id)
-      .or(where(scope_type: "Project", scope_id: project.id))
+    active.where(scope_type: "Project", scope_id: project.id)
+          .or(active.where(scope_type: "Company", scope_id: project.company_id))
     # System scope intentionally excluded
   }
 
-  # Separate scope for Aixle Builder
-  scope :system_meta, -> { where(scope_type: "System", config: { meta_workflow: true }) }
+  # System workflows (no config flag involved)
+  scope :system, -> { where(scope_type: "System") }
+
+  def system?
+    scope_type == "System"
+  end
+
+  # Aixle Builder is identified by name lookup among System workflows —
+  # NOT by any config key.
+  def self.aixle_builder
+    system.active.find_by!(name: "Aixle Builder")
+  end
 end
 ```
+
+Note: there is no `config['meta_workflow']` flag — `ALLOWED_CONFIG_KEYS` on the
+Workflow model does not permit it. A workflow is "the builder" when
+`scope_type == "System"` and its name is `"Aixle Builder"`.
 
 **API endpoint for launching Aixle Builder:**
 
@@ -210,19 +224,16 @@ All the tools below are **internal tools** (like `mark_sub_step`), available onl
 | `meta_create_agent` | Create a new agent | `agent:created` |
 | `meta_create_tool` | Create a new tool | `tool:created` |
 | `meta_create_mcp_server` | Create an MCP server | `mcp_server:created` |
-| `meta_create_skill` | Create a skill | `skill:created` |
-| `meta_link_tool_to_step` | Link a tool to a step | `workflow:step_updated` |
-| `meta_link_mcp_server_to_step` | Link an MCP server to a step | `workflow:step_updated` |
-| `meta_link_skill_to_step` | Link a skill to a step | `workflow:step_updated` |
-| `meta_link_agent_to_step` | Link an agent to a step | `workflow:step_updated` |
+| `meta_search_skills` | Search the skills.sh registry for available skills | — |
+| `meta_install_skill` | Install a skill from the skills.sh registry | `skill:created` |
+| `meta_link_resource_to_step` | Link a tool, skill, MCP server, or asset to a step | `workflow:step_updated` |
 | `meta_list_agents` | List available agents | — |
 | `meta_list_tools` | List available tools | — |
-| `meta_list_mcp_servers` | List available MCP servers | — |
 | `meta_list_skills` | List available skills | — |
 | `meta_list_workflows` | List existing workflows (for reference) | — |
 | `meta_get_workflow` | Get the full workflow with steps/sub-steps | — |
 | `meta_finalize_workflow` | Finalize and validate the workflow | `workflow:finalized` |
-| `meta_import_bmad` | Import BMAD context (see §5) | — |
+| `meta_delete_workflow` | Soft-delete a workflow (fails if it has active runs or a board binding) | `workflow:deleted` |
 | **Board & Column tools** | | |
 | `meta_get_board` | Get the current state of the project board (columns, bindings) | — |
 | `meta_create_board_column` | Create a new column on the board | `board:column_created` |
@@ -707,9 +718,10 @@ system_prompt: |
   | instructions | text | no | Additional guidance (injected into step context) |
   | required | boolean | false | Must be completed for step to finish |
 
-  The agent uses the `mark_sub_step` tool to report progress:
+  The agent uses the `mark_sub_step` tool to report progress. Sub-steps are
+  addressed by their `id` (the SubStepRun ID), not by name:
   ```
-  mark_sub_step(name: "Research Phase", status: "completed")
+  mark_sub_step(id: 42, status: "completed")
   ```
 
   **SubSteps are NOT:**
@@ -950,7 +962,7 @@ system_prompt: |
   ## 3.3 What Agents Can Do Inside a Step
 
   Agents in workflow steps have access to these internal tools:
-  - `mark_sub_step(name, status)` — report progress
+  - `mark_sub_step(id, status)` — report progress (addressed by SubStepRun id)
   - `list_sub_steps()` — see expected sub-steps
   - `finish_session()` — mark step as completed (REQUIRED in non-interactive mode)
   - `fail_session(reason)` — mark step as failed
@@ -1236,6 +1248,12 @@ The agent reads the files and uses the meta_import_bmad tool
 
 ### 5.3 Tool: meta_import_bmad
 
+> **Not implemented.** `meta_import_bmad` was never built — there is no
+> corresponding handler under `app/services/internal_tools/`. The current
+> approach for BMAD input is §5.4: the agent reads the uploaded BMAD files
+> directly from `/workspace/input/` and maps them via the `meta_create_*` tools.
+> The design below is retained as a possible future enhancement.
+
 ```json
 {
   "name": "meta_import_bmad",
@@ -1308,92 +1326,73 @@ Recommendation: **use both approaches**:
 
 Aixle Builder has **its own routes**, separate from the regular workflow run pages:
 
-```typescript
-// shared/routes.ts
-aixleBuilderPath: '/company/projects/:projectId/aixle-builder',
-aixleBuilderRunPath: '/company/projects/:projectId/aixle-builder/:runId',
-
-// routeTree.tsx
-export const aixleBuilderRoute = createRoute({
-  getParentRoute: () => projectLayoutRoute,
-  path: Routes.frontend.aixleBuilderPath,
-  component: AixleBuilderPage,        // Start page / list of past builder runs
-});
-
-export const aixleBuilderRunRoute = createRoute({
-  getParentRoute: () => projectLayoutRoute,
-  path: Routes.frontend.aixleBuilderRunPath,
-  component: AixleBuilderRunPage,      // Specialized page for a running builder
-});
+```
+# Rails routes (see companyProjectAixleBuilder* helpers in shared/routes.ts)
+GET  /company/projects/:project_id/aixle_builder             → landing
+POST /company/projects/:project_id/aixle_builder/start       → launch a builder session
+GET  /company/projects/:project_id/aixle_builder/:id/session → running builder session
+POST /company/projects/:project_id/aixle_builder/:id/finish  → finish a builder session
 ```
 
-**AixleBuilderPage** — start page:
-- The "Start new build" button → POST launch of meta-workflow → redirect to AixleBuilderRunPage
+The pages live under `app/frontend/pages/Projects/AixleBuilder/`:
+- **LandingPage.tsx** — start page
+- **SessionPage.tsx** — page for a running builder session
+
+**LandingPage** — start page:
+- The "Start new build" button → POST `aixle_builder/start` → redirect to the session page
 - List of past builder runs (if any) with results (which workflows were created)
 - If there is an active run → show the "Continue building..." banner
 
-**AixleBuilderRunPage** — page for a running builder (§6.3):
+**SessionPage** — page for a running builder (§6.3):
 - Terminal + Activity Log + Workflow Preview + Board Preview
 - Specialized for the meta-workflow (the regular WorkflowRunPage is not used)
 
 ### 6.1 Activity Log
 
-On successful execution, each meta-tool creates a **MetaWorkflowActivity** record:
+There is no dedicated `MetaWorkflowActivity` ActiveRecord model. Builder
+activities are appended to a JSONB array on the run/session's `metadata`
+column (`metadata["builder_activities"]`), capped at the last 100 entries. Each
+meta-tool calls the shared `broadcast_meta_activity` helper
+(`InternalTools::MetaToolHelpers`), which persists the activity and triggers a
+Turbo refresh:
 
 ```ruby
-class MetaWorkflowActivity < ApplicationRecord
-  belongs_to :workflow_run
-  belongs_to :created_entity, polymorphic: true, optional: true
+# app/services/internal_tools/meta_tool_helpers.rb
+def broadcast_meta_activity(action:, entity_type:, entity_name:, entity_id:, details: {})
+  activity = {
+    "action" => action, "entity_type" => entity_type, "entity_name" => entity_name,
+    "entity_id" => entity_id, "details" => details, "timestamp" => Time.current.iso8601
+  }
+  persist_activity(activity)
+end
 
-  # action: string (created_workflow, created_step, created_agent, ...)
-  # entity_type: string (Workflow, Step, SubStep, Agent, Tool, ...)
-  # entity_name: string
-  # details: jsonb
-  # created_at: datetime
+def persist_activity(activity)
+  target = session || workflow_run
+  return unless target.respond_to?(:metadata)
+
+  meta = target.metadata || {}
+  meta["builder_activities"] ||= []
+  meta["builder_activities"] << activity
+  meta["builder_activities"] = meta["builder_activities"].last(100)
+  target.update_column(:metadata, meta)
+  target.broadcast_refresh_to(target)   # Turbo Streams refresh
 end
 ```
 
-Broadcasts via ActionCable on the `MetaWorkflowChannel` channel:
-
-```ruby
-MetaWorkflowChannel.broadcast_to(
-  workflow_run,
-  {
-    type: "activity",
-    action: "created_step",
-    entity_type: "Step",
-    entity_name: "Create Architecture",
-    entity_id: step.id,
-    details: { position: 3, workflow_id: target_workflow.id },
-    timestamp: Time.current.iso8601
-  }
-)
-```
+Each activity is a plain hash: `action` (created_step, created_agent, ...),
+`entity_type`, `entity_name`, `entity_id`, `details` (jsonb), and `timestamp`.
 
 ### 6.2 Live Workflow Constructor
 
-The frontend subscribes to two channels:
-1. `WorkflowRunChannel` — standard (sub-step progress, state changes)
-2. `MetaWorkflowChannel` — specific (activity + entity updates)
+There is no dedicated `MetaWorkflowChannel` — `app/channels/` contains only
+`SessionListChannel`. Real-time updates ride on **Turbo Streams**: after each
+meta-tool persists a builder activity, `persist_activity` calls
+`broadcast_refresh_to(target)` (see §6.1). The target (workflow run or session)
+broadcasts a Turbo refresh over its own stream; the frontend re-fetches the
+current view rather than applying a granular, typed cache invalidation. There is
+no per-entity RTK Query tag-invalidation flow for builder events.
 
-When events are received from `MetaWorkflowChannel`, the UI **invalidates the RTK Query cache** for the target workflow:
-
-```typescript
-// On receiving a meta-workflow event:
-onMessage(event) {
-  if (event.type === 'activity') {
-    // Invalidate the target workflow's cache
-    dispatch(
-      workflowsApi.util.invalidateTags([
-        { type: 'Workflow', id: event.details.workflow_id },
-        { type: 'Step', id: event.entity_id },
-      ])
-    );
-  }
-}
-```
-
-### 6.3 UI Layout: AixleBuilderRunPage
+### 6.3 UI Layout: SessionPage
 
 The page uses a **tabbed layout** — the right panel switches between Workflow Preview and Board Preview.
 
@@ -1447,8 +1446,8 @@ When switching to the **Board** tab:
 ### 6.4 Workflow Preview Component
 
 The `WorkflowPreview` component is a **read-only version of WorkflowBuilder** that:
-- Is subscribed to `MetaWorkflowChannel`
-- Automatically loads new steps/sub-steps when events are received
+- Refreshes on the target's Turbo Stream (`broadcast_refresh_to`, see §6.2)
+- Automatically loads new steps/sub-steps when a refresh arrives
 - Shows the current state of the target workflow "as if the user were viewing it in the builder"
 - Highlights the last added/changed entity (animation)
 
@@ -1474,7 +1473,7 @@ interface BoardPreviewProps {
   // Shows columns as vertical list (compact, not full kanban)
   // Highlights newly created columns (animation)
   // Shows workflow bindings with trigger mode icons
-  // Auto-refreshes on MetaWorkflowChannel events
+  // Auto-refreshes on Turbo Stream refresh (see §6.2)
 }
 ```
 
@@ -1544,18 +1543,23 @@ end
 
 ### 8.1 Only the Meta-Workflow has meta-tools
 
-Meta-tools (all `meta_*`) are registered as `tool_type: :internal` with `category: :meta`. They are available **only** to steps that belong to a workflow with `scope_type: 'System'` and `config.meta_workflow: true`.
+Meta-tools (all `meta_*`) are internal-tool handlers under `InternalTools::`,
+each declared with `tags :builder` and `user_attachable false` (so users cannot
+attach them to arbitrary steps). They reach an agent only by being attached to
+the steps of the System-scoped **Aixle Builder** workflow.
+
+There is no `Workflow#meta_workflow?` predicate and no `config['meta_workflow']`
+flag (`ALLOWED_CONFIG_KEYS` would reject that key). The builder workflow is
+identified structurally:
 
 ```ruby
-class InternalTools::MetaCreateWorkflow < InternalTools::Base
-  def self.available_for?(step_run)
-    step_run.workflow_run.workflow.meta_workflow?
-  end
-end
-
 class Workflow < ApplicationRecord
-  def meta_workflow?
-    scope_type == 'System' && config&.dig('meta_workflow') == true
+  def system?
+    scope_type == "System"
+  end
+
+  def self.aixle_builder
+    system.active.find_by!(name: "Aixle Builder")
   end
 end
 ```
@@ -1565,7 +1569,7 @@ end
 If a meta-workflow run fails or is cancelled:
 - All created entities (workflow, steps, agents, tools) **remain** (they are not deleted automatically)
 - The user can continue working manually or restart the meta-workflow
-- The MetaWorkflowActivity log preserves the full history of what was created
+- The `metadata["builder_activities"]` log (see §6.1) preserves the recent history of what was created
 
 ### 8.3 Rate Limits
 
@@ -1716,64 +1720,21 @@ Meta-tools have limits for safety:
 
 ---
 
-## 10. Implementation Plan
+## 10. Implementation Status
 
-### Phase 1: Foundation (2-3 days)
-- [ ] Add `scope_type: 'System'` to the Workflow model
-- [ ] Create `MetaWorkflowActivity` model + migration
-- [ ] Create `MetaWorkflowChannel` (ActionCable)
-- [ ] Implement basic meta-tools: `meta_create_workflow`, `meta_create_step`, `meta_create_sub_step`
-- [ ] Permissions for meta-tools
+**Status: largely implemented.** The `scope_type: "System"` model support, the
+full set of workflow and board meta-tools (§3.1), implicit target-workflow state,
+System-workflow exclusion from `visible_for_project`, the Aixle Builder routes,
+and the `LandingPage` / `SessionPage` frontend are all built. Real-time updates
+use Turbo `broadcast_refresh_to` over the `builder_activities` metadata log
+(§6.1/§6.2) rather than a dedicated ActionCable channel or an ActiveRecord
+activity model.
 
-### Phase 2: Full Workflow Tool Set (2-3 days)
-- [ ] Implement all workflow meta-tools from §3.1
-- [ ] `meta_import_bmad` — BMAD artifact parser
-- [ ] `meta_finalize_workflow` — validator
-- [ ] Tool state management (implicit target workflow)
-- [ ] Rate limits
-
-### Phase 3: Board & Automation Tools (2-3 days)
-- [ ] `meta_get_board` — retrieving the board state
-- [ ] `meta_create_board_column`, `meta_update_board_column`, `meta_delete_board_column`
-- [ ] `meta_reorder_board_columns`
-- [ ] `meta_create_column_binding`, `meta_update_column_binding`, `meta_delete_column_binding`
-- [ ] `meta_setup_board_from_preset`
-- [ ] Board-specific broadcasts for MetaWorkflowChannel
-- [ ] Validation: column belongs to project board, workflow visible for project
-
-### Phase 4: UI — Entry Point & Routing (2-3 days)
-- [ ] Routes: `/company/projects/:projectId/aixle-builder` and `aixle-builder/:runId`
-- [ ] `AixleBuilderBanner` — CTA banner on `WorkflowsPanel` (above the workflows list)
-- [ ] Dropdown "New Workflow" → "Blank Workflow" / "Aixle Builder"
-- [ ] `AixleBuilderPage` — start page (start new / list past runs)
-- [ ] API: `POST /projects/:id/aixle_builder/start` (or via workflow_runs with system workflow_id)
-- [ ] Filter System workflows out of standard scopes (do not show in WorkflowsPanel)
-
-### Phase 5: UI — Builder Run Page (3-4 days)
-- [ ] `AixleBuilderRunPage` — specialized page with 3 panels
-- [ ] `ActivityLog` component for the meta-workflow
-- [ ] `WorkflowPreview` component (read-only live constructor)
-- [ ] `BoardPreview` component (shows board state + bindings)
-- [ ] Workflow/Board tab switcher in the right panel
-- [ ] ActionCable subscriptions + RTK Query invalidation
-- [ ] Animations for live updates (new columns, bindings, steps)
-
-### Phase 6: System Workflow & Agent (1-2 days)
-- [ ] Seed: System meta-workflow "Aixle Builder" with 5 steps
-- [ ] Seed: Workflow Architect agent (system-level) with full instructions
-- [ ] Seed: Meta-tools registration (workflow + board tools)
-- [ ] Exclude System workflows from `visible_for_project` / `for_company` scopes
-
-### Phase 6: Polish & Testing (2-3 days)
-- [ ] E2E test: creating a workflow from BMAD + board binding
-- [ ] E2E test: creating a workflow from scratch
-- [ ] E2E test: configuring board automation (scenario 9.3)
-- [ ] Handling edge cases (failed tools, partial creation, retry)
-- [ ] Edge case: deleting a column with tasks (should fail)
-- [ ] Edge case: binding to a non-existent workflow
-- [ ] UX polish: loading states, error messages, confirmation dialogs
-
-**Overall estimate: 14-20 days**
+Notable deltas from the original plan: `meta_import_bmad` and a
+`meta_list_mcp_servers` tool were not built; the four `meta_link_*_to_step` tools
+collapsed into a single `meta_link_resource_to_step`; skills are handled via
+`meta_search_skills` + `meta_install_skill` (against the skills.sh registry)
+rather than a `meta_create_skill`.
 
 ---
 
@@ -1811,10 +1772,10 @@ Cons: inflexible (the mapping is not always 1:1, interpretation is needed), does
 | 3 | How to handle the situation when the agent runtime is unavailable? | Standard error handling — retry or fail depending on the step config |
 | 4 | Do we need the ability to "fork" the meta-workflow to create custom builder workflows? | Not yet — a single System meta-workflow is enough |
 | 5 | How do we version the System meta-workflow on Aixle updates? | Seed update + migration. Running runs use a snapshot |
-| 6 | Do we need a meta_delete_workflow tool? | Not yet — too destructive for automation |
+| 6 | Do we need a meta_delete_workflow tool? | Implemented — `meta_delete_workflow` soft-deletes, and refuses if the workflow has active runs or a board-column binding |
 | 7 | Can a meta-workflow change the board preset (reset to preset) if the board already contains tasks? | No — `meta_setup_board_from_preset` works only if all columns are empty. Otherwise — add columns one by one |
 | 8 | How do we handle a binding conflict — a column is already bound to another workflow? | Show the user the current binding, ask: replace or keep? Do not overwrite automatically |
-| 9 | Do we need a preview of board automation in the real-time UI (like WorkflowPreview)? | Yes — a `BoardPreview` component showing columns + bindings. Updated via MetaWorkflowChannel |
+| 9 | Do we need a preview of board automation in the real-time UI (like WorkflowPreview)? | Yes — a `BoardPreview` component showing columns + bindings. Updated via Turbo Stream refresh (§6.2) |
 | 10 | Should the agent be able to delete other bindings (created not via meta-workflow)? | Yes, but with user confirmation. The agent shows the current binding and asks |
 
 ---

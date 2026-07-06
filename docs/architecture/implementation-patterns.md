@@ -45,21 +45,21 @@ Controllers: 2-3 lines per action max. Use `respond_with` for automatic format +
 
 ```ruby
 module Api::V1::Company
-  class ToolsController < ApplicationController
+  class AssetsController < Api::V1::ApplicationController
     def index
-      tools = Tool.merged_for_company(current_company).ransack(params[:q]).result
-      respond_with paginate(tools)
+      assets = current_company.assets.ransack(params[:q]).result
+      respond_with paginate(assets)
     end
 
     def create
-      tool = current_company.tools.create(tool_params)
-      respond_with tool
+      asset = current_company.assets.create(asset_params)
+      respond_with asset
     end
 
     def update
-      tool = current_company.tools.find(params[:id])
-      tool.update(tool_params)
-      respond_with tool
+      asset = current_company.assets.find(params[:id])
+      asset.update(asset_params)
+      respond_with asset
     end
   end
 end
@@ -67,19 +67,29 @@ end
 
 ### Controller Hierarchy
 
+API tree (no `Api::V1::Company::ApplicationController` layer):
+
 ```ruby
 ApplicationController                    # Auth, browser, gon
-  Api::V1::ApplicationController         # JSON API, pagination, rescue_from
-    Api::V1::Company::ApplicationController  # current_company, dynamic_authorize!
-      Api::V1::Company::Projects::ApplicationController  # current_project
+  Api::V1::ApplicationController         # JSON API, pagination, rescue_from, dynamic_authorize!
+    Api::V1::Company::AssetsController   # inherits directly; defines current_company inline
+    Api::V1::Projects::ApplicationController  # current_project
 ```
 
-Each namespace base sets: `before_action :dynamic_authorize!` + scope helper (`current_company`, `current_project`).
+`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and define `current_company` inline; `current_project` lives in `Api::V1::Projects::ApplicationController`.
+
+The genuine 4-level base-controller chain exists only in the **Web** namespace:
+
+```ruby
+Web::ApplicationController
+  Web::Company::ApplicationController           # current_company
+    Web::Company::Projects::ApplicationController  # current_project
+```
 
 ### Dynamic Authorization (AuthorizationConcern)
 
 Authorization is automatic via `dynamic_authorize!`:
-1. Controller name → Policy class: `Api::V1::Company::ToolsController` → `Api::V1::Company::ToolsPolicy`
+1. Controller name → Policy class: `Api::V1::Company::AssetsController` → `Api::V1::Company::AssetsPolicy`
 2. Action name → policy method: `index` → `index?`, `create` → `create?`
 3. `policy_record` is overridable per controller
 
@@ -109,11 +119,11 @@ Authorization is automatic via `dynamic_authorize!`:
 - **State machines:** `app/state_machines/` — AASM definitions
 - **Temporal:** `app/temporal/workflows/`, `app/temporal/activities/`
 
-### Frontend (Feature-Sliced Design)
-- **Layers:** app → pages → features → entities → shared
-- **Import rule:** upper layers import only from lower layers
+### Frontend (Inertia + React)
+- **Pages:** `app/frontend/pages/` — one component per Inertia page (server-driven routing)
+- **Shared:** `app/frontend/shared/` — `components`, `lib`, `resources`, `ui`, `ui-inertia`, `theme`, `config`, generated `routes.ts`
 - **Co-located tests:** `*.test.tsx` next to component
-- **API:** `shared/api/baseApi.ts` — RTK Query with auto case conversion
+- **API:** `shared/lib/apiFetch.ts` — `fetch` wrapper (CSRF + JSON); most data arrives via Inertia props (no RTK Query)
 
 ### Test Organization
 - **Mirrors app structure:** `test/controllers/`, `test/services/`, `test/models/`
@@ -132,13 +142,15 @@ Authorization is automatic via `dynamic_authorize!`:
 - Active machines:
   - **User:** `state` (active/pending/suspended/archived), `onboarding_state` (step1→completed)
   - **Company:** `state` (active/suspended/archived)
-  - **TerminalSession:** `state` (not_started/running/ready/finished/failed)
+  - **TerminalSession:** `state` (not_started/running/ready/finishing/finished/failed)
+  - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
 
 ### Polymorphic Scoping
-- Agent, Tool, MCPServer, Skill, Asset, ConfigItem, Repository
+- Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository, NamespaceResourceQuota
 - `scope_type` + `scope_id` → Company or Project
-- `merged_for_project(project)` → combines internal + company + project (project overrides by name)
-- `merged_for_company(company)` → combines internal + company
+- `visible_for_project(project)` → union of Company-scoped + Project-scoped rows (System-scoped excluded; no name override)
+- `visible_for_company(company)` → Company-scoped rows
+- `for_project(project)` / `for_company(company)` → a single scope only
 
 ### Encrypted Fields
 - `AgentCredential#config_data` — via `ActiveSupport::MessageEncryptor`
@@ -147,16 +159,15 @@ Authorization is automatic via `dynamic_authorize!`:
 - **Rule:** Always use setter (`config_data=`), never write `encrypted_config_data` directly
 
 ### Case Conversion (Frontend ↔ Backend)
-- **Request:** `decamelizeKeys(data)` — `{ currentUser: {...} }` → `{ current_user: {...} }`
-- **Response:** `camelcaseKeys(result.data)` — reverse
-- **Location:** `app/frontend/shared/api/baseApi.ts`
-- **TS interfaces:** always camelCase
+- **Server-side, not client-side.** Alba `transform_keys :lower_camel` in `ApplicationResource` camelizes serialized JSON; `InertiaPropsCamelizer` (`config/initializers/inertia.rb`) camelizes all Inertia props
+- **TS types:** Typelizer generates camelCase interfaces (`config/initializers/typelizer.rb`)
+- **Rule:** Ruby stays snake_case; TS interfaces are always camelCase
 
 ### Error Handling
 - **Controllers:** `rescue_from` in `ApplicationController` for global errors
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`
-- **Frontend:** RTK Query error handling + MUI Snackbar toasts
+- **Frontend:** `apiFetch` response checks + Mantine notifications for toasts
 
 ### Logging
 - **Backend:** Lograge (structured JSON) + Rollbar (error tracking)
@@ -176,5 +187,5 @@ Authorization is automatic via `dynamic_authorize!`:
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
 - **Never** return bare arrays from API → always wrap in `items`/`data`
-- **Never** use global loading states → use per-request via RTK Query
+- **Never** use global loading states → track loading per request (local state around `apiFetch`)
 - **Never** validate only on submit → use on blur + on submit

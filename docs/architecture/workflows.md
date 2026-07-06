@@ -1,25 +1,85 @@
-# Workflow & Asset Architecture Design
+# Workflow Engine
 
-**Date:** 2026-02-13 (v3)
-**Previous versions:** v2 2026-02-13, v1 2026-01-30
+**Date:** 2026-02-13 (v3) · **Previous versions:** v2 2026-02-13, v1 2026-01-30
 **Status:** Approved
 **Author:** Artem Petrov + AI Analysis
 
----
+Architecture of the workflow and asset system for Aixle. This document defines how
+workflows, steps, sub-steps, assets, and their execution are modeled, scoped, and
+connected — from high-level concepts and scope rules down to the detailed data
+models, execution lifecycle, internal tools, and asset versioning.
 
-## Related Documents
+Key design principle: **Aixle is a persistent BMAD runtime** — BMAD today works
+through fresh LLM chats with markdown files; Aixle turns this into a persistent
+system with tracking, assets, versioning, and automation.
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](./architecture/index.md) | Core architecture decisions, tech stack |
+| [Architecture index](./index.md) | Core architecture decisions, tech stack |
 
 ---
 
-## Overview
+## Table of Contents
 
-Architecture of the workflow and asset system for Aixle. This document defines how workflows, steps, sub-steps, assets, and their execution are modeled and connected.
+- [Key Concepts](#key-concepts)
+- [Scope Decision](#scope-decision)
+- [Implementation Phases & Dependency Graph](#implementation-phases--dependency-graph)
+- [1. Core Concepts](#1-core-concepts)
+- [2. Data Model](#2-data-model)
+- [3. Workspace Structure](#3-workspace-structure)
+- [4. Execution Flow](#4-execution-flow)
+- [5. Workflow Context Injection](#5-workflow-context-injection)
+- [6. Internal Tools (Workflow-specific)](#6-internal-tools-workflow-specific)
+- [7. Asset Versioning](#7-asset-versioning)
+- [8. Asset Public Sharing (planned)](#8-asset-public-sharing-planned)
+- [9. Validation](#9-validation)
+- [10. BMAD Mapping](#10-bmad-mapping)
+- [11. GitHub Integration](#11-github-integration)
+- [12. Open Questions — Decisions](#12-open-questions--decisions)
+- [13. Implementation Notes](#13-implementation-notes)
 
-Key design principle: **Aixle is a persistent BMAD runtime** — BMAD today works through fresh LLM chats with markdown files; Aixle turns this into a persistent system with tracking, assets, versioning, and automation.
+---
+
+## Key Concepts
+
+| Concept | Description |
+|---------|-------------|
+| **Agent** | LLM configuration (persona, system prompt). Not tied to a workflow |
+| **Workflow** | Process definition: steps, inputs, outputs. **Polymorphic scope** (Company or Project) — same pattern as Agent/Tool/Skill |
+| **Step** | Single step within a workflow with instructions |
+| **SubStep** | Unit of work within a step |
+| **WorkflowRun** | Specific workflow execution, always project-scoped (even for company workflows) |
+| **StepRun** | Single step execution (= one terminal session) |
+| **SubStepRun** | Tracked execution of one sub-step |
+| **WorkflowRunAsset** | Intermediate file shared between steps |
+| **Asset** | Project-level versioned file/document |
+
+## Scope Decision
+
+> **2026-02-22**
+
+Workflow uses polymorphic `scope` (Company | Project) with `visible_for_project(project)`.
+A Company defines standard workflows available in all its projects; projects can create
+project-specific workflows or override by name. `WorkflowRun` always `belongs_to :project` —
+execution is project-scoped.
+
+## Implementation Phases & Dependency Graph
+
+| Phase | Scope |
+|-------|-------|
+| 0 | Secrets Management |
+| 1 | Agents (CRUD, selection) |
+| 2 | Tools (Docker execution) |
+| 3 | MCP Servers |
+| 4 | Unified Container Execution |
+| 4+ | Session Context (per-CLI config) |
+| 4++ | Agent Sessions Core |
+| 5-6 | Workflows + Artifacts |
+| 7 | Billing & Integrations |
+
+```
+WORKFLOWS → SESSION CONTEXT → MCP SERVERS → TOOLS → AGENTS → SECRETS
+```
 
 ---
 
@@ -69,19 +129,28 @@ A BMAD workflow like "Create Architecture" (8 step-files producing 1 document) b
 
 ```ruby
 class Workflow < ApplicationRecord
-  belongs_to :project
+  belongs_to :scope, polymorphic: true, optional: true  # Company | Project | System
+  belongs_to :published_by, class_name: 'User', optional: true
   has_many :steps, dependent: :destroy
-  has_many :runs, class_name: 'WorkflowRun'
+  has_many :runs, class_name: 'WorkflowRun', dependent: :destroy
 
   # name: string
   # description: text
-  # config: jsonb (additional settings)
+  # config: jsonb (base_tool_ids, base_skill_ids, base_mcp_server_ids,
+  #                base_asset_ids, inherit_all_project_resources)
+  # published_at: datetime (nil until published)
+  # deleted_at: datetime (soft delete)
 
   def can_run_non_interactive?
     steps.all?(&:allow_non_interactive)
   end
 end
 ```
+
+Workflows are **scoped polymorphically** (`Company` | `Project` | `System`) — the
+same pattern used for Agent/Tool/Skill/Asset — rather than owned by a single
+project. A project sees its own workflows plus its company's via a `visible_for_project`
+scope.
 
 ### 2.2 Step
 
@@ -113,13 +182,21 @@ class Step < ApplicationRecord
   #   [{ name: "architecture", asset_type: "document", required: true, name_pattern: "*.md" }]
   #   Used for validation on step completion and for skip_policy: if_outputs_exist
   #
-  # agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex)
-  # tool_ids: jsonb (which tools/MCP servers are available in this step)
+  # depends_on_step_ids: jsonb (DAG — ids of sibling steps this step depends on)
+  # preferred_model: string (optional model override, e.g. "claude-sonnet-4")
+  # required_agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex)
+  # bmad_enabled: boolean (default: false — inject BMAD-method context)
+  # tool_ids / mcp_server_ids / skill_ids / asset_ids: jsonb (resources available in this step)
+  # mount_repositories: boolean (default: true)
+  # deleted_at: datetime (soft delete — steps with runs are soft-deleted, not destroyed)
   #
   # on_failure: enum (retry, skip, fail)
   # max_retries: integer (default: 0)
 end
 ```
+
+Steps form a **DAG** via `depends_on_step_ids` (validated against sibling steps,
+no self-reference); `root?` steps have no dependencies.
 
 ### 2.3 SubStep
 
@@ -167,7 +244,8 @@ class WorkflowRun < ApplicationRecord
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
 
-  # status: enum (pending, running, paused, completed, failed, cancelled)
+  # state: managed by AASM state machine (WorkflowRunStateMachine)
+  #   pending → running → (paused ↔ running) → completed / failed / cancelled
   # mode: enum (interactive, non_interactive, mixed)
   #   interactive      — all steps wait for user input/approval
   #   non_interactive  — all steps auto-proceed (only if workflow.can_run_non_interactive?)
@@ -208,9 +286,10 @@ class StepRun < ApplicationRecord
   has_many :produced_workflow_run_assets, class_name: 'WorkflowRunAsset',
            foreign_key: :produced_by_step_run_id
 
-  # status: enum (pending, running, waiting_input, completed, failed, skipped)
-  # step_note: text (written by agent via write_step_note tool)
-  # skip_reason: string (why skipped, if status=skipped)
+  # state: enumerize (pending, running, waiting_input, completed, failed, skipped, cancelled)
+  # step_note: text (final note carried into subsequent steps' context;
+  #                  populated from finish_session / fail_session notes)
+  # skip_reason: string (why skipped, if state=skipped)
   # started_at: datetime
   # completed_at: datetime
   # error_message: text
@@ -219,14 +298,14 @@ end
 
 ### 2.6 SubStepRun
 
-Created automatically when StepRun starts. Agent updates status via `mark_sub_step` tool.
+Created automatically when StepRun starts. Agent updates state via `mark_sub_step` tool.
 
 ```ruby
 class SubStepRun < ApplicationRecord
   belongs_to :step_run
   belongs_to :sub_step
 
-  # status: enum (pending, in_progress, completed, skipped)
+  # state: enumerize (pending, in_progress, completed, skipped)
   # note: text (agent writes what was done, decisions made)
   # data: jsonb (structured data — decisions, metrics, key findings)
   # started_at: datetime
@@ -241,7 +320,7 @@ end
 step.sub_steps.ordered.each do |sub_step|
   step_run.sub_step_runs.create!(
     sub_step: sub_step,
-    status: :pending
+    state: :pending
   )
 end
 
@@ -274,21 +353,28 @@ Intermediate files shared between steps within a single workflow run.
 
 ```ruby
 class WorkflowRunAsset < ApplicationRecord
+  include WorkflowRunAssetUploader::Attachment(:file)  # Shrine attachment
+
   belongs_to :workflow_run
   belongs_to :produced_by_step_run, class_name: 'StepRun', optional: true
 
   # name: string (filename)
-  # s3_key: string
-  # content_type: string (mime type)
-  # file_size: integer
+  # file_data: text (Shrine attachment metadata — storage key, mime, size)
+
+  def download_to(dir)  # materialise the file into a workspace dir
+    # ...
+  end
 end
 ```
 
+The blob is a Shrine `file` attachment (`WorkflowRunAssetUploader`) — there is no
+separate `s3_key` / `content_type` / `file_size` column; those live inside the
+Shrine `file_data`.
+
 **Lifecycle:**
-1. Step completes → all files from `/workspace/output/` uploaded to S3 → WorkflowRunAsset records created
+1. Step completes → files from `/workspace/output/` uploaded as Shrine attachments → WorkflowRunAsset records created
 2. Next step starts → ALL WorkflowRunAssets from previous steps + user-selected project Assets mounted to `/workspace/input/`
-3. After workflow completes → user sees all WorkflowRunAssets and can export selected ones to project-level Assets
-4. `export_asset` tool can also promote during workflow execution
+3. After workflow completes → user sees all WorkflowRunAssets and can export selected ones to project-level Assets (via the export UI / `AssetExportService`)
 
 ### 2.8 Asset (Polymorphic Scope + Separate Versions)
 
@@ -311,24 +397,28 @@ class Asset < ApplicationRecord
   scope :for_company, ->(company) { where(scope_type: 'Company', scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: 'Project', scope_id: project.id) }
 
-  def self.merged_for_project(project)
+  def self.visible_for_project(project)
     where(scope_type: 'Project', scope_id: project.id)
       .or(where(scope_type: 'Company', scope_id: project.company_id))
   end
 end
 
 class AssetVersion < ApplicationRecord
-  belongs_to :asset
+  extend Enumerize
+  include AssetFileUploader::Attachment(:file)  # Shrine attachment
+
+  belongs_to :asset, inverse_of: :versions
   belongs_to :uploaded_by, class_name: 'User'
 
+  enumerize :source, in: %i[upload workflow github session slack], default: :upload
+
+  before_validation :set_version, on: :create  # auto-increment within asset
+
   # version: integer (auto-increment within asset)
-  # file_data: text (Shrine attachment data)
+  # file_data: text (Shrine attachment metadata)
   # content_type: string (mime type)
   # file_size: integer
-  # provenance: jsonb
-  #   { source: "upload", user_id: X }
-  #   { source: "workflow", step_run_id: Y, step_name: "..." }
-  #   { source: "github", repo_url: "...", branch: "...", commit: "..." }
+  # source: enum (upload | workflow | github | session | slack)
 end
 ```
 
@@ -338,9 +428,11 @@ end
 
 ```ruby
 class Project < ApplicationRecord
-  has_many :workflows
-  has_many :assets
-  has_many :terminal_sessions
+  belongs_to :company
+  has_many :workflows, as: :scope      # polymorphic scope, not a direct FK
+  has_many :assets, as: :scope         # same polymorphic pattern
+  has_many :workflow_runs
+  has_many :terminal_sessions, dependent: :nullify
 end
 
 class TerminalSession < ApplicationRecord
@@ -348,6 +440,10 @@ class TerminalSession < ApplicationRecord
   has_one :step_run
 end
 ```
+
+Both `Workflow` and `Asset` `belong_to :scope, polymorphic: true`; a `Company`
+carries the same `as: :scope` associations, so company-level workflows/assets are
+shared across that company's projects.
 
 ---
 
@@ -420,7 +516,7 @@ User clicks "Run Workflow"
     │     • User picks what to include
     │
     ▼
-Create WorkflowRun (status: pending, input_asset_ids: [...])
+Create WorkflowRun (state: pending, input_asset_ids: [...])
     │
     ▼
 Start first step
@@ -438,8 +534,8 @@ Check skip_policy:
     ├─→ never: always execute
     │
     ▼
-Create StepRun (status: pending)
-Auto-create SubStepRuns from Step.sub_steps (all status: pending)
+Create StepRun (state: pending)
+Auto-create SubStepRuns from Step.sub_steps (all state: pending)
     │
     ▼
 Prepare workspace:
@@ -454,7 +550,7 @@ Inject workflow context into CLI context file (AGENTS.md / CLAUDE.md / .cursorru
 Start terminal session (TerminalSession, session_type: workflow_step)
     │
     ▼
-StepRun status → running
+StepRun state → running
 ```
 
 ### 4.3 Complete Step
@@ -468,7 +564,7 @@ Create WorkflowRunAsset records
     │
     ▼
 Validate against output_asset_specs (if defined):
-    ├─→ Valid: StepRun status → completed, proceed to next step
+    ├─→ Valid: StepRun state → completed, proceed to next step
     ├─→ Invalid + retry: new StepRun, retry (up to max_retries)
     ├─→ Invalid + skip: StepRun → skipped, proceed
     └─→ Invalid + fail: StepRun → failed, WorkflowRun → failed
@@ -480,7 +576,7 @@ Validate against output_asset_specs (if defined):
 All steps completed/skipped
     │
     ▼
-WorkflowRun status → completed
+WorkflowRun state → completed
     │
     ▼
 Show post-workflow UI:
@@ -540,11 +636,9 @@ Description: Make critical architectural decisions through collaborative discove
 ### Available Input Files:
 See /workspace/input/_index.md for full list.
 
-### Workflow Tools:
+### Workflow Tools (MCP):
 - list_sub_steps — list current sub-steps with statuses
 - mark_sub_step(id, status, note, data) — update sub-step progress
-- write_step_note(note) — save a note for future steps
-- export_asset(file, tags, folder, public) — promote output to project asset
 
 ### Workspace Rules:
 - Read from: /workspace/input/
@@ -554,18 +648,23 @@ See /workspace/input/_index.md for full list.
 # ===== END WORKFLOW CONTEXT =====
 ```
 
-### 5.3 Context Assembler
+### 5.3 Context Builder
+
+Implemented as `ContextBuilders::WorkflowContext`
+(`app/services/context_builders/workflow_context.rb`), one of a family of composable
+`ContextBuilders::Base` builders (agent role, tools, workspace, board, BMAD, …). The
+sketch below shows the shape; the live builder splits it into per-section methods.
 
 ```ruby
-class WorkflowContextAssembler
-  def assemble(step_run)
+class ContextBuilders::WorkflowContext < ContextBuilders::Base
+  def build(step_run)
     workflow_run = step_run.workflow_run
     workflow = workflow_run.workflow
     step = step_run.step
 
     previous_step_runs = workflow_run.step_runs
       .where.not(id: step_run.id)
-      .where(status: [:completed, :skipped])
+      .where(state: [:completed, :skipped])
       .includes(step: :sub_steps, sub_step_runs: :sub_step)
       .order(:created_at)
 
@@ -584,14 +683,14 @@ class WorkflowContextAssembler
     if step_run.sub_step_runs.any?
       context << "### Sub-Steps:"
       step_run.sub_step_runs.includes(:sub_step).order('sub_steps.position').each do |ssr|
-        icon = case ssr.status
+        icon = case ssr.state
                when 'completed' then '✅'
                when 'in_progress' then '🔄'
                when 'skipped' then '⏭️'
                else '⬜'
                end
         line = "#{ssr.sub_step.position}. #{icon} #{ssr.sub_step.name}"
-        line += " — #{ssr.status}" if ssr.in_progress?
+        line += " — #{ssr.state}" if ssr.in_progress?
         context << line
         context << "   → #{ssr.note.truncate(200)}" if ssr.note.present?
         if ssr.data.present?
@@ -608,7 +707,7 @@ class WorkflowContextAssembler
         status_icon = prev.completed? ? '✅' : '⏭️ Skipped'
         context << "- Step #{prev.step.position}: #{prev.step.name} #{status_icon}"
         # Include sub-step data from previous steps
-        prev.sub_step_runs.where(status: :completed).each do |ssr|
+        prev.sub_step_runs.where(state: :completed).each do |ssr|
           if ssr.data.present? || ssr.note.present?
             parts = ["  - \"#{ssr.sub_step.name}\""]
             parts << "data: #{ssr.data.to_json.truncate(200)}" if ssr.data.present?
@@ -633,7 +732,23 @@ end
 
 ## 6. Internal Tools (Workflow-specific)
 
-Four internal tools, automatically available when `session_type = workflow_step`.
+Internal tools are code-defined (`app/services/internal_tools/`, subclasses of
+`InternalTools::Base`) and injected into a session based on an `inject_when`
+condition rather than by hardcoding to one session type. The ones relevant to
+workflow execution:
+
+- **list_sub_steps** / **mark_sub_step** — injected when `workflow_step_session`;
+  the two sub-step tracking tools (below).
+- **finish_session** / **fail_session** — injected for a `non_interactive_session`;
+  signal completion/failure and terminate the session. Their optional `note` is
+  saved to `StepRun.step_note` when running inside a workflow.
+- **read_tool_result** — injected when container tools are present; fetches status
+  and presigned download URLs for an async tool execution.
+
+There is **no** `write_step_note` or `export_asset` internal tool. Step notes are
+written through `finish_session` / `fail_session`; promoting an output to a
+project-level Asset is handled by `AssetExportService` (via the post-workflow
+export UI), not an agent tool.
 
 ### 6.1 list_sub_steps
 
@@ -670,109 +785,59 @@ Returns:
 }
 ```
 
-### 6.3 write_step_note
-
-```json
-{
-  "name": "write_step_note",
-  "description": "Save a note for this step. Visible to agents in subsequent steps via workflow context.",
-  "parameters": {
-    "note": { "type": "string", "required": true }
-  }
-}
-```
-
-Writes to `StepRun.step_note`. Appends if called multiple times.
-
-### 6.4 export_asset
-
-```json
-{
-  "name": "export_asset",
-  "description": "Promote a file from /workspace/output/ to a project-level Asset. Optionally make it public with a shareable link.",
-  "parameters": {
-    "file": { "type": "string", "required": true, "description": "Filename in /workspace/output/" },
-    "tags": { "type": "array", "items": { "type": "string" }, "required": false },
-    "folder": { "type": "string", "required": false },
-    "public": { "type": "boolean", "required": false, "default": false }
-  }
-}
-```
-
-Logic:
-1. Find file in `/workspace/output/{file}`
-2. Upload to S3 (or find existing WorkflowRunAsset)
-3. Check if Asset with same name exists → new version or new Asset
-4. If `public: true` → generate `public_token`, return shareable URL
-
 ---
 
 ## 7. Asset Versioning
 
-### 7.1 Version Chain
+Versioning is **not** a chain of `Asset` rows. Each `Asset` `has_many :versions`
+(`AssetVersion`), and the blob lives on the version, not the asset. The `assets`
+table has no `parent_id` / `version` / `s3_key` / `source_workflow_run_asset`
+columns — see [§2.8](#28-asset-polymorphic-scope--separate-versions) for the models.
 
-```
-Asset (v1, parent: nil)  ← root
-    └─→ Asset (v2, parent: v1)
-            └─→ Asset (v3, parent: v1)  # parent always points to root
-```
+### 7.1 How versions are created
 
-### 7.2 Version Creation on Export
+- **Same name into the same scope+folder** → a new `AssetVersion` on the existing
+  `Asset`. `AssetVersion#set_version` (a `before_validation` on create) sets
+  `version = (asset.versions.maximum(:version) || 0) + 1`.
+- **Different name** → a new `Asset` (with its first version).
+- Metadata (name, folder, tags, public flag, scope) lives on `Asset` and is not
+  duplicated per version.
 
-```ruby
-def export_to_project_asset(workflow_run_asset, options = {})
-  project = workflow_run_asset.workflow_run.project
-  existing_root = project.assets.find_by(name: workflow_run_asset.name, parent_id: nil)
+### 7.2 Version provenance
 
-  attrs = {
-    project: project,
-    name: workflow_run_asset.name,
-    s3_key: workflow_run_asset.s3_key,
-    content_type: workflow_run_asset.content_type,
-    file_size: workflow_run_asset.file_size,
-    source_workflow_run_asset: workflow_run_asset,
-    folder: options[:folder],
-    tags: options[:tags] || [],
-    public: options[:public] || false,
-    public_token: options[:public] ? SecureRandom.urlsafe_base64(16) : nil,
-    provenance: build_provenance(workflow_run_asset)
-  }
-
-  if existing_root
-    attrs[:parent] = existing_root
-    attrs[:version] = existing_root.versions.count + 2
-  else
-    attrs[:version] = 1
-  end
-
-  Asset.create!(attrs)
-end
-```
+Each `AssetVersion` records where it came from via an `enumerize :source`
+(`upload | workflow | github | session | slack`) plus `uploaded_by`. Workflow
+provenance is additionally captured on `Asset#step_run` (the step run that produced
+it). Resolution helpers: `Asset#latest_version` and
+`Asset#resolve_version(version_number)`.
 
 ---
 
-## 8. Asset Public Sharing
+## 8. Asset Public Sharing (planned)
 
-### 8.1 Shareable Endpoint
+The data model is in place — `assets.public` (boolean) and `assets.public_token`
+(string) columns exist — **but the public read endpoint is not yet implemented**.
+There is no `SharedAssetsController` and no `/shared/{token}` route in the codebase
+today.
+
+Intended design once built:
 
 ```ruby
+# PLANNED — not yet implemented
 class SharedAssetsController < ApplicationController
   skip_before_action :authenticate_user!
 
   def show
     asset = Asset.find_by!(public_token: params[:token], public: true)
-    # For HTML: render inline; for other types: redirect to S3 pre-signed URL
+    # For HTML: render inline; for other types: redirect to a pre-signed URL
   end
 end
 ```
 
-URL: `https://app.example.com/shared/{public_token}`
-
-### 8.2 Management
-
-- Toggle `public` on/off from Asset detail view
-- `public_token` generated once and preserved (stable URL)
-- Revoking: set `public: false` (token preserved for re-enabling)
+- URL: `https://app.example.com/shared/{public_token}`
+- Toggle `public` on/off from the Asset detail view
+- `public_token` generated once and preserved (stable URL); revoking sets
+  `public: false` while keeping the token for re-enabling
 
 ---
 
@@ -961,7 +1026,7 @@ end
 | 9 | Sub-steps | ✅ Separate model, configurable in UI, pre-created on StepRun start |
 | 10 | Agent context | ✅ Injected into CLI context files, no read tools |
 | 11 | Skip policy | ✅ never / if_outputs_exist / manual (no condition) |
-| 12 | Workflow scope | ✅ Project-level only |
+| 12 | Workflow scope | ✅ Polymorphic scope (Company / Project / System), same as Agent/Tool/Skill/Asset |
 | 13 | Asset versioning | ✅ Same name → new version; different name → new asset |
 | 14 | Asset organization | ✅ One-level folders + tags |
 | 15 | Public sharing | ✅ public flag + public_token → shareable URL |
@@ -972,34 +1037,20 @@ end
 
 ---
 
-## 13. Implementation Priority
+## 13. Implementation Notes
 
-### Prerequisites (already implemented)
+The subsystems this design builds on all exist today: secrets management, Agents,
+Tools, MCP servers, container/session execution, and session context injection. The
+workflow and asset stack described above (Asset + AssetVersion, Workflow / Step /
+SubStep definitions, WorkflowRun / StepRun / SubStepRun execution, WorkflowRunAsset,
+the sub-step internal tools, and `ContextBuilders::WorkflowContext`) is implemented.
 
-| # | Component | Status |
-|---|-----------|--------|
-| P0 | Secrets Management | ✅ Done (Epic 4) |
-| P1 | Agents | ✅ Done (Epic 5) |
-| P2 | Tools | ✅ Done (Epic 6) |
-| P3 | MCP Servers | ✅ Done (Epic 7) |
-| P4 | Container Execution | ✅ Done (Epic 8) |
-| P4+ | Session Context | ✅ Done (Epic 9) |
-| P4++ | Agent Sessions Core | 🔄 In Progress (Epic 10) |
+Remaining forward-looking work:
 
-### Workflow & Asset Implementation Phases
-
-| Phase | Scope | Key Deliverables |
-|-------|-------|------------------|
-| **A** | Asset Foundation | Asset model, S3, upload, versioning, folders/tags |
-| **B** | Asset UI + Public | List, detail, upload, public toggle, shareable links |
-| **C** | Workflow Definition | Workflow, Step, SubStep models + CRUD UI |
-| **D** | Workflow Execution | WorkflowRun, StepRun, SubStepRun, WorkflowRunAsset, Temporal |
-| **E** | Internal Tools | 4 tools: list_sub_steps, mark_sub_step, write_step_note, export_asset |
-| **F** | Context + _index.md | WorkflowContextAssembler, _index.md, CLI context injection |
-| **G** | Execution Modes | Interactive/non-interactive/mixed, skip policies |
-| **H** | Post-workflow UI | WorkflowRun detail, asset export selection, public links |
+- **Asset public sharing** — columns exist; the public read endpoint / route is not
+  yet built (see [§8](#8-asset-public-sharing-planned)).
 
 ---
 
-_Document v3 generated from design session 2026-02-13_
-_Key changes from v2: Objective→SubStep, correct granularity (BMAD workflow=Step), SubStepRun auto-creation + data, BMAD mapping section_
+_Document v3 generated from design session 2026-02-13._
+_Key changes from v2: Objective→SubStep, correct granularity (BMAD workflow=Step), SubStepRun auto-creation + data, BMAD mapping section._

@@ -132,7 +132,7 @@ ContainerWorkflowService.start_agent_session(
 )
 ```
 
-**Documentation:** See `ai/tool-execution-framework.md` and `ai/architecture/index.md`
+**Documentation:** See `docs/design/tool-execution.md` and `docs/architecture/index.md`
 
 ### State Machines (AASM)
 
