@@ -28,6 +28,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[design/meta-workflow.md](./design/meta-workflow.md)** — Meta-workflow / Aixle Builder design
 - **[design/session-config-and-context.md](./design/session-config-and-context.md)** — Session config cascade + context constructor pipeline
 - **[design/bmad.md](./design/bmad.md)** — BMAD integration: implemented toggle, system-workflow RFC, and framework reference
+- **[design/oauth-unification.md](./design/oauth-unification.md)** — RFC: unified OAuth lifecycle (token broker, MCP OAuth 2.1 discovery/DCR, Temporal refresh sweep, 1MCP evaluation)
 
 ## Feature Pipeline
 
