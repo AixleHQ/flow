@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoard } from 'test/factories/board';
 import { buildBoardColumn } from 'test/factories/boardColumn';
@@ -48,6 +48,11 @@ const populatedProps = {
 };
 
 describe('Projects/Board/BoardPage', () => {
+  // Column collapse state is persisted to localStorage (`board:<id>:collapsedColumns`) and is NOT
+  // reset between tests by the harness, so a prior collapse-all/collapse-one test would otherwise
+  // leave later tests starting with columns collapsed (their task cards hidden). Clear it each test.
+  beforeEach(() => localStorage.clear());
+
   it('shows the preset picker empty state when the project has no board yet', () => {
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -433,5 +438,363 @@ describe('Projects/Board/BoardPage', () => {
 
     // Collapsed columns no longer render their task cards.
     await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+  });
+
+  it('collapses a single column via its header chevron, leaving other columns expanded', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Each expanded column header has a chevron-left ActionIcon that collapses just that column.
+    const collapseFirst = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-chevron-left'));
+    await userEvent.click(collapseFirst!);
+
+    // Backlog (first column) collapses → its card disappears; In Progress stays expanded.
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+    expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
+  });
+
+  // --- create-task modal submit + validation ---
+
+  it('submits the create-task form, POSTs the new task and renders its card', async () => {
+    const created = makeTask({ id: 99, title: 'New task from modal', boardColumnId: 100, position: 1 });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(created), { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Open the modal from the first column's "+" so boardColumnId is pre-filled (Backlog = 100).
+    const plus = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-plus'));
+    await userEvent.click(plus!);
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /title/i }), 'New task from modal');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    // POSTs to the tasks collection with the entered title and the pre-filled column id.
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.boardTask.title).toBe('New task from modal');
+      expect(body.boardTask.boardColumnId).toBe(100);
+    });
+
+    // On success the modal closes and the returned task is added to the board optimistically.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('New task from modal')).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows a validation error and does not POST when the title is empty', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Open via the "n" hotkey (no column pre-filled) then submit the empty form.
+    await userEvent.keyboard('n');
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    // Empty title fails client validation: no task is POSTed and the modal stays open.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  // --- more toolbar filters ---
+
+  it('filters tasks by assignee via the Assignee select', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        members: [{ id: 1, name: 'Dana Scout' }],
+        tasks: [
+          makeTask({ id: 1, title: 'Assigned task', boardColumnId: 100, assigneeId: 1 }),
+          makeTask({ id: 2, title: 'Unassigned task', boardColumnId: 200, assigneeId: null }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getByPlaceholderText('Assignee'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Dana Scout' }));
+
+    expect(screen.getByText('Assigned task')).toBeInTheDocument();
+    expect(screen.queryByText('Unassigned task')).not.toBeInTheDocument();
+  });
+
+  it('filters tasks by tag via the Tags multi-select', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend'] }),
+          makeTask({ id: 2, title: 'Backend task', boardColumnId: 200, tags: ['backend'] }),
+        ],
+      },
+    });
+
+    // The Tags MultiSelect only renders once at least one task carries a tag.
+    await userEvent.click(screen.getByPlaceholderText('Tags'));
+    await userEvent.click(await screen.findByRole('option', { name: 'frontend' }));
+
+    expect(screen.getByText('Frontend task')).toBeInTheDocument();
+    expect(screen.queryByText('Backend task')).not.toBeInTheDocument();
+  });
+
+  // --- view presets (built-in + saved) ---
+
+  it('applies the built-in "My Work" preset to show only the current user\'s tasks', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        currentUserId: 1,
+        tasks: [
+          makeTask({ id: 1, title: 'My task', boardColumnId: 100, assigneeId: 1 }),
+          makeTask({ id: 2, title: 'Other task', boardColumnId: 200, assigneeId: 2 }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'My Work' }));
+
+    expect(screen.getByText('My task')).toBeInTheDocument();
+    expect(screen.queryByText('Other task')).not.toBeInTheDocument();
+  });
+
+  it('applies a saved view preset from the Presets menu', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        currentUserId: 1,
+        viewPresets: [
+          {
+            id: 1,
+            name: 'Only Bugs',
+            filters: { task_type: 'bug' },
+            shared: true,
+            userId: 1,
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+        tasks: [
+          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
+          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
+    // The saved preset renders under a "Saved" label with a "shared" badge.
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+    expect(screen.getByText('shared')).toBeInTheDocument();
+
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Only Bugs/ }));
+
+    expect(screen.getByText('Fix login crash')).toBeInTheDocument();
+    expect(screen.queryByText('Build settings page')).not.toBeInTheDocument();
+  });
+
+  it('deletes a saved view preset the current user owns', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        currentUserId: 1,
+        viewPresets: [
+          {
+            id: 1,
+            name: 'Only Bugs',
+            filters: { task_type: 'bug' },
+            shared: false,
+            userId: 1,
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
+    // The owned preset row carries a trailing X ActionIcon that deletes it (no filters are active,
+    // so this is the only x-icon button on screen).
+    const deleteBtn = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-x'));
+    await userEvent.click(deleteBtn!);
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/view_presets/1');
+      expect(call).toBeTruthy();
+      expect((call![1] as RequestInit).method).toBe('DELETE');
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('saves the current filters as a new view preset', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Activate a filter so the "Save current filters" menu item appears.
+    await userEvent.type(screen.getByPlaceholderText('Search title...'), 'auth');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Save current filters/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /preset name/i }), 'Sprint 5');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/view_presets');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.boardViewPreset.name).toBe('Sprint 5');
+      expect(body.boardViewPreset.filters.search).toBe('auth');
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  // --- task detail sidebar interactions ---
+
+  it('moves a task to another column via the sidebar Column select', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    // The detail drawer's "Column" select is the only combobox by that name (create modal is closed).
+    await userEvent.click(screen.getByRole('combobox', { name: 'Column' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'In Progress' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/1/move');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.columnId).toBe(200);
+    });
+    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['tasks', 'selected_task'] }));
+
+    fetchSpy.mockRestore();
+  });
+
+  it('triggers a workflow from the sidebar Run workflow button', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        columns: [
+          {
+            id: 100,
+            name: 'Backlog',
+            position: 0,
+            purpose: null,
+            workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement', triggerMode: 'manual' },
+          },
+          buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
+        ],
+        // No active run → the trigger button is offered.
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, recentWorkflowRuns: [] }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run workflow' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/1/trigger_workflow');
+      expect(call).toBeTruthy();
+      expect((call![1] as RequestInit).method).toBe('POST');
+    });
+    await waitFor(() =>
+      expect(router.reload).toHaveBeenCalledWith({
+        only: ['selected_task', 'task_workflow_runs', 'task_activities'],
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('submits a comment from the Comments tab, POSTing the body and selected tag', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Comments/ }));
+
+    const panel = screen.getByRole('tabpanel');
+    await userEvent.type(within(panel).getByPlaceholderText(/Write a comment/), 'Ship it');
+    // Toggle a quick-tag suggestion so the comment carries a tag.
+    await userEvent.click(within(panel).getByText('feedback'));
+    await userEvent.click(within(panel).getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/1/comments');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.taskComment.body).toBe('Ship it');
+      expect(body.taskComment.tags).toContain('feedback');
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('filters comments by author type in the Comments tab', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, commentsCount: 2 }),
+        taskComments: [
+          buildTaskComment({ id: 9, body: 'Looks good to me', authorType: 'human' }),
+          buildTaskComment({ id: 10, body: 'Automated summary', authorType: 'agent' }),
+        ],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Comments/ }));
+
+    // The only combobox in the Comments panel is the author-type filter.
+    await userEvent.click(within(screen.getByRole('tabpanel')).getByRole('combobox'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Agent' }));
+
+    expect(screen.getByText('Automated summary')).toBeInTheDocument();
+    expect(screen.queryByText('Looks good to me')).not.toBeInTheDocument();
+  });
+
+  // --- keyboard shortcuts ---
+
+  it('focuses the search box when the "/" hotkey is pressed', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.keyboard('/');
+
+    expect(screen.getByPlaceholderText('Search title...')).toHaveFocus();
   });
 });

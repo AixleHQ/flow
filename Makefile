@@ -29,8 +29,8 @@ check: be_check fe_check
 CHECK_RESULTS := tmp/check_results
 
 # Backend coverage floor, enforced only on full-suite runs (see test/test_helper.rb).
-# Ratchet upward as coverage grows — never lower it. Measured 78.15% on 2026-07-03.
-COVERAGE_MIN := 77
+# Ratchet upward as coverage grows — never lower it. Measured 88.3% on 2026-07-06.
+COVERAGE_MIN := 85
 
 # Two concurrent `rails test` invocations are mutually destructive: parallel test
 # workers drop/recreate the shared aixle_test_N databases, so overlapping runs

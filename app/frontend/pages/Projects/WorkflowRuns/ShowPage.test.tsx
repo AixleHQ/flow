@@ -193,6 +193,11 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       { reason: 'Not needed for this run' },
       expect.objectContaining({ preserveScroll: true }),
     );
+
+    // Let the modal's open-transition lifecycle timer drain while still mounted,
+    // so it doesn't setState on the unmounted tree after RTL cleanup (Mantine
+    // Transition schedules a ~200ms timer even under env="test").
+    await new Promise((resolve) => setTimeout(resolve, 250));
   });
 
   it('shows the failure card and retries a failed step', async () => {
