@@ -135,11 +135,11 @@ module Coder
         raise ParseError, "#{op} failed: invalid JSON response"
       end
 
-      # Build the Faraday connection. When the configured Coder host is in
-      # the trusted-hosts allowlist (split-horizon DNS scenario) the system
-      # resolver may return a private IP that is not reachable from inside
-      # the cluster; in that case fall back to a public DNS lookup and
-      # connect to the public IP directly while preserving the original
+      # Build the Faraday connection. The DNS path is chosen by the
+      # trusted-host check (see `resolve_target`): a trusted host is resolved
+      # normally through the system (internal) resolver, while a non-trusted
+      # host must not be resolved internally — it is looked up via public DNS
+      # and connected to by its public IP directly, preserving the original
       # hostname for the Host header and TLS SNI.
       def build_conn(coder_url, session_token)
         uri = URI.parse(coder_url)
@@ -155,8 +155,12 @@ module Coder
         end
       end
 
+      # Trusted host  → resolve normally (internal DNS allowed): return the
+      #                 URL unchanged so the system resolver is used.
+      # Non-trusted host → must not use internal DNS: resolve via public DNS
+      #                 and connect to the public IPv4 directly.
       def resolve_target(uri)
-        return [ uri.to_s, nil, nil ] unless UrlSafetyValidator.trusted_host?(uri.host.to_s)
+        return [ uri.to_s, nil, nil ] if UrlSafetyValidator.trusted_host?(uri.host.to_s)
 
         public_ip = UrlSafetyValidator.resolve_public_ipv4(uri.host)
         return [ uri.to_s, nil, nil ] if public_ip.nil?

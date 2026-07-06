@@ -98,23 +98,27 @@ module Coder
     end
 
     # ==================================================================
-    # Trusted-host outbound DNS fallback
+    # Outbound DNS path selection by trusted-host check
+    #
+    # Trusted host      → resolved normally via internal DNS (URL unchanged).
+    # Non-trusted host  → must not use internal DNS: resolved via public DNS
+    #                     and connected to by its public IPv4 directly.
     # ==================================================================
 
-    test "for a trusted host the request is routed to the public IPv4" do
+    test "for a non-trusted host the request is routed to the public IPv4" do
       @integration.credentials_data = {
-        coder_url: "https://coder.staging.aixle.com",
+        coder_url: "https://coder.example.com",
         session_token: "test-token-xyz"
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.staging.aixle.com").returns(true)
-      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.staging.aixle.com").returns("203.0.113.10")
+      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns("203.0.113.10")
 
       stub_request(:get, "https://203.0.113.10/api/v2/users/me")
         .with(headers: {
           "Coder-Session-Token" => "test-token-xyz",
-          "Host" => "coder.staging.aixle.com"
+          "Host" => "coder.example.com"
         })
         .to_return(
           status: 200,
@@ -127,17 +131,17 @@ module Coder
       assert_equal "stager", info[:username]
     end
 
-    test "non-trusted host is not rewritten to a public IPv4" do
+    test "trusted host is not rewritten to a public IPv4" do
       @integration.credentials_data = {
-        coder_url: "https://coder.example.com",
+        coder_url: "https://coder.staging.aixle.com",
         session_token: "test-token-xyz"
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:trusted_host?).with("coder.staging.aixle.com").returns(true)
       UrlSafetyValidator.expects(:resolve_public_ipv4).never
 
-      stub_request(:get, "https://coder.example.com/api/v2/users/me")
+      stub_request(:get, "https://coder.staging.aixle.com/api/v2/users/me")
         .to_return(
           status: 200,
           body: { id: "u2", username: "alice", email: "a@example.com" }.to_json,
@@ -148,17 +152,17 @@ module Coder
       assert_equal "alice", info[:username]
     end
 
-    test "trusted host falls back to original URL when public DNS yields nothing" do
+    test "non-trusted host falls back to original URL when public DNS yields nothing" do
       @integration.credentials_data = {
-        coder_url: "https://coder.staging.aixle.com",
+        coder_url: "https://coder.example.com",
         session_token: "test-token-xyz"
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.staging.aixle.com").returns(true)
-      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.staging.aixle.com").returns(nil)
+      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns(nil)
 
-      stub_request(:get, "https://coder.staging.aixle.com/api/v2/users/me")
+      stub_request(:get, "https://coder.example.com/api/v2/users/me")
         .to_return(
           status: 200,
           body: { id: "u3", username: "fallback", email: "f@example.com" }.to_json,
@@ -169,18 +173,18 @@ module Coder
       assert_equal "fallback", info[:username]
     end
 
-    test "trusted host on a non-default port preserves port in Host header" do
+    test "non-trusted host on a non-default port preserves port in Host header" do
       @integration.credentials_data = {
-        coder_url: "https://coder.staging.aixle.com:8443",
+        coder_url: "https://coder.example.com:8443",
         session_token: "test-token-xyz"
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.staging.aixle.com").returns(true)
-      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.staging.aixle.com").returns("203.0.113.10")
+      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns("203.0.113.10")
 
       stub_request(:get, "https://203.0.113.10:8443/api/v2/users/me")
-        .with(headers: { "Host" => "coder.staging.aixle.com:8443" })
+        .with(headers: { "Host" => "coder.example.com:8443" })
         .to_return(
           status: 200,
           body: { id: "u4", username: "portuser", email: "p@example.com" }.to_json,
