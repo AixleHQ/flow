@@ -43,4 +43,42 @@ Capybara.default_max_wait_time =
 
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :cuprite_alpine
+
+  # TEMP CI diagnostic: on a failing system test, dump enough to see WHY the SPA didn't render
+  # on the runner (empty #app vs 404'd JS vs console error). Runs BEFORE super (Rails resets the
+  # Capybara session in after_teardown, so the browser must be inspected first). Silent on green.
+  # Remove once the CI system-test flake is understood.
+  def after_teardown
+    dump_system_diag unless passed?
+    super
+  end
+
+  def dump_system_diag
+    puts "\n===== SYSDIAG #{name} ====="
+    html = page.html.to_s
+    puts "URL: #{current_url}"
+    puts "HTML_LEN: #{html.length}  APP_EMPTY: #{html.include?('<div id="app"></div>')}"
+    puts "HAS_EMAIL_LABEL: #{html.include?(">Email<")}  HAS_INPUT: #{html.include?("<input")}"
+    traffic = begin
+      page.driver.browser.network.traffic
+    rescue StandardError
+      []
+    end
+    vite = traffic.select { |e| (e.request&.url).to_s.include?("/vite-") }
+    puts "VITE_REQUESTS(#{vite.size}):"
+    vite.first(20).each { |e| puts "  #{(e.response&.status) || 'PENDING'} #{e.request&.url}" }
+    console = begin
+      Array(page.driver.browser.options.logger&.instance_variable_get(:@messages))
+    rescue StandardError
+      []
+    end
+    fails = traffic.select { |e| s = e.response&.status; s.nil? || s.to_i >= 400 }
+    puts "NET_FAILURES(#{fails.size}):"
+    fails.first(20).each { |e| puts "  #{(e.response&.status) || 'nil'} #{e.request&.url}" }
+    puts "CONSOLE(#{console.size}): #{console.first(10).join(' | ')}" unless console.empty?
+  rescue StandardError => e
+    puts "SYSDIAG_ERR: #{e.class} #{e.message}"
+  ensure
+    puts "===== END SYSDIAG ====="
+  end
 end
