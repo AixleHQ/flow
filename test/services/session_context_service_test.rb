@@ -1041,6 +1041,65 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_includes context_log_content, "cis"
   end
 
+  # ====================================================================
+  # OAuth token injection (RFC oauth-unification §4.4, Phase 1)
+  # ====================================================================
+
+  test "generate_mcp_config injects a Bearer header when a token resolves for the server" do
+    server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
+                    transport: "sse", scope: @company, headers: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+    Oauth::TokenService.stubs(:access_token_for).returns("resolved-token")
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    config = JSON.parse(result["/workspace/.mcp.json"])
+    assert_equal "Bearer resolved-token", config["mcpServers"]["oauth-srv"]["headers"]["Authorization"]
+  end
+
+  test "generate_mcp_config leaves headers untouched when no OAuth token resolves" do
+    server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
+                    transport: "sse", scope: @company, headers: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+    Oauth::TokenService.stubs(:access_token_for).returns(nil)
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    config = JSON.parse(result["/workspace/.mcp.json"])
+    assert_not config["mcpServers"]["oauth-srv"].fetch("headers", {}).key?("Authorization")
+  end
+
+  test "generate_mcp_config never overwrites an explicit Authorization header" do
+    server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
+                    transport: "sse", scope: @company,
+                    headers: { "Authorization" => "Bearer preset" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+    # Presence of an explicit header short-circuits before TokenService is consulted.
+    Oauth::TokenService.expects(:access_token_for).never
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    config = JSON.parse(result["/workspace/.mcp.json"])
+    assert_equal "Bearer preset", config["mcpServers"]["oauth-srv"]["headers"]["Authorization"]
+  end
+
+  test "generate_mcp_config swallows ReauthRequired and continues without a header" do
+    server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
+                    transport: "sse", scope: @company, headers: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+    Oauth::TokenService.stubs(:access_token_for).raises(Oauth::ReauthRequired.new(nil))
+
+    config = nil
+    assert_nothing_raised do
+      config = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+    end
+    assert_not config["mcpServers"]["oauth-srv"].fetch("headers", {}).key?("Authorization")
+  end
+
   private
 
   # Build a tar stream containing a single file (mirrors ContainerRuntime.read_file input format)

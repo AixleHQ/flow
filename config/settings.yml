@@ -84,6 +84,19 @@ encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || "integrations test key" %>
+  oauth_key: <%= ENV['OAUTH_SECRET_KEY'] || "oauth test key" %>
+
+# Unified OAuth provider client credentials (operator-set once per deployment,
+# multi-tenant via per-owner OauthCredential). Distinct from the `sentry:` DSN
+# block above — these are OAuth app client_id/secret, not error-tracking DSNs.
+# Quoted so YAML keeps client_id values as strings (see the slack comment below).
+sentry_oauth:
+  client_id: "<%= ENV['SENTRY_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['SENTRY_OAUTH_CLIENT_SECRET'] %>"
+
+railway_oauth:
+  client_id: "<%= ENV['RAILWAY_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['RAILWAY_OAUTH_CLIENT_SECRET'] %>"
 
 skills_sh:
   api_key: <%= ENV['SKILLS_SH_API_KEY'] %>

@@ -1,0 +1,242 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+module Oauth
+  # Exercises Oauth::TokenService against the real OauthClient/OauthCredential
+  # models (testing doctrine R2: don't mock what you own). Only the provider
+  # token endpoint is faked, via WebMock (R4: contract-test the HTTP boundary).
+  class TokenServiceTest < ActiveSupport::TestCase
+    TOKEN_ENDPOINT = "https://provider.test/oauth/token"
+
+    setup do
+      Rails.logger.stubs(:info)
+      Rails.logger.stubs(:warn)
+
+      @company = create(:company)
+      @user = create(:user, :admin, company: @company)
+      @client = build_client
+    end
+
+    # == access_token_for: selection / no-op ==
+
+    test "returns nil when no credential is attached to the server" do
+      server = create(:mcp_server, :custom, scope: @company)
+
+      assert_nil Oauth::TokenService.access_token_for(server: server, user: @user)
+    end
+
+    test "returns nil when no credential exists for owner+provider" do
+      assert_nil Oauth::TokenService.access_token_for(owner: @company, provider: "sentry", user: @user)
+    end
+
+    # == fresh: token still valid ==
+
+    test "returns the stored token without hitting the network when not near expiry" do
+      cred = build_credential(owner: @user, access_token: "valid-token",
+                              refresh_token: "r1", expires_at: 1.hour.from_now)
+
+      token = Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+
+      assert_equal "valid-token", token
+      assert_equal cred.id, Oauth::TokenService.pick_credential(server: nil, owner: @user, provider: "sentry", user: @user).id
+      assert_not_requested :post, TOKEN_ENDPOINT
+    end
+
+    # == fresh: refresh path ==
+
+    test "refreshes under expiry and persists the rotated token pair" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", refresh_token: "new-refresh", expires_in: 3600)
+
+      token = Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+
+      assert_equal "new-token", token
+      cred.reload
+      assert_equal "new-token", cred.access_token
+      assert_equal "new-refresh", cred.refresh_token
+      assert cred.active?
+      assert_not_nil cred.last_refreshed_at
+      assert_requested(:post, TOKEN_ENDPOINT) do |req|
+        req.body.include?("grant_type=refresh_token") && req.body.include?("refresh_token=old-refresh")
+      end
+    end
+
+    test "retains the existing refresh token when the refresh response omits one" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "keep-me", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", expires_in: 3600) # no refresh_token key
+
+      Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+
+      assert_equal "keep-me", cred.reload.refresh_token
+    end
+
+    test "sends client_secret only for confidential clients" do
+      confidential = build_client(client_id: "confidential-client", client_secret: "shh")
+      build_credential(owner: @company, oauth_client: confidential, access_token: "old",
+                       refresh_token: "r", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", expires_in: 3600)
+
+      Oauth::TokenService.access_token_for(owner: @company, provider: "sentry", user: @user)
+
+      assert_requested(:post, TOKEN_ENDPOINT) { |req| req.body.include?("client_secret=shh") }
+    end
+
+    test "omits client_secret for public (PKCE-only) clients" do
+      build_credential(owner: @user, access_token: "old",
+                       refresh_token: "r", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", expires_in: 3600)
+
+      Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+
+      assert_requested(:post, TOKEN_ENDPOINT) { |req| !req.body.include?("client_secret") }
+    end
+
+    # == fresh: reauth-required paths ==
+
+    test "raises ReauthRequired without a network call when the credential is unrefreshable" do
+      build_credential(owner: @user, access_token: "old-token",
+                       refresh_token: nil, expires_at: 1.minute.ago)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+      end
+      assert_not_requested :post, TOKEN_ENDPOINT
+    end
+
+    test "marks the credential errored and raises ReauthRequired when the provider rejects the refresh" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "r", expires_at: 1.minute.ago)
+      stub_request(:post, TOKEN_ENDPOINT).to_return(status: 400, body: "invalid_grant")
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+      end
+
+      cred.reload
+      assert cred.error?
+      assert cred.refresh_error.present?
+    end
+
+    # == fresh: rotation safety ==
+
+    test "does not downgrade to an earlier-expiring token" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "r", expires_at: 9.minutes.from_now)
+      # Response expiry (now + 60s) is earlier than the stored expiry — a downgrade.
+      stub_token_endpoint(access_token: "downgrade-token", expires_in: 60)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+      end
+
+      assert_equal "old-token", cred.reload.access_token
+    end
+
+    test "skips the network refresh when a concurrent request already refreshed under the lock" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "r", expires_at: 1.minute.ago)
+      # Simulate a concurrent writer: the row is fresh by the time we hold the lock.
+      cred.define_singleton_method(:reload) do |*, **|
+        self.access_token = "concurrent-fresh"
+        self.expires_at = 2.hours.from_now
+        self
+      end
+
+      token = Oauth::TokenService.fresh(cred)
+
+      assert_equal "concurrent-fresh", token
+      assert_not_requested :post, TOKEN_ENDPOINT
+    end
+
+    # == pick_credential: server scoping ==
+
+    test "prefers a credential owned by the session user over the server scope owner" do
+      server = create(:mcp_server, :custom, scope: @company)
+      build_credential(owner: @company, mcp_server: server, access_token: "company-token",
+                       expires_at: 1.hour.from_now)
+      build_credential(owner: @user, mcp_server: server, access_token: "user-token",
+                       expires_at: 1.hour.from_now)
+
+      assert_equal "user-token", Oauth::TokenService.access_token_for(server: server, user: @user)
+    end
+
+    test "falls back to the server scope owner when the user has no credential" do
+      server = create(:mcp_server, :custom, scope: @company)
+      build_credential(owner: @company, mcp_server: server, access_token: "company-token",
+                       expires_at: 1.hour.from_now)
+
+      assert_equal "company-token", Oauth::TokenService.access_token_for(server: server, user: @user)
+    end
+
+    test "never selects a credential owned by a different tenant (no owner-blind fallback)" do
+      server = create(:mcp_server, :custom, scope: @company)
+      other = create(:user, :admin, company: create(:company))
+      build_credential(owner: other, mcp_server: server, access_token: "foreign-token",
+                       expires_at: 1.hour.from_now)
+
+      assert_nil Oauth::TokenService.pick_credential(server: server, owner: nil, provider: nil, user: @user)
+      assert_nil Oauth::TokenService.access_token_for(server: server, user: @user)
+    end
+
+    test "ignores revoked credentials when picking for a server" do
+      server = create(:mcp_server, :custom, scope: @company)
+      build_credential(owner: @user, mcp_server: server, status: :revoked,
+                       access_token: "revoked-token", expires_at: 1.hour.from_now)
+
+      assert_nil Oauth::TokenService.pick_credential(server: server, owner: nil, provider: nil, user: @user)
+    end
+
+    # == pick_credential: owner + provider ==
+
+    test "returns the newest active credential for an owner+provider and ignores revoked" do
+      older = build_credential(owner: @company, oauth_client: build_client(client_id: "c-old"),
+                               access_token: "older", expires_at: 1.hour.from_now)
+      newer = build_credential(owner: @company, oauth_client: build_client(client_id: "c-new"),
+                               access_token: "newer", expires_at: 1.hour.from_now)
+      build_credential(owner: @company, oauth_client: build_client(client_id: "c-revoked"),
+                       status: :revoked, access_token: "revoked", expires_at: 1.hour.from_now)
+      older.update_column(:updated_at, 2.hours.ago)
+      newer.update_column(:updated_at, 1.minute.ago)
+
+      picked = Oauth::TokenService.pick_credential(server: nil, owner: @company, provider: "sentry", user: @user)
+
+      assert_equal newer.id, picked.id
+    end
+
+    private
+
+    def build_client(client_id: "public-client", client_secret: nil)
+      client = OauthClient.new(
+        issuer: "https://provider.test",
+        authorization_endpoint: "https://provider.test/oauth/authorize",
+        token_endpoint: TOKEN_ENDPOINT,
+        client_id: client_id,
+        source: "static"
+      )
+      client.client_secret = client_secret if client_secret
+      client.save!
+      client
+    end
+
+    def build_credential(owner:, oauth_client: @client, provider: "sentry", mcp_server: nil,
+                         status: :active, access_token: nil, refresh_token: nil, expires_at: nil)
+      cred = OauthCredential.new(owner: owner, oauth_client: oauth_client, provider: provider,
+                                 mcp_server: mcp_server, status: status)
+      cred.access_token = access_token if access_token
+      cred.refresh_token = refresh_token if refresh_token
+      cred.expires_at = expires_at
+      cred.save!
+      cred
+    end
+
+    def stub_token_endpoint(access_token:, expires_in:, refresh_token: nil)
+      body = { access_token: access_token, token_type: "Bearer", expires_in: expires_in }
+      body[:refresh_token] = refresh_token if refresh_token
+      stub_request(:post, TOKEN_ENDPOINT)
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: body.to_json)
+    end
+  end
+end

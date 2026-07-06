@@ -201,6 +201,12 @@ Rails.application.routes.draw do
     # Slack app; the project is carried in the signed `state`, not the path.
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
 
+    # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
+    # every provider; the provider + all routing data are carried in a signed,
+    # single-use `state`. PKCE is mandatory (OAuth 2.1).
+    get "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
+    get "oauth/callback", to: "oauth#callback", as: :oauth_callback
+
     namespace :company do
       resources :members, only: %i[index create update destroy]
       resources :config_items, only: %i[index create update destroy]

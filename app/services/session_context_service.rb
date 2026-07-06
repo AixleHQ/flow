@@ -533,7 +533,7 @@ class SessionContextService
       effective_items = resolve_effective_config_items(session)
       external = resolve_mcp_servers(session)
                    .reject(&:managed?)
-                   .map { |s| resolve_server_secrets(s, effective_items) }
+                   .map { |s| resolve_server_secrets(s, effective_items, session) }
 
       [ build_internal_mcp(session) ] + external
     end
@@ -561,7 +561,7 @@ class SessionContextService
       servers
     end
 
-    def resolve_server_secrets(server, effective_items)
+    def resolve_server_secrets(server, effective_items, session = nil)
       resolved_headers = (server.headers || {}).transform_values do |value|
         resolve_embedded_references(value, effective_items)
       end
@@ -569,6 +569,11 @@ class SessionContextService
       resolved_env = (server.env || {}).transform_values do |value|
         resolve_embedded_references(value, effective_items)
       end
+
+      # Phase-1 OAuth injection (RFC oauth-unification §4.4). No-op unless a live
+      # credential is attached to this server. auth_type wiring is Phase 3 —
+      # presence of a credential is the trigger.
+      inject_oauth_token!(server, resolved_headers, session)
 
       attrs = {
         name: server.name,
@@ -584,6 +589,21 @@ class SessionContextService
       end
 
       OpenStruct.new(attrs)
+    end
+
+    # Guarded: returns immediately unless a live OAuth credential resolves for
+    # this server. On success injects a Bearer header (never overwrites an
+    # explicit Authorization header). ReauthRequired is logged and swallowed in
+    # Phase 1 (the server will 401); Phase 2 turns this into a session-start
+    # preflight block + reconnect UX.
+    def inject_oauth_token!(server, headers, session)
+      return if session.nil?
+      return if headers.key?("Authorization") || headers.key?("authorization")
+
+      token = Oauth::TokenService.access_token_for(server: server, user: session.user)
+      headers["Authorization"] = "Bearer #{token}" if token.present?
+    rescue Oauth::ReauthRequired => e
+      Rails.logger.warn("[SessionContext] OAuth reauth required for MCP server #{server.id}: #{e.message}")
     end
 
     # Write MCP config file respecting merge strategy
