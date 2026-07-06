@@ -40,12 +40,7 @@ config/master.key
 web_reference
 initializer_reference
 
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+.yarn/
 
 # Vite Ruby
 .vite
@@ -90,3 +85,4 @@ docker/remote/db_dumps/latest.sql.gz
 .claude/
 docker/tools/
 _bmad/
+_bmad-output/
