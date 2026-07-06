@@ -5,8 +5,10 @@ module Oauth
   #
   # The signed payload (which travels in the authorize/callback URL) carries only
   # non-secret routing data: which provider, which owner identity, which user
-  # initiated the flow, an optional MCP server, a post-connect return path, and a
-  # nonce. The PKCE `code_verifier` is NEVER put in the URL — it is kept
+  # initiated the flow, an optional MCP server, an optional RFC 8707 resource
+  # indicator + DCR `oauth_client_id` (MCP OAuth, oauth-unification §5), a
+  # post-connect return path, and a nonce. All of these are signed and cannot be
+  # tampered with. The PKCE `code_verifier` is NEVER put in the URL — it is kept
   # server-side in the cache entry keyed by the nonce and handed back exactly once
   # via #consume. `user_id` is stored on BOTH sides (signed AND cached) so the
   # callback can double-pin the initiating user (anti-CSRF, defense in depth).
@@ -27,7 +29,14 @@ module Oauth
     # `provider` is part of the SIGNED payload: the deployment-wide callback reads
     # it back to know which authorization server issued the code. It cannot be
     # tampered with (signature) and never needs to be re-derived from params.
-    def encode(owner_type:, owner_id:, user_id:, return_to:, code_verifier:, provider:, mcp_server_id: nil)
+    #
+    # `resource` (RFC 8707 resource indicator, the canonical MCP URL) and
+    # `oauth_client_id` (the DCR-registered client's id) are OPTIONAL, additive
+    # fields used only by the MCP connect flow. Static providers pass neither and
+    # keep the exact Phase-1 payload shape. Both are signed; the callback trusts
+    # `oauth_client_id` for routing but still constrains the lookup to source:"dcr".
+    def encode(owner_type:, owner_id:, user_id:, return_to:, code_verifier:, provider:,
+               mcp_server_id: nil, resource: nil, oauth_client_id: nil)
       nonce = SecureRandom.uuid
       Rails.cache.write(
         cache_key(nonce),
@@ -41,6 +50,8 @@ module Oauth
           "user_id" => user_id,
           "provider" => provider,
           "mcp_server_id" => mcp_server_id,
+          "resource" => resource,
+          "oauth_client_id" => oauth_client_id,
           "return_to" => return_to,
           "nonce" => nonce
         },

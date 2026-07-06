@@ -43,6 +43,22 @@ class Oauth::StateTest < ActiveSupport::TestCase
     assert payload["nonce"].present?, "a nonce must be embedded for single-use tracking"
   end
 
+  test "encode carries the optional MCP resource indicator and DCR oauth_client_id when given" do
+    state = encode(provider: "mcp:mcp.example.com", resource: "https://mcp.example.com/v1", oauth_client_id: 123)
+    payload = Oauth::State.decode(state)
+
+    assert_equal "mcp:mcp.example.com", payload["provider"]
+    assert_equal "https://mcp.example.com/v1", payload["resource"]
+    assert_equal 123, payload["oauth_client_id"]
+  end
+
+  test "encode leaves the MCP fields nil for a static provider (backward compatible)" do
+    payload = Oauth::State.decode(encode)
+
+    assert_nil payload["resource"]
+    assert_nil payload["oauth_client_id"]
+  end
+
   test "the PKCE code_verifier is NEVER present in the signed state payload" do
     state = encode(code_verifier: "top-secret-verifier")
     payload = Oauth::State.decode(state)

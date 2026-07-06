@@ -412,4 +412,130 @@ class MCPServerTest < ActiveSupport::TestCase
     assert_includes MCPServer.enabled, enabled
     assert_not_includes MCPServer.enabled, disabled
   end
+
+  # ====================================================================
+  # OAuth: auth_type + credential_scope (Phase 3)
+  # ====================================================================
+
+  test "auth_type defaults to none and credential_scope to shared" do
+    server = MCPServer.new(
+      name: "defaults", display_name: "Defaults",
+      url: "https://mcp.example.com", kind: "custom", scope: @company
+    )
+
+    assert_equal "none", server.auth_type
+    assert_equal "shared", server.credential_scope
+    assert server.auth_type_none?
+    assert server.credential_scope_shared?
+  end
+
+  test "auth_type predicates" do
+    server = MCPServer.new
+
+    server.auth_type = "none"
+    assert server.auth_type_none?
+    assert_not server.auth_type_static?
+    assert_not server.auth_type_oauth?
+
+    server.auth_type = "static"
+    assert server.auth_type_static?
+    assert_not server.auth_type_none?
+    assert_not server.auth_type_oauth?
+
+    server.auth_type = "oauth"
+    assert server.auth_type_oauth?
+    assert_not server.auth_type_none?
+    assert_not server.auth_type_static?
+  end
+
+  test "credential_scope predicates" do
+    server = MCPServer.new
+
+    server.credential_scope = "shared"
+    assert server.credential_scope_shared?
+    assert_not server.credential_scope_per_user?
+
+    server.credential_scope = "per_user"
+    assert server.credential_scope_per_user?
+    assert_not server.credential_scope_shared?
+  end
+
+  test "oauth? convenience predicate mirrors auth_type_oauth?" do
+    server = MCPServer.new
+    server.auth_type = "static"
+    assert_not server.oauth?
+    server.auth_type = "oauth"
+    assert server.oauth?
+  end
+
+  test "rejects unknown auth_type / credential_scope values" do
+    server = MCPServer.new(
+      name: "bad-enum", display_name: "Bad", url: "https://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "bogus", credential_scope: "nobody"
+    )
+
+    assert_not server.valid?
+    assert server.errors[:auth_type].any?
+    assert server.errors[:credential_scope].any?
+  end
+
+  test "with_auth_type scope filters by auth_type" do
+    oauth_server = MCPServer.create!(
+      name: "oauth-srv", display_name: "OAuth", url: "https://oauth.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+    static_server = MCPServer.create!(
+      name: "static-srv", display_name: "Static", url: "https://static.example.com",
+      kind: "custom", scope: @company, auth_type: "static"
+    )
+
+    result = MCPServer.with_auth_type(:oauth)
+    assert_includes result, oauth_server
+    assert_not_includes result, static_server
+  end
+
+  test "with_credential_scope scope filters by credential_scope" do
+    per_user = MCPServer.create!(
+      name: "per-user-srv", display_name: "Per User", url: "https://pu.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth", credential_scope: "per_user"
+    )
+    shared = MCPServer.create!(
+      name: "shared-srv", display_name: "Shared", url: "https://shared.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth", credential_scope: "shared"
+    )
+
+    result = MCPServer.with_credential_scope(:per_user)
+    assert_includes result, per_user
+    assert_not_includes result, shared
+  end
+
+  test "oauth server requires https url" do
+    server = MCPServer.new(
+      name: "oauth-http", display_name: "OAuth HTTP", url: "http://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+
+    assert_not server.valid?
+    assert_includes server.errors[:url], "must use https"
+  end
+
+  test "oauth server accepts https url" do
+    server = MCPServer.new(
+      name: "oauth-https", display_name: "OAuth HTTPS", url: "https://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+
+    server.valid?
+    assert_empty server.errors[:url]
+  end
+
+  test "static server does not require https url" do
+    server = MCPServer.new(
+      name: "static-http", display_name: "Static HTTP", url: "http://mcp.example.com:8080/sse",
+      kind: "custom", scope: @company, auth_type: "static"
+    )
+
+    server.valid?
+    assert_empty server.errors[:url]
+  end
 end

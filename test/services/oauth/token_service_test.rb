@@ -151,10 +151,10 @@ module Oauth
       assert_not_requested :post, TOKEN_ENDPOINT
     end
 
-    # == pick_credential: server scoping ==
+    # == pick_credential: server scoping (scope-driven, oauth-unification §4.4) ==
 
-    test "prefers a credential owned by the session user over the server scope owner" do
-      server = create(:mcp_server, :custom, scope: @company)
+    test "a per_user oauth server selects the acting user's own credential" do
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
       build_credential(owner: @company, mcp_server: server, access_token: "company-token",
                        expires_at: 1.hour.from_now)
       build_credential(owner: @user, mcp_server: server, access_token: "user-token",
@@ -163,16 +163,48 @@ module Oauth
       assert_equal "user-token", Oauth::TokenService.access_token_for(server: server, user: @user)
     end
 
-    test "falls back to the server scope owner when the user has no credential" do
-      server = create(:mcp_server, :custom, scope: @company)
+    test "a shared oauth server selects the scope owner's credential, never the user's" do
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
       build_credential(owner: @company, mcp_server: server, access_token: "company-token",
+                       expires_at: 1.hour.from_now)
+      build_credential(owner: @user, mcp_server: server, access_token: "user-token",
                        expires_at: 1.hour.from_now)
 
       assert_equal "company-token", Oauth::TokenService.access_token_for(server: server, user: @user)
     end
 
-    test "never selects a credential owned by a different tenant (no owner-blind fallback)" do
-      server = create(:mcp_server, :custom, scope: @company)
+    test "raises ReauthRequired (connect required) when a per_user oauth server has no credential for the user" do
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
+      # A scope-owner credential must NOT satisfy a per_user server — the user connects.
+      build_credential(owner: @company, mcp_server: server, access_token: "company-token",
+                       expires_at: 1.hour.from_now)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(server: server, user: @user)
+      end
+    end
+
+    test "raises ReauthRequired when a shared oauth server has no scope-owner credential" do
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(server: server, user: @user)
+      end
+    end
+
+    test "never injects another tenant's credential — raises connect-required instead" do
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
+      other = create(:user, :admin, company: create(:company))
+      build_credential(owner: other, mcp_server: server, access_token: "foreign-token",
+                       expires_at: 1.hour.from_now)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(server: server, user: @user)
+      end
+    end
+
+    test "returns nil (no connect signal) for a non-oauth server with no matching credential" do
+      server = create(:mcp_server, :custom, scope: @company) # auth_type defaults to :none
       other = create(:user, :admin, company: create(:company))
       build_credential(owner: other, mcp_server: server, access_token: "foreign-token",
                        expires_at: 1.hour.from_now)
@@ -182,11 +214,44 @@ module Oauth
     end
 
     test "ignores revoked credentials when picking for a server" do
-      server = create(:mcp_server, :custom, scope: @company)
-      build_credential(owner: @user, mcp_server: server, status: :revoked,
+      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
+      build_credential(owner: @company, mcp_server: server, status: :revoked,
                        access_token: "revoked-token", expires_at: 1.hour.from_now)
 
-      assert_nil Oauth::TokenService.pick_credential(server: server, owner: nil, provider: nil, user: @user)
+      # Revoked excluded ⇒ no live credential ⇒ connect required for an oauth server.
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.pick_credential(server: server, owner: nil, provider: nil, user: @user)
+      end
+    end
+
+    # == perform_refresh!: resource indicator + time-of-use SSRF guard (§5) ==
+
+    test "sends the RFC 8707 resource indicator on refresh for an MCP-server credential" do
+      server = create(:mcp_server, :custom, scope: @company, url: "https://mcp.acme.test/v1",
+                      auth_type: :oauth, credential_scope: :shared)
+      build_credential(owner: @company, mcp_server: server, access_token: "old",
+                       refresh_token: "r", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", expires_in: 3600)
+
+      Oauth::TokenService.access_token_for(server: server, user: @user)
+
+      assert_requested(:post, TOKEN_ENDPOINT) do |req|
+        URI.decode_www_form(req.body).to_h["resource"] == "https://mcp.acme.test/v1"
+      end
+    end
+
+    test "refuses to refresh against an unsafe (link-local) token_endpoint and signals reauth" do
+      evil = OauthClient.new(issuer: "https://evil.test", client_id: "evil-cid", source: "dcr",
+                             authorization_endpoint: "https://evil.test/authorize",
+                             token_endpoint: "http://169.254.169.254/token")
+      evil.save!
+      build_credential(owner: @user, oauth_client: evil, access_token: "old",
+                       refresh_token: "r", expires_at: 1.minute.ago)
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+      end
+      assert_not_requested(:post, "http://169.254.169.254/token")
     end
 
     # == pick_credential: owner + provider ==

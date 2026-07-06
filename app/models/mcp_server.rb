@@ -16,6 +16,10 @@ class MCPServer < ApplicationRecord
 
   enumerize :kind, in: %i[internal custom managed], default: :custom, predicates: true
   enumerize :transport, in: %i[http sse stdio], default: :http
+  enumerize :auth_type, in: %i[none static oauth],
+                        default: :none, predicates: { prefix: true }, scope: true
+  enumerize :credential_scope, in: %i[shared per_user],
+                               default: :shared, predicates: { prefix: true }, scope: true
 
   # Polymorphic scope (Company or Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
@@ -67,6 +71,9 @@ class MCPServer < ApplicationRecord
     transport.to_s == "stdio"
   end
 
+  # Convenience predicate for the delivery/UI layer.
+  def oauth? = auth_type_oauth?
+
   # Split "npx @playwright/mcp --headless" → ["npx", "@playwright/mcp", "--headless"]
   def parsed_command
     Shellwords.split(command.to_s)
@@ -101,6 +108,6 @@ class MCPServer < ApplicationRecord
   private
 
   def url_safety
-    UrlSafetyValidator.errors_for(url).each { |msg| errors.add(:url, msg) }
+    UrlSafetyValidator.errors_for(url, require_https: auth_type_oauth?).each { |msg| errors.add(:url, msg) }
   end
 end

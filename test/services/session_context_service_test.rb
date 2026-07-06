@@ -1042,12 +1042,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
-  # OAuth token injection (RFC oauth-unification §4.4, Phase 1)
+  # OAuth token injection (oauth-unification §4.4)
   # ====================================================================
 
   test "generate_mcp_config injects a Bearer header when a token resolves for the server" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).returns("resolved-token")
@@ -1058,9 +1058,23 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "Bearer resolved-token", config["mcpServers"]["oauth-srv"]["headers"]["Authorization"]
   end
 
+  test "generate_mcp_config does not inject for a non-oauth server" do
+    server = create(:mcp_server, :custom, name: "plain-srv", url: "https://plain.example.com/mcp",
+                    transport: "sse", scope: @company, headers: {}) # auth_type defaults to :none
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+    # A non-oauth server never consults the token service (auth_type gate).
+    Oauth::TokenService.expects(:access_token_for).never
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    config = JSON.parse(result["/workspace/.mcp.json"])
+    assert_not config["mcpServers"]["plain-srv"].fetch("headers", {}).key?("Authorization")
+  end
+
   test "generate_mcp_config leaves headers untouched when no OAuth token resolves" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).returns(nil)
@@ -1073,7 +1087,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config never overwrites an explicit Authorization header" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company,
+                    transport: "sse", scope: @company, auth_type: :oauth,
                     headers: { "Authorization" => "Bearer preset" })
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
@@ -1086,18 +1100,18 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "Bearer preset", config["mcpServers"]["oauth-srv"]["headers"]["Authorization"]
   end
 
-  test "generate_mcp_config swallows ReauthRequired and continues without a header" do
+  test "generate_mcp_config propagates ReauthRequired so the session-start preflight can block launch" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).raises(Oauth::ReauthRequired.new(nil))
 
-    config = nil
-    assert_nothing_raised do
-      config = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+    # Phase 3 no longer swallows here — a missing/dead per_user credential must trip
+    # the session-start preflight rather than silently launch without a token.
+    assert_raises(Oauth::ReauthRequired) do
+      SessionContextService.generate_mcp_config(session)
     end
-    assert_not config["mcpServers"]["oauth-srv"].fetch("headers", {}).key?("Authorization")
   end
 
   private

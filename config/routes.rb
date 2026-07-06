@@ -206,6 +206,10 @@ Rails.application.routes.draw do
     # single-use `state`. PKCE is mandatory (OAuth 2.1).
     get "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
     get "oauth/callback", to: "oauth#callback", as: :oauth_callback
+    # MCP OAuth 2.1 connect (oauth-unification §5): discovery + dynamic client
+    # registration, then the SAME consent flow as #authorize. The mcp_server_id
+    # sources the discovered DCR client; the callback stays the shared oauth_callback.
+    get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
 
     namespace :company do
       resources :members, only: %i[index create update destroy]

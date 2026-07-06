@@ -267,8 +267,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
 
   create_table "mcp_servers", force: :cascade do |t|
     t.jsonb "args", default: []
+    t.string "auth_type", default: "none", null: false
     t.string "command"
     t.datetime "created_at", null: false
+    t.string "credential_scope", default: "shared", null: false
     t.text "description"
     t.string "display_name", null: false
     t.boolean "enabled", default: true, null: false

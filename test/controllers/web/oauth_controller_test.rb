@@ -52,11 +52,30 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
 
   # Encode a real state (side-effects the nonce into the stubbed cache) so the
   # callback can be driven exactly as the browser would return.
-  def build_state(owner:, user: @user, provider: "sentry", return_to: "/company/projects", mcp_server_id: nil, code_verifier: "pkce-verifier-001")
+  def build_state(owner:, user: @user, provider: "sentry", return_to: "/company/projects",
+                  mcp_server_id: nil, code_verifier: "pkce-verifier-001", resource: nil, oauth_client_id: nil)
     Oauth::State.encode(
       owner_type: owner.class.name, owner_id: owner.id, user_id: user.id,
       provider: provider, return_to: return_to, mcp_server_id: mcp_server_id,
-      code_verifier: code_verifier
+      code_verifier: code_verifier, resource: resource, oauth_client_id: oauth_client_id
+    )
+  end
+
+  # A persisted DCR (dynamic client registration) client — the kind Phase-3
+  # discovery produces and the mcp_connect / callback flow consumes.
+  def build_dcr_client(issuer: "https://auth.mcp.test", client_id: "dcr-cid", scopes: "mcp:read")
+    OauthClient.create!(
+      issuer: issuer, client_id: client_id, source: "dcr", scopes: scopes,
+      authorization_endpoint: "#{issuer}/authorize", token_endpoint: "#{issuer}/token"
+    )
+  end
+
+  def stub_mcp_token_success!(endpoint)
+    stub_request(:post, endpoint).to_return(
+      status: 200,
+      body: { access_token: "mcp-at-1", refresh_token: "mcp-rt-1",
+              token_type: "Bearer", expires_in: 3600, scope: "mcp:read" }.to_json,
+      headers: { "Content-Type" => "application/json" }
     )
   end
 
@@ -242,5 +261,145 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     state = build_state(owner: @company)
     get oauth_callback_path, params: { code: "auth-code-1", state: state }
     assert_redirected_to login_path
+  end
+
+  # --- MCP CONNECT: discovery + DCR, then consent --------------------------
+  # Depends on the DISCOVERY builder's MCP::OauthDiscoveryService / MCP::DiscoveryError
+  # (pinned interface); prepare is stubbed so no discovery network call is made here.
+
+  def stub_discovery!(client:, resource: "https://mcp.acme.test/v1", scopes: "mcp:read")
+    result = OpenStruct.new(oauth_client: client, resource: resource, scopes: scopes)
+    MCP::OauthDiscoveryService.stubs(:prepare).returns(result)
+    result
+  end
+
+  test "mcp_connect discovers the client and redirects to consent with PKCE + RFC 8707 resource" do
+    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared,
+                    url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_discovery!(client: client)
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+
+    assert_response :redirect
+    location = @response.headers["Location"]
+    assert_equal "auth.mcp.test", URI(location).host
+
+    q = query_params(location)
+    assert_equal "code", q["response_type"]
+    assert_equal "dcr-cid", q["client_id"]
+    assert_equal "S256", q["code_challenge_method"]
+    assert q["code_challenge"].present?, "a PKCE challenge must be sent"
+    assert_equal "https://mcp.acme.test/v1", q["resource"], "RFC 8707 resource indicator on authorize"
+    assert_equal "mcp:read", q["scope"]
+    refute q.key?("code_verifier"), "the PKCE verifier must NEVER appear in the URL"
+
+    payload = Oauth::State.decode(q["state"])
+    assert_equal "mcp:mcp.acme.test", payload["provider"]
+    assert_equal "https://mcp.acme.test/v1", payload["resource"]
+    assert_equal client.id, payload["oauth_client_id"]
+    assert_equal "Company", payload["owner_type"]
+    assert_equal @company.id, payload["owner_id"]
+  end
+
+  test "mcp_connect pins the connecting identity to the current user for a per_user server" do
+    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user,
+                    url: "https://mcp.acme.test/v1")
+    stub_discovery!(client: build_dcr_client)
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    payload = Oauth::State.decode(query_params(@response.headers["Location"])["state"])
+    assert_equal "User", payload["owner_type"]
+    assert_equal @user.id, payload["owner_id"]
+  end
+
+  test "mcp_connect refuses a non-oauth server (never runs discovery)" do
+    server = create(:mcp_server, :custom, scope: @company) # auth_type :none
+    MCP::OauthDiscoveryService.expects(:prepare).never
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    assert_redirected_to root_path
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "mcp_connect refuses a server the user may not act for (never runs discovery)" do
+    other = create(:company)
+    server = create(:mcp_server, :custom, scope: other, auth_type: :oauth, url: "https://mcp.other.test/v1")
+    MCP::OauthDiscoveryService.expects(:prepare).never
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    assert_redirected_to root_path
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "mcp_connect surfaces a generic error and leaks no metadata when discovery fails" do
+    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    MCP::OauthDiscoveryService.stubs(:prepare).raises(MCP::DiscoveryError.new("boom"))
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+    assert_redirected_to "/company/projects"
+    assert_equal "Couldn't connect to this MCP server", flash[:alert]
+  end
+
+  # --- CALLBACK: MCP (DCR) branch ------------------------------------------
+
+  test "callback (mcp) loads the signed DCR client, threads the resource, and upserts an mcp:<host> credential" do
+    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared,
+                    url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+
+    state = build_state(owner: @company, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id,
+                        return_to: "/company/projects")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    end
+
+    assert_redirected_to "/company/projects"
+    assert_equal "Connected", flash[:notice]
+
+    assert_requested(:post, "https://auth.mcp.test/token") do |req|
+      body = URI.decode_www_form(req.body).to_h
+      body["grant_type"] == "authorization_code" &&
+        body["code"] == "mcp-code-1" &&
+        body["code_verifier"] == "pkce-verifier-001" &&
+        body["resource"] == "https://mcp.acme.test/v1" && # RFC 8707
+        body["client_id"] == "dcr-cid"
+    end
+
+    cred = OauthCredential.last
+    assert_equal @company, cred.owner
+    assert_equal "mcp:mcp.acme.test", cred.provider
+    assert_equal server.id, cred.mcp_server_id
+    assert_equal client.id, cred.oauth_client_id
+    assert_equal "mcp-at-1", cred.access_token
+  end
+
+  test "callback (mcp) rejects an oauth_client_id that is not a source:\"dcr\" client" do
+    static = OauthClient.create!(issuer: "https://static.test", client_id: "static-cid", source: "static",
+                                 authorization_endpoint: "https://static.test/authorize",
+                                 token_endpoint: "https://static.test/token")
+    state = build_state(owner: @company, provider: "mcp:mcp.acme.test",
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: static.id,
+                        return_to: "/company/projects")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    end
+    assert_redirected_to "/company/projects"
+    assert_equal "Unknown OAuth client", flash[:alert]
+  end
+
+  test "callback (mcp) rejects an unknown oauth_client_id" do
+    state = build_state(owner: @company, provider: "mcp:mcp.acme.test",
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: 999_999,
+                        return_to: "/company/projects")
+
+    get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    assert_redirected_to "/company/projects"
+    assert_equal "Unknown OAuth client", flash[:alert]
   end
 end

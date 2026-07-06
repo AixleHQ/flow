@@ -24,19 +24,24 @@ module Oauth
       fresh(cred)
     end
 
-    # Phase-1 credential selection.
-    # - server: prefer a live credential owned by `user`, else the server's scope
-    #   owner (shared identity). credential_scope enum is Phase 3; until then
-    #   presence of a credential row attached to the server IS the trigger.
-    # - owner/provider: newest active credential for that owner+provider.
+    # Credential selection.
+    # - server: scope-driven (oauth-unification §4.4). credential_scope decides the
+    #   identity — per_user => the acting `user`; shared => the server's scope owner.
+    #   NEVER an owner-blind fallback, which would inject another tenant's token into
+    #   this session (cross-tenant confused deputy). For an OAuth server a MISSING
+    #   credential is not "no credential attached" — it means the user/scope must
+    #   connect, so it raises ReauthRequired to trip the session-start preflight.
+    # - owner/provider: newest active credential for that owner+provider (unchanged).
     def pick_credential(server:, owner:, provider:, user:)
       if server
         scope = OauthCredential.for_mcp_server(server).where.not(status: :revoked)
-        # Only the user's own credential or the server's scope-owner (shared
-        # identity) — NEVER an owner-blind fallback, which would inject another
-        # tenant's token into this session (cross-tenant confused deputy).
-        (user && scope.for_owner(user).order(updated_at: :desc).first) ||
-          (server.scope && scope.for_owner(server.scope).order(updated_at: :desc).first)
+        cred_owner = server.credential_scope_per_user? ? user : server.scope
+        return nil if cred_owner.nil? # can't resolve an identity to act as
+
+        cred = scope.for_owner(cred_owner).order(updated_at: :desc).first
+        raise Oauth::ReauthRequired.new(nil, "connect required") if cred.nil? && server.auth_type_oauth?
+
+        cred
       elsif owner && provider
         OauthCredential.for_owner(owner).where(provider: provider)
                        .where.not(status: :revoked).order(updated_at: :desc).first
@@ -75,6 +80,18 @@ module Oauth
       client = cred.oauth_client
       body = { grant_type: "refresh_token", refresh_token: cred.refresh_token, client_id: client.client_id }
       body[:client_secret] = client.client_secret if client.confidential?
+
+      # SECURITY (oauth-unification §5): a source:"dcr" token_endpoint is
+      # attacker-authored — re-validate at time-of-use, since a persisted endpoint is
+      # no more trustworthy than a freshly discovered one (TOCTOU). Static endpoints
+      # come from the trusted registry and pass. Raised as StandardError so `fresh`
+      # marks the credential errored and surfaces ReauthRequired.
+      uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true)
+      raise "unsafe token_endpoint" if uri_errs.any?
+
+      # RFC 8707 resource indicator — bind the refreshed token to the MCP resource.
+      # Derived from the credential's server (self-contained; nothing to persist).
+      body[:resource] = cred.mcp_server.url if cred.mcp_server_id.present?
 
       uri = URI.parse(client.token_endpoint)
       http = Net::HTTP.new(uri.host, uri.port)
