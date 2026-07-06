@@ -1,11 +1,15 @@
 # Contributor License Agreement
 
-> ⚠️ **Draft — must be reviewed and approved by legal before going live.**
-> This template is adapted from the Apache Software Foundation Individual and
-> Corporate CLAs. The signing flow is handled by a CLA bot (e.g. CLA Assistant)
-> on each pull request; the authoritative, signable version is the one
-> configured in that bot. Final entity name, contact address, and governing-law
-> terms must be confirmed by Dualboot Partners, LLC legal.
+> ⚠️ **Not currently in effect — DCO only for now.**
+> The project currently requires only a [DCO](DCO) sign-off on each commit; this
+> CLA is **not yet active** and signing is **not** required to contribute. The
+> text below is a draft retained for a possible future rollout and must be
+> reviewed and approved by Dualboot Partners, LLC legal (final entity name,
+> contact address, and governing-law terms) before it goes live. This template
+> is adapted from the Apache Software Foundation Individual and Corporate CLAs.
+> When activated, the signing flow will be handled by a CLA bot (e.g. CLA
+> Assistant) on each pull request; the authoritative, signable version will be
+> the one configured in that bot.
 
 Thank you for contributing to **Aixle Flow** (the "Project"), maintained by
 **Dualboot Partners, LLC** (the "Project Owner"). To clarify the intellectual
