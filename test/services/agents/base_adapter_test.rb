@@ -212,5 +212,12 @@ module Agents
       assert_equal "key-123", credentials[:api_key]
       assert_equal "user-456", credentials[:user_id]
     end
+
+    # == Proactive Refresh Hook ==
+
+    test "refresh! defaults to a not_needed no-op" do
+      # Agents whose credentials carry no refreshable OAuth token never refresh.
+      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(Object.new))
+    end
   end
 end

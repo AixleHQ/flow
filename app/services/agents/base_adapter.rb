@@ -240,6 +240,21 @@ module Agents
       incoming
     end
 
+    # Proactively refresh this credential's OAuth token(s) server-side, persisting
+    # any rotated tokens back onto the AgentCredential. Called by the Temporal
+    # token-refresh sweep for credentials nearing expiry. Default: no-op (agents
+    # whose credentials don't carry a refreshable OAuth token).
+    #
+    # MUST persist via credential.with_lock + merge_refreshed_credentials +
+    # AgentCredential.from_artifacts (never a bare update! of a whole blob) so a
+    # concurrent live session's cleanup can't race the read-merge-write.
+    #
+    # @param credential [AgentCredential]
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
+    def refresh!(_credential)
+      { status: :not_needed, detail: nil }
+    end
+
     # =================================================================
     # Usage Collection (called once at session cleanup)
     # =================================================================

@@ -270,6 +270,44 @@ module Agents
       assert_nil session.reload.usage_statistic
     end
 
+    # =========================================================================
+    # refresh! — proactive-refresh hook (wraps refresh_access_token!)
+    # =========================================================================
+
+    test "refresh! returns refreshed and persists the rotated token" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "old", "refresh_token" => "r1", "id_token" => "id1" }
+      })
+      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200,
+                   body: { access_token: "new", refresh_token: "r2", id_token: "id2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal({ status: :refreshed, detail: nil }, @adapter.refresh!(credential))
+      assert_equal "new", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
+    test "refresh! returns error when the token endpoint fails" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
+      })
+      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert_equal "codex token refresh failed", result[:detail]
+    end
+
+    test "refresh! returns error when no refresh token is present" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: { "tokens" => {} })
+
+      assert_equal :error, @adapter.refresh!(credential)[:status]
+    end
+
     private
 
     def create_terminal_session(agent_type:)

@@ -199,6 +199,16 @@ module Agents
       nil
     end
 
+    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
+    # refresh_access_token! which already persists via credential.update!.
+    # @param credential [AgentCredential]
+    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
+    def refresh!(credential)
+      new_token = refresh_access_token!(credential)
+      new_token ? { status: :refreshed, detail: nil }
+                : { status: :error, detail: "codex token refresh failed" }
+    end
+
     # Default environment variables for Codex CLI runtime.
     # MITM_TRACKED_DOMAINS limits logging to chatgpt.com (Codex API host).
     def default_env_vars(session)
