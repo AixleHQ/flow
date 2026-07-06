@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { Integration } from './IntegrationsContent';
 import { IntegrationsContent } from './IntegrationsContent';
@@ -318,6 +318,29 @@ describe('IntegrationsContent', () => {
       // The same installation already exists at project scope, so the company copy's Link button is suppressed.
       expect(screen.queryByRole('button', { name: /Link to project/i })).not.toBeInTheDocument();
     });
+
+    it('clicking Link on a company integration with no installation id is a no-op', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[
+            makeIntegration({
+              id: 2,
+              name: 'Org Wide',
+              scopeIndicator: 'company',
+              status: 'active',
+              // No installationId: the button still renders, but handleLinkToProject bails early.
+            }),
+          ]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /Link to project/i }));
+
+      expect(router.post).not.toHaveBeenCalled();
+    });
   });
 
   describe('Coder connect modal', () => {
@@ -414,6 +437,234 @@ describe('IntegrationsContent', () => {
 
       await userEvent.click(within(dialog).getByText('Advanced'));
       expect(within(dialog).queryByPlaceholderText('aws-ec2-spot-v1')).not.toBeInTheDocument();
+    });
+
+    it('keeps Connect disabled when only the URL is filled but the token is empty', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
+
+      // A valid URL alone is not enough — the session token is still required.
+      expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+      expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it('cancelling the Coder modal closes it and clears the entered fields', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect Coder/i })).not.toBeInTheDocument());
+      expect(router.post).not.toHaveBeenCalled();
+
+      // Reopening yields a pristine form: closeCoderModal ran resetCoderForm on cancel.
+      const reopened = await openCoderModal();
+      expect(within(reopened).getByPlaceholderText('https://coder.example.com')).toHaveValue('');
+    });
+
+    it('surfaces the server error message in the dialog when the Coder connect fails', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      const dialog = await openCoderModal();
+      await userEvent.type(within(dialog).getByPlaceholderText('https://coder.example.com'), 'https://coder.acme.dev');
+      await userEvent.type(within(dialog).getByPlaceholderText('vFVrbTLdls-...'), 'session-token-xyz');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+      // The router mock records the call but never runs the callbacks itself; drive the onError
+      // branch by invoking the captured callback, then assert the error is rendered in the dialog.
+      const options = vi.mocked(router.post).mock.lastCall?.[2] as
+        { onError?: (errors: Record<string, string>) => void } | undefined;
+      act(() => options?.onError?.({ sessionToken: 'Token was rejected by Coder' }));
+
+      expect(within(dialog).getByText('Token was rejected by Coder')).toBeInTheDocument();
+      // The dialog stays open on failure so the user can correct the input.
+      expect(screen.getByRole('dialog', { name: /Connect Coder/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('GitLab connect modal interactions', () => {
+    it('cancelling the GitLab modal closes it without posting', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Connect GitLab/i })).not.toBeInTheDocument());
+      expect(router.post).not.toHaveBeenCalled();
+    });
+
+    it('pressing Enter in the token field submits the GitLab connection', async () => {
+      renderPage(
+        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /GitLab/i }));
+      const dialog = await screen.findByRole('dialog', { name: /Connect GitLab/i });
+      // Typing the token then Enter exercises the onKeyDown submit path (no button click).
+      await userEvent.type(within(dialog).getByPlaceholderText('glpat-...'), 'glpat-enter-token{Enter}');
+
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/integrations',
+        expect.objectContaining({ provider: 'gitlab', personalAccessToken: 'glpat-enter-token' }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+  });
+
+  describe('Slack connect navigation', () => {
+    // Same window.location swap as the GitHub block: jsdom's location is read-only, so replace it
+    // with a plain object to observe handleConnectSlack's assignment to location.href.
+    const originalLocation = window.location;
+
+    beforeEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: { href: '' },
+      });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: originalLocation,
+      });
+    });
+
+    it('connecting Slack from the empty state in a project navigates to the OAuth start URL', async () => {
+      renderPage(
+        <IntegrationsContent title="Project Integrations" basePath="/projects/42/integrations" integrations={[]} />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Slack' }));
+
+      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start');
+    });
+
+    it('opens the Slack OAuth start from the Connect menu in a project context', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[makeIntegration({ id: 1, name: 'Existing GitHub', scopeIndicator: 'project' })]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+      await userEvent.click(await screen.findByRole('menuitem', { name: /Slack/i }));
+
+      expect(window.location.href).toBe('/projects/42/integrations/slack_oauth_start');
+    });
+
+    it('does not offer Slack in a company (non-project) context', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Company Integrations"
+          basePath="/company/integrations"
+          integrations={[makeIntegration({ id: 1, name: 'Existing GitHub' })]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+      // GitHub/GitLab/Coder are offered, but Slack is project-scoped only.
+      expect(await screen.findByRole('menuitem', { name: 'GitHub' })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Slack/i })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('viewer without execute permission', () => {
+    const readOnlyProps = { ...settingsProps, projectPermissions: { canExecute: false, canManage: false } };
+
+    it('hides every connect action on the empty state', () => {
+      renderPage(
+        <IntegrationsContent title="Project Integrations" basePath="/projects/42/integrations" integrations={[]} />,
+        { props: readOnlyProps },
+      );
+
+      expect(screen.getByText('No integrations connected')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'GitHub' })).not.toBeInTheDocument();
+    });
+
+    it('hides the Remove action on integration cards', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Company Integrations"
+          basePath="/company/integrations"
+          integrations={[makeIntegration({ id: 5, name: 'Acme GitHub' })]}
+        />,
+        { props: readOnlyProps },
+      );
+
+      // The card still renders, but its mutating controls are gone for a read-only viewer.
+      expect(screen.getByText('Acme GitHub')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Remove/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('connected integration card details', () => {
+    it('shows the Slack request URL and a copy button for a Slack integration', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Company Integrations"
+          basePath="/company/integrations"
+          integrations={[
+            makeIntegration({
+              id: 8,
+              name: 'Acme Slack',
+              provider: 'slack',
+              slackRequestUrl: 'https://hooks.aixle.dev/slack/req',
+            }),
+          ]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByText('https://hooks.aixle.dev/slack/req')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Request URL/i })).toBeInTheDocument();
+    });
+
+    it('shows the Coder instance URL on a Coder integration card', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Company Integrations"
+          basePath="/company/integrations"
+          integrations={[
+            makeIntegration({
+              id: 9,
+              name: 'Acme Coder',
+              provider: 'coder',
+              coderUrl: 'https://coder.aixle.dev',
+            }),
+          ]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByText('https://coder.aixle.dev')).toBeInTheDocument();
     });
   });
 });

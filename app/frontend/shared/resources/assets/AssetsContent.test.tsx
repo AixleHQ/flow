@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { notifications } from '@mantine/notifications';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderPage, screen, userEvent, within } from 'test/renderPage';
 
@@ -44,6 +45,11 @@ const baseProps = {
 };
 
 describe('AssetsContent', () => {
+  // Notifications live in a global Mantine store; the two delete-failure tests both raise the same
+  // static "Failed to delete asset" toast, so a leftover from one leaks into the next and makes
+  // findByText match two nodes. Clear the store before each test.
+  beforeEach(() => notifications.clean());
+
   it('renders the header and a row for each seeded asset', () => {
     renderPage(
       <AssetsContent
@@ -397,5 +403,145 @@ describe('AssetsContent', () => {
     const row = screen.getByText('typed.csv').closest('tr') as HTMLElement;
     expect(within(row).getByText('text/csv')).toBeInTheDocument();
     expect(within(row).getByText('reports')).toBeInTheDocument();
+  });
+
+  it('completes the delete flow: DELETE request, success toast, and reload when confirmed', async () => {
+    const { container } = renderPage(
+      <AssetsContent {...baseProps} assets={[makeAsset({ id: 1, name: 'trash-me.pdf' })]} />,
+    );
+
+    const deleteBtn = container.querySelector('.tabler-icon-trash')?.closest('button');
+    await userEvent.click(deleteBtn as HTMLButtonElement);
+    await userEvent.click(await screen.findByRole('button', { name: /move to trash/i }));
+
+    // The confirm handler DELETEs the asset's REST path, then reloads + toasts on success.
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/v1/company/assets/1',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    expect(await screen.findByText('"trash-me.pdf" moved to trash')).toBeInTheDocument();
+    expect(router.reload).toHaveBeenCalled();
+  });
+
+  it('shows a failure toast and skips the reload when the delete request is not ok', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    const { container } = renderPage(
+      <AssetsContent {...baseProps} assets={[makeAsset({ id: 3, name: 'stubborn.pdf' })]} />,
+    );
+
+    const deleteBtn = container.querySelector('.tabler-icon-trash')?.closest('button');
+    await userEvent.click(deleteBtn as HTMLButtonElement);
+    await userEvent.click(await screen.findByRole('button', { name: /move to trash/i }));
+
+    expect(await screen.findByText('Failed to delete asset')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure toast when the delete request rejects', async () => {
+    vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error('network down'));
+    const { container } = renderPage(
+      <AssetsContent {...baseProps} assets={[makeAsset({ id: 4, name: 'flaky.pdf' })]} />,
+    );
+
+    const deleteBtn = container.querySelector('.tabler-icon-trash')?.closest('button');
+    await userEvent.click(deleteBtn as HTMLButtonElement);
+    await userEvent.click(await screen.findByRole('button', { name: /move to trash/i }));
+
+    expect(await screen.findByText('Failed to delete asset')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+  });
+
+  it('hides the upload controls for viewers without execute permission', () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />, {
+      props: { projectPermissions: { canExecute: false, canManage: false } },
+    });
+
+    expect(screen.getByText('No assets yet')).toBeInTheDocument();
+    // canExecute gates both the header Upload button and the empty-state first-upload CTA.
+    expect(screen.queryByRole('button', { name: /^upload$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /upload your first file/i })).not.toBeInTheDocument();
+  });
+
+  it('renders a disabled delete action for viewers without execute permission', async () => {
+    const { container } = renderPage(
+      <AssetsContent {...baseProps} assets={[makeAsset({ id: 1, name: 'readonly.pdf' })]} />,
+      { props: { projectPermissions: { canExecute: false, canManage: false } } },
+    );
+
+    const deleteBtn = container.querySelector('.tabler-icon-trash')?.closest('button');
+    expect(deleteBtn).toBeDisabled();
+
+    // A disabled delete must never surface the confirm modal.
+    await userEvent.click(deleteBtn as HTMLButtonElement);
+    expect(screen.queryByText('Delete "readonly.pdf"')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the company download path for a project asset when no projectId is provided', () => {
+    const { container } = renderPage(
+      <AssetsContent
+        {...baseProps}
+        isProjectContext
+        assets={[makeAsset({ id: 7, name: 'orphan.pdf', scopeIndicator: 'project', scopeType: 'Project' })]}
+      />,
+    );
+
+    // With scopeIndicator 'project' but no projectId, downloadUrl takes the company branch.
+    const downloadLink = container.querySelector('.tabler-icon-download')?.closest('a');
+    expect(downloadLink).toHaveAttribute('href', '/api/v1/company/assets/7/download');
+  });
+
+  it('shows the loading placeholder in the history modal until the reload finishes', async () => {
+    const { container } = renderPage(
+      <AssetsContent {...baseProps} assets={[makeAsset({ id: 8, name: 'loading.pdf' })]} />,
+    );
+
+    const historyBtn = container.querySelector('.tabler-icon-history')?.closest('button');
+    await userEvent.click(historyBtn as HTMLButtonElement);
+
+    // router.reload's onFinish never runs on its own, so the modal stays in its loading branch.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Loading versions...')).toBeInTheDocument();
+  });
+
+  it('renders a download link only for history versions that carry a fileUrl', async () => {
+    const { container } = renderPage(
+      <AssetsContent
+        {...baseProps}
+        assets={[makeAsset({ id: 9, name: 'linked.pdf' })]}
+        assetVersions={[
+          {
+            id: 301,
+            version: 2,
+            contentType: 'application/pdf',
+            fileSize: 4096,
+            source: 'upload',
+            fileUrl: 'https://files.example/v2.pdf',
+            createdAt: '2026-03-01T00:00:00Z',
+          },
+          {
+            id: 300,
+            version: 1,
+            contentType: 'application/pdf',
+            fileSize: 2048,
+            source: 'import',
+            fileUrl: null,
+            createdAt: '2026-02-01T00:00:00Z',
+          },
+        ]}
+      />,
+    );
+
+    const historyBtn = container.querySelector('.tabler-icon-history')?.closest('button');
+    await userEvent.click(historyBtn as HTMLButtonElement);
+    const reloadArgs = (router.reload as unknown as { mock: { calls: [{ onFinish?: () => void }][] } }).mock.calls.at(
+      -1,
+    )?.[0];
+    act(() => reloadArgs?.onFinish?.());
+
+    const dialog = await screen.findByRole('dialog');
+    // Only the version with a fileUrl exposes a download anchor; the null-url version has none.
+    const links = within(dialog).getAllByRole('link');
+    expect(links).toHaveLength(1);
+    expect(links[0]).toHaveAttribute('href', 'https://files.example/v2.pdf');
   });
 });

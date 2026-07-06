@@ -188,4 +188,36 @@ class InternalTools::MetaBoardToolsTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "Invalid preset"
   end
+
+  # ── meta_reorder_board_columns ──
+
+  test "meta_reorder_board_columns applies the given column order" do
+    col3 = create(:board_column, board: @board, name: "Done", position: 3)
+
+    result = InternalTools::MetaReorderBoardColumns.new(
+      params: { column_ids: [ col3.id, @col1.id, @col2.id ] },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal @board.id, data["board_id"]
+    assert_equal [ col3.id, @col1.id, @col2.id ], data["new_order"]
+
+    # Positions persisted to match the requested order (1-based).
+    assert_equal 1, col3.reload.position
+    assert_equal 2, @col1.reload.position
+    assert_equal 3, @col2.reload.position
+  end
+
+  test "meta_reorder_board_columns swaps two columns without a position collision" do
+    result = InternalTools::MetaReorderBoardColumns.new(
+      params: { column_ids: [ @col2.id, @col1.id ] },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal 1, @col2.reload.position
+    assert_equal 2, @col1.reload.position
+  end
 end

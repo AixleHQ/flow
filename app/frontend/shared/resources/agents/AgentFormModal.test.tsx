@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { AgentFormModal } from './AgentFormModal';
 
@@ -142,5 +142,102 @@ describe('AgentFormModal', () => {
     renderPage(<AgentFormModal opened onClose={vi.fn()} editAgent={editAgent} basePath="/projects/1/agents" />);
     expect(screen.getByText('🔍')).toBeInTheDocument();
     expect(screen.queryByText('Icon')).not.toBeInTheDocument();
+  });
+
+  it('blocks the submit and shows field messages when required fields are empty', async () => {
+    renderPage(<AgentFormModal opened onClose={vi.fn()} basePath="/projects/1/agents" />);
+
+    // The zod resolver rejects the empty form, so form.onSubmit never reaches handleSubmit.
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    // Title/Persona each hit their `.min(1)` check first, so these messages are unambiguous.
+    expect(await screen.findByText('Title is required')).toBeInTheDocument();
+    expect(screen.getByText('Persona is required')).toBeInTheDocument();
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('blocks the submit when the name is otherwise valid but does not start with a letter', async () => {
+    renderPage(<AgentFormModal opened onClose={vi.fn()} basePath="/projects/1/agents" />);
+
+    // Digits pass handleNameChange's char filter, so "9agent" survives typing unchanged — but the
+    // schema regex requires a leading letter, so validation still blocks the submit.
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), '9agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /title/i }), 'My Agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /persona/i }), 'A helpful agent.');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(screen.getByRole('textbox', { name: /name/i })).toHaveValue('9agent');
+    expect(
+      await screen.findByText('Must start with letter, use only lowercase letters, numbers, underscores'),
+    ).toBeInTheDocument();
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('closes the modal via the router onSuccess callback after a create submit', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} basePath="/projects/1/agents" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'my_agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /title/i }), 'My Agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /persona/i }), 'A helpful agent.');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+
+    // The inert router mock never resolves, so drive the success path Inertia would have invoked.
+    const options = (router.post as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onSuccess?.());
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('surfaces server-side field errors from the router onError callback on create', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} basePath="/projects/1/agents" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /name/i }), 'my_agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /title/i }), 'My Agent');
+    await userEvent.type(screen.getByRole('textbox', { name: /persona/i }), 'A helpful agent.');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+
+    // handleSubmit maps each server error onto its matching form field via setFieldError.
+    const options = (router.post as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onError?.({ name: 'has already been taken' }));
+
+    expect(await screen.findByText('has already been taken')).toBeInTheDocument();
+    // A rejected submit leaves the modal open.
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes the modal via the router onSuccess callback after an edit save', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} editAgent={editAgent} basePath="/projects/1/agents" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(router.patch).toHaveBeenCalled());
+
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onSuccess?.());
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('surfaces server-side field errors from the router onError callback on edit', async () => {
+    const onClose = vi.fn();
+    renderPage(<AgentFormModal opened onClose={onClose} editAgent={editAgent} basePath="/projects/1/agents" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(router.patch).toHaveBeenCalled());
+
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onError?.({ title: 'is invalid' }));
+
+    expect(await screen.findByText('is invalid')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

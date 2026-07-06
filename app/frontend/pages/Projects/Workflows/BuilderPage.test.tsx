@@ -448,4 +448,383 @@ describe('Projects/Workflows/BuilderPage', () => {
     // The scope indicator is shown as a badge next to the title.
     expect(screen.getByText('Project')).toBeInTheDocument();
   });
+
+  it('opening the Triggers button reveals the workflow triggers drawer', async () => {
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    // Drawer is closed initially.
+    expect(screen.queryByText('Triggers — how this workflow launches')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Triggers' }));
+
+    expect(await screen.findByText('Triggers — how this workflow launches')).toBeInTheDocument();
+  });
+
+  it('editing the workflow name in the header debounce-PATCHes the workflow endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    // The header workflow-name field is an unlabelled input holding the workflow name.
+    await userEvent.type(screen.getByDisplayValue('Release pipeline'), '!');
+
+    await waitFor(
+      () =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v1/projects/7/workflows/3',
+          expect.objectContaining({ method: 'PATCH' }),
+        ),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.workflow.name).toBe('Release pipeline!');
+  });
+
+  it('editing the workflow description debounce-PATCHes the workflow endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    await userEvent.type(screen.getByPlaceholderText('Add a description...'), 'Ship');
+
+    await waitFor(
+      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.workflow.description).toBe('Ship');
+  });
+
+  it('toggling "Inherit all project resources" PATCHes the config-nested field and shows the helper text', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ workflow: makeWorkflow({ inheritAllProjectResources: false }) }),
+    });
+
+    // Expand the sidebar Base Resources accordion, then flip the inherit switch. The panel content
+    // is revealed asynchronously, so wait for the switch to become queryable by role before clicking.
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    await userEvent.click(await screen.findByRole('switch', { name: 'Inherit all project resources' }));
+
+    // Observable state change: the "all resources available" helper text now renders.
+    expect(
+      await screen.findByText('All project tools, skills, and MCP servers are available in every step.'),
+    ).toBeInTheDocument();
+
+    // Config-backed field must be sent nested under `config`.
+    await waitFor(
+      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.workflow.config.inheritAllProjectResources).toBe(true);
+  });
+
+  it('selecting a base tool group PATCHes config.baseToolIds expanded to its member ids', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        tools: [
+          { id: 10, name: 'Board List Tasks' },
+          { id: 11, name: 'Board Move Task' },
+        ],
+        toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
+        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+      }),
+    });
+
+    // Expand the base-resources accordion so its Tools picker (and dropdown options) are accessible
+    // by role — collapsed accordion content is hidden from the accessibility tree.
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    // Open the base-resources Tools picker (first of the two "Tools" pickers) and pick the group.
+    await userEvent.click(screen.getAllByLabelText('Tools')[0]);
+    await userEvent.click((await screen.findAllByRole('option', { name: 'Board management' }))[0]);
+
+    await waitFor(
+      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    // The single group token expands to every member tool id.
+    expect(body.workflow.config.baseToolIds).toEqual([10, 11]);
+  });
+
+  it('toggling "Auto-run available" immediately PATCHes the step and surfaces the "Auto" badge', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, allowNonInteractive: false })],
+      }),
+    });
+
+    // The Execution accordion is open by default; toggle the auto-run switch. The switch also renders
+    // a description inside its label, so match the accessible name by substring (regex).
+    await userEvent.click(screen.getByRole('switch', { name: /Auto-run available/ }));
+
+    // The sidebar step card now shows the "Auto" badge.
+    expect(await screen.findByText('Auto')).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.allowNonInteractive).toBe(true);
+  });
+
+  it('setting On Failure to "Retry" reveals Max Retries and PATCHes the step', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail' })] }),
+    });
+
+    // Max Retries is hidden while the policy is not "retry".
+    expect(screen.queryByRole('textbox', { name: 'Max Retries' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByLabelText('On Failure')[0]);
+    await userEvent.click(await screen.findByRole('option', { name: 'Retry' }));
+
+    // The conditional Max Retries input now renders.
+    expect(await screen.findByRole('textbox', { name: 'Max Retries' })).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.onFailure).toBe('retry');
+  });
+
+  it('choosing a Required Runtime PATCHes the runtime and resets preferredModel, then reveals the model picker', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: null })],
+      }),
+    });
+
+    // Preferred Model picker is absent until a runtime is chosen.
+    expect(screen.queryByLabelText('Preferred Model')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByLabelText('Required Runtime')[0]);
+    await userEvent.click(await screen.findByRole('option', { name: 'Cursor CLI' }));
+
+    // Choosing a runtime now shows the Preferred Model select.
+    expect((await screen.findAllByLabelText('Preferred Model'))[0]).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.requiredAgentRuntime).toBe('cursor_cli');
+    // Switching runtime clears any previously-chosen model.
+    expect(body.step.preferredModel).toBeNull();
+  });
+
+  it('selecting a Preferred Model for a runtime step PATCHes the step with the model id', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+      }),
+    });
+
+    await userEvent.click(screen.getAllByLabelText('Preferred Model')[0]);
+    await userEvent.click(await screen.findByRole('option', { name: 'Opus 9' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.preferredModel).toBe('opus-9');
+  });
+
+  it('selecting a dependency PATCHes dependsOnStepIds and shows the "after:" badge in the sidebar', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({ id: 1, name: 'Draft spec', position: 1, dependsOnStepIds: [] }),
+          makeStep({ id: 2, name: 'Implement', position: 2, dependsOnStepIds: [] }),
+        ],
+      }),
+    });
+
+    // Open the Dependencies section for the selected (first) step and pick the other step.
+    await userEvent.click(screen.getByRole('button', { name: /Dependencies/ }));
+    await userEvent.click(screen.getByPlaceholderText('Select steps this step depends on...'));
+    await userEvent.click(await screen.findByRole('option', { name: '2. Implement' }));
+
+    // The sidebar card for step 1 now records the dependency.
+    expect(await screen.findByText(/after:\s*Implement/)).toBeInTheDocument();
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.dependsOnStepIds).toEqual([2]);
+  });
+
+  it('adding a sub-step PATCHes the step with a new subStepsAttributes entry', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Sub-steps/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add Sub-step' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'Sub-step 1', position: 1, required: true });
+  });
+
+  it('editing a sub-step name debounce-PATCHes the step with that sub-step id', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Draft spec',
+            position: 1,
+            subSteps: [{ id: 11, name: 'Outline', description: null, instructions: null, position: 1, required: true }],
+          }),
+        ],
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Sub-steps/ }));
+
+    // The sub-step name field is the placeholder-only "Name" input (detail Name uses a label instead).
+    await userEvent.type(await screen.findByPlaceholderText('Name'), '!');
+
+    await waitFor(
+      () =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v1/projects/7/workflows/3/steps/1',
+          expect.objectContaining({ method: 'PATCH' }),
+        ),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.subStepsAttributes[0].id).toBe(11);
+    expect(body.step.subStepsAttributes[0].name).toBe('Outline!');
+  });
+
+  it('adding an output asset spec reveals the Match pattern column and PATCHes outputAssetSpecs', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Asset Specs/ }));
+
+    // Second "Add" belongs to the Output editor (Input editor renders first, then a divider).
+    const addButtons = await screen.findAllByRole('button', { name: 'Add' });
+    await userEvent.click(addButtons[1]);
+
+    // Output specs support a name pattern; the column header + pattern input only render there.
+    expect(await screen.findByText('Match pattern')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('e.g. report')).toBeInTheDocument();
+
+    // Typing the path debounce-saves the output specs to the step endpoint.
+    await userEvent.type(screen.getByPlaceholderText('e.g. tasks/report.md'), 'out.md');
+
+    await waitFor(
+      () =>
+        expect(fetchSpy).toHaveBeenCalledWith(
+          '/api/v1/projects/7/workflows/3/steps/1',
+          expect.objectContaining({ method: 'PATCH' }),
+        ),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(Array.isArray(body.step.outputAssetSpecs)).toBe(true);
+    expect(body.step.outputAssetSpecs[0].name).toBe('out.md');
+  });
+
+  it('renders a read-only project workflow with disabled editing affordances', () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        readOnly: true,
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
+      }),
+    });
+
+    // Detail-panel step Name field is present but disabled.
+    expect(screen.getByRole('textbox', { name: 'Name' })).toBeDisabled();
+
+    // Run stays rendered (a project is set) but disabled under read-only.
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+
+    // Editing affordances are withheld: no Triggers and no Add Step.
+    expect(screen.queryByRole('button', { name: 'Triggers' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add Step' })).not.toBeInTheDocument();
+  });
 });

@@ -80,4 +80,65 @@ describe('Docs/components/DocsMdxContent', () => {
     // Inline code never renders the fenced block's copy button.
     expect(screen.queryByRole('button', { name: 'Copy code to clipboard' })).not.toBeInTheDocument();
   });
+
+  it('detects a callout keyword inside bold, strips the keyword, and drops the now-empty bold node', () => {
+    // The keyword lives in a **strong** node: remarkCalloutType must read it out of the <strong>,
+    // set the callout type, then remove the emptied <strong> and un-indent the following text.
+    renderPage(<DocsMdxContent content={'> **Danger** Do not delete this.'} />);
+
+    // Keyword consumed the entire <strong>, so only the trailing sentence survives as the body.
+    expect(screen.getByText('Do not delete this.')).toBeInTheDocument();
+    // The "Danger" keyword must not leak through as its own (bold) text node.
+    expect(screen.queryByText('Danger')).not.toBeInTheDocument();
+  });
+
+  it('keeps the remaining bold text when a bold callout keyword has trailing words', () => {
+    // Here the <strong> is NOT fully consumed: "Tip" is stripped but "and more" stays bold — the
+    // else side of the empty-strong branch that the plain-keyword tests never reach.
+    renderPage(<DocsMdxContent content={'> **Tip and more** context follows.'} />);
+
+    const bold = screen.getByText('and more');
+    expect(bold).toBeInTheDocument();
+    expect(bold.tagName).toBe('STRONG');
+    // The leading "Tip" keyword is gone even though the bold node was preserved.
+    expect(screen.queryByText(/Tip/)).not.toBeInTheDocument();
+    expect(screen.getByText(/context follows\./)).toBeInTheDocument();
+  });
+
+  it('renders a keyword-less blockquote as a plain callout with its text untouched', () => {
+    // No callout keyword => remarkCalloutType returns early and nothing is stripped; the blockquote
+    // component still wraps it in the default (info) callout.
+    renderPage(<DocsMdxContent content={'> Just a plain quote with no keyword.'} />);
+
+    expect(screen.getByText('Just a plain quote with no keyword.')).toBeInTheDocument();
+  });
+
+  it('renders an ordered list as an <ol> with each item', () => {
+    renderPage(<DocsMdxContent content={'1. first step\n2. second step\n3. third step'} />);
+
+    const list = screen.getByRole('list');
+    // The `ol` component mapping (distinct from the `ul` one exercised above) must emit an <ol>.
+    expect(list.tagName).toBe('OL');
+    const items = within(list).getAllByRole('listitem');
+    expect(items).toHaveLength(3);
+    expect(items[2]).toHaveTextContent('third step');
+  });
+
+  it('renders a thematic break as a separator between paragraphs', () => {
+    renderPage(<DocsMdxContent content={'Above the line.\n\n---\n\nBelow the line.'} />);
+
+    expect(screen.getByRole('separator')).toBeInTheDocument();
+    expect(screen.getByText('Above the line.')).toBeInTheDocument();
+    expect(screen.getByText('Below the line.')).toBeInTheDocument();
+  });
+
+  it('renders raw <details>/<summary> HTML as native disclosure elements', () => {
+    // rehypeRaw + rehypeSanitize keep details/summary, and the custom component mappings render the
+    // matching native tags — the raw-HTML passthrough path the markdown-only tests never hit.
+    renderPage(<DocsMdxContent content={'<details><summary>More info</summary>Body of the disclosure.</details>'} />);
+
+    const summary = screen.getByText('More info');
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(screen.getByText('Body of the disclosure.').tagName).toBe('DETAILS');
+  });
 });

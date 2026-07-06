@@ -314,4 +314,140 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     const dialog = await screen.findByRole('dialog', { name: /Run: Nightly Build/ });
     expect(within(dialog).getByText('Execution Mode')).toBeInTheDocument();
   });
+
+  // --- Read-only viewer (canExecute:false) -------------------------------------------------------
+  // useProjectPermissions() reads the shared `projectPermissions` prop and defaults canExecute to
+  // true, so every test above exercises the executor branch. Seeding it false hits the gated paths.
+  it('hides the create CTAs in the empty state for a read-only viewer (canExecute:false)', () => {
+    renderAuthedPage(<WorkflowsPage />, {
+      props: { ...baseProps([]), projectPermissions: { canExecute: false, canManage: false } },
+    });
+
+    expect(screen.getByText('No workflows yet')).toBeInTheDocument();
+    // Both the empty-state CTA and the toolbar button are gated behind canExecute.
+    expect(screen.queryByRole('button', { name: 'Create your first workflow' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New Workflow' })).not.toBeInTheDocument();
+  });
+
+  it('hides run/mutate controls but keeps Configure for a read-only viewer (canExecute:false)', () => {
+    const { container } = renderAuthedPage(<WorkflowsPage />, {
+      props: {
+        ...baseProps([workflow({ id: 1, name: 'Nightly Build', scopeIndicator: 'project' })]),
+        projectPermissions: { canExecute: false, canManage: false },
+      },
+    });
+
+    // Configure is ungated — a viewer can still open the (read-only) builder.
+    expect(screen.getByRole('button', { name: 'Configure' })).toBeInTheDocument();
+    // Every execute/mutate affordance is gone: Run, New Workflow, and the icon-only edit/trash/publish.
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New Workflow' })).not.toBeInTheDocument();
+    expect(container.querySelector('svg.tabler-icon-edit')).not.toBeInTheDocument();
+    expect(container.querySelector('svg.tabler-icon-trash')).not.toBeInTheDocument();
+    expect(container.querySelector('svg.tabler-icon-globe-off')).not.toBeInTheDocument();
+  });
+
+  // --- Search filter branches --------------------------------------------------------------------
+  it('filters workflows by a term that only appears in the description', async () => {
+    renderAuthedPage(<WorkflowsPage />, {
+      props: baseProps([
+        workflow({ id: 1, name: 'Alpha', description: 'no match here' }),
+        workflow({ id: 2, name: 'Beta', description: 'contains the zephyr keyword' }),
+      ]),
+    });
+
+    // 'zephyr' matches only Beta's description (not its name), hitting the `w.description?...` branch
+    // of the filter's OR that the name-only search tests never reach.
+    await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zephyr');
+
+    await waitFor(() => expect(screen.queryByText('Alpha')).not.toBeInTheDocument());
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+  });
+
+  it('suppresses the create CTA in the no-match state even when execution is allowed', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([workflow({ name: 'Nightly Build' })]) });
+
+    await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zzz');
+
+    expect(await screen.findByText('No workflows match your search')).toBeInTheDocument();
+    // The CTA is `!search && canExecute`; an active search must hide it despite canExecute being true.
+    expect(screen.queryByRole('button', { name: 'Create your first workflow' })).not.toBeInTheDocument();
+  });
+
+  // --- Modal dismissal (Cancel handlers) ---------------------------------------------------------
+  it('closes the New Workflow modal via Cancel without posting', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Workflow' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New Workflow' });
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'New Workflow' })).not.toBeInTheDocument());
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('closes the delete confirmation via Cancel without deleting', async () => {
+    const { container } = renderAuthedPage(<WorkflowsPage />, {
+      props: baseProps([workflow({ id: 11, name: 'Nightly Build' })]),
+    });
+
+    await userEvent.click(iconButton(container, 'tabler-icon-trash'));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete Workflow' });
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete Workflow' })).not.toBeInTheDocument());
+    expect(router.delete).not.toHaveBeenCalled();
+  });
+
+  // --- Edit + create form details ----------------------------------------------------------------
+  it('seeds an empty description in the Edit modal when the workflow has none', async () => {
+    // openEdit() does `description: wf.description ?? ''` — a null description must seed an empty field.
+    const { container } = renderAuthedPage(<WorkflowsPage />, {
+      props: baseProps([workflow({ id: 3, name: 'Nightly Build', description: null })]),
+    });
+
+    await userEvent.click(iconButton(container, 'tabler-icon-edit'));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+
+    expect(within(dialog).getByRole('textbox', { name: /name/i })).toHaveValue('Nightly Build');
+    expect(within(dialog).getByRole('textbox', { name: /description/i })).toHaveValue('');
+  });
+
+  it('patches with the edited name when the Edit form is changed and submitted', async () => {
+    const { container } = renderAuthedPage(<WorkflowsPage />, {
+      props: baseProps([workflow({ id: 3, name: 'Nightly Build', description: 'Runs the nightly build' })]),
+    });
+
+    await userEvent.click(iconButton(container, 'tabler-icon-edit'));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Workflow' });
+
+    const nameInput = within(dialog).getByRole('textbox', { name: /name/i });
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Renamed Flow');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/workflows/3',
+      { workflow: { name: 'Renamed Flow', description: 'Runs the nightly build' } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('includes the typed description in the create POST payload', async () => {
+    renderAuthedPage(<WorkflowsPage />, { props: baseProps([]) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Workflow' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New Workflow' });
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /name/i }), 'Release Flow');
+    await userEvent.type(within(dialog).getByRole('textbox', { name: /description/i }), 'Ships on tag');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflows',
+      { workflow: { name: 'Release Flow', description: 'Ships on tag' } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
 });

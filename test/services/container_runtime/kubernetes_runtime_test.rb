@@ -373,6 +373,111 @@ module ContainerRuntime
       assert_equal "2Gi",   hard["limits.memory"]
       assert_equal "20",    hard["count/pods"]
     end
+
+    test "container_identifier truncates a raw container id to 12 chars" do
+      container = Object.new
+      container.define_singleton_method(:id) { "abcdef0123456789deadbeef" }
+
+      assert_equal "abcdef012345", @runtime.container_identifier(container)
+    end
+
+    test "start_container creates only the service when handle has ports but no route token" do
+      handle = OpenStruct.new(
+        pod_name: "my-pod",
+        namespace: "default",
+        service_name: "my-pod",
+        route_token: nil,
+        service_ports: [ 7681 ]
+      )
+
+      core_mock = mock("core_client")
+      created_service = nil
+      core_mock.expects(:create_service).with do |service|
+        created_service = service
+        true
+      end.returns(true)
+      @runtime.stubs(:core_client).returns(core_mock)
+      # traefik_client intentionally left unstubbed: a routed resource call would
+      # blow up, proving the no-route-token branch skips ingress setup entirely.
+
+      result = @runtime.start_container(handle)
+
+      assert_equal handle, result
+      metadata = created_service.metadata.respond_to?(:to_h) ? created_service.metadata.to_h : created_service.metadata
+      assert_equal "my-pod", metadata[:name] || metadata["name"]
+      assert_equal "default", metadata[:namespace] || metadata["namespace"]
+    end
+
+    test "start_container creates service, middlewares, and ingressroute for a routed handle" do
+      handle = OpenStruct.new(
+        pod_name: "my-pod",
+        namespace: "default",
+        container_name: "main",
+        service_name: "my-pod",
+        ingress_name: "my-pod-ingress",
+        middleware_names: [ "my-pod-tty-strip", "my-pod-fs-strip" ],
+        route_token: "abc123",
+        service_ports: [ 7681, 4040 ]
+      )
+
+      created_service = nil
+      core_mock = mock("core_client")
+      core_mock.expects(:create_service).with do |service|
+        created_service = service
+        true
+      end.returns(true)
+
+      created_entities = []
+      traefik_mock = mock("traefik_client")
+      # Auth middleware already present in the namespace -> no create for it.
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "default").returns(true)
+      traefik_mock.expects(:create_entity).times(3).with do |kind, resource_type, resource|
+        created_entities << [ kind, resource_type, resource ]
+        true
+      end.returns(true)
+
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      result = @runtime.start_container(handle)
+
+      assert_equal handle, result
+
+      spec = created_service.spec.respond_to?(:to_h) ? created_service.spec.to_h : created_service.spec
+      ports = Array(spec[:ports] || spec["ports"]).map { |port| port.respond_to?(:to_h) ? port.to_h : port }
+      assert_equal [ 7681, 4040 ], ports.map { |port| port[:port] || port["port"] }
+      assert_equal [ 7681, 4040 ], ports.map { |port| port[:targetPort] || port["targetPort"] }
+
+      assert_equal [ "Middleware", "Middleware", "IngressRoute" ], created_entities.map(&:first)
+      assert_equal [ "middlewares", "middlewares", "ingressroutes" ], created_entities.map { |entity| entity[1] }
+    end
+
+    test "remove_container tears down ingressroute, middlewares, service, and pod" do
+      handle = OpenStruct.new(
+        pod_name: "my-pod",
+        namespace: "default",
+        service_name: "my-pod",
+        ingress_name: "my-pod-ingress",
+        middleware_names: [ "my-pod-tty-strip", "my-pod-fs-strip" ]
+      )
+
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:delete_entity).with("ingressroutes", "my-pod-ingress", "default")
+      traefik_mock.expects(:delete_entity).with("middlewares", "my-pod-tty-strip", "default")
+      traefik_mock.expects(:delete_entity).with("middlewares", "my-pod-fs-strip", "default")
+
+      core_mock = mock("core_client")
+      core_mock.expects(:delete_service).with("my-pod", "default")
+      core_mock.expects(:delete_pod).with("my-pod", "default").returns(:pod_deleted)
+
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      result = @runtime.remove_container(handle)
+
+      assert_equal :pod_deleted, result
+    end
+
     private
 
     def build_test_tar(filename, content)

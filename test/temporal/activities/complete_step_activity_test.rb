@@ -104,6 +104,89 @@ module Activities
         assert_equal "quota_exceeded", @run.failure_reason
         assert_nil @run.failed_agent_credential_id
       end
+
+      # --- success path ---
+
+      test "completes step with no output specs and no assets" do
+        session = create(:terminal_session, :collected,
+          user: @user,
+          agent_type: "claude_code",
+          session_type: :workflow_step)
+        step_run = create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["valid"]
+        assert_nil result["failed"]
+        assert_nil result["quota_error"]
+        assert_equal step_run.id, result["step_run_id"]
+        assert_equal @step.id, result["step_id"]
+        assert_equal @run.id, result["workflow_run_id"]
+        assert_equal 0, result["assets_collected"]
+
+        step_run.reload
+        assert_equal "completed", step_run.state
+        assert_not_nil step_run.completed_at
+        assert_nil step_run.error_message
+
+        @run.reload
+        assert_nil @run.failure_reason
+      end
+
+      test "completes step and counts produced assets" do
+        session = create(:terminal_session, :collected,
+          user: @user,
+          agent_type: "claude_code",
+          session_type: :workflow_step)
+        step_run = create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: session)
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: step_run, name: "one.md")
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: step_run, name: "two.md")
+        # Asset produced by a different step must not be counted.
+        other_step_run = create(:step_run, workflow_run: @run, step: @step)
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: other_step_run, name: "other.md")
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["valid"]
+        assert_equal 2, result["assets_collected"]
+
+        step_run.reload
+        assert_equal "completed", step_run.state
+      end
+
+      test "completes step when output_asset_specs are satisfied" do
+        step = create(:step, workflow: @workflow,
+          output_asset_specs: [ { "name" => "report.md", "required" => true } ])
+        session = create(:terminal_session, :collected,
+          user: @user,
+          agent_type: "claude_code",
+          session_type: :workflow_step)
+        step_run = create(:step_run, :running, workflow_run: @run, step: step, terminal_session: session)
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: step_run, name: "report.md")
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["valid"]
+        assert_nil result["validation_errors"]
+        assert_equal 1, result["assets_collected"]
+
+        step_run.reload
+        assert_equal "completed", step_run.state
+      end
+
+      test "completes step when there is no terminal session" do
+        step_run = create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: nil)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["valid"]
+        assert_nil result["failed"]
+        assert_equal 0, result["assets_collected"]
+
+        step_run.reload
+        assert_equal "completed", step_run.state
+        assert_not_nil step_run.completed_at
+      end
     end
   end
 end
