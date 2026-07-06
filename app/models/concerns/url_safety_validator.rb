@@ -87,10 +87,19 @@ module UrlSafetyValidator
     Array(raw).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
   end
 
+  # Check both the system resolver and a public DNS resolver to defend against
+  # DNS rebinding: an attacker can arrange for the system resolver to return a
+  # public IP at validation time, then serve a private IP at request time.
+  # Rejecting the hostname when either resolver returns a private address closes
+  # that window.
   def resolved_to_private?(hostname)
-    Resolv.getaddresses(hostname).any? do |addr|
+    system_addrs = Resolv.getaddresses(hostname)
+    public_ip    = resolve_public_ipv4(hostname)
+    (system_addrs + [public_ip]).compact.uniq.any? do |addr|
       ip = IPAddr.new(addr)
       ip.private? || ip.loopback? || ip.link_local?
+    rescue IPAddr::InvalidAddressError
+      false
     end
   rescue Resolv::ResolvError
     false

@@ -2,6 +2,10 @@
 
 # Shared encryption logic for models that store encrypted data.
 # Include and define #encryption_key_setting to return the raw key string.
+#
+# Key derivation: HKDF-SHA256 (RFC 5869) with a versioned salt so any future
+# KDF migration can be identified by changing the salt string.
+# Run db/migrate/*_recrypt_encryptable_fields.rb before deploying this change.
 module Encryptable
   extend ActiveSupport::Concern
 
@@ -13,10 +17,9 @@ module Encryptable
 
   def derived_encryption_key
     raw = encryption_key_setting.to_s
-    if raw.bytesize < 32
-      Rails.logger.warn("[Encryptable] #{self.class.name} encryption key is shorter than 32 bytes — padded with zeros")
-    end
-    raw.ljust(32, "0")[0..31]
+    raise ArgumentError, "[Encryptable] #{self.class.name} encryption key is not set" if raw.blank?
+
+    OpenSSL::KDF.hkdf(raw, salt: "aixle-encryptable-v2", info: self.class.name, length: 32, hash: "SHA256")
   end
 
   def encryption_key_setting

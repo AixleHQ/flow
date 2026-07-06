@@ -19,6 +19,8 @@ module Aixle
     config.secret_key_base = Settings.rails.secret_key_base
     config.public_file_server.enabled = true
 
+    config.middleware.use Rack::Attack
+
     # Set Sidekiq as the job processor
     # config.active_job.queue_adapter = :sidekiq
 

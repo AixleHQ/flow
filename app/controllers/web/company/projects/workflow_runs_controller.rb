@@ -52,9 +52,6 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     if run.persisted?
       redirect_to company_project_workflow_run_path(current_project, run)
     else
-      # WorkflowService.start returns an unsaved run when validation/start fails;
-      # redirecting to its (nil-id) path raised UrlGenerationError
-      # (Sentry PALAD-AI-RAILS-1W). Surface the errors and return to the launch page.
       redirect_back(
         fallback_location: company_project_workflow_runs_path(current_project),
         inertia: { errors: run.errors },
@@ -100,7 +97,13 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def workflow_run_params
     permitted = params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, :requested_model, input_asset_ids: [], repository_ids: [])
-    permitted[:step_overrides] = params[:workflow_run][:step_overrides]&.to_unsafe_h || {}
+    # Validate step_overrides keys are integers rather than using to_unsafe_h which bypasses strong params
+    raw = params[:workflow_run][:step_overrides]
+    permitted[:step_overrides] = if raw.respond_to?(:to_unsafe_h)
+      raw.to_unsafe_h.transform_keys { |k| Integer(k) rescue nil }.compact
+    else
+      {}
+    end
     permitted
   end
 end

@@ -3,7 +3,11 @@ unless Rails.env.development?
     allow do
       origins do |source|
         uri = URI.parse(source)
-        uri.host == Settings.domain || uri.host.ends_with?(Settings.domain)
+        host = uri.host.to_s.downcase
+        # Require leading dot so "maliciousaixle.com" doesn't match when domain is "aixle.com"
+        host == Settings.domain || host.end_with?(".#{Settings.domain}")
+      rescue URI::InvalidURIError
+        false
       end
       resource "*", headers: :any, methods: [ :get, :post, :options, :put, :patch, :delete ], credentials: true
     end

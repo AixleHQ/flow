@@ -37,7 +37,8 @@ module Api
 
           # @summary Reorder steps within a project workflow
           def reorder
-            positions = params.require(:positions).to_unsafe_h
+            # permit! is intentional here: keys are step IDs (validated below as integers)
+            positions = params.require(:positions).permit!.to_h
             positions = positions.select { |k, v| k.match?(/\A\d+\z/) && v.to_s.match?(/\A\d+\z/) }
 
             ActiveRecord::Base.transaction do

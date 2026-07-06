@@ -10,6 +10,12 @@ class WorkflowRunAssetUploader < Shrine
 
   Attacher.validate do
     validate_max_size 1024 * 1024 * 1024, message: "is too large (max is 1 GB)"
+    validate_mime_type %w[
+      image/jpeg image/png image/gif image/webp image/svg+xml
+      application/pdf text/plain text/csv text/markdown
+      application/zip application/json application/octet-stream
+      text/x-python text/x-ruby application/javascript
+    ]
   end
 
   def generate_location(io, record: nil, **)

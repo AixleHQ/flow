@@ -8,13 +8,18 @@ class AssetUploader < Shrine
   plugin :pretty_location
   plugin :restore_cached_data
   plugin :cached_attachment_data
+  plugin :validation_helpers
 
   def url(id)
     "https://assets.example.com/#{id}"
   end
 
-  # Attacher.validate do
-  #   validate_max_size 10*1024*1024, message: 'is too large (max is 10 MB)'
-  #   validate_mime_type_inclusion ['image/jpeg', 'image/png', 'image/gif']
-  # end
+  Attacher.validate do
+    validate_max_size 100 * 1024 * 1024
+    validate_mime_type %w[
+      image/jpeg image/png image/gif image/webp image/svg+xml
+      application/pdf text/plain text/csv
+      application/zip application/json
+    ]
+  end
 end
