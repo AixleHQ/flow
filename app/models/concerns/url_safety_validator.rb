@@ -12,7 +12,6 @@
 # Or call individual predicates:
 #
 #   UrlSafetyValidator.safe?(url)
-#   UrlSafetyValidator.private_or_loopback?("10.0.0.1")
 module UrlSafetyValidator
   BLOCKED_HOSTS = %w[
     localhost
@@ -28,9 +27,7 @@ module UrlSafetyValidator
   # Returns an array of human-readable error messages for the given URL.
   # An empty array means the URL passes all safety checks.
   # Pass `require_https: true` to reject plain `http://` URLs.
-  # Pass `trusted_hosts_override:` to extend the trusted-host allowlist for
-  # a single call-site without weakening global URL validation.
-  def errors_for(url, require_https: false, trusted_hosts_override: nil)
+  def errors_for(url, require_https: false)
     raw = url.to_s
     return [ "is required" ] if raw.blank?
 
@@ -46,7 +43,7 @@ module UrlSafetyValidator
 
     host = uri.host.to_s.downcase
     errors << "cannot point to internal services" if BLOCKED_HOSTS.include?(host)
-    errors << "cannot point to private or internal network addresses" if blocked_address?(host, trusted_hosts_override: trusted_hosts_override)
+    errors << "cannot point to private or internal network addresses" if blocked_address?(host)
 
     errors
   end
@@ -65,38 +62,29 @@ module UrlSafetyValidator
     %w[http https].include?(uri.scheme)
   end
 
-  def private_or_loopback?(host)
-    return false if host.to_s.empty?
-
-    ip = IPAddr.new(host)
-    ip.private? || ip.loopback? || ip.link_local?
-  rescue IPAddr::InvalidAddressError
-    resolved_to_private?(host)
-  end
-
   # True when the host should be rejected as private/internal.
   #
   # Literal-IP hosts are always checked. For hostnames, the DNS-resolution
   # check is skipped when the host appears in `trusted_hosts` — this handles
   # split-horizon DNS where a public hostname (e.g. `coder.staging.aixle.com`)
   # resolves to a private IP from inside the cluster.
-  def blocked_address?(host, trusted_hosts_override: nil)
+  def blocked_address?(host)
     return false if host.to_s.empty?
 
     ip = IPAddr.new(host)
     ip.private? || ip.loopback? || ip.link_local?
   rescue IPAddr::InvalidAddressError
-    return false if trusted_host?(host, trusted_hosts_override: trusted_hosts_override)
+    return false if trusted_host?(host)
     resolved_to_private?(host)
   end
 
-  def trusted_host?(host, trusted_hosts_override: nil)
-    trusted_hosts(trusted_hosts_override).include?(host.to_s.downcase)
+  def trusted_host?(host)
+    trusted_hosts.include?(host.to_s.downcase)
   end
 
-  def trusted_hosts(extra_hosts = nil)
+  def trusted_hosts
     raw = Settings.respond_to?(:url_safety) ? Settings.url_safety&.trusted_hosts : nil
-    Array(raw).concat(Array(extra_hosts)).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
+    Array(raw).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
   end
 
   def resolved_to_private?(hostname)

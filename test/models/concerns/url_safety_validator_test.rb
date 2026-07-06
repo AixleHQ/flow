@@ -94,23 +94,6 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
-  # IPv6 SSRF protection — exercised via the predicate so the tests do
-  # not depend on URI's version-specific bracket handling of `uri.host`.
-  # ====================================================================
-
-  test "private_or_loopback? recognises IPv6 loopback" do
-    assert UrlSafetyValidator.private_or_loopback?("::1")
-  end
-
-  test "private_or_loopback? recognises IPv6 link-local" do
-    assert UrlSafetyValidator.private_or_loopback?("fe80::1")
-  end
-
-  test "private_or_loopback? accepts a public IPv6" do
-    refute UrlSafetyValidator.private_or_loopback?("2606:4700:4700::1111")
-  end
-
-  # ====================================================================
   # Hostname resolved to a private IP (Resolv fallback)
   # ====================================================================
 
@@ -158,13 +141,22 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
     assert_empty UrlSafetyValidator.errors_for("https://Coder.Staging.Aixle.Com")
   end
 
-  test "trusted_hosts_override allows a private-resolving host for a single call-site" do
+  test "trusted hosts allowlist comes from settings only" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "coder.coder.svc.cluster.local" ])
     Resolv.stubs(:getaddresses).with("coder.coder.svc.cluster.local").returns([ "10.0.0.5" ])
 
-    assert_empty UrlSafetyValidator.errors_for(
-      "http://coder.coder.svc.cluster.local",
-      trusted_hosts_override: [ "coder.coder.svc.cluster.local" ]
-    )
+    assert_empty UrlSafetyValidator.errors_for("http://coder.coder.svc.cluster.local")
+  end
+
+  test "trusted hostname is not blocked even when resolver returns internal addresses" do
+    UrlSafetyValidator.stubs(:trusted_hosts).returns([ "trusted.internal.example" ])
+    Resolv.stubs(:getaddresses).with("trusted.internal.example").returns([
+      "10.0.0.5",
+      "127.0.0.1",
+      "169.254.10.20"
+    ])
+
+    assert_empty UrlSafetyValidator.errors_for("https://trusted.internal.example")
   end
 
   test "trusted hosts allowlist does not bypass literal private IP" do

@@ -127,6 +127,7 @@ module Coder
         headers: { "Content-Type" => "application/json" }
       )
 
+      UrlSafetyValidator.stubs(:trusted_hosts).returns([ "coder.coder.svc.cluster.local" ])
       Resolv.stubs(:getaddresses).with("coder.coder.svc.cluster.local").returns([ "10.0.0.5" ])
 
       integration = Coder::IntegrationService.new(company: @company, connected_by: @user).create(
