@@ -32,6 +32,15 @@ end
 
 Capybara.server = :puma, { Silent: true }
 
+# CI runners (2-4 vCPU, CPU-throttled) parse+execute the ~720KB app bundle and mount React
+# far slower than bare metal — the FIRST page's mount routinely takes several seconds, past
+# Capybara's 2s default element wait, so the first `find`/`set` flakes "Unable to find field".
+# Give slow runners generous headroom (same signal vitest.config.ts uses: CI or inside Docker —
+# and system tests ALWAYS run in the container). The wait is only an upper bound: a fast mount
+# returns immediately, so this never slows a passing test — it only stops the cold-start flake.
+Capybara.default_max_wait_time =
+  ENV.fetch("CAPYBARA_MAX_WAIT") { ENV["CI"] || File.exist?("/.dockerenv") ? 20 : 2 }.to_f
+
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :cuprite_alpine
 end
