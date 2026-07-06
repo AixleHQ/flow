@@ -32,54 +32,6 @@ end
 
 Capybara.server = :puma, { Silent: true }
 
-# CI runners (2-4 vCPU, CPU-throttled) parse+execute the ~720KB app bundle and mount React
-# far slower than bare metal — the FIRST page's mount routinely takes several seconds, past
-# Capybara's 2s default element wait, so the first `find`/`set` flakes "Unable to find field".
-# Give slow runners generous headroom (same signal vitest.config.ts uses: CI or inside Docker —
-# and system tests ALWAYS run in the container). The wait is only an upper bound: a fast mount
-# returns immediately, so this never slows a passing test — it only stops the cold-start flake.
-Capybara.default_max_wait_time =
-  ENV.fetch("CAPYBARA_MAX_WAIT") { ENV["CI"] || File.exist?("/.dockerenv") ? 20 : 2 }.to_f
-
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :cuprite_alpine
-
-  # On a failing system test, dump enough to see WHY the SPA didn't render on the runner:
-  # empty #app vs 404'd JS chunks vs a wrong asset host. (This is exactly what surfaced the
-  # CDN-base bug — dynamic-import chunks 404ing against static.flow.aixle.com — behind an
-  # opaque "Unable to find field Email".) Runs BEFORE super, since Rails resets the Capybara
-  # session in after_teardown, so the browser must be inspected first. Silent on green.
-  def after_teardown
-    dump_system_diag unless passed?
-    super
-  end
-
-  def dump_system_diag
-    puts "\n===== SYSDIAG #{name} ====="
-    html = page.html.to_s
-    puts "URL: #{current_url}"
-    puts "HTML_LEN: #{html.length}  APP_EMPTY: #{html.include?('<div id="app"></div>')}"
-    puts "HAS_EMAIL_LABEL: #{html.include?(">Email<")}  HAS_INPUT: #{html.include?("<input")}"
-    traffic = begin
-      page.driver.browser.network.traffic
-    rescue StandardError
-      []
-    end
-    vite = traffic.select { |e| (e.request&.url).to_s.include?("/vite-") }
-    puts "VITE_REQUESTS(#{vite.size}):"
-    vite.first(20).each { |e| puts "  #{(e.response&.status) || 'PENDING'} #{e.request&.url}" }
-    console = begin
-      Array(page.driver.browser.options.logger&.instance_variable_get(:@messages))
-    rescue StandardError
-      []
-    end
-    fails = traffic.select { |e| s = e.response&.status; s.nil? || s.to_i >= 400 }
-    puts "NET_FAILURES(#{fails.size}):"
-    fails.first(20).each { |e| puts "  #{(e.response&.status) || 'nil'} #{e.request&.url}" }
-    puts "CONSOLE(#{console.size}): #{console.first(10).join(' | ')}" unless console.empty?
-  rescue StandardError => e
-    puts "SYSDIAG_ERR: #{e.class} #{e.message}"
-  ensure
-    puts "===== END SYSDIAG ====="
-  end
 end
