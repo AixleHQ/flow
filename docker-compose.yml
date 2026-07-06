@@ -3,6 +3,14 @@ x-web-volumes: &web-volumes
   - ~/.bash_history:/root/.bash_history
   - bundle_cache:/bundle_cache
   - ./docker/remote/db_dumps:/db_dumps:cached
+
+# Worker needs Docker socket access for container lifecycle management (docker-api gem).
+# Web does not — it uses kubeclient for k8s in production.
+x-worker-volumes: &worker-volumes
+  - .:/app:cached
+  - ~/.bash_history:/root/.bash_history
+  - bundle_cache:/bundle_cache
+  - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
 
 x-db-environment: &db-environment
@@ -105,7 +113,7 @@ services:
 
   worker:
     image: web
-    volumes: *web-volumes
+    volumes: *worker-volumes
     environment:
       <<: *web-environment
       TEMPORAL_ENABLED: 'true'

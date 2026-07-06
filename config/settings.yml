@@ -10,7 +10,7 @@ google_oauth:
   client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
 
 rails:
-  secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] || "secret" %>
+  secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] %>
   port: <%= ENV['RAILS_PORT'] || 4000 %>
 
 app:
@@ -46,10 +46,10 @@ redis:
 
 docs:
   login: <%= ENV['DOCS_LOGIN'] || 'user' %>
-  password: <%= ENV['DOCS_PASSWORD'] || 'password' %>
+  password: <%= ENV['DOCS_PASSWORD'] %>
 
 admin:
-  password: <%= ENV['ADMIN_PASSWORD'] || "adminpass" %>
+  password: <%= ENV['ADMIN_PASSWORD'] %>
   email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@aixle.com" %>
 
 aws:
@@ -81,9 +81,9 @@ temporal:
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
 
 encryption:
-  credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || "test secret key" %>
-  config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || "config items test key" %>
-  integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || "integrations test key" %>
+  credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] %>
+  config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] %>
+  integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] %>
 
 skills_sh:
   api_key: <%= ENV['SKILLS_SH_API_KEY'] %>

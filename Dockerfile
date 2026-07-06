@@ -72,4 +72,7 @@ RUN RAILS_SECRET_KEY_BASE=secret \
     VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
     rails assets:precompile
 
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+USER app
+
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

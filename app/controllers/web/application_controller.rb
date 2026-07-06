@@ -15,7 +15,6 @@ class Web::ApplicationController < ApplicationController
         env: Rails.env,
         domain: Settings.domain,
         github_app_slug: Settings.github.app_slug,
-        sentry_frontend_dsn: Settings.sentry.frontend_dsn,
         app_version: Settings.app.version
       }
     }

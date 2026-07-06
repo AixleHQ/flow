@@ -4,10 +4,9 @@ module ApplicationFormWithoutActiveRecord
   extend ActiveSupport::Concern
 
   included do
-    include ActiveModel::Validations
-    include ActiveModel::Conversion
+    include ActiveModel::Model
+    include ActiveModel::Attributes
     include ActiveModel::Serialization
-    include ::Virtus.model
   end
 
   def persisted?
