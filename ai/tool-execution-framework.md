@@ -12,8 +12,7 @@
 | Document | Description |
 |----------|-------------|
 | [Workflow Architecture](./workflow-architecture.md) | Workflow, Step, SubStep data model and execution flow |
-| [Epic 18: Internal Tools](./epics/epic-18-internal-tools.md) | Original internal tools epic (routing, seeds, handlers) |
-| [Architecture](./architecture.md) | Core architecture decisions, tech stack |
+| [Architecture](./architecture/index.md) | Core architecture decisions, tech stack |
 
 ---
 

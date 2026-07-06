@@ -2,6 +2,11 @@
 
 Guidance for AI agents working in this repository.
 
+## Documentation index
+
+`ai/index.md` is the index of all planning/architecture docs. Whenever you add,
+remove, or move a document under `ai/`, update `ai/index.md` in the same change.
+
 ## Before pushing a branch or opening/updating a PR
 
 **ALWAYS run the full check suite in Docker first, and only push once it is green:**

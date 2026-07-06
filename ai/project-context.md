@@ -401,11 +401,10 @@ test/
   factories/                            # FactoryBot factories
   playwright/                           # E2E test helpers
 
-ai/                                     # AI planning & architecture docs
+ai/                                     # AI planning & architecture docs (see ai/index.md)
   architecture/                         # Architecture decisions
-  epics/                                # Epic definitions
-  prd/                                  # Product requirements
-  implementation-artifacts/             # Sprint plans, status
+  research/                             # Technical research + design docs
+  specs/                                # Feature specs (frozen-intent format)
 ```
 
 ---

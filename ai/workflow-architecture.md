@@ -11,9 +11,7 @@
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](./architecture.md) | Core architecture decisions, tech stack |
-| [PRD](./prd.md) | Product Requirements Document |
-| [Implementation Notes](./implementation-notes.md) | Detailed implementation decisions |
+| [Architecture](./architecture/index.md) | Core architecture decisions, tech stack |
 
 ---
 

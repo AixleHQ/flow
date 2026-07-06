@@ -132,7 +132,7 @@ ContainerWorkflowService.start_agent_session(
 )
 ```
 
-**Documentation:** See `ai/epic-8-unified-container-architecture.md`
+**Documentation:** See `ai/tool-execution-framework.md` and `ai/architecture/index.md`
 
 ### State Machines (AASM)
 

@@ -11,7 +11,6 @@
   - [Frontend Architecture](./core-architectural-decisions.md#frontend-architecture)
   - [Infrastructure & Deployment](./core-architectural-decisions.md#infrastructure-deployment)
 - [Implementation Patterns & Consistency Rules](./implementation-patterns-consistency-rules.md)
-- [Project Structure & Boundaries](./project-structure-boundaries.md)
 
 ## Container Execution Architecture
 
@@ -95,12 +94,6 @@ Merge pattern: `Model.merged_for_project(project)` → internal + company + proj
 
 ## Other Architecture Docs
 
-- [Container Execution Framework (Epic 8)](./container-execution-framework-epic-8.md)
 - [Container Runtime: K8s Pods (Epic 14)](./container-runtime-k8s-pods.md)
 - [Container Service Refactoring v2](./container-service-refactoring-v2.md)
 - [Workflow System](./workflow-system.md)
-- [Architecture Status](./architecture-status.md)
-- [Implementation Updates (2026-01-23)](./implementation-updates-2026-01-23.md)
-- [Project Structure & Boundaries](./project-structure-boundaries.md)
-- [Architecture Validation Results](./architecture-validation-results.md)
-- [Architecture Completion Summary](./architecture-completion-summary.md)

@@ -12,7 +12,7 @@
 |----------|-------------|
 | [Workflow Architecture](./workflow-architecture.md) | Workflow, Steps, SubSteps, execution model |
 | [BMAD Structure Analysis](./BMAD-structure-description.md) | Why XML + config + critical notes work |
-| [Architecture](./architecture.md) | Core architecture decisions |
+| [Architecture](./architecture/index.md) | Core architecture decisions |
 
 ---
 

@@ -12,7 +12,7 @@
 |----------|-------------|
 | [Workflow Architecture](./workflow-architecture.md) | Workflow, Steps, SubSteps, execution model |
 | [Session Context Constructor](./session-context-constructor.md) | How context is assembled for agent sessions |
-| [Architecture](./architecture.md) | Core architecture decisions |
+| [Architecture](./architecture/index.md) | Core architecture decisions |
 
 ---
 

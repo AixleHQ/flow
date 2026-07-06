@@ -1,6 +1,6 @@
 # Workflow System
 
-> Full details: [Workflow Architecture](./workflow-architecture.md)
+> Full details: [Workflow Architecture](../workflow-architecture.md)
 
 ## Key Concepts
 
