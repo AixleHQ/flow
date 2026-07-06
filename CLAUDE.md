@@ -2,6 +2,11 @@
 
 Guidance for AI agents working in this repository.
 
+## Documentation index
+
+`docs/index.md` is the index of all architecture/design/research docs. Whenever you
+add, remove, or move a document under `docs/`, update `docs/index.md` in the same change.
+
 ## Before pushing a branch or opening/updating a PR
 
 **ALWAYS run the full check suite in Docker first, and only push once it is green:**
