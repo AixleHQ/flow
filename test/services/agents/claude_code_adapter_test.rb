@@ -84,7 +84,7 @@ module Agents
 
       assert_equal "sk-xxx", config["primaryApiKey"]
       assert_equal "u1", config["userID"]
-      assert_equal true, config["hasCompletedOnboarding"]
+      assert config["hasCompletedOnboarding"]
       assert_equal "2.1.14", config["lastOnboardingVersion"]
       assert config["projects"].present?
     end
@@ -223,8 +223,8 @@ module Agents
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       # skipDangerousModePermissionPrompt is the key Claude Code writes when the
       # user clicks through the warning; without it, bypassPermissions still blocks.
-      assert_equal true, settings["skipDangerousModePermissionPrompt"]
-      assert_equal true, settings["bypassPermissionsWarningAccepted"]
+      assert_equal true, settings["skipDangerousModePermissionPrompt"] # rubocop:disable Minitest/AssertTruthy
+      assert_equal true, settings["bypassPermissionsWarningAccepted"] # rubocop:disable Minitest/AssertTruthy
     end
 
     test "config_files defaults to bypassPermissions when mode is absent" do

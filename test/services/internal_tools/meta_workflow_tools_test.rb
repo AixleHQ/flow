@@ -191,7 +191,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
 
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
-    assert data["workflows_count"] >= 2
+    assert_operator data["workflows_count"], :>=, 2
     names = data["workflows"].map { |w| w["name"] }
     assert_includes names, "Project WF"
     assert_includes names, "Company WF"
@@ -321,6 +321,44 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "depend on it"
+  end
+
+  # ── meta_delete_workflow ──
+
+  test "meta_delete_workflow soft-deletes a project workflow and returns deleted: true" do
+    wf = create(:workflow, scope: @project, name: "Disposable WF")
+
+    result = InternalTools::MetaDeleteWorkflow.new(
+      params: { workflow_id: wf.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert data["deleted"]
+    assert_equal "Disposable WF", data["workflow_name"]
+
+    # Soft delete keeps the row but stamps deleted_at and drops it from the active scope
+    wf.reload
+    assert wf.deleted?
+    assert_not_nil wf.deleted_at
+    assert_not Workflow.active.exists?(wf.id)
+    assert Workflow.exists?(wf.id)
+  end
+
+  test "meta_delete_workflow soft-deletes a company-scoped workflow" do
+    wf = create(:workflow, scope: @company, name: "Company Disposable")
+
+    result = InternalTools::MetaDeleteWorkflow.new(
+      params: { workflow_id: wf.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert data["deleted"]
+    assert_equal "Company Disposable", data["workflow_name"]
+    assert wf.reload.deleted?
   end
 
   # ── context requirement ──

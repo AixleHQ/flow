@@ -59,6 +59,12 @@ module ContainerRuntime
       # No-op by default; overridden in DockerRuntime.
     end
 
+    # Resolve the pulled image's repo digest (for reproducibility pinning).
+    # Returns a digest String or nil. Docker-specific; nil by default.
+    def image_digest(_image)
+      nil
+    end
+
     # -- Execution ------------------------------------------------------------
 
     def exec(_id, _cmd, _opts = {})

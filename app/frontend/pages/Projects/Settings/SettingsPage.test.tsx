@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { notifications } from '@mantine/notifications';
+import { describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import SettingsPage from './SettingsPage';
 
@@ -267,5 +268,143 @@ describe('Projects/Settings/SettingsPage', () => {
       }),
       expect.objectContaining({ preserveScroll: true }),
     );
+  });
+
+  it('trims surrounding whitespace from the description before submitting', async () => {
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    const description = screen.getByLabelText('Description');
+    await userEvent.clear(description);
+    await userEvent.type(description, '  padded description  ');
+
+    const save = screen.getByRole('button', { name: 'Save Changes' });
+    await waitFor(() => expect(save).toBeEnabled());
+    await userEvent.click(save);
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/settings',
+      expect.objectContaining({ project: expect.objectContaining({ description: 'padded description' }) }),
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('shows a success notification when the settings patch resolves', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    const nameInput = screen.getByLabelText('Project Name');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Renamed Gateway');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    // The inert router mock never resolves, so drive the success path Inertia would have invoked.
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onSuccess?.());
+
+    expect(showSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Project settings saved', color: 'green' }),
+    );
+  });
+
+  it('shows an error notification when the settings patch fails', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    const nameInput = screen.getByLabelText('Project Name');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Renamed Gateway');
+    await userEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onError?.());
+
+    expect(showSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Failed to save settings', color: 'red' }));
+  });
+
+  it('notifies and returns to the projects list after the archive patch succeeds', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onSuccess?.());
+
+    expect(showSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Project archived', color: 'orange' }));
+    expect(router.visit).toHaveBeenCalledWith('/company/projects');
+  });
+
+  it('shows an error notification and stays put when the archive patch fails', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    const options = (router.patch as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onError?.());
+
+    expect(showSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Failed to archive project', color: 'red' }),
+    );
+    expect(router.visit).not.toHaveBeenCalled();
+  });
+
+  it('notifies and returns to the projects list after the delete succeeds', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete Project' }));
+
+    // router.delete(url, options) — the callbacks live in the second argument.
+    const options = (router.delete as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    act(() => options.onSuccess?.());
+
+    expect(showSpy).toHaveBeenCalledWith(expect.objectContaining({ message: 'Project deleted', color: 'red' }));
+    expect(router.visit).toHaveBeenCalledWith('/company/projects');
+  });
+
+  it('shows an error notification and stays put when the delete fails', async () => {
+    const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    renderAuthedPage(<SettingsPage />, { props: { project, members } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete Project' }));
+
+    const options = (router.delete as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    act(() => options.onError?.());
+
+    expect(showSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Failed to delete project', color: 'red' }),
+    );
+    expect(router.visit).not.toHaveBeenCalled();
+  });
+
+  it('renders an empty Description field when the project has no description', () => {
+    const noDescription = { ...project, description: null };
+    renderAuthedPage(<SettingsPage />, { props: { project: noDescription, members } });
+
+    expect(screen.getByLabelText('Description')).toHaveValue('');
+  });
+
+  it('defaults the Artifacts Language to English when the project has none set', () => {
+    const noLanguage = { ...project, preferredArtifactsLanguage: '' };
+    renderAuthedPage(<SettingsPage />, { props: { project: noLanguage, members } });
+
+    // The useForm fallback (preferredArtifactsLanguage || 'en') resolves to the English label.
+    expect(screen.getByDisplayValue('English')).toBeInTheDocument();
+  });
+
+  it('renders the Archived status badge for an archived project', () => {
+    const archived = { ...project, state: 'archived' };
+    renderAuthedPage(<SettingsPage />, { props: { project: archived, members } });
+
+    expect(screen.getByText('Archived')).toBeInTheDocument();
   });
 });

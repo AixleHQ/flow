@@ -34,3 +34,19 @@ on the host). If the container isn't running: `docker compose up -d`.
 - Backend tests: `docker compose exec -T web bin/rails test <files>`
 - Frontend tests: `docker compose exec -T web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
 - Full suite before push: `docker compose exec -T web make check_all`
+
+**Never run two backend test invocations at the same time** (including from another
+agent session or a git worktree — worktrees share the same Postgres and the same
+`aixle_test` database, so overlapping runs corrupt each other). `make`-driven runs
+are flock-serialized; direct `bin/rails test` runs are not — check nothing else is
+running first. Test parallelization is deliberately off — see the note in
+`test/test_helper.rb` before re-enabling.
+
+## Writing tests
+
+**Read `docs/testing.md` before writing or changing any test.** It defines what to test at
+which layer, the mocking rules (never stub the class under test; don't mock vendor gems —
+stub the app-owned adapter or its fake; no `any_instance`), test-data conventions, and the
+blessed seams/fakes. Parts of the doctrine are linter-enforced (custom `Testing/*` rubocop
+cops, `eslint-plugin-testing-library`); the frozen allowlists in `.rubocop.yml` and
+`eslint.config.js` only ever shrink — never add files to them.

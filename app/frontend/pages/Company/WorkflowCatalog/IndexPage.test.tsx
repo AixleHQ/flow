@@ -55,7 +55,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zzz');
 
     // The search value is debounced (300ms) before the empty state appears.
-    await waitFor(() => expect(screen.getByText('No workflows match your search')).toBeInTheDocument());
+    expect(await screen.findByText('No workflows match your search')).toBeInTheDocument();
   });
 
   it('opens the duplicate modal for the chosen workflow', async () => {
@@ -89,5 +89,102 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Duplicate' }));
 
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('filters by a description match even when the name does not match', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [
+          workflow({ id: 1, name: 'Onboarding Flow', description: 'Welcomes new teammates' }),
+          workflow({ id: 2, name: 'Release Pipeline', description: 'Ships builds' }),
+        ],
+        projects: [],
+      },
+    });
+
+    // "welcomes" matches only the first workflow's description, never a name.
+    await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'welcomes');
+
+    await waitFor(() => expect(screen.queryByText('Release Pipeline')).not.toBeInTheDocument());
+    expect(screen.getByText('Onboarding Flow')).toBeInTheDocument();
+  });
+
+  it('renders the publisher attribution only for workflows that have one', () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [
+          workflow({ id: 1, name: 'Onboarding Flow', publishedByName: 'Dana Ops' }),
+          workflow({ id: 2, name: 'Release Pipeline', publishedByName: null }),
+        ],
+        projects: [],
+      },
+    });
+
+    // Only the first card carries a "Published by …" line; the null-publisher card omits it.
+    const attributions = screen.getAllByText(/Published by/);
+    expect(attributions).toHaveLength(1);
+    expect(screen.getByText('Published by Dana Ops')).toBeInTheDocument();
+  });
+
+  it('posts the duplicate to the selected project once a project is chosen', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
+        projects: [{ id: 9, name: 'Mercury' }],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Duplicate to project' }));
+    const dialog = await screen.findByRole('dialog');
+
+    // Pick a project — the option renders in a portal, so query it at the document root.
+    await userEvent.click(within(dialog).getByPlaceholderText('Select project'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Mercury' }));
+
+    // Choosing a project enables the confirm button that was previously disabled.
+    const confirm = within(dialog).getByRole('button', { name: 'Duplicate' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+
+    await userEvent.click(confirm);
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/workflow_catalog/5/duplicate',
+      { project_id: '9' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onFinish: expect.any(Function) }),
+    );
+  });
+
+  it('closes the duplicate modal without posting when Cancel is clicked', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
+        projects: [{ id: 9, name: 'Mercury' }],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Duplicate to project' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('tells the user they have no projects instead of offering the project select', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
+        projects: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Duplicate to project' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText('You do not have access to any projects yet.')).toBeInTheDocument();
+    // No project picker is rendered, so the confirm stays disabled.
+    expect(within(dialog).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Duplicate' })).toBeDisabled();
   });
 });

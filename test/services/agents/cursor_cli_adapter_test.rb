@@ -93,8 +93,8 @@ module Agents
       assert files.key?("/home/cursor/.cursor/cli-config.json")
       cli_config = JSON.parse(files["/home/cursor/.cursor/cli-config.json"])
       assert_equal 1, cli_config["version"]
-      assert cli_config["permissions"]["allow"].include?("Shell(git)")
-      assert cli_config["permissions"]["deny"].include?("Shell(sudo)")
+      assert_includes cli_config["permissions"]["allow"], "Shell(git)"
+      assert_includes cli_config["permissions"]["deny"], "Shell(sudo)"
       assert cli_config.dig("network", "useHttp1ForAgent")
 
       # Workspace trust
@@ -152,6 +152,196 @@ module Agents
       ].map(&:to_json).join("\n")
 
       assert_empty @adapter.send(:build_rpc_windows, log)
+    end
+
+    # =========================================================================
+    # session_command
+    # =========================================================================
+
+    test "session_command returns agent --force without a model" do
+      assert_equal "agent --force", @adapter.session_command(mode: "interactive")
+      assert_equal "agent --force", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+    end
+
+    test "session_command appends a shell-escaped model flag when model provided" do
+      assert_equal "agent --force --model gpt-5.1", @adapter.session_command(mode: "interactive", model: "gpt-5.1")
+      # Space in the model name must be shell-escaped so it stays one argument.
+      assert_equal "agent --force --model claude\\ sonnet", @adapter.session_command(mode: "interactive", model: "claude sonnet")
+    end
+
+    # =========================================================================
+    # mcp_config
+    # =========================================================================
+
+    test "mcp_config emits mcp.json + pre-approvals for stdio and remote servers" do
+      company = create(:company)
+      stdio = create(:mcp_server, :stdio_transport,
+                     name: "playwright", command: "npx @playwright/mcp",
+                     args: [ "--headless" ], env: { "KEY" => "v" }, scope: company)
+      remote = create(:mcp_server, :with_headers,
+                      name: "context7", url: "https://mcp.context7.com/v1", scope: company)
+
+      result = @adapter.mcp_config([ stdio, remote ])
+
+      mcp = JSON.parse(result["/workspace/.cursor/mcp.json"])
+      servers = mcp["mcpServers"]
+
+      # stdio server: command/args/env, no url
+      assert_equal "npx @playwright/mcp", servers["playwright"]["command"]
+      assert_equal [ "--headless" ], servers["playwright"]["args"]
+      assert_equal({ "KEY" => "v" }, servers["playwright"]["env"])
+      refute servers["playwright"].key?("url")
+
+      # remote (sse) server: url + headers, no command
+      assert_equal "https://mcp.context7.com/v1", servers["context7"]["url"]
+      assert_equal({ "Authorization" => "Bearer test-token" }, servers["context7"]["headers"])
+      refute servers["context7"].key?("command")
+
+      # One pre-approval per server, "<name>-<16 hex>" (Cursor's approval hash).
+      approvals = JSON.parse(result["/home/cursor/.cursor/projects/workspace/mcp-approvals.json"])
+      assert_equal 2, approvals.size
+      assert(approvals.all? { |a| a.match?(/\A(playwright|context7)-[0-9a-f]{16}\z/) },
+             "approvals should be name-hash pairs, got #{approvals.inspect}")
+    end
+
+    # =========================================================================
+    # fetch_available_models
+    # =========================================================================
+
+    test "fetch_available_models parses the Cursor GetUsableModels response" do
+      body = {
+        "models" => [
+          { "modelId" => "claude-4-sonnet", "displayName" => "Claude 4 Sonnet", "description" => "Balanced" },
+          { "modelId" => "gpt-5", "displayName" => "GPT-5" },
+          { "displayName" => "no id, dropped" }
+        ]
+      }.to_json
+      stub_request(:post, CursorCliAdapter::CURSOR_MODELS_URL)
+        .to_return(status: 200, body: body, headers: { "Content-Type" => "application/json" })
+
+      models = @adapter.fetch_available_models({ "accessToken" => "tok-abc" })
+
+      assert_equal 2, models.size
+      assert_equal(
+        { model_id: "claude-4-sonnet", display_name: "Claude 4 Sonnet", description: "Balanced" },
+        models.first
+      )
+      # display_name falls back to the model id; description defaults to "".
+      assert_equal({ model_id: "gpt-5", display_name: "GPT-5", description: "" }, models.last)
+    end
+
+    test "fetch_available_models refreshes the token on 401 and persists the new one" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "stale", "refreshToken" => "refresh-1" })
+
+      models_body = { "models" => [ { "modelId" => "auto", "displayName" => "Auto" } ] }.to_json
+      stub_request(:post, CursorCliAdapter::CURSOR_MODELS_URL)
+        .to_return(status: 401, body: "")
+        .to_return(status: 200, body: models_body, headers: { "Content-Type" => "application/json" })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200,
+                   body: { "access_token" => "fresh-token", "refresh_token" => "refresh-2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      models = @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
+
+      assert_equal [ { model_id: "auto", display_name: "Auto", description: "" } ], models
+      # Refreshed credentials are persisted for the next session.
+      credential.reload
+      assert_equal "fresh-token", credential.config_data["accessToken"]
+      assert_equal "refresh-2", credential.config_data["refreshToken"]
+    end
+
+    # =========================================================================
+    # collect_usage — MITM RPC windows correlated with Dashboard API events
+    # =========================================================================
+
+    test "collect_usage correlates API events to RPC windows and persists a UsageStatistic" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      response_iso = "2026-05-21T19:32:31.000Z"
+      response_ms = @adapter.send(:parse_iso_to_epoch_ms, response_iso)
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" },
+        { ts: response_iso, direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" }
+      ].map(&:to_json).join("\n")
+
+      api_events = [
+        {
+          "timestamp" => (response_ms + 100).to_s,
+          "model" => "claude-4-sonnet",
+          "tokenUsage" => { "inputTokens" => 1000, "outputTokens" => 200,
+                            "cacheReadTokens" => 800, "cacheWriteTokens" => 50, "totalCents" => 3.5 }
+        },
+        {
+          "timestamp" => (response_ms + 200).to_s,
+          "model" => "gpt-5",
+          "tokenUsage" => { "inputTokens" => 500, "outputTokens" => 100, "totalCents" => 1.5 }
+        }
+      ]
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => api_events }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert stat, "UsageStatistic should be persisted"
+      assert_equal 1500, stat.input_tokens
+      assert_equal 300, stat.output_tokens
+      assert_equal 800, stat.cache_read_tokens
+      assert_equal 50, stat.cache_write_tokens
+      assert_equal BigDecimal("5.0"), stat.total_cents_precise
+      assert_equal 5, stat.cost_cents
+      assert_equal %w[claude-4-sonnet gpt-5].sort, stat.models.sort
+      assert_equal 2, stat.events_count
+      assert_equal 2, stat.events_data.size
+      assert_equal "cursor_api", stat.source
+
+      # Raw API result is stashed in session metadata for debugging.
+      api_result = session.metadata["usage_api_result"]
+      assert_equal 2, api_result["total_fetched"]
+      assert_equal 2, api_result["events"].size
+    end
+
+    test "collect_usage drops API events that fall outside every RPC window" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      response_iso = "2026-05-21T19:32:31.000Z"
+      response_ms = @adapter.send(:parse_iso_to_epoch_ms, response_iso)
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" },
+        { ts: response_iso, direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" }
+      ].map(&:to_json).join("\n")
+
+      api_events = [
+        { "timestamp" => (response_ms + 100).to_s, "model" => "in-window",
+          "tokenUsage" => { "inputTokens" => 10, "totalCents" => 0.1 } },
+        # 5s after the response — well past the 1s matching window, so it is ignored.
+        { "timestamp" => (response_ms + 5_000).to_s, "model" => "out-of-window",
+          "tokenUsage" => { "inputTokens" => 999, "totalCents" => 9.9 } }
+      ]
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => api_events }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert_equal 1, stat.events_count
+      assert_equal 10, stat.input_tokens
+      assert_equal [ "in-window" ], stat.models
     end
   end
 end

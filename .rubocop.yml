@@ -1,8 +1,136 @@
 # Omakase Ruby styling for Rails
 inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 
-# Overwrite or add rules to create your own house style
-#
-# # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
-# Layout/SpaceInsideArrayLiteralBrackets:
-#   Enabled: false
+plugins:
+  - rubocop-minitest
+  - rubocop-factory_bot
+
+# House testing-doctrine cops (see docs/testing.md)
+require:
+  - ./.rubocop/cops/testing/no_any_instance.rb
+  - ./.rubocop/cops/testing/no_vendor_stubbing.rb
+
+# Doctrine R6: no `any_instance` in new tests. The Exclude list below is the
+# pre-doctrine offender set, frozen on 2026-07-02 — it only ever shrinks.
+Testing/NoAnyInstance:
+  Include:
+    - "test/**/*"
+  Exclude:
+    - "test/controllers/admin/session_logs_controller_test.rb"
+    - "test/controllers/api/v1/authorization_enforcement_test.rb"
+    - "test/controllers/api/v1/projects/workflow_run_assets_controller_test.rb"
+    - "test/controllers/webhooks/slack_controller_test.rb"
+    - "test/services/asset_export_service_test.rb"
+    - "test/services/bmad_e2e_all_runtimes_test.rb"
+    - "test/services/bmad_method_injector_test.rb"
+    - "test/services/internal_tools/coder_tools_test.rb"
+    - "test/temporal/activities/cleanup_stale_sessions_activity_test.rb"
+    - "test/support/stub_support.rb" # legacy container fake — replaced by a real FakeRuntime in Phase 3
+
+# Doctrine R2: don't mock what you don't own. Frozen offender set, 2026-07-02.
+Testing/NoVendorStubbing:
+  Include:
+    - "test/**/*"
+  Exclude:
+    - "test/services/container_runtime/docker_runtime_test.rb"
+    - "test/services/temporal_service_test.rb"
+
+# Explicit opt-in to every pending cop of both plugins (keeps the run
+# warning-free without enabling pending cops of rubocop core).
+Minitest/AssertInDelta:
+  Enabled: true
+Minitest/AssertKindOf:
+  Enabled: true
+Minitest/AssertOperator:
+  Enabled: true
+Minitest/AssertOutput:
+  Enabled: true
+Minitest/AssertPathExists:
+  Enabled: true
+Minitest/AssertPredicate:
+  # Parked: 289-site restyle of existing assertions; `assert { }` via
+  # minitest-power_assert already gives rich failure output. Revisit in a
+  # quiet window together with EmptyLineBeforeAssertionMethods.
+  Enabled: false
+Minitest/AssertRaisesCompoundBody:
+  Enabled: true
+Minitest/AssertRaisesWithRegexpArgument:
+  Enabled: true
+Minitest/AssertSame:
+  Enabled: true
+Minitest/AssertSilent:
+  Enabled: true
+Minitest/AssertWithExpectedArgument:
+  # All local hits are the intentional failure-message idiom
+  # (`assert record.valid?, record.errors.full_messages.to_sentence`), which
+  # this heuristic cop misreads as a forgotten assert_equal.
+  Enabled: false
+Minitest/AssertionInLifecycleHook:
+  Enabled: true
+Minitest/DuplicateTestRun:
+  Enabled: true
+Minitest/EmptyLineBeforeAssertionMethods:
+  # Parked: enabling costs a 1189-site autocorrect across 200+ test files —
+  # pointless merge pain while test-touching branches are in flight. Candidate
+  # for a quiet-window enable + one-shot `rubocop -a`.
+  Enabled: false
+Minitest/Focus:
+  Enabled: true
+Minitest/LifecycleHooksOrder:
+  Enabled: true
+Minitest/LiteralAsActualArgument:
+  Enabled: true
+Minitest/MultipleAssertions:
+  # Doctrine prefers fewer, longer behavioral tests — an assertion-count cap
+  # fights that (see docs/testing.md, assertion style).
+  Enabled: false
+Minitest/NonExecutableTestMethod:
+  Enabled: true
+Minitest/NonPublicTestMethod:
+  Enabled: true
+Minitest/RedundantMessageArgument:
+  Enabled: true
+Minitest/RefuteInDelta:
+  Enabled: true
+Minitest/RefuteKindOf:
+  Enabled: true
+Minitest/RefuteOperator:
+  Enabled: true
+Minitest/RefutePathExists:
+  Enabled: true
+Minitest/RefutePredicate:
+  Enabled: true
+Minitest/RefuteSame:
+  Enabled: true
+Minitest/ReturnInTestMethod:
+  Enabled: true
+Minitest/SkipEnsure:
+  Enabled: true
+Minitest/SkipWithoutReason:
+  Enabled: true
+Minitest/TestFileName:
+  Enabled: true
+Minitest/TestMethodName:
+  Enabled: true
+Minitest/UnreachableAssertion:
+  Enabled: true
+Minitest/UnspecifiedException:
+  Enabled: true
+Minitest/UselessAssertion:
+  Enabled: true
+FactoryBot/AssociationStyle:
+  Enabled: true
+FactoryBot/ConsistentParenthesesStyle:
+  Enabled: true
+FactoryBot/ExcessiveCreateList:
+  Enabled: true
+FactoryBot/FactoryAssociationWithStrategy:
+  Enabled: true
+FactoryBot/FactoryNameStyle:
+  Enabled: true
+FactoryBot/IdSequence:
+  Enabled: true
+FactoryBot/RedundantFactoryOption:
+  Enabled: true
+FactoryBot/SyntaxMethods:
+  Enabled: true

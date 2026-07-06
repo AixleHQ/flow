@@ -44,7 +44,8 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
                          status: :active, connected_by: @user)
     repo = create(:repository, integration: integration, scope: @project)
     @session.repositories << repo
-    Github::TokenService.stubs(:new).returns(stub(generate_installation_token: "tok-123"))
+    fake_github = FakeGithub::TokenService.new(token: "tok-123")
+    Github::TokenService.stubs(:new).returns(fake_github)
     tool = Tool.shadow_for(Tools::Registry.fetch("list_sub_steps"))
     captured = nil
     InternalToolExecutor.stubs(:execute).with { |_t, params, _s, **| captured = params; true }
@@ -56,6 +57,7 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
     assert_equal "tok-123", captured["GITHUB_TOKEN"]
     assert_equal repo.source_branch, captured["BRANCH"]
     assert_nil captured["repository_id"]
+    assert fake_github.called?(:generate_installation_token)
   end
 
   test "unattached repository_id raises" do

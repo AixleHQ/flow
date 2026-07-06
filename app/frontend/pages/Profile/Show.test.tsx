@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { makeFormStub, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { makeFormStub, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { AgentCredential, SharedUser } from 'shared/ui';
 
@@ -269,5 +269,169 @@ describe('Profile/Show', () => {
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile), form });
 
     expect(screen.getByText('has already been taken')).toBeInTheDocument();
+  });
+
+  it('shows a client-side length error and does NOT submit when the display name exceeds 100 chars', async () => {
+    // isFormValid only checks length >= 2, so the button is enabled for a too-long name; the zod
+    // schema (max 100) then rejects it on submit, populating clientErrors and skipping the patch.
+    const longName = 'a'.repeat(101);
+    const form = pinForm(longName);
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile), form });
+
+    const save = screen.getByRole('button', { name: 'Save Changes' });
+    expect(save).toBeEnabled();
+
+    await userEvent.click(save);
+
+    expect(screen.getByText('Name must be less than 100 characters')).toBeInTheDocument();
+    expect(form.patch).not.toHaveBeenCalled();
+  });
+
+  it('enables MCP by posting to the regenerate-token route when MCP is disabled', async () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      mcp: { enabled: false, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    // Disabled state: primary CTA reads "Enable MCP" and there is no Disable action yet.
+    expect(screen.queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/MCP access is enabled/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Enable MCP' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/profile/regenerate_mcp_token',
+      {},
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('regenerates and disables the MCP token via the router when MCP is enabled', async () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      mcp: { enabled: true, lastUsedAt: '2026-03-01T12:00:00Z', serverUrl: 'http://localhost:4000/mcp', token: null },
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    // Enabled-without-token hint includes the last-used timestamp.
+    expect(screen.getByText(/MCP access is enabled/)).toHaveTextContent(/Last used/);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate token' }));
+    expect(router.post).toHaveBeenCalledWith(
+      '/profile/regenerate_mcp_token',
+      {},
+      expect.objectContaining({ preserveScroll: true }),
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Disable' }));
+    expect(router.delete).toHaveBeenCalledWith(
+      '/profile/disable_mcp_token',
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('shows the not-used-yet hint when MCP is enabled but has never been used', () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      mcp: { enabled: true, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    expect(screen.getByText(/MCP access is enabled/)).toHaveTextContent(/Not used yet/);
+  });
+
+  it('renders the one-time MCP token and the ready-to-paste Claude command when a token is present', () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      mcp: { enabled: true, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: 'mcp_tok_abc123' },
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    expect(screen.getByText('Your token — copy it now, it will not be shown again:')).toBeInTheDocument();
+    // The token renders on its own in a Code block…
+    expect(screen.getByText('mcp_tok_abc123')).toBeInTheDocument();
+    // …and is embedded in the copyable `claude mcp add` command with the server URL.
+    const command = screen.getByText(/claude mcp add aixle --transport http/);
+    expect(command).toHaveTextContent('http://localhost:4000/mcp');
+    expect(command).toHaveTextContent('Authorization: Bearer mcp_tok_abc123');
+    // With MCP already enabled the primary button rotates the token rather than enabling.
+    expect(screen.getByRole('button', { name: 'Regenerate token' })).toBeInTheDocument();
+  });
+
+  it('patches the default agent runtime when a different credential is selected', async () => {
+    const claude = buildCredential({ id: 100, agentType: 'claude_code' });
+    const cursor = buildCredential({ id: 200, agentType: 'cursor_cli' });
+    const profile = buildProfile({
+      configuredAgents: ['claude_code', 'cursor_cli'],
+      agentCredentials: [claude, cursor],
+      defaultAgentCredentialId: 100,
+    });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    // Scope to the runtime card (two+ credentials keep the Select enabled) and pick the other agent.
+    const runtimeCard = screen.getByText('Default Agent Runtime').closest('.mantine-Card-root') as HTMLElement;
+    const select = within(runtimeCard).getByRole('combobox');
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole('option', { name: 'Cursor CLI' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/profile',
+      { profile: { defaultAgentCredentialId: 200 } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('puts the chosen default model for a credential when a model is selected', async () => {
+    const credential = buildCredential({ id: 100, agentType: 'claude_code' }); // defaultModel null -> empty select
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    const props = {
+      ...baseProps(profile),
+      agentModels: [
+        {
+          agentType: 'claude_code',
+          models: [
+            { modelId: 'claude-sonnet-4-5', displayName: 'Claude Sonnet 4.5', description: 'Balanced' },
+            { modelId: 'claude-opus-4', displayName: 'Claude Opus 4', description: 'Deep reasoning' },
+          ],
+        },
+      ],
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    // The Default Models card has one row (one credential) -> a single combobox to disambiguate.
+    const modelsCard = screen.getByText('Default Models').closest('.mantine-Card-root') as HTMLElement;
+    const select = within(modelsCard).getByRole('combobox');
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole('option', { name: 'Claude Sonnet 4.5' }));
+
+    expect(router.put).toHaveBeenCalledWith(
+      '/profile/update_default_model',
+      { agentCredentialId: 100, defaultModel: 'claude-sonnet-4-5' },
+      expect.objectContaining({ preserveScroll: true, preserveState: true }),
+    );
+  });
+
+  it('opens the authentication modal and starts a terminal session when Re-authenticate is clicked', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const credential = buildCredential({ id: 400, agentType: 'claude_code' });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Re-authenticate' }));
+
+    // Modal renders titled for the agent and shows the pre-session loading state.
+    expect(await screen.findByText('Authenticate Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('Starting authentication session...')).toBeInTheDocument();
+
+    // Opening the modal kicks off a terminal-session create request (auth_setup, interactive).
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.objectContaining({ method: 'POST' })),
+    );
   });
 });

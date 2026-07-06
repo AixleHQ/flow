@@ -104,7 +104,7 @@ describe('SessionNewForm', () => {
     await user.click(screen.getByText('Codex'));
     await user.click(screen.getByRole('button', { name: /start session/i }));
 
-    await waitFor(() => expect(screen.getByText('Quota exceeded')).toBeInTheDocument());
+    expect(await screen.findByText('Quota exceeded')).toBeInTheDocument();
     expect(router.visit).not.toHaveBeenCalled();
 
     fetchSpy.mockRestore();

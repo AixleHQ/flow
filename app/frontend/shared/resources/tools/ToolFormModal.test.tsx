@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { ToolFormModal } from './ToolFormModal';
 
@@ -326,5 +326,186 @@ describe('ToolFormModal', () => {
     const download = screen.getByRole('link', { name: /download/i });
     expect(download).toHaveAttribute('href', 'https://example.test/data.bin');
     expect(screen.getByRole('button', { name: /replace/i })).toBeInTheDocument();
+  });
+
+  it('a valid create submit with a text file includes it in tool_files_attributes', async () => {
+    renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+
+    // Add a file with a valid /workspace/ path so it survives handleSubmit's path guard.
+    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    const path = screen.getByRole('textbox', { name: /^path$/i });
+    await userEvent.clear(path);
+    await userEvent.type(path, '/workspace/run.py');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    // No uploads → the JSON (non-FormData) branch: activeFiles are mapped into toolFilesAttributes.
+    // ToolFileEditor is stubbed and never emits onChange, so the file's content stays ''.
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/projects/1/tools',
+        expect.objectContaining({
+          tool: expect.objectContaining({
+            toolFilesAttributes: expect.arrayContaining([
+              expect.objectContaining({ path: '/workspace/run.py', content: '' }),
+            ]),
+          }),
+        }),
+        expect.any(Object),
+      ),
+    );
+    expect(router.patch).not.toHaveBeenCalled();
+  });
+
+  it('submitting an upload-mode file with no file selected is blocked and jumps to the Files tab', async () => {
+    renderPage(<ToolFormModal opened onClose={vi.fn()} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    // Valid basic fields so the only blocker is the missing upload.
+    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+
+    // Add a file (default /workspace/ path is valid), switch to Upload mode, select nothing.
+    await userEvent.click(screen.getByRole('tab', { name: /files \(0\)/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add file/i }));
+    await userEvent.click(screen.getByRole('radio', { name: /upload/i }));
+    expect(await screen.findByText(/click to select a file/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    // handleSubmit's uploadFileMissing guard bails: no request, tab forced to Files.
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /files \(1\)/i })).toHaveAttribute('aria-selected', 'true'),
+    );
+    expect(router.post).not.toHaveBeenCalled();
+    expect(router.patch).not.toHaveBeenCalled();
+  });
+
+  it('removing a saved file in edit mode marks it _destroy and Save submits the deletion', async () => {
+    const toolWithFiles = {
+      ...editTool,
+      toolFiles: [
+        {
+          id: 11,
+          path: '/workspace/run.py',
+          content: 'print(1)',
+          binary: false,
+          fileName: null,
+          fileUrl: null,
+        },
+      ],
+    };
+
+    renderPage(
+      <ToolFormModal
+        opened
+        onClose={vi.fn()}
+        editTool={toolWithFiles}
+        configItemNames={[]}
+        basePath="/projects/1/tools"
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('tab', { name: /files \(1\)/i }));
+
+    // The trash ActionIcon is the only text-less button in the file panel.
+    const panel = screen.getByRole('tabpanel');
+    const trash = within(panel)
+      .getAllByRole('button')
+      .find((b) => b.textContent === '');
+    await userEvent.click(trash as HTMLElement);
+
+    // A saved row (has id) is kept but hidden as _destroy → count drops and the empty message returns.
+    expect(screen.getByRole('tab', { name: /files \(0\)/i })).toBeInTheDocument();
+    expect(screen.getByText(/no files\. add files to mount into the container\./i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/1/tools/7',
+        expect.objectContaining({
+          tool: expect.objectContaining({
+            toolFilesAttributes: expect.arrayContaining([expect.objectContaining({ id: 11, _destroy: '1' })]),
+          }),
+        }),
+        expect.any(Object),
+      ),
+    );
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('selecting a config item includes it in the submit payload', async () => {
+    renderPage(
+      <ToolFormModal
+        opened
+        onClose={vi.fn()}
+        configItemNames={['OPENAI_API_KEY', 'DATABASE_URL']}
+        basePath="/projects/1/tools"
+      />,
+    );
+
+    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+
+    await userEvent.click(screen.getByRole('tab', { name: /config items/i }));
+    await userEvent.click(screen.getByPlaceholderText(/select config items\.\.\./i));
+    await userEvent.click(await screen.findByRole('option', { name: 'OPENAI_API_KEY' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/projects/1/tools',
+        expect.objectContaining({
+          tool: expect.objectContaining({ requiredConfigItems: ['OPENAI_API_KEY'] }),
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
+
+  it('closes the modal via the router onSuccess callback after a create submit', async () => {
+    const onClose = vi.fn();
+    renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+
+    // The inert router mock never resolves, so drive the success path Inertia would have invoked.
+    const options = (router.post as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onSuccess?.());
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('surfaces server-side field errors from the router onError callback', async () => {
+    const onClose = vi.fn();
+    renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: /^name$/i }), 'scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
+    await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+
+    // handleSubmit's onError maps each server error onto its matching form field via setFieldError.
+    const options = (router.post as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    act(() => options.onError?.({ displayName: 'has already been taken' }));
+
+    expect(await screen.findByText('has already been taken')).toBeInTheDocument();
+    // A rejected submit leaves the modal open.
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

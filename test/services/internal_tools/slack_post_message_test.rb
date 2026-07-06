@@ -22,6 +22,8 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "x")
     @step_run.update!(terminal_session: @session)
     @session.reload
+
+    stub_slack_client!
   end
 
   def run_tool(params)
@@ -29,64 +31,76 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
   end
 
   test "posts to the triggering channel/thread by default" do
-    Slack::Client.expects(:post_message)
-      .with(has_entries(token: "xoxb-1", channel: "C1", text: "hi", thread_ts: "111.2"))
-      .once.returns({ "ok" => true })
-
     result = run_tool(text: "hi")
     assert_equal 0, result[:exit_code]
+
+    assert_equal 1, fake_slack.posted_messages.size
+    msg = fake_slack.last_posted_message
+    assert_equal "xoxb-1", msg[:token]
+    assert_equal "C1", msg[:channel]
+    assert_equal "hi", msg[:text]
+    assert_equal "111.2", msg[:thread_ts]
   end
 
   test "uses an explicit channel and thread when provided" do
-    Slack::Client.expects(:post_message)
-      .with(has_entries(channel: "C2", thread_ts: "999"))
-      .once.returns({ "ok" => true })
-
     assert_equal 0, run_tool(text: "hi", channel: "C2", thread_ts: "999")[:exit_code]
+
+    assert_equal 1, fake_slack.posted_messages.size
+    msg = fake_slack.last_posted_message
+    assert_equal "C2", msg[:channel]
+    assert_equal "999", msg[:thread_ts]
   end
 
   test "errors when neither text nor files are given" do
-    Slack::Client.expects(:post_message).never
-    Slack::Client.expects(:upload_files).never
     result = run_tool(text: "")
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "text` and/or `files"
+
+    assert_empty fake_slack.posted_messages
+    assert_empty fake_slack.uploaded_files
   end
 
   test "sends text and a file as a single message via the upload flow" do
-    Slack::Client.expects(:upload_files)
-      .with(has_entries(token: "xoxb-1", channel: "C1", thread_ts: "111.2", initial_comment: "here you go",
-                        files: [ { filename: "fizzbuzz.rb", content: "puts 'Fizz'", title: nil } ]))
-      .once.returns({ "ok" => true })
-    Slack::Client.expects(:post_message).never
-
     result = run_tool(text: "here you go",
       files: [ { "filename" => "fizzbuzz.rb", "content" => "puts 'Fizz'" } ])
     assert_equal 0, result[:exit_code]
+
+    assert_equal 1, fake_slack.uploaded_files.size
+    upload = fake_slack.last_uploaded_files
+    assert_equal "xoxb-1", upload[:token]
+    assert_equal "C1", upload[:channel]
+    assert_equal "111.2", upload[:thread_ts]
+    assert_equal "here you go", upload[:initial_comment]
+    assert_equal [ { filename: "fizzbuzz.rb", content: "puts 'Fizz'", title: nil } ], upload[:files]
+
+    assert_empty fake_slack.posted_messages
   end
 
   test "can send files only, with no text" do
-    Slack::Client.expects(:upload_files)
-      .with(has_entries(initial_comment: nil, files: [ { filename: "a.txt", content: "x", title: nil } ]))
-      .once.returns({ "ok" => true })
-
     assert_equal 0, run_tool(files: [ { "filename" => "a.txt", "content" => "x" } ])[:exit_code]
+
+    assert_equal 1, fake_slack.uploaded_files.size
+    upload = fake_slack.last_uploaded_files
+    assert_nil upload[:initial_comment]
+    assert_equal [ { filename: "a.txt", content: "x", title: nil } ], upload[:files]
   end
 
   test "errors when the project has no active Slack integration" do
     @integration.update!(status: :inactive)
-    Slack::Client.expects(:post_message).never
     result = run_tool(text: "hi")
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "Slack is not connected"
+
+    assert_empty fake_slack.posted_messages
   end
 
   test "errors when no channel is given and the run did not come from Slack" do
     @workflow_run.update!(shared_context: {})
-    Slack::Client.expects(:post_message).never
     result = run_tool(text: "hi")
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "No channel"
+
+    assert_empty fake_slack.posted_messages
   end
 
   test "replies through the workspace that triggered the run (by integration_id)" do
@@ -97,10 +111,12 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
       "slack" => { "channel" => "C9", "thread_ts" => "9.9", "integration_id" => other.id }
     })
 
-    Slack::Client.expects(:post_message)
-      .with(has_entries(token: "xoxb-OTHER", channel: "C9", thread_ts: "9.9"))
-      .once.returns({ "ok" => true })
-
     assert_equal 0, run_tool(text: "hi")[:exit_code]
+
+    assert_equal 1, fake_slack.posted_messages.size
+    msg = fake_slack.last_posted_message
+    assert_equal "xoxb-OTHER", msg[:token]
+    assert_equal "C9", msg[:channel]
+    assert_equal "9.9", msg[:thread_ts]
   end
 end

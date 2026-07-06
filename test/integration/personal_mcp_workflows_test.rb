@@ -95,8 +95,9 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
   test "run control: approve / retry / skip delegate to WorkflowService" do
     run = @workflow.runs.create!(project: @project, user: @user, state: "running")
     sr = run.step_runs.create!(step: @workflow.steps.create!(name: "S", position: 1), state: "pending")
-    run.stubs(:current_step_run).returns(sr)
-    WorkflowRun.any_instance.stubs(:current_step_run).returns(sr)
+    # sr is the run's only pending step_run, so the real WorkflowRun#current_step_run
+    # (state IN pending/running/waiting_input, newest) resolves to it on the reloaded
+    # run the tool looks up — no stubbing of the class under test needed (R5/R6).
 
     WorkflowService.expects(:approve_step).with(step_run: sr)
     assert_not error?(call_tool("approve_step_run", { project_id: @project.id, run_id: run.id }))

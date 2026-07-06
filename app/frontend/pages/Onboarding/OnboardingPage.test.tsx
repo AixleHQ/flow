@@ -364,6 +364,138 @@ describe('Onboarding/OnboardingPage', () => {
     );
   });
 
+  it('advances from the profile step after choosing a position and language in the selects', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
+    });
+
+    // Open the (empty) Position select and pick an option — drives handlePositionChange.
+    await userEvent.click(screen.getByRole('combobox', { name: /Your Position/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Developer' }));
+
+    // Open the searchable Language select and pick an option — drives handleLanguageChange.
+    await userEvent.click(screen.getByRole('combobox', { name: /Preferred Agent Language/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'English' }));
+
+    // Both fields now satisfy canAdvanceStep1, so Continue submits the chosen values.
+    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/onboarding',
+        expect.objectContaining({
+          onboarding: expect.objectContaining({
+            position: 'dev',
+            preferredAgentLanguage: 'en',
+            onboardingStateEvent: 'go_next',
+          }),
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('clears the validation warning once a required field is chosen', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
+    });
+
+    // Submitting empty surfaces the warning...
+    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(screen.getByText(/Please fill in all required fields to continue/)).toBeInTheDocument();
+
+    // ...and picking a field clears it via setValidationWarning(null) in the change handler.
+    await userEvent.click(screen.getByRole('combobox', { name: /Your Position/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'QA Engineer' }));
+
+    expect(screen.queryByText(/Please fill in all required fields to continue/)).not.toBeInTheDocument();
+  });
+
+  it('deselecting a pre-selected agent auto-saves the emptied selection', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2', selectedAgents: ['claude_code'] as AgentType[] }),
+        authSessions: [],
+      },
+    });
+
+    // The agent starts selected; clicking its card toggles it off (the untested filter branch).
+    await userEvent.click(screen.getByText('Claude Code'));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/onboarding',
+        expect.objectContaining({ onboarding: expect.objectContaining({ selectedAgents: [] as AgentType[] }) }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('advances the authenticate step with go_next when Continue is clicked', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({
+          onboardingState: 'step3',
+          selectedAgents: ['claude_code'] as AgentType[],
+          configuredAgents: ['claude_code'] as AgentType[],
+        }),
+        authSessions: [],
+      },
+    });
+
+    // Continue is enabled once at least one agent is configured; it walks the state machine forward.
+    await userEvent.click(screen.getByRole('button', { name: /Continue \(1\/1\)/ }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/onboarding',
+      expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'go_next' }) }),
+      expect.anything(),
+    );
+  });
+
+  it('shows the failure panel and retries session creation when an auth session failed', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({
+          onboardingState: 'step3',
+          selectedAgents: ['claude_code'] as AgentType[],
+          configuredAgents: [],
+        }),
+        authSessions: [buildTerminalSession({ agentType: 'claude_code', state: 'failed' })],
+      },
+    });
+
+    // Selecting the failed agent mounts its terminal, which renders the failed branch.
+    await userEvent.click(screen.getByText('Claude Code'));
+    expect(await screen.findByText('Authentication session failed to start.')).toBeInTheDocument();
+
+    // Retry POSTs a fresh session (apiFetch → mocked fetch resolves 200) then reloads authSessions.
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['authSessions'] }));
+  });
+
+  it('renders the ttyd terminal iframe for a ready auth session', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({
+          onboardingState: 'step3',
+          selectedAgents: ['claude_code'] as AgentType[],
+          configuredAgents: [],
+        }),
+        authSessions: [
+          buildTerminalSession({ agentType: 'claude_code', state: 'ready', websocketUrl: 'wss://term.example/ws' }),
+        ],
+      },
+    });
+
+    // A ready session with a websocket URL renders the embedded ttyd terminal iframe.
+    await userEvent.click(screen.getByText('Claude Code'));
+
+    expect(await screen.findByTitle('Agent Authentication Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
+  });
+
   describe('viewer (read-only client) onboarding', () => {
     const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser => userAt({ role: 'viewer', ...overrides });
 

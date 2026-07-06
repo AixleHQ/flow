@@ -8,7 +8,6 @@ module Activities
       setup do
         @company = create(:company)
         @user = create(:user, :admin, company: @company)
-        @activity = ScanQuotaErrorsActivity.new
         @runtime_mock = mock("runtime")
         ContainerRuntime.stubs(:build).returns(@runtime_mock)
         @runtime_mock.stubs(:resolve_container).returns(nil)
@@ -28,7 +27,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Credit balance too low · Add funds: https://platform.claude.com/settings/billing")
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -54,7 +53,7 @@ module Activities
           0
         ])
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -84,7 +83,7 @@ module Activities
           0
         ])
 
-        @activity.run
+        run_activity(ScanQuotaErrorsActivity)
 
         session.reload
         assert_equal "Credit balance too low · Add funds: https://platform.claude.com/settings/billing",
@@ -112,7 +111,7 @@ module Activities
           0
         ])
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 1, result[:cleaned]
         session.reload
@@ -127,7 +126,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Connection refused")
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -141,7 +140,7 @@ module Activities
           started_at: 30.seconds.ago,
           error_message: "Credit balance too low")
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -156,7 +155,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "Credit balance too low")
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -170,7 +169,7 @@ module Activities
           started_at: 3.minutes.ago,
           error_message: "insufficient_quota")
 
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
 
         assert_equal 0, result[:cleaned]
         session.reload
@@ -178,7 +177,7 @@ module Activities
       end
 
       test "returns cleaned count of 0 when no candidate sessions exist" do
-        result = @activity.run
+        result = run_activity(ScanQuotaErrorsActivity)
         assert_equal 0, result[:cleaned]
       end
     end

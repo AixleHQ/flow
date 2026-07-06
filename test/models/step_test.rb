@@ -81,7 +81,7 @@ class StepTest < ActiveSupport::TestCase
     create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
 
     result = step_a.destroy
-    assert_equal false, result
+    refute result
     assert step_a.errors[:base].any?
     assert Step.exists?(step_a.id)
   end

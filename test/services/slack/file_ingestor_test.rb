@@ -12,6 +12,7 @@ module Slack
         name: "Acme", status: :active
       )
       @integration.update!(credentials_data: { "bot_token" => "xoxb-1", "team_id" => "T1" })
+      stub_slack_client!
     end
 
     def ingestor
@@ -23,7 +24,7 @@ module Slack
     end
 
     test "downloads a file with the bot token and stores it as a project asset" do
-      Slack::Client.expects(:download_file).with(has_entries(token: "xoxb-1")).returns("PDFBYTES")
+      fake_slack.file_body = "PDFBYTES"
 
       ids = nil
       assert_difference -> { Asset.count } => 1, -> { AssetVersion.count } => 1 do
@@ -36,24 +37,28 @@ module Slack
       assert_equal @user, asset.created_by
       assert_equal "spec.pdf", asset.name
       assert asset.versions.first.slack?
+      assert_equal "xoxb-1", fake_slack.last_download[:token]
     end
 
     test "skips files over the size cap without downloading" do
-      Slack::Client.expects(:download_file).never
       assert_no_difference -> { Asset.count } do
         assert_equal [], ingestor.ingest([ file(size: 60 * 1024 * 1024) ])
       end
+      assert_equal [], fake_slack.downloads
     end
 
     test "skips a file whose download fails and keeps the rest" do
-      Slack::Client.stubs(:download_file).raises(Slack::Client::Error.new("file_not_found")).then.returns("OK")
+      # Per-file error injection (first download raises, second succeeds) — a
+      # sequence the canonical fake cannot express, so we drive it through the
+      # fake's own download_file while still routing Slack::Client via the seam.
+      fake_slack.stubs(:download_file).raises(Slack::Client::Error.new("file_not_found")).then.returns("OK")
 
       ids = ingestor.ingest([ file(id: "F1", name: "bad.txt"), file(id: "F2", name: "good.txt") ])
       assert_equal 1, ids.size
     end
 
     test "disambiguates a clashing asset name across messages" do
-      Slack::Client.stubs(:download_file).returns("BYTES")
+      fake_slack.file_body = "BYTES"
 
       first = ingestor.ingest([ file(id: "F1", name: "dup.txt") ])
       second = ingestor.ingest([ file(id: "F2", name: "dup.txt") ])
@@ -63,14 +68,14 @@ module Slack
     end
 
     test "skips a file whose URL is not a Slack host (SSRF guard)" do
-      Slack::Client.expects(:download_file).never
       assert_equal [], ingestor.ingest([ file(url: "https://169.254.169.254/latest/meta-data") ])
+      assert_equal [], fake_slack.downloads
     end
 
     test "returns [] when the install has no bot token" do
       @integration.update!(credentials_data: {})
-      Slack::Client.expects(:download_file).never
       assert_equal [], ingestor.ingest([ file ])
+      assert_equal [], fake_slack.downloads
     end
   end
 end

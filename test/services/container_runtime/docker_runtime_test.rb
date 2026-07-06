@@ -34,7 +34,7 @@ module ContainerRuntime
 
       assert_equal :pulled, result[:status]
       assert_equal "alpine:latest", result[:image]
-      assert result[:duration_seconds].is_a?(Integer)
+      assert_kind_of Integer, result[:duration_seconds]
     end
 
     test "create_container builds config from spec" do
@@ -153,6 +153,142 @@ module ContainerRuntime
 
       @runtime.remove_image("")
       @runtime.remove_image(nil)
+    end
+
+    test "start_container resolves, starts and returns the container" do
+      container_mock = mock("container")
+      container_mock.expects(:start)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      result = @runtime.start_container("cid")
+
+      assert_equal container_mock, result
+    end
+
+    test "exec resolves the container and returns its exec result" do
+      container_mock = mock("container")
+      container_mock.expects(:exec).with([ "echo", "hi" ], {}).returns([ [ "hi\n" ], [], 0 ])
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      result = @runtime.exec("cid", [ "echo", "hi" ])
+
+      assert_equal [ [ "hi\n" ], [], 0 ], result
+    end
+
+    test "read_file extracts the file body matching basename from the tar archive" do
+      tar_bytes = build_test_tar("tmp/hello.txt", "file body")
+      container_mock = mock("container")
+      container_mock.stubs(:archive_out).with("/tmp/hello.txt").yields(tar_bytes)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal "file body", @runtime.read_file("cid", "/tmp/hello.txt")
+    end
+
+    test "read_file returns nil when the requested file is absent from the tar" do
+      tar_bytes = build_test_tar("tmp/other.txt", "unrelated")
+      container_mock = mock("container")
+      container_mock.stubs(:archive_out).with("/tmp/hello.txt").yields(tar_bytes)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_nil @runtime.read_file("cid", "/tmp/hello.txt")
+    end
+
+    test "wait_container waits with the default timeout and returns the wait result" do
+      container_mock = mock("container")
+      container_mock.expects(:wait).with(1800).returns({ "StatusCode" => 0 })
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal({ "StatusCode" => 0 }, @runtime.wait_container("cid"))
+    end
+
+    test "wait_container passes an explicit timeout through to the container" do
+      container_mock = mock("container")
+      container_mock.expects(:wait).with(5).returns({ "StatusCode" => 137 })
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal({ "StatusCode" => 137 }, @runtime.wait_container("cid", 5))
+    end
+
+    test "container_logs demultiplexes stdout and stderr frames" do
+      container_mock = mock("container")
+      container_mock.stubs(:logs).with(stdout: true, stderr: false).returns(docker_log_frame("out\n"))
+      container_mock.stubs(:logs).with(stdout: false, stderr: true).returns(docker_log_frame("err\n"))
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      result = @runtime.container_logs("cid")
+
+      assert_equal "out\n", result[:stdout]
+      assert_equal "err\n", result[:stderr]
+    end
+
+    test "container_logs concatenates multiple demuxed frames on the same stream" do
+      framed = docker_log_frame("line1\n") + docker_log_frame("line2\n")
+      container_mock = mock("container")
+      container_mock.stubs(:logs).with(stdout: true, stderr: false).returns(framed)
+      container_mock.stubs(:logs).with(stdout: false, stderr: true).returns("")
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      result = @runtime.container_logs("cid")
+
+      assert_equal "line1\nline2\n", result[:stdout]
+      assert_equal "", result[:stderr]
+    end
+
+    test "remove_image gets and force-removes the image when present" do
+      docker_image = mock("image")
+      docker_image.expects(:remove).with(force: true)
+      Docker::Image.stubs(:get).with("alpine:latest").returns(docker_image)
+
+      @runtime.remove_image("alpine:latest")
+    end
+
+    test "image_digest returns the first repo digest" do
+      image_mock = mock("image")
+      image_mock.stubs(:info).returns({ "RepoDigests" => [ "alpine@sha256:abc", "alpine@sha256:def" ] })
+      Docker::Image.stubs(:get).with("alpine:latest").returns(image_mock)
+
+      assert_equal "alpine@sha256:abc", @runtime.image_digest("alpine:latest")
+    end
+
+    test "image_digest returns nil when image blank" do
+      Docker::Image.expects(:get).never
+
+      assert_nil @runtime.image_digest("")
+      assert_nil @runtime.image_digest(nil)
+    end
+
+    test "wait_for_ready returns true when container is running with no ports and no traffic route" do
+      container_mock = mock("container")
+      container_mock.stubs(:refresh!)
+      container_mock.stubs(:json).returns("State" => { "Running" => true }, "Name" => "/worker-1")
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert @runtime.wait_for_ready("cid")
+    end
+
+    test "container_identifier falls back to to_s when id is not a usable string" do
+      container_mock = mock("container")
+      container_mock.stubs(:id).returns(nil)
+      container_mock.stubs(:to_s).returns("Custom#123")
+
+      assert_equal "Custom#123", @runtime.container_identifier(container_mock)
+    end
+
+    private
+
+    def build_test_tar(filename, content)
+      io = StringIO.new
+      io.binmode
+      Gem::Package::TarWriter.new(io) do |tar|
+        tar.add_file_simple(filename, 0o644, content.bytesize) { |f| f.write(content) }
+      end
+      io.string
+    end
+
+    # Frame a payload the way Docker's multiplexed log stream does:
+    # 8-byte header [stream_type(1) | padding(3) | size(4 big-endian)] then payload.
+    def docker_log_frame(payload, stream_type: 1)
+      [ stream_type, 0, 0, 0 ].pack("C4") + [ payload.bytesize ].pack("N") + payload
     end
   end
 end

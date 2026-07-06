@@ -3,48 +3,63 @@
 require "test_helper"
 
 module Workflows
+  # Runs the real workflow end to end through the SDK time-skipping WorkflowEnvironment
+  # (docs/testing.md §2 Temporal-workflow target) with a fake activity registered on the
+  # worker — instead of stubbing execute_activity on the instance. Time-skipping fast-
+  # forwards retry backoff, so the retry-policy behavior is exercised without real waits.
   class StaleSessionCleanupWorkflowTest < ActiveSupport::TestCase
+    TASK_QUEUE = "stale-session-cleanup-test"
+
+    # Fake stand-in for Activities::Session::CleanupStaleActivity, registered on the
+    # worker under the real activity name the workflow dispatches to.
+    class FakeCleanupActivity < Temporalio::Activity::Definition
+      activity_name "session_cleanup_stale_activity"
+      def execute(_input = nil)
+        { cleaned_running: 2, cleaned_ready: 1 }
+      end
+    end
+
+    # Fails on the first attempt, succeeds on the second — proves the retry policy.
+    class FlakyCleanupActivity < Temporalio::Activity::Definition
+      activity_name "session_cleanup_stale_activity"
+      @attempts = 0
+      class << self
+        attr_accessor :attempts
+      end
+      def execute(_input = nil)
+        self.class.attempts += 1
+        raise "transient failure" if self.class.attempts < 2
+
+        { cleaned_running: 0, cleaned_ready: 0 }
+      end
+    end
+
     setup do
-      @workflow = StaleSessionCleanupWorkflow.new
-
-      Rails.logger.stubs(:info)
-      Rails.logger.stubs(:warn)
-      Rails.logger.stubs(:error)
+      # The workflow resolves activities from the class-level registry proxy; point the
+      # one activity it calls at our test task queue.
+      proxy = Object.new
+      proxy.define_singleton_method(:session_cleanup_stale_activity) do
+        TemporalWorkflowHelper::ActivityRef.new("session_cleanup_stale_activity", TASK_QUEUE)
+      end
+      StaleSessionCleanupWorkflow.stubs(:_preloaded_activities).returns(proxy)
     end
 
-    test "executes cleanup activity and returns result" do
-      expected_result = { cleaned_running: 2, cleaned_ready: 1 }
+    test "executes the cleanup activity and returns its result" do
+      result = run_workflow(StaleSessionCleanupWorkflow,
+                            activities: [ FakeCleanupActivity.new ], task_queue: TASK_QUEUE)
 
-      activities = mock("activities")
-      activities.stubs(:session_cleanup_stale_activity).returns(:session_cleanup_stale_activity)
-
-      @workflow.stubs(:activities).returns(activities)
-      @workflow.stubs(:execute_activity)
-        .with(:session_cleanup_stale_activity, {}, has_entries(start_to_close_timeout: 300))
-        .returns(expected_result)
-
-      result = @workflow.run
-
-      assert_equal 2, result[:cleaned_running]
-      assert_equal 1, result[:cleaned_ready]
+      assert_equal 2, result["cleaned_running"]
+      assert_equal 1, result["cleaned_ready"]
     end
 
-    test "uses limited retry policy" do
-      activities = mock("activities")
-      activities.stubs(:session_cleanup_stale_activity).returns(:session_cleanup_stale_activity)
+    test "retries the activity under the max_attempts:2 policy (time-skips the backoff)" do
+      FlakyCleanupActivity.attempts = 0
 
-      @workflow.stubs(:activities).returns(activities)
+      result = run_workflow(StaleSessionCleanupWorkflow,
+                            activities: [ FlakyCleanupActivity.new ], task_queue: TASK_QUEUE)
 
-      retry_policy = nil
-      @workflow.stubs(:execute_activity).with do |_act, _input, opts|
-        retry_policy = opts[:retry_policy]
-        true
-      end.returns({})
-
-      @workflow.run
-
-      assert_instance_of Temporalio::RetryPolicy, retry_policy
-      assert_equal 2, retry_policy.max_attempts
+      assert_equal 2, FlakyCleanupActivity.attempts, "activity should be retried exactly once"
+      assert_equal 0, result["cleaned_running"]
     end
   end
 end

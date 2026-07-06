@@ -4,14 +4,14 @@ FactoryBot.define do
   factory :asset do
     sequence(:name) { |n| "asset-#{n}.md" }
     scope { nil }
-    association :created_by, factory: :user
+    created_by factory: %i[user]
 
     trait :with_company_scope do
-      association :scope, factory: :company
+      scope factory: %i[company]
     end
 
     trait :with_project_scope do
-      association :scope, factory: :project
+      scope factory: %i[project]
     end
 
     trait :public_asset do

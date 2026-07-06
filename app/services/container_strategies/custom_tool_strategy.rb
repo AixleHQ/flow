@@ -64,8 +64,7 @@ module ContainerStrategies
     def pin_image_digest!(tool)
       return if tool.docker_image_digest.present?
 
-      repo_digests = Docker::Image.get(tool.docker_image).info["RepoDigests"]
-      digest = Array(repo_digests).first
+      digest = runtime.image_digest(tool.docker_image)
       tool.update_columns(docker_image_digest: digest) if digest.present?
     rescue StandardError => e
       Rails.logger.warn("[CustomToolStrategy] image digest pin skipped for tool ##{tool.id}: #{e.message}")

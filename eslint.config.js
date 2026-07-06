@@ -7,6 +7,7 @@ import eslintPluginPrettier from 'eslint-plugin-prettier/recommended';
 import eslintPluginReact from 'eslint-plugin-react';
 import eslintPluginReactHooks from 'eslint-plugin-react-hooks';
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh';
+import eslintPluginTestingLibrary from 'eslint-plugin-testing-library';
 import globals from 'globals';
 import typescriptEslint from 'typescript-eslint';
 
@@ -83,6 +84,57 @@ export default typescriptEslint.config(
       'import/resolver': {
         typescript: createTypeScriptImportResolver(),
       },
+    },
+  },
+  // Testing doctrine for component/page tests (docs/testing.md, rule R8):
+  // query by role/label through Testing Library, never reach into the DOM or
+  // snapshot Mantine's hashed markup.
+  {
+    ...eslintPluginTestingLibrary.configs['flat/react'],
+    files: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
+  },
+  {
+    files: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        {
+          property: 'toMatchSnapshot',
+          message:
+            'Snapshot tests flap on every Mantine bump (hashed .m-* classes). Assert roles/text/behavior instead (docs/testing.md R8).',
+        },
+        {
+          property: 'toMatchInlineSnapshot',
+          message:
+            'Snapshot tests flap on every Mantine bump (hashed .m-* classes). Assert roles/text/behavior instead (docs/testing.md R8).',
+        },
+      ],
+    },
+  },
+  {
+    // Pre-doctrine offenders, frozen 2026-07-02 (64 querySelector sites) —
+    // this list only ever shrinks. New tests must satisfy the full rule set.
+    files: [
+      'app/frontend/pages/Auth/GoogleLoginButton.test.tsx',
+      'app/frontend/pages/Docs/components/DocsCallout.test.tsx',
+      'app/frontend/pages/Projects/Board/BoardPage.test.tsx',
+      'app/frontend/pages/Projects/Sessions/SessionsPage.test.tsx',
+      'app/frontend/pages/Projects/WorkflowRuns/ShowPage.test.tsx',
+      'app/frontend/pages/Projects/Workflows/BuilderPage.test.tsx',
+      'app/frontend/pages/Projects/Workflows/WorkflowsPage.test.tsx',
+      'app/frontend/shared/components/SessionShowContent/SessionShowContent.test.tsx',
+      'app/frontend/shared/resources/agents/AgentsContent.test.tsx',
+      'app/frontend/shared/resources/assets/AssetPreviewModal.test.tsx',
+      'app/frontend/shared/resources/assets/AssetsContent.test.tsx',
+      'app/frontend/shared/resources/config-items/ConfigItemsContent.test.tsx',
+      'app/frontend/shared/resources/mcp-servers/McpServerFormModal.test.tsx',
+      'app/frontend/shared/resources/mcp-servers/McpServersContent.test.tsx',
+      'app/frontend/shared/resources/tools/ToolFileEditor.test.tsx',
+      'app/frontend/shared/resources/tools/ToolsContent.test.tsx',
+    ],
+    rules: {
+      'testing-library/no-node-access': 'off',
+      'testing-library/no-container': 'off',
     },
   },
   eslintPluginPrettier,

@@ -57,7 +57,7 @@ module InternalTools
         name: params[:name],
         display_name: params[:display_name] || params[:name].titleize,
         description: params[:description],
-        kind: :custom,
+        source: "db",
         execution_mode: params[:execution_mode] || "container",
         docker_image: params[:docker_image],
         input_schema: params[:input_schema] || {},

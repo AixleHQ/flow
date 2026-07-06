@@ -23,10 +23,8 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
     )
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user)
 
-    activity = Activities::Asset::CleanupDismissedActivity.new
-
     assert_difference "Asset.count", -1 do
-      result = activity.run
+      result = run_activity(Activities::Asset::CleanupDismissedActivity)
       assert_equal 1, result[:cleaned_count]
     end
   end
@@ -41,10 +39,8 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
       reviewed_at: 2.days.ago
     )
 
-    activity = Activities::Asset::CleanupDismissedActivity.new
-
     assert_no_difference "Asset.count" do
-      result = activity.run
+      result = run_activity(Activities::Asset::CleanupDismissedActivity)
       assert_equal 0, result[:cleaned_count]
     end
   end
@@ -59,10 +55,8 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
       reviewed_at: nil
     )
 
-    activity = Activities::Asset::CleanupDismissedActivity.new
-
     assert_no_difference "Asset.count" do
-      result = activity.run
+      result = run_activity(Activities::Asset::CleanupDismissedActivity)
       assert_equal 0, result[:cleaned_count]
     end
   end
@@ -75,10 +69,8 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
       status: "active"
     )
 
-    activity = Activities::Asset::CleanupDismissedActivity.new
-
     assert_no_difference "Asset.count" do
-      result = activity.run
+      result = run_activity(Activities::Asset::CleanupDismissedActivity)
       assert_equal 0, result[:cleaned_count]
     end
   end
@@ -95,8 +87,7 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user)
     create(:asset_version, :with_file, asset: asset, uploaded_by: @user, version: 2)
 
-    activity = Activities::Asset::CleanupDismissedActivity.new
-    activity.run
+    run_activity(Activities::Asset::CleanupDismissedActivity)
 
     assert_equal 0, Asset.where(id: asset.id).count
     assert_equal 0, AssetVersion.where(asset_id: asset.id).count

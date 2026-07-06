@@ -262,7 +262,7 @@ describe('McpServersContent', () => {
     // Scope badge text "System" plus the read-only label "System" both render.
     expect(screen.getAllByText('System').length).toBeGreaterThanOrEqual(1);
     // Internal servers are not editable, so no edit/delete icons render.
-    expect(screen.queryByText('Builtin Server')).toBeInTheDocument();
+    expect(screen.getByText('Builtin Server')).toBeInTheDocument();
   });
 
   it('opens the edit form modal pre-titled "Edit MCP Server" with a Save button when editing a row', async () => {

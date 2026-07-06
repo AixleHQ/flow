@@ -11,7 +11,9 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
   end
 
   test "creates project-scoped github integration and redirects to the project" do
-    token_service = stub(verify_installation: { account_login: "octocat", account_type: "User", target_type: "User" })
+    token_service = FakeGithub::TokenService.new(
+      installation: { account_login: "octocat", account_type: "User", target_type: "User" }
+    )
     Github::TokenService.stubs(:new).returns(token_service)
 
     assert_difference("Integration.count", 1) do
@@ -23,6 +25,7 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
     assert_equal @project.id, integration.project_id
     assert_equal "github", integration.provider.to_s
     assert_equal "active", integration.status.to_s
+    assert token_service.called?(:verify_installation)
     assert_redirected_to company_project_integrations_path(@project)
   end
 

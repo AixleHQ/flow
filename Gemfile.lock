@@ -165,6 +165,9 @@ GEM
       rexml
     crass (1.0.7)
     csv (3.3.5)
+    cuprite (0.17)
+      capybara (~> 3.0)
+      ferrum (~> 0.17.0)
     date (3.5.1)
     debug (1.11.1)
       irb (~> 1.10)
@@ -212,6 +215,12 @@ GEM
       net-http (~> 0.5)
     faraday-retry (2.4.0)
       faraday (~> 2.0)
+    ferrum (0.17.2)
+      addressable (~> 2.5)
+      base64 (~> 0.2)
+      concurrent-ruby (~> 1.1)
+      webrick (~> 1.7)
+      websocket-driver (~> 0.7)
     ffi (1.17.4)
     ffi (1.17.4-aarch64-linux-gnu)
     ffi (1.17.4-aarch64-linux-musl)
@@ -588,6 +597,13 @@ GEM
     rubocop-ast (1.49.1)
       parser (>= 3.3.7.2)
       prism (~> 1.7)
+    rubocop-factory_bot (2.28.0)
+      lint_roller (~> 1.1)
+      rubocop (~> 1.72, >= 1.72.1)
+    rubocop-minitest (0.39.1)
+      lint_roller (~> 1.1)
+      rubocop (>= 1.75.0, < 2.0)
+      rubocop-ast (>= 1.38.0, < 2.0)
     rubocop-performance (1.26.1)
       lint_roller (~> 1.1)
       rubocop (>= 1.75.0, < 2.0)
@@ -629,6 +645,13 @@ GEM
     simplecov-html (0.13.1)
     simplecov_json_formatter (0.1.4)
     simpleidn (0.2.3)
+    site_prism (6.0.1)
+      addressable (~> 2.8, >= 2.8.4)
+      base64 (~> 0.3.0)
+      capybara (~> 3.37)
+      logger (~> 1.7)
+      site_prism-all_there (> 3, < 5)
+    site_prism-all_there (3.0.9)
     snaky_hash (2.0.6)
       hashie (>= 0.1.0, < 6)
       version_gem (>= 1.1.8, < 3)
@@ -693,6 +716,7 @@ GEM
       addressable (>= 2.8.0)
       crack (>= 0.3.2)
       hashdiff (>= 0.4.0, < 2.0.0)
+    webrick (1.9.2)
     websocket (1.2.11)
     websocket-client-simple (0.9.0)
       base64
@@ -739,6 +763,7 @@ DEPENDENCIES
   capybara (>= 3)
   config
   csv
+  cuprite
   debug
   docker-api (~> 2.3)
   dotenv-rails
@@ -791,6 +816,8 @@ DEPENDENCIES
   rolify
   rotp (~> 6.3)
   rubocop
+  rubocop-factory_bot
+  rubocop-minitest
   rubocop-performance
   rubocop-rails
   rubocop-rails-omakase
@@ -799,6 +826,7 @@ DEPENDENCIES
   sentry-ruby
   shrine (~> 3.8)
   simplecov
+  site_prism
   spring
   stackprof (~> 0.2.28)
   temporalio

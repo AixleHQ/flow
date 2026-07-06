@@ -63,7 +63,7 @@ describe('McpServerFormModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Add Header/i }));
 
-    await waitFor(() => expect(screen.getByPlaceholderText('Authorization')).toBeInTheDocument());
+    expect(await screen.findByPlaceholderText('Authorization')).toBeInTheDocument();
     expect(screen.queryByText('No headers configured')).not.toBeInTheDocument();
   });
 
@@ -99,9 +99,7 @@ describe('McpServerFormModal', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
 
-    await waitFor(() =>
-      expect(screen.getByPlaceholderText('npx @automattic/mcp-wordpress-remote')).toBeInTheDocument(),
-    );
+    expect(await screen.findByPlaceholderText('npx @automattic/mcp-wordpress-remote')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('https://mcp.example.com')).not.toBeInTheDocument();
   });
 
@@ -171,13 +169,13 @@ describe('McpServerFormModal', () => {
     const { container } = renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
     await userEvent.click(screen.getByRole('button', { name: /Add Header/i }));
-    await waitFor(() => expect(screen.getByPlaceholderText('Authorization')).toBeInTheDocument());
+    expect(await screen.findByPlaceholderText('Authorization')).toBeInTheDocument();
 
     // The remove control is the icon-only ActionIcon carrying the trash icon.
     const trash = container.querySelector('.tabler-icon-trash')?.closest('button');
     await userEvent.click(trash!);
 
-    await waitFor(() => expect(screen.getByText('No headers configured')).toBeInTheDocument());
+    expect(await screen.findByText('No headers configured')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Authorization')).not.toBeInTheDocument();
   });
 
@@ -185,7 +183,7 @@ describe('McpServerFormModal', () => {
     const onClose = vi.fn();
     renderPage(<McpServerFormModal opened onClose={onClose} editServer={editServer} {...baseProps} />);
 
-    await waitFor(() => expect(screen.getByDisplayValue('Playwright Browser')).toBeInTheDocument());
+    expect(await screen.findByDisplayValue('Playwright Browser')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -209,7 +207,7 @@ describe('McpServerFormModal', () => {
   it('edit mode prefills existing headers into editable rows', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={editServer} {...baseProps} />);
 
-    await waitFor(() => expect(screen.getByDisplayValue('Authorization')).toBeInTheDocument());
+    expect(await screen.findByDisplayValue('Authorization')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Bearer x')).toBeInTheDocument();
     expect(screen.queryByText('No headers configured')).not.toBeInTheDocument();
   });
@@ -218,13 +216,13 @@ describe('McpServerFormModal', () => {
     const { container } = renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
     await userEvent.click(screen.getByRole('button', { name: /Add Header/i }));
-    await waitFor(() => expect(screen.getByPlaceholderText('Bearer token')).toBeInTheDocument());
+    expect(await screen.findByPlaceholderText('Bearer token')).toBeInTheDocument();
 
     // The key icon toggles the value field into the config-item autocomplete.
     const keyToggle = container.querySelector('.tabler-icon-key')?.closest('button');
     await userEvent.click(keyToggle!);
 
-    await waitFor(() => expect(screen.getByPlaceholderText('Select config item...')).toBeInTheDocument());
+    expect(await screen.findByPlaceholderText('Select config item...')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('Bearer token')).not.toBeInTheDocument();
   });
 

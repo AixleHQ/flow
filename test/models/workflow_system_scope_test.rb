@@ -37,7 +37,7 @@ class WorkflowSystemScopeTest < ActiveSupport::TestCase
     Workflow.create!(scope_type: "System", scope_id: 0, name: "System X")
 
     belonging = Workflow.belonging_to_company(@company)
-    refute belonging.pluck(:name).include?("System X")
+    refute_includes belonging.pluck(:name), "System X"
   end
 
   test "Workflow.aixle_builder returns system workflow" do

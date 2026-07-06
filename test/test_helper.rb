@@ -2,9 +2,19 @@ ENV["RAILS_ENV"] = "test"
 
 require "simplecov"
 
-SimpleCov.start("rails") do
-  primary_coverage :line
+# System tests run as a separate suite (make: system-test) after the unit run; skip
+# coverage there so its partial result doesn't clobber the unit run's .last_run.json
+# (the coverage floor is enforced on the unit `rails test`, see COVERAGE_MIN below).
+unless ENV["SKIP_COVERAGE"].to_s.strip == "1"
+  SimpleCov.start("rails") do
+    primary_coverage :line
+  end
 end
+
+# Coverage floor is opt-in (COVERAGE_MIN is set by `make be_check`/`be_check_all`):
+# enforcing it on partial runs (`rails test test/models/foo_test.rb`) would always fail.
+# Ratchet the floor in the Makefile as coverage grows — never lower it.
+SimpleCov.minimum_coverage Float(ENV["COVERAGE_MIN"]) unless ENV["COVERAGE_MIN"].to_s.strip.empty?
 
 require_relative "../config/environment"
 require "rails/test_help"
@@ -32,8 +42,15 @@ class ActiveSupport::TestCase
   setup do
   end
 
-  # Run tests in parallel with specified workers
-  # parallelize(workers: :number_of_processors)
+  # Parallelization is deliberately OFF (2026-07-03). It was tried: the suite
+  # runs in ~20s on 14 workers vs ~55s serial, but worker-DB reconstruction
+  # proved unstable (mid-run NoDatabaseError / pg_class duplicate storms whose
+  # root cause is not fully pinned) and this repo routinely has several agent
+  # sessions running tests against the same Postgres, which parallel worker
+  # DB drop/recreate makes catastrophically non-concurrent. Revisit only with:
+  # per-invocation DB namespacing, the Settings-pollution leaks fixed, and the
+  # reconstruct instability explained. SimpleCov worker-merge plumbing lives in
+  # git history (parallelize_setup/teardown with per-worker command_name).
 
   # Include FactoryBot methods
   include FactoryBot::Syntax::Methods
@@ -41,6 +58,9 @@ class ActiveSupport::TestCase
   include TemporalHelper
   include UploadSupport
   include StubSupport
+  include SlackTestHelper
+  include TemporalActivityHelper
+  include TemporalWorkflowHelper
   # Add more helper methods to be used by all tests here...
 
   # Helper for parsing JSON responses as Hashie::Mash

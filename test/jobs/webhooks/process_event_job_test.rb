@@ -132,7 +132,8 @@ module Webhooks
       integration.update!(credentials_data: { "bot_token" => "xoxb-1" })
       @endpoint.update!(config: { "integration_id" => integration.id })
 
-      Slack::Client.expects(:download_file).returns("BYTES")
+      fake_slack = stub_slack_client!
+      fake_slack.file_body = "BYTES"
       captured = nil
       WorkflowService.expects(:start).with { |kw| captured = kw; true }.returns(build(:workflow_run))
 
@@ -148,6 +149,10 @@ module Webhooks
       assert_difference -> { Asset.count }, 1 do
         Webhooks::ProcessEventJob.perform_now(rw.id)
       end
+
+      # The Slack file was downloaded once from its private URL to build the asset.
+      assert_equal 1, fake_slack.downloads.length
+      assert_equal "https://files.slack.com/in.txt", fake_slack.last_download[:url]
 
       # Ingested at fire time for the firing binding's project and forwarded to the run.
       assert_equal @project, captured[:project]

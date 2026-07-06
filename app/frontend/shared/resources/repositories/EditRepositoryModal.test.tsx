@@ -2,25 +2,16 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildRepository } from 'test/factories/repository';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { EditRepositoryModal } from './EditRepositoryModal';
-
-const makeRepo = (overrides: Partial<Parameters<typeof EditRepositoryModal>[0]['repo'] & object> = {}) => ({
-  id: 42,
-  fullName: 'acme/payments-api',
-  sourceBranch: 'main',
-  purpose: 'Billing service',
-  description: 'Handles invoices',
-  integration: { id: 1, name: 'GitHub', provider: 'github' },
-  ...overrides,
-});
 
 describe('EditRepositoryModal', () => {
   it('renders the title with the repo name and the form fields when a repo is provided', () => {
     renderPage(
       <EditRepositoryModal
-        repo={makeRepo()}
+        repo={buildRepository()}
         branches={['main', 'develop']}
         basePath="/projects/7/repositories"
         onClose={vi.fn()}
@@ -37,7 +28,7 @@ describe('EditRepositoryModal', () => {
   it('submitting fires router.patch with the repo path and current values', async () => {
     renderPage(
       <EditRepositoryModal
-        repo={makeRepo()}
+        repo={buildRepository()}
         branches={['main', 'develop']}
         basePath="/projects/7/repositories"
         onClose={vi.fn()}
@@ -58,7 +49,7 @@ describe('EditRepositoryModal', () => {
   it('does NOT submit when the source branch is empty (validation blocks)', async () => {
     renderPage(
       <EditRepositoryModal
-        repo={makeRepo({ sourceBranch: '' })}
+        repo={buildRepository({ sourceBranch: '' })}
         branches={['main', 'develop']}
         basePath="/projects/7/repositories"
         onClose={vi.fn()}
@@ -74,7 +65,7 @@ describe('EditRepositoryModal', () => {
     const onClose = vi.fn();
     renderPage(
       <EditRepositoryModal
-        repo={makeRepo()}
+        repo={buildRepository()}
         branches={['main', 'develop']}
         basePath="/projects/7/repositories"
         onClose={onClose}
@@ -90,7 +81,7 @@ describe('EditRepositoryModal', () => {
   it('shows the AI helper description and placeholder for the Purpose field', () => {
     renderPage(
       <EditRepositoryModal
-        repo={makeRepo()}
+        repo={buildRepository()}
         branches={['main', 'develop']}
         basePath="/projects/7/repositories"
         onClose={vi.fn()}

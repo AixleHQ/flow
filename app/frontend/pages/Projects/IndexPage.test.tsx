@@ -2,25 +2,18 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { buildProject } from 'test/factories/project';
 import { makeFormStub, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import type Project from 'types/generated/Project';
 
 import IndexPage from './IndexPage';
 
-const project = (overrides: Record<string, unknown> = {}) => ({
-  id: 1,
-  name: 'Acme',
-  description: 'First project',
-  slug: 'acme',
-  state: 'active',
-  collaboratorsCount: 0,
-  membersCount: 1,
-  sessionsCount: 0,
-  workflowsCount: 0,
-  boardTasksCount: 0,
-  lastActivityAt: null,
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
+// Delegates to the typed factory so the Project drift contract applies here too.
+// buildProject defaults description to null; the local builder defaulted it to
+// 'First project', so we keep that exact value as an override to preserve the field
+// values the search-by-description tests rely on.
+const project = (overrides: Partial<Project> = {}): Project =>
+  buildProject({ description: 'First project', ...overrides });
 
 describe('Projects/IndexPage', () => {
   it('renders the empty state with a create CTA when there are no projects', () => {

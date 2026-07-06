@@ -215,7 +215,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     builder = ContextBuilders::WorkflowContext.new(session)
     content = builder.build.find { |s| s.tag == "previous-steps" }.content
 
-    assert content.include?("A" * 497 + "...")
+    assert_includes content, "A" * 497 + "..."
     assert_not content.include?("A" * 600)
   end
 
@@ -300,7 +300,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     tools_idx = builders.index(ContextBuilders::Tools)
 
     assert_not_nil wf_ctx_idx, "WorkflowContext must be in BUILDERS"
-    assert wf_ctx_idx > workspace_idx, "WorkflowContext must be after Workspace"
-    assert wf_ctx_idx < tools_idx, "WorkflowContext must be before Tools"
+    assert_operator wf_ctx_idx, :>, workspace_idx, "WorkflowContext must be after Workspace"
+    assert_operator wf_ctx_idx, :<, tools_idx, "WorkflowContext must be before Tools"
   end
 end

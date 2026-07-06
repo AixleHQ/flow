@@ -119,6 +119,8 @@ group :development do
 
   # Rubocop and related gems
   gem "rubocop"
+  gem "rubocop-factory_bot"
+  gem "rubocop-minitest"
   gem "rubocop-performance"
   gem "rubocop-rails"
   gem "rubocop-rails-omakase"
@@ -142,8 +144,10 @@ group :test do
   gem "simplecov", require: false
   gem "webmock"
 
-  # System testing
+  # System testing (Capybara + Cuprite headless-Chrome driver + SitePrism page objects)
   gem "capybara", ">= 3"
+  gem "cuprite"
+  gem "site_prism"
 end
 
 gem "shrine", "~> 3.8"
