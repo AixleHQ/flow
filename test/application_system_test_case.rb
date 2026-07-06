@@ -44,10 +44,11 @@ Capybara.default_max_wait_time =
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :cuprite_alpine
 
-  # TEMP CI diagnostic: on a failing system test, dump enough to see WHY the SPA didn't render
-  # on the runner (empty #app vs 404'd JS vs console error). Runs BEFORE super (Rails resets the
-  # Capybara session in after_teardown, so the browser must be inspected first). Silent on green.
-  # Remove once the CI system-test flake is understood.
+  # On a failing system test, dump enough to see WHY the SPA didn't render on the runner:
+  # empty #app vs 404'd JS chunks vs a wrong asset host. (This is exactly what surfaced the
+  # CDN-base bug — dynamic-import chunks 404ing against static.flow.aixle.com — behind an
+  # opaque "Unable to find field Email".) Runs BEFORE super, since Rails resets the Capybara
+  # session in after_teardown, so the browser must be inspected first. Silent on green.
   def after_teardown
     dump_system_diag unless passed?
     super

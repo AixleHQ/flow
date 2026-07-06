@@ -46,7 +46,13 @@ define run_be_checks
 	@# VITE_RUBY_MODE=test selects the vite-test publicOutputDir (a bare `--mode test`
 	@# only sets Vite's JS mode, NOT ViteRuby's output dir → it'd build to vite-dev).
 	@# --force so a stale last-compilation digest never skips the build (leaving no manifest).
-	@( VITE_RUBY_MODE=test bin/vite build --force > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
+	@# env -u VITE_RUBY_ASSET_HOST -u ASSET_HOST: the deploy image bakes ASSET_HOST=
+	@# https://static.flow.aixle.com into VITE_RUBY_ASSET_HOST (Dockerfile ENV), which Vite
+	@# would otherwise stamp as the base of every dynamic-import chunk URL. On CI the browser
+	@# then fetches chunks from the CDN (which has no freshly-built test chunks) → 404 → the
+	@# React SPA never mounts → system tests fail "Unable to find field Email". Unset it so
+	@# test chunks resolve relative to the Capybara test server.
+	@( env -u VITE_RUBY_ASSET_HOST -u ASSET_HOST VITE_RUBY_MODE=test bin/vite build --force > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
 	@( COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( SKIP_COVERAGE=1 $(TEST_LOCK) bundle exec rails test:system   > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
