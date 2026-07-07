@@ -1112,22 +1112,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@inertiajs/core@npm:3.0.2":
-  version: 3.0.2
-  resolution: "@inertiajs/core@npm:3.0.2"
-  dependencies:
-    "@jridgewell/trace-mapping": "npm:^0.3.31"
-    es-toolkit: "npm:^1.33.0"
-    laravel-precognition: "npm:^2.0.0"
-  peerDependencies:
-    axios: ^1.13.2
-  peerDependenciesMeta:
-    axios:
-      optional: true
-  checksum: 10c0/0c1efca318007ca67e528df841500616fbd1c8c3a050511f94541d3f6dd89453299385730b049d2cf9383104c4879d005af004f8d778192b7c53e4f8a86a578a
-  languageName: node
-  linkType: hard
-
 "@inertiajs/core@npm:3.4.0":
   version: 3.4.0
   resolution: "@inertiajs/core@npm:3.4.0"
@@ -1144,17 +1128,33 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@inertiajs/react@npm:^3.0.1":
-  version: 3.0.2
-  resolution: "@inertiajs/react@npm:3.0.2"
+"@inertiajs/core@npm:3.6.0":
+  version: 3.6.0
+  resolution: "@inertiajs/core@npm:3.6.0"
   dependencies:
-    "@inertiajs/core": "npm:3.0.2"
+    "@jridgewell/trace-mapping": "npm:^0.3.31"
+    es-toolkit: "npm:^1.33.0"
+    laravel-precognition: "npm:^2.0.0"
+  peerDependencies:
+    axios: ^1.15.2
+  peerDependenciesMeta:
+    axios:
+      optional: true
+  checksum: 10c0/a5ba3d65d0621503257f0c400dd1a65123878e246d268dae8b4271f4302c48b7e0a57a3686679089301f12c7e11199e5a497f8c1f183ad1c15dd5a2817cda9d4
+  languageName: node
+  linkType: hard
+
+"@inertiajs/react@npm:^3.6.0":
+  version: 3.6.0
+  resolution: "@inertiajs/react@npm:3.6.0"
+  dependencies:
+    "@inertiajs/core": "npm:3.6.0"
     es-toolkit: "npm:^1.33.0"
     laravel-precognition: "npm:^2.0.0"
   peerDependencies:
     react: ^19.0.0
     react-dom: ^19.0.0
-  checksum: 10c0/7a81db64ed2a1db56098dbac0c790671bc569b1f6715b1df8b62d1ce47a345b61cb1410032d5e40419edcfef2363d919017cb2058c11d5b8230897f2cae96f88
+  checksum: 10c0/a595aea645574b63f570ffc39f12099b729b49efc9c118f3349f2ec01bfba98f40994fff14b95b2ac54a51f7168f41422667660cf5fddafb48a6aa5dd0285d2e
   languageName: node
   linkType: hard
 
@@ -9346,7 +9346,7 @@ __metadata:
     "@emoji-mart/react": "npm:^1.1.1"
     "@eslint/js": "npm:^10.0.1"
     "@inertia-cable/react": "npm:^0.2.2"
-    "@inertiajs/react": "npm:^3.0.1"
+    "@inertiajs/react": "npm:^3.6.0"
     "@inertiajs/vite": "npm:^3.4.0"
     "@mantine/core": "npm:^9.4.1"
     "@mantine/dates": "npm:^9.4.0"
