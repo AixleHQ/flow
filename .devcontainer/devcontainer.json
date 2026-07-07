@@ -48,7 +48,8 @@
 		"vscode": {
 			"extensions": [
 				"Shopify.ruby-lsp",
-				"openai.chatgpt"
+				"openai.chatgpt",
+				"Anthropic.claude-code"
 			]
 		}
 	},
