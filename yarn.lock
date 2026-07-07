@@ -1408,9 +1408,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mantine/core@npm:^9.4.0":
-  version: 9.4.0
-  resolution: "@mantine/core@npm:9.4.0"
+"@mantine/core@npm:^9.4.1":
+  version: 9.4.1
+  resolution: "@mantine/core@npm:9.4.1"
   dependencies:
     "@floating-ui/react": "npm:^0.27.19"
     clsx: "npm:^2.1.1"
@@ -1418,10 +1418,10 @@ __metadata:
     react-remove-scroll: "npm:^2.7.2"
     type-fest: "npm:^5.7.0"
   peerDependencies:
-    "@mantine/hooks": 9.4.0
+    "@mantine/hooks": 9.4.1
     react: ^19.2.0
     react-dom: ^19.2.0
-  checksum: 10c0/7f08c6c322821b1784983932d2ca13e26e3e002697ccfbe9c7d7f83da1849f70bedce80f19a2e55422ea494c59d2d6190165f4689522feafa2d8d65bd24e29a6
+  checksum: 10c0/8aa77905e0bef7b634673a6bcbee058627cac4a6b7dc25f1d89e003718ef9f152519a5b606d85166060e0b2271b0371ff6777b2c6e0419d522591087c897feb5
   languageName: node
   linkType: hard
 
@@ -9348,7 +9348,7 @@ __metadata:
     "@inertia-cable/react": "npm:^0.2.2"
     "@inertiajs/react": "npm:^3.0.1"
     "@inertiajs/vite": "npm:^3.4.0"
-    "@mantine/core": "npm:^9.4.0"
+    "@mantine/core": "npm:^9.4.1"
     "@mantine/dates": "npm:^9.4.0"
     "@mantine/form": "npm:^9.0.0"
     "@mantine/hooks": "npm:^9.4.0"
