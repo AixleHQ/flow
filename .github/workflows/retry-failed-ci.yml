@@ -1,17 +1,33 @@
 name: Retry failed CI
 
-# Auto-retry transient CI failures once.
+# Auto-retry CI runs that died because a self-hosted runner was lost.
 #
-# Observed symptom: jobs (most often "Build Web") die mid-step with
-# "The operation was canceled." — the self-hosted/ARC runner is lost or the
-# build is killed mid bundle-install. These surface as conclusion == 'failure'
-# (across the last 100 runs we saw 0 'cancelled' / 0 'timed_out', only
-# 'failure'), so a failure-guarded auto-rerun absorbs them.
+# The ARC CI runners live on a Spot-only EKS node group; AWS reclaims or
+# rebalances those instances regularly, the node is drained mid-job, and the
+# run surfaces as 'failure' OR 'cancelled' with a job-log line
+# "The runner has received a shutdown signal" (graceful drain) or
+# "... lost communication with the server" (hard reclaim). Infra background:
+# aixle-infra doc/cicd/selfhosted-runners.md.
 #
-# How it works: when a watched workflow finishes as 'failure', re-run ONLY its
-# failed jobs (and their dependents) via `gh run rerun --failed`. This reuses
-# the same run id and bumps run_attempt, so a successful retry lets downstream
-# jobs (db-migrate / deploy) proceed normally and never double-deploys.
+# Retry policy:
+#   - runner-loss failures/cancellations: up to 2 automatic re-runs.
+#     Evictions cluster: on 2026-07-07 a retry was itself killed by the next
+#     eviction 25 minutes later (run 28870705458), so one retry is not
+#     always enough.
+#   - any other 'failure': exactly one re-run (previous behaviour).
+#   - 'cancelled' WITHOUT a runner-loss annotation is never retried:
+#     concurrency-superseded runs and manual cancellations look like that.
+#
+# How it works: when a watched workflow finishes, re-run ONLY its failed jobs
+# (and their dependents) via `gh run rerun --failed`. This reuses the same run
+# id and bumps run_attempt, so a successful retry lets downstream jobs
+# (db-migrate / deploy) proceed normally and never double-deploys.
+#
+# Why a separate watcher workflow at all: GitHub Actions has no native
+# job-level retry, and a run cannot re-run itself while it is still in
+# progress, so a completed run can only be re-run from the outside.
+# workflow_run is the least noisy built-in trigger for that: non-matching
+# completions produce a silent 'skipped' run and send no notifications.
 #
 # NOTE: this file must live on the DEFAULT branch (develop) — workflow_run only
 # triggers from the default branch's copy. It will not fire from feature/PR
@@ -26,7 +42,7 @@ on:
       - completed
 
 permissions:
-  actions: write # required for `gh run rerun` (GITHUB_TOKEN Actions: write)
+  actions: write # `gh run rerun` needs write; job-log reads are covered by it
   contents: read
 
 # One retry job per source run; never cancel an in-flight retry.
@@ -41,20 +57,53 @@ jobs:
     # depend on the (possibly unhealthy) self-hosted runner pool whose failures
     # it is meant to absorb. Do not use vars.CI_RUNNER here.
     runs-on: ubuntu-latest
-    # run_attempt is 1 on the first run, so '< 2' => exactly one rerun
-    # (two attempts total); the rerun's own completed event (attempt 2) is not
-    # retried again, so there is no infinite loop.
-    #
-    # Guard on 'failure' only. We deliberately do NOT retry 'cancelled':
-    # concurrency-superseded runs (stale commits) and manual cancellations both
-    # report 'cancelled', and re-running those would be wrong. Genuine
-    # job timeouts also report 'cancelled' — if those ever become the flaky
-    # case, fix the timeout/hang rather than broadening this guard.
+    # Widest gate any retry could need (runner loss gets up to attempt 3).
+    # The exact per-conclusion policy is decided in the steps below, where job
+    # annotations can be inspected; everything else stays 'skipped' and silent.
     if: >-
-      github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.run_attempt < 2
+      (github.event.workflow_run.conclusion == 'failure' ||
+       github.event.workflow_run.conclusion == 'cancelled') &&
+      github.event.workflow_run.run_attempt < 3
     steps:
+      - name: Decide whether to re-run
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          # A job whose runner pod was evicted (Spot drain/reclaim) has one of
+          # the messages below in its log. Detection must use full job logs:
+          # check-run annotations only carry the generic "The operation was
+          # canceled." line, which manual cancellations produce too (verified
+          # against runs 28870529546 / 28870705458 on 2026-07-07).
+          runner_lost=false
+          for job_id in $(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${ATTEMPT}/jobs" \
+              --paginate -q '.jobs[] | select(.conclusion == "failure" or .conclusion == "cancelled") | .id'); do
+            if gh api "repos/${GH_REPO}/actions/jobs/${job_id}/logs" 2>/dev/null \
+                | grep -Eq 'runner has received a shutdown signal|lost communication with the server'; then
+              runner_lost=true
+              break
+            fi
+          done
+
+          rerun=false
+          if [ "$runner_lost" = true ]; then
+            # attempt < 3 is already guaranteed by the job-level `if`
+            rerun=true
+          elif [ "$CONCLUSION" = "failure" ] && [ "$ATTEMPT" -lt 2 ]; then
+            # non-runner-loss failures keep the original single retry
+            rerun=true
+          fi
+
+          echo "runner_lost=${runner_lost}"
+          echo "runner_lost=${runner_lost}" >> "$GITHUB_OUTPUT"
+          echo "rerun=${rerun}" >> "$GITHUB_OUTPUT"
+
       - name: Re-run failed jobs
+        if: steps.decide.outputs.rerun == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -62,7 +111,7 @@ jobs:
           ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           SOURCE_URL: ${{ github.event.workflow_run.html_url }}
         run: |
-          echo "Re-running failed jobs for run ${RUN_ID} (attempt ${ATTEMPT})"
+          echo "Re-running failed jobs for run ${RUN_ID} (attempt ${ATTEMPT}, runner_lost=${{ steps.decide.outputs.runner_lost }})"
           echo "Source: ${SOURCE_URL}"
           # Don't fail this workflow if the rerun is rejected (run older than
           # 30 days, or the 50-rerun-per-run cap reached).
