@@ -44,6 +44,7 @@ RUN bundle config set --local frozen true && \
 RUN npm install -g corepack@latest && corepack enable
 
 COPY package.json yarn.lock .yarnrc.yml ./
+COPY .yarn/releases/ .yarn/releases/
 
 RUN corepack install
 RUN yarn install --immutable
@@ -66,6 +67,9 @@ ENV ASSET_HOST=${ASSET_HOST}
 ENV VITE_RUBY_ASSET_HOST=${ASSET_HOST}
 
 RUN RAILS_SECRET_KEY_BASE=secret \
+    CREDENTIALS_SECRET_KEY=build_placeholder_32bytes_000000 \
+    CONFIG_ITEMS_SECRET_KEY=build_placeholder_32bytes_000000 \
+    INTEGRATIONS_SECRET_KEY=build_placeholder_32bytes_000000 \
     RAILS_ENV=production \
     AWS_EC2_METADATA_DISABLED=true \
     ASSET_HOST="${ASSET_HOST}" \
