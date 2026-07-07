@@ -62,6 +62,27 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert BoardActivity.exists?(board: @board, event_type: :task_updated, board_task: task)
   end
 
+  test "update assigns a valid epic parent" do
+    epic = create(:board_task, board: @board, board_column: @column, task_type: :epic)
+    task = create(:board_task, board: @board, board_column: @column, task_type: :story)
+
+    result = TaskService.update(task: task, params: { parent_task_id: epic.id }, actor: @user)
+
+    assert_empty result.errors
+    assert_equal epic.id, task.reload.parent_task_id
+  end
+
+  test "update surfaces validation errors and does not record activity on failure" do
+    non_epic = create(:board_task, board: @board, board_column: @column, task_type: :bug)
+    task = create(:board_task, board: @board, board_column: @column, task_type: :story)
+
+    result = TaskService.update(task: task, params: { parent_task_id: non_epic.id }, actor: @user)
+
+    assert result.errors[:parent_task].present?
+    assert_nil task.reload.parent_task_id
+    assert_not BoardActivity.exists?(board: @board, event_type: :task_updated, board_task: task)
+  end
+
   # == destroy ==
 
   test "destroy removes task and records activity" do
