@@ -30,7 +30,11 @@ module Api
           def update
             task = current_board.board_tasks.find(params[:id])
             task = TaskService.update(task: task, params: task_params, actor: current_user)
-            render json: BoardTaskResource.new(task).to_h
+            if task.errors.empty?
+              render json: BoardTaskResource.new(task).to_h
+            else
+              render json: { errors: task.errors.full_messages }, status: :unprocessable_entity
+            end
           end
 
           def destroy

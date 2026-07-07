@@ -50,6 +50,33 @@ module Api
           assert_response :success
         end
 
+        test "update assigns a valid epic parent" do
+          epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic)
+
+          patch :update, params: {
+            project_id: @project.id,
+            id: @task.id,
+            board_task: { parent_task_id: epic.id }
+          }
+
+          assert_response :success
+          assert_equal epic.id, @task.reload.parent_task_id
+        end
+
+        test "update with invalid parent returns unprocessable entity instead of silently succeeding" do
+          non_epic = create(:board_task, board: @board, board_column: @col1, task_type: :bug)
+
+          patch :update, params: {
+            project_id: @project.id,
+            id: @task.id,
+            board_task: { parent_task_id: non_epic.id }
+          }
+
+          assert_response :unprocessable_entity
+          assert_nil @task.reload.parent_task_id
+          assert JSON.parse(response.body)["errors"].present?
+        end
+
         test "destroy removes task" do
           delete :destroy, params: { project_id: @project.id, id: @task.id }
 
