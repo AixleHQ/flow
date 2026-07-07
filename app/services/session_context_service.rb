@@ -526,10 +526,14 @@ class SessionContextService
 
     # == MCP Server Resolution ==
 
-    # Combine internal Aixle MCP + resolved external servers
+    # Combine internal Aixle MCP + resolved custom external servers.
+    # Managed MCP rows are served through aixle-tools as namespaced tools; they
+    # are not standalone client endpoints and usually have no url/command.
     def build_all_servers(session)
       effective_items = resolve_effective_config_items(session)
-      external = resolve_mcp_servers(session).map { |s| resolve_server_secrets(s, effective_items) }
+      external = resolve_mcp_servers(session)
+                   .reject(&:managed?)
+                   .map { |s| resolve_server_secrets(s, effective_items) }
 
       [ build_internal_mcp(session) ] + external
     end

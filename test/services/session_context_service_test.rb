@@ -231,6 +231,24 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     refute_includes result[toml_path], "\nheaders = "
   end
 
+  test "generate_mcp_config skips managed servers as standalone client endpoints" do
+    custom = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @company, headers: {})
+    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+    managed = create(:mcp_server, name: "coder-#{integration.id}", display_name: "Coder",
+                     kind: :managed, transport: :http, url: nil, scope: @company,
+                     integration: integration)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+    session.mcp_servers << [ custom, managed ]
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    toml_path = "/home/codex/.codex/config.toml"
+    assert_includes result[toml_path], '[mcp_servers."aixle-tools"]'
+    assert_includes result[toml_path], '[mcp_servers."tavily"]'
+    refute_includes result[toml_path], %([mcp_servers."#{managed.name}"])
+  end
+
   test "generate_mcp_config resolves secrets in headers" do
     create(:config_item, name: "TAVILY_API_KEY", value: "tvly-secret", item_type: :variable, scope: @company)
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
