@@ -32,6 +32,34 @@ CHECK_RESULTS := tmp/check_results
 # Ratchet upward as coverage grows — never lower it. Measured 88.3% on 2026-07-06.
 COVERAGE_MIN := 85
 
+# Coverage gating (task #288). SimpleCov (backend) and v8 all:true (frontend)
+# instrumentation are a large multiplier on suite runtime, so CI only runs coverage
+# on the develop branch — the integration gate — and skips it on ordinary feature-branch
+# pushes to keep the Checks/Run stage fast. CI exports CI_BRANCH (github.ref_name) into
+# the container; when it is unset (local `make check_all`/`rails-test`) coverage stays
+# ON so the pre-push gate keeps enforcing the floor.
+COVERAGE_BRANCH := develop
+CI_BRANCH ?=
+ifeq ($(strip $(CI_BRANCH)),)
+  RUN_COVERAGE := 1
+else ifeq ($(strip $(CI_BRANCH)),$(COVERAGE_BRANCH))
+  RUN_COVERAGE := 1
+else
+  RUN_COVERAGE := 0
+endif
+
+ifeq ($(RUN_COVERAGE),1)
+  # Enforce the backend floor and produce a coverage report.
+  RAILS_TEST_COV_ENV := COVERAGE_MIN=$(COVERAGE_MIN)
+  # Frontend: run Vitest with v8 coverage + thresholds (vitest.config.ts).
+  FE_TEST_CMD := yarn test --coverage
+else
+  # Skip SimpleCov instrumentation entirely (test_helper.rb honors SKIP_COVERAGE).
+  RAILS_TEST_COV_ENV := SKIP_COVERAGE=1
+  # Frontend: run Vitest without coverage instrumentation/thresholds.
+  FE_TEST_CMD := yarn test
+endif
+
 # Two concurrent `rails test` invocations are mutually destructive: parallel test
 # workers drop/recreate the shared aixle_test_N databases, so overlapping runs
 # corrupt each other's schemas (observed 2026-07-03: pg_class duplicate-key storms).
@@ -54,7 +82,7 @@ define run_be_checks
 	@# test chunks resolve relative to the Capybara test server.
 	@( env -u VITE_RUBY_ASSET_HOST -u ASSET_HOST VITE_RUBY_MODE=test bin/vite build --force > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
-	@( COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
+	@( $(RAILS_TEST_COV_ENV) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( SKIP_COVERAGE=1 $(TEST_LOCK) bundle exec rails test:system   > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
 	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
 	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
@@ -70,8 +98,8 @@ define run_fe_checks
 	@( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
 	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
 	 wait
-	@echo "Running fe-test (Vitest + coverage) on its own..."
-	@( yarn test --coverage                                         > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )
+	@echo "Running fe-test (Vitest$(if $(filter 1,$(RUN_COVERAGE)), + coverage,)) on its own..."
+	@( $(FE_TEST_CMD)                                               > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )
 endef
 
 # Summarize every tmp/check_results/*.status, print whichever coverage files exist, dump the full log
@@ -155,9 +183,9 @@ typescript:
 # Run all tests
 test: rails-test
 
-# Run Rails tests (full suite → coverage floor applies; lock prevents overlapping suite runs)
+# Run Rails tests (full suite → coverage floor applies unless gated off; lock prevents overlapping suite runs)
 rails-test:
-	COVERAGE_MIN=$(COVERAGE_MIN) $(TEST_LOCK) bundle exec rails test
+	$(RAILS_TEST_COV_ENV) $(TEST_LOCK) bundle exec rails test
 
 # Run frontend tests (Vitest, node-only — no backend). Runs inside the web container; also part of check_all.
 fe-test:

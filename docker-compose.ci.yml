@@ -8,6 +8,10 @@ services:
       # (see vitest.config.ts). `docker compose run` only forwards declared env vars,
       # not the runner's ambient CI=true, so it must be set here explicitly.
       CI: "true"
+      # Branch under test, forwarded from the runner's GITHUB_REF_NAME (empty locally).
+      # The Makefile coverage gate reads it: coverage runs only on develop (task #288).
+      # `docker compose run` only forwards declared env vars, so it must be listed here.
+      CI_BRANCH: ${GITHUB_REF_NAME:-}
       APP_VERSION: ci
       AUTHOR_NAME: github-actions
       AUTHOR_EMAIL: github-actions@users.noreply.github.com
