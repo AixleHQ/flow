@@ -68,7 +68,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     result = TaskService.update(task: task, params: { parent_task_id: epic.id }, actor: @user)
 
-    assert result.errors.empty?
+    assert_empty result.errors
     assert_equal epic.id, task.reload.parent_task_id
   end
 
