@@ -17,6 +17,7 @@ Rails.application.configure do
     policy.style_src   :self, :https, :unsafe_inline, "https://fonts.googleapis.com"
     policy.connect_src :self, :https, "wss://#{Settings.domain}"
     policy.frame_src   :none
+    policy.report_uri  "/csp-violation-report-endpoint"
     if Rails.env.development?
       policy.script_src  *policy.script_src, :unsafe_eval
       policy.connect_src *policy.connect_src, "ws://localhost:*", "http://localhost:*"

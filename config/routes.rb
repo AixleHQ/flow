@@ -10,6 +10,10 @@ Rails.application.routes.draw do
   match "/action_mcp", to: "mcp#handle", via: %i[get post delete]
   match "/mcp", to: "mcp#handle", via: %i[get post delete]
 
+  # CSP violation report sink (report-only mode, M-16). Browsers POST here with
+  # Content-Type application/csp-report; no session/CSRF token is sent.
+  post "/csp-violation-report-endpoint", to: "csp_reports#create"
+
   # Reveal health status on /up that returns 200 if the app boots with no exceptions, otherwise 500.
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
