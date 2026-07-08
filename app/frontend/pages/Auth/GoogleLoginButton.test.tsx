@@ -6,12 +6,16 @@ import { renderPage, screen } from 'test/renderPage';
 import { GoogleLoginButton } from './GoogleLoginButton';
 
 describe('GoogleLoginButton', () => {
-  it('renders a link labelled "Sign in with Google" pointing at the Google auth path', () => {
-    renderPage(<GoogleLoginButton />);
+  it('renders a POST form targeting the Google auth path (OmniAuth request phase must not accept GET, see CVE-2015-9284)', () => {
+    const { container } = renderPage(<GoogleLoginButton />);
 
-    const link = screen.getByRole('link', { name: 'Sign in with Google' });
-    expect(link).toBeInTheDocument();
-    expect(link).toHaveAttribute('href', '/auth/google');
+    const form = container.querySelector('form');
+    expect(form).toHaveAttribute('method', 'post');
+    expect(form).toHaveAttribute('action', '/auth/google');
+
+    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    expect(button).toBeInTheDocument();
+    expect(button).toHaveAttribute('type', 'submit');
   });
 
   it('renders the Google icon svg inside the button', () => {
@@ -25,21 +29,21 @@ describe('GoogleLoginButton', () => {
   it('forwards extra Button props (e.g. className) onto the rendered element', () => {
     renderPage(<GoogleLoginButton className="custom-google-cta" />);
 
-    const link = screen.getByRole('link', { name: 'Sign in with Google' });
-    expect(link).toHaveClass('custom-google-cta');
+    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    expect(button).toHaveClass('custom-google-cta');
   });
 
   it('shows the loading state when the loading prop is forwarded', () => {
     renderPage(<GoogleLoginButton loading />);
 
-    const link = screen.getByRole('link', { name: 'Sign in with Google' });
-    expect(link).toHaveAttribute('data-loading', 'true');
+    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    expect(button).toHaveAttribute('data-loading', 'true');
   });
 
   it('honours a disabled prop forwarded to the underlying Button', () => {
     renderPage(<GoogleLoginButton disabled />);
 
-    const link = screen.getByRole('link', { name: 'Sign in with Google' });
-    expect(link).toHaveAttribute('data-disabled', 'true');
+    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    expect(button).toHaveAttribute('data-disabled', 'true');
   });
 });

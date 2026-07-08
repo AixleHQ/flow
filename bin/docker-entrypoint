@@ -11,6 +11,12 @@ if [ "$(id -u)" = "0" ]; then
   for dir in /bundle_cache /home/app; do
     [ "$(stat -c '%U' "$dir" 2>/dev/null)" = "app" ] || chown -R app:app "$dir" 2>/dev/null || true
   done
+  # See bin/run-as-app: grant the app user access to the host Docker socket
+  # when it's mounted (root:root 660 on the host side). No-op otherwise.
+  if [ -S /var/run/docker.sock ]; then
+    chgrp app /var/run/docker.sock 2>/dev/null || true
+    chmod g+rw /var/run/docker.sock 2>/dev/null || true
+  fi
   exec su-exec app:app "$0" "$@"
 fi
 

@@ -9,8 +9,10 @@ Rails.application.config.middleware.use OmniAuth::Builder do
   }
 end
 
-# Protect from CSRF attacks
-OmniAuth.config.allowed_request_methods = [ :post, :get ]
+# CVE-2015-9284: OmniAuth's request phase must be POST-only, or an attacker
+# can trigger a login/link flow on a victim's session via a plain GET link
+# (CSRF). Leave allowed_request_methods at its :post-only default — the
+# login button submits a real <form method="post"> (GoogleLoginButton.tsx).
 OmniAuth.config.path_prefix = "/auth"
 
 # Set failure path
