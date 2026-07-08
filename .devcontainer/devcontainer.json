@@ -14,15 +14,15 @@
 	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
 	"workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/${localWorkspaceFolderBasename},type=bind,consistency=cached",
 
-	// Mount host kube config for Orbstack K8s access
+	// Mount persisted developer tool state
 	"mounts": [
-		"source=${localEnv:HOME}/.kube,target=/root/.kube,type=bind,consistency=cached",
 		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-		"source=aixle-app-codex,target=/root/.codex,type=volume"
+		"source=aixle-app-codex,target=/root/.codex,type=volume",
+		"source=aixle-app-vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
+		"source=aixle-app-claude,target=/root/.claude,type=volume"
 	],
 
 	"containerEnv": {
-		"KUBECONFIG": "/root/.kube/config",
 		"DB_HOST": "db",
 		"DB_PORT": "5432",
 		"DB_USERNAME": "postgres",
@@ -43,7 +43,7 @@
 	],
 
 	// Install kubectl/helm/minikube on Alpine-based image
-	"postCreateCommand": "bash .devcontainer/install-k8s-tools.sh",
+	"postCreateCommand": "bash .devcontainer/setup.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -52,7 +52,7 @@
 				"Anthropic.claude-code"
 			]
 		}
-	},
+	}
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
