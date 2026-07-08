@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -e
 
+# docker-compose overrides the image ENTRYPOINT with this script. Mirror
+# bin/run-as-app so bundle_cache stays writable under the non-root app user.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /bundle_cache
+  chown -R app:app /bundle_cache 2>/dev/null || true
+  exec su-exec app:app "$0" "$@"
+fi
+
 if [ -z "${LD_PRELOAD+x}" ]; then
     LD_PRELOAD=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
     export LD_PRELOAD

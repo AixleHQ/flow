@@ -3,7 +3,7 @@ FROM ruby:4.0.5-alpine
 RUN apk update && \
     apk add --no-cache build-base postgresql-dev tzdata bash git vim curl nodejs npm postgresql-client \
         less vips vips-dev vips-tools gcompat build-base yaml-dev file-dev openssh-client \
-        chromium ttf-freefont font-noto nss freetype harfbuzz
+        chromium ttf-freefont font-noto nss freetype harfbuzz su-exec
 
 # Coder CLI — used by Coder::SshRunner to exec commands on workspaces (N1 / DD-1).
 # Only present in the Rails image; the workflow-step image deliberately does NOT
@@ -80,6 +80,6 @@ RUN RAILS_SECRET_KEY_BASE=secret \
     rails assets:precompile
 
 RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
-USER app
 
+ENTRYPOINT ["bin/run-as-app"]
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

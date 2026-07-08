@@ -1,0 +1,12 @@
+#!/bin/sh
+set -e
+
+# Drop from root to the unprivileged app user (L-22). When bundle_cache is a
+# Docker volume it is root-owned on first mount — fix that before switching.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /bundle_cache
+  chown -R app:app /bundle_cache 2>/dev/null || true
+  exec su-exec app "$@"
+fi
+
+exec "$@"
