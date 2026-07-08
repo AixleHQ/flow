@@ -17,8 +17,9 @@ module Github
       @integration.credentials_data = { "installation_id" => "12345" }
       @integration.save!
 
-      # The real TokenService signs a JWT from a GitHub App id + private key.
-      @pem_path = Rails.root.join("tmp", "test-github-repo-svc.pem")
+      # Per-test temp key file — a fixed tmp/ path races when the suite runs in parallel.
+      @pem_file = Tempfile.new([ "github-repo-svc", ".pem" ])
+      @pem_path = Pathname.new(@pem_file.path)
       generate_test_pem(@pem_path)
       Settings.github.stubs(:app_id).returns("999")
       Settings.github.stubs(:private_key_path).returns(@pem_path.to_s)
@@ -27,7 +28,7 @@ module Github
     end
 
     teardown do
-      File.delete(@pem_path) if File.exist?(@pem_path)
+      @pem_file&.close!
     end
 
     test "list_available returns the parsed repositories from the installation endpoint" do

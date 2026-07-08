@@ -15,7 +15,8 @@ module Github
       @integration.credentials_data = { "installation_id" => "12345" }
       @integration.save!
 
-      @pem_path = Rails.root.join("tmp", "test-github-app.pem")
+      @pem_file = Tempfile.new([ "github-app", ".pem" ])
+      @pem_path = Pathname.new(@pem_file.path)
       generate_test_pem(@pem_path)
 
       # Stub, don't assign: assigning mutates the process-global Settings and
@@ -25,7 +26,7 @@ module Github
     end
 
     teardown do
-      File.delete(@pem_path) if File.exist?(@pem_path)
+      @pem_file&.close!
     end
 
     test "generate_installation_token returns the token from the access-tokens endpoint" do
