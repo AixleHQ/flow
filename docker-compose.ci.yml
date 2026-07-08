@@ -8,6 +8,11 @@ services:
       # (see vitest.config.ts). `docker compose run` only forwards declared env vars,
       # not the runner's ambient CI=true, so it must be set here explicitly.
       CI: "true"
+      # Coverage gate decision (task #288), computed in the deploy workflow's
+      # "Prepare Config" job and forwarded via code-check.yml. 1 = run coverage
+      # (develop), 0 = skip. The Makefile honors this flag (empty → defaults to on).
+      # `docker compose run` only forwards declared env vars, so it must be listed here.
+      RUN_COVERAGE: ${RUN_COVERAGE:-}
       APP_VERSION: ci
       AUTHOR_NAME: github-actions
       AUTHOR_EMAIL: github-actions@users.noreply.github.com

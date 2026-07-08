@@ -33,6 +33,7 @@ jobs:
       service_account: ${{ steps.config.outputs.service_account }}
       configmap_name: ${{ steps.config.outputs.configmap_name }}
       secret_name: ${{ steps.config.outputs.secret_name }}
+      run_coverage: ${{ steps.config.outputs.run_coverage }}
     steps:
       - name: Compute Workflow Config
         id: config
@@ -54,8 +55,16 @@ jobs:
           service_account="aixle-web"
           configmap_name="aixle-app-config"
           secret_name="aixle-app-secrets"
+          # Coverage gate (task #288): SimpleCov (backend) + v8 all:true (frontend)
+          # instrumentation is a large runtime multiplier, so run coverage only on the
+          # develop integration branch and skip it on ordinary feature-branch pushes.
+          # Forwarded to the check jobs as run_coverage → RUN_COVERAGE in the container.
+          run_coverage="0"
 
           case "${GITHUB_REF}" in
+            refs/heads/develop)
+              run_coverage="1"
+              ;;
             refs/heads/staging)
               asset_host="https://staging.flow.aixle.com"
               raw_tag="staging"
@@ -91,6 +100,7 @@ jobs:
           service_account=${service_account}
           configmap_name=${configmap_name}
           secret_name=${secret_name}
+          run_coverage=${run_coverage}
           EOF
 
   build-web:
@@ -167,6 +177,7 @@ jobs:
       command: be_check_all
       runner: ${{ needs.prepare-config.outputs.ci_runner }}
       needs-db: true
+      run-coverage: ${{ needs.prepare-config.outputs.run_coverage }}
       timeout: 25
       image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
@@ -182,6 +193,7 @@ jobs:
       command: fe_check_all
       runner: ${{ needs.prepare-config.outputs.ci_runner }}
       needs-db: false
+      run-coverage: ${{ needs.prepare-config.outputs.run_coverage }}
       timeout: 20
       image-tag: ${{ needs.prepare-config.outputs.web_image_tag }}
     secrets: inherit
