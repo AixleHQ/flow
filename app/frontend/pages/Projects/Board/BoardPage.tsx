@@ -413,13 +413,7 @@ function TaskCardUI({
       {/* Type chip + tags */}
       <Group gap={4} mt={6} wrap="wrap">
         {task.archived && (
-          <Badge
-            size="xs"
-            variant="light"
-            color="gray"
-            leftSection={<IconArchive size={9} />}
-            style={{ fontSize: 10 }}
-          >
+          <Badge size="xs" variant="light" color="gray" leftSection={<IconArchive size={9} />} style={{ fontSize: 10 }}>
             Archived
           </Badge>
         )}
