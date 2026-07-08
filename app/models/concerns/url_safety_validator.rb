@@ -95,7 +95,7 @@ module UrlSafetyValidator
   def resolved_to_private?(hostname)
     system_addrs = Resolv.getaddresses(hostname)
     public_ip    = resolve_public_ipv4(hostname)
-    (system_addrs + [public_ip]).compact.uniq.any? do |addr|
+    (system_addrs + [ public_ip ]).compact.uniq.any? do |addr|
       ip = IPAddr.new(addr)
       ip.private? || ip.loopback? || ip.link_local?
     rescue IPAddr::InvalidAddressError

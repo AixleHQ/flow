@@ -10,9 +10,9 @@
 class RecryptEncryptableFields < ActiveRecord::Migration[8.1]
   def up
     [
-      { klass: "AgentCredential", key: Settings.encryption.credentials_key,  columns: [:encrypted_config_data] },
-      { klass: "ConfigItem",      key: Settings.encryption.config_items_key,  columns: [:encrypted_value] },
-      { klass: "Integration",     key: Settings.encryption.integrations_key,  columns: [:credentials] }
+      { klass: "AgentCredential", key: Settings.encryption.credentials_key,  columns: [ :encrypted_config_data ] },
+      { klass: "ConfigItem",      key: Settings.encryption.config_items_key,  columns: [ :encrypted_value ] },
+      { klass: "Integration",     key: Settings.encryption.integrations_key,  columns: [ :credentials ] }
     ].each do |spec|
       raw_key = spec[:key].to_s
       old_key = raw_key.ljust(32, "0")[0..31]

@@ -32,9 +32,11 @@ module Api
           def preset_params
             p = params.require(:board_view_preset)
             filters = p[:filters]
-            # Use permit!.to_h instead of to_unsafe_h — both allow arbitrary keys,
-            # but permit! goes through ActionController::Parameters and is logged
-            filters = filters.is_a?(ActionController::Parameters) ? filters.permit!.to_h : (filters || {})
+            filters = if filters.is_a?(ActionController::Parameters)
+              filters.permit(:assignee_id, :task_type, :priority, :search, :status, tags: [], columns: []).to_h
+            else
+              (filters || {}).slice("assignee_id", "task_type", "priority", "search", "status", "tags", "columns")
+            end
             p.permit(:name, :shared).merge(filters: filters)
           end
         end

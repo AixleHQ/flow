@@ -13,3 +13,5 @@ class Rack::Attack
   # Allow OAuth callbacks without rate limiting
   safelist("allow-oauth") { |r| r.path.start_with?("/auth/") }
 end
+
+Rack::Attack.enabled = false if Rails.env.test?
