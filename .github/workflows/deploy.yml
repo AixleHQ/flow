@@ -157,6 +157,7 @@ jobs:
             AUTHOR_NAME=${{ github.actor }}
             AUTHOR_EMAIL=${{ github.actor }}@users.noreply.github.com
             ASSET_HOST=${{ needs.prepare-config.outputs.asset_host }}
+            VITE_SENTRY_FRONTEND_DSN=${{ secrets.SENTRY_FRONTEND_DSN }}
           cache-from: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }}
           cache-to: type=registry,ref=${{ needs.prepare-config.outputs.cache_ref }},mode=max,image-manifest=true,oci-mediatypes=true
 
