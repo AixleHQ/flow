@@ -25,6 +25,7 @@ import {
   IconTool,
   IconUser,
   IconUsers,
+  IconWand,
 } from '@tabler/icons-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 
@@ -160,6 +161,122 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+// ─── AI Builder sidebar banner (AC11) ────────────────────────────────────────
+
+interface AiBannerProps {
+  collapsed: boolean;
+  projectId?: string | null;
+}
+
+function AiBanner({ collapsed, projectId }: AiBannerProps) {
+  const handleClick = () => {
+    if (projectId) {
+      router.visit(`/company/projects/${projectId}/aixle_builder`);
+    } else {
+      router.visit('/company/aixle_builder');
+    }
+  };
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          padding: '8px 0',
+          display: 'flex',
+          justifyContent: 'center',
+          borderTop: '1px solid var(--app-border-default)',
+          flexShrink: 0,
+        }}
+      >
+        <Tooltip label="AI Builder" position="right" withArrow>
+          <UnstyledButton
+            onClick={handleClick}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: '#cf6b4a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            <IconWand size={16} style={{ color: '#fff' }} />
+          </UnstyledButton>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        padding: '12px 10px',
+        borderTop: '1px solid var(--app-border-default)',
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: 'flex-start',
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            background: '#cf6b4a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <IconWand size={18} style={{ color: '#fff' }} />
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text-primary)', lineHeight: 1.3 }}>
+            AI Builder
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', lineHeight: 1.4, marginTop: 2 }}>
+            Tasks, boards, and workflows — connected, from one prompt.
+          </div>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={handleClick}
+        style={{
+          background: '#e8e5e2',
+          color: '#1a1816',
+          borderRadius: 8,
+          width: '100%',
+          border: 'none',
+          cursor: 'pointer',
+          padding: '8px 12px',
+          fontSize: 13,
+          fontWeight: 600,
+          fontFamily: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          transition: 'background 0.12s',
+        }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f0edea')}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#e8e5e2')}
+      >
+        <IconWand size={14} />✦ Build with AI
+      </button>
+    </div>
+  );
+}
 
 // ─── SidebarNav ───────────────────────────────────────────────────────────────
 
@@ -486,6 +603,8 @@ function SidebarContent({
       <ScrollArea className={classes.scrollArea} type="never">
         <SidebarNav groups={navGroups} collapsed={collapsed} isAdmin={isAdmin} onNavigate={onNavigate} />
       </ScrollArea>
+
+      <AiBanner collapsed={collapsed} projectId={projectId} />
 
       <div className={`${classes.collapseRow} ${collapsed ? classes.collapseRowCollapsed : ''}`}>
         <ColorSchemeToggle className={classes.collapseBtn} tooltipPosition={collapsed ? 'right' : 'top'} />

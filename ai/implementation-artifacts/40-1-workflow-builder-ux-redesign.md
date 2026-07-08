@@ -1,6 +1,6 @@
 # Story 40.1: Workflow Builder — Full UX Redesign
 
-Status: ready-for-dev
+Status: review
 
 ## Story
 
@@ -249,80 +249,80 @@ The existing button/link on `WorkflowsPage` (if any) that previously opened the 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Rename terminology in UI only (AC1)
-  - [ ] 1.1 Replace all `Step` labels with `Session` in tree-nav and editor panel header
-  - [ ] 1.2 Replace all `Sub-step` / `Substep` labels with `Step`
-  - [ ] 1.3 Update placeholder text: "Add a session…", "Session name…", "Add a step…", "Step name…"
-  - [ ] 1.4 Update BuilderPage title, section labels, empty states
+- [x] Task 1: Rename terminology in UI only (AC1)
+  - [x] 1.1 Replace all `Step` labels with `Session` in tree-nav and editor panel header
+  - [x] 1.2 Replace all `Sub-step` / `Substep` labels with `Step`
+  - [x] 1.3 Update placeholder text: "Add a session…", "Session name…", "Add a step…", "Step name…"
+  - [x] 1.4 Update BuilderPage title, section labels, empty states
 
-- [ ] Task 2: Post-create redirect to builder (AC2)
-  - [ ] 2.1 In `WorkflowsPage.tsx`, after successful workflow create mutation, call `router.visit(Routes.builderProjectWorkflowPath(projectId, newWorkflowId))`
-  - [ ] 2.2 Use `Routes.builderCompanyProjectWorkflowPath(project.id, newWorkflowId)` — this helper already exists in `shared/routes.ts` (line ~941)
+- [x] Task 2: Post-create redirect to builder (AC2)
+  - [x] 2.1 In `WorkflowsPage.tsx`, after successful workflow create mutation, call `router.visit(Routes.builderProjectWorkflowPath(projectId, newWorkflowId))`
+  - [x] 2.2 Use `Routes.builderCompanyProjectWorkflowPath(project.id, newWorkflowId)` — this helper already exists in `shared/routes.ts` (line ~941)
 
-- [ ] Task 3: Header redesign (AC3)
-  - [ ] 3.1 Replace current MUI-style `TextInput` header with transparent inline inputs (name as heading, desc as compact textarea)
-  - [ ] 3.2 Add "Saving… / Saved" chip component — single piece of shared state `savingCount: number`, shows spinner when > 0, check when 0
-  - [ ] 3.3 Ensure chip is visible in top-right of header row alongside "Back" link and "Run" button
-  - [ ] 3.4 Debounced save for name/description hooks into existing `apiFetch(Routes.apiV1ProjectWorkflowPath(project.id, workflow.id), { method: 'PATCH', ... })` — `apiV1ProjectWorkflowPath` exists in `shared/routes.ts`
+- [x] Task 3: Header redesign (AC3)
+  - [x] 3.1 Replace current MUI-style `TextInput` header with transparent inline inputs (name as heading, desc as compact textarea)
+  - [x] 3.2 Add "Saving… / Saved" chip component — single piece of shared state `savingCount: number`, shows spinner when > 0, check when 0
+  - [x] 3.3 Ensure chip is visible in top-right of header row alongside "Back" link and "Run" button
+  - [x] 3.4 Debounced save for name/description hooks into existing `apiFetch(Routes.apiV1ProjectWorkflowPath(project.id, workflow.id), { method: 'PATCH', ... })` — `apiV1ProjectWorkflowPath` exists in `shared/routes.ts`
 
-- [ ] Task 4: Three-tab layout scaffold (AC4)
-  - [ ] 4.1 Wrap builder body in Mantine `Tabs` component with `Sessions`, `Triggers`, `Base Resources` panels
-  - [ ] 4.2 Style tab bar to match design: accent active indicator, `bg-raised` background
-  - [ ] 4.3 Lazy-render tab content (only mount active tab or keep all mounted — choose based on perf)
+- [x] Task 4: Three-tab layout scaffold (AC4)
+  - [x] 4.1 Wrap builder body in Mantine `Tabs` component with `Sessions`, `Triggers`, `Base Resources` panels
+  - [x] 4.2 Style tab bar to match design: accent active indicator, `bg-raised` background
+  - [x] 4.3 Lazy-render tab content (only mount active tab or keep all mounted — choose based on perf)
 
-- [ ] Task 5: Sessions tab — tree-nav + editor (AC5)
-  - [ ] 5.1 Extract existing tree nav into `SessionTreeNav` component (left pane, ~300px fixed width, `bg-raised` bg + right border)
-  - [ ] 5.2 Implement session row with: numbered badge, name, tag chips row (AUTO / BMAD / ROOT / AFTER), drag handle (hover-only), trash button (hover-only); active row gets `accent-dim` bg + accent border
-  - [ ] 5.3 Add step (sub-step) rows nested inside each session — indented 26px, lettered badge (`a`, `b`, …), name, drag handle, trash
-  - [ ] 5.4 Inline ghost rows: "Add a session…" global (bottom) and per-session "+ Add a step…"; both open focused inline input on click; `↵` confirms, `Esc` / blur cancels; confirm immediately creates and selects the item
-  - [ ] 5.5 Drag-to-reorder sessions via `@dnd-kit/sortable`; sub-tree moves with session; drag-to-reorder steps within a session
-  - [ ] 5.6 Re-number session badges (`1, 2, …`) after add/delete/reorder; re-letter step badges (`a, b, …`) after add/delete/reorder within a session
-  - [ ] 5.7 Session badge chips (`renderSessionTags`): re-compute and re-render on every field change that affects tags (auto-run toggle, BMAD toggle, dependency change)
-  - [ ] 5.8 Extract right-side editor into `SessionEditorPanel` (session selected) and `StepEditorPanel` (step selected); controlled by `editorMode: 'session' | 'step'` + selectedId state
-  - [ ] 5.9 **DEFINITION section**: name as heading-style `TextInput` (18px/700/transparent, focus→accent border), description 2-row `Textarea`, instructions tall `Textarea` (min 180px) with character count + Expand toggle + required-field dot + help link; sessions only for instructions
-  - [ ] 5.10 **EXECUTION section**: Agent custom select (agent icon 18px + name, options from `agents` Inertia prop), Execution Environment custom select with runtime logos (base64 images in HTML reference)
-  - [ ] 5.11 **RESOURCES section**: info note bar (`Session-level additions — stacked on top of Base Resources`); Tools, MCP Servers, Skills each as labeled `MultiSelect` with chips + "None added"
-  - [ ] 5.12 **DEPENDENCIES section**: live contextual note; "Run after" `Select` populated from sibling sessions; selecting a dep re-renders tree nav tags immediately
-  - [ ] 5.13 **DATA FLOW section**: Inputs list (add/remove rows: name, asset_type, required); Output Artifact list (add/remove rows: name, asset_type, required, name_pattern)
-  - [ ] 5.14 **BEHAVIOR section — Run control**: "Auto-run available" `Switch` (→ updates AUTO badge); Skip Policy `Select` (Never/If outputs exist/Manual + consequence text); On Failure `Select` (Fail/Retry/Skip + consequence text)
-  - [ ] 5.15 **BEHAVIOR section — Environment**: "Mount repositories" `Switch`; "BMAD Method" `Switch` (→ updates BMAD badge; subsumed from Story 34.3)
-  - [ ] 5.16 **OPTIONS section** (step only): "Required" `Switch`
+- [x] Task 5: Sessions tab — tree-nav + editor (AC5)
+  - [x] 5.1 Extract existing tree nav into `SessionTreeNav` component (left pane, ~300px fixed width, `bg-raised` bg + right border)
+  - [x] 5.2 Implement session row with: numbered badge, name, tag chips row (AUTO / BMAD / ROOT / AFTER), drag handle (hover-only), trash button (hover-only); active row gets `accent-dim` bg + accent border
+  - [x] 5.3 Add step (sub-step) rows nested inside each session — indented 26px, lettered badge (`a`, `b`, …), name, drag handle, trash
+  - [x] 5.4 Inline ghost rows: "Add a session…" global (bottom) and per-session "+ Add a step…"; both open focused inline input on click; `↵` confirms, `Esc` / blur cancels; confirm immediately creates and selects the item
+  - [x] 5.5 Drag-to-reorder sessions via `@dnd-kit/sortable`; sub-tree moves with session; drag-to-reorder steps within a session
+  - [x] 5.6 Re-number session badges (`1, 2, …`) after add/delete/reorder; re-letter step badges (`a, b, …`) after add/delete/reorder within a session
+  - [x] 5.7 Session badge chips (`renderSessionTags`): re-compute and re-render on every field change that affects tags (auto-run toggle, BMAD toggle, dependency change)
+  - [x] 5.8 Extract right-side editor into `SessionEditorPanel` (session selected) and `StepEditorPanel` (step selected); controlled by `editorMode: 'session' | 'step'` + selectedId state
+  - [x] 5.9 **DEFINITION section**: name as heading-style `TextInput` (18px/700/transparent, focus→accent border), description 2-row `Textarea`, instructions tall `Textarea` (min 180px) with character count + Expand toggle + required-field dot + help link; sessions only for instructions
+  - [x] 5.10 **EXECUTION section**: Agent custom select (agent icon 18px + name, options from `agents` Inertia prop), Execution Environment custom select with runtime logos (base64 images in HTML reference)
+  - [x] 5.11 **RESOURCES section**: info note bar (`Session-level additions — stacked on top of Base Resources`); Tools, MCP Servers, Skills each as labeled `MultiSelect` with chips + "None added"
+  - [x] 5.12 **DEPENDENCIES section**: live contextual note; "Run after" `Select` populated from sibling sessions; selecting a dep re-renders tree nav tags immediately
+  - [x] 5.13 **DATA FLOW section**: Inputs list (add/remove rows: name, asset_type, required); Output Artifact list (add/remove rows: name, asset_type, required, name_pattern)
+  - [x] 5.14 **BEHAVIOR section — Run control**: "Auto-run available" `Switch` (→ updates AUTO badge); Skip Policy `Select` (Never/If outputs exist/Manual + consequence text); On Failure `Select` (Fail/Retry/Skip + consequence text)
+  - [x] 5.15 **BEHAVIOR section — Environment**: "Mount repositories" `Switch`; "BMAD Method" `Switch` (→ updates BMAD badge; subsumed from Story 34.3)
+  - [x] 5.16 **OPTIONS section** (step only): "Required" `Switch`
 
-- [ ] Task 6: Triggers tab (AC6)
-  - [ ] 6.1 Create `TriggersTab` component — renders tab header, card grid or empty state
-  - [ ] 6.2 **Empty state**: bolt icon badge, "Add your first trigger" heading, subtitle, 2×2 option tile grid (column/schedule/slack/webhook icons+names+descriptions); clicking tile opens panel pre-selected to that type
-  - [ ] 6.3 **Card grid**: `display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px`; each `trig-item` card renders title, meta, event chip, disabled badge (if off), on/off `Switch`, edit, delete
-  - [ ] 6.4 **"+ Add a trigger" tile**: dashed border tile appended after cards; clicking opens Add panel with type unlocked
-  - [ ] 6.5 **Add/Edit side panel**: right-side panel with scrim over list; type `Select` (locked on edit with lock note); per-type fields (see AC6 field spec); Subject `Select` populated from sessions list; "Cancel" ghost btn + "Add/Update trigger" accent btn
-  - [ ] 6.6 On trigger save/delete trigger mutation via `apiFetch` → `router.reload({ only: ['triggers'] })`
-  - [ ] 6.7 Ensure `builder` controller action serializes `triggers` in Inertia props (check `app/controllers/web/projects/workflows_controller.rb`)
+- [x] Task 6: Triggers tab (AC6)
+  - [x] 6.1 Create `TriggersTab` component — renders tab header, card grid or empty state
+  - [x] 6.2 **Empty state**: bolt icon badge, "Add your first trigger" heading, subtitle, 2×2 option tile grid (column/schedule/slack/webhook icons+names+descriptions); clicking tile opens panel pre-selected to that type
+  - [x] 6.3 **Card grid**: `display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px`; each `trig-item` card renders title, meta, event chip, disabled badge (if off), on/off `Switch`, edit, delete
+  - [x] 6.4 **"+ Add a trigger" tile**: dashed border tile appended after cards; clicking opens Add panel with type unlocked
+  - [x] 6.5 **Add/Edit side panel**: right-side panel with scrim over list; type `Select` (locked on edit with lock note); per-type fields (see AC6 field spec); Subject `Select` populated from sessions list; "Cancel" ghost btn + "Add/Update trigger" accent btn
+  - [x] 6.6 On trigger save/delete trigger mutation via `apiFetch` → `router.reload({ only: ['triggers'] })`
+  - [x] 6.7 Ensure `builder` controller action serializes `triggers` in Inertia props (check `app/controllers/web/projects/workflows_controller.rb`)
 
-- [ ] Task 7: Base Resources tab (AC7)
-  - [ ] 7.1 Move `BaseResourcesSection` from Accordion inside Sessions tab to `BaseResourcesTab` component
-  - [ ] 7.2 Add "Inherit all project resources" toggle card at top of tab (maps to existing `inheritAllProjectResources` field)
-  - [ ] 7.3 Lay out pickers in 2-column grid
-  - [ ] 7.4 Remove old `BaseResourcesSection` Accordion from Sessions tab
+- [x] Task 7: Base Resources tab (AC7)
+  - [x] 7.1 Move `BaseResourcesSection` from Accordion inside Sessions tab to `BaseResourcesTab` component
+  - [x] 7.2 Add "Inherit all project resources" toggle card at top of tab (maps to existing `inheritAllProjectResources` field)
+  - [x] 7.3 Lay out pickers in 2-column grid
+  - [x] 7.4 Remove old `BaseResourcesSection` Accordion from Sessions tab
 
-- [ ] Task 8: Design tokens + CSS (AC8)
-  - [ ] 8.1 Audit `BuilderPage.module.css` — ensure all new selectors use the established token variables
-  - [ ] 8.2 No floating `box-shadow` on new components — use `border` only
-  - [ ] 8.3 Use `--accent` only for interactive states (active tab, active session row, primary button) — not decoration
+- [x] Task 8: Design tokens + CSS (AC8)
+  - [x] 8.1 Audit `BuilderPage.module.css` — ensure all new selectors use the established token variables
+  - [x] 8.2 No floating `box-shadow` on new components — use `border` only
+  - [x] 8.3 Use `--accent` only for interactive states (active tab, active session row, primary button) — not decoration
 
-- [ ] Task 9: Autosave chip + field wiring (AC9)
-  - [ ] 9.1 Create `useSavingState()` hook: tracks in-flight count, exposes `withSave(promise)` wrapper
-  - [ ] 9.2 Wrap every mutation in `withSave(...)` so chip reflects aggregate state
-  - [ ] 9.3 Ensure all new fields (Dependencies, BMAD toggle) call save on change
+- [x] Task 9: Autosave chip + field wiring (AC9)
+  - [x] 9.1 Create `useSavingState()` hook: tracks in-flight count, exposes `withSave(promise)` wrapper
+  - [x] 9.2 Wrap every mutation in `withSave(...)` so chip reflects aggregate state
+  - [x] 9.3 Ensure all new fields (Dependencies, BMAD toggle) call save on change
 
-- [ ] Task 10: Run button guard (AC10)
-  - [ ] 10.1 Compute `canRun = steps.some(s => s.instructions?.trim().length > 0)`
-  - [ ] 10.2 Disable Run button + show `Tooltip` when `!canRun`
+- [x] Task 10: Run button guard (AC10)
+  - [x] 10.1 Compute `canRun = steps.some(s => s.instructions?.trim().length > 0)`
+  - [x] 10.2 Disable Run button + show `Tooltip` when `!canRun`
 
-- [ ] Task 11: Move "Build with AI" to sidebar (AC11)
-  - [ ] 11.1 Remove "Build with AI" button / link from `WorkflowsPage` header or wherever it currently lives
-  - [ ] 11.2 Add AI Builder banner at the bottom of the global sidebar layout component (find the shared layout in `app/frontend/shared/layouts/` or `app/frontend/layouts/`)
-  - [ ] 11.3 Banner markup: accent icon badge (`ti-wand`) + "AI Builder" title + subtitle text + "✦ Build with AI" full-width button
-  - [ ] 11.4 "Build with AI" button navigates to the AI Builder page via `router.visit(Routes.aiBuilderPath(...))` — verify route name; if the AI Builder page doesn't exist yet, wire button to the existing flow (modal or redirect) that was previously in the header
-  - [ ] 11.5 Banner is always visible in the sidebar regardless of which page the user is on (it is part of the global layout, not page-specific)
+- [x] Task 11: Move "Build with AI" to sidebar (AC11)
+  - [x] 11.1 Remove "Build with AI" button / link from `WorkflowsPage` header or wherever it currently lives
+  - [x] 11.2 Add AI Builder banner at the bottom of the global sidebar layout component (find the shared layout in `app/frontend/shared/layouts/` or `app/frontend/layouts/`)
+  - [x] 11.3 Banner markup: accent icon badge (`ti-wand`) + "AI Builder" title + subtitle text + "✦ Build with AI" full-width button
+  - [x] 11.4 "Build with AI" button navigates to the AI Builder page via `router.visit(Routes.aiBuilderPath(...))` — verify route name; if the AI Builder page doesn't exist yet, wire button to the existing flow (modal or redirect) that was previously in the header
+  - [x] 11.5 Banner is always visible in the sidebar regardless of which page the user is on (it is part of the global layout, not page-specific)
 
 ---
 
@@ -590,8 +590,51 @@ Also confirm the "New Workflow" modal (`createModal`) is already present on `Wor
 
 ### Agent Model Used
 
+claude-sonnet-4-6
+
 ### Debug Log References
+
+- Fixed unused imports in `BuilderPage.tsx`, `SessionEditorPanel.tsx`, `SessionTreeNav.tsx`, `TriggersTab.tsx`
+- Fixed TypeScript type conversion error in `TriggersTab.tsx` (double-cast via `unknown`)
+- Fixed ESLint/Prettier formatting errors across multiple new files
+- Fixed Vitest test failures in `BuilderPage.test.tsx` and `WorkflowsPage.test.tsx` to match new component structure and terminology
+- Extracted `useSavingState` to `useSavingState.ts` to resolve `react-refresh/only-export-components` warning
+- Fixed import order for `useSavingState` in `BuilderPage.tsx`
+- Removed redundant `fetchSpy` assignment in `BuilderPage.test.tsx`
 
 ### Completion Notes List
 
+- AC1: All UI labels updated — "Step" → "Session", "Sub-step" → "Step". Backend model names unchanged.
+- AC2: `WorkflowsPage.tsx` `handleCreate` now redirects to `builderCompanyProjectWorkflowPath` after successful creation.
+- AC3: Inline editable header with transparent `TextInput` for workflow name, autosizing `Textarea` for description, 500ms debounce saves, persistent `SaveChip` in header row.
+- AC4: Mantine `Tabs` with three panels (Sessions / Triggers / Base Resources), accent-coloured active indicator.
+- AC5: `SessionTreeNav` (tree nav with session/step rows, ghost rows, D&D, badge tags), `SessionEditorPanel` (all sections: Definition, Execution, Resources, Dependencies, Data Flow, Behavior), `StepEditorPanel` (Definition + Options).
+- AC6: `TriggersTab` with empty state (2×2 option tiles) and card grid; `TriggerFormPanel` as right-side sliding panel for add/edit with per-type fields.
+- AC7: `BaseResourcesTab` with inherit toggle card + 2-column MultiSelect grid. Moved from former Accordion in Sessions tab.
+- AC8: All new CSS selectors in `BuilderPage.module.css` use `--bg`, `--bg-raised`, `--bg-card`, `--accent`, `--accent-dim`, etc. No floating box-shadows.
+- AC9: `useSavingState` hook in `useSavingState.ts` + `SaveChip` in `SaveChip.tsx`. All mutations wrapped in `withSave(...)`.
+- AC10: `canRun` derived from `steps.some(s => s.instructions?.trim())`. Run button disabled with tooltip when false.
+- AC11: `AiBanner` component added to `AppSidebar.tsx` — always visible at bottom of sidebar. Removed from `WorkflowsPage` header. Banner includes wand icon badge, title, subtitle, full-width "✦ Build with AI" button.
+- All tests pass: 22 tests in `WorkflowsPage.test.tsx`, 17 tests in `BuilderPage.test.tsx`.
+- Full `check_all` suite green: eslint, typescript, rails-test, rubocop, brakeman, fe-test.
+
 ### File List
+
+- `app/frontend/pages/Projects/Workflows/BuilderPage.tsx` (modified)
+- `app/frontend/pages/Projects/Workflows/BuilderPage.module.css` (modified)
+- `app/frontend/pages/Projects/Workflows/BuilderPage.test.tsx` (modified)
+- `app/frontend/pages/Projects/Workflows/WorkflowsPage.tsx` (modified)
+- `app/frontend/pages/Projects/Workflows/WorkflowsPage.test.tsx` (modified)
+- `app/frontend/pages/Projects/Workflows/SaveChip.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/useSavingState.ts` (new)
+- `app/frontend/pages/Projects/Workflows/SessionTreeNav.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/SessionEditorPanel.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/StepEditorPanel.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/TriggersTab.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/TriggerFormPanel.tsx` (new)
+- `app/frontend/pages/Projects/Workflows/BaseResourcesTab.tsx` (new)
+- `app/frontend/shared/ui/AppSidebar.tsx` (modified)
+
+## Change Log
+
+- 2026-07-08: Implemented story 40.1 — full UX redesign of Workflow Builder page. Renamed Step→Session/Sub-step→Step in UI; post-create redirect; inline editable header with SaveChip; three-tab layout (Sessions/Triggers/Base Resources); SessionTreeNav with badge tags and D&D; SessionEditorPanel with all sections; StepEditorPanel; TriggersTab with card grid and TriggerFormPanel; BaseResourcesTab with inherit toggle; useSavingState hook; Run button guard; AI Builder banner in global sidebar.

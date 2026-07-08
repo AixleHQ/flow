@@ -26,9 +26,7 @@ import {
   IconPlus,
   IconSearch,
   IconSettings,
-  IconSparkles,
   IconTrash,
-  IconWand,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
@@ -36,6 +34,7 @@ import { z } from 'zod';
 
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -144,9 +143,17 @@ const WorkflowsPage = () => {
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
-        onSuccess: () => {
+        onSuccess: (page) => {
           setCreateOpen(false);
           createForm.reset();
+          // AC2: redirect to builder after successful create
+          const newWorkflows = (page.props as { workflows?: { id: number }[] }).workflows;
+          if (newWorkflows && newWorkflows.length > 0) {
+            const latest = newWorkflows[newWorkflows.length - 1];
+            if (latest) {
+              router.visit(builderCompanyProjectWorkflowPath(project.id, latest.id));
+            }
+          }
         },
       },
     );
@@ -239,38 +246,7 @@ const WorkflowsPage = () => {
           50% { opacity: 0.4; }
         }
       `}</style>
-      {/* Aixle Builder Banner */}
-      <Card
-        withBorder
-        p="md"
-        mb="md"
-        style={{
-          borderColor: 'var(--mantine-color-brand-6)',
-          backgroundImage: 'linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, rgba(168, 85, 247, 0.04) 100%)',
-        }}
-      >
-        <Group justify="space-between" wrap="nowrap">
-          <Group gap="sm" wrap="nowrap">
-            <IconWand size={24} style={{ color: 'var(--mantine-color-brand-5)', flexShrink: 0 }} />
-            <Box>
-              <Text fw={600} size="sm">
-                Aixle Builder
-              </Text>
-              <Text size="xs" c="dimmed">
-                Build workflows with AI — agents, steps, board automation
-              </Text>
-            </Box>
-          </Group>
-          <Button
-            size="sm"
-            leftSection={<IconSparkles size={14} />}
-            onClick={() => router.visit(`/company/projects/${project.id}/aixle_builder`)}
-          >
-            Open Builder
-          </Button>
-        </Group>
-      </Card>
-
+      {/* Search and actions */}
       <Group justify="space-between" mb="md">
         <Group gap="sm">
           <TextInput
@@ -338,7 +314,7 @@ const WorkflowsPage = () => {
                   </Text>
                 )}
                 <Text size="xs" c="dimmed" mt={4}>
-                  {wf.stepsCount} steps
+                  {wf.stepsCount} {wf.stepsCount === 1 ? 'session' : 'sessions'}
                   {wf.lastRunAt && <> &middot; Last run {new Date(wf.lastRunAt).toLocaleDateString()}</>}
                 </Text>
 

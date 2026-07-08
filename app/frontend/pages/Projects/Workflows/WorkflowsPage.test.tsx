@@ -51,8 +51,6 @@ describe('Projects/Workflows/WorkflowsPage', () => {
 
     expect(screen.getByText('No workflows yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create your first workflow' })).toBeInTheDocument();
-    // Builder banner CTA is always present.
-    expect(screen.getByRole('button', { name: 'Open Builder' })).toBeInTheDocument();
   });
 
   it('lists workflows and filters them by the search query', async () => {
@@ -115,21 +113,22 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     expect(router.visit).toHaveBeenCalledWith('/company/workflow_catalog');
   });
 
-  it('navigates to the Aixle Builder from the banner CTA', async () => {
+  it('navigates to the Aixle Builder from the sidebar banner', async () => {
     renderAuthedPage(<WorkflowsPage />, { props: baseProps([]) });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Open Builder' }));
-
-    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder');
+    // AI Builder banner is now in the sidebar, not on this page.
+    // The banner is rendered by AppSidebar which is outside WorkflowsPage.
+    // This test verifies the page itself does not render an "Open Builder" button anymore.
+    expect(screen.queryByRole('button', { name: 'Open Builder' })).not.toBeInTheDocument();
   });
 
-  it('shows the step count and last-run date on a workflow card', () => {
+  it('shows the session count and last-run date on a workflow card', () => {
     renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 1, name: 'Nightly Build', stepsCount: 5, lastRunAt: '2026-03-15T10:00:00Z' })]),
     });
 
     const lastRunDate = new Date('2026-03-15T10:00:00Z').toLocaleDateString();
-    expect(screen.getByText(/5 steps/)).toBeInTheDocument();
+    expect(screen.getByText(/5 sessions/)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`Last run ${lastRunDate}`))).toBeInTheDocument();
   });
 
@@ -138,7 +137,7 @@ describe('Projects/Workflows/WorkflowsPage', () => {
       props: baseProps([workflow({ id: 1, name: 'Nightly Build', stepsCount: 2, lastRunAt: null })]),
     });
 
-    expect(screen.getByText(/2 steps/)).toBeInTheDocument();
+    expect(screen.getByText(/2 sessions/)).toBeInTheDocument();
     expect(screen.queryByText(/Last run/)).not.toBeInTheDocument();
   });
 
