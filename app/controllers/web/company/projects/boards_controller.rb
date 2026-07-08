@@ -24,6 +24,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       tasks: -> {
         board.board_tasks
+             .active
              .select(Arel.sql(<<~SQL))
                board_tasks.*,
                (SELECT COUNT(*) FROM task_comments WHERE board_task_id = board_tasks.id) AS comments_count,

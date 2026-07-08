@@ -46,6 +46,8 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import {
+  IconArchive,
+  IconArchiveOff,
   IconArrowsMaximize,
   IconArrowsMinimize,
   IconBookmark,
@@ -105,6 +107,8 @@ import {
   apiV1ProjectTaskAssetPath,
   apiV1ProjectTaskGatePath,
   moveApiV1ProjectTaskPath,
+  archiveApiV1ProjectTaskPath,
+  unarchiveApiV1ProjectTaskPath,
   triggerWorkflowApiV1ProjectTaskPath,
   apiV1ProjectColumnsPath,
   apiV1ProjectColumnPath,
@@ -172,6 +176,7 @@ interface Task {
   position: number;
   parentTaskId: number | null;
   tags: string[];
+  archived: boolean;
   commentsCount: number;
   childrenCount: number;
   assetsCount?: number;
@@ -288,9 +293,17 @@ interface BoardFilters {
   priority: string | null;
   tags: string[];
   search: string;
+  showArchived: boolean;
 }
 
-const EMPTY_FILTERS: BoardFilters = { assigneeId: null, taskType: null, priority: null, tags: [], search: '' };
+const EMPTY_FILTERS: BoardFilters = {
+  assigneeId: null,
+  taskType: null,
+  priority: null,
+  tags: [],
+  search: '',
+  showArchived: false,
+};
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -363,6 +376,7 @@ function TaskCardUI({
         cursor: 'pointer',
         transition: 'box-shadow 0.15s, border-color 0.15s',
         borderColor: 'var(--app-border-strong)',
+        opacity: task.archived ? 0.6 : 1,
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
@@ -398,6 +412,17 @@ function TaskCardUI({
 
       {/* Type chip + tags */}
       <Group gap={4} mt={6} wrap="wrap">
+        {task.archived && (
+          <Badge
+            size="xs"
+            variant="light"
+            color="gray"
+            leftSection={<IconArchive size={9} />}
+            style={{ fontSize: 10 }}
+          >
+            Archived
+          </Badge>
+        )}
         {task.taskType && task.taskType !== 'not_specified' && (
           <Badge
             size="xs"
@@ -877,6 +902,7 @@ function TaskDetailSidebar({
   const [authorFilter, setAuthorFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1014,6 +1040,21 @@ function TaskDetailSidebar({
     setTriggeringWorkflow(false);
   }, [projectId, task]);
 
+  const handleToggleArchive = useCallback(async () => {
+    if (!task) return;
+    setArchiving(true);
+    const path = task.archived
+      ? unarchiveApiV1ProjectTaskPath(projectId, task.id)
+      : archiveApiV1ProjectTaskPath(projectId, task.id);
+    try {
+      await apiFetch(path, { method: 'PATCH', headers: jsonHeaders });
+      router.reload({ only: ['tasks', 'selected_task'] });
+    } catch {
+      /* ignore */
+    }
+    setArchiving(false);
+  }, [projectId, task]);
+
   const handleDeleteGate = useCallback(
     async (gateId: number) => {
       if (!task) return;
@@ -1104,6 +1145,19 @@ function TaskDetailSidebar({
               >
                 Run workflow
               </Button>
+            )}
+            {canExecute && (
+              <Tooltip label={task.archived ? 'Unarchive' : 'Archive'}>
+                <ActionIcon
+                  variant="subtle"
+                  color={task.archived ? 'brand' : 'gray'}
+                  size="sm"
+                  onClick={handleToggleArchive}
+                  loading={archiving}
+                >
+                  {task.archived ? <IconArchiveOff size={16} /> : <IconArchive size={16} />}
+                </ActionIcon>
+              </Tooltip>
             )}
             {canExecute && (
               <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeleteConfirm(true)}>
@@ -2458,6 +2512,7 @@ function ViewPresetMenu({
             priority: null,
             tags: [],
             search: '',
+            showArchived: false,
           }),
       },
       {
@@ -2471,6 +2526,7 @@ function ViewPresetMenu({
             priority: null,
             tags: [],
             search: '',
+            showArchived: false,
           }),
       },
     ],
@@ -2495,6 +2551,7 @@ function ViewPresetMenu({
       priority: (f.priority as string) ?? null,
       tags: (f.tags as string[]) ?? [],
       search: (f.search as string) ?? '',
+      showArchived: false,
     });
   };
 
@@ -2631,12 +2688,21 @@ function normalizeTask(t: Task): Task {
     ...t,
     title: t.title ?? '',
     tags: t.tags ?? [],
+    archived: t.archived ?? false,
     pendingGates: t.pendingGates ?? [],
     recentWorkflowRuns: t.recentWorkflowRuns ?? [],
     assetsCount: t.assetsCount ?? 0,
     childrenCount: t.childrenCount ?? 0,
     commentsCount: t.commentsCount ?? 0,
   };
+}
+
+// Merge two task lists, deduping by id. Tasks in `primary` win over `extra`
+// (used to fold on-demand-loaded archived tasks into the active board without
+// duplicating any task that already appears in the active set).
+function mergeTasksById(primary: Task[], extra: Task[]): Task[] {
+  const ids = new Set(primary.map((t) => t.id));
+  return [...primary, ...extra.filter((t) => !ids.has(t.id))];
 }
 
 const BoardPage = () => {
@@ -2661,10 +2727,41 @@ const BoardPage = () => {
   } = usePage<{ props: Props }>().props as unknown as Props;
   const { canExecute } = useProjectPermissions();
 
+  const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
+  const showArchived = filters.showArchived;
+
+  // Archived tasks are fetched on demand — only when "Show archived" is enabled — so the
+  // initial board load stays limited to active tasks (the core load optimization). Refetched
+  // whenever the active task set changes so archive/unarchive stays reflected in this view.
+  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+
   const [localTasks, setLocalTasks] = useState<Task[]>(() => (serverTasks ?? []).map(normalizeTask));
   useEffect(() => {
-    setLocalTasks((serverTasks ?? []).map(normalizeTask));
-  }, [serverTasks]);
+    const base = (serverTasks ?? []).map(normalizeTask);
+    setLocalTasks(showArchived ? mergeTasksById(base, archivedTasks) : base);
+  }, [serverTasks, archivedTasks, showArchived]);
+
+  useEffect(() => {
+    if (!showArchived || !board) {
+      if (!showArchived) setArchivedTasks([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch(`${apiV1ProjectTasksPath(project.id)}?archived=archived`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setArchivedTasks((Array.isArray(data) ? data : []).map(normalizeTask));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showArchived, board, project.id, serverTasks]);
 
   const selectedTask = selectedTaskProp ? normalizeTask(selectedTaskProp) : null;
 
@@ -2696,7 +2793,6 @@ const BoardPage = () => {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
   const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
   const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(collapsedColumnsStorageKey, new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2739,6 +2835,7 @@ const BoardPage = () => {
 
   const filteredTasks = useMemo(() => {
     return localTasks.filter((t) => {
+      if (!filters.showArchived && t.archived) return false;
       if (filters.search && !(t.title ?? '').toLowerCase().includes(filters.search.toLowerCase())) return false;
       if (filters.assigneeId && String(t.assigneeId) !== filters.assigneeId) return false;
       if (filters.taskType && t.taskType !== filters.taskType) return false;
@@ -3069,7 +3166,16 @@ const BoardPage = () => {
             size="sm"
             w={180}
           />
-          {hasActiveFilters && (
+          <Checkbox
+            label="Show archived"
+            size="sm"
+            checked={filters.showArchived}
+            onChange={(e) => {
+              const checked = e.currentTarget.checked;
+              setFilters((f) => ({ ...f, showArchived: checked }));
+            }}
+          />
+          {(hasActiveFilters || filters.showArchived) && (
             <Button
               variant="subtle"
               size="sm"

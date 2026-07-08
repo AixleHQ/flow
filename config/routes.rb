@@ -106,6 +106,8 @@ Rails.application.routes.draw do
             resources :tasks do
               member do
                 patch :move
+                patch :archive
+                patch :unarchive
                 post :trigger_workflow
                 get :workflow_runs
               end
