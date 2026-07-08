@@ -27,6 +27,7 @@ x-web-environment: &web-environment
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   RAILS_LOG_TO_STDOUT: 'true'
   PORT: 4000
   REDIS_URL: redis://redis:6379/1

@@ -15,6 +15,7 @@ if [ -z "${LD_PRELOAD+x}" ]; then
 fi
 
 bundle check || bundle install
+corepack install
 yarn install
 bundle exec rails db:prepare
 
