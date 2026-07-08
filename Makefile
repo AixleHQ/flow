@@ -35,20 +35,18 @@ COVERAGE_MIN := 85
 # Coverage gating (task #288). SimpleCov (backend) and v8 all:true (frontend)
 # instrumentation are a large multiplier on suite runtime, so CI only runs coverage
 # on the develop branch — the integration gate — and skips it on ordinary feature-branch
-# pushes to keep the Checks/Run stage fast. CI exports CI_BRANCH (github.ref_name) into
-# the container; when it is unset (local `make check_all`/`rails-test`) coverage stays
-# ON so the pre-push gate keeps enforcing the floor.
-COVERAGE_BRANCH := develop
-CI_BRANCH ?=
-ifeq ($(strip $(CI_BRANCH)),)
+# pushes to keep the Checks/Run stage fast. The branch→coverage decision is made in the
+# workflow config (deploy.yml "Prepare Config" job), which sets the run_coverage output
+# and forwards it into the container as RUN_COVERAGE (see code-check.yml /
+# docker-compose.ci.yml). This Makefile just honors that flag. When RUN_COVERAGE is
+# unset/empty (local `make check_all`/`rails-test`) it defaults to 1 so the pre-push gate
+# keeps enforcing the floor.
+RUN_COVERAGE ?= 1
+ifeq ($(strip $(RUN_COVERAGE)),)
   RUN_COVERAGE := 1
-else ifeq ($(strip $(CI_BRANCH)),$(COVERAGE_BRANCH))
-  RUN_COVERAGE := 1
-else
-  RUN_COVERAGE := 0
 endif
 
-ifeq ($(RUN_COVERAGE),1)
+ifeq ($(strip $(RUN_COVERAGE)),1)
   # Enforce the backend floor and produce a coverage report.
   RAILS_TEST_COV_ENV := COVERAGE_MIN=$(COVERAGE_MIN)
   # Frontend: run Vitest with v8 coverage + thresholds (vitest.config.ts).

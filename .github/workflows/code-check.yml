@@ -14,6 +14,13 @@ on:
         required: false
         type: boolean
         default: false
+      run-coverage:
+        # Coverage gate decision (task #288), forwarded from the deploy workflow's
+        # "Prepare Config" job into the container as RUN_COVERAGE. "1" = run coverage,
+        # "0" = skip. Empty (the default) leaves it to the Makefile, which defaults to on.
+        required: false
+        type: string
+        default: ""
       timeout:
         required: false
         type: number
@@ -87,6 +94,9 @@ jobs:
         run: docker compose -f "$COMPOSE_FILE" run --rm --no-deps web bundle exec rails db:create db:migrate
 
       - name: Run check
+        env:
+          # Forwarded into the container by docker-compose.ci.yml (RUN_COVERAGE).
+          RUN_COVERAGE: ${{ inputs.run-coverage }}
         run: |
           ARTIFACT_PATH="${{ inputs.artifact-path }}"
           if [ -n "$ARTIFACT_PATH" ]; then
