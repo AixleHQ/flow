@@ -6,6 +6,7 @@ set -e
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /bundle_cache
   chown -R app:app /bundle_cache 2>/dev/null || true
+  corepack install 2>/dev/null || true
   exec su-exec app "$@"
 fi
 

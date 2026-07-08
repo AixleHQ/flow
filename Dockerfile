@@ -52,6 +52,7 @@ RUN yarn install --immutable
 COPY . /app
 
 ENV PATH=/app/bin:/app/node_modules/.bin:$PATH
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 ARG APP_VERSION
 ENV APP_VERSION=${APP_VERSION}
