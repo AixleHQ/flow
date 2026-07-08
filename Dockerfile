@@ -44,7 +44,6 @@ RUN bundle config set --local frozen true && \
 RUN npm install -g corepack@latest && corepack enable
 
 COPY package.json yarn.lock .yarnrc.yml ./
-COPY .yarn/releases/ .yarn/releases/
 
 RUN corepack install
 RUN yarn install --immutable

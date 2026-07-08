@@ -2,10 +2,15 @@
 set -e
 
 # docker-compose overrides the image ENTRYPOINT with this script. Mirror
-# bin/run-as-app so bundle_cache stays writable under the non-root app user.
+# bin/run-as-app so bundle_cache/app_home stay writable under the non-root
+# app user (app_home holds corepack/yarn's global cache — see docker-compose.yml).
+# Only chown -R once (checked via top-level ownership): app_home accumulates a
+# large corepack/yarn cache, and re-walking it on every container start is slow.
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p /bundle_cache
-  chown -R app:app /bundle_cache 2>/dev/null || true
+  mkdir -p /bundle_cache /home/app
+  for dir in /bundle_cache /home/app; do
+    [ "$(stat -c '%U' "$dir" 2>/dev/null)" = "app" ] || chown -R app:app "$dir" 2>/dev/null || true
+  done
   exec su-exec app:app "$0" "$@"
 fi
 
