@@ -505,7 +505,7 @@ GEM
       base64 (>= 0.1.0)
       logger (>= 1.6.0)
       rack (>= 3.0.0, < 4)
-    rack-proxy (0.8.2)
+    rack-proxy (0.8.3)
       rack
     rack-session (2.1.2)
       base64 (>= 0.1.0)
@@ -704,7 +704,7 @@ GEM
       axiom-types (~> 0.1)
       coercible (~> 1.0)
       descendants_tracker (~> 0.0, >= 0.0.3)
-    vite_rails (3.11.0)
+    vite_rails (3.11.1)
       railties (>= 5.1, < 9)
       vite_ruby (~> 3.0, >= 3.2.2)
     vite_ruby (3.10.2)
@@ -835,7 +835,7 @@ DEPENDENCIES
   ts_routes
   typelizer
   virtus
-  vite_rails (~> 3.0)
+  vite_rails (~> 3.11)
   webmock
   websocket-client-simple (~> 0.3)
 

@@ -72,7 +72,7 @@ gem "csv" # Required for CSV parsing
 
 # Add HTTP asset caching/compression and X-Sendfile acceleration to Puma [https://github.com/basecamp/thruster/]
 gem "thruster", require: false
-gem "vite_rails", "~> 3.0"
+gem "vite_rails", "~> 3.11"
 gem "oas_rails"
 
 # Inertia.js - modern monolith (server-side routing + React components)
