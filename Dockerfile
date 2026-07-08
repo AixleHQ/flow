@@ -9,8 +9,16 @@ RUN apk update && \
 # Only present in the Rails image; the workflow-step image deliberately does NOT
 # receive the CLI or Coder env vars.
 #
-# Downloads the linux amd64 build from the GitHub release tarball. The tarball
-# is small (~50MB) and ships a single `coder` binary plus license/readme files.
+# Downloads the linux amd64 build from the GitHub release tarball (~175MB
+# compressed, ~400MB installed) and ships a single `coder` binary plus
+# license/readme files. The binary is this large because Coder only publishes
+# "fat" builds — every release (all OSes/arches) embeds the web dashboard, so
+# there's no official CLI-only artifact to switch to. A slim, dashboard-less
+# binary exists as an internal build target in the coder repo (`make
+# build/coder-slim_...`) but isn't published anywhere, including their own
+# Docker images — using it here would mean building coder from source
+# in-tree. Decided that's not worth it just to talk to workspaces over SSH;
+# keeping the official fat binary.
 ARG CODER_CLI_VERSION=v2.34.5
 RUN set -eux; \
     curl -fsSL "https://github.com/coder/coder/releases/download/${CODER_CLI_VERSION}/coder_${CODER_CLI_VERSION#v}_linux_amd64.tar.gz" \
@@ -27,7 +35,9 @@ WORKDIR /app
 COPY Gemfile Gemfile.lock .ruby-version ./
 
 RUN gem install bundler -v 4.0.11
-RUN bundle config set --local frozen true && bundle install
+RUN bundle config set --local frozen true && \
+    bundle install && \
+    rm -rf "$GEM_HOME/cache"
 
 # Yarn is provisioned via Corepack driven by the "packageManager" field in
 # package.json — the Yarn release is NOT vendored into the repo.

@@ -31,6 +31,15 @@
 /app/assets/builds/*
 !/app/assets/builds/.keep
 /public/assets
+/public/vite*
+/public/cache
+/public/store
+
+# Ignore local test/coverage artifacts.
+/coverage
+
+# Ignore git metadata (history, not needed at runtime, avoid shipping it).
+/.git
 
 # Ignore CI service files.
 /.github
