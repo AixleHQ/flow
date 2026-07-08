@@ -100,7 +100,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     # Validate step_overrides keys are integers rather than using to_unsafe_h which bypasses strong params
     raw = params[:workflow_run][:step_overrides]
     permitted[:step_overrides] = if raw.respond_to?(:to_unsafe_h)
-      raw.to_unsafe_h.transform_keys { |k| Integer(k) rescue nil }.compact
+      raw.to_unsafe_h.select { |k, _| k.to_s.match?(/\A\d+\z/) }
     else
       {}
     end

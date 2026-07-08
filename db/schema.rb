@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_08_124504) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -22,6 +22,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
     t.datetime "expires_at"
     t.datetime "last_used_at"
     t.jsonb "metadata", default: {}
+    t.datetime "quota_error_detected_at"
+    t.string "status"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
@@ -82,6 +84,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
     t.index ["status"], name: "index_assets_on_status"
     t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
     t.index ["terminal_session_id"], name: "index_assets_on_terminal_session_id"
+  end
+
+  create_table "audits", force: :cascade do |t|
+    t.string "action"
+    t.integer "associated_id"
+    t.string "associated_type"
+    t.integer "auditable_id"
+    t.string "auditable_type"
+    t.text "audited_changes"
+    t.string "comment"
+    t.datetime "created_at"
+    t.string "remote_address"
+    t.string "request_uuid"
+    t.integer "user_id"
+    t.string "user_type"
+    t.string "username"
+    t.integer "version", default: 0
+    t.index ["associated_type", "associated_id"], name: "associated_index"
+    t.index ["auditable_type", "auditable_id", "version"], name: "auditable_index"
+    t.index ["created_at"], name: "index_audits_on_created_at"
+    t.index ["request_uuid"], name: "index_audits_on_request_uuid"
+    t.index ["user_id", "user_type"], name: "user_index"
   end
 
   create_table "board_activities", force: :cascade do |t|
@@ -408,7 +432,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_02_300006) do
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "package"
-    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
