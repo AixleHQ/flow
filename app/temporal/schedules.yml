@@ -34,3 +34,11 @@ schedules:
     cron: "*/5 * * * *"
     overlap: skip
     enabled: true
+
+  # Proactive server-side OAuth token refresh for integration + MCP-server
+  # credentials nearing expiry (oauth-unification §4.5). SKIP overlap: each refresh
+  # is a read-merge-write under a row lock, so two sweeps must never run at once.
+  - workflow: oauth_token_refresh_workflow
+    cron: "*/5 * * * *"
+    overlap: skip
+    enabled: true

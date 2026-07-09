@@ -402,4 +402,25 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to "/company/projects"
     assert_equal "Unknown OAuth client", flash[:alert]
   end
+
+  # --- CIMD client-metadata document ---------------------------------------
+
+  test "client-metadata.json is publicly fetchable and is a valid CIMD document" do
+    # A fresh, unauthenticated session — the AS dereferences this URL with no cookie.
+    anon = open_session
+    anon.get "/oauth/client-metadata.json"
+
+    assert_equal 200, anon.response.status
+    doc = JSON.parse(anon.response.body)
+
+    base = "#{Settings.protocol}://#{Settings.domain}"
+    # CIMD invariant: the document's client_id equals the URL it is served at.
+    assert_equal "#{base}/oauth/client-metadata.json", doc["client_id"]
+    # We identify to the authorization server as the product, "Aixle Flow".
+    assert_equal "Aixle Flow", doc["client_name"]
+    assert_includes doc["redirect_uris"], "#{base}/oauth/callback"
+    assert_equal "none", doc["token_endpoint_auth_method"]
+    assert_equal %w[authorization_code refresh_token], doc["grant_types"]
+    assert_equal %w[code], doc["response_types"]
+  end
 end

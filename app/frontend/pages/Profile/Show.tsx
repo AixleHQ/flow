@@ -98,6 +98,18 @@ const ROLE_LABELS: Record<UserRole, string> = {
   viewer: 'Viewer',
 };
 
+// Which login a credential auth session performs: the agent's normal login, or
+// Claude's /design-login (layers a designOauth block onto an existing claude.ai login).
+type AuthKind = 'agent' | 'design';
+
+// Agent-credential connection status (derived from token expiry — agents have no
+// error state). Functional labels + colour so it reads without relying on hue.
+const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { color: string; label: string }> = {
+  active: { color: 'green', label: 'Connected' },
+  expiring: { color: 'yellow', label: 'Expiring soon' },
+  expired: { color: 'red', label: 'Re-authenticate' },
+};
+
 const formatDate = (d: string | null) => {
   if (!d) return '';
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -288,13 +300,16 @@ type AuthSessionState = 'idle' | 'starting' | 'not_started' | 'running' | 'ready
 
 function AgentAuthModal({
   agentType,
+  authKind,
   opened,
   onClose,
 }: {
   agentType: AgentType;
+  authKind: AuthKind;
   opened: boolean;
   onClose: () => void;
 }) {
+  const isDesign = authKind === 'design';
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessionState, setSessionState] = useState<AuthSessionState>('idle');
   const [ttydUrl, setTtydUrl] = useState<string | null>(null);
@@ -359,7 +374,14 @@ function AgentAuthModal({
       const res = await apiFetch(apiV1TerminalSessionsPath(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ terminalSession: { agentType, sessionType: 'auth_setup', mode: 'interactive' } }),
+        body: JSON.stringify({
+          terminalSession: {
+            agentType,
+            sessionType: 'auth_setup',
+            mode: 'interactive',
+            ...(isDesign ? { authKind: 'design' } : {}),
+          },
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -374,7 +396,7 @@ function AgentAuthModal({
     } catch {
       setSessionState('failed');
     }
-  }, [agentType, cleanup, applySessionData]);
+  }, [agentType, isDesign, cleanup, applySessionData]);
 
   useEffect(() => {
     if (opened) startAuth();
@@ -526,7 +548,9 @@ function AgentAuthModal({
               </Group>
             ) : (
               <Text size="xs" c="dimmed">
-                Complete authentication in the terminal above
+                {isDesign
+                  ? 'Approve the design login in your browser'
+                  : 'Complete authentication in the terminal above'}
               </Text>
             )}
           </Group>
@@ -551,7 +575,7 @@ function AgentAuthModal({
       title={
         <Group gap="sm">
           <Box style={{ width: 4, height: 24, borderRadius: 4, backgroundColor: agentInfo.color }} />
-          <Text fw={600}>Authenticate {agentInfo.name}</Text>
+          <Text fw={600}>{isDesign ? `Connect Design for ${agentInfo.name}` : `Authenticate ${agentInfo.name}`}</Text>
         </Group>
       }
       size="lg"
@@ -572,17 +596,20 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
   }, {});
 
   const [authAgent, setAuthAgent] = useState<AgentType | null>(null);
+  const [authKind, setAuthKind] = useState<AuthKind>('agent');
   const [opened, { open, close }] = useDisclosure(false);
   const [disconnecting, setDisconnecting] = useState<AgentType | null>(null);
 
-  const handleAuth = (agentType: AgentType) => {
+  const handleAuth = (agentType: AgentType, kind: AuthKind = 'agent') => {
     setAuthAgent(agentType);
+    setAuthKind(kind);
     open();
   };
 
   const handleClose = () => {
     close();
     setAuthAgent(null);
+    setAuthKind('agent');
   };
 
   const handleDisconnect = (credential: AgentCredential) => {
@@ -637,9 +664,9 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                 </Box>
 
                 <Box className={classes.agentActions}>
-                  {isConfigured && (
-                    <Badge variant="outline" color="green" size="sm">
-                      Connected
+                  {isConfigured && credential && (
+                    <Badge variant="outline" color={AGENT_STATUS_BADGE[credential.connectionStatus].color} size="sm">
+                      {AGENT_STATUS_BADGE[credential.connectionStatus].label}
                     </Badge>
                   )}
                   <Button
@@ -649,6 +676,18 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                   >
                     {isConfigured ? 'Re-authenticate' : 'Authenticate'}
                   </Button>
+                  {/* Design login layers a `designOauth` block onto an existing Claude login. It works
+                      on either base (claude.ai OR the Console managed key), so offer it once any base
+                      login exists. */}
+                  {isConfigured &&
+                    credential &&
+                    agent.type === 'claude_code' &&
+                    (credential.configKeys.includes('claudeAiOauth') ||
+                      credential.configKeys.includes('primaryApiKey')) && (
+                      <Button variant="light" size="xs" onClick={() => handleAuth(agent.type, 'design')}>
+                        {credential.configKeys.includes('designOauth') ? 'Reconnect Design' : 'Connect Design'}
+                      </Button>
+                    )}
                   {isConfigured && credential && (
                     <Tooltip label="Remove credentials">
                       <Button
@@ -670,7 +709,7 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
         })}
       </Card>
 
-      {authAgent && <AgentAuthModal agentType={authAgent} opened={opened} onClose={handleClose} />}
+      {authAgent && <AgentAuthModal agentType={authAgent} authKind={authKind} opened={opened} onClose={handleClose} />}
     </>
   );
 }

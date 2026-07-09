@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_09_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -272,7 +272,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
     t.datetime "created_at", null: false
     t.string "credential_scope", default: "shared", null: false
     t.text "description"
-    t.string "display_name", null: false
     t.boolean "enabled", default: true, null: false
     t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
@@ -333,6 +332,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
     t.string "owner_type", null: false
     t.string "provider", null: false
     t.string "refresh_error"
+    t.integer "refresh_failure_count", default: 0, null: false
     t.string "scopes"
     t.string "status", default: "pending", null: false
     t.string "token_type", default: "Bearer"
@@ -769,8 +769,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
     t.datetime "created_at", null: false
     t.bigint "default_agent_credential_id"
     t.citext "email", null: false
-    t.string "google_refresh_token"
-    t.string "google_token"
     t.datetime "invited_at"
     t.bigint "invited_by_id"
     t.string "mcp_token_digest"

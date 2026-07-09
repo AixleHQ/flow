@@ -53,6 +53,72 @@ module Agents
       assert @adapter.auth_complete?(content)
     end
 
+    # == design auth kind (all design behavior lives in this adapter) ==
+
+    test "the default (agent) auth kind is a fresh login via the standard hooks" do
+      assert_equal @adapter.auth_required_keys, @adapter.auth_required_keys_for("agent")
+      assert_equal @adapter.auth_setup_files, @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
+      assert_empty @adapter.auth_launch_commands_for("agent")
+    end
+
+    test "design kind watches only for the designOauth block" do
+      assert_equal %w[designOauth.accessToken], @adapter.auth_required_keys_for("design")
+    end
+
+    test "design kind seeds the existing base login, stripping designOauth (reconnect-safe)" do
+      current = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
+        "designOauth" => { "accessToken" => "sk-ant-oat01-OLD" }
+      }
+      files = @adapter.auth_setup_files_for("design", current)
+      creds = files["/home/claude/.claude/.credentials.json"]
+
+      assert_includes creds, "sk-ant-oat01-base"
+      refute_includes creds, "sk-ant-oat01-OLD", "must not seed the design token we're re-minting"
+    end
+
+    test "design kind launches claude already running /design-login (one command)" do
+      assert_equal [ "claude /design-login" ], @adapter.auth_launch_commands_for("design")
+    end
+
+    test "design completion is gated on the designOauth block, not the injected base" do
+      base_only = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } }.to_json
+      refute @adapter.auth_complete_for?("design", base_only)
+
+      with_design = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
+                      "designOauth" => { "accessToken" => "sk-ant-oat01-design" } }.to_json
+      assert @adapter.auth_complete_for?("design", with_design)
+    end
+
+    test "design reconcile adds only the fresh designOauth, never re-scraping the base" do
+      current = { "primaryApiKey" => "sk-ant-api-PLATFORM" }
+      # A full container scrape also surfaces the injected base AND a stale
+      # claudeAiOauth Claude wrote — neither must survive into the stored blob.
+      captured = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-STALE" },
+        "designOauth" => { "accessToken" => "sk-ant-oat01-DESIGN-NEW" }
+      }
+      result = @adapter.reconcile_captured_credentials("design", current, captured)
+
+      assert_equal "sk-ant-api-PLATFORM", result["primaryApiKey"], "base login preserved untouched"
+      assert_equal "sk-ant-oat01-DESIGN-NEW", result.dig("designOauth", "accessToken")
+      refute result.key?("claudeAiOauth"), "must not resurrect the stale scraped base login"
+    end
+
+    test "design reconcile keeps the current credential when the scrape has no designOauth" do
+      current = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } }
+      result = @adapter.reconcile_captured_credentials("design", current, { "designOauth" => {} })
+
+      assert_equal current, result
+    end
+
+    test "the default (agent) auth kind reconcile replaces with the fresh scrape" do
+      current = { "claudeAiOauth" => { "accessToken" => "old" } }
+      captured = { "claudeAiOauth" => { "accessToken" => "new" } }
+
+      assert_equal captured, @adapter.reconcile_captured_credentials("agent", current, captured)
+    end
+
     test "auth_complete? returns false without credentials" do
       content = { "otherField" => "value" }.to_json
       refute @adapter.auth_complete?(content)

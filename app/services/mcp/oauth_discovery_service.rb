@@ -60,7 +60,8 @@ module MCP
     end
 
     SOURCE_DCR = "dcr"
-    CLIENT_NAME = "Aixle"
+    SOURCE_CIMD = "cimd"
+    CLIENT_NAME = "Aixle Flow"
     TIMEOUT = 5
     MAX_REDIRECTS = 3
     MAX_BYTES = 256 * 1024
@@ -143,6 +144,9 @@ module MCP
         authorization_endpoint: meta["authorization_endpoint"].to_s,
         token_endpoint: meta["token_endpoint"].to_s,
         registration_endpoint: meta["registration_endpoint"].presence,
+        # RFC "Client ID Metadata Document": when the AS advertises support, we use
+        # our hosted metadata-doc URL as the client_id instead of registering (DCR).
+        cimd_supported: meta["client_id_metadata_document_supported"] == true,
         scopes: scope_string(meta["scopes_supported"]),
         raw: meta
       }
@@ -178,8 +182,25 @@ module MCP
     def register_client(asm, prm)
       cache_metadata(asm[:issuer], prm[:raw], asm[:raw])
 
-      existing = OauthClient.find_by(source: SOURCE_DCR, issuer: asm[:issuer])
-      return reuse_client(existing, asm) if existing
+      existing = OauthClient.find_by(source: OauthClient::DISCOVERED_SOURCES, issuer: asm[:issuer])
+      if existing
+        return reuse_client(existing, asm) unless redirect_drifted?(existing)
+
+        # The deployment callback host changed since this DCR client was registered
+        # (typically a rotated dev tunnel domain). The redirect_uri is pinned at the
+        # AS per client_id, so every authorize would fail with "invalid redirect_uri"
+        # — and because the client is keyed by issuer (shared across MCP servers), even
+        # a brand-new server pointing at the same AS reuses the poisoned client. Drop
+        # the stale registration (dependent: :destroy clears its now-unusable creds) and
+        # re-register below. In prod Settings.domain is stable, so this never fires.
+        Rails.logger.info("[MCP OAuth] redirect_uri drift for issuer=#{existing.issuer}; re-registering DCR client")
+        existing.destroy!
+      end
+
+      # Prefer CIMD when the AS supports it: no network round-trip, no registration
+      # secret to store, and no per-server DCR row churn — our hosted metadata-doc
+      # URL IS the client_id (the AS dereferences it).
+      return persist_cimd_client(asm, prm) if asm[:cimd_supported]
 
       registration_endpoint = asm[:registration_endpoint]
       if registration_endpoint.blank?
@@ -207,6 +228,20 @@ module MCP
         scopes: asm[:scopes]
       )
       existing
+    end
+
+    # True only for a DCR client whose registered redirect_uri no longer matches the
+    # current deployment callback. CIMD clients never drift (their client_id is our
+    # live metadata-doc URL, so the AS reads the current redirect_uris from it), and a
+    # client with no recorded redirect (rows from before drift-tracking) reads as current.
+    def redirect_drifted?(client)
+      return false unless client.source == SOURCE_DCR
+
+      registered = [
+        client.metadata["redirect_uri"],
+        *Array(client.metadata.dig("dcr", "redirect_uris"))
+      ].compact
+      registered.any? && registered.exclude?(redirect_uri)
     end
 
     def post_registration(registration_endpoint)
@@ -243,6 +278,29 @@ module MCP
       guard!(registration["client_uri"]) if registration["client_uri"].present?
     end
 
+    # CIMD: no registration call. Our hosted, publicly-fetchable client-metadata
+    # document URL is used verbatim as the client_id; the AS dereferences it to
+    # learn our redirect_uris/grant_types. The client is public (PKCE-only), so no
+    # client_secret is stored. (Served by Web::OauthController#client_metadata.)
+    def persist_cimd_client(asm, prm)
+      client_id = client_id_metadata_document_url
+      client = OauthClient.find_or_initialize_by(issuer: asm[:issuer], client_id: client_id)
+      client.source = SOURCE_CIMD
+      client.authorization_endpoint = asm[:authorization_endpoint]
+      client.token_endpoint = asm[:token_endpoint]
+      client.registration_endpoint = asm[:registration_endpoint]
+      client.scopes = asm[:scopes]
+      client.metadata = { "prm" => prm[:raw], "asm" => asm[:raw], "cimd" => { "client_id" => client_id } }
+      client.save!
+      client
+    end
+
+    # Our deployment-wide client-metadata document URL — a stable, public endpoint.
+    # This IS the CIMD client_id, so it must match the URL the endpoint is served at.
+    def client_id_metadata_document_url
+      "#{Settings.protocol}://#{Settings.domain}/oauth/client-metadata.json"
+    end
+
     def persist_dcr_client(asm, prm, registration)
       client_id = registration["client_id"].to_s
       raise RegistrationError, "registration response missing client_id" if client_id.blank?
@@ -268,7 +326,12 @@ module MCP
       {
         "prm" => prm[:raw],
         "asm" => asm[:raw],
-        "dcr" => registration.except(*SENSITIVE_DCR_KEYS)
+        "dcr" => registration.except(*SENSITIVE_DCR_KEYS),
+        # The callback we registered THIS client with. The AS pins it, so if the
+        # deployment domain later changes (e.g. a rotated dev tunnel) we can detect
+        # the drift and re-register instead of reusing a client whose authorize
+        # would fail with "invalid redirect_uri" (see #redirect_drifted?).
+        "redirect_uri" => redirect_uri
       }
     end
 
@@ -371,7 +434,7 @@ module MCP
       klass = method == :post ? Net::HTTP::Post : Net::HTTP::Get
       request = klass.new(uri)
       request["Accept"] = "application/json"
-      request["User-Agent"] = "Aixle-MCP-OAuth"
+      request["User-Agent"] = "AixleFlow-MCP-OAuth"
       if json
         request["Content-Type"] = "application/json"
         request.body = json.to_json

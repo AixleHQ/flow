@@ -3,7 +3,6 @@
 FactoryBot.define do
   factory :mcp_server do
     sequence(:name) { |n| "mcp-server-#{n}" }
-    sequence(:display_name) { |n| "MCP Server #{n}" }
     kind { :custom }
     transport { :sse }
     url { "https://mcp.example.com/v1" }

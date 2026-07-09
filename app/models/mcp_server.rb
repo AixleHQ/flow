@@ -27,16 +27,30 @@ class MCPServer < ApplicationRecord
   # Owning integration for managed servers
   belongs_to :integration, optional: true
 
-  # Auto-downcase and sanitize name
-  def name=(val)
-    super(val&.downcase&.gsub(/[^a-z0-9_-]/, "-"))
+  # OAuth credentials attached to this server (auth_type:oauth). dependent: :destroy
+  # so deleting the server cleans them up — the FK is RESTRICT, so without this a
+  # server with credentials could not be destroyed. Also lets the index eager-load
+  # them (avoids an N+1 in MCPServerResource#oauth_status).
+  has_many :oauth_credentials, dependent: :destroy
+
+  # `name` is a free-form human label — no format constraint. The lowercase
+  # protocol identifier is derived from it at config-generation time (config_key),
+  # NOT stored, so the name is kept verbatim as the user typed it.
+  def self.config_key_for(raw)
+    raw.to_s.strip.downcase.gsub(/[^a-z0-9_-]+/, "_").gsub(/\A[_-]+|[_-]+\z/, "")
+  end
+
+  # The MCP protocol key written to each agent's config: the JSON key in .mcp.json
+  # and the tool-permission namespace `mcp__<key>__tool`. Existing slug names
+  # (already within [a-z0-9_-]) pass through unchanged, so keys like "aixle-tools"
+  # stay stable; spaces/punctuation in a free-form name collapse to "_".
+  def config_key
+    self.class.config_key_for(name)
   end
 
   # Validations
-  validates :name, presence: true,
-                   format: { with: /\A[a-z][a-z0-9_-]*\z/, message: "must start with letter, use lowercase letters, numbers, dashes, underscores" }
+  validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
-  validates :display_name, presence: true
   validates :kind, presence: true
   validates :url, presence: true, if: -> { custom? && !transport_stdio? }
   validates :command, presence: true, if: :transport_stdio?
@@ -88,7 +102,7 @@ class MCPServer < ApplicationRecord
   end
 
   def picker_name
-    display_name.presence || name
+    name
   end
 
   def scope_indicator
@@ -98,7 +112,7 @@ class MCPServer < ApplicationRecord
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
-    %w[name display_name kind scope_type enabled created_at updated_at]
+    %w[name kind scope_type enabled created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)

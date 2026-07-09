@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -21,10 +22,10 @@ import { z } from 'zod';
 
 import { ConfigItemValueField } from './ConfigItemValueField';
 
-// Sentinel the MCPServerResource sends in place of every stored header/env value (§5.1). A value
-// still equal to this string was never edited by the user, so we must not resubmit it verbatim as a
-// real secret — kvToObj drops it and the server keeps the stored value.
-const MASK = '••••••';
+// The MCPServerResource masks every stored header/env value to a sentinel before it reaches the
+// browser. The modal echoes that sentinel back untouched for values the user didn't edit; the
+// backend swaps each sentinel for the stored secret (see McpServersController#unmask_secrets!), so
+// the modal itself no longer needs to know the sentinel string.
 
 type OauthStatus = 'pending' | 'active' | 'expiring' | 'error';
 
@@ -39,11 +40,7 @@ const OAUTH_STATUS_META: Record<OauthStatus, { color: string; label: string }> =
 
 const schema = z
   .object({
-    name: z
-      .string()
-      .min(1, 'Name is required')
-      .regex(/^[a-z][a-z0-9_-]*$/, 'Must start with letter, use lowercase, numbers, dashes, underscores'),
-    displayName: z.string().min(1, 'Display name is required'),
+    name: z.string().min(1, 'Name is required'),
     transport: z.enum(['http', 'sse', 'stdio']),
     url: z.string().default(''),
     command: z.string().default(''),
@@ -84,7 +81,6 @@ interface KVPair {
 interface McpServer {
   id: number;
   name: string;
-  displayName: string;
   url: string | null;
   transport: string;
   headers: Record<string, string> | null;
@@ -117,13 +113,15 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [headersList, setHeadersList] = useState<KVPair[]>([]);
   const [envList, setEnvList] = useState<KVPair[]>([]);
+  // Credential scope defaults to project-wide (shared); the per-user option is tucked behind an
+  // "Advanced" disclosure. Auto-expanded when editing a server that already uses per_user.
+  const [showScopeOptions, setShowScopeOptions] = useState(false);
   const isEdit = !!editServer;
 
   const form = useForm<FormData>({
     validate: zodResolver(schema),
     initialValues: {
       name: '',
-      displayName: '',
       transport: 'http',
       url: '',
       command: '',
@@ -158,7 +156,6 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         setEnvList(Object.entries(env).map(([key, value]) => ({ key, value: String(value) })));
         form.setValues({
           name: editServer.name,
-          displayName: editServer.displayName,
           transport: editServer.transport as 'http' | 'sse' | 'stdio',
           url: editServer.url ?? '',
           command: editServer.command ?? '',
@@ -167,9 +164,12 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           authType: editServer.authType ?? 'none',
           credentialScope: editServer.credentialScope ?? 'shared',
         });
+        // Reveal the advanced scope control up-front only when it's already non-default.
+        setShowScopeOptions(editServer.credentialScope === 'per_user');
       } else {
         setHeadersList([]);
         setEnvList([]);
+        setShowScopeOptions(false);
         form.reset();
       }
     }
@@ -180,10 +180,11 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
     const obj: Record<string, string> = {};
     list.forEach(({ key, value }) => {
       if (!key.trim()) return;
-      // A value still equal to the mask sentinel was loaded from the server and never edited — omit
-      // it so we never resubmit the placeholder as a real secret (§5.1/§5.2). The server keeps the
-      // stored value for keys we don't send a fresh value for.
-      if (value === MASK) return;
+      // Send EVERY current key, keeping the mask sentinel for values the user never edited. The
+      // server swaps each sentinel back to the stored secret, so untouched secrets are preserved
+      // while keys the user removed (absent here) stay removed. Sending only edited values would be
+      // ambiguous — the backend couldn't tell "unchanged" from "deleted" and would wipe untouched
+      // secrets on every edit.
       obj[key.trim()] = value;
     });
     return obj;
@@ -235,13 +236,15 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         <Stack gap="md">
           <TextInput
             label="Name"
-            placeholder="playwright"
+            placeholder="Playwright Browser"
             {...form.getInputProps('name')}
-            description="Lowercase identifier (e.g., playwright, context7)"
+            description={
+              isEdit
+                ? 'Locked after creation — agents reference the server by this name'
+                : "Normalized to an agent identifier (e.g. 'Playwright Browser' → playwright_browser)"
+            }
             disabled={isEdit}
           />
-
-          <TextInput label="Display Name" placeholder="Playwright Browser" {...form.getInputProps('displayName')} />
 
           <NativeSelect
             label="Transport"
@@ -267,15 +270,28 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
               />
 
               {isOauth && (
-                <NativeSelect
-                  label="Credential Scope"
-                  {...form.getInputProps('credentialScope')}
-                  description="Shared: one connection for the whole scope. Per-user: each member connects individually."
-                  data={[
-                    { label: 'Shared (one connection for everyone)', value: 'shared' },
-                    { label: 'Per-user (each member connects)', value: 'per_user' },
-                  ]}
-                />
+                <Box>
+                  <Group gap={6} align="baseline">
+                    <Text fz={13} c="dimmed">
+                      Shared by all project members.
+                    </Text>
+                    <Anchor component="button" type="button" fz={13} onClick={() => setShowScopeOptions((v) => !v)}>
+                      {showScopeOptions ? 'Hide advanced' : 'Advanced'}
+                    </Anchor>
+                  </Group>
+                  {showScopeOptions && (
+                    <NativeSelect
+                      mt="xs"
+                      label="Credential Scope"
+                      {...form.getInputProps('credentialScope')}
+                      description="Shared: one project-wide connection (default). Per-user: each member connects their own account — use only for personal accounts."
+                      data={[
+                        { label: 'Shared (project-wide, default)', value: 'shared' },
+                        { label: 'Per-user (each member connects their own)', value: 'per_user' },
+                      ]}
+                    />
+                  )}
+                </Box>
               )}
 
               <TextInput

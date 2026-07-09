@@ -6,7 +6,7 @@ import { renderPage, screen, userEvent } from 'test/renderPage';
 
 import { DeleteMcpServerModal } from './DeleteMcpServerModal';
 
-const server = { id: 7, name: 'github', displayName: 'GitHub Server' };
+const server = { id: 7, name: 'GitHub Server' };
 
 describe('DeleteMcpServerModal', () => {
   it('renders the title and the server name in the confirmation prompt', () => {

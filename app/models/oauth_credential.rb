@@ -22,6 +22,11 @@ class OauthCredential < ApplicationRecord
   # (a {access,refresh}_token denylist would still leak an OIDC id_token in cleartext).
   SAFE_METADATA_KEYS = %w[account user organization token_uuid].freeze
 
+  # Consecutive refresh failures before the credential is escalated to status:error
+  # (surfaced as a reconnect badge + notification). Below the threshold it stays
+  # :active so the sweep keeps retrying — a transient provider blip self-heals.
+  MAX_REFRESH_FAILURES = 3
+
   # --- Scopes ---
   scope :for_owner,      ->(owner) { where(owner: owner) }
   scope :for_mcp_server, ->(server) { where(mcp_server_id: server.id) }
@@ -83,16 +88,36 @@ class OauthCredential < ApplicationRecord
     self.metadata      = (metadata || {}).merge(resp.slice(*SAFE_METADATA_KEYS))
     self.status        = :active
     self.refresh_error = nil
+    self.refresh_failure_count = 0        # success resets the consecutive-failure streak
     self.last_refreshed_at = Time.current
     save!
   end
 
-  # Mark a failed refresh; N-consecutive-failure escalation is Phase 2.
+  # Record a failed refresh. Increments the consecutive-failure counter and only
+  # escalates to status:error once MAX_REFRESH_FAILURES is reached, so a transient
+  # blip keeps the credential usable and the sweep retries. On the escalation edge
+  # it notifies the owner (reconnect) and returns true.
   def mark_refresh_error!(message)
-    update!(status: :error, refresh_error: message.to_s.truncate(500))
+    self.refresh_failure_count = refresh_failure_count.to_i + 1
+    self.refresh_error = message.to_s.truncate(500)
+    self.status = :error if refresh_failure_count >= MAX_REFRESH_FAILURES
+    save!
+
+    crossed = saved_change_to_status? && error?
+    notify_refresh_failure if crossed
+    crossed
   end
 
   private
+
+  # Notify the owner to reconnect when the credential is first escalated to error.
+  # Only per-user (User owner) credentials have a single addressable person; shared
+  # (Company/Project) credentials rely on the status badge surfaced in the UI.
+  def notify_refresh_failure
+    return unless owner.is_a?(User) && owner.email.present?
+
+    OauthMailer.refresh_failed(self).deliver_later
+  end
 
   def decrypt(cipher)
     return nil if cipher.blank?

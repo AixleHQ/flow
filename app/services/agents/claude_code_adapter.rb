@@ -66,6 +66,52 @@ module Agents
       config["primaryApiKey"].present? || config.dig("claudeAiOauth", "accessToken").present?
     end
 
+    # /design-login layers a `designOauth` block onto an EXISTING Claude login. It is
+    # the one "design" concept in the codebase — the AgentAuthStrategy is generic and
+    # only sees an opaque `kind`; everything design-specific lives in these overrides.
+    DESIGN_KIND = "design"
+
+    # Seed the user's existing base login (minus any designOauth) so the CLI starts
+    # authenticated; the session then only adds the fresh designOauth block. Stripping
+    # designOauth matters on RECONNECT — otherwise the token the watcher waits for is
+    # present from the start and completes instantly.
+    def auth_setup_files_for(kind, current_config = nil)
+      return super unless kind == DESIGN_KIND
+
+      config_files((current_config || {}).except("designOauth"))
+    end
+
+    # Wait for the design block specifically (the base token is injected up-front).
+    def auth_required_keys_for(kind)
+      kind == DESIGN_KIND ? %w[designOauth.accessToken] : super
+    end
+
+    def auth_complete_for?(kind, config_content)
+      return super unless kind == DESIGN_KIND
+
+      parse_json(config_content).dig("designOauth", "accessToken").present?
+    end
+
+    # Launch the CLI already running /design-login (the prompt is passed on the command
+    # line as ONE command, so there's no delay before it appears). The CLI is already
+    # logged in via the seeded creds; the user just approves in the browser.
+    def auth_launch_commands_for(kind)
+      kind == DESIGN_KIND ? [ "claude /design-login" ] : super
+    end
+
+    # Design only ADDS the freshly-minted designOauth to the existing credential. It
+    # must NOT re-capture the base from the container: the base was injected there, and
+    # a full re-scrape would resurrect a stale base login (e.g. an old claudeAiOauth)
+    # next to the real one → Claude's "Both claude.ai and /login managed key set".
+    def reconcile_captured_credentials(kind, current, captured)
+      return super unless kind == DESIGN_KIND
+
+      design = captured["designOauth"]
+      return current || {} unless design.is_a?(Hash) && design["accessToken"].present?
+
+      (current || {}).merge("designOauth" => design)
+    end
+
     # Soonest OAuth-token expiry (epoch ms) across all present blocks
     # (claudeAiOauth + designOauth), or nil if none carry one. Used to (a) populate
     # agent_credentials.expires_at and (b) drive the proactive-refresh sweep so we
@@ -230,7 +276,7 @@ module Agents
           entry["url"] = s.url if s.url.present?
           entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         end
-        mcp_servers[s.name] = entry
+        mcp_servers[MCPServer.config_key_for(s.name)] = entry
       end
       { "/workspace/.mcp.json" => { "mcpServers" => mcp_servers }.to_json }
     end

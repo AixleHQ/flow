@@ -14,12 +14,18 @@ class SessionContextService
   # Collects a structured log of everything injected into the container.
   # Written to /var/log/context.log for post-mortem debugging.
   class ContextLog
+    # Values shorter than this are never redacted — they are common non-secret
+    # tokens ("json", "true", "sse") whose masking would only obscure the log; real
+    # credentials (bearer tokens, API keys, resolved config-item secrets) are longer.
+    MIN_REDACT_LEN = 6
+
     def initialize(session)
       @session_id = session.id
       @agent_type = session.agent_type
       @mode = session.mode
       @started_at = Time.current
       @entries = []
+      @secrets = []
     end
 
     def record(step, data)
@@ -30,6 +36,18 @@ class SessionContextService
       return if files_hash.blank?
 
       @entries << { step: step, files: files_hash, at: Time.current.iso8601(3) }
+    end
+
+    # Register secret VALUES to scrub from the rendered log (oauth-unification §7).
+    # We keep the structure (server names, header/env KEYS) but replace each secret
+    # value with a stable fingerprint, so the log stays useful for audit/debugging
+    # ("which header carried which secret") without exposing the bytes. Called with
+    # the resolved header/env values + the injected OAuth bearer + the session key.
+    def redact(*values)
+      values.flatten.each do |value|
+        s = value.to_s
+        @secrets << s if s.length >= MIN_REDACT_LEN
+      end
     end
 
     def to_s
@@ -57,7 +75,18 @@ class SessionContextService
 
       lines << ""
       lines << "=== End Context Log ==="
-      lines.join("\n")
+      scrub_secrets(lines.join("\n"))
+    end
+
+    private
+
+    # Replace every registered secret with a fingerprint. Longest-first so a secret
+    # that is a substring of a longer one never corrupts the longer replacement.
+    def scrub_secrets(text)
+      @secrets.uniq.sort_by { |s| -s.length }.each do |secret|
+        text = text.gsub(secret, "«redacted:sha256:#{Digest::SHA256.hexdigest(secret)[0, 8]}»")
+      end
+      text
     end
   end
 
@@ -75,7 +104,16 @@ class SessionContextService
 
       # Resolve MCP server names early — needed for pre-approving servers
       # in the credential config (e.g. Claude Code's enabledMcpjsonServers)
-      mcp_server_names = build_all_servers(session).map(&:name)
+      resolved_servers = build_all_servers(session)
+      # Normalized protocol keys (matches the .mcp.json keys the adapters write and
+      # the mcp__<key> tool-permission namespace). Must stay in sync with
+      # MCPServer.config_key_for used in each agent adapter's MCP config builder.
+      mcp_server_names = resolved_servers.map { |s| MCPServer.config_key_for(s.name) }
+      # Register every resolved secret (header/env values incl. the injected OAuth
+      # bearer, plus the session mcp_key) so they are scrubbed from the collected
+      # /var/log/context.log artifact (oauth-unification §7). The real values still
+      # reach the container's MCP config files — only the log copy is redacted.
+      context_log.redact(collect_context_secrets(resolved_servers, session))
       context_log.record(:mcp_servers, mcp_server_names)
       Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
 
@@ -536,6 +574,19 @@ class SessionContextService
                    .map { |s| resolve_server_secrets(s, effective_items, session) }
 
       [ build_internal_mcp(session) ] + external
+    end
+
+    # Secret VALUES to scrub from context.log (oauth-unification §7): every resolved
+    # MCP header/env value (includes the injected OAuth bearer and the internal
+    # aixle-tools X-Session-Key) plus the session mcp_key. Values only — KEYS and
+    # server names stay so the log remains auditable.
+    def collect_context_secrets(servers, session)
+      values = servers.flat_map do |server|
+        headers = server.respond_to?(:headers) ? (server.headers || {}).values : []
+        env     = server.respond_to?(:env) ? (server.env || {}).values : []
+        headers + env
+      end
+      (values + [ session.mcp_key ]).compact.map(&:to_s).reject(&:blank?)
     end
 
     # Build internal Aixle MCP server entry (always included in session containers)

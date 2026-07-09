@@ -156,6 +156,8 @@ Rails.application.routes.draw do
     resources :config_items, only: %i[index show]
     resources :integrations, only: %i[index show]
     resources :mcp_servers, only: %i[index show]
+    resources :oauth_clients, only: %i[index show]
+    resources :oauth_credentials, only: %i[index show]
     resources :repositories, only: %i[index show]
     resources :skills, only: %i[index show]
     resources :tools, only: %i[index show]
@@ -204,6 +206,9 @@ Rails.application.routes.draw do
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,
     # single-use `state`. PKCE is mandatory (OAuth 2.1).
+    # Public RFC "Client ID Metadata Document" (CIMD). When an MCP authorization
+    # server supports CIMD, this URL is our client_id and the AS dereferences it.
+    get "oauth/client-metadata.json", to: "oauth#client_metadata", as: :oauth_client_metadata
     get "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
     get "oauth/callback", to: "oauth#callback", as: :oauth_callback
     # MCP OAuth 2.1 connect (oauth-unification §5): discovery + dynamic client
@@ -257,6 +262,7 @@ Rails.application.routes.draw do
           resources :integrations, only: %i[index create destroy] do
             collection do
               get :slack_oauth_start
+              get :github_app_install
             end
           end
           resources :agents, only: %i[index create update destroy]

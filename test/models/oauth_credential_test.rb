@@ -181,27 +181,58 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "apply_token_response! clears a prior refresh_error and reactivates" do
-    cred = build_credential
+    cred = build_credential(status: :active)
     cred.save!
-    cred.mark_refresh_error!("boom")
+    OauthCredential::MAX_REFRESH_FAILURES.times { cred.mark_refresh_error!("boom") }
     assert cred.error?
 
     cred.apply_token_response!("access_token" => "at")
 
     assert cred.active?
     assert_nil cred.reload.refresh_error
+    assert_equal 0, cred.refresh_failure_count, "a success resets the consecutive-failure streak"
   end
 
   # --- mark_refresh_error! ---
 
-  test "mark_refresh_error! sets error status and truncates the message" do
-    cred = build_credential
+  test "mark_refresh_error! truncates the message and escalates only after MAX_REFRESH_FAILURES" do
+    cred = build_credential(status: :active)
     cred.save!
 
-    cred.mark_refresh_error!("x" * 600)
-
-    assert cred.reload.error?
+    # Below the threshold: stays usable (active) so the sweep retries; records the error.
+    (OauthCredential::MAX_REFRESH_FAILURES - 1).times do |i|
+      assert_not cred.mark_refresh_error!("x" * 600), "should not escalate before the threshold"
+      assert cred.active?, "stays active after #{i + 1} consecutive failure(s)"
+    end
     assert_equal 500, cred.refresh_error.length
+
+    # The failure that reaches the threshold escalates to error, and reports the edge once.
+    assert cred.mark_refresh_error!("boom"), "the threshold-crossing failure returns true (notify edge)"
+    assert cred.reload.error?
+    assert_equal OauthCredential::MAX_REFRESH_FAILURES, cred.refresh_failure_count
+
+    # A further failure past the threshold does not re-report the edge.
+    assert_not cred.mark_refresh_error!("boom again")
+  end
+
+  test "escalation notifies a per-user (User) owner to reconnect (exactly once)" do
+    cred = build_credential(owner: @user, status: :active)
+    cred.save!
+
+    mailer = mock("mailer")
+    mailer.expects(:deliver_later)
+    OauthMailer.expects(:refresh_failed).with(cred).returns(mailer)
+
+    OauthCredential::MAX_REFRESH_FAILURES.times { cred.mark_refresh_error!("boom") }
+  end
+
+  test "escalation for a shared (Company) owner does not email" do
+    cred = build_credential(owner: @company, status: :active)
+    cred.save!
+
+    OauthMailer.expects(:refresh_failed).never
+
+    OauthCredential::MAX_REFRESH_FAILURES.times { cred.mark_refresh_error!("boom") }
   end
 
   # --- upsert_from_token! ---

@@ -4,7 +4,7 @@ class MCPServerResource < ApplicationResource
   preserve_keys :env, :headers
 
   typelize headers: "Record<string, unknown>", env: "Record<string, unknown>", integration_id: :number?
-  attributes :id, :name, :display_name, :url, :transport,
+  attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
              :command, :integration_id, :created_at, :updated_at
 
@@ -58,8 +58,15 @@ class MCPServerResource < ApplicationResource
     next nil unless server.auth_type_oauth?
 
     owner = server.credential_scope_per_user? ? params[:user] : server.scope
-    cred = owner && OauthCredential.for_mcp_server(server).for_owner(owner)
-                                   .where.not(status: :revoked).order(updated_at: :desc).first
+    next "pending" if owner.nil?
+
+    # Read the (eager-loaded when listed) oauth_credentials association in memory to
+    # avoid an N+1 across the servers list; filter to the acting owner by type+id so
+    # we never trigger a per-record owner load.
+    cred = server.oauth_credentials
+                 .reject(&:revoked?)
+                 .select { |c| c.owner_type == owner.class.polymorphic_name && c.owner_id == owner.id }
+                 .max_by(&:updated_at)
     next "pending" if cred.nil?
     next "error" if cred.error?
 

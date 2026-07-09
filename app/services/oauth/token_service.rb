@@ -48,6 +48,20 @@ module Oauth
       end
     end
 
+    # Sweep entry point (Activities::Oauth::RefreshExpiringTokensActivity). Refreshes
+    # a due credential through the SAME `fresh` path as on-demand use (refresh-under-
+    # lock + rotation guard + failure escalation), reporting an outcome symbol for the
+    # activity's counts. :not_needed when the credential wasn't within REFRESH_SKEW yet
+    # (a later sweep tick, closer to expiry, will refresh it).
+    # @return [Symbol] :refreshed | :not_needed | :error
+    def refresh_credential(cred)
+      before = cred.access_token
+      fresh(cred)
+      cred.access_token == before ? :not_needed : :refreshed
+    rescue Oauth::ReauthRequired
+      :error
+    end
+
     # Ensure `cred` yields a fresh token; refresh under lock if near expiry.
     def fresh(cred)
       return cred.access_token unless cred.expired?(REFRESH_SKEW)

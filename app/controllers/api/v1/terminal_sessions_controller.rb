@@ -28,6 +28,10 @@ module Api
         )
 
         render json: TerminalSessionResource.new(session).to_h, status: :created
+      rescue Oauth::PreflightError => e
+        # Session-start preflight (§4.6): block launch with a "Connect …" CTA rather
+        # than starting a session doomed to fail during provisioning.
+        render json: { error: e.message, reauth_required: e.connections }, status: :unprocessable_entity
       end
 
       def destroy
@@ -54,7 +58,7 @@ module Api
       def session_params
         params.require(:terminal_session).permit(
           :project_id, :session_type, :agent_type, :configured_agent_id, :mode,
-          :initial_prompt, :requested_model,
+          :initial_prompt, :requested_model, :auth_kind,
           tool_ids: [], skill_ids: [], mcp_server_ids: [],
           input_asset_ids: [], repository_ids: [],
           session_config: [ :bmad_enabled, { bmad_modules: [] } ]

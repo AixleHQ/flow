@@ -59,6 +59,62 @@ module MCP
       assert_equal "read write", result.scopes
     end
 
+    # ============================ CIMD ============================
+
+    test "uses CIMD (no DCR POST) when the AS advertises client_id_metadata_document support" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.merge("client_id_metadata_document_supported" => true))
+      # Deliberately NO stub_registration: any DCR POST would be an unstubbed request.
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+      client = result.oauth_client
+
+      expected_client_id = "#{Settings.protocol}://#{Settings.domain}/oauth/client-metadata.json"
+      assert_equal "cimd", client.source
+      assert_equal expected_client_id, client.client_id
+      assert_equal ISSUER, client.issuer
+      assert_equal AUTH_EP, client.authorization_endpoint
+      assert_equal TOKEN_EP, client.token_endpoint
+      assert_not client.confidential?, "CIMD clients are public (PKCE-only)"
+      assert client.persisted?
+      assert_not_requested :post, REG_EP
+    end
+
+    test "reuses a persisted CIMD client on a subsequent connect instead of re-creating it" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.merge("client_id_metadata_document_supported" => true))
+
+      first = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client
+      second = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client
+
+      assert_equal first.id, second.id
+      assert_equal 1, OauthClient.where(source: "cimd", issuer: ISSUER).count
+    end
+
+    test "prefers DCR when the AS does not advertise CIMD support" do
+      stub_probe
+      stub_prm
+      stub_asm # default ASM has no client_id_metadata_document_supported flag
+      stub_registration(body: { client_id: "dcr-client-id" })
+
+      assert_equal "dcr", MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client.source
+    end
+
+    test "registers with the DCR endpoint as the product, \"Aixle Flow\"" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(body: { client_id: "dcr-client-id" })
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :post, REG_EP do |req|
+        JSON.parse(req.body)["client_name"] == "Aixle Flow"
+      end
+    end
+
     test "falls back to the well-known PRM path when WWW-Authenticate has no hint" do
       stub_request(:get, MCP_URL).to_return(status: 401, body: "")
       stub_prm
@@ -156,6 +212,48 @@ module MCP
       # Endpoints refreshed from the freshly-discovered + guarded ASM.
       assert_equal AUTH_EP, result.oauth_client.reload.authorization_endpoint
       assert_equal TOKEN_EP, result.oauth_client.token_endpoint
+    end
+
+    test "reuses a dcr client when the stored redirect_uri still matches the deployment callback" do
+      current = "#{Settings.protocol}://#{Settings.domain}/oauth/callback"
+      existing = OauthClient.create!(
+        source: "dcr", issuer: ISSUER, client_id: "still-valid",
+        authorization_endpoint: "https://auth.example.com/old-authorize",
+        token_endpoint: "https://auth.example.com/old-token",
+        metadata: { "redirect_uri" => current }
+      )
+      stub_probe
+      stub_prm
+      stub_asm
+      # No registration stub — a matching redirect must not re-register.
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal existing.id, result.oauth_client.id
+      assert_not_requested :post, REG_EP
+    end
+
+    test "re-registers a dcr client when the stored redirect_uri no longer matches the deployment callback" do
+      # Simulates a rotated dev tunnel: the client was registered under an old host,
+      # so its pinned redirect_uri would make every authorize fail. Discovery must
+      # drop it and register fresh rather than reuse the poisoned client.
+      stale = OauthClient.create!(
+        source: "dcr", issuer: ISSUER, client_id: "stale-client",
+        authorization_endpoint: "https://auth.example.com/old-authorize",
+        token_endpoint: "https://auth.example.com/old-token",
+        metadata: { "redirect_uri" => "https://old-tunnel.example.dev/oauth/callback" }
+      )
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(body: { client_id: "fresh-client" })
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :post, REG_EP
+      assert_equal "fresh-client", result.oauth_client.client_id
+      assert_not OauthClient.exists?(stale.id), "stale client should be dropped"
+      assert_equal 1, OauthClient.where(source: "dcr", issuer: ISSUER).count
     end
 
     test "prefers ASM scopes when PRM omits scopes_supported" do

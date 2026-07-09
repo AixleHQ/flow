@@ -106,7 +106,7 @@ module Oauth
       assert_not_requested :post, TOKEN_ENDPOINT
     end
 
-    test "marks the credential errored and raises ReauthRequired when the provider rejects the refresh" do
+    test "records the failure and raises ReauthRequired when the provider rejects the refresh" do
       cred = build_credential(owner: @user, access_token: "old-token",
                               refresh_token: "r", expires_at: 1.minute.ago)
       stub_request(:post, TOKEN_ENDPOINT).to_return(status: 400, body: "invalid_grant")
@@ -116,8 +116,26 @@ module Oauth
       end
 
       cred.reload
-      assert cred.error?
+      # A single failure records the error and increments the streak but keeps the
+      # credential usable (the sweep retries); it escalates to :error only after
+      # MAX_REFRESH_FAILURES consecutive failures.
       assert cred.refresh_error.present?
+      assert_equal 1, cred.refresh_failure_count
+      assert cred.active?
+    end
+
+    test "escalates the credential to error after MAX_REFRESH_FAILURES consecutive rejections" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "r", expires_at: 1.minute.ago)
+      stub_request(:post, TOKEN_ENDPOINT).to_return(status: 400, body: "invalid_grant")
+
+      OauthCredential::MAX_REFRESH_FAILURES.times do
+        assert_raises(Oauth::ReauthRequired) do
+          Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
+        end
+      end
+
+      assert cred.reload.error?
     end
 
     # == fresh: rotation safety ==
@@ -269,6 +287,34 @@ module Oauth
       picked = Oauth::TokenService.pick_credential(server: nil, owner: @company, provider: "sentry", user: @user)
 
       assert_equal newer.id, picked.id
+    end
+
+    # == refresh_credential: sweep entry point ==
+
+    test "refresh_credential returns :refreshed and rotates the token when near expiry" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_token_endpoint(access_token: "new-token", refresh_token: "new-refresh", expires_in: 3600)
+
+      assert_equal :refreshed, Oauth::TokenService.refresh_credential(cred)
+      assert_equal "new-token", cred.reload.access_token
+    end
+
+    test "refresh_credential returns :not_needed when the token is not yet near expiry" do
+      cred = build_credential(owner: @user, access_token: "valid-token",
+                              refresh_token: "r1", expires_at: 1.hour.from_now)
+
+      assert_equal :not_needed, Oauth::TokenService.refresh_credential(cred)
+      assert_not_requested :post, TOKEN_ENDPOINT
+    end
+
+    test "refresh_credential returns :error and marks the credential when the refresh fails" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: "old-refresh", expires_at: 1.minute.from_now)
+      stub_request(:post, TOKEN_ENDPOINT).to_return(status: 400, body: "nope")
+
+      assert_equal :error, Oauth::TokenService.refresh_credential(cred)
+      assert_equal 1, cred.reload.refresh_failure_count
     end
 
     private

@@ -431,6 +431,50 @@ module ContainerStrategies
       end
     end
 
+    # == collect_outputs (nested output dirs — session #61 regression) ==
+
+    test "collect_outputs recurses subdirectories and names assets by path relative to outputs" do
+      # Session 61: the agent wrote its deliverable into /workspace/outputs/presentation/*.
+      # A `find -maxdepth 1` scan collected zero of them. Guard: nested files are collected,
+      # and the path relative to outputs (not the bare basename) becomes the asset name — so
+      # two files sharing a basename across subdirs both survive the name-uniqueness index.
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/workspace/outputs/presentation/index.html"      => "<html>deck</html>",
+        "/workspace/outputs/presentation/assets/logo.svg" => "<svg>brand</svg>",
+        "/workspace/outputs/notes/logo.svg"               => "<svg>other</svg>",
+        "/workspace/outputs/report.md"                    => "# top level"
+      })
+      ContainerRuntime.stubs(:build).returns(fake)
+      strategy = build_strategy
+
+      count = nil
+      assert_difference "Asset.count", 4 do
+        count = strategy.send(:collect_outputs, "abc123", @session)
+      end
+
+      assert_equal 4, count
+      names = @session.output_assets.pluck(:name)
+      assert_includes names, "presentation/index.html"
+      assert_includes names, "presentation/assets/logo.svg"
+      assert_includes names, "notes/logo.svg"
+      assert_includes names, "report.md"
+
+      refute fake.execs.any? { |cmd| cmd.join(" ").include?("-maxdepth") },
+             "collect_outputs must not cap find depth"
+    end
+
+    test "collect_outputs skips blank files" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/workspace/outputs/empty.txt" => ""
+      })
+      ContainerRuntime.stubs(:build).returns(fake)
+      strategy = build_strategy
+
+      assert_no_difference "Asset.count" do
+        assert_equal 0, strategy.send(:collect_outputs, "abc123", @session)
+      end
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code", credential: nil)

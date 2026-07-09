@@ -308,7 +308,85 @@ module Agents
       assert_equal :error, @adapter.refresh!(credential)[:status]
     end
 
+    test "refresh_access_token! keeps the stored refresh_token when the server omits a rotated one" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "old", "refresh_token" => "keep-me", "id_token" => "keep-id" }
+      })
+      # Response rotates only the access token — no refresh_token/id_token echoed back.
+      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "new" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.refresh_access_token!(credential)
+
+      tokens = credential.reload.config_data["tokens"]
+      assert_equal "new", tokens["access_token"]
+      assert_equal "keep-me", tokens["refresh_token"], "must not drop the stored refresh_token"
+      assert_equal "keep-id", tokens["id_token"], "must not drop the stored id_token"
+    end
+
+    test "refresh_access_token! does not overwrite a concurrently-stored newer token" do
+      user = create(:user, company: create(:company))
+      newer = jwt_with_exp(1.hour.from_now.to_i)
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => newer, "refresh_token" => "r1" }
+      })
+      # Server hands back a token that expires SOONER than the stored one — the
+      # rotation guard must keep the fresher stored token.
+      older = jwt_with_exp(1.minute.from_now.to_i)
+      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: older, refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      returned = @adapter.refresh_access_token!(credential)
+
+      assert_equal newer, returned
+      assert_equal newer, credential.reload.config_data.dig("tokens", "access_token")
+    end
+
+    test "token_expires_at decodes the JWT exp (ms) from the access token" do
+      exp = 2.hours.from_now.to_i
+      credentials = { "tokens" => { "access_token" => jwt_with_exp(exp) } }
+      assert_equal exp * 1000, @adapter.token_expires_at(credentials)
+    end
+
+    test "token_expires_at falls back to the id_token when the access token is opaque" do
+      exp = 90.minutes.from_now.to_i
+      credentials = { "tokens" => { "access_token" => "opaque", "id_token" => jwt_with_exp(exp) } }
+      assert_equal exp * 1000, @adapter.token_expires_at(credentials)
+    end
+
+    test "token_expires_at returns nil when no token is a JWT" do
+      assert_nil @adapter.token_expires_at({ "tokens" => { "access_token" => "opaque" } })
+      assert_nil @adapter.token_expires_at({})
+    end
+
+    test "mcp_config escapes TOML-hostile characters in values" do
+      server = OpenStruct.new(
+        name: "ctx",
+        transport: "streamable-http",
+        url: "https://mcp.example.com",
+        headers: { "Authorization" => 'Bearer a"b\\c' }
+      )
+
+      toml = @adapter.mcp_config([ server ])["/home/codex/.codex/config.toml"]
+
+      # Quote and backslash inside the value are escaped, so the string stays a
+      # single valid TOML basic string instead of corrupting the file.
+      assert_includes toml, 'Bearer a\\"b\\\\c'
+      assert_includes toml, 'url = "https://mcp.example.com"'
+    end
+
     private
+
+    # Minimal unsigned JWT carrying an `exp` claim (seconds). Signature segment is
+    # irrelevant — token_expires_at reads the payload without verifying.
+    def jwt_with_exp(exp_seconds)
+      header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+      payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)
+      "#{header}.#{payload}.sig"
+    end
 
     def create_terminal_session(agent_type:)
       company = create(:company)

@@ -632,6 +632,41 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
   end
 
+  test "assemble_session_context redacts resolved secrets from context.log but keeps them in the container config" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    url: "https://mcp.example.com",
+                    headers: { "Authorization" => "super-secret-token-value" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code", mode: "interactive")
+    session.mcp_servers << server
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:read_file).returns(nil)
+
+    captured = {}
+    runtime_mock.stubs(:write_file).with do |_ctr, path, content|
+      captured[path] = content
+      true
+    end.returns(true)
+
+    SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+
+    mcp_config = captured["/workspace/.mcp.json"]
+    context_log = captured["/var/log/context.log"]
+
+    # The container's MCP config keeps the real secret — the agent needs it.
+    assert_includes mcp_config, "super-secret-token-value"
+
+    # context.log keeps the header KEY but scrubs the VALUE to a fingerprint.
+    assert_includes context_log, "Authorization"
+    assert_not_includes context_log, "super-secret-token-value"
+    assert_match(/«redacted:sha256:[0-9a-f]{8}»/, context_log)
+
+    # The internal aixle-tools X-Session-Key (session.mcp_key) is scrubbed too.
+    assert_not_includes context_log, session.mcp_key if session.mcp_key.present?
+  end
+
   test "assemble_session_context skips credentials when nil" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
                      mode: "interactive")

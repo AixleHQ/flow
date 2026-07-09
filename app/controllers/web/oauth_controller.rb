@@ -17,10 +17,28 @@
 # the RFC 8707 resource indicator through the exchange. A DCR token_endpoint is
 # attacker-authored, so it is re-validated against the SSRF guard at exchange time.
 class Web::OauthController < Web::ApplicationController
-  before_action :require_auth
+  before_action :require_auth, except: :client_metadata
   # The OAuth return must land here even for super-admins (who are otherwise
   # bounced to the admin panel on every web request).
   skip_before_action :redirect_super_admin_to_admin_panel, raise: false
+
+  # GET /oauth/client-metadata.json — public RFC "Client ID Metadata Document".
+  # When an MCP authorization server advertises CIMD support, this document's URL
+  # is used as our client_id; the AS dereferences it here (no session) to learn our
+  # redirect_uris/grant_types. Its `client_id` MUST equal the request URL.
+  def client_metadata
+    render json: {
+      # Built from Settings (NOT the request host) so it is byte-identical to the
+      # client_id MCP::OauthDiscoveryService uses — a CIMD document's client_id MUST
+      # equal the URL it is served at.
+      client_id: "#{Settings.protocol}://#{Settings.domain}/oauth/client-metadata.json",
+      client_name: "Aixle Flow",
+      redirect_uris: [ redirect_uri ],
+      grant_types: %w[authorization_code refresh_token],
+      response_types: %w[code],
+      token_endpoint_auth_method: "none"
+    }
+  end
 
   # GET /oauth/:provider/authorize?owner_type=&owner_id=&mcp_server_id=&return_to=
   def authorize
@@ -95,7 +113,7 @@ class Web::OauthController < Web::ApplicationController
     # is signed, but still CONSTRAINED to source:"dcr" so a static client id can't be
     # smuggled through the mcp: branch.
     if provider.start_with?("mcp:")
-      client = OauthClient.where(source: "dcr").find_by(id: payload["oauth_client_id"])
+      client = OauthClient.where(source: OauthClient::DISCOVERED_SOURCES).find_by(id: payload["oauth_client_id"])
       return redirect_to(return_to, alert: "Unknown OAuth client") if client.nil?
     else
       return redirect_to(return_to, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)

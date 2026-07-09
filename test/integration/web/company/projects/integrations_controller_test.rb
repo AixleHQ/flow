@@ -45,6 +45,27 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_not_includes response.location.to_s, Slack::Oauth::AUTHORIZE_URL
   end
 
+  test "github_app_install redirects to GitHub with a signed state" do
+    Settings.github.stubs(:app_slug).returns("aixle-app")
+
+    get github_app_install_company_project_integrations_path(@project)
+
+    assert_response :redirect
+    assert_includes response.location, "https://github.com/apps/aixle-app/installations/new?state="
+    # The state is the signed Oauth::State blob, NOT the legacy plaintext project:<id>.
+    assert_not_includes response.location, "project%3A#{@project.id}"
+    assert_not_includes response.location, "project:#{@project.id}"
+  end
+
+  test "github_app_install alerts when the GitHub App is not configured" do
+    Settings.github.stubs(:app_slug).returns(nil)
+
+    get github_app_install_company_project_integrations_path(@project)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitHub App is not configured", flash[:alert]
+  end
+
   test "destroy removes integration" do
     integration = create(:integration, company: @company, connected_by: @user, project: @project)
 

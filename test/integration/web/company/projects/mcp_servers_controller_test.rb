@@ -28,31 +28,87 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     end
   end
 
+  # The masking sentinel MCPServerResource serializes for every stored secret
+  # (must match SECRET_MASK in the controller / MASK in the modal).
+  SECRET_MASK = "••••••"
+
   test "create redirects on success" do
     post company_project_mcp_servers_path(@project), params: {
-      mcp_server: { name: "test-mcp", display_name: "Test MCP", url: "https://mcp.test/v1", transport: "sse" }
+      mcp_server: { name: "test-mcp", url: "https://mcp.test/v1", transport: "sse" }
     }
     assert_response :redirect
+  end
+
+  test "create persists auth_type and credential_scope so the OAuth flow is reachable" do
+    post company_project_mcp_servers_path(@project), params: {
+      mcp_server: { name: "oauth-mcp", url: "https://mcp.test/v1",
+                    transport: "http", auth_type: "oauth", credential_scope: "per_user" }
+    }
+    assert_response :redirect
+
+    server = @project.mcp_servers.find_by(name: "oauth-mcp")
+    assert_equal "oauth", server.auth_type
+    assert_equal "per_user", server.credential_scope
+  end
+
+  test "update preserves an untouched masked header instead of wiping it" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: "sse",
+                    headers: { "Authorization" => "super-secret" })
+
+    # The UI resubmits the untouched value as the sentinel (never the real secret).
+    patch company_project_mcp_server_path(@project, server), params: {
+      mcpServer: { description: "Renamed", headers: { "Authorization" => SECRET_MASK } }
+    }
+    assert_response :redirect
+
+    server.reload
+    assert_equal "Renamed", server.description
+    assert_equal({ "Authorization" => "super-secret" }, server.headers)
+  end
+
+  test "update stores a freshly edited header value" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: "sse",
+                    headers: { "Authorization" => "old-secret" })
+
+    patch company_project_mcp_server_path(@project, server), params: {
+      mcpServer: { headers: { "Authorization" => "rotated-secret" } }
+    }
+    assert_response :redirect
+
+    assert_equal({ "Authorization" => "rotated-secret" }, server.reload.headers)
+  end
+
+  test "update deletes a header the user removed in the UI" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: "sse",
+                    headers: { "Authorization" => "secret", "X-Extra" => "keep" })
+
+    # Authorization is absent from the payload (removed); X-Extra stays (masked).
+    patch company_project_mcp_server_path(@project, server), params: {
+      mcpServer: { headers: { "X-Extra" => SECRET_MASK } }
+    }
+    assert_response :redirect
+
+    assert_equal({ "X-Extra" => "keep" }, server.reload.headers)
   end
 
   test "update redirects on success" do
     server = create(:mcp_server, scope: @project, kind: :custom)
 
     patch company_project_mcp_server_path(@project, server), params: {
-      mcp_server: { display_name: "Updated" }
+      mcp_server: { description: "Updated" }
     }
     assert_response :redirect
   end
 
   test "update rejects company-scoped server" do
-    server = create(:mcp_server, scope: @company, kind: :custom, display_name: "Company MCP")
+    server = create(:mcp_server, scope: @company, kind: :custom, description: "Company MCP")
 
     patch company_project_mcp_server_path(@project, server), params: {
-      mcp_server: { display_name: "Updated from project" }
+      mcp_server: { description: "Updated from project" }
     }
 
     assert_response :not_found
-    assert_equal "Company MCP", server.reload.display_name
+    assert_equal "Company MCP", server.reload.description
   end
 
   test "destroy redirects" do

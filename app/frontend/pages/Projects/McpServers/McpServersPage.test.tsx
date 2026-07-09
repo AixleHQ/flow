@@ -10,7 +10,6 @@ import McpServersPage from './McpServersPage';
 const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   id: 1,
   name: 'playwright',
-  displayName: 'Playwright Browser',
   url: 'https://mcp.example.com',
   transport: 'http',
   headers: null,
@@ -59,21 +58,18 @@ describe('Projects/McpServers/McpServersPage', () => {
     renderAuthedPage(<McpServersPage />, {
       props: {
         project,
-        mcpServers: [
-          server({ id: 1, name: 'playwright', displayName: 'Playwright Browser' }),
-          server({ id: 2, name: 'context7', displayName: 'Context7 Docs' }),
-        ],
+        mcpServers: [server({ id: 1, name: 'playwright' }), server({ id: 2, name: 'context7' })],
         configItemNames: [],
       },
     });
 
-    expect(screen.getByText('Playwright Browser')).toBeInTheDocument();
-    expect(screen.getByText('Context7 Docs')).toBeInTheDocument();
+    expect(screen.getByText('playwright')).toBeInTheDocument();
+    expect(screen.getByText('context7')).toBeInTheDocument();
 
     await userEvent.type(screen.getByPlaceholderText('Search by name...'), 'context');
 
-    expect(screen.queryByText('Playwright Browser')).not.toBeInTheDocument();
-    expect(screen.getByText('Context7 Docs')).toBeInTheDocument();
+    expect(screen.queryByText('playwright')).not.toBeInTheDocument();
+    expect(screen.getByText('context7')).toBeInTheDocument();
   });
 
   it('opens the add-server form modal when the primary action is clicked', async () => {
@@ -97,7 +93,7 @@ describe('Projects/McpServers/McpServersPage', () => {
       },
     });
 
-    expect(screen.getByText('Playwright Browser')).toBeInTheDocument();
+    expect(screen.getByText('playwright')).toBeInTheDocument();
     // Edit/Delete action icons are rendered (they have accessible tooltips, not text labels),
     // so assert the row has interactive controls rather than a read-only label.
     expect(screen.queryByText('Read-only')).not.toBeInTheDocument();

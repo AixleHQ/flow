@@ -1,9 +1,16 @@
 # frozen_string_literal: true
 
 # "How to talk to an authorization server." One row per (issuer, client_id).
-# source: "static" = materialized from Oauth::Providers registry (Settings-backed).
+# source: "static" = materialized from Oauth::Providers registry (Settings-backed);
+# "dcr" = RFC 7591 dynamic client registration; "cimd" = RFC "Client ID Metadata
+# Document" (client_id is our hosted metadata-doc URL — no registration needed).
 class OauthClient < ApplicationRecord
   include Encryptable
+
+  # Sources produced by MCP OAuth discovery (attacker-influenced endpoints — the
+  # callback constrains signed client ids to these so a static client can't be
+  # smuggled through the mcp: branch).
+  DISCOVERED_SOURCES = %w[dcr cimd].freeze
 
   has_many :oauth_credentials, dependent: :destroy
 
