@@ -132,7 +132,13 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
       onClick={onSelect}
     >
       {!readOnly && (
-        <span className={classes.dragHandle} {...attributes} {...listeners}>
+        <span
+          className={classes.dragHandle}
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder step"
+          title="Drag to reorder step"
+        >
           <IconGripVertical size={12} />
         </span>
       )}
@@ -156,6 +162,8 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
             e.stopPropagation();
             onDelete();
           }}
+          aria-label={`Delete step "${step.name || 'Untitled'}"`}
+          title={`Delete step "${step.name || 'Untitled'}"`}
         >
           <IconTrash size={12} />
         </button>
@@ -230,7 +238,13 @@ function SortableSessionRow({
         onClick={() => onSelectSession(step.id)}
       >
         {!readOnly && (
-          <span className={`${classes.dragHandle} ${classes.sessionDragHandle}`} {...attributes} {...listeners}>
+          <span
+            className={`${classes.dragHandle} ${classes.sessionDragHandle}`}
+            {...attributes}
+            {...listeners}
+            aria-label={`Drag to reorder session "${step.name || 'Untitled'}"`}
+            title={`Drag to reorder session "${step.name || 'Untitled'}"`}
+          >
             <IconGripVertical size={14} />
           </span>
         )}
@@ -260,6 +274,8 @@ function SortableSessionRow({
               e.stopPropagation();
               onDeleteSession(step.id);
             }}
+            aria-label={`Delete session "${step.name || 'Untitled'}"`}
+            title={`Delete session "${step.name || 'Untitled'}"`}
           >
             <IconTrash size={14} />
           </button>

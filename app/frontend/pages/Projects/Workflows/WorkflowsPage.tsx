@@ -134,13 +134,20 @@ const WorkflowsPage = () => {
           setCreateOpen(false);
           createForm.reset();
           // AC2: redirect to builder after successful create
-          const newWorkflows = (page.props as { workflows?: { id: number }[] }).workflows;
-          if (newWorkflows && newWorkflows.length > 0) {
-            const latest = newWorkflows[newWorkflows.length - 1];
-            if (latest) {
-              router.visit(builderCompanyProjectWorkflowPath(project.id, latest.id));
+          try {
+            const newWorkflows = (page.props as { workflows?: { id: number }[] }).workflows;
+            if (newWorkflows && newWorkflows.length > 0) {
+              const latest = newWorkflows[newWorkflows.length - 1];
+              if (latest) {
+                router.visit(builderCompanyProjectWorkflowPath(project.id, latest.id));
+              }
             }
+          } catch (error) {
+            console.error('Error redirecting to builder:', error);
           }
+        },
+        onError: (errors) => {
+          console.error('Error creating workflow:', errors);
         },
       },
     );
@@ -170,6 +177,9 @@ const WorkflowsPage = () => {
       preserveScroll: true,
       onFinish: () => setLoading(false),
       onSuccess: () => setDeleteWorkflow(null),
+      onError: (errors) => {
+        console.error('Error deleting workflow:', errors);
+      },
     });
   };
 
@@ -436,7 +446,12 @@ const WorkflowsPage = () => {
                                 router.post(
                                   `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
                                   {},
-                                  { preserveScroll: true },
+                                  {
+                                    preserveScroll: true,
+                                    onError: (errors) => {
+                                      console.error('Error publishing/unpublishing workflow:', errors);
+                                    },
+                                  },
                                 )
                               }
                             >

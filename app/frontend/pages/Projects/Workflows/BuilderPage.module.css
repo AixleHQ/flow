@@ -540,7 +540,7 @@
   color: var(--text-1);
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-bottom: 6px;
 }
 
@@ -753,7 +753,7 @@
 .dfGroup {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .dfGroup + .dfGroup {

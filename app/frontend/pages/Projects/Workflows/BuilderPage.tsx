@@ -2,7 +2,7 @@ import { arrayMove } from '@dnd-kit/sortable';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Text, TextInput, Tooltip } from '@mantine/core';
 import { IconArrowLeft, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
@@ -244,10 +244,20 @@ const BuilderPage = () => {
 
   const deleteSession = useCallback(
     async (stepId: number) => {
-      await withSave(apiFetch(stepApi(projectId, workflow.id, stepId), { method: 'DELETE' }));
-      setSteps((prev) => prev.filter((s) => s.id !== stepId));
-      if (selection?.sessionId === stepId) setSelection(null);
-      setDeleteStepConfirm(null);
+      try {
+        const res = await apiFetch(stepApi(projectId, workflow.id, stepId), { method: 'DELETE' });
+        if (!res.ok) {
+          console.error('Failed to delete session:', res.statusText);
+          return;
+        }
+        await withSave(Promise.resolve(res));
+        setSteps((prev) => prev.filter((s) => s.id !== stepId));
+        if (selection?.sessionId === stepId) setSelection(null);
+      } catch (error) {
+        console.error('Error deleting session:', error);
+      } finally {
+        setDeleteStepConfirm(null);
+      }
     },
     [projectId, workflow.id, selection, withSave],
   );
@@ -422,6 +432,19 @@ const BuilderPage = () => {
     [debouncedSaveAssetSpecs],
   );
 
+  // Flush debounced saves on unload to prevent data loss
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveWorkflow.flush();
+      saveStepField.flush();
+      updateSubStepField.flush();
+      debouncedSaveAssetSpecs.flush();
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [saveWorkflow, saveStepField, updateSubStepField, debouncedSaveAssetSpecs]);
+
   // Derive selected session and step from selection state
   const selectedSession = useMemo(
     () => (selection ? (steps.find((s) => s.id === selection.sessionId) ?? null) : null),
@@ -473,7 +496,7 @@ const BuilderPage = () => {
               }}
               onMouseEnter={(e) => {
                 const b = e.currentTarget;
-                b.style.background = 'var(--bg-hover, rgba(255,255,255,0.04))';
+                b.style.background = 'var(--border-mid, rgba(57,56,55,0.5))';
                 b.style.borderColor = 'var(--border)';
                 b.style.color = 'var(--text-2)';
               }}
@@ -497,16 +520,16 @@ const BuilderPage = () => {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 5,
-                    padding: '5px 12px',
-                    borderRadius: 5,
+                    gap: 4,
+                    padding: '4px 12px',
+                    borderRadius: 4,
                     fontFamily: 'inherit',
                     fontSize: 12,
                     fontWeight: 600,
                     cursor: canRun ? 'pointer' : 'not-allowed',
-                    border: canRun ? '1px solid rgba(207,107,74,0.30)' : '1px solid var(--border)',
-                    background: canRun ? 'rgba(207,107,74,0.12)' : 'var(--bg-card)',
-                    color: canRun ? '#cf6b4a' : 'var(--text-3)',
+                    border: canRun ? '1px solid var(--accent-muted)' : '1px solid var(--border)',
+                    background: canRun ? 'var(--accent-dim)' : 'var(--bg-card)',
+                    color: canRun ? 'var(--accent)' : 'var(--text-3)',
                     marginLeft: 8,
                     transition: 'background 0.12s, border-color 0.12s',
                   }}
@@ -549,8 +572,8 @@ const BuilderPage = () => {
                     textTransform: 'uppercase',
                     padding: '2px 8px',
                     borderRadius: 4,
-                    border: '1px solid rgba(209,207,205,0.12)',
-                    background: 'rgba(209,207,205,0.05)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-card)',
                     color: 'var(--text-2)',
                     flexShrink: 0,
                     whiteSpace: 'nowrap',

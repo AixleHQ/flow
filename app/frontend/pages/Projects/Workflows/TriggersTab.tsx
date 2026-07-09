@@ -146,15 +146,21 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
 
   const remove = useCallback(
     async (t: Trigger) => {
-      const url = apiV1ProjectWorkflowTriggerPath(
-        projectId,
-        workflowId,
-        t.id,
-        t.kind === 'column' ? { kind: 'column' } : {},
-      );
-      const res = await apiFetch(url, { method: 'DELETE' });
-      if (res.ok) {
-        setTriggers((prev) => prev.filter((x) => x.id !== t.id || x.kind !== t.kind));
+      try {
+        const url = apiV1ProjectWorkflowTriggerPath(
+          projectId,
+          workflowId,
+          t.id,
+          t.kind === 'column' ? { kind: 'column' } : {},
+        );
+        const res = await apiFetch(url, { method: 'DELETE' });
+        if (res.ok) {
+          setTriggers((prev) => prev.filter((x) => x.id !== t.id || x.kind !== t.kind));
+        } else {
+          console.error('Failed to delete trigger:', res.statusText);
+        }
+      } catch (error) {
+        console.error('Error deleting trigger:', error);
       }
     },
     [projectId, workflowId],
@@ -162,19 +168,31 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
 
   const toggleEnabled = useCallback(
     async (t: Trigger, enabled: boolean) => {
-      const url = apiV1ProjectWorkflowTriggerPath(
-        projectId,
-        workflowId,
-        t.id,
-        t.kind === 'column' ? { kind: 'column' } : {},
-      );
-      const res = await apiFetch(url, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trigger: { enabled } }),
-      });
-      if (res.ok) {
-        setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled } : x)));
+      try {
+        const url = apiV1ProjectWorkflowTriggerPath(
+          projectId,
+          workflowId,
+          t.id,
+          t.kind === 'column' ? { kind: 'column' } : {},
+        );
+        const res = await apiFetch(url, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger: { enabled } }),
+        });
+        if (res.ok) {
+          setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled } : x)));
+        } else {
+          console.error('Failed to toggle trigger:', res.statusText);
+          // Revert the UI state on failure
+          setTriggers((prev) =>
+            prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled: !enabled } : x)),
+          );
+        }
+      } catch (error) {
+        console.error('Error toggling trigger:', error);
+        // Revert the UI state on failure
+        setTriggers((prev) => prev.map((x) => (x.id === t.id && x.kind === t.kind ? { ...x, enabled: !enabled } : x)));
       }
     },
     [projectId, workflowId],

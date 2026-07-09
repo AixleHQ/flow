@@ -1,5 +1,6 @@
 import { Switch } from '@mantine/core';
 import { IconArrowUpRight, IconFileDescription, IconMaximize, IconShieldCheck } from '@tabler/icons-react';
+import { useState } from 'react';
 
 import classes from './BuilderPage.module.css';
 
@@ -33,6 +34,7 @@ interface StepEditorPanelProps {
 }
 
 export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPanelProps) {
+  const [instrExpanded, setInstrExpanded] = useState(false);
   const instrLen = (step.instructions ?? '').length;
 
   return (
@@ -51,7 +53,7 @@ export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPan
         />
 
         {/* Description */}
-        <div style={{ marginTop: 10, marginBottom: 12 }}>
+        <div style={{ marginTop: 12, marginBottom: 12 }}>
           <label className={classes.fieldLabel}>Description</label>
           <textarea
             className={classes.descTa}
@@ -81,12 +83,21 @@ export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPan
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
             disabled={readOnly}
+            style={{
+              minHeight: instrExpanded ? 400 : 180,
+              transition: 'min-height 0.2s ease',
+            }}
           />
           <div className={classes.instrFoot}>
             <span className={classes.charCt}>{instrLen} characters</span>
-            <button className={classes.ibtn} type="button" onClick={() => {}}>
+            <button
+              className={classes.ibtn}
+              type="button"
+              onClick={() => setInstrExpanded(!instrExpanded)}
+              title={instrExpanded ? 'Collapse' : 'Expand'}
+            >
               <IconMaximize size={12} />
-              Expand
+              {instrExpanded ? 'Collapse' : 'Expand'}
             </button>
           </div>
         </div>
