@@ -15,7 +15,10 @@ module Github
       @integration.credentials_data = { "installation_id" => "12345" }
       @integration.save!
 
-      @pem_path = Rails.root.join("tmp", "test-github-app.pem")
+      # Worker-unique path: the suite runs parallel (one forked worker per core),
+      # so a fixed tmp filename would let one worker's teardown delete the pem
+      # another worker is mid-read on. Process.pid is stable within a worker.
+      @pem_path = Rails.root.join("tmp", "test-github-app-#{Process.pid}.pem")
       generate_test_pem(@pem_path)
 
       # Stub, don't assign: assigning mutates the process-global Settings and

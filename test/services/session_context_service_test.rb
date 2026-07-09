@@ -235,7 +235,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     custom = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
                     transport: "sse", scope: @company, headers: {})
     integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
-    managed = create(:mcp_server, name: "coder-#{integration.id}", display_name: "Coder",
+    managed = create(:mcp_server, name: "coder-#{integration.id}",
                      kind: :managed, transport: :http, url: nil, scope: @company,
                      integration: integration)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")

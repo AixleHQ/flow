@@ -18,7 +18,9 @@ module Github
       @integration.save!
 
       # The real TokenService signs a JWT from a GitHub App id + private key.
-      @pem_path = Rails.root.join("tmp", "test-github-repo-svc.pem")
+      # Worker-unique path (parallel suite): a fixed tmp filename races across
+      # forked workers — one worker's teardown deletes the pem another is reading.
+      @pem_path = Rails.root.join("tmp", "test-github-repo-svc-#{Process.pid}.pem")
       generate_test_pem(@pem_path)
       Settings.github.stubs(:app_id).returns("999")
       Settings.github.stubs(:private_key_path).returns(@pem_path.to_s)
