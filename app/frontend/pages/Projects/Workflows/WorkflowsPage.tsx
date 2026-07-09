@@ -245,24 +245,39 @@ const WorkflowsPage = () => {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-        <TextInput
-          placeholder="Search workflows..."
-          leftSection={<IconSearch size={14} style={{ color: 'var(--app-text-tertiary)' }} />}
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          styles={{
-            root: { maxWidth: 260 },
-            input: {
+        <div style={{ position: 'relative', maxWidth: 260 }}>
+          <IconSearch
+            size={14}
+            style={{
+              position: 'absolute',
+              left: 9,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--app-text-tertiary)',
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            type="text"
+            placeholder="Search workflows..."
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            style={{
+              width: '100%',
               background: 'var(--app-bg-paper)',
               border: '1px solid var(--app-border-default)',
               borderRadius: 5,
               color: 'var(--app-text-primary)',
+              fontFamily: 'inherit',
               fontSize: 13,
               padding: '7px 10px 7px 30px',
-              height: 'auto',
-            },
-          }}
-        />
+              outline: 'none',
+              transition: 'border-color 0.12s',
+            }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = 'rgba(207,107,74,0.30)')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--app-border-default)')}
+          />
+        </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             type="button"
