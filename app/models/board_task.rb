@@ -34,6 +34,12 @@ class BoardTask < ApplicationRecord
   scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
+  scope :active, -> { where(archived_at: nil) }
+  scope :archived, -> { where.not(archived_at: nil) }
+
+  def archived?
+    archived_at.present?
+  end
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]

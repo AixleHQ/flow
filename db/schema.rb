@@ -11,6 +11,7 @@
 # It's strongly recommended that you check this file into your version control system.
 
 ActiveRecord::Schema[8.1].define(version: 2026_07_08_130000) do
+
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -136,6 +137,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_130000) do
   end
 
   create_table "board_tasks", force: :cascade do |t|
+    t.datetime "archived_at"
     t.bigint "assignee_id"
     t.bigint "board_column_id", null: false
     t.bigint "board_id", null: false
@@ -150,6 +152,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_130000) do
     t.datetime "updated_at", null: false
     t.index ["assignee_id"], name: "index_board_tasks_on_assignee_id"
     t.index ["board_column_id"], name: "index_board_tasks_on_board_column_id"
+    t.index ["board_id", "archived_at"], name: "index_board_tasks_on_board_id_and_archived_at"
     t.index ["board_id"], name: "index_board_tasks_on_board_id"
     t.index ["parent_task_id"], name: "index_board_tasks_on_parent_task_id"
   end

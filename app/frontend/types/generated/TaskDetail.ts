@@ -16,6 +16,7 @@ type TaskDetail = {
   createdAt: string;
   updatedAt: string;
   assigneeName?: string;
+  archived: boolean;
   commentsCount: number;
   childrenCount: number;
   assetsCount: number;

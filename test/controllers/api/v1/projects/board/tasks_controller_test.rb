@@ -93,6 +93,53 @@ module Api
           assert_response :success
         end
 
+        test "archive marks the task archived" do
+          patch :archive, params: { project_id: @project.id, id: @task.id }
+
+          assert_response :success
+          assert_predicate @task.reload, :archived?
+        end
+
+        test "unarchive restores an archived task" do
+          @task.update!(archived_at: Time.current)
+
+          patch :unarchive, params: { project_id: @project.id, id: @task.id }
+
+          assert_response :success
+          assert_not @task.reload.archived?
+        end
+
+        test "index excludes archived tasks by default" do
+          archived = create(:board_task, board: @board, board_column: @col1, archived_at: Time.current)
+
+          get :index, params: { project_id: @project.id }
+
+          assert_response :success
+          ids = JSON.parse(response.body).map { |t| t["id"] }
+          assert_includes ids, @task.id
+          assert_not_includes ids, archived.id
+        end
+
+        test "index with archived filter returns only archived tasks" do
+          archived = create(:board_task, board: @board, board_column: @col1, archived_at: Time.current)
+
+          get :index, params: { project_id: @project.id, archived: "archived" }
+
+          assert_response :success
+          ids = JSON.parse(response.body).map { |t| t["id"] }
+          assert_includes ids, archived.id
+          assert_not_includes ids, @task.id
+        end
+
+        test "index supports limit and offset for on-demand loading" do
+          create_list(:board_task, 3, board: @board, board_column: @col2)
+
+          get :index, params: { project_id: @project.id, board_column_id: @col2.id, limit: 2, offset: 1 }
+
+          assert_response :success
+          assert_equal 2, JSON.parse(response.body).length
+        end
+
         test "workflow_runs returns runs json" do
           create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
 
@@ -160,6 +207,16 @@ module Api
 
           test "viewer move is forbidden" do
             patch :move, params: { project_id: @project.id, id: @task.id, column_id: @col2.id }
+            assert_response :forbidden
+          end
+
+          test "viewer archive is forbidden" do
+            patch :archive, params: { project_id: @project.id, id: @task.id }
+            assert_response :forbidden
+          end
+
+          test "viewer unarchive is forbidden" do
+            patch :unarchive, params: { project_id: @project.id, id: @task.id }
             assert_response :forbidden
           end
 

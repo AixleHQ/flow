@@ -51,6 +51,44 @@ class TaskServiceTest < ActiveSupport::TestCase
     )
   end
 
+  # == archive / unarchive ==
+
+  test "archive sets archived_at and records activity" do
+    task = create(:board_task, board: @board, board_column: @column)
+
+    result = TaskService.archive(task: task, actor: @user)
+
+    assert_predicate result, :archived?
+    assert_predicate task.reload, :archived?
+    assert BoardActivity.exists?(board: @board, event_type: :task_archived, board_task: task)
+  end
+
+  test "archive is a no-op on an already-archived task" do
+    task = create(:board_task, board: @board, board_column: @column, archived_at: Time.current)
+
+    TaskService.archive(task: task, actor: @user)
+
+    assert_equal 0, BoardActivity.where(board: @board, event_type: :task_archived, board_task: task).count
+  end
+
+  test "unarchive clears archived_at and records activity" do
+    task = create(:board_task, board: @board, board_column: @column, archived_at: Time.current)
+
+    result = TaskService.unarchive(task: task, actor: @user)
+
+    assert_not result.archived?
+    assert_not task.reload.archived?
+    assert BoardActivity.exists?(board: @board, event_type: :task_unarchived, board_task: task)
+  end
+
+  test "unarchive is a no-op on an active task" do
+    task = create(:board_task, board: @board, board_column: @column)
+
+    TaskService.unarchive(task: task, actor: @user)
+
+    assert_equal 0, BoardActivity.where(board: @board, event_type: :task_unarchived, board_task: task).count
+  end
+
   # == update ==
 
   test "update saves changes and records activity" do

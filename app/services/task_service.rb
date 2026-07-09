@@ -35,6 +35,26 @@ class TaskService
       task
     end
 
+    def archive(task:, actor:)
+      return task if task.archived?
+
+      if task.update(archived_at: Time.current)
+        record_activity(task.board, :task_archived, actor, task: task, metadata: { title: task.title })
+      end
+
+      task
+    end
+
+    def unarchive(task:, actor:)
+      return task unless task.archived?
+
+      if task.update(archived_at: nil)
+        record_activity(task.board, :task_unarchived, actor, task: task, metadata: { title: task.title })
+      end
+
+      task
+    end
+
     def destroy(task:, actor:)
       title = task.title
       board = task.board

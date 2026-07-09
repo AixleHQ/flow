@@ -9,6 +9,7 @@ class BoardActivity < ApplicationRecord
 
   enumerize :event_type, in: %i[
     task_created task_updated task_deleted task_moved
+    task_archived task_unarchived
     comment_added asset_attached
     workflow_started workflow_completed workflow_failed
     human_help_requested
