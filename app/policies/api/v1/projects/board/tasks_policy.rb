@@ -12,6 +12,8 @@ module Api
           def update? = project_writable?
           def destroy? = project_writable?
           def move? = project_writable?
+          def archive? = project_writable?
+          def unarchive? = project_writable?
           def trigger_workflow? = project_writable?
         end
       end

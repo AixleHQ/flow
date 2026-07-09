@@ -10,6 +10,11 @@ class BoardTaskResource < ApplicationResource
     task.assignee&.name
   end
 
+  typelize :boolean
+  attribute :archived do |task|
+    task.archived?
+  end
+
   typelize :number
   attribute :comments_count do |task|
     task.has_attribute?(:comments_count) ? task[:comments_count].to_i : task.task_comments.size

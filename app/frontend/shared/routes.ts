@@ -272,6 +272,16 @@ export function moveApiV1ProjectTaskPath(project_id: ScalarType, id: ScalarType,
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + id + "/" + "move" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /api/v1/projects/:project_id/tasks/:id/archive(.:format) */
+export function archiveApiV1ProjectTaskPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + id + "/" + "archive" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/tasks/:id/unarchive(.:format) */
+export function unarchiveApiV1ProjectTaskPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + id + "/" + "unarchive" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/tasks/:id/trigger_workflow(.:format) */
 export function triggerWorkflowApiV1ProjectTaskPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + id + "/" + "trigger_workflow" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);

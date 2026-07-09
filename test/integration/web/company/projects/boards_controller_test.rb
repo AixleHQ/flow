@@ -35,6 +35,21 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     Bullet.enable = true
   end
 
+  test "show excludes archived tasks from the default board load" do
+    board = create(:board, project: @project)
+    col = create(:board_column, board: board)
+    active = create(:board_task, board: board, board_column: col)
+    archived = create(:board_task, board: board, board_column: col, archived_at: Time.current)
+
+    get company_project_board_path(@project)
+    assert_inertia_page "Projects/Board/BoardPage"
+
+    assert_inertia_props do |props|
+      ids = props[:tasks].map { |t| t[:id] }
+      ids.include?(active.id) && ids.exclude?(archived.id)
+    end
+  end
+
   test "show includes assets_count for each task without N+1 queries" do
     board = create(:board, project: @project)
     col = create(:board_column, board: board)

@@ -423,6 +423,64 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  // --- archive feature ---
+
+  it('archives a task from the sidebar via a PATCH to the archive endpoint', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, archived: false }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const archiveButton = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-archive'));
+    await userEvent.click(archiveButton!);
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/tasks/1/archive',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('hides archived tasks by default and reveals them via the Show archived toggle', async () => {
+    const archivedTask = makeTask({
+      id: 42,
+      title: 'Old finished task',
+      boardColumnId: 200,
+      position: 5,
+      archived: true,
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify([archivedTask]), { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Archived tasks are not part of the initial (active-only) board load.
+    expect(screen.queryByText('Old finished task')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Show archived'));
+
+    // Toggling fetches archived tasks (?archived=archived) and merges them into the board.
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/7/tasks?archived=archived', expect.anything()),
+    );
+    const card = (await screen.findByText('Old finished task')).closest('[class*="Paper-root"]') as HTMLElement;
+    expect(within(card).getByText('Archived')).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
   // --- collapse-all toggle ---
 
   it('collapses every column when the collapse-all toggle is pressed', async () => {

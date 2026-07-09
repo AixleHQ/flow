@@ -10,6 +10,10 @@ module Api
                                  .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates)
             tasks = tasks.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
             tasks = tasks.tags_overlap(Array(params[:tags])) if params[:tags].present?
+            tasks = filter_by_archived(tasks)
+            tasks = tasks.order(:position)
+            tasks = tasks.limit(params[:limit]) if params[:limit].present?
+            tasks = tasks.offset(params[:offset]) if params[:offset].present?
             render json: tasks.map { |t| BoardTaskResource.new(t).to_h }
           end
 
@@ -51,6 +55,20 @@ module Api
             render json: BoardTaskResource.new(moved_task).to_h
           end
 
+          # @summary Archive a board task (drops it from the default board load)
+          def archive
+            task = current_board.board_tasks.find(params[:id])
+            task = TaskService.archive(task: task, actor: current_user)
+            render json: BoardTaskResource.new(task).to_h
+          end
+
+          # @summary Unarchive a board task (restores it to the default board load)
+          def unarchive
+            task = current_board.board_tasks.find(params[:id])
+            task = TaskService.unarchive(task: task, actor: current_user)
+            render json: BoardTaskResource.new(task).to_h
+          end
+
           # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])
@@ -72,6 +90,16 @@ module Api
           end
 
           private
+
+          # Default view hides archived tasks. `archived=archived` returns only archived
+          # tasks (for the "Show archived" toggle); `archived=all` returns everything.
+          def filter_by_archived(scope)
+            case params[:archived].to_s
+            when "archived" then scope.archived
+            when "all" then scope
+            else scope.active
+            end
+          end
 
           def task_params
             params.require(:board_task).permit(

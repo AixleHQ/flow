@@ -185,4 +185,24 @@ class BoardTaskTest < ActiveSupport::TestCase
     task = BoardTask.new(title: "T", board: @board, board_column: @col1, assignee_id: nil)
     assert task.valid?
   end
+
+  # == Archiving ==
+
+  test "archived? reflects archived_at" do
+    task = BoardTask.create!(title: "T", board: @board, board_column: @col1)
+    refute_predicate task, :archived?
+
+    task.update!(archived_at: Time.current)
+    assert_predicate task, :archived?
+  end
+
+  test "active scope excludes archived tasks and archived scope includes only them" do
+    active = BoardTask.create!(title: "Active", board: @board, board_column: @col1)
+    archived = BoardTask.create!(title: "Archived", board: @board, board_column: @col1, archived_at: Time.current)
+
+    assert_includes BoardTask.active, active
+    assert_not_includes BoardTask.active, archived
+    assert_includes BoardTask.archived, archived
+    assert_not_includes BoardTask.archived, active
+  end
 end
