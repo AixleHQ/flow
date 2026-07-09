@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Box, Group, Loader, Switch, Text, ThemeIcon, Tooltip } from '@mantine/core';
+import { Loader, Switch } from '@mantine/core';
 import {
   IconBolt,
   IconBrandSlack,
@@ -204,56 +204,57 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
   const isEmpty = !loading && triggers.length === 0;
 
   return (
-    <Box style={{ position: 'relative', display: 'flex', height: '100%' }}>
+    <div style={{ position: 'relative', display: 'flex', height: '100%' }}>
       {/* Main content */}
-      <Box style={{ flex: 1, overflow: 'auto', padding: '24px' }}>
-        <Text fw={600} size="md" style={{ color: 'var(--text-1)' }} mb={4}>
-          Triggers — how this workflow launches
-        </Text>
-        <Text size="sm" style={{ color: 'var(--text-2)' }} mb={20}>
-          Any enabled trigger can start a run. Off-board triggers (Slack, webhook) decide what task the run is about via
-          subject.
-        </Text>
+      <div style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
+        {/* Heading */}
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--text-1)',
+            letterSpacing: '-0.02em',
+            marginBottom: 4,
+          }}
+        >
+          Triggers <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>— how this workflow launches</span>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
+          Any enabled trigger can start a run. Off-board triggers (Slack, webhook) decide what task the run is about via{' '}
+          <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
+        </div>
 
         {loading ? (
-          <Group justify="center" py="xl">
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
             <Loader size="sm" />
-          </Group>
+          </div>
         ) : isEmpty ? (
           /* Empty state */
-          <Box ta="center" py={48}>
-            <Box
-              mb={16}
+          <div style={{ maxWidth: 640, margin: '48px auto 0', textAlign: 'center' }}>
+            <div
               style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: 'var(--accent-dim)',
-                border: '1px solid var(--accent-muted)',
+                width: 40,
+                height: 40,
+                borderRadius: 8,
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-2)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 16px',
               }}
             >
-              <IconBolt size={20} style={{ color: 'var(--accent)' }} />
-            </Box>
-            <Text fw={600} size="md" style={{ color: 'var(--text-1)' }} mb={8}>
+              <IconBolt size={18} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)', marginBottom: 6 }}>
               Add your first trigger
-            </Text>
-            <Text size="sm" style={{ color: 'var(--text-2)' }} mb={24} maw={420} mx="auto">
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, marginBottom: 24 }}>
               Choose how this workflow should launch. You can add more than one — any enabled trigger starts a run.
-            </Text>
+            </div>
             {!readOnly && (
-              <Box
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: 12,
-                  maxWidth: 480,
-                  margin: '0 auto',
-                }}
-              >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, textAlign: 'left' }}>
                 {[
                   {
                     kind: 'column',
@@ -277,158 +278,258 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                 ].map((opt) => {
                   const Icon = opt.icon;
                   return (
-                    <Box
+                    <div
                       key={opt.kind}
-                      p={16}
                       onClick={() => openAdd(opt.kind)}
                       style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '14px 16px',
                         background: 'var(--bg-card)',
                         border: '1px solid var(--border)',
                         borderRadius: 8,
                         cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'border-color 0.15s',
+                        transition: 'all 0.12s',
                       }}
-                      onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--border-mid)')}
-                      onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--border)')}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-muted)';
+                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
+                        (e.currentTarget as HTMLElement).style.background = 'var(--bg-card)';
+                      }}
                     >
-                      <Icon size={18} style={{ color: 'var(--accent)', marginBottom: 8 }} />
-                      <Text size="sm" fw={600} style={{ color: 'var(--text-1)' }} mb={4}>
-                        {opt.name}
-                      </Text>
-                      <Text size="xs" style={{ color: 'var(--text-2)' }}>
-                        {opt.desc}
-                      </Text>
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
-          </Box>
-        ) : (
-          /* Card grid */
-          <Box>
-            <Box
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: 12,
-              }}
-            >
-              {triggers.map((t) => {
-                const Icon = TG_ICONS[t.kind] ?? IconBolt;
-                const isDisabled = t.enabled === false;
-                return (
-                  <Box
-                    key={`${t.kind}-${t.id}`}
-                    p={16}
-                    style={{
-                      background: 'var(--bg-card)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      opacity: isDisabled ? 0.6 : 1,
-                    }}
-                  >
-                    {/* Top row */}
-                    <Group gap="sm" mb={12} wrap="nowrap">
-                      <ThemeIcon
-                        size={32}
-                        radius="md"
+                      <div
                         style={{
-                          background: 'var(--accent-dim)',
-                          border: '1px solid var(--accent-muted)',
+                          width: 32,
+                          height: 32,
+                          borderRadius: 8,
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-2)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           flexShrink: 0,
                         }}
                       >
-                        <Icon size={16} style={{ color: 'var(--accent)' }} />
-                      </ThemeIcon>
-                      <Box style={{ flex: 1, minWidth: 0 }}>
-                        <Text size="sm" fw={600} truncate style={{ color: 'var(--text-1)' }}>
-                          {triggerTitle(t)}
-                        </Text>
-                        <Text size="xs" truncate style={{ color: 'var(--text-2)' }}>
-                          {triggerMeta(t)}
-                        </Text>
-                      </Box>
-                    </Group>
-
-                    {/* Bottom row */}
-                    <Group justify="space-between" wrap="nowrap">
-                      <Group gap={6}>
-                        <Badge
-                          size="xs"
-                          variant="outline"
-                          style={{ borderColor: 'var(--border-mid)', color: 'var(--text-2)' }}
-                        >
-                          {TG_EVENTS[t.kind] ?? t.event_type}
-                        </Badge>
-                        {isDisabled && (
-                          <Badge size="xs" color="gray" variant="outline">
-                            Disabled
-                          </Badge>
-                        )}
-                      </Group>
-                      <Group gap={4} wrap="nowrap">
-                        {!readOnly && t.kind !== 'column' && (
-                          <Tooltip label={t.enabled === false ? 'Enable' : 'Disable'}>
-                            <Switch
-                              size="xs"
-                              checked={t.enabled !== false}
-                              onChange={(e) => toggleEnabled(t, e.currentTarget.checked)}
-                            />
-                          </Tooltip>
-                        )}
-                        {!readOnly && (
-                          <>
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              style={{ color: 'var(--text-2)' }}
-                              onClick={() => openEdit(t)}
-                            >
-                              <IconPencil size={14} />
-                            </ActionIcon>
-                            <ActionIcon size="sm" variant="subtle" color="red" onClick={() => remove(t)}>
-                              <IconTrash size={14} />
-                            </ActionIcon>
-                          </>
-                        )}
-                      </Group>
-                    </Group>
-                  </Box>
-                );
-              })}
-
-              {/* Add a trigger tile */}
-              {!readOnly && (
-                <Box
-                  p={16}
-                  onClick={() => openAdd()}
+                        <Icon size={16} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{opt.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 2 }}>{opt.desc}</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Card grid */
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 10,
+            }}
+          >
+            {triggers.map((t) => {
+              const Icon = TG_ICONS[t.kind] ?? IconBolt;
+              const isDisabled = t.enabled === false;
+              return (
+                <div
+                  key={`${t.kind}-${t.id}`}
                   style={{
-                    background: 'transparent',
-                    border: '1px dashed var(--border-mid)',
-                    borderRadius: 8,
-                    cursor: 'pointer',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    minHeight: 80,
-                    transition: 'border-color 0.15s',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '14px 16px',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    opacity: isDisabled ? 0.55 : 1,
+                    transition: 'opacity 0.15s, border-color 0.15s',
                   }}
-                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-muted)')}
-                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--border-mid)')}
                 >
-                  <IconPlus size={16} style={{ color: 'var(--text-2)' }} />
-                  <Text size="sm" style={{ color: 'var(--text-2)' }}>
-                    Add a trigger
-                  </Text>
-                </Box>
-              )}
-            </Box>
-          </Box>
+                  {/* Head row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 8,
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        color: 'var(--text-2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Icon size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: 'var(--text-1)',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {triggerTitle(t)}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--text-2)',
+                          marginTop: 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {triggerMeta(t)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Foot row */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      marginTop: 'auto',
+                    }}
+                  >
+                    {/* Event badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          letterSpacing: '0.04em',
+                          color: 'var(--text-3)',
+                          background: 'var(--bg-raised)',
+                          border: '1px solid var(--border)',
+                          padding: '2px 8px',
+                          borderRadius: 4,
+                          textTransform: 'uppercase',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {TG_EVENTS[t.kind] ?? t.event_type}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    {!readOnly && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <Switch
+                          size="xs"
+                          checked={t.enabled !== false}
+                          onChange={(e) => toggleEnabled(t, e.currentTarget.checked)}
+                        />
+                        <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px' }} />
+                        <button
+                          onClick={() => openEdit(t)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-3)',
+                            padding: 6,
+                            borderRadius: 4,
+                            display: 'flex',
+                            transition: 'all 0.12s',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
+                            (e.currentTarget as HTMLElement).style.background = 'none';
+                          }}
+                        >
+                          <IconPencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => remove(t)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: 'var(--text-3)',
+                            padding: 6,
+                            borderRadius: 4,
+                            display: 'flex',
+                            transition: 'all 0.12s',
+                          }}
+                          onMouseEnter={(e) => {
+                            (e.currentTarget as HTMLElement).style.color = 'var(--err)';
+                            (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                          }}
+                          onMouseLeave={(e) => {
+                            (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
+                            (e.currentTarget as HTMLElement).style.background = 'none';
+                          }}
+                        >
+                          <IconTrash size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Add a trigger tile */}
+            {!readOnly && (
+              <button
+                onClick={() => openAdd()}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  minHeight: 96,
+                  border: '1px dashed var(--border)',
+                  borderRadius: 8,
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.12s',
+                  background: 'none',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--accent)';
+                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-muted)';
+                  (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--text-2)';
+                  (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)';
+                  (e.currentTarget as HTMLElement).style.background = 'none';
+                }}
+              >
+                <IconPlus size={16} />
+                Add a trigger
+              </button>
+            )}
+          </div>
         )}
-      </Box>
+      </div>
 
       {/* Right-side panel */}
       {panelOpen && !readOnly && (
@@ -443,6 +544,6 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
           onSaved={onSaved}
         />
       )}
-    </Box>
+    </div>
   );
 }

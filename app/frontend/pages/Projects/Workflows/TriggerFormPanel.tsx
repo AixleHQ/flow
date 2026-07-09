@@ -1,4 +1,4 @@
-import { Box, Button, Group, NumberInput, PasswordInput, Select, Stack, Switch, Text, TextInput } from '@mantine/core';
+import { NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core';
 import { IconLock, IconX } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
 import { useCallback, useState } from 'react';
@@ -247,140 +247,323 @@ export function TriggerFormPanel({
   return (
     <>
       {/* Scrim */}
-      <Box
+      <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           inset: 0,
-          background: 'rgba(10,9,8,0.5)',
-          zIndex: 10,
+          background: 'rgba(0,0,0,0.45)',
+          zIndex: 90,
         }}
         onClick={onClose}
       />
 
       {/* Panel */}
-      <Box
+      <div
         style={{
-          position: 'absolute',
+          position: 'fixed',
           top: 0,
           right: 0,
           bottom: 0,
-          width: 400,
-          background: 'var(--bg-raised)',
+          width: 480,
+          maxWidth: '92vw',
+          background: 'var(--bg-card)',
           borderLeft: '1px solid var(--border)',
-          zIndex: 20,
+          zIndex: 91,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
       >
         {/* Header */}
-        <Group justify="space-between" p={20} style={{ borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <Text fw={600} size="sm" style={{ color: 'var(--text-1)' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 24px',
+            borderBottom: '1px solid var(--border)',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
             {isEdit ? 'Edit trigger' : 'Add trigger'}
-          </Text>
-          <Button variant="subtle" size="compact-xs" style={{ color: 'var(--text-2)' }} onClick={onClose}>
+          </div>
+          <button
+            onClick={onClose}
+            title="Close"
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-3)',
+              padding: 6,
+              borderRadius: 4,
+              display: 'flex',
+              transition: 'all 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
+              (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-3)';
+              (e.currentTarget as HTMLElement).style.background = 'none';
+            }}
+          >
             <IconX size={16} />
-          </Button>
-        </Group>
+          </button>
+        </div>
 
         {/* Body */}
-        <Stack gap="md" p={20} style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
           {/* Trigger type */}
-          <Box>
-            <Text
-              size="xs"
-              fw={600}
-              style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-              mb={6}
-            >
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}>
               Trigger type
-            </Text>
+            </label>
             {isEdit ? (
-              <Group gap={6} align="center">
-                <Text size="sm" style={{ color: 'var(--text-1)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-1)' }}>
                   {kindOptions.find((o) => o.value === kind)?.label ?? kind}
-                </Text>
+                </span>
                 <IconLock size={12} style={{ color: 'var(--text-3)' }} />
-                <Text size="xs" style={{ color: 'var(--text-3)' }}>
-                  Type is locked when editing
-                </Text>
-              </Group>
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Type is locked when editing</span>
+              </div>
             ) : (
               <Select
                 data={kindOptions}
                 value={kind}
                 onChange={(v) => setKind((v as Kind) ?? 'column')}
                 allowDeselect={false}
+                styles={{
+                  input: {
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    fontSize: 13,
+                  },
+                }}
               />
             )}
-          </Box>
+          </div>
 
           {/* Column fields */}
           {kind === 'column' && (
             <>
-              <Select
-                label="Column"
-                data={columnBindingData}
-                value={columnId}
-                onChange={setColumnId}
-                placeholder="Pick a column"
-                searchable
-                disabled={isEdit}
-              />
-              <Group grow>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Column
+                </label>
                 <Select
-                  label="Mode"
-                  data={[
-                    { value: 'auto', label: 'Auto' },
-                    { value: 'manual', label: 'Manual' },
-                  ]}
-                  value={mode}
-                  onChange={(v) => setMode(v ?? 'auto')}
-                  allowDeselect={false}
+                  data={columnBindingData}
+                  value={columnId}
+                  onChange={setColumnId}
+                  placeholder="Pick a column"
+                  searchable
+                  disabled={isEdit}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
                 />
-                <NumberInput label="Cooldown (s)" value={cooldown} onChange={setCooldown} min={0} />
-              </Group>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 6 }}
+                  >
+                    Mode
+                  </label>
+                  <div
+                    style={{
+                      display: 'inline-flex',
+                      background: 'var(--bg-raised)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      padding: 3,
+                      gap: 2,
+                    }}
+                  >
+                    {['auto', 'manual'].map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setMode(m)}
+                        style={{
+                          padding: '6px 20px',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: mode === m ? 'var(--text-1)' : 'var(--text-2)',
+                          background: mode === m ? 'var(--bg-card)' : 'transparent',
+                          borderRadius: 4,
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.12s',
+                          fontFamily: 'inherit',
+                          textTransform: 'capitalize',
+                        }}
+                      >
+                        {m.charAt(0).toUpperCase() + m.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Cooldown (s)
+                  </label>
+                  <NumberInput
+                    value={cooldown}
+                    onChange={setCooldown}
+                    min={0}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+              </div>
             </>
           )}
 
           {/* Schedule fields */}
           {kind === 'schedule' && (
             <>
-              <TextInput
-                label="Cron"
-                description="minute · hour · day-of-month · month · day-of-week"
-                placeholder="0 9 * * 1-5"
-                value={cron}
-                onChange={(e) => setCron(e.currentTarget.value)}
-                error={cron.trim() && !cronDesc.ok ? 'Invalid cron' : undefined}
-              />
-              <Text size="xs" style={{ color: cronDesc.ok ? 'var(--accent)' : 'var(--text-3)' }}>
-                {cronDesc.ok ? `Runs: ${cronDesc.text}` : cronDesc.text}
-              </Text>
-              <Select
-                label="Timezone"
-                data={TIMEZONE_OPTIONS}
-                value={timezone}
-                onChange={(v) => setTimezone(v ?? 'UTC')}
-                searchable
-                nothingFoundMessage="No timezone"
-              />
-              <Select
-                label="Subject"
-                data={sessionOptions}
-                value={subjectPolicy}
-                onChange={(v) => setSubjectPolicy(v ?? 'none')}
-                allowDeselect={false}
-              />
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Cron
+                </label>
+                <div style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 6, lineHeight: 1.5 }}>
+                  minute · hour · day-of-month · month · day-of-week
+                </div>
+                <TextInput
+                  placeholder="0 9 * * 1-5"
+                  value={cron}
+                  onChange={(e) => setCron(e.currentTarget.value)}
+                  error={cron.trim() && !cronDesc.ok ? 'Invalid cron' : undefined}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
+                />
+                <div style={{ fontSize: 12, color: cronDesc.ok ? 'var(--accent)' : 'var(--text-3)', marginTop: 6 }}>
+                  {cronDesc.ok ? `Runs: ${cronDesc.text}` : cronDesc.text}
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Timezone
+                </label>
+                <Select
+                  data={TIMEZONE_OPTIONS}
+                  value={timezone}
+                  onChange={(v) => setTimezone(v ?? 'UTC')}
+                  searchable
+                  nothingFoundMessage="No timezone"
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Subject (what the run is about)
+                </label>
+                <Select
+                  data={sessionOptions}
+                  value={subjectPolicy}
+                  onChange={(v) => setSubjectPolicy(v ?? 'none')}
+                  allowDeselect={false}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
+                />
+              </div>
               {subjectPolicy !== 'none' && (
                 <>
-                  <Select label="Task column" data={columnData} value={subjectColumnId} onChange={setSubjectColumnId} />
-                  <TextInput
-                    label="Task title template"
-                    placeholder="webhook.received — {{date}}"
-                    value={subjectTitleTemplate}
-                    onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
-                  />
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task column
+                    </label>
+                    <Select
+                      data={columnData}
+                      value={subjectColumnId}
+                      onChange={setSubjectColumnId}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task title template
+                    </label>
+                    <TextInput
+                      placeholder="webhook.received — {{date}}"
+                      value={subjectTitleTemplate}
+                      onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -389,48 +572,149 @@ export function TriggerFormPanel({
           {/* Slack fields */}
           {kind === 'slack' && (
             <>
-              <TextInput
-                label="Channel id"
-                placeholder="C0123ABC (blank = any)"
-                value={channel}
-                onChange={(e) => setChannel(e.currentTarget.value)}
-              />
-              <Group grow align="flex-end">
-                <Select
-                  label="Text match"
-                  data={[
-                    { value: 'contains', label: 'contains' },
-                    { value: 'eq', label: 'equals' },
-                    { value: 'regex', label: 'regex' },
-                    { value: 'starts_with', label: 'starts with' },
-                  ]}
-                  value={textOp}
-                  onChange={(v) => setTextOp(v ?? 'contains')}
-                  allowDeselect={false}
-                />
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Channel id
+                </label>
                 <TextInput
-                  label="Pattern"
-                  placeholder="ship it (optional)"
-                  value={textContains}
-                  onChange={(e) => setTextContains(e.currentTarget.value)}
+                  placeholder="C0123ABC (blank = any)"
+                  value={channel}
+                  onChange={(e) => setChannel(e.currentTarget.value)}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
                 />
-              </Group>
-              <Select
-                label="Subject"
-                data={sessionOptions}
-                value={subjectPolicy}
-                onChange={(v) => setSubjectPolicy(v ?? 'none')}
-                allowDeselect={false}
-              />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, marginBottom: 12 }}>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Text match
+                  </label>
+                  <Select
+                    data={[
+                      { value: 'contains', label: 'contains' },
+                      { value: 'eq', label: 'equals' },
+                      { value: 'regex', label: 'regex' },
+                      { value: 'starts_with', label: 'starts with' },
+                    ]}
+                    value={textOp}
+                    onChange={(v) => setTextOp(v ?? 'contains')}
+                    allowDeselect={false}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Pattern
+                  </label>
+                  <TextInput
+                    placeholder="ship it (optional)"
+                    value={textContains}
+                    onChange={(e) => setTextContains(e.currentTarget.value)}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Subject (what the run is about)
+                </label>
+                <Select
+                  data={sessionOptions}
+                  value={subjectPolicy}
+                  onChange={(v) => setSubjectPolicy(v ?? 'none')}
+                  allowDeselect={false}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
+                />
+              </div>
               {subjectPolicy !== 'none' && (
                 <>
-                  <Select label="Task column" data={columnData} value={subjectColumnId} onChange={setSubjectColumnId} />
-                  <TextInput
-                    label="Task title template"
-                    placeholder="slack.message — {{date}}"
-                    value={subjectTitleTemplate}
-                    onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
-                  />
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task column
+                    </label>
+                    <Select
+                      data={columnData}
+                      value={subjectColumnId}
+                      onChange={setSubjectColumnId}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task title template
+                    </label>
+                    <TextInput
+                      placeholder="slack.message — {{date}}"
+                      value={subjectTitleTemplate}
+                      onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -440,66 +724,207 @@ export function TriggerFormPanel({
           {kind === 'webhook' && (
             <>
               {!isEdit && (
-                <Group grow>
-                  <Select
-                    label="Verification"
-                    data={[
-                      { value: 'none', label: 'None' },
-                      { value: 'hmac_sha256', label: 'HMAC SHA-256' },
-                      { value: 'shared_token', label: 'Shared token' },
-                    ]}
-                    value={verification}
-                    onChange={(v) => setVerification(v ?? 'none')}
-                    allowDeselect={false}
-                  />
-                  <PasswordInput
-                    label="Secret"
-                    placeholder="optional"
-                    value={secret}
-                    onChange={(e) => setSecret(e.currentTarget.value)}
-                  />
-                </Group>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Verification
+                    </label>
+                    <Select
+                      data={[
+                        { value: 'none', label: 'None' },
+                        { value: 'hmac_sha256', label: 'HMAC SHA-256' },
+                        { value: 'shared_token', label: 'Shared token' },
+                      ]}
+                      value={verification}
+                      onChange={(v) => setVerification(v ?? 'none')}
+                      allowDeselect={false}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Secret
+                    </label>
+                    <PasswordInput
+                      placeholder="optional"
+                      value={secret}
+                      onChange={(e) => setSecret(e.currentTarget.value)}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
+                </div>
               )}
-              <Text size="xs" fw={500} style={{ color: 'var(--text-2)' }}>
+              <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginBottom: 8 }}>
                 Only when (optional)
-              </Text>
-              <Group grow align="flex-end">
-                <TextInput
-                  label="Field"
-                  placeholder="ref"
-                  value={condField}
-                  onChange={(e) => setCondField(e.currentTarget.value)}
-                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 1fr', gap: 10, marginBottom: 12 }}>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Field
+                  </label>
+                  <TextInput
+                    placeholder="ref"
+                    value={condField}
+                    onChange={(e) => setCondField(e.currentTarget.value)}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Op
+                  </label>
+                  <Select
+                    data={['eq', 'ne', 'contains', 'starts_with', 'ends_with'].map((o) => ({ value: o, label: o }))}
+                    value={condOp}
+                    onChange={(v) => setCondOp(v ?? 'eq')}
+                    allowDeselect={false}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+                <div>
+                  <label
+                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                  >
+                    Value
+                  </label>
+                  <TextInput
+                    placeholder="refs/heads/main"
+                    value={condValue}
+                    onChange={(e) => setCondValue(e.currentTarget.value)}
+                    styles={{
+                      input: {
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        fontSize: 13,
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  Subject (what the run is about)
+                </label>
                 <Select
-                  label="Op"
-                  data={['eq', 'ne', 'contains', 'starts_with', 'ends_with'].map((o) => ({ value: o, label: o }))}
-                  value={condOp}
-                  onChange={(v) => setCondOp(v ?? 'eq')}
+                  data={sessionOptions}
+                  value={subjectPolicy}
+                  onChange={(v) => setSubjectPolicy(v ?? 'none')}
                   allowDeselect={false}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                    },
+                  }}
                 />
-                <TextInput
-                  label="Value"
-                  placeholder="refs/heads/main"
-                  value={condValue}
-                  onChange={(e) => setCondValue(e.currentTarget.value)}
-                />
-              </Group>
-              <Select
-                label="Subject"
-                data={sessionOptions}
-                value={subjectPolicy}
-                onChange={(v) => setSubjectPolicy(v ?? 'none')}
-                allowDeselect={false}
-              />
+              </div>
               {subjectPolicy !== 'none' && (
                 <>
-                  <Select label="Task column" data={columnData} value={subjectColumnId} onChange={setSubjectColumnId} />
-                  <TextInput
-                    label="Task title template"
-                    placeholder="webhook.received — {{date}}"
-                    value={subjectTitleTemplate}
-                    onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
-                  />
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task column
+                    </label>
+                    <Select
+                      data={columnData}
+                      value={subjectColumnId}
+                      onChange={setSubjectColumnId}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
+                  <div style={{ marginBottom: 12 }}>
+                    <label
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: 'var(--text-1)',
+                        display: 'block',
+                        marginBottom: 5,
+                      }}
+                    >
+                      Task title template
+                    </label>
+                    <TextInput
+                      placeholder="webhook.received — {{date}}"
+                      value={subjectTitleTemplate}
+                      onChange={(e) => setSubjectTitleTemplate(e.currentTarget.value)}
+                      styles={{
+                        input: {
+                          background: 'var(--bg-card)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 5,
+                          fontSize: 13,
+                        },
+                      }}
+                    />
+                  </div>
                 </>
               )}
             </>
@@ -510,28 +935,65 @@ export function TriggerFormPanel({
             <Switch label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
           )}
 
-          {error && (
-            <Text size="xs" style={{ color: 'var(--mantine-color-red-6)' }}>
-              {error}
-            </Text>
-          )}
-        </Stack>
+          {error && <div style={{ fontSize: 12, color: 'var(--mantine-color-red-6)', marginTop: 8 }}>{error}</div>}
+        </div>
 
         {/* Footer */}
-        <Group justify="flex-end" gap="sm" p={20} style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-          <Button variant="subtle" style={{ color: 'var(--text-2)' }} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            loading={saving}
-            disabled={kind === 'schedule' && !cronDesc.ok}
-            style={{ background: 'var(--accent)' }}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 10,
+            padding: '16px 24px',
+            borderTop: '1px solid var(--border)',
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 500,
+              color: 'var(--text-2)',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-1)';
+              (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.color = 'var(--text-2)';
+              (e.currentTarget as HTMLElement).style.background = 'none';
+            }}
           >
-            {isEdit ? 'Update trigger' : 'Add trigger'}
-          </Button>
-        </Group>
-      </Box>
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving || (kind === 'schedule' && !cronDesc.ok)}
+            style={{
+              background: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-dim)' : 'var(--accent)',
+              border: 'none',
+              borderRadius: 6,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-muted)' : '#fff',
+              cursor: saving || (kind === 'schedule' && !cronDesc.ok) ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              transition: 'all 0.12s',
+            }}
+          >
+            {saving ? 'Saving…' : isEdit ? 'Update trigger' : 'Add trigger'}
+          </button>
+        </div>
+      </div>
     </>
   );
 }

@@ -1,17 +1,16 @@
+import { MultiSelect, Select, Switch } from '@mantine/core';
 import {
-  ActionIcon,
-  Box,
-  Group,
-  MultiSelect,
-  Select,
-  Stack,
-  Switch,
-  Text,
-  Textarea,
-  TextInput,
-  Tooltip,
-} from '@mantine/core';
-import { IconArrowsMaximize, IconArrowsMinimize, IconInfoCircle } from '@tabler/icons-react';
+  IconArrowsExchange2,
+  IconArrowUpRight,
+  IconCpu,
+  IconFileDescription,
+  IconInfoCircle,
+  IconLayersIntersect,
+  IconListTree,
+  IconMaximize,
+  IconMinimize,
+  IconShield,
+} from '@tabler/icons-react';
 import { useState } from 'react';
 
 import classes from './BuilderPage.module.css';
@@ -75,47 +74,47 @@ interface SectionLabelProps {
 
 function SectionLabel({ icon, label }: SectionLabelProps) {
   return (
-    <Group gap={6} pb={8} mb={12} style={{ borderBottom: '1px solid var(--border)' }}>
-      {icon}
-      <Text size="xs" fw={700} style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-        {label}
-      </Text>
-    </Group>
+    <div className={classes.secLabel}>
+      <span className={classes.secLabelIcon}>{icon}</span>
+      {label}
+    </div>
   );
 }
 
-interface AssetSpecRowsProps {
+interface AssetRowsProps {
   specs: AssetSpec[];
   onChange: (specs: AssetSpec[]) => void;
   showNamePattern: boolean;
   disabled: boolean;
+  kind: 'input' | 'output';
 }
 
-function AssetSpecRows({ specs, onChange, showNamePattern, disabled }: AssetSpecRowsProps) {
+function AssetRows({ specs, onChange, showNamePattern, disabled, kind }: AssetRowsProps) {
   const addSpec = () => onChange([...specs, { name: '', assetType: 'file', required: true, namePattern: null }]);
   const removeSpec = (i: number) => onChange(specs.filter((_, idx) => idx !== i));
   const updateSpec = (i: number, field: string, value: unknown) =>
     onChange(specs.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
 
   return (
-    <Stack gap="xs">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {specs.length === 0 && <span style={{ fontSize: 12, color: 'var(--text-3)' }}>None added</span>}
       {specs.map((spec, idx) => (
-        <Group key={idx} gap="xs" wrap="nowrap">
-          <TextInput
-            size="xs"
+        <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <input
+            className={classes.descTa}
+            style={{ flex: 1, height: 28, padding: '0 8px', lineHeight: '28px' }}
             placeholder="e.g. tasks/report.md"
             value={spec.name}
             onChange={(e) => updateSpec(idx, 'name', e.currentTarget.value)}
-            style={{ flex: 1 }}
             disabled={disabled}
           />
           {showNamePattern && (
-            <TextInput
-              size="xs"
+            <input
+              className={classes.descTa}
+              style={{ width: 100, height: 28, padding: '0 8px', lineHeight: '28px' }}
               placeholder="e.g. report"
               value={spec.namePattern ?? ''}
               onChange={(e) => updateSpec(idx, 'namePattern', e.currentTarget.value || null)}
-              w={100}
               disabled={disabled}
             />
           )}
@@ -126,40 +125,32 @@ function AssetSpecRows({ specs, onChange, showNamePattern, disabled }: AssetSpec
             disabled={disabled}
           />
           {!disabled && (
-            <ActionIcon size="xs" color="red" variant="subtle" onClick={() => removeSpec(idx)}>
+            <button type="button" className={classes.rowTrash} onClick={() => removeSpec(idx)} style={{ opacity: 1 }}>
               ×
-            </ActionIcon>
+            </button>
           )}
-        </Group>
+        </div>
       ))}
       {!disabled && (
-        <Box>
-          <button
-            type="button"
-            className={classes.ghostRow}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px 0',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-            onClick={addSpec}
-          >
-            <Text size="xs" style={{ color: 'var(--accent)' }}>
-              + Add {showNamePattern ? 'output' : 'input'}
-            </Text>
-          </button>
-        </Box>
+        <button
+          type="button"
+          onClick={addSpec}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '3px 0',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            color: 'var(--accent)',
+            fontSize: 12,
+          }}
+        >
+          + Add {kind}
+        </button>
       )}
-      {specs.length === 0 && (
-        <Text size="xs" style={{ color: 'var(--text-3)' }}>
-          None added
-        </Text>
-      )}
-    </Stack>
+    </div>
   );
 }
 
@@ -247,112 +238,76 @@ export function SessionEditorPanel({
 
   return (
     <div className={classes.editorPanel}>
-      {/* DEFINITION */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Definition" />
+      {/* ── DEFINITION ─────────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Definition" icon={<IconFileDescription size={14} />} />
 
-        <TextInput
+        <input
+          className={classes.stepNameInp}
           placeholder="Session name…"
           value={step.name}
           onChange={(e) => onFieldChange('name', e.currentTarget.value)}
           disabled={readOnly}
-          variant="unstyled"
-          styles={{
-            input: {
-              fontSize: 18,
-              fontWeight: 700,
-              fontFamily: 'Sora, sans-serif',
-              color: 'var(--text-1)',
-              padding: '4px 0',
-              borderBottom: '1px solid transparent',
-              borderRadius: 0,
-              '&:hover': { borderBottomColor: 'var(--border-mid)' },
-              '&:focus': { borderBottomColor: 'var(--accent)' },
-            },
-          }}
-          mb={12}
         />
 
-        <Textarea
-          placeholder="One-line summary of what this does…"
-          value={step.description ?? ''}
-          onChange={(e) => onFieldChange('description', e.currentTarget.value)}
-          disabled={readOnly}
-          autosize
-          minRows={2}
-          mb={16}
-          styles={{ input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4 } }}
-        />
+        <div style={{ marginTop: 10, marginBottom: 12 }}>
+          <label className={classes.fieldLabel}>Description</label>
+          <textarea
+            className={classes.descTa}
+            rows={2}
+            placeholder="One-line summary of what this does…"
+            value={step.description ?? ''}
+            onChange={(e) => onFieldChange('description', e.currentTarget.value)}
+            disabled={readOnly}
+          />
+        </div>
 
-        {/* Instructions */}
-        <Box>
-          <Group gap={6} mb={6} justify="space-between">
-            <Group gap={4}>
-              <Text size="xs" fw={600} style={{ color: 'var(--text-1)' }}>
-                Instructions
-              </Text>
-              <span style={{ color: 'var(--mantine-color-red-6)', fontSize: 12 }}>•</span>
-              <Tooltip
-                label="The prompt the AI agent receives. Use {{artifact_name}} to reference assets."
-                withArrow
-                multiline
-                w={260}
-              >
-                <ActionIcon size="xs" variant="subtle" style={{ color: 'var(--text-3)' }}>
-                  <IconInfoCircle size={12} />
-                </ActionIcon>
-              </Tooltip>
-            </Group>
-          </Group>
-          <Textarea
-            placeholder="Enter session instructions… Use {{artifact_name}} to reference workflow assets."
+        <div style={{ marginTop: 12 }}>
+          <label className={classes.fieldLabel}>
+            Instructions
+            <span className={classes.instrDot} title="Required" />
+            <span
+              className={classes.instrInfoIcon}
+              title="The prompt the AI agent receives. Use {{artifact_name}} to reference assets."
+            >
+              <IconInfoCircle size={12} />
+            </span>
+          </label>
+          <p className={classes.fieldHelp}>
+            Use <code>{'{{artifact_name}}'}</code> to reference workflow assets.{' '}
+            <a href="#" onClick={(e) => e.preventDefault()}>
+              Prompt guide <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+            </a>
+          </p>
+          <textarea
+            className={classes.instrTa}
+            style={instructionsExpanded ? { minHeight: 400 } : undefined}
+            placeholder="Enter instructions… Use {{artifact_name}} for variable references."
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
             disabled={readOnly}
-            minRows={instructionsExpanded ? 20 : 10}
-            autosize={!instructionsExpanded}
-            styles={{
-              input: {
-                minHeight: instructionsExpanded ? 400 : 180,
-                background: 'transparent',
-                border: '1px solid var(--border)',
-                borderRadius: 4,
-              },
-            }}
-            mb={4}
           />
-          <Group justify="space-between">
-            <Text size="xs" style={{ color: 'var(--text-3)' }}>
-              {charCount} characters
-            </Text>
-            <Group gap={4}>
-              <Text size="xs" style={{ color: 'var(--text-2)' }}>
-                Use {'{{artifact_name}}'} to reference workflow assets.{' '}
-                <a href="#" style={{ color: 'var(--accent)' }}>
-                  Prompt guide ↗
-                </a>
-              </Text>
-              <ActionIcon
-                size="xs"
-                variant="subtle"
-                style={{ color: 'var(--text-2)' }}
-                onClick={() => setInstructionsExpanded((v) => !v)}
-              >
-                {instructionsExpanded ? <IconArrowsMinimize size={12} /> : <IconArrowsMaximize size={12} />}
-              </ActionIcon>
-            </Group>
-          </Group>
-        </Box>
-      </Box>
+          <div className={classes.instrFoot}>
+            <span className={classes.charCt}>{charCount} characters</span>
+            <button className={classes.ibtn} type="button" onClick={() => setInstructionsExpanded((v) => !v)}>
+              {instructionsExpanded ? <IconMinimize size={12} /> : <IconMaximize size={12} />}
+              {instructionsExpanded ? 'Collapse' : 'Expand'}
+            </button>
+          </div>
+        </div>
+      </div>
 
-      {/* EXECUTION */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Execution" />
-        <Group grow mb={12}>
-          <Box>
-            <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-              Agent
-            </Text>
+      {/* ── EXECUTION ──────────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Execution" icon={<IconCpu size={14} />} />
+        <div className={classes.field2Col}>
+          <div>
+            <label className={classes.fieldLabel}>
+              Agent&nbsp;
+              <span title="The AI model that executes this session" style={{ color: 'var(--text-3)', cursor: 'help' }}>
+                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </span>
+            </label>
             <Select
               data={[{ value: '', label: 'No agent' }, ...toSelectData(agents)]}
               value={step.agentId ? String(step.agentId) : ''}
@@ -360,12 +315,27 @@ export function SessionEditorPanel({
               disabled={readOnly}
               clearable
               placeholder="No agent"
+              styles={{
+                input: {
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-1)',
+                  fontSize: 13,
+                },
+              }}
             />
-          </Box>
-          <Box>
-            <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-              Execution Environment
-            </Text>
+          </div>
+          <div>
+            <label className={classes.fieldLabel}>
+              Execution Environment&nbsp;
+              <span
+                title="The CLI/runtime this session runs in. None uses the agent's default."
+                style={{ color: 'var(--text-3)', cursor: 'help' }}
+              >
+                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </span>
+            </label>
             <Select
               data={[
                 { value: '', label: 'None (default)' },
@@ -379,89 +349,93 @@ export function SessionEditorPanel({
               disabled={readOnly}
               clearable
               placeholder="None (default)"
+              styles={{
+                input: {
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-1)',
+                  fontSize: 13,
+                },
+              }}
             />
-          </Box>
-        </Group>
-      </Box>
+          </div>
+        </div>
+      </div>
 
-      {/* RESOURCES */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Resources" />
-        <Box
-          p={10}
-          mb={12}
-          style={{
-            borderLeft: '2px solid var(--accent)',
-            background: 'var(--accent-dim)',
-            borderRadius: '0 4px 4px 0',
-          }}
-        >
-          <Text size="xs" style={{ color: 'var(--text-2)' }}>
-            ℹ Session-level additions — stacked on top of Base Resources
-          </Text>
-        </Box>
-        <Stack gap="sm">
-          <Box>
-            <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-              Tools — custom functions this session can call
-            </Text>
-            <MultiSelect
-              data={toolSelectData}
-              value={toToolValue(step.toolIds)}
-              onChange={(v) => onFieldChange('toolIds', fromToolValue(v), true)}
-              disabled={readOnly}
-              searchable
-              placeholder="None added"
-            />
-          </Box>
-          <Box>
-            <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-              MCP Servers — external providers
-            </Text>
-            <MultiSelect
-              data={toSelectData(mcpServers)}
-              value={toStringArr(step.mcpServerIds)}
-              onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v), true)}
-              disabled={readOnly}
-              searchable
-              placeholder="None added"
-            />
-          </Box>
-          <Box>
-            <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-              Skills — capability modules
-            </Text>
-            <MultiSelect
-              data={toSelectData(skills)}
-              value={toStringArr(step.skillIds)}
-              onChange={(v) => onFieldChange('skillIds', toNumberArr(v), true)}
-              disabled={readOnly}
-              searchable
-              placeholder="None added"
-            />
-          </Box>
-        </Stack>
-      </Box>
+      {/* ── RESOURCES ──────────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Resources" icon={<IconLayersIntersect size={14} />} />
+        <div className={classes.infoNote}>
+          <IconInfoCircle size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+          Session-level additions — stacked on top of Base Resources
+        </div>
 
-      {/* DEPENDENCIES */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Dependencies" />
-        <Box
-          p={10}
-          mb={12}
-          style={{
-            borderLeft: '2px solid var(--mantine-color-green-6)',
-            background: 'rgba(52,211,153,0.06)',
-            borderRadius: '0 4px 4px 0',
-          }}
-        >
-          <Text size="xs" style={{ color: 'var(--text-2)' }}>
-            {depNote}
-          </Text>
-        </Box>
-        <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={4}>
-          Run after
-        </Text>
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            Tools <span className={classes.resTypeSub}>— custom functions this session can call</span>
+          </div>
+          <MultiSelect
+            data={toolSelectData}
+            value={toToolValue(step.toolIds)}
+            onChange={(v) => onFieldChange('toolIds', fromToolValue(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+        </div>
+
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            MCP Servers <span className={classes.resTypeSub}>— external providers</span>
+          </div>
+          <MultiSelect
+            data={toSelectData(mcpServers)}
+            value={toStringArr(step.mcpServerIds)}
+            onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+        </div>
+
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            Skills <span className={classes.resTypeSub}>— capability modules</span>
+          </div>
+          <MultiSelect
+            data={toSelectData(skills)}
+            value={toStringArr(step.skillIds)}
+            onChange={(v) => onFieldChange('skillIds', toNumberArr(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── DEPENDENCIES ───────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Dependencies" icon={<IconListTree size={14} />} />
+        <div className={classes.depNote}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok, #34d399)', flexShrink: 0 }} />
+          {depNote}
+        </div>
+        <label className={classes.fieldLabel}>
+          Run after&nbsp;
+          <span title="Waits for these sessions before starting" style={{ color: 'var(--text-3)', cursor: 'help' }}>
+            <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+          </span>
+        </label>
         <MultiSelect
           data={dependencyOptions}
           value={toStringArr(step.dependsOnStepIds)}
@@ -469,60 +443,70 @@ export function SessionEditorPanel({
           disabled={readOnly}
           searchable
           placeholder="Select sessions this session depends on…"
+          styles={{
+            input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+          }}
         />
-      </Box>
+      </div>
 
-      {/* DATA FLOW */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Data Flow" />
-        <Box mb={16}>
-          <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={8}>
-            INPUTS — files this session reads
-          </Text>
-          <AssetSpecRows
+      {/* ── DATA FLOW ──────────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Data Flow" icon={<IconArrowsExchange2 size={14} />} />
+
+        <div className={classes.dfGroup}>
+          <div className={classes.dfSub}>
+            Inputs <span className={classes.dfSubMuted}>— files this session reads</span>
+          </div>
+          <AssetRows
             specs={step.inputAssetSpecs ?? []}
             onChange={(specs) => onAssetSpecsChange('inputAssetSpecs', specs)}
             showNamePattern={false}
             disabled={readOnly}
+            kind="input"
           />
-        </Box>
-        <Box>
-          <Text size="xs" fw={600} style={{ color: 'var(--text-2)' }} mb={8}>
-            OUTPUT ARTIFACT — file this session produces
-          </Text>
-          <AssetSpecRows
+        </div>
+
+        <div className={classes.dfGroup}>
+          <div className={classes.dfSub}>
+            Output artifact <span className={classes.dfSubMuted}>— file this session produces</span>
+          </div>
+          <AssetRows
             specs={step.outputAssetSpecs ?? []}
             onChange={(specs) => onAssetSpecsChange('outputAssetSpecs', specs)}
             showNamePattern
             disabled={readOnly}
+            kind="output"
           />
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      {/* BEHAVIOR */}
-      <Box mb={24}>
-        <SectionLabel icon={null} label="Behavior" />
+      {/* ── BEHAVIOR ───────────────────────────────────────────────────────── */}
+      <div className={classes.edSection}>
+        <SectionLabel label="Behavior" icon={<IconShield size={14} />} />
 
-        {/* Run control */}
-        <Text
-          size="xs"
-          fw={600}
-          style={{ color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          mb={8}
-        >
-          Run control
-        </Text>
-        <Stack gap="sm" mb={16}>
-          <Switch
-            label="Auto-run available"
-            description="Skip user approval in non-interactive/mixed modes."
-            checked={step.allowNonInteractive}
-            onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked, true)}
-            disabled={readOnly}
-          />
-          <Box>
+        <div className={classes.behGroup}>
+          <div className={classes.behSub}>Run control</div>
+
+          <div className={classes.togRow}>
+            <div>
+              <div className={classes.togLbl}>Auto-run available</div>
+              <div className={classes.togDesc}>Skip user approval in non-interactive/mixed modes.</div>
+            </div>
+            <Switch
+              checked={step.allowNonInteractive}
+              onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked, true)}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label className={classes.fieldLabel}>
+              Skip Policy&nbsp;
+              <span title="When to bypass this session during a run" style={{ color: 'var(--text-3)', cursor: 'help' }}>
+                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </span>
+            </label>
             <Select
-              label="Skip Policy"
               data={[
                 { value: 'never', label: 'Never' },
                 { value: 'if_outputs_exist', label: 'If outputs exist' },
@@ -532,14 +516,30 @@ export function SessionEditorPanel({
               onChange={(v) => onFieldChange('skipPolicy', v ?? 'never', true)}
               disabled={readOnly}
               allowDeselect={false}
+              styles={{
+                input: {
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-1)',
+                  fontSize: 13,
+                },
+              }}
             />
-            <Text size="xs" style={{ color: 'var(--text-3)' }} mt={4}>
-              {SKIP_POLICY_TEXTS[step.skipPolicy] ?? ''}
-            </Text>
-          </Box>
-          <Box>
+            <div className={classes.consequence}>{SKIP_POLICY_TEXTS[step.skipPolicy] ?? ''}</div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <label className={classes.fieldLabel}>
+              On Failure&nbsp;
+              <span
+                title="What happens when this session exits with an error"
+                style={{ color: 'var(--text-3)', cursor: 'help' }}
+              >
+                <IconInfoCircle size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </span>
+            </label>
             <Select
-              label="On Failure"
               data={[
                 { value: 'fail', label: 'Fail' },
                 { value: 'retry', label: 'Retry' },
@@ -549,46 +549,55 @@ export function SessionEditorPanel({
               onChange={(v) => onFieldChange('onFailure', v ?? 'fail', true)}
               disabled={readOnly}
               allowDeselect={false}
+              styles={{
+                input: {
+                  background: 'transparent',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text-1)',
+                  fontSize: 13,
+                },
+              }}
             />
-            <Text size="xs" style={{ color: 'var(--text-3)' }} mt={4}>
-              {ON_FAILURE_TEXTS[step.onFailure] ?? ''}
-            </Text>
-          </Box>
-        </Stack>
+            <div className={classes.consequence}>{ON_FAILURE_TEXTS[step.onFailure] ?? ''}</div>
+          </div>
+        </div>
 
-        {/* Environment */}
-        <Text
-          size="xs"
-          fw={600}
-          style={{ color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          mb={8}
-        >
-          Environment
-        </Text>
-        <Stack gap="sm">
-          <Switch
-            label="Mount repositories"
-            description="Makes project repositories available to the agent during this session."
-            checked={step.mountRepositories}
-            onChange={(e) => onFieldChange('mountRepositories', e.currentTarget.checked, true)}
-            disabled={readOnly}
-          />
-          <Switch
-            label="BMAD Method"
-            description={
-              <>
+        <div className={classes.behGroup}>
+          <div className={classes.behSub}>Environment</div>
+
+          <div className={classes.togRow}>
+            <div>
+              <div className={classes.togLbl}>Mount repositories</div>
+              <div className={classes.togDesc}>
+                Makes project repositories available to the agent during this session.
+              </div>
+            </div>
+            <Switch
+              checked={step.mountRepositories}
+              onChange={(e) => onFieldChange('mountRepositories', e.currentTarget.checked, true)}
+              disabled={readOnly}
+            />
+          </div>
+
+          <div className={classes.togRow} style={{ marginTop: 8 }}>
+            <div>
+              <div className={classes.togLbl}>BMAD Method</div>
+              <div className={classes.togDesc}>
                 Enable the BMAD methodology for this session.{' '}
-                <a href="#" style={{ color: 'var(--accent)' }}>
+                <a href="#" style={{ color: 'var(--accent)' }} onClick={(e) => e.preventDefault()}>
                   Learn more ↗
                 </a>
-              </>
-            }
-            checked={step.bmadEnabled}
-            onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked, true)}
-            disabled={readOnly}
-          />
-        </Stack>
-      </Box>
+              </div>
+            </div>
+            <Switch
+              checked={step.bmadEnabled}
+              onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked, true)}
+              disabled={readOnly}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

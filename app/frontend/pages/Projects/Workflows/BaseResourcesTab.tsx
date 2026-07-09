@@ -1,4 +1,4 @@
-import { Box, MultiSelect, Stack, Switch, Text } from '@mantine/core';
+import { MultiSelect, Switch } from '@mantine/core';
 
 interface NamedItem {
   id: number;
@@ -82,123 +82,122 @@ export function BaseResourcesTab({
   const toNumberArr = (vals: string[]) => (Array.isArray(vals) ? vals : []).map(Number);
 
   return (
-    <Box p={24}>
-      <Text fw={600} size="md" style={{ color: 'var(--text-1)' }} mb={4}>
-        Base Resources
-      </Text>
-      <Text size="sm" style={{ color: 'var(--text-2)' }} mb={20}>
-        Default resources available to every session. Sessions can add their own on top.
-      </Text>
+    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+      <div style={{ padding: '28px 24px', maxWidth: 640 }}>
+        {/* Heading */}
+        <div
+          style={{
+            fontSize: 16,
+            fontWeight: 700,
+            color: 'var(--text-1)',
+            letterSpacing: '-0.02em',
+            marginBottom: 4,
+          }}
+        >
+          Base Resources
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
+          Default resources available to every session. Sessions can add their own on top.
+        </div>
 
-      {/* Inherit toggle card */}
-      <Box
-        mb={20}
-        p={16}
-        style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
-        <Box>
-          <Text size="sm" fw={700} style={{ color: 'var(--text-1)' }}>
-            Inherit all project resources
-          </Text>
-          <Text size="xs" style={{ color: 'var(--text-2)' }} mt={2}>
-            Tools, skills, MCP servers, and assets from the project level are included automatically.
-          </Text>
-        </Box>
-        <Switch
-          checked={workflow.inheritAllProjectResources}
-          onChange={(e) => onWorkflowChange('inheritAllProjectResources', e.currentTarget.checked)}
-          disabled={readOnly}
-        />
-      </Box>
-
-      {/* 2-column grid */}
-      <Box
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: 16,
-        }}
-      >
-        <Stack gap="xs">
-          <Text
-            size="xs"
-            fw={600}
-            style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          >
-            Tools
-          </Text>
-          <MultiSelect
-            data={toolSelectData}
-            value={toToolValue(workflow.baseToolIds)}
-            onChange={(v) => onWorkflowChange('baseToolIds', fromToolValue(v))}
-            disabled={readOnly || workflow.inheritAllProjectResources}
-            searchable
-            placeholder={workflow.baseToolIds.length === 0 ? 'None added' : undefined}
+        {/* Inherit toggle card — toggle on LEFT, text on right */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            padding: '10px 14px',
+            background: 'var(--bg-card)',
+            borderRadius: 7,
+            border: '1px solid var(--border)',
+            marginBottom: 20,
+          }}
+        >
+          <Switch
+            checked={workflow.inheritAllProjectResources}
+            onChange={(e) => onWorkflowChange('inheritAllProjectResources', e.currentTarget.checked)}
+            disabled={readOnly}
+            style={{ flexShrink: 0 }}
           />
-        </Stack>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>Inherit all project resources</div>
+            <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
+              Tools, skills, MCP servers, and assets from the project level are included automatically.
+            </div>
+          </div>
+        </div>
 
-        <Stack gap="xs">
-          <Text
-            size="xs"
-            fw={600}
-            style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          >
-            Skills
-          </Text>
-          <MultiSelect
-            data={toSelectData(skills)}
-            value={toStringArr(workflow.baseSkillIds)}
-            onChange={(v) => onWorkflowChange('baseSkillIds', toNumberArr(v))}
-            disabled={readOnly || workflow.inheritAllProjectResources}
-            searchable
-            placeholder={workflow.baseSkillIds.length === 0 ? 'None added' : undefined}
-          />
-        </Stack>
-
-        <Stack gap="xs">
-          <Text
-            size="xs"
-            fw={600}
-            style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          >
-            MCP Servers
-          </Text>
-          <MultiSelect
-            data={toSelectData(mcpServers)}
-            value={toStringArr(workflow.baseMCPServerIds)}
-            onChange={(v) => onWorkflowChange('baseMCPServerIds', toNumberArr(v))}
-            disabled={readOnly || workflow.inheritAllProjectResources}
-            searchable
-            placeholder={workflow.baseMCPServerIds.length === 0 ? 'None added' : undefined}
-          />
-        </Stack>
-
-        <Stack gap="xs">
-          <Text
-            size="xs"
-            fw={600}
-            style={{ color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.08em' }}
-          >
-            Assets
-          </Text>
-          <MultiSelect
-            data={toSelectData(assets)}
-            value={toStringArr(workflow.baseAssetIds)}
-            onChange={(v) => onWorkflowChange('baseAssetIds', toNumberArr(v))}
-            disabled={readOnly || workflow.inheritAllProjectResources}
-            searchable
-            placeholder={workflow.baseAssetIds.length === 0 ? 'None added' : undefined}
-          />
-        </Stack>
-      </Box>
-    </Box>
+        {/* 2-column grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {(
+            [
+              {
+                label: 'Tools',
+                placeholder: 'Select tools…',
+                data: toolSelectData,
+                value: toToolValue(workflow.baseToolIds),
+                onChange: (v: string[]) => onWorkflowChange('baseToolIds', fromToolValue(v)),
+                isEmpty: workflow.baseToolIds.length === 0,
+              },
+              {
+                label: 'Skills',
+                placeholder: 'Select skills…',
+                data: toSelectData(skills),
+                value: toStringArr(workflow.baseSkillIds),
+                onChange: (v: string[]) => onWorkflowChange('baseSkillIds', toNumberArr(v)),
+                isEmpty: workflow.baseSkillIds.length === 0,
+              },
+              {
+                label: 'MCP Servers',
+                placeholder: 'Select MCP servers…',
+                data: toSelectData(mcpServers),
+                value: toStringArr(workflow.baseMCPServerIds),
+                onChange: (v: string[]) => onWorkflowChange('baseMCPServerIds', toNumberArr(v)),
+                isEmpty: workflow.baseMCPServerIds.length === 0,
+              },
+              {
+                label: 'Assets',
+                placeholder: 'Select assets…',
+                data: toSelectData(assets),
+                value: toStringArr(workflow.baseAssetIds),
+                onChange: (v: string[]) => onWorkflowChange('baseAssetIds', toNumberArr(v)),
+                isEmpty: workflow.baseAssetIds.length === 0,
+              },
+            ] as const
+          ).map(({ label, placeholder, data, value, onChange, isEmpty }) => (
+            <div key={label}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: 'var(--text-1)',
+                  marginBottom: 5,
+                }}
+              >
+                {label}
+              </div>
+              <MultiSelect
+                data={data}
+                value={[...value]}
+                onChange={onChange}
+                disabled={readOnly || workflow.inheritAllProjectResources}
+                searchable
+                placeholder={placeholder}
+                styles={{
+                  input: {
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    fontSize: 13,
+                    minHeight: 36,
+                  },
+                }}
+              />
+              {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>None added</div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

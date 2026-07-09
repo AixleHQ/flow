@@ -14,7 +14,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { ActionIcon, Box, Text, Tooltip } from '@mantine/core';
+import { Tooltip } from '@mantine/core';
 import { IconGripVertical, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
@@ -49,16 +49,21 @@ interface SessionTagsProps {
 }
 
 function SessionTags({ step, allSteps }: SessionTagsProps) {
-  const tags: { label: string; className: string; tooltip: string }[] = [];
+  const tags: { label: string; className: string; tooltip: string; dot?: boolean }[] = [];
 
   if (step.allowNonInteractive) {
     tags.push({ label: 'AUTO', className: classes.tagAuto, tooltip: 'Runs automatically without approval' });
   }
   if (step.bmadEnabled) {
-    tags.push({ label: '· BMAD', className: classes.tagNeutral, tooltip: 'BMAD methodology enabled' });
+    tags.push({ label: 'BMAD', className: classes.tagNeutral, tooltip: 'BMAD methodology enabled', dot: true });
   }
   if (step.dependsOnStepIds.length === 0) {
-    tags.push({ label: 'ROOT', className: classes.tagNeutral, tooltip: 'No dependencies — runs in parallel' });
+    tags.push({
+      label: 'ROOT',
+      className: classes.tagNeutral,
+      tooltip: 'No dependencies — runs in parallel',
+      dot: false,
+    });
   } else {
     const firstName = allSteps.find((s) => s.id === step.dependsOnStepIds[0])?.name ?? String(step.dependsOnStepIds[0]);
     const label =
@@ -67,14 +72,29 @@ function SessionTags({ step, allSteps }: SessionTagsProps) {
       .filter((s) => step.dependsOnStepIds.includes(s.id))
       .map((s) => s.name)
       .join(', ')}`;
-    tags.push({ label, className: classes.tagNeutral, tooltip: tooltipText });
+    tags.push({ label, className: classes.tagNeutral, tooltip: tooltipText, dot: false });
   }
 
   return (
     <div className={classes.tagRow}>
       {tags.map((t, i) => (
         <Tooltip key={i} label={t.tooltip} withArrow position="right">
-          <span className={`${classes.tag} ${t.className}`}>{t.label}</span>
+          <span className={`${classes.tag} ${t.className}`}>
+            {t.dot && (
+              <span
+                style={{
+                  width: 4,
+                  height: 4,
+                  borderRadius: '50%',
+                  background: 'var(--text-3)',
+                  display: 'inline-block',
+                  marginRight: 5,
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            {t.label}
+          </span>
         </Tooltip>
       ))}
     </div>
@@ -117,14 +137,20 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
         </span>
       )}
       <span className={`${classes.stepBadge} ${isSelected ? classes.stepBadgeActive : ''}`}>{letter}</span>
-      <Text size="xs" truncate style={{ flex: 1, color: isSelected ? 'var(--accent)' : 'var(--text-1)' }}>
+      <span
+        style={{
+          flex: 1,
+          fontSize: 13,
+          color: isSelected ? 'var(--accent)' : 'var(--text-2)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
         {step.name || 'Untitled'}
-      </Text>
+      </span>
       {!readOnly && (
-        <ActionIcon
-          size="xs"
-          variant="subtle"
-          style={{ color: 'var(--text-3)', flexShrink: 0 }}
+        <button
           className={classes.rowTrash}
           onClick={(e) => {
             e.stopPropagation();
@@ -132,7 +158,7 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
           }}
         >
           <IconTrash size={12} />
-        </ActionIcon>
+        </button>
       )}
     </div>
   );
@@ -211,17 +237,24 @@ function SortableSessionRow({
         <span className={`${classes.sessionBadge} ${isSessionActive ? classes.sessionBadgeActive : ''}`}>
           {index + 1}
         </span>
-        <Box style={{ flex: 1, minWidth: 0 }}>
-          <Text size="sm" fw={500} truncate style={{ color: isSessionActive ? 'var(--accent)' : 'var(--text-1)' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: isSessionActive ? 'var(--accent)' : 'var(--text-1)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              marginBottom: 2,
+            }}
+          >
             {step.name || 'Untitled'}
-          </Text>
+          </div>
           <SessionTags step={step} allSteps={allSteps} />
-        </Box>
+        </div>
         {!readOnly && (
-          <ActionIcon
-            size="xs"
-            variant="subtle"
-            style={{ color: 'var(--text-3)', flexShrink: 0 }}
+          <button
             className={classes.rowTrash}
             onClick={(e) => {
               e.stopPropagation();
@@ -229,7 +262,7 @@ function SortableSessionRow({
             }}
           >
             <IconTrash size={14} />
-          </ActionIcon>
+          </button>
         )}
       </div>
 
@@ -297,7 +330,7 @@ function AddStepGhost({ sessionId, onAdd }: AddStepGhostProps) {
 
   if (editing) {
     return (
-      <div className={classes.ghostRowEditing} style={{ paddingLeft: 42 }}>
+      <div className={`${classes.ghostRowEditing} ${classes.ghostRowStep}`}>
         <input
           ref={inputRef}
           className={classes.ghostInput}
@@ -316,11 +349,9 @@ function AddStepGhost({ sessionId, onAdd }: AddStepGhostProps) {
   }
 
   return (
-    <div className={classes.ghostRow} style={{ paddingLeft: 42 }} onClick={handleClick}>
-      <IconPlus size={10} style={{ color: 'var(--text-3)' }} />
-      <Text size="xs" style={{ color: 'var(--text-3)' }}>
-        Add a step…
-      </Text>
+    <div className={`${classes.ghostRow} ${classes.ghostRowStep}`} onClick={handleClick}>
+      <IconPlus size={10} />
+      Add a step…
     </div>
   );
 }
@@ -377,10 +408,8 @@ function AddSessionGhost({ onAdd }: AddSessionGhostProps) {
 
   return (
     <div className={`${classes.ghostRow} ${classes.ghostRowSession}`} onClick={handleClick}>
-      <IconPlus size={12} style={{ color: 'var(--accent)' }} />
-      <Text size="sm" fw={500} style={{ color: 'var(--accent)' }}>
-        Add a session…
-      </Text>
+      <IconPlus size={12} />
+      Add a session…
     </div>
   );
 }
