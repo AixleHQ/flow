@@ -1,22 +1,9 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import {
-  Badge,
-  Box,
-  Button,
-  Card,
-  Group,
-  Modal,
-  SimpleGrid,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-  Tooltip,
-  ActionIcon,
-} from '@mantine/core';
+import { Box, Button, Group, Modal, Stack, Text, TextInput, Textarea, Tooltip } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDebouncedValue } from '@mantine/hooks';
 import {
+  IconArrowUpRight,
   IconCopy,
   IconEdit,
   IconGlobe,
@@ -25,7 +12,7 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconSearch,
-  IconSettings,
+  IconStack2,
   IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -203,40 +190,6 @@ const WorkflowsPage = () => {
     setEditWorkflow(wf);
   };
 
-  const getStatusDot = (status: string | null) => {
-    if (!status) return null;
-    const s = status.toLowerCase();
-
-    let color: string;
-    let pulse = false;
-
-    if (s === 'completed' || s === 'finished') {
-      color = 'var(--mantine-color-green-6)';
-    } else if (s === 'failed') {
-      color = 'var(--mantine-color-red-6)';
-    } else if (s === 'running') {
-      color = 'var(--mantine-color-blue-6)';
-      pulse = true;
-    } else {
-      return null;
-    }
-
-    return (
-      <Box
-        component="span"
-        style={{
-          display: 'inline-block',
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          backgroundColor: color,
-          flexShrink: 0,
-          ...(pulse ? { animation: 'pulse-dot 1.4s ease-in-out infinite' } : {}),
-        }}
-      />
-    );
-  };
-
   return (
     <>
       <Head title={`Workflows — ${project.name}`} />
@@ -245,39 +198,109 @@ const WorkflowsPage = () => {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.4; }
         }
+        .wf-card { background: var(--app-bg-paper); border: 1px solid var(--app-border-default); border-radius: 8px; display: flex; flex-direction: column; transition: border-color 0.15s; }
+        .wf-card:hover { border-color: var(--app-border-active); }
+        .wf-card-body { padding: 18px 18px 14px; flex: 1; display: flex; flex-direction: column; }
+        .wf-card-name { font-size: 14px; font-weight: 600; color: var(--app-text-primary); letter-spacing: -0.01em; margin-bottom: 6px; }
+        .wf-card-desc { font-size: 13px; color: var(--app-text-secondary); line-height: 1.55; margin-bottom: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
+        .wf-card-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .wf-meta-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--app-text-secondary); }
+        .wf-status-label { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; border: 1px solid transparent; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
+        .wf-status-label-active { background: rgba(209,207,205,0.05); color: var(--app-text-primary); border-color: rgba(209,207,205,0.12); }
+        .wf-status-label-draft { background: rgba(209,207,205,0.03); color: var(--app-text-tertiary); border-color: var(--app-border-default); }
+        .wf-card-foot { display: flex; align-items: center; gap: 6px; padding: 11px 18px; border-top: 1px solid var(--app-border-default); }
+        .wf-foot-left { display: flex; align-items: center; gap: 6px; flex: 1; }
+        .wf-foot-right { display: flex; gap: 2px; }
+        .wf-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; border: 1px solid var(--app-border-default); background: transparent; color: var(--app-text-secondary); white-space: nowrap; }
+        .wf-btn:hover { background: var(--app-bg-hover, rgba(255,255,255,0.04)); color: var(--app-text-primary); border-color: var(--app-border-active); }
+        .wf-btn-run { background: rgba(207,107,74,0.12); color: #cf6b4a; border-color: rgba(207,107,74,0.30); font-weight: 600; }
+        .wf-btn-run:hover { background: rgba(207,107,74,0.18); color: #cf6b4a; border-color: #cf6b4a; }
+        .wf-icon-btn { width: 28px; height: 28px; border-radius: 4px; border: none; background: transparent; color: var(--app-text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
+        .wf-icon-btn:hover { background: var(--app-bg-hover, rgba(255,255,255,0.04)); color: var(--app-text-secondary); }
+        .wf-icon-btn-danger:hover { background: rgba(200,90,90,0.1); color: #c85a5a; }
+        .run-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--app-text-tertiary); }
+        .run-dot-ok { background: var(--app-text-tertiary); }
+        .run-dot-idle { background: var(--app-text-tertiary); }
       `}</style>
-      {/* Search and actions */}
-      <Group justify="space-between" mb="md">
-        <Group gap="sm">
-          <TextInput
-            placeholder="Search workflows..."
-            leftSection={<IconSearch size={16} />}
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            w={300}
-            size="sm"
-          />
-        </Group>
-        <Group gap="sm">
-          <Button
-            variant="outline"
-            size="sm"
-            leftSection={<IconHistory size={16} />}
+
+      {/* Page heading */}
+      <div style={{ marginBottom: 18, maxWidth: 680 }}>
+        <div
+          style={{
+            fontSize: 18,
+            fontWeight: 700,
+            color: 'var(--app-text-primary)',
+            letterSpacing: '-0.02em',
+            marginBottom: 4,
+          }}
+        >
+          Workflows
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--app-text-secondary)', lineHeight: 1.6 }}>
+          Reusable automations your agents run end-to-end — a sequence of sessions with instructions, tools, and
+          resources, triggered on a schedule or event. Create one manually, or describe what you want and let AI build
+          it for you.
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <TextInput
+          placeholder="Search workflows..."
+          leftSection={<IconSearch size={14} style={{ color: 'var(--app-text-tertiary)' }} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          styles={{
+            root: { maxWidth: 260 },
+            input: {
+              background: 'var(--app-bg-paper)',
+              border: '1px solid var(--app-border-default)',
+              borderRadius: 5,
+              color: 'var(--app-text-primary)',
+              fontSize: 13,
+              padding: '7px 10px 7px 30px',
+              height: 'auto',
+            },
+          }}
+        />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="wf-btn"
             onClick={() => router.visit(`/company/projects/${project.id}/workflow_runs`)}
           >
-            Run History
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => router.visit('/company/workflow_catalog')}>
+            <IconHistory size={13} /> Run History
+          </button>
+          <button type="button" className="wf-btn" onClick={() => router.visit('/company/workflow_catalog')}>
             Catalog
-          </Button>
+          </button>
           {canExecute && (
-            <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateOpen(true)}>
-              New Workflow
-            </Button>
+            <button
+              type="button"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 14px',
+                borderRadius: 5,
+                fontFamily: 'inherit',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: '1px solid transparent',
+                background: 'var(--app-primary, #cf6b4a)',
+                color: '#0a0908',
+                transition: 'background 0.12s',
+              }}
+              onClick={() => setCreateOpen(true)}
+            >
+              <IconPlus size={13} /> New Workflow
+            </button>
           )}
-        </Group>
-      </Group>
+        </div>
+      </div>
 
+      {/* Card grid / empty state */}
       {filtered.length === 0 ? (
         <Box py={60} ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
           <Text size="xl">&#128736;</Text>
@@ -291,81 +314,109 @@ const WorkflowsPage = () => {
           )}
         </Box>
       ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, alignContent: 'start' }}>
           {filtered.map((wf) => {
             const isInherited = wf.scopeIndicator === 'company';
+            const isActive = !!wf.publishedAt;
+            const lastRunDot = wf.lastRunStatus
+              ? (() => {
+                  const s = wf.lastRunStatus.toLowerCase();
+                  let bg = 'var(--app-text-tertiary)';
+                  let pulse = false;
+                  if (s === 'completed' || s === 'finished') bg = 'var(--mantine-color-green-6)';
+                  else if (s === 'failed') bg = 'var(--mantine-color-red-6)';
+                  else if (s === 'running') {
+                    bg = 'var(--mantine-color-blue-6)';
+                    pulse = true;
+                  }
+                  return (
+                    <span
+                      className="run-dot"
+                      style={{ background: bg, ...(pulse ? { animation: 'pulse-dot 1.4s ease-in-out infinite' } : {}) }}
+                    />
+                  );
+                })()
+              : null;
 
             return (
-              <Card key={wf.id} padding="md" withBorder style={{ display: 'flex', flexDirection: 'column' }}>
-                <Group gap="xs" mb={4}>
-                  {getStatusDot(wf.lastRunStatus)}
-                  <Text fw={500} size="md" truncate style={{ flex: 1 }}>
-                    {wf.name}
-                  </Text>
-                  {isInherited && (
-                    <Badge size="xs" variant="outline" color="brand">
-                      company
-                    </Badge>
-                  )}
-                </Group>
-                {wf.descriptionExcerpt && (
-                  <Text size="sm" c="dimmed" truncate>
-                    {wf.descriptionExcerpt}
-                  </Text>
-                )}
-                <Text size="xs" c="dimmed" mt={4}>
-                  {wf.stepsCount} {wf.stepsCount === 1 ? 'session' : 'sessions'}
-                  {wf.lastRunAt && <> &middot; Last run {new Date(wf.lastRunAt).toLocaleDateString()}</>}
-                </Text>
+              <div key={wf.id} className="wf-card">
+                <div className="wf-card-body">
+                  {/* Name row + status badge */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div className="wf-card-name">{wf.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 1 }}>
+                      {isInherited && <span className="wf-status-label wf-status-label-draft">company</span>}
+                      <span
+                        className={`wf-status-label ${isActive ? 'wf-status-label-active' : 'wf-status-label-draft'}`}
+                      >
+                        {isActive ? 'Active' : 'Draft'}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Description */}
+                  {wf.descriptionExcerpt && <div className="wf-card-desc">{wf.descriptionExcerpt}</div>}
+                  {/* Meta row */}
+                  <div className="wf-card-meta">
+                    <div className="wf-meta-item">
+                      <IconStack2 size={13} style={{ color: 'var(--app-text-tertiary)' }} />
+                      <span>
+                        {wf.stepsCount} {wf.stepsCount === 1 ? 'session' : 'sessions'}
+                      </span>
+                    </div>
+                    <div className="wf-meta-item">
+                      {lastRunDot}
+                      <span>
+                        {wf.lastRunAt ? `Last run ${new Date(wf.lastRunAt).toLocaleDateString()}` : 'Never run'}
+                      </span>
+                    </div>
+                    <div className="wf-meta-item">
+                      <IconPlayerPlay size={13} style={{ color: 'var(--app-text-tertiary)' }} />
+                      <span>0 runs</span>
+                    </div>
+                  </div>
+                </div>
 
-                <Group justify="space-between" mt="auto" pt="sm">
-                  <Group gap="xs">
+                {/* Footer */}
+                <div className="wf-card-foot">
+                  <div className="wf-foot-left">
                     {canExecute && (
                       <Tooltip label="Run workflow">
-                        <Button
-                          size="xs"
-                          variant="filled"
-                          leftSection={<IconPlayerPlay size={14} />}
-                          onClick={() => setRunWorkflow(wf)}
-                        >
-                          Run
-                        </Button>
+                        <button type="button" className="wf-btn wf-btn-run" onClick={() => setRunWorkflow(wf)}>
+                          <IconPlayerPlay size={12} /> Run
+                        </button>
                       </Tooltip>
                     )}
-                    <Tooltip label="Configure">
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        leftSection={<IconSettings size={14} />}
-                        onClick={(e: React.MouseEvent) => {
-                          e.preventDefault();
-                          router.visit(`/company/projects/${project.id}/workflows/${wf.id}/builder`);
-                        }}
-                      >
-                        Configure
-                      </Button>
-                    </Tooltip>
-                  </Group>
-                  <Group gap={4}>
+                    <button
+                      type="button"
+                      className="wf-btn"
+                      onClick={() => router.visit(`/company/projects/${project.id}/workflows/${wf.id}/builder`)}
+                    >
+                      <IconArrowUpRight size={12} /> Configure
+                    </button>
+                  </div>
+                  <div className="wf-foot-right">
                     {canExecute &&
                       (isInherited ? (
                         <Tooltip label="Copy & Configure">
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            onClick={() => handleCopyAndConfigure(wf)}
-                            loading={loading}
-                          >
-                            <IconCopy size={16} />
-                          </ActionIcon>
+                          <button type="button" className="wf-icon-btn" onClick={() => handleCopyAndConfigure(wf)}>
+                            <IconCopy size={14} />
+                          </button>
                         </Tooltip>
                       ) : (
                         <>
                           <Tooltip label={wf.publishedAt ? 'Unpublish from catalog' : 'Publish to catalog'}>
-                            <ActionIcon
-                              size="sm"
-                              variant="subtle"
-                              color={wf.publishedAt ? 'green' : 'gray'}
+                            <button
+                              type="button"
+                              className="wf-icon-btn"
+                              style={wf.publishedAt ? { color: 'var(--mantine-color-green-6)' } : {}}
                               onClick={() =>
                                 router.post(
                                   `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
@@ -374,27 +425,31 @@ const WorkflowsPage = () => {
                                 )
                               }
                             >
-                              {wf.publishedAt ? <IconGlobe size={16} /> : <IconGlobeOff size={16} />}
-                            </ActionIcon>
+                              {wf.publishedAt ? <IconGlobe size={14} /> : <IconGlobeOff size={14} />}
+                            </button>
                           </Tooltip>
                           <Tooltip label="Edit name & description">
-                            <ActionIcon size="sm" variant="subtle" onClick={() => openEdit(wf)}>
-                              <IconEdit size={16} />
-                            </ActionIcon>
+                            <button type="button" className="wf-icon-btn" onClick={() => openEdit(wf)}>
+                              <IconEdit size={14} />
+                            </button>
                           </Tooltip>
                           <Tooltip label="Delete workflow">
-                            <ActionIcon size="sm" variant="subtle" color="red" onClick={() => setDeleteWorkflow(wf)}>
-                              <IconTrash size={16} />
-                            </ActionIcon>
+                            <button
+                              type="button"
+                              className="wf-icon-btn wf-icon-btn-danger"
+                              onClick={() => setDeleteWorkflow(wf)}
+                            >
+                              <IconTrash size={14} />
+                            </button>
                           </Tooltip>
                         </>
                       ))}
-                  </Group>
-                </Group>
-              </Card>
+                  </div>
+                </div>
+              </div>
             );
           })}
-        </SimpleGrid>
+        </div>
       )}
 
       {/* Create Modal */}

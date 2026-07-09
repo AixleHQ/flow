@@ -182,10 +182,10 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
     return (
       <div
         style={{
-          padding: '8px 0',
+          margin: '8px 0 4px',
+          padding: '0',
           display: 'flex',
           justifyContent: 'center',
-          borderTop: '1px solid var(--app-border-default)',
           flexShrink: 0,
         }}
       >
@@ -193,17 +193,20 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
           <UnstyledButton
             onClick={handleClick}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              background: '#cf6b4a',
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              background: 'var(--accent-dim, rgba(207,107,74,0.12))',
+              border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              color: '#cf6b4a',
+              transition: 'background 0.12s, border-color 0.12s',
             }}
           >
-            <IconWand size={16} style={{ color: '#fff' }} />
+            <IconWand size={16} />
           </UnstyledButton>
         </Tooltip>
       </div>
@@ -213,66 +216,68 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
   return (
     <div
       style={{
-        padding: '12px 10px',
-        borderTop: '1px solid var(--app-border-default)',
+        margin: '8px 10px 4px',
+        padding: '13px',
+        border: '1px solid var(--app-border-default)',
+        borderRadius: 8,
+        background: 'var(--app-bg-paper, #121110)',
         flexShrink: 0,
       }}
     >
       <div
         style={{
+          width: 30,
+          height: 30,
+          borderRadius: 7,
+          background: 'var(--accent-dim, rgba(207,107,74,0.12))',
+          border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
           display: 'flex',
-          gap: 10,
-          alignItems: 'flex-start',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#cf6b4a',
           marginBottom: 10,
         }}
       >
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            background: '#cf6b4a',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <IconWand size={18} style={{ color: '#fff' }} />
-        </div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--app-text-primary)', lineHeight: 1.3 }}>
-            AI Builder
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--app-text-secondary)', lineHeight: 1.4, marginTop: 2 }}>
-            Tasks, boards, and workflows — connected, from one prompt.
-          </div>
-        </div>
+        <IconWand size={16} />
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: 'var(--app-text-primary)',
+          letterSpacing: '-0.01em',
+          marginBottom: 4,
+        }}
+      >
+        AI Builder
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--app-text-secondary)', lineHeight: 1.45, marginBottom: 12 }}>
+        Tasks, boards, and workflows — connected, from one prompt.
       </div>
       <button
         type="button"
         onClick={handleClick}
         style={{
-          background: '#e8e5e2',
-          color: '#1a1816',
-          borderRadius: 8,
+          background: '#d1cfcd',
+          color: '#0a0908',
+          borderRadius: 5,
           width: '100%',
-          border: 'none',
+          border: '1px solid transparent',
           cursor: 'pointer',
           padding: '8px 12px',
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: 600,
           fontFamily: 'inherit',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 6,
+          gap: 5,
           transition: 'background 0.12s',
         }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#f0edea')}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#e8e5e2')}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#e3e1df')}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#d1cfcd')}
       >
-        <IconWand size={14} />✦ Build with AI
+        <IconSparkles size={13} color="#0a0908" />✦ Build with AI
       </button>
     </div>
   );
