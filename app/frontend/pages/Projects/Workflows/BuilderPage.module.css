@@ -123,13 +123,13 @@
   display: flex;
   flex-direction: column;
   height: calc(100vh - 60px);
-  margin: -24px -32px;
+  margin: -28px -24px;
   overflow: hidden;
   background: var(--bg);
 }
 
 .builderHeader {
-  padding: 16px 24px;
+  padding: 14px 24px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   background: var(--bg-raised);
@@ -140,6 +140,33 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
   padding: 0 24px;
+  display: flex;
+}
+
+.builderTab {
+  padding: 9px 14px;
+  font-size: 14px;
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.12s;
+  user-select: none;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: inherit;
+}
+
+.builderTab:hover {
+  color: var(--text-1);
+}
+
+.builderTabActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
 }
 
 .builderTabContent {
@@ -385,23 +412,60 @@
 /* ── Inline editable header (AC3) ────────────────────────────────────────── */
 
 .headerNameInput {
-  font-size: 20px !important;
+  font-size: 18px !important;
   font-weight: 700 !important;
   color: var(--text-1) !important;
+  letter-spacing: -0.02em !important;
   background: transparent !important;
-  border: none !important;
-  border-bottom: 1px solid transparent !important;
-  border-radius: 0 !important;
-  padding: 2px 0 !important;
-  transition: border-color 0.12s !important;
+  border: 1px solid transparent !important;
+  border-radius: 5px !important;
+  padding: 2px 6px 3px !important;
+  margin-left: -6px !important;
+  transition: all 0.15s !important;
+  cursor: text;
+  width: auto !important;
+  min-width: 120px;
+  max-width: 520px;
 }
 
 .headerNameInput:hover {
-  border-bottom-color: var(--border-mid) !important;
+  border-color: var(--border) !important;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04)) !important;
 }
 
 .headerNameInput:focus {
-  border-bottom-color: var(--accent) !important;
+  border-color: var(--accent-muted) !important;
+  background: var(--bg-card) !important;
+}
+
+.headerDescInput {
+  font-size: 13px;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  padding: 5px 6px;
+  line-height: 1.5;
+  width: 100%;
+  cursor: text;
+  transition: all 0.15s;
+  margin-left: -6px;
+  font-family: inherit;
+  resize: none;
+}
+
+.headerDescInput:hover {
+  border-color: var(--border);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  color: var(--text-2);
+}
+
+.headerDescInput:focus {
+  border-color: var(--accent-muted);
+  background: var(--bg-card);
+  color: var(--text-1);
+  outline: none;
 }
 
 /* ── AI Builder sidebar banner (AC11) ────────────────────────────────────── */

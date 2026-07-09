@@ -1,7 +1,7 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { Head, router, usePage } from '@inertiajs/react';
-import { ActionIcon, Alert, Box, Button, Group, Modal, Tabs, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { IconBolt, IconChevronLeft, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
+import { Alert, Button, Group, Modal, Text, TextInput, Tooltip } from '@mantine/core';
+import { IconArrowLeft, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -452,21 +452,86 @@ const BuilderPage = () => {
       <div className={classes.builderLayout}>
         {/* ===== HEADER (AC3) ===== */}
         <div className={classes.builderHeader}>
-          <Group justify="space-between" wrap="nowrap">
-            <Group gap="sm" style={{ flex: 1, minWidth: 0 }}>
-              <ActionIcon
-                variant="subtle"
-                size="sm"
-                style={{ color: 'var(--text-2)', flexShrink: 0 }}
-                onClick={() => router.visit(backPath)}
-              >
-                <IconChevronLeft size={16} />
-              </ActionIcon>
-              <Box style={{ flex: 1, minWidth: 0 }}>
+          {/* Row 1: back link | spacer | save chip | run button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <button
+              type="button"
+              onClick={() => router.visit(backPath)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                color: 'var(--text-3)',
+                fontSize: 12,
+                cursor: 'pointer',
+                padding: '3px 6px',
+                borderRadius: 4,
+                border: '1px solid transparent',
+                background: 'transparent',
+                transition: 'all 0.12s',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={(e) => {
+                const b = e.currentTarget;
+                b.style.background = 'var(--bg-hover, rgba(255,255,255,0.04))';
+                b.style.borderColor = 'var(--border)';
+                b.style.color = 'var(--text-2)';
+              }}
+              onMouseLeave={(e) => {
+                const b = e.currentTarget;
+                b.style.background = 'transparent';
+                b.style.borderColor = 'transparent';
+                b.style.color = 'var(--text-3)';
+              }}
+            >
+              <IconArrowLeft size={13} /> Workflows
+            </button>
+            <div style={{ flex: 1 }} />
+            <SaveChip saving={saving} />
+            {project && !readOnly && (
+              <Tooltip label="Add instructions to at least one session to run" disabled={canRun}>
+                <button
+                  type="button"
+                  disabled={!canRun}
+                  onClick={() => setRunModalOpen(true)}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '5px 12px',
+                    borderRadius: 5,
+                    fontFamily: 'inherit',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: canRun ? 'pointer' : 'not-allowed',
+                    border: canRun ? '1px solid rgba(207,107,74,0.30)' : '1px solid var(--border)',
+                    background: canRun ? 'rgba(207,107,74,0.12)' : 'var(--bg-card)',
+                    color: canRun ? '#cf6b4a' : 'var(--text-3)',
+                    marginLeft: 8,
+                    transition: 'background 0.12s, border-color 0.12s',
+                  }}
+                >
+                  <IconPlayerPlay size={12} /> Run
+                </button>
+              </Tooltip>
+            )}
+          </div>
+
+          {/* Row 2: editable title + scope tag */}
+          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
                 {readOnly ? (
-                  <Text fw={700} size="lg" style={{ color: 'var(--text-1)' }}>
+                  <span
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: 'var(--text-1)',
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
                     {workflow.name}
-                  </Text>
+                  </span>
                 ) : (
                   <TextInput
                     value={workflow.name}
@@ -476,79 +541,57 @@ const BuilderPage = () => {
                     placeholder="Workflow name…"
                   />
                 )}
-                {!readOnly && (
-                  <Textarea
-                    value={workflow.description ?? ''}
-                    onChange={(e) => updateWorkflowField('description', e.currentTarget.value)}
-                    placeholder="Add a description…"
-                    autosize
-                    minRows={1}
-                    maxRows={2}
-                    variant="unstyled"
-                    size="xs"
-                    styles={{ input: { color: 'var(--text-2)', padding: '1px 0' } }}
-                  />
-                )}
-              </Box>
-              <Box
-                px={8}
-                py={2}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  flexShrink: 0,
-                }}
-              >
-                <Text size="xs" style={{ color: 'var(--text-2)' }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(209,207,205,0.12)',
+                    background: 'rgba(209,207,205,0.05)',
+                    color: 'var(--text-2)',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.5,
+                  }}
+                >
                   {workflow.scopeIndicator}
-                </Text>
-              </Box>
-            </Group>
-
-            <Group gap="sm" style={{ flexShrink: 0 }}>
-              <SaveChip saving={saving} />
-              {project && !readOnly && (
-                <Tooltip label="Add instructions to at least one session to run" disabled={canRun}>
-                  <Button
-                    size="sm"
-                    leftSection={<IconPlayerPlay size={14} />}
-                    disabled={!canRun}
-                    onClick={() => setRunModalOpen(true)}
-                    style={{ background: canRun ? 'var(--accent)' : undefined }}
-                  >
-                    Run
-                  </Button>
-                </Tooltip>
+                </span>
+              </div>
+              {/* Row 3: editable description */}
+              {readOnly ? (
+                workflow.description && (
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
+                    {workflow.description}
+                  </p>
+                )
+              ) : (
+                <textarea
+                  value={workflow.description ?? ''}
+                  onChange={(e) => updateWorkflowField('description', e.currentTarget.value)}
+                  placeholder="Add a description…"
+                  rows={1}
+                  className={classes.headerDescInput}
+                />
               )}
-            </Group>
-          </Group>
+            </div>
+          </div>
         </div>
 
         {/* ===== TAB BAR (AC4) ===== */}
         <div className={classes.builderTabBar}>
-          <Tabs
-            value={activeTab}
-            onChange={(v) => setActiveTab(v ?? 'sessions')}
-            styles={{
-              tab: {
-                color: 'var(--text-2)',
-                borderBottom: '2px solid transparent',
-                '&[dataActive]': {
-                  color: 'var(--accent)',
-                  borderBottomColor: 'var(--accent)',
-                },
-              },
-            }}
-          >
-            <Tabs.List style={{ borderBottom: 'none' }}>
-              <Tabs.Tab value="sessions">Sessions</Tabs.Tab>
-              <Tabs.Tab value="triggers" leftSection={<IconBolt size={14} />}>
-                Triggers
-              </Tabs.Tab>
-              <Tabs.Tab value="base-resources">Base Resources</Tabs.Tab>
-            </Tabs.List>
-          </Tabs>
+          {(['sessions', 'triggers', 'base-resources'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`${classes.builderTab} ${activeTab === tab ? classes.builderTabActive : ''}`}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab === 'sessions' ? 'Sessions' : tab === 'triggers' ? 'Triggers' : 'Base Resources'}
+            </button>
+          ))}
         </div>
 
         {/* ===== TAB CONTENT ===== */}
