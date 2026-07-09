@@ -35,7 +35,7 @@ class Web::Company::Projects::MCPServersAuthorizationTest < ActionDispatch::Inte
   test "create is a project write" do
     assert_project_write do
       post company_project_mcp_servers_path(@project), params: {
-        mcp_server: { name: "authz-mcp-#{SecureRandom.hex(4)}", display_name: "Authz MCP",
+        mcp_server: { name: "authz-mcp-#{SecureRandom.hex(4)}",
                       url: "https://mcp.test/v1", transport: "sse" }
       }
     end
@@ -44,7 +44,7 @@ class Web::Company::Projects::MCPServersAuthorizationTest < ActionDispatch::Inte
   test "update is a project write" do
     assert_project_write do
       patch company_project_mcp_server_path(@project, @server), params: {
-        mcp_server: { display_name: "Renamed by authz" }
+        mcp_server: { description: "Renamed by authz" }
       }
     end
   end

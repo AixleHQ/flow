@@ -68,4 +68,29 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # deployment Settings.slack.* — never user-supplied.
     redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
   end
+
+  # Kick off a GitHub App installation for this project. The GitHub App "Setup URL"
+  # is app-wide, so we carry the originating project in a SIGNED `state` (Oauth::State:
+  # signed + 10-min TTL + single-use nonce + user pinning) instead of the old
+  # plaintext `project:<id>` (replayable, forgeable — oauth-unification §7). GitHub
+  # echoes `state` back to the deployment-wide callback (GithubSetupController).
+  def github_app_install
+    slug = Settings.github.app_slug
+    if slug.blank?
+      redirect_to company_project_integrations_path(current_project), alert: "GitHub App is not configured"
+      return
+    end
+
+    state = Oauth::State.encode(
+      owner_type: "Project",
+      owner_id: current_project.id,
+      user_id: current_user.id,
+      return_to: company_project_integrations_path(current_project),
+      code_verifier: nil,          # GitHub App setup has no PKCE code exchange
+      provider: "github_setup"
+    )
+    # allow_other_host: github.com install URL built from deployment Settings — never user-supplied.
+    redirect_to "https://github.com/apps/#{slug}/installations/new?state=#{CGI.escape(state)}",
+                allow_other_host: true
+  end
 end

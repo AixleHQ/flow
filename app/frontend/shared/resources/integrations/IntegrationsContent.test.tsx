@@ -132,7 +132,9 @@ describe('IntegrationsContent', () => {
       });
     });
 
-    it('connecting GitHub from the empty state navigates to the GitHub app install URL', async () => {
+    // Connecting GitHub navigates to the SERVER endpoint, which mints a signed state
+    // (Oauth::State) and redirects to GitHub — the state is no longer built client-side (§7).
+    it('connecting GitHub from the empty state navigates to the server install endpoint', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
@@ -140,10 +142,10 @@ describe('IntegrationsContent', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
 
-      expect(window.location.href).toBe('https://github.com/apps/aixle-app/installations/new');
+      expect(window.location.href).toBe('/company/integrations/github_app_install');
     });
 
-    it('in a project context the install URL carries the project id as state', async () => {
+    it('in a project context it navigates to that project’s install endpoint', async () => {
       renderPage(
         <IntegrationsContent title="Project Integrations" basePath="/projects/42/integrations" integrations={[]} />,
         { props: settingsProps },
@@ -151,23 +153,10 @@ describe('IntegrationsContent', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
 
-      expect(window.location.href).toBe(
-        `https://github.com/apps/aixle-app/installations/new?state=${encodeURIComponent('project:42')}`,
-      );
+      expect(window.location.href).toBe('/projects/42/integrations/github_app_install');
     });
 
-    it('falls back to the github_setup page when no app slug is configured', async () => {
-      renderPage(
-        <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
-        { props: { settings: { githubAppSlug: null } } },
-      );
-
-      await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
-
-      expect(window.location.href).toBe('/company/integrations/github_setup');
-    });
-
-    it('opens the GitHub install URL from the Connect menu when integrations already exist', async () => {
+    it('opens the server install endpoint from the Connect menu when integrations already exist', async () => {
       renderPage(
         <IntegrationsContent
           title="Company Integrations"
@@ -180,7 +169,7 @@ describe('IntegrationsContent', () => {
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
       await userEvent.click(await screen.findByRole('menuitem', { name: 'GitHub' }));
 
-      expect(window.location.href).toBe('https://github.com/apps/aixle-app/installations/new');
+      expect(window.location.href).toBe('/company/integrations/github_app_install');
     });
   });
 

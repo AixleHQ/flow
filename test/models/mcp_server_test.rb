@@ -12,7 +12,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "creates valid custom MCP server with company scope" do
     server = MCPServer.new(
       name: "context7",
-      display_name: "Context7",
       url: "https://mcp.context7.io",
       transport: "sse",
       kind: "custom",
@@ -26,7 +25,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "creates valid custom MCP server with project scope" do
     server = MCPServer.new(
       name: "tavily",
-      display_name: "Tavily Search",
       url: "https://mcp.tavily.com",
       transport: "sse",
       kind: "custom",
@@ -37,25 +35,35 @@ class MCPServerTest < ActiveSupport::TestCase
     assert server.save
   end
 
-  test "validates name format" do
-    # Name starting with number is invalid
+  test "allows a free-form name with no format constraint" do
+    # The lowercase protocol identifier is derived at config time (config_key), so
+    # the name itself accepts spaces, capitals and punctuation verbatim.
     server = MCPServer.new(
-      display_name: "Test",
+      name: "My Fancy Server!",
       url: "https://example.com",
       kind: "custom",
       scope: @company
     )
-    # Bypass sanitizer by setting raw attribute
-    server.write_attribute(:name, "123-invalid")
 
-    assert_not server.valid?
-    assert_includes server.errors[:name], "must start with letter, use lowercase letters, numbers, dashes, underscores"
+    assert server.valid?, server.errors.full_messages.to_sentence
+    assert server.save
+    assert_equal "My Fancy Server!", server.reload.name
+  end
+
+  test "config_key derives a lowercase protocol identifier from the name" do
+    assert_equal "context7", MCPServer.config_key_for("Context7")
+    assert_equal "my_fancy_server", MCPServer.config_key_for("My Fancy Server!")
+    assert_equal "playwright_browser", MCPServer.config_key_for("Playwright  Browser")
+    # Names already within [a-z0-9_-] (e.g. existing slugs) pass through unchanged.
+    assert_equal "aixle-tools", MCPServer.config_key_for("aixle-tools")
+
+    server = MCPServer.new(name: "My Fancy Server!")
+    assert_equal "my_fancy_server", server.config_key
   end
 
   test "validates name uniqueness within scope" do
     MCPServer.create!(
       name: "context7",
-      display_name: "Context7",
       url: "https://mcp.context7.io",
       kind: "custom",
       scope: @company
@@ -63,7 +71,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     duplicate = MCPServer.new(
       name: "context7",
-      display_name: "Context7 Duplicate",
       url: "https://mcp2.context7.io",
       kind: "custom",
       scope: @company
@@ -76,7 +83,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "allows same name in different scopes" do
     MCPServer.create!(
       name: "context7",
-      display_name: "Context7 Company",
       url: "https://mcp.context7.io",
       kind: "custom",
       scope: @company
@@ -84,7 +90,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     project_server = MCPServer.new(
       name: "context7",
-      display_name: "Context7 Project",
       url: "https://mcp2.context7.io",
       kind: "custom",
       scope: @project
@@ -96,7 +101,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "custom server requires scope" do
     server = MCPServer.new(
       name: "test",
-      display_name: "Test",
       url: "https://example.com",
       kind: "custom"
     )
@@ -108,7 +112,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "custom server requires url" do
     server = MCPServer.new(
       name: "test",
-      display_name: "Test",
       kind: "custom",
       scope: @company
     )
@@ -120,7 +123,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "internal server does not require scope or url" do
     server = MCPServer.new(
       name: "aixle-tools",
-      display_name: "Aixle Tools",
       kind: "internal"
     )
 
@@ -130,7 +132,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "scopes return correct servers" do
     company_server = MCPServer.create!(
       name: "company-server",
-      display_name: "Company Server",
       url: "https://company.example.com",
       kind: "custom",
       scope: @company
@@ -138,7 +139,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     project_server = MCPServer.create!(
       name: "project-server",
-      display_name: "Project Server",
       url: "https://project.example.com",
       kind: "custom",
       scope: @project
@@ -154,7 +154,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "visible_for_project returns company and project servers" do
     company_server = MCPServer.create!(
       name: "company-server",
-      display_name: "Company Server",
       url: "https://company.example.com",
       kind: "custom",
       scope: @company
@@ -162,7 +161,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     project_server = MCPServer.create!(
       name: "project-server",
-      display_name: "Project Server",
       url: "https://project.example.com",
       kind: "custom",
       scope: @project
@@ -177,7 +175,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "visible_for_project includes both company and project with same name" do
     MCPServer.create!(
       name: "shared-name",
-      display_name: "Company Version",
       url: "https://company.example.com",
       kind: "custom",
       scope: @company
@@ -185,7 +182,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     MCPServer.create!(
       name: "shared-name",
-      display_name: "Project Version",
       url: "https://project.example.com",
       kind: "custom",
       scope: @project
@@ -209,7 +205,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "rejects private IPv4 addresses" do
     %w[http://10.0.0.1/mcp http://172.16.0.1/mcp http://192.168.1.1/mcp].each do |private_url|
       server = MCPServer.new(
-        name: "test-ssrf", display_name: "Test", url: private_url,
+        name: "test-ssrf", url: private_url,
         kind: "custom", scope: @company
       )
       assert_not server.valid?, "Expected #{private_url} to be rejected"
@@ -220,7 +216,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "rejects loopback addresses" do
     %w[http://127.0.0.1/mcp http://127.0.0.2:8080/mcp].each do |loopback_url|
       server = MCPServer.new(
-        name: "test-ssrf", display_name: "Test", url: loopback_url,
+        name: "test-ssrf", url: loopback_url,
         kind: "custom", scope: @company
       )
       assert_not server.valid?, "Expected #{loopback_url} to be rejected"
@@ -230,7 +226,7 @@ class MCPServerTest < ActiveSupport::TestCase
 
   test "rejects link-local addresses (cloud metadata)" do
     server = MCPServer.new(
-      name: "test-ssrf", display_name: "Test", url: "http://169.254.169.254/latest/meta-data/",
+      name: "test-ssrf", url: "http://169.254.169.254/latest/meta-data/",
       kind: "custom", scope: @company
     )
     assert_not server.valid?
@@ -240,7 +236,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "rejects blocked hostnames" do
     %w[http://localhost:3000/mcp http://metadata.google.internal/mcp http://metadata.goog/mcp].each do |blocked_url|
       server = MCPServer.new(
-        name: "test-ssrf", display_name: "Test", url: blocked_url,
+        name: "test-ssrf", url: blocked_url,
         kind: "custom", scope: @company
       )
       assert_not server.valid?, "Expected #{blocked_url} to be rejected"
@@ -251,7 +247,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "rejects non-http schemes" do
     %w[ftp://example.com/mcp file:///etc/passwd javascript:alert(1)].each do |bad_url|
       server = MCPServer.new(
-        name: "test-ssrf", display_name: "Test", url: bad_url,
+        name: "test-ssrf", url: bad_url,
         kind: "custom", scope: @company
       )
       assert_not server.valid?, "Expected #{bad_url} to be rejected"
@@ -262,7 +258,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "allows valid public URLs" do
     %w[https://mcp.context7.io https://api.tavily.com/mcp http://mcp.example.com:8080/sse].each do |good_url|
       server = MCPServer.new(
-        name: "test-valid", display_name: "Test", url: good_url,
+        name: "test-valid", url: good_url,
         kind: "custom", scope: @company
       )
       server.valid?
@@ -272,7 +268,7 @@ class MCPServerTest < ActiveSupport::TestCase
 
   test "internal servers skip URL validation" do
     server = MCPServer.new(
-      name: "aixle-internal", display_name: "Internal", kind: "internal"
+      name: "aixle-internal", kind: "internal"
     )
     assert server.valid?
   end
@@ -288,7 +284,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "managed server requires an integration" do
     server = MCPServer.new(
       name: "coder-1",
-      display_name: "Coder",
       kind: "managed",
       scope: @company
     )
@@ -302,7 +297,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     server = MCPServer.new(
       name: "coder-1",
-      display_name: "Coder",
       kind: "managed",
       integration: integration
     )
@@ -316,7 +310,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     server = MCPServer.new(
       name: "custom-no-integration",
-      display_name: "Custom",
       url: "https://example.com",
       kind: "custom",
       scope: @company,
@@ -332,7 +325,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     server = MCPServer.new(
       name: "coder-#{integration.id}",
-      display_name: "Coder",
       kind: "managed",
       integration: integration,
       scope: @company
@@ -346,11 +338,11 @@ class MCPServerTest < ActiveSupport::TestCase
   test "managed_servers scope filters by kind" do
     integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
     managed = MCPServer.create!(
-      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      name: "coder-#{integration.id}", kind: "managed",
       integration: integration, scope: @company
     )
     custom = MCPServer.create!(
-      name: "custom-x", display_name: "Custom", url: "https://example.com",
+      name: "custom-x", url: "https://example.com",
       kind: "custom", scope: @company
     )
 
@@ -361,7 +353,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "for_integration scope returns the managed row" do
     integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
     server = MCPServer.create!(
-      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      name: "coder-#{integration.id}", kind: "managed",
       integration: integration, scope: @company
     )
 
@@ -371,7 +363,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "visible_for_project surfaces managed servers in scope" do
     integration = create(:integration, :coder, :active, company: @company, project: @project, connected_by: @user)
     server = MCPServer.create!(
-      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      name: "coder-#{integration.id}", kind: "managed",
       integration: integration, scope: @project
     )
 
@@ -381,7 +373,7 @@ class MCPServerTest < ActiveSupport::TestCase
   test "destroying integration deletes its managed MCP server (FK cascade)" do
     integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
     MCPServer.create!(
-      name: "coder-#{integration.id}", display_name: "Coder", kind: "managed",
+      name: "coder-#{integration.id}", kind: "managed",
       integration: integration, scope: @company
     )
 
@@ -393,7 +385,6 @@ class MCPServerTest < ActiveSupport::TestCase
   test "enabled scope filters correctly" do
     enabled = MCPServer.create!(
       name: "enabled-server",
-      display_name: "Enabled",
       url: "https://enabled.example.com",
       kind: "custom",
       scope: @company,
@@ -402,7 +393,6 @@ class MCPServerTest < ActiveSupport::TestCase
 
     disabled = MCPServer.create!(
       name: "disabled-server",
-      display_name: "Disabled",
       url: "https://disabled.example.com",
       kind: "custom",
       scope: @company,
@@ -411,5 +401,131 @@ class MCPServerTest < ActiveSupport::TestCase
 
     assert_includes MCPServer.enabled, enabled
     assert_not_includes MCPServer.enabled, disabled
+  end
+
+  # ====================================================================
+  # OAuth: auth_type + credential_scope (Phase 3)
+  # ====================================================================
+
+  test "auth_type defaults to none and credential_scope to shared" do
+    server = MCPServer.new(
+      name: "defaults",
+      url: "https://mcp.example.com", kind: "custom", scope: @company
+    )
+
+    assert_equal "none", server.auth_type
+    assert_equal "shared", server.credential_scope
+    assert server.auth_type_none?
+    assert server.credential_scope_shared?
+  end
+
+  test "auth_type predicates" do
+    server = MCPServer.new
+
+    server.auth_type = "none"
+    assert server.auth_type_none?
+    assert_not server.auth_type_static?
+    assert_not server.auth_type_oauth?
+
+    server.auth_type = "static"
+    assert server.auth_type_static?
+    assert_not server.auth_type_none?
+    assert_not server.auth_type_oauth?
+
+    server.auth_type = "oauth"
+    assert server.auth_type_oauth?
+    assert_not server.auth_type_none?
+    assert_not server.auth_type_static?
+  end
+
+  test "credential_scope predicates" do
+    server = MCPServer.new
+
+    server.credential_scope = "shared"
+    assert server.credential_scope_shared?
+    assert_not server.credential_scope_per_user?
+
+    server.credential_scope = "per_user"
+    assert server.credential_scope_per_user?
+    assert_not server.credential_scope_shared?
+  end
+
+  test "oauth? convenience predicate mirrors auth_type_oauth?" do
+    server = MCPServer.new
+    server.auth_type = "static"
+    assert_not server.oauth?
+    server.auth_type = "oauth"
+    assert server.oauth?
+  end
+
+  test "rejects unknown auth_type / credential_scope values" do
+    server = MCPServer.new(
+      name: "bad-enum", url: "https://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "bogus", credential_scope: "nobody"
+    )
+
+    assert_not server.valid?
+    assert server.errors[:auth_type].any?
+    assert server.errors[:credential_scope].any?
+  end
+
+  test "with_auth_type scope filters by auth_type" do
+    oauth_server = MCPServer.create!(
+      name: "oauth-srv", url: "https://oauth.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+    static_server = MCPServer.create!(
+      name: "static-srv", url: "https://static.example.com",
+      kind: "custom", scope: @company, auth_type: "static"
+    )
+
+    result = MCPServer.with_auth_type(:oauth)
+    assert_includes result, oauth_server
+    assert_not_includes result, static_server
+  end
+
+  test "with_credential_scope scope filters by credential_scope" do
+    per_user = MCPServer.create!(
+      name: "per-user-srv", url: "https://pu.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth", credential_scope: "per_user"
+    )
+    shared = MCPServer.create!(
+      name: "shared-srv", url: "https://shared.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth", credential_scope: "shared"
+    )
+
+    result = MCPServer.with_credential_scope(:per_user)
+    assert_includes result, per_user
+    assert_not_includes result, shared
+  end
+
+  test "oauth server requires https url" do
+    server = MCPServer.new(
+      name: "oauth-http", url: "http://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+
+    assert_not server.valid?
+    assert_includes server.errors[:url], "must use https"
+  end
+
+  test "oauth server accepts https url" do
+    server = MCPServer.new(
+      name: "oauth-https", url: "https://mcp.example.com",
+      kind: "custom", scope: @company, auth_type: "oauth"
+    )
+
+    server.valid?
+    assert_empty server.errors[:url]
+  end
+
+  test "static server does not require https url" do
+    server = MCPServer.new(
+      name: "static-http", url: "http://mcp.example.com:8080/sse",
+      kind: "custom", scope: @company, auth_type: "static"
+    )
+
+    server.valid?
+    assert_empty server.errors[:url]
   end
 end

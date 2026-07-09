@@ -159,7 +159,7 @@ class WorkflowDuplicator
 
       MCPServer.create!(
         scope: @project,
-        name: server.name, display_name: server.display_name,
+        name: server.name,
         url: server.url, transport: server.transport, description: server.description,
         command: server.command, args: server.args, enabled: server.enabled,
         env: server.env, headers: server.headers # verbatim — secrets live in ConfigItem, not here (D3)

@@ -50,6 +50,13 @@ module Agents
       config["accessToken"].present?
     end
 
+    # Cursor's accessToken is a JWT carrying an `exp` claim. Surface its expiry
+    # (epoch ms) so AgentCredential#expires_at is populated and the proactive
+    # refresh sweep selects the credential before expiry rather than only on 401.
+    def token_expires_at(credentials)
+      jwt_exp_ms(credentials["accessToken"])
+    end
+
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
@@ -111,8 +118,9 @@ module Agents
           entry["url"] = s.url if s.url.present?
           entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         end
-        mcp_servers[s.name] = entry
-        approvals << "#{s.name}-#{mcp_approval_hash(entry, workspace)}"
+        key = MCPServer.config_key_for(s.name)
+        mcp_servers[key] = entry
+        approvals << "#{key}-#{mcp_approval_hash(entry, workspace)}"
       end
 
       {
@@ -148,6 +156,16 @@ module Agents
     rescue StandardError => e
       Rails.logger.warn("[CursorCliAdapter] fetch_available_models failed: #{e.message}")
       []
+    end
+
+    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
+    # refresh_cursor_token! which persists under a row lock via persist_refreshed!.
+    # @param credential [AgentCredential]
+    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
+    def refresh!(credential)
+      new_token = refresh_cursor_token!(credential)
+      new_token ? { status: :refreshed, detail: nil }
+                : { status: :error, detail: "cursor token refresh failed" }
     end
 
     # Env vars for MITM proxy and http2-logger configuration.
@@ -256,10 +274,12 @@ module Agents
         "accessToken" => new_access,
         "refreshToken" => data["refresh_token"] || refresh_token
       )
-      credential.update!(config_data: updated)
+      # Persist under a row lock with the rotation guard so a concurrent session
+      # cleanup or sweep can't clobber a newer token.
+      persisted = persist_refreshed!(credential, updated)
       Rails.logger.info("[CursorCliAdapter] Token refreshed for credential #{credential.id}")
 
-      new_access
+      persisted["accessToken"]
     rescue StandardError => e
       Rails.logger.warn("[CursorCliAdapter] Token refresh error: #{e.message}")
       nil

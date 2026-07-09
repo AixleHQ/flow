@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "base64"
+
 module Agents
   # Base adapter interface for agent-specific credential handling
   # Each agent (Claude Code, Cursor CLI, etc.) has different config formats and paths
@@ -47,6 +49,47 @@ module Agents
     # @return [Boolean]
     def auth_complete?(config_content)
       raise NotImplementedError, "#{self.class} must implement #auth_complete?"
+    end
+
+    # ---- Auth-kind hooks -------------------------------------------------------
+    # An auth session can run in different "kinds" (default "agent" = a fresh
+    # login). AgentAuthStrategy is generic and drives everything through these
+    # hooks; adapters that support extra kinds (e.g. Claude's "design") override
+    # them. Defaults are kind-agnostic so no other adapter needs to change.
+
+    # Files to seed into the container before the CLI launches, for `kind`, given
+    # the user's currently-stored credential config. Default: the fresh-login setup
+    # files (no credentials).
+    def auth_setup_files_for(_kind, _current_config = nil)
+      auth_setup_files
+    end
+
+    # Keys the watcher waits on for `kind`. Default: the standard login keys.
+    def auth_required_keys_for(_kind)
+      auth_required_keys
+    end
+
+    # Completion predicate for `kind`. Default: the standard auth_complete?.
+    def auth_complete_for?(_kind, config_content)
+      auth_complete?(config_content)
+    end
+
+    # Commands to launch/drive the CLI for `kind`, sent into the tmux session AFTER
+    # the setup files are written. Empty (default) = the entrypoint's TTYD_CMD
+    # launches the CLI at container start (a fresh login). Non-empty = the strategy
+    # starts `bash` and sends these instead (so the CLI starts with seeded creds).
+    def auth_launch_commands_for(_kind)
+      []
+    end
+
+    # Reconcile the credentials scraped from the container (`captured`) with the
+    # user's currently-stored credential (`current`) for `kind`, returning the blob to
+    # persist. Default: replace with the freshly-scraped set (a normal login should
+    # supersede whatever was there). A kind that only LAYERS onto an existing login
+    # (e.g. Claude's "design") overrides this to add just its own block, so it never
+    # re-captures/duplicates the base login it seeded into the container.
+    def reconcile_captured_credentials(_kind, _current, captured)
+      captured
     end
 
     # Extract credentials from config content (only fields we need to persist)
@@ -224,6 +267,26 @@ module Agents
       nil
     end
 
+    # Decode the `exp` claim (seconds since epoch) from a JWT payload WITHOUT
+    # verifying the signature, returning epoch milliseconds — or nil when the
+    # value is not a three-segment JWT or carries no `exp`. Adapters whose access
+    # tokens are JWTs (Codex, Cursor) use this to implement #token_expires_at so
+    # the proactive-refresh sweep can select them.
+    # @param token [String, nil]
+    # @return [Integer, nil]
+    def jwt_exp_ms(token)
+      return nil if token.blank?
+
+      segments = token.split(".")
+      return nil unless segments.size == 3
+
+      payload = JSON.parse(Base64.urlsafe_decode64(base64_pad(segments[1])))
+      exp = payload["exp"]
+      exp.present? ? exp.to_i * 1000 : nil
+    rescue StandardError
+      nil
+    end
+
     # Merge freshly-collected credentials (from a live session's container) onto the
     # stored blob before persisting. Default: replace wholesale, but keep the stored
     # blob when the incoming token is older (refresh-token rotation guard). Adapters
@@ -238,6 +301,40 @@ module Agents
       return current if new_exp && old_exp && new_exp.to_i <= old_exp.to_i
 
       incoming
+    end
+
+    # Proactively refresh this credential's OAuth token(s) server-side, persisting
+    # any rotated tokens back onto the AgentCredential. Called by the Temporal
+    # token-refresh sweep for credentials nearing expiry. Default: no-op (agents
+    # whose credentials don't carry a refreshable OAuth token).
+    #
+    # MUST persist via credential.with_lock + merge_refreshed_credentials +
+    # AgentCredential.from_artifacts (never a bare update! of a whole blob) so a
+    # concurrent live session's cleanup can't race the read-merge-write.
+    #
+    # @param credential [AgentCredential]
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
+    def refresh!(_credential)
+      { status: :not_needed, detail: nil }
+    end
+
+    # Persist a freshly-refreshed credential blob under a row lock, guarding
+    # against clobbering a concurrently-rotated (newer) token. Mirrors the Claude
+    # per-block pattern for single-block agents (Codex, Cursor): reload the locked
+    # row, run it through merge_refreshed_credentials (rotation guard), and write
+    # via AgentCredential.from_artifacts. NEVER bare-update! a whole blob — a
+    # concurrent live session's cleanup can otherwise race the read-merge-write.
+    # @param credential [AgentCredential]
+    # @param new_config [Hash] the freshly-refreshed credential blob
+    # @return [Hash] the blob actually persisted (may be the pre-existing one if it
+    #   was newer)
+    def persist_refreshed!(credential, new_config)
+      credential.with_lock do
+        current = credential.config_data
+        merged  = merge_refreshed_credentials(current, new_config)
+        AgentCredential.from_artifacts(credential.user_id, credential.agent_type, merged) if merged != current
+        merged
+      end
     end
 
     # =================================================================
@@ -271,6 +368,12 @@ module Agents
       JSON.parse(content)
     rescue JSON::ParserError
       {}
+    end
+
+    # Right-pad a base64url segment to a multiple of 4 so Base64.urlsafe_decode64
+    # (which is strict about padding) accepts a JWT payload segment.
+    def base64_pad(str)
+      str + ("=" * ((4 - (str.length % 4)) % 4))
     end
   end
 end

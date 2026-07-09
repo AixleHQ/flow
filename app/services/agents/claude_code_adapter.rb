@@ -66,11 +66,58 @@ module Agents
       config["primaryApiKey"].present? || config.dig("claudeAiOauth", "accessToken").present?
     end
 
-    # claudeAiOauth.expiresAt is the OAuth access-token expiry (epoch ms). Used to
-    # avoid clobbering a freshly-refreshed token with an older one from a
-    # concurrent session (Claude Code rotates the refresh token on refresh).
+    # /design-login layers a `designOauth` block onto an EXISTING Claude login. It is
+    # the one "design" concept in the codebase — the AgentAuthStrategy is generic and
+    # only sees an opaque `kind`; everything design-specific lives in these overrides.
+    DESIGN_KIND = "design"
+
+    # Seed the user's existing base login (minus any designOauth) so the CLI starts
+    # authenticated; the session then only adds the fresh designOauth block. Stripping
+    # designOauth matters on RECONNECT — otherwise the token the watcher waits for is
+    # present from the start and completes instantly.
+    def auth_setup_files_for(kind, current_config = nil)
+      return super unless kind == DESIGN_KIND
+
+      config_files((current_config || {}).except("designOauth"))
+    end
+
+    # Wait for the design block specifically (the base token is injected up-front).
+    def auth_required_keys_for(kind)
+      kind == DESIGN_KIND ? %w[designOauth.accessToken] : super
+    end
+
+    def auth_complete_for?(kind, config_content)
+      return super unless kind == DESIGN_KIND
+
+      parse_json(config_content).dig("designOauth", "accessToken").present?
+    end
+
+    # Launch the CLI already running /design-login (the prompt is passed on the command
+    # line as ONE command, so there's no delay before it appears). The CLI is already
+    # logged in via the seeded creds; the user just approves in the browser.
+    def auth_launch_commands_for(kind)
+      kind == DESIGN_KIND ? [ "claude /design-login" ] : super
+    end
+
+    # Design only ADDS the freshly-minted designOauth to the existing credential. It
+    # must NOT re-capture the base from the container: the base was injected there, and
+    # a full re-scrape would resurrect a stale base login (e.g. an old claudeAiOauth)
+    # next to the real one → Claude's "Both claude.ai and /login managed key set".
+    def reconcile_captured_credentials(kind, current, captured)
+      return super unless kind == DESIGN_KIND
+
+      design = captured["designOauth"]
+      return current || {} unless design.is_a?(Hash) && design["accessToken"].present?
+
+      (current || {}).merge("designOauth" => design)
+    end
+
+    # Soonest OAuth-token expiry (epoch ms) across all present blocks
+    # (claudeAiOauth + designOauth), or nil if none carry one. Used to (a) populate
+    # agent_credentials.expires_at and (b) drive the proactive-refresh sweep so we
+    # fire when whichever block expires first is near expiry.
     def token_expires_at(credentials)
-      credentials.dig("claudeAiOauth", "expiresAt")
+      OAUTH_BLOCKS.filter_map { |b| credentials.dig(b, "expiresAt") }.map(&:to_i).min
     end
 
     # Claude stores two independently-rotating OAuth blocks: claudeAiOauth (base login)
@@ -78,6 +125,12 @@ module Agents
     # (a) adding designOauth isn't skipped just because claudeAiOauth didn't change, and
     # (b) a session without design access never wipes a stored designOauth.
     OAUTH_BLOCKS = %w[claudeAiOauth designOauth].freeze
+
+    # Proactive server-side token refresh (Temporal sweep).
+    REFRESH_MARGIN_MS = 15 * 60 * 1000 # refresh a block if it expires within 15 min (or already expired)
+    OAUTH_TOKEN_URL   = "https://platform.claude.com/v1/oauth/token"
+    # Base (claude.ai) login client_id. Prefer Settings; fall back to the known public client id.
+    BASE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
     def merge_refreshed_credentials(current, incoming)
       merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
@@ -90,6 +143,50 @@ module Agents
         end
       end
       merged
+    end
+
+    # Proactively refresh any OAuth block within the refresh margin, server-side.
+    # Each block (claudeAiOauth base login + designOauth) rotates independently, so
+    # we refresh only the blocks that are near expiry and persist under a row lock
+    # via merge_refreshed_credentials + from_artifacts so a concurrent live session's
+    # cleanup can't clobber the rotated token.
+    # @param credential [AgentCredential]
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
+    def refresh!(credential)
+      current = credential.config_data
+      now_ms  = (Time.current.to_f * 1000).to_i
+      refreshed_blocks = {}
+      error = nil
+
+      OAUTH_BLOCKS.each do |block_name|
+        block = current[block_name]
+        next unless block.is_a?(Hash) && block["refreshToken"].present?
+
+        exp = block["expiresAt"].to_i
+        # refresh if expired or within the margin
+        next unless exp.positive? && (exp - now_ms) <= REFRESH_MARGIN_MS
+
+        client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
+        new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
+                                          previous: block, now_ms: now_ms)
+        if new_block
+          refreshed_blocks[block_name] = new_block
+        else
+          error ||= "#{block_name} refresh failed"
+        end
+      end
+
+      return { status: :error,      detail: error } if refreshed_blocks.empty? && error
+      return { status: :not_needed, detail: nil }   if refreshed_blocks.empty?
+
+      credential.with_lock do
+        fresh    = credential.config_data
+        incoming = fresh.merge(refreshed_blocks)                # only the blocks we refreshed change
+        merged   = merge_refreshed_credentials(fresh, incoming) # existing per-block freshest guard
+        AgentCredential.from_artifacts(credential.user_id, "claude_code", merged) if merged != fresh
+      end
+
+      { status: :refreshed, detail: error } # partial failure (one block ok, one failed) still counts as refreshed
     end
 
     # Extract only the credentials we need to persist
@@ -179,7 +276,7 @@ module Agents
           entry["url"] = s.url if s.url.present?
           entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         end
-        mcp_servers[s.name] = entry
+        mcp_servers[MCPServer.config_key_for(s.name)] = entry
       end
       { "/workspace/.mcp.json" => { "mcpServers" => mcp_servers }.to_json }
     end
@@ -287,6 +384,45 @@ module Agents
     end
 
     private
+
+    # Base-login client id, from Settings when configured, else the known public id.
+    def base_oauth_client_id
+      Settings.agents.oauth&.base_client_id.presence || BASE_OAUTH_CLIENT_ID
+    rescue StandardError
+      BASE_OAUTH_CLIENT_ID
+    end
+
+    # Exchange a refresh token for a fresh OAuth block via the token endpoint.
+    # Returns the rebuilt block (accessToken/refreshToken/expiresAt/scopes/clientId),
+    # or nil on any network / non-2xx / parse failure (logged). Preserves the block's
+    # refreshToken when the server omits a rotated one, and its clientId (designOauth
+    # carries its own; claudeAiOauth's is typically nil and dropped by .compact).
+    def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:)
+      uri = URI(OAUTH_TOKEN_URL)
+      req = Net::HTTP::Post.new(uri)
+      req["Content-Type"] = "application/x-www-form-urlencoded"
+      req.body = URI.encode_www_form(
+        grant_type:    "refresh_token",
+        client_id:     client_id,
+        refresh_token: refresh_token
+      )
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |h| h.request(req) }
+      unless response.is_a?(Net::HTTPSuccess)
+        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
+        return nil
+      end
+      data = JSON.parse(response.body)
+      {
+        "accessToken"  => data["access_token"],
+        "refreshToken" => data["refresh_token"].presence || refresh_token, # rotation: keep old if server omits
+        "expiresAt"    => now_ms + (data["expires_in"].to_i * 1000),
+        "scopes"       => (data["scope"].present? ? data["scope"].split(" ") : previous["scopes"]),
+        "clientId"     => previous["clientId"] # preserve (designOauth carries its own; claudeAiOauth may be nil → compacted)
+      }.compact
+    rescue StandardError => e
+      Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message}")
+      nil
+    end
 
     # Keep whichever OAuth block has the later expiry; never drop one that only the
     # stored blob has (the incoming session may simply not have touched that scope).

@@ -169,7 +169,7 @@ module Agents
           entry["httpUrl"] = s.url if s.url.present?
           entry["headers"] = s.headers if s.headers.present? && s.headers.any?
         end
-        mcp_servers[s.name] = entry
+        mcp_servers[MCPServer.config_key_for(s.name)] = entry
       end
       { "#{home_dir}/.gemini/settings.json" => { "mcpServers" => mcp_servers }.to_json }
     end

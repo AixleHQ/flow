@@ -31,12 +31,10 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
 
     # Returned payload mirrors the persisted record
     assert_equal mcp.name, data["name"]
-    assert_equal mcp.display_name, data["display_name"]
 
     # Persisted state: defaults applied, scoped to the session's company
     assert_equal @company, mcp.scope
     assert_equal "tavily", mcp.name
-    assert_equal "Tavily", mcp.display_name # titleized from name
     assert mcp.custom?
     assert_equal "http", mcp.transport.to_s # default transport
     assert mcp.enabled?
@@ -91,13 +89,12 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     assert_equal %w[npx @playwright/mcp --headless], mcp.parsed_command
   end
 
-  # ── explicit attributes + name sanitization ──
+  # ── explicit attributes; name is stored verbatim ──
 
-  test "persists explicit display_name, description, headers, env, and sanitizes the name" do
+  test "persists the name verbatim plus description, headers, and env" do
     result = run_tool(
       name: "Tavily Search",
       url: "https://mcp.example.com/v1",
-      display_name: "Tavily Web Search",
       description: "Web search via Tavily",
       headers: { "Authorization" => "Bearer secret" },
       env: { "TAVILY_API_KEY" => "abc123" },
@@ -108,9 +105,9 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     mcp = MCPServer.find(data["id"])
 
-    assert_equal "tavily-search", mcp.name # downcased + non-slug chars replaced
-    assert_equal "Tavily Web Search", mcp.display_name
-    assert_equal "Tavily Web Search", data["display_name"]
+    # Name is kept as typed; the lowercase protocol key is derived at config time.
+    assert_equal "Tavily Search", mcp.name
+    assert_equal "tavily_search", mcp.config_key
     assert_equal "Web search via Tavily", mcp.description
     assert_equal({ "Authorization" => "Bearer secret" }, mcp.headers)
     assert_equal({ "TAVILY_API_KEY" => "abc123" }, mcp.env)
@@ -130,6 +127,6 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     assert_equal "created_mcp_server", activity["action"]
     assert_equal "MCPServer", activity["entity_type"]
     assert_equal mcp.id, activity["entity_id"]
-    assert_equal mcp.display_name, activity["entity_name"]
+    assert_equal mcp.name, activity["entity_name"]
   end
 end

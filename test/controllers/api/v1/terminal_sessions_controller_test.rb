@@ -59,6 +59,21 @@ module Api
         assert_equal %w[bmm cis], captured[:session_config]["bmad_modules"]
       end
 
+      test "create returns 422 with connect links when the OAuth preflight blocks launch" do
+        SessionService.stubs(:create_and_start).raises(
+          Oauth::PreflightError.new([ { mcp_server_id: 5, name: "Sentry", connect_url: "/oauth/mcp/5/connect" } ])
+        )
+
+        post :create, params: {
+          terminal_session: { session_type: "agent_session", agent_type: "claude_code", project_id: @project.id }
+        }
+
+        assert_response :unprocessable_entity
+        body = JSON.parse(response.body)
+        assert_equal 1, body["reauth_required"].size
+        assert_equal "/oauth/mcp/5/connect", body["reauth_required"].first["connect_url"]
+      end
+
       test "destroy removes finished session" do
         ts = create(:terminal_session, user: @user, project: @project, state: "finished")
 

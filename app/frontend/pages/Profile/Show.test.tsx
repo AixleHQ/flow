@@ -41,6 +41,7 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
   defaultModel: null,
   lastUsedAt: null,
   expiresAt: null,
+  connectionStatus: 'active',
   createdAt: '2026-01-02T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
   ...overrides,
@@ -136,6 +137,48 @@ describe('Profile/Show', () => {
       '/profile/destroy_credential',
       expect.objectContaining({ data: { agentCredentialId: 777 } }),
     );
+  });
+
+  it('offers a Connect Design button for a Claude credential with a claude.ai OAuth token', () => {
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: ['claudeAiOauth'] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('button', { name: 'Connect Design' })).toBeInTheDocument();
+  });
+
+  it('labels the design button "Reconnect Design" once a designOauth block exists', () => {
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: ['claudeAiOauth', 'designOauth'] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('button', { name: 'Reconnect Design' })).toBeInTheDocument();
+  });
+
+  it('offers Connect Design for a Console (managed-key) Claude credential too', () => {
+    // /design-login layers on either base — claude.ai OR the platform.claude.com key.
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: ['primaryApiKey'] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('button', { name: 'Connect Design' })).toBeInTheDocument();
+  });
+
+  it('hides the design button for a Claude credential with no base login at all', () => {
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: [] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.queryByRole('button', { name: /Design/ })).not.toBeInTheDocument();
+  });
+
+  it('shows an "Expiring soon" badge for an agent credential nearing token expiry', () => {
+    const credential = buildCredential({ agentType: 'claude_code', connectionStatus: 'expiring' });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByText('Expiring soon')).toBeInTheDocument();
+    expect(screen.queryByText('Connected')).not.toBeInTheDocument();
   });
 
   it('does NOT remove a credential when the user cancels the confirm prompt', async () => {
@@ -425,11 +468,9 @@ describe('Profile/Show', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Re-authenticate' }));
 
-    // Modal renders titled for the agent and shows the pre-session loading state.
+    // Modal launches `claude` directly — the login method is chosen inside Claude's own TUI.
     expect(await screen.findByText('Authenticate Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Starting authentication session...')).toBeInTheDocument();
-
-    // Opening the modal kicks off a terminal-session create request (auth_setup, interactive).
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.objectContaining({ method: 'POST' })),
     );

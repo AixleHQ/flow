@@ -53,6 +53,72 @@ module Agents
       assert @adapter.auth_complete?(content)
     end
 
+    # == design auth kind (all design behavior lives in this adapter) ==
+
+    test "the default (agent) auth kind is a fresh login via the standard hooks" do
+      assert_equal @adapter.auth_required_keys, @adapter.auth_required_keys_for("agent")
+      assert_equal @adapter.auth_setup_files, @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
+      assert_empty @adapter.auth_launch_commands_for("agent")
+    end
+
+    test "design kind watches only for the designOauth block" do
+      assert_equal %w[designOauth.accessToken], @adapter.auth_required_keys_for("design")
+    end
+
+    test "design kind seeds the existing base login, stripping designOauth (reconnect-safe)" do
+      current = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
+        "designOauth" => { "accessToken" => "sk-ant-oat01-OLD" }
+      }
+      files = @adapter.auth_setup_files_for("design", current)
+      creds = files["/home/claude/.claude/.credentials.json"]
+
+      assert_includes creds, "sk-ant-oat01-base"
+      refute_includes creds, "sk-ant-oat01-OLD", "must not seed the design token we're re-minting"
+    end
+
+    test "design kind launches claude already running /design-login (one command)" do
+      assert_equal [ "claude /design-login" ], @adapter.auth_launch_commands_for("design")
+    end
+
+    test "design completion is gated on the designOauth block, not the injected base" do
+      base_only = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } }.to_json
+      refute @adapter.auth_complete_for?("design", base_only)
+
+      with_design = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
+                      "designOauth" => { "accessToken" => "sk-ant-oat01-design" } }.to_json
+      assert @adapter.auth_complete_for?("design", with_design)
+    end
+
+    test "design reconcile adds only the fresh designOauth, never re-scraping the base" do
+      current = { "primaryApiKey" => "sk-ant-api-PLATFORM" }
+      # A full container scrape also surfaces the injected base AND a stale
+      # claudeAiOauth Claude wrote — neither must survive into the stored blob.
+      captured = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-STALE" },
+        "designOauth" => { "accessToken" => "sk-ant-oat01-DESIGN-NEW" }
+      }
+      result = @adapter.reconcile_captured_credentials("design", current, captured)
+
+      assert_equal "sk-ant-api-PLATFORM", result["primaryApiKey"], "base login preserved untouched"
+      assert_equal "sk-ant-oat01-DESIGN-NEW", result.dig("designOauth", "accessToken")
+      refute result.key?("claudeAiOauth"), "must not resurrect the stale scraped base login"
+    end
+
+    test "design reconcile keeps the current credential when the scrape has no designOauth" do
+      current = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } }
+      result = @adapter.reconcile_captured_credentials("design", current, { "designOauth" => {} })
+
+      assert_equal current, result
+    end
+
+    test "the default (agent) auth kind reconcile replaces with the fresh scrape" do
+      current = { "claudeAiOauth" => { "accessToken" => "old" } }
+      captured = { "claudeAiOauth" => { "accessToken" => "new" } }
+
+      assert_equal captured, @adapter.reconcile_captured_credentials("agent", current, captured)
+    end
+
     test "auth_complete? returns false without credentials" do
       content = { "otherField" => "value" }.to_json
       refute @adapter.auth_complete?(content)
@@ -432,7 +498,137 @@ module Agents
       assert_equal 50, @session.usage_statistic.output_tokens
     end
 
+    # == token_expires_at (soonest across blocks) ==
+
+    test "token_expires_at returns the soonest expiry across oauth blocks" do
+      creds = {
+        "claudeAiOauth" => { "expiresAt" => 3_000 },
+        "designOauth" => { "expiresAt" => 1_000 }
+      }
+
+      assert_equal 1_000, @adapter.token_expires_at(creds)
+    end
+
+    test "token_expires_at returns the single block's expiry when only one is present" do
+      assert_equal 5_000, @adapter.token_expires_at({ "claudeAiOauth" => { "expiresAt" => 5_000 } })
+    end
+
+    test "token_expires_at coerces a string expiresAt to an integer" do
+      assert_equal 1_234, @adapter.token_expires_at({ "designOauth" => { "expiresAt" => "1234" } })
+    end
+
+    test "token_expires_at returns nil when no oauth block carries an expiry" do
+      assert_nil @adapter.token_expires_at({ "primaryApiKey" => "sk" })
+    end
+
+    # == refresh! (proactive server-side refresh) ==
+
+    test "refresh! returns not_needed when no oauth block carries a refresh token" do
+      cred = create(:agent_credential, :claude_code, user: @user,
+                    config_data: { "primaryApiKey" => "sk" })
+
+      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(cred))
+    end
+
+    test "refresh! returns not_needed when the token is not near expiry" do
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "r", "expiresAt" => ms_from_now(60 * 60 * 1000) }
+      })
+
+      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(cred))
+    end
+
+    test "refresh! refreshes a claudeAiOauth block near expiry and persists rotated tokens" do
+      soon = ms_from_now(5 * 60 * 1000) # within the 15-min margin
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => {
+          "accessToken" => "old-a", "refreshToken" => "old-r",
+          "expiresAt" => soon, "scopes" => %w[user:inference]
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: ClaudeCodeAdapter::BASE_OAUTH_CLIENT_ID, refresh_token: "old-r" })
+        .to_return(status: 200,
+                   body: { access_token: "new-a", refresh_token: "new-r", expires_in: 3_600, scope: "user:inference" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :refreshed, result[:status]
+      block = cred.reload.config_data["claudeAiOauth"]
+      assert_equal "new-a", block["accessToken"]
+      assert_equal "new-r", block["refreshToken"]
+      assert_operator block["expiresAt"], :>, soon
+    end
+
+    test "refresh! uses the designOauth block's own clientId and preserves refreshToken/scopes when the server omits them" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "designOauth" => {
+          "accessToken" => "old-d", "refreshToken" => "old-dr", "expiresAt" => soon,
+          "clientId" => "design-client", "scopes" => %w[user:design:read]
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: "design-client", refresh_token: "old-dr" })
+        .to_return(status: 200,
+                   body: { access_token: "new-d", expires_in: 3_600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :refreshed, result[:status]
+      block = cred.reload.config_data["designOauth"]
+      assert_equal "new-d", block["accessToken"]
+      assert_equal "old-dr", block["refreshToken"]        # server omitted rotation → keep old
+      assert_equal "design-client", block["clientId"]     # preserved
+      assert_equal %w[user:design:read], block["scopes"]  # scope omitted → keep previous
+    end
+
+    test "refresh! returns error and persists nothing when the token endpoint responds non-2xx" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "r", "expiresAt" => soon }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return(status: 400, body: "bad")
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      assert_match(/claudeAiOauth refresh failed/, result[:detail])
+      assert_equal "a", cred.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    test "refresh! counts as refreshed when one block succeeds and another fails, leaving the failed block intact" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "base-a", "refreshToken" => "base-r", "expiresAt" => soon },
+        "designOauth" => { "accessToken" => "d-a", "refreshToken" => "d-r", "expiresAt" => soon, "clientId" => "design-client" }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: ClaudeCodeAdapter::BASE_OAUTH_CLIENT_ID, refresh_token: "base-r" })
+        .to_return(status: 200,
+                   body: { access_token: "base-a2", refresh_token: "base-r2", expires_in: 3_600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: "design-client", refresh_token: "d-r" })
+        .to_return(status: 500, body: "boom")
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :refreshed, result[:status]
+      assert_match(/designOauth refresh failed/, result[:detail])
+      reloaded = cred.reload.config_data
+      assert_equal "base-a2", reloaded.dig("claudeAiOauth", "accessToken")
+      assert_equal "d-a", reloaded.dig("designOauth", "accessToken") # failed block left intact
+    end
+
     private
+
+    # Epoch-ms `offset_ms` into the future (matches the adapter's now_ms basis).
+    def ms_from_now(offset_ms)
+      (Time.current.to_f * 1000).to_i + offset_ms
+    end
 
     # Stub Net::HTTP to return a successful /v1/models response and capture the
     # outgoing request so header/auth assertions can be made.

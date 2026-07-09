@@ -9,7 +9,7 @@ add, remove, or move a document under `docs/`, update `docs/index.md` in the sam
 
 ## Before pushing a branch or opening/updating a PR
 
-**ALWAYS run the full check suite in Docker first, and only push once it is green:**
+**before push final results to repo - run the full check suite in Docker first, and only push once it is green:**
 
 ```bash
 docker compose exec -T web make check_all

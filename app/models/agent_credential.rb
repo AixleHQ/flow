@@ -22,12 +22,26 @@ class AgentCredential < ApplicationRecord
   # models fetched with a stale token. See User#fetch_or_cache_agent_models.
   after_save :invalidate_models_cache, if: :saved_change_to_encrypted_config_data?
   after_destroy :invalidate_models_cache
+  # Keep expires_at in sync with the token material in config_data so the `.active`
+  # scope and the proactive token-refresh sweep have a real expiry to read. Only
+  # recompute when the encrypted blob actually changes — a bare touch(:last_used_at)
+  # or metadata-only save leaves the token untouched. See #sync_expires_at.
+  before_save :sync_expires_at, if: :will_save_change_to_encrypted_config_data?
 
   broadcasts_to :user
+
+  # Agent types whose credentials carry a refreshable OAuth token.
+  REFRESHABLE_AGENT_TYPES = %w[claude_code codex cursor_cli].freeze
 
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :active, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :refreshable, -> { where(agent_type: REFRESHABLE_AGENT_TYPES) }
+  # Credentials whose token expires within `within` (drives the refresh sweep).
+  # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
+  scope :refresh_due, ->(within = 15.minutes) {
+    where.not(expires_at: nil).where(expires_at: ..within.from_now)
+  }
 
   # Virtual attribute for admin display (shows keys without values)
   def config_keys
@@ -107,6 +121,17 @@ class AgentCredential < ApplicationRecord
 
   def invalidate_models_cache
     Rails.cache.delete(models_cache_key)
+  end
+
+  # Derive expires_at from the adapter's soonest token expiry (epoch ms → Time).
+  # nil when the agent's tokens carry no expiry (e.g. codex/cursor today), which
+  # keeps the credential always-active in `.active` (its expiry is unknown, not past).
+  def sync_expires_at
+    ms = adapter.token_expires_at(config_data)
+    self.expires_at = ms ? Time.zone.at(ms / 1000.0) : nil
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] sync_expires_at failed for #{id}: #{e.message}")
+    self.expires_at = nil
   end
 
   def encryption_key_setting

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
@@ -8,32 +8,56 @@ import { McpServerFormModal } from './McpServerFormModal';
 
 // This component uses @mantine/form (real form state + zodResolver) and fires the backend
 // request through Inertia's router.* spies. We assert validation gating and the eventual
-// router.post / router.patch payload without a backend.
+// router.post / router.patch payload without a backend. OAuth "Connect" is a top-level browser
+// navigation (window.location), never an Inertia visit, so those tests swap window.location.
 
 const baseProps = {
   configItemNames: ['API_KEY', 'SECRET'],
   basePath: '/projects/1/mcp_servers',
 };
 
+// The MCPServerResource masks every stored header/env value to this sentinel before it reaches the
+// browser, so an edited server arrives with masked values, not real secrets.
+const MASK = '••••••';
+
+// A static (manual-header) server. Its Authorization value arrives masked, exactly as the resource
+// sends it — the modal must not resubmit that placeholder verbatim.
 const editServer = {
   id: 7,
   name: 'playwright',
-  displayName: 'Playwright Browser',
   url: 'https://mcp.example.com',
   transport: 'http',
-  headers: { Authorization: 'Bearer x' },
+  headers: { Authorization: MASK },
   command: null,
   env: null,
   description: 'Browser automation',
   enabled: true,
+  authType: 'static' as const,
+  credentialScope: 'shared' as const,
+  oauthStatus: null,
+};
+
+// A saved OAuth server. oauthStatus is per-current-user and read-only.
+const oauthServer = {
+  id: 12,
+  name: 'linear',
+  url: 'https://mcp.linear.app',
+  transport: 'http',
+  headers: {},
+  command: null,
+  env: null,
+  description: 'Linear MCP',
+  enabled: true,
+  authType: 'oauth' as const,
+  credentialScope: 'per_user' as const,
+  oauthStatus: 'pending' as const,
 };
 
 describe('McpServerFormModal', () => {
-  it('renders the create title, core fields and a Create button', () => {
+  it('renders the create title, the Name field and a Create button', () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
     expect(screen.getByText('Add MCP Server')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('playwright')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Playwright Browser')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
@@ -45,7 +69,6 @@ describe('McpServerFormModal', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
 
     await waitFor(() => expect(screen.getByDisplayValue('playwright')).toBeDisabled());
-    expect(screen.getByDisplayValue('Playwright Browser')).toBeInTheDocument();
   });
 
   it('cancel calls onClose', async () => {
@@ -70,8 +93,7 @@ describe('McpServerFormModal', () => {
   it('a valid http submit fires router.post with the mcpServer payload', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
-    await userEvent.type(screen.getByPlaceholderText('playwright'), 'context7');
-    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'Context7 Docs');
+    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'context7');
     await userEvent.type(screen.getByPlaceholderText('https://mcp.example.com'), 'https://mcp.context7.com');
 
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
@@ -82,9 +104,9 @@ describe('McpServerFormModal', () => {
         expect.objectContaining({
           mcpServer: expect.objectContaining({
             name: 'context7',
-            displayName: 'Context7 Docs',
             transport: 'http',
             url: 'https://mcp.context7.com',
+            authType: 'none',
           }),
         }),
         expect.objectContaining({ preserveScroll: true }),
@@ -103,11 +125,20 @@ describe('McpServerFormModal', () => {
     expect(screen.queryByPlaceholderText('https://mcp.example.com')).not.toBeInTheDocument();
   });
 
+  it('the Auth Type selector is only offered for remote (non-stdio) transports', async () => {
+    renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
+
+    expect(screen.getByLabelText('Auth Type')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
+
+    expect(screen.queryByLabelText('Auth Type')).not.toBeInTheDocument();
+  });
+
   it('a valid stdio submit fires router.post with command, env populated and empty headers', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
-    await userEvent.type(screen.getByPlaceholderText('playwright'), 'localproc');
-    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'Local Process');
+    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'localproc');
     await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
 
     await userEvent.type(
@@ -141,8 +172,7 @@ describe('McpServerFormModal', () => {
   it('includes typed header key/value pairs in the http payload', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
-    await userEvent.type(screen.getByPlaceholderText('playwright'), 'context7');
-    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'Context7 Docs');
+    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'context7');
     await userEvent.type(screen.getByPlaceholderText('https://mcp.example.com'), 'https://mcp.context7.com');
 
     await userEvent.click(screen.getByRole('button', { name: /Add Header/i }));
@@ -183,7 +213,7 @@ describe('McpServerFormModal', () => {
     const onClose = vi.fn();
     renderPage(<McpServerFormModal opened onClose={onClose} editServer={editServer} {...baseProps} />);
 
-    expect(await screen.findByDisplayValue('Playwright Browser')).toBeInTheDocument();
+    expect(await screen.findByDisplayValue('playwright')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -193,9 +223,12 @@ describe('McpServerFormModal', () => {
         expect.objectContaining({
           mcpServer: expect.objectContaining({
             name: 'playwright',
-            displayName: 'Playwright Browser',
             url: 'https://mcp.example.com',
-            headers: { Authorization: 'Bearer x' },
+            authType: 'static',
+            // The masked Authorization value was never touched, so it is resubmitted as the
+            // sentinel; the backend swaps it back to the stored secret (keeping the key present so
+            // it is not treated as a deletion).
+            headers: { Authorization: MASK },
           }),
         }),
         expect.objectContaining({ preserveScroll: true }),
@@ -204,12 +237,57 @@ describe('McpServerFormModal', () => {
     expect(router.post).not.toHaveBeenCalled();
   });
 
-  it('edit mode prefills existing headers into editable rows', async () => {
+  it('edit mode prefills existing headers into editable rows (with masked values)', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={editServer} {...baseProps} />);
 
     expect(await screen.findByDisplayValue('Authorization')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Bearer x')).toBeInTheDocument();
+    expect(screen.getByDisplayValue(MASK)).toBeInTheDocument();
     expect(screen.queryByText('No headers configured')).not.toBeInTheDocument();
+  });
+
+  it('sends a freshly edited header value verbatim', async () => {
+    renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={editServer} {...baseProps} />);
+
+    const valueField = await screen.findByDisplayValue(MASK);
+    await userEvent.clear(valueField);
+    await userEvent.type(valueField, 'rotated-secret');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/1/mcp_servers/7',
+        expect.objectContaining({
+          mcpServer: expect.objectContaining({
+            headers: { Authorization: 'rotated-secret' },
+          }),
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('omits a removed header from the payload so the server deletes it', async () => {
+    const { container } = renderPage(
+      <McpServerFormModal opened onClose={vi.fn()} editServer={editServer} {...baseProps} />,
+    );
+
+    // Delete the (masked) Authorization row entirely, then save.
+    expect(await screen.findByDisplayValue('Authorization')).toBeInTheDocument();
+    const trash = container.querySelector('.tabler-icon-trash')?.closest('button');
+    await userEvent.click(trash!);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/1/mcp_servers/7',
+        // Absent from the payload — the backend distinguishes this (deletion) from a
+        // resubmitted sentinel (unchanged), so the stored secret is dropped.
+        expect.objectContaining({ mcpServer: expect.objectContaining({ headers: {} }) }),
+        expect.anything(),
+      ),
+    );
   });
 
   it('toggling a header value to a config item shows the config-item picker', async () => {
@@ -235,8 +313,7 @@ describe('McpServerFormModal', () => {
   it('disables Cancel while a submit is in flight', async () => {
     renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
-    await userEvent.type(screen.getByPlaceholderText('playwright'), 'context7');
-    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'Context7 Docs');
+    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'context7');
     await userEvent.type(screen.getByPlaceholderText('https://mcp.example.com'), 'https://mcp.context7.com');
 
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));
@@ -245,5 +322,98 @@ describe('McpServerFormModal', () => {
     // calls onFinish, so loading stays true and Cancel is disabled.
     await waitFor(() => expect(router.post).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  });
+
+  describe('OAuth auth type', () => {
+    it('selecting OAuth hides the Headers editor and tucks Credential Scope behind Advanced', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
+
+      // Default auth type is "none": the manual Headers editor is present, no credential scope.
+      expect(screen.getByRole('button', { name: /Add Header/i })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Credential Scope')).not.toBeInTheDocument();
+
+      await userEvent.selectOptions(screen.getByLabelText('Auth Type'), 'oauth');
+
+      // Headers editor gone; scope is project-wide by default and only revealed on demand.
+      expect(screen.queryByRole('button', { name: /Add Header/i })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Credential Scope')).not.toBeInTheDocument();
+      expect(screen.getByText(/Shared by all project members/i)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Advanced' }));
+      const scope = await screen.findByLabelText('Credential Scope');
+      expect(scope).toBeInTheDocument();
+      // Default value is the project-wide "shared" scope.
+      expect(scope).toHaveValue('shared');
+    });
+
+    it('an unsaved OAuth server shows a "Save first" hint and no Connect button', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
+
+      await userEvent.selectOptions(screen.getByLabelText('Auth Type'), 'oauth');
+
+      expect(await screen.findByText('Save first, then Connect')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+    });
+
+    it('a saved OAuth server hides the Headers editor and shows a Connect button', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
+
+      expect(await screen.findByRole('button', { name: 'Connect' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Add Header/i })).not.toBeInTheDocument();
+      // The Credential Scope select is prefilled from the server's per_user scope.
+      expect(screen.getByLabelText('Credential Scope')).toHaveValue('per_user');
+    });
+
+    it.each([
+      ['active', 'Connected'],
+      ['expiring', 'Expiring soon'],
+      ['pending', 'Not connected'],
+      ['error', 'Reconnect'],
+    ] as const)('maps oauth_status "%s" to the "%s" connection badge', async (status, label) => {
+      renderPage(
+        <McpServerFormModal
+          opened
+          onClose={vi.fn()}
+          editServer={{ ...oauthServer, oauthStatus: status }}
+          {...baseProps}
+        />,
+      );
+
+      expect(await screen.findByText(label)).toBeInTheDocument();
+    });
+
+    describe('Connect navigation', () => {
+      // window.location is read-only in jsdom; swap it for a plain object so we can observe
+      // handleConnect's assignment to location.href (OAuth needs a top-level navigation).
+      const originalLocation = window.location;
+
+      beforeEach(() => {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: { href: '' },
+        });
+      });
+
+      afterEach(() => {
+        Object.defineProperty(window, 'location', {
+          configurable: true,
+          writable: true,
+          value: originalLocation,
+        });
+      });
+
+      it('Connect performs a top-level navigation to the connect entry, not an Inertia visit', async () => {
+        renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+
+        expect(window.location.href).toBe(
+          `/oauth/mcp/12/connect?return_to=${encodeURIComponent('/projects/1/mcp_servers')}`,
+        );
+        expect(router.get).not.toHaveBeenCalled();
+        expect(router.visit).not.toHaveBeenCalled();
+      });
+    });
   });
 });

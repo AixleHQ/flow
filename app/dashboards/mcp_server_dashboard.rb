@@ -6,7 +6,6 @@ class MCPServerDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     name: Field::String,
-    display_name: Field::String,
     kind: Field::Select.with_options(
       include_blank: false,
       collection: %w[internal custom managed]
@@ -30,7 +29,7 @@ class MCPServerDashboard < Administrate::BaseDashboard
 
   COLLECTION_ATTRIBUTES = %i[
     id
-    display_name
+    name
     kind
     transport
     enabled
@@ -41,7 +40,6 @@ class MCPServerDashboard < Administrate::BaseDashboard
   SHOW_PAGE_ATTRIBUTES = %i[
     id
     name
-    display_name
     kind
     transport
     url
@@ -66,6 +64,6 @@ class MCPServerDashboard < Administrate::BaseDashboard
   }.freeze
 
   def display_resource(mcp_server)
-    mcp_server.display_name.presence || mcp_server.name
+    mcp_server.name
   end
 end

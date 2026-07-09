@@ -343,5 +343,63 @@ module Agents
       assert_equal 10, stat.input_tokens
       assert_equal [ "in-window" ], stat.models
     end
+
+    # =========================================================================
+    # refresh! — proactive-refresh hook (wraps refresh_cursor_token!)
+    # =========================================================================
+
+    test "refresh! rotates and persists the token, returning refreshed" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200,
+                   body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal({ status: :refreshed, detail: nil }, @adapter.refresh!(credential))
+      credential.reload
+      assert_equal "new", credential.config_data["accessToken"]
+      assert_equal "r2", credential.config_data["refreshToken"]
+    end
+
+    test "refresh! returns error when the refresh endpoint fails" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 401, body: "")
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert_equal "cursor token refresh failed", result[:detail]
+    end
+
+    test "refresh! returns error when no refresh token is present" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "old" })
+
+      assert_equal :error, @adapter.refresh!(credential)[:status]
+    end
+
+    test "token_expires_at decodes the JWT exp (ms) from the accessToken" do
+      exp = 2.hours.from_now.to_i
+      assert_equal exp * 1000, @adapter.token_expires_at({ "accessToken" => jwt_with_exp(exp) })
+    end
+
+    test "token_expires_at returns nil when the accessToken is opaque or missing" do
+      assert_nil @adapter.token_expires_at({ "accessToken" => "opaque" })
+      assert_nil @adapter.token_expires_at({})
+    end
+
+    private
+
+    # Minimal unsigned JWT carrying an `exp` claim (seconds).
+    def jwt_with_exp(exp_seconds)
+      header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+      payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)
+      "#{header}.#{payload}.sig"
+    end
   end
 end

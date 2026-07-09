@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_09_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -267,10 +267,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
 
   create_table "mcp_servers", force: :cascade do |t|
     t.jsonb "args", default: []
+    t.string "auth_type", default: "none", null: false
     t.string "command"
     t.datetime "created_at", null: false
+    t.string "credential_scope", default: "shared", null: false
     t.text "description"
-    t.string "display_name", null: false
     t.boolean "enabled", default: true, null: false
     t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
@@ -300,6 +301,48 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
     t.datetime "updated_at", null: false
     t.index ["scope_type", "scope_id"], name: "index_namespace_resource_quotas_on_scope"
     t.index ["scope_type", "scope_id"], name: "index_namespace_resource_quotas_on_scope_type_and_scope_id", unique: true
+  end
+
+  create_table "oauth_clients", force: :cascade do |t|
+    t.string "authorization_endpoint", null: false
+    t.string "client_id", null: false
+    t.datetime "created_at", null: false
+    t.text "encrypted_client_secret"
+    t.string "issuer", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.string "registration_endpoint"
+    t.string "scopes"
+    t.string "source", null: false
+    t.string "token_endpoint", null: false
+    t.datetime "updated_at", null: false
+    t.index ["issuer", "client_id"], name: "index_oauth_clients_on_issuer_and_client_id", unique: true
+    t.index ["source"], name: "index_oauth_clients_on_source"
+  end
+
+  create_table "oauth_credentials", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "encrypted_access_token"
+    t.text "encrypted_refresh_token"
+    t.datetime "expires_at"
+    t.datetime "last_refreshed_at"
+    t.bigint "mcp_server_id"
+    t.jsonb "metadata", default: {}, null: false
+    t.bigint "oauth_client_id", null: false
+    t.bigint "owner_id", null: false
+    t.string "owner_type", null: false
+    t.string "provider", null: false
+    t.string "refresh_error"
+    t.integer "refresh_failure_count", default: 0, null: false
+    t.string "scopes"
+    t.string "status", default: "pending", null: false
+    t.string "token_type", default: "Bearer"
+    t.datetime "updated_at", null: false
+    t.index ["mcp_server_id"], name: "index_oauth_credentials_on_mcp_server_id"
+    t.index ["oauth_client_id"], name: "index_oauth_credentials_on_oauth_client_id"
+    t.index ["owner_type", "owner_id", "oauth_client_id", "provider", "mcp_server_id"], name: "idx_oauth_credentials_unique_owner_client", unique: true
+    t.index ["owner_type", "owner_id", "provider"], name: "idx_on_owner_type_owner_id_provider_1db0e9274f"
+    t.index ["owner_type", "owner_id"], name: "index_oauth_credentials_on_owner"
+    t.index ["status", "expires_at"], name: "index_oauth_credentials_on_status_and_expires_at"
   end
 
   create_table "project_collaborators", force: :cascade do |t|
@@ -726,8 +769,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
     t.datetime "created_at", null: false
     t.bigint "default_agent_credential_id"
     t.citext "email", null: false
-    t.string "google_refresh_token"
-    t.string "google_token"
     t.datetime "invited_at"
     t.bigint "invited_by_id"
     t.string "mcp_token_digest"
@@ -866,6 +907,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_08_120000) do
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
   add_foreign_key "mcp_servers", "integrations", on_delete: :cascade
+  add_foreign_key "oauth_credentials", "mcp_servers"
+  add_foreign_key "oauth_credentials", "oauth_clients"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "projects", "companies"

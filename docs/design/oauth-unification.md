@@ -116,7 +116,7 @@ Known providers (Sentry, Railway, Google, Slack, …) are declared in an `Oauth:
 
 1. Probe the MCP URL; on 401 read `WWW-Authenticate` → protected-resource metadata (RFC 9728, `/.well-known/oauth-protected-resource`) → authorization server list.
 2. Fetch authorization-server metadata (RFC 8414 / OIDC discovery) → endpoints.
-3. Dynamic client registration (RFC 7591): POST to `registration_endpoint` (`client_name: "Aixle"`, our single callback URL) → persist `client_id`/`client_secret` as an `oauth_clients` row with `source: dcr`.
+3. Dynamic client registration (RFC 7591): POST to `registration_endpoint` (`client_name: "Aixle Flow"`, our single callback URL) → persist `client_id`/`client_secret` as an `oauth_clients` row with `source: dcr`.
 4. Authorize with PKCE + `resource=<mcp url>` (RFC 8707 resource indicators).
 
 **Every discovery/token/DCR request must pass `UrlSafetyValidator`** — DCR metadata and endpoint URLs are attacker-controlled input (SSRF).

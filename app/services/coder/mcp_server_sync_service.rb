@@ -22,7 +22,6 @@ module Coder
       server.assign_attributes(
         kind:         :managed,
         name:         managed_name,
-        display_name: managed_display_name,
         description:  "Coder MCP for #{@integration.name}",
         transport:    :http,
         scope_type:   @integration.project_id.present? ? "Project" : "Company",
@@ -37,11 +36,6 @@ module Coder
 
     def managed_name
       "coder-#{@integration.id}"
-    end
-
-    def managed_display_name
-      base = @integration.name.to_s.strip
-      base.presence || "Coder #{@integration.id}"
     end
   end
 end

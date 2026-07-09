@@ -16,7 +16,7 @@ module PersonalTools
       authorize!(project, :index?, policy: Web::Company::Projects::MCPServersPolicy, project: project)
 
       rows = MCPServer.visible_for_project(project).limit(100).map do |m|
-        { id: m.id, name: m.name, display_name: m.display_name, kind: m.kind,
+        { id: m.id, name: m.name, kind: m.kind,
           transport: m.transport, enabled: m.enabled }
       end
       success(project_id: project.id, mcp_servers: rows)

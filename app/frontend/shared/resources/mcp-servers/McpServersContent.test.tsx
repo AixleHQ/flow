@@ -9,7 +9,6 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   return {
     id: 1,
     name: 'playwright',
-    displayName: 'Playwright Browser',
     url: 'https://mcp.example.com/pw',
     transport: 'http',
     headers: null,
@@ -43,17 +42,14 @@ describe('McpServersContent', () => {
     renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[
-          makeServer({ id: 1, name: 'playwright', displayName: 'Playwright Browser' }),
-          makeServer({ id: 2, name: 'context7', displayName: 'Context7 Docs' }),
-        ]}
+        mcpServers={[makeServer({ id: 1, name: 'playwright' }), makeServer({ id: 2, name: 'context7' })]}
       />,
     );
 
     expect(screen.getByText('MCP Servers')).toBeInTheDocument();
     expect(screen.getByText('Connect external tools')).toBeInTheDocument();
-    expect(screen.getByText('Playwright Browser')).toBeInTheDocument();
-    expect(screen.getByText('Context7 Docs')).toBeInTheDocument();
+    expect(screen.getByText('playwright')).toBeInTheDocument();
+    expect(screen.getByText('context7')).toBeInTheDocument();
   });
 
   it('shows the empty state with an "add your first" CTA when there are no servers and no active filters', async () => {
@@ -71,34 +67,28 @@ describe('McpServersContent', () => {
     renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[
-          makeServer({ id: 1, name: 'playwright', displayName: 'Playwright Browser' }),
-          makeServer({ id: 2, name: 'context7', displayName: 'Context7 Docs' }),
-        ]}
+        mcpServers={[makeServer({ id: 1, name: 'playwright' }), makeServer({ id: 2, name: 'context7' })]}
       />,
     );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name/i), 'context');
 
-    expect(screen.getByText('Context7 Docs')).toBeInTheDocument();
-    expect(screen.queryByText('Playwright Browser')).not.toBeInTheDocument();
+    expect(screen.getByText('context7')).toBeInTheDocument();
+    expect(screen.queryByText('playwright')).not.toBeInTheDocument();
   });
 
   it('hides custom servers when the kind filter is switched to System', async () => {
     renderPage(
-      <McpServersContent
-        {...baseProps}
-        mcpServers={[makeServer({ id: 1, name: 'playwright', displayName: 'Playwright Browser', kind: 'custom' })]}
-      />,
+      <McpServersContent {...baseProps} mcpServers={[makeServer({ id: 1, name: 'playwright', kind: 'custom' })]} />,
     );
 
     // Default filter is "custom", so the row is visible first.
-    expect(screen.getByText('Playwright Browser')).toBeInTheDocument();
+    expect(screen.getByText('playwright')).toBeInTheDocument();
 
     await userEvent.click(screen.getByText('System'));
 
     // No internal servers in fixtures -> filtered list becomes empty.
-    expect(screen.queryByText('Playwright Browser')).not.toBeInTheDocument();
+    expect(screen.queryByText('playwright')).not.toBeInTheDocument();
     expect(screen.getByText('No MCP servers match your filters')).toBeInTheDocument();
   });
 
@@ -116,7 +106,7 @@ describe('McpServersContent', () => {
     const { container } = renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[makeServer({ id: 7, displayName: 'Doomed Server', kind: 'custom', scopeIndicator: 'company' })]}
+        mcpServers={[makeServer({ id: 7, name: 'Doomed Server', kind: 'custom', scopeIndicator: 'company' })]}
       />,
     );
 
@@ -135,12 +125,7 @@ describe('McpServersContent', () => {
   });
 
   it('shows the "no matches" empty state (without a CTA) when an active search filters everything out', async () => {
-    renderPage(
-      <McpServersContent
-        {...baseProps}
-        mcpServers={[makeServer({ id: 1, name: 'playwright', displayName: 'Playwright Browser' })]}
-      />,
-    );
+    renderPage(<McpServersContent {...baseProps} mcpServers={[makeServer({ id: 1, name: 'playwright' })]} />);
 
     await userEvent.type(screen.getByPlaceholderText(/search by name/i), 'zzz-no-such-server');
 
@@ -154,10 +139,10 @@ describe('McpServersContent', () => {
       <McpServersContent
         {...baseProps}
         mcpServers={[
-          makeServer({ id: 1, displayName: 'Custom One', kind: 'custom', scopeIndicator: 'company' }),
+          makeServer({ id: 1, name: 'Custom One', kind: 'custom', scopeIndicator: 'company' }),
           makeServer({
             id: 2,
-            displayName: 'System One',
+            name: 'System One',
             kind: 'internal',
             internal: true,
             scopeIndicator: 'internal',
@@ -183,7 +168,6 @@ describe('McpServersContent', () => {
           makeServer({
             id: 1,
             name: 'playwright',
-            displayName: 'Playwright Browser',
             url: 'https://mcp.example.com/pw',
             transport: 'sse',
             scopeIndicator: 'company',
@@ -193,7 +177,6 @@ describe('McpServersContent', () => {
       />,
     );
 
-    expect(screen.getByText('Playwright Browser')).toBeInTheDocument();
     expect(screen.getByText('playwright')).toBeInTheDocument();
     expect(screen.getByText('https://mcp.example.com/pw')).toBeInTheDocument();
     // Transport badge is uppercased.
@@ -208,7 +191,7 @@ describe('McpServersContent', () => {
     renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[makeServer({ id: 1, displayName: 'Stdio Server', transport: 'stdio', url: null })]}
+        mcpServers={[makeServer({ id: 1, name: 'Stdio Server', transport: 'stdio', url: null })]}
       />,
     );
 
@@ -218,10 +201,7 @@ describe('McpServersContent', () => {
 
   it('shows a Disabled status badge for a disabled server', () => {
     renderPage(
-      <McpServersContent
-        {...baseProps}
-        mcpServers={[makeServer({ id: 1, displayName: 'Off Server', enabled: false })]}
-      />,
+      <McpServersContent {...baseProps} mcpServers={[makeServer({ id: 1, name: 'Off Server', enabled: false })]} />,
     );
 
     expect(screen.getByText('Disabled')).toBeInTheDocument();
@@ -233,7 +213,7 @@ describe('McpServersContent', () => {
       <McpServersContent
         {...baseProps}
         editableScope="project"
-        mcpServers={[makeServer({ id: 1, displayName: 'Project Server', scopeIndicator: 'project' })]}
+        mcpServers={[makeServer({ id: 1, name: 'Project Server', scopeIndicator: 'project' })]}
       />,
     );
 
@@ -247,7 +227,7 @@ describe('McpServersContent', () => {
         mcpServers={[
           makeServer({
             id: 1,
-            displayName: 'Builtin Server',
+            name: 'Builtin Server',
             kind: 'internal',
             internal: true,
             scopeIndicator: 'internal',
@@ -269,7 +249,7 @@ describe('McpServersContent', () => {
     const { container } = renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[makeServer({ id: 5, displayName: 'Editable Server', kind: 'custom', scopeIndicator: 'company' })]}
+        mcpServers={[makeServer({ id: 5, name: 'Editable Server', kind: 'custom', scopeIndicator: 'company' })]}
       />,
     );
 
@@ -290,7 +270,7 @@ describe('McpServersContent', () => {
       <McpServersContent
         {...baseProps}
         editableScope="project"
-        mcpServers={[makeServer({ id: 1, displayName: 'Inherited Server', kind: 'custom', scopeIndicator: 'company' })]}
+        mcpServers={[makeServer({ id: 1, name: 'Inherited Server', kind: 'custom', scopeIndicator: 'company' })]}
       />,
     );
 
@@ -309,8 +289,8 @@ describe('McpServersContent', () => {
         title="MCP Servers"
         subtitle="Connect external tools"
         mcpServers={[
-          makeServer({ id: 1, displayName: 'Server A', kind: 'custom', scopeIndicator: 'company' }),
-          makeServer({ id: 2, displayName: 'Server B', kind: 'custom', scopeIndicator: 'project' }),
+          makeServer({ id: 1, name: 'Server A', kind: 'custom', scopeIndicator: 'company' }),
+          makeServer({ id: 2, name: 'Server B', kind: 'custom', scopeIndicator: 'project' }),
         ]}
       />,
     );

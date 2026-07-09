@@ -34,7 +34,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       agents: agents.map { |a| { id: a.id, name: a.title.presence || a.name } },
       tools: tools.map { |t| { id: t.id, name: t.display_name.presence || t.name } },
       skills: skills.map { |s| { id: s.id, name: s.title.presence || s.name } },
-      mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.display_name.presence || m.name } },
+      mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
       assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
       agent_models: current_user.agent_models_for_props

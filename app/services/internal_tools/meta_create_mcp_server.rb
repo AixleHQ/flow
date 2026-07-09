@@ -42,9 +42,6 @@ module InternalTools
           },
           description: {
             type: "string"
-          },
-          display_name: {
-            type: "string"
           }
         }
       })
@@ -72,7 +69,6 @@ module InternalTools
       mcp = MCPServer.create!(
         scope: scope_record,
         name: params[:name],
-        display_name: params[:display_name] || params[:name].titleize,
         description: params[:description],
         url: params[:url],
         transport: params[:transport] || "http",
@@ -86,11 +82,11 @@ module InternalTools
       broadcast_meta_activity(
         action: "created_mcp_server",
         entity_type: "MCPServer",
-        entity_name: mcp.display_name,
+        entity_name: mcp.name,
         entity_id: mcp.id
       )
 
-      success({ id: mcp.id, name: mcp.name, display_name: mcp.display_name }.to_json)
+      success({ id: mcp.id, name: mcp.name }.to_json)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create MCP server: #{e.message}")
     end

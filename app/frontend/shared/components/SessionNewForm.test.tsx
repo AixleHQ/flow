@@ -110,6 +110,30 @@ describe('SessionNewForm', () => {
     fetchSpy.mockRestore();
   });
 
+  it('shows a per-server Connect CTA when the OAuth preflight blocks the launch (422)', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: () =>
+        Promise.resolve({
+          error: 'Connect required for 1 OAuth MCP server(s) before launching',
+          reauth_required: [{ mcp_server_id: 5, name: 'Sentry', connect_url: '/oauth/mcp/5/connect' }],
+        }),
+    } as Response);
+
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['claude_code']) });
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    // A Connect button per unconnected server — not a raw error, and no navigation.
+    expect(await screen.findByRole('button', { name: 'Connect Sentry' })).toBeInTheDocument();
+    expect(router.visit).not.toHaveBeenCalled();
+
+    fetchSpy.mockRestore();
+  });
+
   it('requires a prompt in automatic mode: Start stays disabled until text is entered', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps(['claude_code']) });
