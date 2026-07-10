@@ -85,6 +85,93 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal [ { filename: "a.txt", content: "x", title: nil } ], upload[:files]
   end
 
+  test "sends multiple files of mixed sources in one message" do
+    runtime = stub_container_runtime
+    runtime.fs["/workspace/outputs/chart.png"] = "\x89PNG\r\n\x1a\nBINARY".b
+    @session.update!(container_id: "c-123")
+    asset = create(:asset, scope: @project, created_by: @user, name: "spec.pdf")
+    create(:asset_version, asset: asset, uploaded_by: @user,
+      file: AssetFileUploader.upload(StringIO.new("%PDF-1.4 bytes"), :store))
+
+    result = run_tool(text: "batch", files: [
+      { "filename" => "notes.txt", "content" => "hi" },
+      { "file_path" => "/workspace/outputs/chart.png", "title" => "Chart" },
+      { "asset_id" => asset.id }
+    ])
+    assert_equal 0, result[:exit_code]
+
+    upload = fake_slack.last_uploaded_files
+    assert_equal "batch", upload[:initial_comment]
+    assert_equal(
+      [
+        { filename: "notes.txt", content: "hi", title: nil },
+        { filename: "chart.png", content: "\x89PNG\r\n\x1a\nBINARY".b, title: "Chart" },
+        { filename: "spec.pdf", content: "%PDF-1.4 bytes", title: nil }
+      ],
+      upload[:files]
+    )
+  end
+
+  test "reads a binary file from the container by file_path" do
+    runtime = stub_container_runtime
+    runtime.fs["/workspace/outputs/logo.png"] = "\x00\x01\x02binary".b
+    @session.update!(container_id: "c-9")
+
+    assert_equal 0, run_tool(files: [ { "file_path" => "/workspace/outputs/logo.png" } ])[:exit_code]
+
+    upload = fake_slack.last_uploaded_files
+    assert_equal [ { filename: "logo.png", content: "\x00\x01\x02binary".b, title: nil } ], upload[:files]
+  end
+
+  test "errors when a file_path is not present in the container" do
+    stub_container_runtime
+    @session.update!(container_id: "c-9")
+
+    result = run_tool(files: [ { "file_path" => "/workspace/outputs/missing.png" } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not found in container"
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "errors when a file_path is given but the session has no container" do
+    @session.update!(container_id: nil)
+
+    result = run_tool(files: [ { "file_path" => "/workspace/outputs/x.png" } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "No container available"
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "errors when an asset_id is not in the project" do
+    other = create(:asset, :with_company_scope, created_by: @user)
+
+    result = run_tool(files: [ { "asset_id" => other.id } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "asset not found"
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "errors when a file entry sets more than one source" do
+    result = run_tool(files: [ { "filename" => "a.txt", "content" => "x", "file_path" => "/p" } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "only one of"
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "errors when a file entry sets no source" do
+    result = run_tool(files: [ { "title" => "orphan" } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "needs one of"
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "errors when inline content is missing a filename" do
+    result = run_tool(files: [ { "content" => "x" } ])
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "requires filename"
+    assert_empty fake_slack.uploaded_files
+  end
+
   test "errors when the project has no active Slack integration" do
     @integration.update!(status: :inactive)
     result = run_tool(text: "hi")

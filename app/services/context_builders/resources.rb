@@ -56,7 +56,9 @@ module ContextBuilders
       lines << ""
       assets.each do |asset|
         folder = asset.folder.present? ? "#{asset.folder}/" : ""
-        lines << "- **#{asset.name}** (id: #{asset.id}) → `/workspace/assets/#{folder}#{asset.name}`"
+        line = "- **#{asset.name}** (id: #{asset.id}) → `/workspace/assets/#{folder}#{asset.name}`"
+        line += " — public link: #{asset.share_url}" if asset.shared?
+        lines << line
       end
       lines.join("\n")
     end

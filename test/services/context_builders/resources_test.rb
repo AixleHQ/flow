@@ -108,6 +108,18 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_includes content, "- **spec.md** (id: #{asset.id}) → `/workspace/assets/docs/spec.md`"
   end
 
+  test "build includes the public share link for shared input assets" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+      mode: "interactive")
+    asset = create(:asset, scope: @project, created_by: @user, name: "diagram.html")
+    asset.share!
+    session.input_assets << asset
+
+    content = ContextBuilders::Resources.new(session.reload).build.first.content
+
+    assert_includes content, "public link: #{asset.share_url}"
+  end
+
   test "build summarises skills for adapters that do not embed skill content" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive", agent_type: "claude_code")

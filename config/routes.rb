@@ -32,6 +32,12 @@ Rails.application.routes.draw do
   # the app signing secret, then routed by team_id to the workspace's install).
   post "/webhooks/slack/events", to: "webhooks/slack#events", as: :slack_events_webhook
 
+  # Public asset share links (no session auth — reachable by anyone with the
+  # token). The viewer renders the asset inside a sandboxed iframe; the token
+  # lives on the asset so the URL is stable across versions.
+  get "/share/:token", to: "web/public_assets#show", as: :public_asset
+  get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure

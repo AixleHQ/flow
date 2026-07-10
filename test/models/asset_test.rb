@@ -264,6 +264,21 @@ class AssetTest < ActiveSupport::TestCase
     assert { asset.latest_version.nil? }
   end
 
+  # ====== Sharing ======
+
+  test "#share_url returns nil until shared" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    assert { asset.share_url.nil? }
+  end
+
+  test "#share_url returns a stable public link once shared" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    asset.share!
+
+    assert { asset.shared? }
+    assert_includes asset.share_url, "/share/#{asset.public_token}"
+  end
+
   # ====== Associations ======
 
   test "company has_many assets" do

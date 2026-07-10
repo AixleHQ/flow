@@ -90,12 +90,14 @@ module Slack
       # faraday-multipart dependency.
       def put_file_bytes(upload_url, filename, content)
         boundary = "----aixle#{SecureRandom.hex(12)}"
-        body = +""
-        body << "--#{boundary}\r\n"
-        body << %(Content-Disposition: form-data; name="file"; filename="#{filename}"\r\n)
-        body << "Content-Type: application/octet-stream\r\n\r\n"
-        body << content
-        body << "\r\n--#{boundary}--\r\n"
+        # Build the body in binary: file bytes may be arbitrary (png/pdf/...), and
+        # appending them to a UTF-8 buffer would raise Encoding::CompatibilityError.
+        body = +"".b
+        body << "--#{boundary}\r\n".b
+        body << %(Content-Disposition: form-data; name="file"; filename="#{filename}"\r\n).b
+        body << "Content-Type: application/octet-stream\r\n\r\n".b
+        body << content.to_s.b
+        body << "\r\n--#{boundary}--\r\n".b
 
         resp = Faraday.new do |f|
           f.request :retry, max: 2, interval: 0.2

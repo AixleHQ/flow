@@ -72,5 +72,26 @@ module Slack
       assert_requested put_bytes
       assert_requested complete
     end
+
+    test "upload_files uploads binary file bytes without an encoding error" do
+      binary = "\x89PNG\r\n\x1a\n\x00\xFF\xFEbytes".b
+      get_url = stub_request(:post, "https://slack.com/api/files.getUploadURLExternal")
+        .with(body: hash_including("filename" => "chart.png", "length" => binary.bytesize.to_s))
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { ok: true, upload_url: "https://files.slack.com/upload/b", file_id: "F2" }.to_json)
+      put_bytes = stub_request(:post, "https://files.slack.com/upload/b")
+        .with { |req| req.body.b.include?(binary) }
+        .to_return(status: 200, body: "OK")
+      complete = stub_request(:post, "https://slack.com/api/files.completeUploadExternal")
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { ok: true }.to_json)
+
+      res = Slack::Client.upload_files(token: "xoxb-1", channel: "C1",
+        files: [ { filename: "chart.png", content: binary } ])
+
+      assert res["ok"]
+      assert_requested get_url
+      assert_requested put_bytes
+      assert_requested complete
+    end
   end
 end
