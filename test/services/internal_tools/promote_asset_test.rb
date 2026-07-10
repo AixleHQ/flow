@@ -51,6 +51,24 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
     assert_equal 1, Asset.where(scope: @project, name: "report.md").count
   end
 
+  test "share_url is null until the promoted asset is shared" do
+    result = run_tool(name: "report.md")
+
+    payload = JSON.parse(result[:stdout])
+    assert_nil payload["share_url"]
+  end
+
+  test "share_url is present when re-promoting an already-shared asset" do
+    first = JSON.parse(run_tool(name: "report.md")[:stdout])
+    Asset.find(first["asset_id"]).share!
+
+    result = run_tool(name: "report.md")
+
+    payload = JSON.parse(result[:stdout])
+    asset = Asset.find(payload["asset_id"])
+    assert_includes payload["share_url"], "/share/#{asset.public_token}"
+  end
+
   test "returns error when no matching workflow output asset exists" do
     result = run_tool(name: "missing.md")
 

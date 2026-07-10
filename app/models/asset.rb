@@ -86,6 +86,16 @@ class Asset < ApplicationRecord
     public? && public_token.present?
   end
 
+  # Stable public share link for a shared asset (nil unless shared). The token
+  # lives on the asset, so this URL is stable across versions.
+  def share_url
+    return nil unless shared?
+
+    Rails.application.routes.url_helpers.public_asset_url(
+      token: public_token, host: Settings.domain, protocol: Settings.protocol
+    )
+  end
+
   def self.generate_public_token
     loop do
       token = SecureRandom.urlsafe_base64(24)

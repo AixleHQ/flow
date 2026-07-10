@@ -10,7 +10,9 @@ module InternalTools
       display_name "Share Asset"
       description "Make a project-level asset publicly accessible and return a stable, safe share link. " \
                   "The link renders the asset inside a sandboxed iframe and does not change across " \
-                  "asset versions."
+                  "asset versions. " \
+                  "Only use this tool when the step instructions explicitly ask to share (or make public) " \
+                  "an asset; do not call it on your own initiative."
       tags :assets
       inject_when :workflow_step_session
       idempotent
@@ -30,12 +32,12 @@ module InternalTools
       asset = resolve_asset
       return error("Asset not found in this project") unless asset
 
-      token = asset.share!
+      asset.share!
       success({
         asset_id: asset.id,
         name: asset.name,
         public: true,
-        share_url: share_url(token)
+        share_url: asset.share_url
       }.to_json)
     end
 
@@ -48,12 +50,6 @@ module InternalTools
       else
         scope.find_by(name: params[:name], folder: params[:folder].presence)
       end
-    end
-
-    def share_url(token)
-      Rails.application.routes.url_helpers.public_asset_url(
-        token: token, host: Settings.domain, protocol: Settings.protocol
-      )
     end
   end
 end

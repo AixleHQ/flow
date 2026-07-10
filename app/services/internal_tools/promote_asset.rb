@@ -10,7 +10,9 @@ module InternalTools
       display_name "Promote Asset"
       description "Promote a workflow/session output asset to a versioned project-level asset. " \
                   "If a project asset with the same name and folder already exists, a new version " \
-                  "is added instead of creating a duplicate."
+                  "is added instead of creating a duplicate. " \
+                  "Only use this tool when the step instructions explicitly ask to promote (or save/publish) " \
+                  "an asset; do not call it on your own initiative."
       tags :assets
       inject_when :workflow_step_session
       param :name, type: :string, required: true,
@@ -40,7 +42,8 @@ module InternalTools
         folder: asset.folder,
         scope: asset.scope_indicator,
         version: result[:version]&.version,
-        public: asset.public
+        public: asset.public,
+        share_url: asset.share_url
       }.to_json)
     end
 
