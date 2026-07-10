@@ -9,7 +9,6 @@ module PersonalTools
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true
       param :mcp_server_id, type: :integer, description: "MCP server id.", required: true
-      param :display_name, type: :string, description: "Name."
       param :url, type: :string, description: "URL."
       param :transport, type: :string, description: "Transport.", enum: %w[http sse stdio]
       param :command, type: :string, description: "Command."
@@ -17,7 +16,7 @@ module PersonalTools
       param :enabled, type: :boolean, description: "Enabled flag."
     end
 
-    ATTRS = %w[display_name url transport command description enabled].freeze
+    ATTRS = %w[url transport command description enabled].freeze
 
     def execute
       project = find_project!

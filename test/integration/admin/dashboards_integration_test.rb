@@ -33,6 +33,13 @@ module Admin
       @tool_file = @tool.tool_files.create!(path: "/workspace/x.rb", content: "1")
       @skill = create(:skill, :with_company_scope, scope: @company)
       @mcp = create(:mcp_server, scope: @company, kind: :custom)
+      @oauth_client = OauthClient.create!(
+        source: "dcr", issuer: "https://auth.example.com/admin-test", client_id: "admin-test-client",
+        authorization_endpoint: "https://auth.example.com/authorize", token_endpoint: "https://auth.example.com/token"
+      )
+      @oauth_credential = OauthCredential.create!(
+        owner: @user, oauth_client: @oauth_client, provider: "mcp:auth.example.com", status: :active
+      )
       @integration = create(:integration, company: @company, connected_by: @user)
       @repository = create(:repository, integration: @integration, scope: @company)
       @config_item = create(:config_item, scope: @company)
@@ -109,6 +116,26 @@ module Admin
 
     test "agent_credentials#show" do
       get admin_agent_credential_path(@credential)
+      assert_response :success
+    end
+
+    test "oauth_clients#index" do
+      get admin_oauth_clients_path
+      assert_response :success
+    end
+
+    test "oauth_clients#show" do
+      get admin_oauth_client_path(@oauth_client)
+      assert_response :success
+    end
+
+    test "oauth_credentials#index" do
+      get admin_oauth_credentials_path
+      assert_response :success
+    end
+
+    test "oauth_credentials#show" do
+      get admin_oauth_credential_path(@oauth_credential)
       assert_response :success
     end
 

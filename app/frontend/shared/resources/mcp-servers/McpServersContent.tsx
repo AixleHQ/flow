@@ -25,7 +25,6 @@ type Transport = 'http' | 'sse' | 'stdio';
 export interface McpServer {
   id: number;
   name: string;
-  displayName: string;
   url: string | null;
   transport: Transport;
   headers: Record<string, string> | null;
@@ -40,9 +39,22 @@ export interface McpServer {
   integrationId: number | null;
   command: string | null;
   env: Record<string, string> | null;
+  // OAuth (oauth-unification §4.3/§4.6). oauthStatus is per-current-user and read-only.
+  authType?: 'none' | 'static' | 'oauth';
+  credentialScope?: 'shared' | 'per_user';
+  oauthStatus?: 'pending' | 'active' | 'expiring' | 'error' | null;
   createdAt: string;
   updatedAt: string;
 }
+
+// Maps a server's per-user oauth_status to a connection badge (functional labels,
+// not colour alone, so the state reads without relying on hue).
+const OAUTH_STATUS_BADGE: Record<string, { color: string; label: string }> = {
+  active: { color: 'green', label: 'Connected' },
+  expiring: { color: 'yellow', label: 'Expiring' },
+  pending: { color: 'gray', label: 'Not connected' },
+  error: { color: 'red', label: 'Reconnect' },
+};
 
 type EditableScope = 'company' | 'project';
 
@@ -92,7 +104,7 @@ export function McpServersContent({
 
     if (search.trim()) {
       const q = search.toLowerCase();
-      result = result.filter((s) => s.name.toLowerCase().includes(q) || s.displayName.toLowerCase().includes(q));
+      result = result.filter((s) => s.name.toLowerCase().includes(q));
     }
 
     return result;
@@ -217,9 +229,6 @@ export function McpServersContent({
                   <Table.Tr key={server.id}>
                     <Table.Td>
                       <Text fz={14} fw={500} c="var(--app-text-primary)">
-                        {server.displayName}
-                      </Text>
-                      <Text fz={12} c="dimmed">
                         {server.name}
                       </Text>
                     </Table.Td>
@@ -258,9 +267,20 @@ export function McpServersContent({
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={server.enabled ? 'green' : 'gray'} size="sm">
-                        {server.enabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
+                      <Group gap={4}>
+                        <Badge color={server.enabled ? 'green' : 'gray'} size="sm">
+                          {server.enabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                        {server.authType === 'oauth' && (
+                          <Badge
+                            color={OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].color}
+                            variant="light"
+                            size="sm"
+                          >
+                            {OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].label}
+                          </Badge>
+                        )}
+                      </Group>
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">

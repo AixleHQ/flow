@@ -34,11 +34,11 @@ class GoogleOmniAuthService
       user.preferred_agent_language = "en"
     end
 
-    # Update OAuth-related attributes (always update tokens)
+    # Update OAuth-related identity attributes. We deliberately do NOT persist the
+    # Google access/refresh tokens: they were dead plaintext columns (never read) and
+    # have been dropped (oauth-unification §7). Google OAuth here is login-only.
     user.assign_attributes(
       name: name,
-      google_token: token,
-      google_refresh_token: refresh_token,
       avatar_url: image,
       provider: provider,
       uid: uid
@@ -70,18 +70,6 @@ class GoogleOmniAuthService
   # @return [String]
   def name
     @name ||= auth_hash.info.name
-  end
-
-  # Extract token from auth hash
-  # @return [String]
-  def token
-    @token ||= auth_hash.credentials.token
-  end
-
-  # Extract refresh token from auth hash if present
-  # @return [String, nil]
-  def refresh_token
-    @refresh_token ||= auth_hash.credentials.refresh_token if auth_hash.credentials.refresh_token.present?
   end
 
   # Extract image from auth hash if present

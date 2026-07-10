@@ -102,6 +102,9 @@ export const SessionNewForm = ({
   const [bmadEnabled, setBmadEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // OAuth session-start preflight (§4.6): MCP servers the user must connect before this
+  // session can launch. Populated from the API's 422 { reauth_required } response.
+  const [reauthRequired, setReauthRequired] = useState<{ name: string; connectUrl: string }[]>([]);
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
@@ -154,6 +157,7 @@ export const SessionNewForm = ({
     if (!canSubmit) return;
     setLoading(true);
     setError(null);
+    setReauthRequired([]);
 
     try {
       const res = await apiFetch(apiV1TerminalSessionsPath(), {
@@ -188,7 +192,15 @@ export const SessionNewForm = ({
         }
       } else {
         const errData = await res.json().catch(() => null);
-        setError(errData?.errors?.[0] ?? errData?.error ?? 'Failed to create session');
+        const reauth = errData?.reauth_required;
+        if (res.status === 422 && Array.isArray(reauth) && reauth.length > 0) {
+          // Preflight blocked the launch: surface a Connect CTA per server instead of a raw error.
+          setReauthRequired(
+            reauth.map((r: { name: string; connect_url: string }) => ({ name: r.name, connectUrl: r.connect_url })),
+          );
+        } else {
+          setError(errData?.errors?.[0] ?? errData?.error ?? 'Failed to create session');
+        }
       }
     } catch {
       setError('Network error');
@@ -473,6 +485,33 @@ export const SessionNewForm = ({
           <Text c="red" size="sm">
             {error}
           </Text>
+        )}
+
+        {/* ── OAuth preflight: Connect CTA (§4.6) ─────── */}
+        {reauthRequired.length > 0 && (
+          <Card withBorder padding="sm" styles={{ root: { borderColor: 'var(--mantine-color-yellow-5)' } }}>
+            <Text fw={600} size="sm">
+              Connect required before launching
+            </Text>
+            <Text c="dimmed" size="xs" mb="xs">
+              These MCP servers need you to connect your account first.
+            </Text>
+            <Group gap="xs">
+              {reauthRequired.map((r) => (
+                <Button
+                  key={r.connectUrl}
+                  variant="light"
+                  color="yellow"
+                  onClick={() => {
+                    // OAuth is a top-level browser navigation, not an Inertia visit.
+                    window.location.href = `${r.connectUrl}?return_to=${encodeURIComponent(window.location.pathname)}`;
+                  }}
+                >
+                  Connect {r.name}
+                </Button>
+              ))}
+            </Group>
+          </Card>
         )}
 
         {/* ── Start Button ────────────────────────────── */}

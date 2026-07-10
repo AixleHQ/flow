@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import {
   Badge,
   Box,
@@ -88,15 +88,6 @@ const PROVIDER_ICON_COLORS: Record<string, string> = {
 
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-
-function getGithubInstallUrl(basePath: string, githubAppSlug: string | null): string {
-  if (!githubAppSlug) return '/company/integrations/github_setup';
-
-  const base = `https://github.com/apps/${githubAppSlug}/installations/new`;
-  const projectMatch = basePath.match(/projects\/(\d+)/);
-  if (projectMatch) return `${base}?state=${encodeURIComponent(`project:${projectMatch[1]}`)}`;
-  return base;
-}
 
 const IntegrationCard = ({
   integration,
@@ -196,7 +187,6 @@ const IntegrationCard = ({
 );
 
 export const IntegrationsContent = ({ integrations, basePath, title }: IntegrationsContentProps) => {
-  const { settings } = usePage<{ settings: { githubAppSlug: string | null } }>().props;
   const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [gitlabOpen, setGitlabOpen] = useState(false);
@@ -256,9 +246,10 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
   );
 
   const handleConnectGithub = useCallback(() => {
-    const url = getGithubInstallUrl(basePath, settings.githubAppSlug);
-    window.location.href = url;
-  }, [basePath, settings.githubAppSlug]);
+    // Server-side endpoint mints a SIGNED state (Oauth::State) and redirects to GitHub's
+    // app-install URL — the state is never built or forgeable client-side (§7).
+    window.location.href = `${basePath}/github_app_install`;
+  }, [basePath]);
 
   const handleLinkToProject = useCallback(
     (integration: Integration) => {

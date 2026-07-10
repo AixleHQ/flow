@@ -26,3 +26,19 @@ schedules:
   - workflow: coder_sweep_expired_locks_workflow
     cron: "0 * * * *"
     enabled: true
+
+  # Proactive server-side OAuth token refresh for agent-CLI credentials nearing
+  # expiry. SKIP overlap: each sweep does read-merge-write under a row lock, so
+  # two batches must never run concurrently (mirrors outbox_relay_workflow).
+  - workflow: agent_token_refresh_workflow
+    cron: "*/5 * * * *"
+    overlap: skip
+    enabled: true
+
+  # Proactive server-side OAuth token refresh for integration + MCP-server
+  # credentials nearing expiry (oauth-unification §4.5). SKIP overlap: each refresh
+  # is a read-merge-write under a row lock, so two sweeps must never run at once.
+  - workflow: oauth_token_refresh_workflow
+    cron: "*/5 * * * *"
+    overlap: skip
+    enabled: true

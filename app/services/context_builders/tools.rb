@@ -69,7 +69,6 @@ module ContextBuilders
 
       external_servers.each do |server|
         lines << "### #{server.name}"
-        lines << server.display_name if server.display_name.present?
         lines << server.description if server.description.present?
         lines << ""
       end

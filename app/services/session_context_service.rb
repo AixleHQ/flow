@@ -14,12 +14,18 @@ class SessionContextService
   # Collects a structured log of everything injected into the container.
   # Written to /var/log/context.log for post-mortem debugging.
   class ContextLog
+    # Values shorter than this are never redacted — they are common non-secret
+    # tokens ("json", "true", "sse") whose masking would only obscure the log; real
+    # credentials (bearer tokens, API keys, resolved config-item secrets) are longer.
+    MIN_REDACT_LEN = 6
+
     def initialize(session)
       @session_id = session.id
       @agent_type = session.agent_type
       @mode = session.mode
       @started_at = Time.current
       @entries = []
+      @secrets = []
     end
 
     def record(step, data)
@@ -30,6 +36,18 @@ class SessionContextService
       return if files_hash.blank?
 
       @entries << { step: step, files: files_hash, at: Time.current.iso8601(3) }
+    end
+
+    # Register secret VALUES to scrub from the rendered log (oauth-unification §7).
+    # We keep the structure (server names, header/env KEYS) but replace each secret
+    # value with a stable fingerprint, so the log stays useful for audit/debugging
+    # ("which header carried which secret") without exposing the bytes. Called with
+    # the resolved header/env values + the injected OAuth bearer + the session key.
+    def redact(*values)
+      values.flatten.each do |value|
+        s = value.to_s
+        @secrets << s if s.length >= MIN_REDACT_LEN
+      end
     end
 
     def to_s
@@ -57,7 +75,18 @@ class SessionContextService
 
       lines << ""
       lines << "=== End Context Log ==="
-      lines.join("\n")
+      scrub_secrets(lines.join("\n"))
+    end
+
+    private
+
+    # Replace every registered secret with a fingerprint. Longest-first so a secret
+    # that is a substring of a longer one never corrupts the longer replacement.
+    def scrub_secrets(text)
+      @secrets.uniq.sort_by { |s| -s.length }.each do |secret|
+        text = text.gsub(secret, "«redacted:sha256:#{Digest::SHA256.hexdigest(secret)[0, 8]}»")
+      end
+      text
     end
   end
 
@@ -75,7 +104,16 @@ class SessionContextService
 
       # Resolve MCP server names early — needed for pre-approving servers
       # in the credential config (e.g. Claude Code's enabledMcpjsonServers)
-      mcp_server_names = build_all_servers(session).map(&:name)
+      resolved_servers = build_all_servers(session)
+      # Normalized protocol keys (matches the .mcp.json keys the adapters write and
+      # the mcp__<key> tool-permission namespace). Must stay in sync with
+      # MCPServer.config_key_for used in each agent adapter's MCP config builder.
+      mcp_server_names = resolved_servers.map { |s| MCPServer.config_key_for(s.name) }
+      # Register every resolved secret (header/env values incl. the injected OAuth
+      # bearer, plus the session mcp_key) so they are scrubbed from the collected
+      # /var/log/context.log artifact (oauth-unification §7). The real values still
+      # reach the container's MCP config files — only the log copy is redacted.
+      context_log.redact(collect_context_secrets(resolved_servers, session))
       context_log.record(:mcp_servers, mcp_server_names)
       Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
 
@@ -533,9 +571,22 @@ class SessionContextService
       effective_items = resolve_effective_config_items(session)
       external = resolve_mcp_servers(session)
                    .reject(&:managed?)
-                   .map { |s| resolve_server_secrets(s, effective_items) }
+                   .map { |s| resolve_server_secrets(s, effective_items, session) }
 
       [ build_internal_mcp(session) ] + external
+    end
+
+    # Secret VALUES to scrub from context.log (oauth-unification §7): every resolved
+    # MCP header/env value (includes the injected OAuth bearer and the internal
+    # aixle-tools X-Session-Key) plus the session mcp_key. Values only — KEYS and
+    # server names stay so the log remains auditable.
+    def collect_context_secrets(servers, session)
+      values = servers.flat_map do |server|
+        headers = server.respond_to?(:headers) ? (server.headers || {}).values : []
+        env     = server.respond_to?(:env) ? (server.env || {}).values : []
+        headers + env
+      end
+      (values + [ session.mcp_key ]).compact.map(&:to_s).reject(&:blank?)
     end
 
     # Build internal Aixle MCP server entry (always included in session containers)
@@ -561,7 +612,7 @@ class SessionContextService
       servers
     end
 
-    def resolve_server_secrets(server, effective_items)
+    def resolve_server_secrets(server, effective_items, session = nil)
       resolved_headers = (server.headers || {}).transform_values do |value|
         resolve_embedded_references(value, effective_items)
       end
@@ -569,6 +620,10 @@ class SessionContextService
       resolved_env = (server.env || {}).transform_values do |value|
         resolve_embedded_references(value, effective_items)
       end
+
+      # OAuth injection (oauth-unification §4.4). No-op unless the server is an
+      # OAuth server; a resolved token becomes an `Authorization: Bearer` header.
+      inject_oauth_token!(server, resolved_headers, session)
 
       attrs = {
         name: server.name,
@@ -584,6 +639,24 @@ class SessionContextService
       end
 
       OpenStruct.new(attrs)
+    end
+
+    # Scope-aware OAuth injection (oauth-unification §4.4). Only OAuth servers are
+    # considered (none/static ⇒ no-op); an explicit Authorization header is never
+    # overwritten. On success injects a Bearer header resolved for the right
+    # identity (per_user ⇒ session.user; shared ⇒ the server's scope owner).
+    #
+    # ReauthRequired is deliberately NOT rescued here: it must propagate to the
+    # session-start preflight (§4.6) so we never silently launch a session with a
+    # missing or dead per_user credential — the preflight surfaces a "Connect" CTA.
+    # `respond_to?(:auth_type)` guards the internal aixle-tools OpenStruct entry.
+    def inject_oauth_token!(server, headers, session)
+      return if session.nil?
+      return unless server.respond_to?(:auth_type) && server.auth_type_oauth?
+      return if headers.key?("Authorization") || headers.key?("authorization")
+
+      token = Oauth::TokenService.access_token_for(server: server, user: session.user)
+      headers["Authorization"] = "Bearer #{token}" if token.present?
     end
 
     # Write MCP config file respecting merge strategy

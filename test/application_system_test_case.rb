@@ -32,6 +32,11 @@ end
 
 Capybara.server = :puma, { Silent: true }
 
+# Implicit wait for find/assert_selector/have_* before failing. Default is 2s;
+# raised to 5 so the Inertia+React stack has time to hydrate and settle async
+# updates on slower/loaded CI without resorting to explicit sleeps.
+Capybara.default_max_wait_time = 5
+
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :cuprite_alpine
 end

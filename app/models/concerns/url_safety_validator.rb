@@ -12,6 +12,7 @@
 # Or call individual predicates:
 #
 #   UrlSafetyValidator.safe?(url)
+#   UrlSafetyValidator.private_or_loopback?("10.0.0.1")
 module UrlSafetyValidator
   BLOCKED_HOSTS = %w[
     localhost
@@ -27,7 +28,9 @@ module UrlSafetyValidator
   # Returns an array of human-readable error messages for the given URL.
   # An empty array means the URL passes all safety checks.
   # Pass `require_https: true` to reject plain `http://` URLs.
-  def errors_for(url, require_https: false)
+  # Pass `trusted_hosts_override:` to extend the trusted-host allowlist for
+  # a single call-site without weakening global URL validation.
+  def errors_for(url, require_https: false, trusted_hosts_override: nil)
     raw = url.to_s
     return [ "is required" ] if raw.blank?
 
@@ -43,7 +46,7 @@ module UrlSafetyValidator
 
     host = uri.host.to_s.downcase
     errors << "cannot point to internal services" if BLOCKED_HOSTS.include?(host)
-    errors << "cannot point to private or internal network addresses" if blocked_address?(host)
+    errors << "cannot point to private or internal network addresses" if blocked_address?(host, trusted_hosts_override: trusted_hosts_override)
 
     errors
   end
@@ -62,47 +65,93 @@ module UrlSafetyValidator
     %w[http https].include?(uri.scheme)
   end
 
-  # True when the host should be rejected as private/internal.
-  #
-  # Literal-IP hosts are always checked. For hostnames, the DNS-resolution
-  # check is skipped when the host appears in `trusted_hosts` — this handles
-  # split-horizon DNS where a public hostname (e.g. `coder.staging.aixle.com`)
-  # resolves to a private IP from inside the cluster.
-  def blocked_address?(host)
+  def private_or_loopback?(host)
     return false if host.to_s.empty?
 
-    ip = IPAddr.new(host)
-    ip.private? || ip.loopback? || ip.link_local?
-  rescue IPAddr::InvalidAddressError
-    return false if trusted_host?(host)
-    resolved_to_private?(host)
+    literal = ip_or_nil(host)
+    return blocked_ip?(literal) unless literal.nil?
+
+    resolves_to_blocked?(host)
   end
 
-  def trusted_host?(host)
-    trusted_hosts.include?(host.to_s.downcase)
+  # True when the host should be rejected as private/internal.
+  #
+  # Literal-IP hosts are always checked. For hostnames, the resolution check is
+  # skipped when the host appears in `trusted_hosts` — this handles split-horizon
+  # DNS where a public hostname (e.g. `coder.staging.aixle.com`) resolves to a
+  # private IP from inside the cluster.
+  def blocked_address?(host, trusted_hosts_override: nil)
+    return false if host.to_s.empty?
+
+    literal = ip_or_nil(host)
+    return blocked_ip?(literal) unless literal.nil?
+
+    return false if trusted_host?(host, trusted_hosts_override: trusted_hosts_override)
+
+    resolves_to_blocked?(host)
   end
 
-  def trusted_hosts
+  def trusted_host?(host, trusted_hosts_override: nil)
+    trusted_hosts(trusted_hosts_override).include?(host.to_s.downcase)
+  end
+
+  def trusted_hosts(extra_hosts = nil)
     raw = Settings.respond_to?(:url_safety) ? Settings.url_safety&.trusted_hosts : nil
-    Array(raw).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
+    Array(raw).concat(Array(extra_hosts)).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
   end
 
-  # Check both the system resolver and a public DNS resolver to defend against
-  # DNS rebinding: an attacker can arrange for the system resolver to return a
-  # public IP at validation time, then serve a private IP at request time.
-  # Rejecting the hostname when either resolver returns a private address closes
-  # that window.
-  def resolved_to_private?(hostname)
-    system_addrs = Resolv.getaddresses(hostname)
-    public_ip    = resolve_public_ipv4(hostname)
-    (system_addrs + [ public_ip ]).compact.uniq.any? do |addr|
-      ip = IPAddr.new(addr)
-      ip.private? || ip.loopback? || ip.link_local?
-    rescue IPAddr::InvalidAddressError
-      false
-    end
-  rescue Resolv::ResolvError
-    false
+  # Parse a host as an IP literal, or nil when it is not a well-formed IPAddr.
+  # NOTE: IPAddr rejects libc-numeric forms (decimal/hex/octal-packed IPv4 such
+  # as "2852039166" or "0x7f.0.0.1"); those deliberately fall through to
+  # #resolves_to_blocked?, which resolves them with the SAME libc resolver the
+  # HTTP client uses at connect time.
+  def ip_or_nil(host)
+    IPAddr.new(host.to_s)
+  rescue IPAddr::InvalidAddressError
+    nil
+  end
+
+  # A resolved/literal IP that must never be dialed server-side: RFC1918 private,
+  # loopback, link-local (incl. the 169.254.169.254 cloud-metadata address), or
+  # the unspecified address (0.0.0.0 / ::, which the OS routes to loopback).
+  def blocked_ip?(ip)
+    ip.private? || ip.loopback? || ip.link_local? || ip.to_i.zero?
+  end
+
+  # Reject the host if ANY address it resolves to is blocked, using two LOCAL
+  # resolvers:
+  #   1. Addrinfo.getaddrinfo — the SAME libc/glibc resolver Net::HTTP dials at
+  #      connect time, so packed/decimal-numeric hosts (e.g. "2852039166" =>
+  #      169.254.169.254) that IPAddr/Resolv miss are still caught.
+  #   2. Resolv.getaddresses — the system resolver.
+  # We deliberately do NOT consult public DNS (resolve_public_ipv4) here: this
+  # runs on every URL validation AND every redirect hop in OAuth discovery, and a
+  # public-DNS round-trip (multi-second timeouts) on each call stalls hot paths —
+  # badly so in a cluster where egress :53 is firewalled. DNS rebinding is
+  # defended at connect time instead, by pinning the resolved IP in the HTTP
+  # clients (resolve_public_ipv4 / pin_public_ip!). An unresolvable host yields []
+  # (not blocked — the connection would fail anyway).
+  def resolves_to_blocked?(host)
+    resolved_addresses(host).any? { |ip| blocked_ip?(ip) }
+  end
+
+  # Union of the two LOCAL resolution sources as IPAddr objects (deduped). Each
+  # source is best-effort: a failing resolver contributes nothing, never raises.
+  def resolved_addresses(host)
+    strings = getaddrinfo_addresses(host) + system_resolver_addresses(host)
+    strings.compact.uniq.filter_map { |addr| ip_or_nil(addr) }
+  end
+
+  def getaddrinfo_addresses(host)
+    Addrinfo.getaddrinfo(host, nil, nil, :STREAM).map { |info| info.ip_address.split("%").first }
+  rescue StandardError
+    []
+  end
+
+  def system_resolver_addresses(host)
+    Array(Resolv.getaddresses(host))
+  rescue StandardError
+    []
   end
 
   # Resolve a hostname using public DNS resolvers (Cloudflare/Google) and

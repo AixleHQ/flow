@@ -54,7 +54,8 @@ x-toolbox-environment: &toolbox-environment
 
 services:
   temporal:
-    image: temporalio/auto-setup:1.29.0
+    image: temporalio/auto-setup:1.29.7
+    restart: on-failure
     ports:
       - "7233:7233"
     environment:

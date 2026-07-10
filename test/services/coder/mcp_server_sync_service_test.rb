@@ -67,20 +67,5 @@ module Coder
         Coder::MCPServerSyncService.new(integration).sync!
       end
     end
-
-    test "uses the integration name as the display name" do
-      integration = create(:integration, :coder, :active, company: @company, name: "Coder Production", connected_by: @user)
-      server = Coder::MCPServerSyncService.new(integration).sync!
-
-      assert_equal "Coder Production", server.display_name
-    end
-
-    test "falls back to 'Coder <id>' when the integration name is blank" do
-      integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
-      integration.update_column(:name, "")
-      server = Coder::MCPServerSyncService.new(integration).sync!
-
-      assert_equal "Coder #{integration.id}", server.display_name
-    end
   end
 end

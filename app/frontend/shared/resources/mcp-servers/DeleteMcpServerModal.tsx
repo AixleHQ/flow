@@ -5,7 +5,6 @@ import { useState, type FC } from 'react';
 interface McpServer {
   id: number;
   name: string;
-  displayName: string;
 }
 
 interface DeleteMcpServerModalProps {
@@ -35,7 +34,7 @@ export const DeleteMcpServerModal: FC<DeleteMcpServerModalProps> = ({ opened, on
         <Text fz={14} c="dimmed" mb="md">
           Are you sure you want to delete{' '}
           <Text span fw={600} c="var(--app-text-primary)">
-            {server.displayName}
+            {server.name}
           </Text>
           ? This action cannot be undone.
         </Text>

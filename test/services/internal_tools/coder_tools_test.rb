@@ -31,7 +31,6 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   def create_managed_server(integration)
     MCPServer.create!(
       name:         "coder-#{integration.id}",
-      display_name: "Coder #{integration.id}",
       kind:         :managed,
       transport:    :http,
       integration:  integration,

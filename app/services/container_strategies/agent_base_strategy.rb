@@ -113,6 +113,26 @@ module ContainerStrategies
       super + env_vars.compact.map { |k, v| "#{k}=#{v}" }
     end
 
+    # Send one command into the container's `agent` tmux session once its shell prompt
+    # is ready. Used to launch the CLI AFTER before_exec seeds credentials (so it starts
+    # authenticated), rather than at container start via the entrypoint's TTYD_CMD.
+    def send_tmux_command(container, cmd)
+      send_tmux_sequence(container, [ cmd ])
+    end
+
+    # Send a sequence of commands: wait for the shell prompt, send the first, then send
+    # each subsequent one after a short delay (e.g. launch the CLI, then drive a slash
+    # command once it is up). Which commands to send is the caller's concern.
+    def send_tmux_sequence(container, commands)
+      return if commands.blank?
+
+      first, *rest = commands
+      script = +"for i in $(seq 1 30); do tmux capture-pane -t agent -p 2>/dev/null | grep -q '\\$' && break; sleep 0.2; done; "
+      script << "tmux send-keys -t agent '#{first}' Enter; "
+      rest.each { |cmd| script << "sleep 5; tmux send-keys -t agent '#{cmd}' Enter; " }
+      runtime.exec(container, [ "sh", "-c", script ])
+    end
+
     def build_labels
       route_token = input[:route_token]
       router_name = "terminal-#{route_token}"

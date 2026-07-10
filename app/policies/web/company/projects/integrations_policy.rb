@@ -8,6 +8,7 @@ module Web
         def create? = manage_integrations?
         def destroy? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
+        def github_app_install? = manage_integrations?
 
         private
 

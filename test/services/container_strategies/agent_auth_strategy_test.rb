@@ -375,6 +375,131 @@ module ContainerStrategies
       assert_equal "uid-1", cred.config_data["userID"]
     end
 
+    # == /design-login variant ==
+
+    test "normal auth watches the base login keys" do
+      env_vars = build_strategy.build_env_vars
+      assert_includes env_vars, "AUTH_REQUIRED_KEYS=primaryApiKey,claudeAiOauth.accessToken"
+    end
+
+    test "design auth watches the designOauth key instead" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      env_vars = build_strategy.build_env_vars
+      assert_includes env_vars, "AUTH_REQUIRED_KEYS=designOauth.accessToken"
+    end
+
+    test "design auth before_exec injects the user's existing base credential" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      AgentCredential.from_artifacts(@user.id, "claude_code",
+                                     { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } })
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      written = {}
+      runtime_mock.stubs(:write_file).with { |_c, path, content| written[path] = content; true }
+
+      strategy.before_exec(container_id: "abc")
+
+      creds = written["/home/claude/.claude/.credentials.json"]
+      assert creds, "expected the base credential file to be injected"
+      assert_includes creds, "sk-ant-oat01-base"
+    end
+
+    test "design auth before_exec strips the existing designOauth on reconnect (no instant complete)" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      AgentCredential.from_artifacts(@user.id, "claude_code", {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
+        "designOauth" => { "accessToken" => "sk-ant-oat01-OLD-design" }
+      })
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      written = {}
+      runtime_mock.stubs(:write_file).with { |_c, path, content| written[path] = content; true }
+
+      strategy.before_exec(container_id: "abc")
+
+      creds = written["/home/claude/.claude/.credentials.json"]
+      assert_includes creds, "sk-ant-oat01-base", "base login must still be injected"
+      refute_includes creds, "sk-ant-oat01-OLD-design",
+                      "the design token being re-minted must NOT be injected (would complete instantly)"
+    end
+
+    test "design auth is NOT complete with only the injected base token" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:read_file_from_container).returns(nil)
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } }.to_json)
+
+      assert_no_difference "AgentCredential.count" do
+        result = strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+        refute result[:auth_completed], "must wait for designOauth, not the injected base token"
+      end
+    end
+
+    test "design auth completes by adding designOauth to the existing base, not re-scraping it" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      # The user is already logged in via the platform key; design layers on top.
+      AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-ant-api-PLATFORM" })
+
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:read_file_from_container).returns(nil)
+      # The container scrape ALSO surfaces a stale claudeAiOauth Claude wrote next to
+      # the injected base — it must NOT be persisted (would trigger Claude's
+      # "Both claude.ai and /login managed key set").
+      strategy.stubs(:read_file_from_container)
+              .with(container, "/home/claude/.claude/.credentials.json")
+              .returns({ "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-STALE" },
+                         "designOauth" => { "accessToken" => "sk-ant-oat01-design" } }.to_json)
+
+      assert_no_difference "AgentCredential.count" do
+        result = strategy.before_cleanup(container_id: "abc", session_id: @session.id)
+        assert result[:auth_completed]
+      end
+
+      cred = @user.agent_credentials.find_by(agent_type: "claude_code")
+      assert_equal "sk-ant-oat01-design", cred.config_data.dig("designOauth", "accessToken")
+      assert_equal "sk-ant-api-PLATFORM", cred.config_data["primaryApiKey"], "existing base preserved"
+      refute cred.config_data.key?("claudeAiOauth"), "stale scraped base must not be resurrected"
+    end
+
+    test "non-design auth launches the login command at container start" do
+      assert_equal "claude", build_strategy.send(:ttyd_command)
+    end
+
+    test "design auth defers the launch (ttyd_command is bash, not claude)" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      assert_equal "bash", build_strategy.send(:ttyd_command)
+    end
+
+    test "design auth exec launches claude AND auto-runs /design-login after seeding creds" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      strategy = build_strategy
+      strategy.stubs(:resolve_container).returns(mock("container"))
+      strategy.stubs(:mark_session_ready)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.stubs(:container_identifier).returns("cid")
+      # The deferred launch sends both `claude` and `/design-login` into tmux — the
+      # user never types the command themselves.
+      runtime_mock.expects(:exec).with do |_c, argv|
+        script = argv.is_a?(Array) ? argv.last.to_s : ""
+        script.include?("send-keys") && script.include?("claude") && script.include?("/design-login")
+      end
+
+      strategy.exec(container_id: "abc")
+    end
+
     private
 
     def build_strategy(agent_type: "claude_code")

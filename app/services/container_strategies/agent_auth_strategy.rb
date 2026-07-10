@@ -19,14 +19,15 @@ module ContainerStrategies
     end
 
     # == before_exec(container_id:, **) → {} ==
-    # Write agent-specific config files needed before auth starts
-    # (e.g. Codex config.toml with cli_auth_credentials_store = "file")
+    # Seed the files the CLI needs before it launches, for this auth kind. Default
+    # ("agent") is the adapter's fresh-login setup files; other kinds (e.g. Claude's
+    # "design") return the user's existing credential so the CLI starts logged in.
+    # Everything kind-specific lives in the adapter — this strategy stays generic.
 
     def before_exec(container_id:, **)
       container = resolve_container(container_id)
-      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
 
-      adapter.auth_setup_files.each do |path, content|
+      adapter.auth_setup_files_for(auth_kind, current_credential_config).each do |path, content|
         runtime.write_file(container, path, content)
         Rails.logger.info("[AgentAuth] Wrote auth setup file: #{path}")
       end
@@ -34,10 +35,24 @@ module ContainerStrategies
       {}
     end
 
+    # == exec ==
+    # When the adapter provides launch commands for this kind, the entrypoint started
+    # `bash` (see #ttyd_command) and we launch the CLI here — AFTER before_exec seeded
+    # the credentials — then drive any follow-up commands (e.g. a slash command).
+
+    def exec(container_id:, **)
+      result = super
+
+      commands = adapter.auth_launch_commands_for(auth_kind)
+      send_tmux_sequence(resolve_container(container_id), commands) if commands.any?
+
+      result
+    end
+
     # == before_cleanup(container_id:, session_id:, **) → { auth_completed:, credential_id: } ==
     # Persists a credential ONLY when auth actually completed (a real token is
     # present). Cleanup runs unconditionally (always: true), and the agent's
-    # config file may exist without a token — so gating on auth_complete? is what
+    # config file may exist without a token — so gating on completion is what
     # prevents an empty/garbage credential from being created on a failed/aborted login.
 
     def before_cleanup(container_id: nil, session_id: nil, **)
@@ -48,7 +63,7 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       auth_files = extract_auth_files(container, agent_service)
-      completed = auth_files_complete?(auth_files, agent_service)
+      completed = auth_files.any? { |_p, content| content.present? && agent_service.adapter.auth_complete_for?(auth_kind, content) }
       result = { auth_completed: completed }
 
       if completed && session.present?
@@ -64,18 +79,53 @@ module ContainerStrategies
       result
     end
 
+    # Override the watched keys per auth kind (the adapter decides; default is the
+    # standard login keys).
+    def build_env_vars
+      vars = super
+      upsert_env_var(vars, "AUTH_REQUIRED_KEYS", adapter.auth_required_keys_for(auth_kind).join(","))
+      vars
+    end
+
     protected
 
     def session_type = "auth_setup"
 
     def ttyd_command
-      AUTH_COMMANDS.fetch(input[:agent_type])
+      # If the adapter drives its own launch (kinds that seed creds first, then send
+      # commands post-seed), start `bash`; otherwise the entrypoint launches the agent's
+      # login command at container start (a fresh login).
+      adapter.auth_launch_commands_for(auth_kind).any? ? "bash" : AUTH_COMMANDS.fetch(input[:agent_type])
     end
 
     private
 
+    # Opaque auth kind carried on the session ("agent" = normal login). The adapter
+    # interprets it; this strategy never branches on specific values.
+    def auth_kind
+      current_terminal_session&.metadata&.dig("auth_kind").presence || "agent"
+    end
+
+    def adapter
+      @adapter ||= AgentCredentialsService.for(input[:agent_type]).adapter
+    end
+
+    # The user's currently-stored credential config for this agent (nil if none) —
+    # passed to the adapter so a kind that layers on an existing login can seed it.
+    def current_credential_config
+      AgentCredential.find_by(user_id: input[:user_id], agent_type: input[:agent_type])&.config_data
+    end
+
     def save_credentials(session, auth_files, agent_service)
-      config_data = build_credentials_from_files(auth_files, agent_service.adapter)
+      adapter = agent_service.adapter
+      captured = build_credentials_from_files(auth_files, adapter)
+      return nil if captured.blank?
+
+      # Reconcile the scrape against what's already stored for this kind. Default is a
+      # full replace; a layering kind (e.g. design) only adds its own block so it never
+      # re-captures the base it seeded into the container.
+      current = AgentCredential.find_by(user_id: session.user_id, agent_type: input[:agent_type])&.config_data
+      config_data = adapter.reconcile_captured_credentials(auth_kind, current, captured)
       return nil if config_data.blank?
 
       AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)

@@ -122,7 +122,7 @@ module ContainerStrategies
         cmd
       end
 
-      runtime.exec(container, [ "sh", "-c", "for i in $(seq 1 30); do tmux capture-pane -t agent -p 2>/dev/null | grep -q '\\$' && break; sleep 0.2; done; tmux send-keys -t agent '#{tmux_cmd}' Enter" ])
+      send_tmux_command(container, tmux_cmd)
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 
@@ -183,9 +183,13 @@ module ContainerStrategies
     def collect_outputs(container, session)
       output_dir = "/workspace/outputs"
 
+      # Recurse: agents organize outputs into subdirs (e.g. outputs/presentation/index.html).
+      # A -maxdepth 1 scan would silently miss all of them. The relative path (not the bare
+      # basename) becomes the asset name so nested files keep their structure and distinct
+      # files that share a basename across subdirs don't collide on the name uniqueness index.
       result = runtime.exec(
         container,
-        [ "/bin/sh", "-c", "find #{output_dir} -maxdepth 1 -type f 2>/dev/null || true" ],
+        [ "/bin/sh", "-c", "find #{output_dir} -type f 2>/dev/null || true" ],
         stdout: true, stderr: true
       )
       return 0 unless result[2].zero?
@@ -197,7 +201,8 @@ module ContainerStrategies
       count = 0
 
       files.each do |file_path|
-        filename = File.basename(file_path)
+        relative = file_path.sub("#{output_dir}/", "")
+        filename = File.basename(relative)
         content = read_file_from_container(container, file_path)
         next if content.blank?
 
@@ -208,7 +213,7 @@ module ContainerStrategies
         tmpfile.define_singleton_method(:original_filename) { filename }
 
         asset = Asset.create!(
-          name: filename, folder: "session-#{session.id}",
+          name: relative, folder: "session-#{session.id}",
           scope_type: scope_type, scope_id: scope_id,
           created_by: session.user, terminal_session: session,
           status: "pending_review"

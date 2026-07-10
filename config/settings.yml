@@ -80,10 +80,27 @@ temporal:
   worker_graceful_shutdown_period: <%= ENV['TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD'] || 900 %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
 
+# At-rest encryption keys. Bare ENV in the base file (no fallbacks): production
+# MUST set these — see config/initializers/required_env.rb, which fails the boot
+# if any is blank. Dev/test fallbacks live in config/settings/{development,test}.yml.
+# The concern derives the real key via HKDF-SHA256 (app/models/concerns/encryptable.rb).
 encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] %>
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] %>
+  oauth_key: <%= ENV['OAUTH_SECRET_KEY'] %>
+
+# Unified OAuth provider client credentials (operator-set once per deployment,
+# multi-tenant via per-owner OauthCredential). Distinct from the `sentry:` DSN
+# block above — these are OAuth app client_id/secret, not error-tracking DSNs.
+# Quoted so YAML keeps client_id values as strings (see the slack comment below).
+sentry_oauth:
+  client_id: "<%= ENV['SENTRY_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['SENTRY_OAUTH_CLIENT_SECRET'] %>"
+
+railway_oauth:
+  client_id: "<%= ENV['RAILWAY_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['RAILWAY_OAUTH_CLIENT_SECRET'] %>"
 
 skills_sh:
   api_key: <%= ENV['SKILLS_SH_API_KEY'] %>

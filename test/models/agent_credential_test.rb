@@ -107,4 +107,132 @@ class AgentCredentialTest < ActiveSupport::TestCase
 
     assert_equal [ { model_id: "fresh" } ], Rails.cache.read(cred.models_cache_key)
   end
+
+  # --- expires_at is derived from the stored token (before_save :sync_expires_at) ---
+
+  # Build a Claude Code config whose OAuth token expires at `time` (epoch-ms, as
+  # Claude stores it). ClaudeCodeAdapter#token_expires_at reads this back as ms.
+  def claude_config(expires_at:)
+    { "claudeAiOauth" => { "accessToken" => "sk-ant-tok", "expiresAt" => (expires_at.to_f * 1000).to_i } }
+  end
+
+  test "expires_at is populated from the token expiry, converting epoch-ms to a Time" do
+    token_exp = 90.minutes.from_now
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: token_exp))
+
+    assert_not_nil cred.expires_at
+    assert_in_delta token_exp.to_i, cred.expires_at.to_i, 2
+  end
+
+  test "from_artifacts populates expires_at from the persisted token" do
+    token_exp = 30.minutes.from_now
+    cred = AgentCredential.from_artifacts(@user.id, "claude_code", claude_config(expires_at: token_exp))
+
+    assert_in_delta token_exp.to_i, cred.reload.expires_at.to_i, 2
+  end
+
+  test "expires_at stays nil when the config carries no token expiry" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: { "primaryApiKey" => "sk-ant" })
+
+    assert_nil cred.expires_at
+  end
+
+  test "codex/cursor credentials keep expires_at nil (adapter reports no expiry)" do
+    codex = create(:agent_credential, user: @user, agent_type: "codex")
+    cursor = create(:agent_credential, user: @user, agent_type: "cursor_cli")
+
+    assert_nil codex.expires_at
+    assert_nil cursor.expires_at
+  end
+
+  test "changing the stored token recomputes expires_at" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.hour.from_now))
+
+    later = 5.hours.from_now
+    cred.update!(config_data: claude_config(expires_at: later))
+
+    assert_in_delta later.to_i, cred.reload.expires_at.to_i, 2
+  end
+
+  test "re-auth to a tokenless config clears a previously-set expires_at" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.hour.from_now))
+    assert_not_nil cred.expires_at
+
+    AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-ant" })
+
+    assert_nil cred.reload.expires_at
+  end
+
+  test "a metadata-only save does not recompute expires_at (guarded on config change)" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.hour.from_now))
+    # Poison the column bypassing callbacks; a stray recompute would reset it to the
+    # token-derived (~1h) value, so the sentinel surviving proves the guard held.
+    sentinel = 99.days.from_now
+    cred.update_column(:expires_at, sentinel)
+
+    cred.update!(metadata: (cred.metadata || {}).merge("default_model" => "claude-opus-4-8"))
+
+    assert_in_delta sentinel.to_i, cred.reload.expires_at.to_i, 2
+  end
+
+  # --- .active becomes meaningful ---
+
+  test "active excludes claude creds whose token already expired and keeps null-expiry creds" do
+    expired = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                        config_data: claude_config(expires_at: 1.hour.ago))
+    null_expiry = create(:agent_credential, user: @user, agent_type: "codex")
+
+    active = AgentCredential.active
+    assert_includes active, null_expiry
+    refute_includes active, expired
+  end
+
+  test "active includes claude creds whose token is still valid" do
+    valid = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                      config_data: claude_config(expires_at: 1.hour.from_now))
+
+    assert_includes AgentCredential.active, valid
+  end
+
+  # --- refreshable / refresh_due scopes (consumed by the token-refresh sweep) ---
+
+  test "refreshable limits to REFRESHABLE_AGENT_TYPES" do
+    claude = create(:agent_credential, user: @user, agent_type: "claude_code")
+    codex = create(:agent_credential, user: @user, agent_type: "codex")
+    cursor = create(:agent_credential, user: @user, agent_type: "cursor_cli")
+    gemini = create(:agent_credential, user: @user, agent_type: "gemini_cli")
+
+    refreshable = AgentCredential.refreshable
+    assert_includes refreshable, claude
+    assert_includes refreshable, codex
+    assert_includes refreshable, cursor
+    refute_includes refreshable, gemini
+  end
+
+  test "refresh_due returns creds expiring within the window, excluding far-future and null-expiry" do
+    other = create(:user, company: @company)
+    due = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                    config_data: claude_config(expires_at: 5.minutes.from_now))
+    far = create(:agent_credential, user: other, agent_type: "claude_code",
+                                    config_data: claude_config(expires_at: 1.hour.from_now))
+    null_expiry = create(:agent_credential, user: @user, agent_type: "codex")
+
+    due_now = AgentCredential.refresh_due
+    assert_includes due_now, due
+    refute_includes due_now, far
+    refute_includes due_now, null_expiry
+  end
+
+  test "refresh_due honors a custom window argument" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 45.minutes.from_now))
+
+    refute_includes AgentCredential.refresh_due, cred            # outside default 15m
+    assert_includes AgentCredential.refresh_due(1.hour), cred    # inside a 1h window
+  end
 end
