@@ -18,6 +18,7 @@ class Asset < ApplicationRecord
                      allow_blank: true
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
+  scope :publicly_shared, -> { where(public: true).where.not(public_token: nil) }
   scope :deleted, -> { where.not(deleted_at: nil) }
   scope :pending_review, -> { where(status: "pending_review") }
   scope :dismissed, -> { where(status: "dismissed") }
@@ -66,6 +67,29 @@ class Asset < ApplicationRecord
       versions.find_by!(version: version_number)
     else
       latest_version or raise ActiveRecord::RecordNotFound, "No versions for asset"
+    end
+  end
+
+  # Makes the asset publicly reachable via a stable share link. The token lives
+  # on the asset (not a version), so the link never changes as new versions are
+  # added. Idempotent: an already-shared asset keeps its existing token.
+  def share!
+    update!(public: true, public_token: public_token.presence || self.class.generate_public_token)
+    public_token
+  end
+
+  def unshare!
+    update!(public: false)
+  end
+
+  def shared?
+    public? && public_token.present?
+  end
+
+  def self.generate_public_token
+    loop do
+      token = SecureRandom.urlsafe_base64(24)
+      break token unless exists?(public_token: token)
     end
   end
 
