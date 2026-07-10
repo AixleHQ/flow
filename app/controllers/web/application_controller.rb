@@ -14,8 +14,16 @@ class Web::ApplicationController < ApplicationController
       settings: {
         env: Rails.env,
         domain: Settings.domain,
-        github_app_slug: Settings.github.app_slug,
-        app_version: Settings.app.version
+        # Only exposed to signed-in users (F8) — nil for anonymous visitors so it
+        # no longer ships in the /login data-page. Low sensitivity (a GitHub App
+        # slug is public in its install URL), just not anonymous-facing.
+        github_app_slug: signed_in? ? Settings.github.app_slug : nil,
+        app_version: Settings.app.version,
+        # Public by design (a browser Sentry DSN is write-only ingest for one
+        # project and must ship to the client anyway). Kept in props — not baked
+        # at build — so it stays runtime-configurable via ENV. Real abuse defense
+        # is Sentry-side allowed-domains + spike protection, not hiding the DSN.
+        sentry_frontend_dsn: Settings.sentry.frontend_dsn
       }
     }
 

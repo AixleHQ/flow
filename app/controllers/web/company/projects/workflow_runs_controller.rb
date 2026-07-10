@@ -97,13 +97,25 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def workflow_run_params
     permitted = params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, :requested_model, input_asset_ids: [], repository_ids: [])
-    # Validate step_overrides keys are integers rather than using to_unsafe_h which bypasses strong params
-    raw = params[:workflow_run][:step_overrides]
-    permitted[:step_overrides] = if raw.respond_to?(:to_unsafe_h)
-      raw.to_unsafe_h.select { |k, _| k.to_s.match?(/\A\d+\z/) }
-    else
-      {}
-    end
+    permitted[:step_overrides] = normalized_step_overrides(params[:workflow_run][:step_overrides])
     permitted
+  end
+
+  # step_overrides is a free-form JSONB map {step_id => override}. Build an
+  # explicit schema instead of passing to_unsafe_h through: keys must be integer
+  # step IDs, and `auto_run` is the ONLY field the engine ever reads from an
+  # override (workflow_run#step_auto_run?, WorkflowService#validate_mode!,
+  # PrepareStepListActivity). Anything else is dropped so no unfiltered value
+  # reaches the workflow engine (F16).
+  def normalized_step_overrides(raw)
+    return {} unless raw.respond_to?(:to_unsafe_h)
+
+    raw.to_unsafe_h.each_with_object({}) do |(step_id, override), acc|
+      next unless step_id.to_s.match?(/\A\d+\z/) && override.is_a?(Hash)
+
+      clean = {}
+      clean["auto_run"] = ActiveModel::Type::Boolean.new.cast(override["auto_run"]) if override.key?("auto_run")
+      acc[step_id.to_s] = clean
+    end
   end
 end

@@ -14,12 +14,9 @@ class AssetUploader < Shrine
     "https://assets.example.com/#{id}"
   end
 
+  # General-purpose assets — no MIME allowlist (served only from the isolated S3
+  # bucket origin, never rendered on the app origin).
   Attacher.validate do
     validate_max_size 100 * 1024 * 1024
-    validate_mime_type %w[
-      image/jpeg image/png image/gif image/webp image/svg+xml
-      application/pdf text/plain text/csv
-      application/zip application/json
-    ]
   end
 end

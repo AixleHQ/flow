@@ -8,13 +8,11 @@ class ToolFileUploader < Shrine
   plugin :cached_attachment_data
   plugin :validation_helpers
 
+  # Tool files are arbitrary code/config the tool author uploads — no MIME
+  # allowlist (marcel sniffs .js as text/javascript, .html as text/html, etc.,
+  # which a narrow list wrongly rejected). Not rendered on the app origin.
   Attacher.validate do
     validate_max_size 50 * 1024 * 1024
-    validate_mime_type %w[
-      text/plain application/json text/x-python text/x-ruby
-      application/javascript text/markdown application/octet-stream
-      text/x-sh application/x-sh
-    ]
   end
 
   def generate_location(io, record: nil, name: nil, **)

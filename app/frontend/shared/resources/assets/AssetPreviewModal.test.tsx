@@ -276,10 +276,12 @@ describe('AssetPreviewModal', () => {
     fetchSpy.mockRestore();
   });
 
-  it('renders fetched inline SVG markup for svg assets', async () => {
+  it('renders svg via <img> and never injects the fetched markup inline (XSS-safe)', async () => {
+    // Spy resolves content, but svg must NOT fetch it — an inline injection of
+    // attacker SVG would execute script on the app origin (stored XSS).
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      text: () => Promise.resolve('<svg><title>inline-vector-art</title></svg>'),
+      text: () => Promise.resolve('<svg><script>alert(1)</script></svg>'),
     } as Response);
 
     const asset = makeAsset({
@@ -297,39 +299,14 @@ describe('AssetPreviewModal', () => {
 
     const { container } = renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/svg" />);
 
-    await waitFor(() => expect(container.querySelector('svg title')).not.toBeNull());
-    expect(container.querySelector('svg title')?.textContent).toBe('inline-vector-art');
-
-    fetchSpy.mockRestore();
-  });
-
-  it('falls back to an <img> for svg assets when inline fetch yields no content', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: false,
-      text: () => Promise.resolve(''),
-    } as Response);
-
-    const asset = makeAsset({
-      name: 'vector.svg',
-      latestVersion: {
-        id: 28,
-        version: 1,
-        contentType: 'image/svg+xml',
-        fileSize: 200,
-        source: null,
-        fileUrl: 'https://files.example/vector.svg',
-        createdAt: null,
-      },
-    });
-
-    renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/svg" />);
-
+    // Rendered via <img> pointing at the isolated cross-origin file URL...
     await waitFor(() =>
-      expect(screen.getByRole('img', { name: 'vector.svg' })).toHaveAttribute(
-        'src',
-        'https://files.example/vector.svg',
-      ),
+      expect(screen.getByRole('img', { name: 'logo.svg' })).toHaveAttribute('src', 'https://files.example/logo.svg'),
     );
+    // ...the SVG bytes are never fetched (so cannot be injected into the app DOM),
+    // and the attacker's <script> payload is nowhere in the rendered markup.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(container.querySelector('script')).toBeNull();
 
     fetchSpy.mockRestore();
   });

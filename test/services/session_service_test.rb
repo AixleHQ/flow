@@ -59,6 +59,74 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal "Run tests", session.initial_prompt
   end
 
+  test "create_and_start records auth_kind in the session metadata (design-login)" do
+    mock_temporal_start
+
+    session = SessionService.create_and_start(
+      user: @user, session_type: "auth_setup", agent_type: "claude_code",
+      params: { auth_kind: "design", mode: "interactive" }
+    )
+
+    assert session.persisted?
+    assert_equal "design", session.metadata["auth_kind"]
+  end
+
+  # == create_and_start: OAuth session-start preflight (§4.6) ==
+
+  test "create_and_start blocks launch when an OAuth MCP server has no usable credential" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+
+    error = assert_raises(Oauth::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+      )
+    end
+
+    assert_equal 1, error.connections.size
+    assert_equal server.id, error.connections.first[:mcp_server_id]
+    assert_equal 0, @user.terminal_sessions.count, "must not create a session it can't launch"
+  end
+
+  test "create_and_start launches when the OAuth MCP server is connected for the user" do
+    mock_temporal_start
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test", authorization_endpoint: "https://provider.test/a",
+      token_endpoint: "https://provider.test/t", client_id: "c1", source: "static"
+    )
+    OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server, provider: "mcp:x",
+                            status: :active, access_token: "tok", expires_at: 1.hour.from_now)
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+    )
+
+    assert session.persisted?
+    assert_includes session.mcp_server_ids, server.id
+  end
+
+  test "create_and_start blocks launch when a selected MCP server URL is unsafe at launch time (F34)" do
+    # Server was valid at creation; simulate its URL becoming unsafe since then
+    # (DNS rebinding / edited row) by saving past validation, then failing the
+    # launch-time re-check.
+    server = build(:mcp_server, :custom, scope: @project, transport: :sse, url: "https://mcp.example.com")
+    server.save!(validate: false)
+    UrlSafetyValidator.stubs(:errors_for).returns([ "cannot point to private or internal network addresses" ])
+
+    error = assert_raises(SessionService::UnsafeMcpUrlError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+      )
+    end
+    assert_match(/#{Regexp.escape(server.name)}/, error.message)
+    assert_nil @user.terminal_sessions.last, "session must not be created when a selected MCP URL is unsafe"
+  end
+
   # == finish ==
 
   test "finish transitions session to finishing and sends container_finished signal" do

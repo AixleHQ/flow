@@ -3,7 +3,9 @@
 class Web::OnboardingController < Web::ApplicationController
   layout "inertia"
 
-  ALLOWED_ONBOARDING_EVENTS = %w[go_next complete].freeze
+  # go_previous is required — the onboarding UI's Back button submits it
+  # (OnboardingPage.tsx). Omitting it silently no-ops the Back button.
+  ALLOWED_ONBOARDING_EVENTS = %w[go_next go_previous complete].freeze
 
   skip_before_action :enforce_onboarding
   before_action :require_auth

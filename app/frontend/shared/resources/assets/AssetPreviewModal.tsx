@@ -156,7 +156,7 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewM
       return;
     }
 
-    const needsTextFetch = previewType === 'text' || previewType === 'markdown' || previewType === 'svg';
+    const needsTextFetch = previewType === 'text' || previewType === 'markdown';
     if (!needsTextFetch) {
       setTextContent(null);
       return;
@@ -207,17 +207,10 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewM
         );
 
       case 'svg':
-        if (textLoading) return <PreviewLoader />;
-        if (textContent) {
-          return (
-            <Center>
-              <Box
-                dangerouslySetInnerHTML={{ __html: textContent }}
-                style={{ maxWidth: '100%', maxHeight: '70vh', overflow: 'auto' }}
-              />
-            </Center>
-          );
-        }
+        // Render via <img> only. Browsers load SVG in <img> in "secure static
+        // mode" — no script execution, no external refs. NEVER inject fetched
+        // SVG via dangerouslySetInnerHTML: that runs on the app origin
+        // (flow.aixle.com, which holds the session cookie) = stored XSS.
         return (
           <Center>
             <img src={fileUrl} alt={asset.name} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />

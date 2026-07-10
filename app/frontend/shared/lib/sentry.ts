@@ -3,10 +3,10 @@ import * as Sentry from '@sentry/react';
 import type { SharedSettings } from 'shared/ui/types';
 
 export const initSentry = (settings: SharedSettings): void => {
-  const { env, appVersion, domain } = settings;
-  // DSN is injected at build time so it is not exposed in the HTML source.
-  // Set VITE_SENTRY_FRONTEND_DSN in CI/CD build env vars.
-  const dsn = import.meta.env.VITE_SENTRY_FRONTEND_DSN as string | undefined;
+  const { env, appVersion, domain, sentryFrontendDsn } = settings;
+  // A browser Sentry DSN is public by design (write-only ingest for one project),
+  // so it rides in shared props — runtime-configurable via ENV, no rebuild needed.
+  const dsn = sentryFrontendDsn ?? undefined;
 
   if (!dsn || env === 'development') return;
 

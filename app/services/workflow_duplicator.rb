@@ -68,7 +68,9 @@ class WorkflowDuplicator
 
   def available_name
     base = @name.presence || @source.name
-    existing = @target_scope.workflows.active.where("workflows.name LIKE ?", "#{base}%").pluck(:name)
+    # sanitize_sql_like escapes %, _ and \ in the user-controlled name so a
+    # workflow named e.g. "a%" can't turn the prefix probe into a wildcard match.
+    existing = @target_scope.workflows.active.where("workflows.name LIKE ?", "#{Workflow.sanitize_sql_like(base)}%").pluck(:name)
     return base unless existing.include?(base)
 
     counter = 1

@@ -1,14 +1,31 @@
 # frozen_string_literal: true
 
 class SessionService
+  # Raised at session-start when a selected custom MCP server's URL fails a
+  # safety re-check (F34): the URL is validated at create/update, but DNS or the
+  # stored value may have changed since, so we re-check before dialing.
+  class UnsafeMcpUrlError < StandardError; end
+
   class << self
     def create_and_start(user:, project: nil, session_type:, agent_type: nil, configured_agent: nil, params: {})
+      # Session-start preflight (oauth-unification §4.6): block the launch with a
+      # "Connect …" CTA when a selected OAuth MCP server has no usable credential for
+      # this user, instead of starting a session that fails silently at provisioning.
+      preflight_oauth!(user, params[:mcp_server_ids])
+      preflight_url_safety!(params[:mcp_server_ids])
+
+      # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
+      # /design-login variant (inject the base credential, watch designOauth.accessToken).
+      metadata = (params[:metadata] || {}).to_h
+      metadata["auth_kind"] = params[:auth_kind] if params[:auth_kind].present?
+
       session = user.terminal_sessions.build(
         project: project,
         session_type: session_type,
         agent_type: agent_type,
         configured_agent: configured_agent,
-        **params.slice(:mode, :initial_prompt, :requested_model, :metadata, :session_config,
+        metadata: metadata.presence,
+        **params.slice(:mode, :initial_prompt, :requested_model, :session_config,
                        :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids)
       )
 
@@ -82,6 +99,35 @@ class SessionService
     end
 
     private
+
+    # Raises Oauth::PreflightError (rescued by the API controller) when any selected
+    # OAuth MCP server lacks a usable credential for `user`. Interactive launches
+    # only — workflow-step sessions (create_for_workflow_step) are automated and have
+    # no interactive user to show a Connect CTA to.
+    def preflight_oauth!(user, mcp_server_ids)
+      return if mcp_server_ids.blank?
+
+      servers = MCPServer.where(id: mcp_server_ids, enabled: true)
+      missing = Oauth::Preflight.missing_connections(servers, user: user)
+      raise Oauth::PreflightError, missing if missing.any?
+    end
+
+    # Re-validate selected custom MCP server URLs right before launch (F34). The
+    # model validates at create/update, but DNS (rebinding) or the stored value
+    # may have changed since — a host that now resolves to a private/internal IP
+    # must not be dialed. Cheap: url_safety uses local resolvers only.
+    def preflight_url_safety!(mcp_server_ids)
+      return if mcp_server_ids.blank?
+
+      unsafe = MCPServer.where(id: mcp_server_ids, enabled: true).custom_servers.filter_map do |server|
+        next if server.url.blank?
+
+        errors = UrlSafetyValidator.errors_for(server.url, require_https: server.auth_type_oauth?)
+        "#{server.name} (#{errors.to_sentence})" if errors.any?
+      end
+
+      raise UnsafeMcpUrlError, "MCP server URL failed a safety check at launch: #{unsafe.join('; ')}" if unsafe.any?
+    end
 
     def start_temporal_workflow(session)
       result = TemporalService.start_workflow(

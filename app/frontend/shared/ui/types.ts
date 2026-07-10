@@ -13,6 +13,7 @@ export interface AgentCredential {
   defaultModel: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
+  connectionStatus: 'active' | 'expiring' | 'expired';
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +57,7 @@ export interface SharedSettings {
   domain: string;
   githubAppSlug: string | null;
   appVersion: string | null;
+  sentryFrontendDsn: string | null;
 }
 
 export interface SharedPermissions {

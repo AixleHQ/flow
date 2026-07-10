@@ -37,6 +37,7 @@ export const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): Sh
   domain: 'localhost',
   githubAppSlug: null,
   appVersion: 'test',
+  sentryFrontendDsn: null,
   ...overrides,
 });
 
