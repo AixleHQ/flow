@@ -118,7 +118,11 @@ class ConfigItem < ApplicationRecord
     return nil if cipher_text.blank?
 
     encryptor.decrypt_and_verify(cipher_text)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature
+  # AES-GCM raises InvalidMessage on a wrong/rotated key; InvalidSignature is the
+  # CBC-era name. Rescue both so an un-recrypted row degrades to nil instead of
+  # 500ing during the key-migration window (mirrors the other Encryptable models).
+  rescue ActiveSupport::MessageVerifier::InvalidSignature,
+         ActiveSupport::MessageEncryptor::InvalidMessage
     nil
   end
 

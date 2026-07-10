@@ -9,6 +9,7 @@ if Rails.env.production?
     CREDENTIALS_SECRET_KEY
     CONFIG_ITEMS_SECRET_KEY
     INTEGRATIONS_SECRET_KEY
+    OAUTH_SECRET_KEY
   ].each do |var|
     raise "Required environment variable #{var} is not set" if ENV[var].blank?
   end
