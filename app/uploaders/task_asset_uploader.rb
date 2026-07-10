@@ -8,6 +8,9 @@ class TaskAssetUploader < Shrine
   plugin :cached_attachment_data
   plugin :validation_helpers
 
+  # General-purpose user attachments (docs, office files, video, …) — no MIME
+  # allowlist. Assets are only downloaded/opened from the isolated S3 bucket
+  # origin, never rendered on the app origin, so type is not an XSS vector here.
   Attacher.validate do
     validate_max_size 1024 * 1024 * 1024, message: "is too large (max is 1 GB)"
   end

@@ -109,6 +109,24 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_includes session.mcp_server_ids, server.id
   end
 
+  test "create_and_start blocks launch when a selected MCP server URL is unsafe at launch time (F34)" do
+    # Server was valid at creation; simulate its URL becoming unsafe since then
+    # (DNS rebinding / edited row) by saving past validation, then failing the
+    # launch-time re-check.
+    server = build(:mcp_server, :custom, scope: @project, transport: :sse, url: "https://mcp.example.com")
+    server.save!(validate: false)
+    UrlSafetyValidator.stubs(:errors_for).returns([ "cannot point to private or internal network addresses" ])
+
+    error = assert_raises(SessionService::UnsafeMcpUrlError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+      )
+    end
+    assert_match(/#{Regexp.escape(server.name)}/, error.message)
+    assert_nil @user.terminal_sessions.last, "session must not be created when a selected MCP URL is unsafe"
+  end
+
   # == finish ==
 
   test "finish transitions session to finishing and sends container_finished signal" do

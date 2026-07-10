@@ -6,7 +6,7 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 
 export default defineConfig({
   build: {
-    sourcemap: 'hidden',
+    sourcemap: false,
   },
   plugins: [ViteRuby(), tsconfigPaths(), reactSwc(), inertia()],
   resolve: {

@@ -19,7 +19,6 @@ module Activities
       READY_STALE_THRESHOLD = 25.hours
       FINISHING_STALE_THRESHOLD = 10.minutes
 
-
       def run(_input = nil)
         cleaned_running = cleanup_stale(:running, RUNNING_STALE_THRESHOLD)
         cleaned_ready = cleanup_stale(:ready, READY_STALE_THRESHOLD)

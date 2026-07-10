@@ -3,6 +3,10 @@
 class Web::OnboardingController < Web::ApplicationController
   layout "inertia"
 
+  # go_previous is required — the onboarding UI's Back button submits it
+  # (OnboardingPage.tsx). Omitting it silently no-ops the Back button.
+  ALLOWED_ONBOARDING_EVENTS = %w[go_next go_previous complete].freeze
+
   skip_before_action :enforce_onboarding
   before_action :require_auth
 
@@ -21,10 +25,13 @@ class Web::OnboardingController < Web::ApplicationController
   end
 
   def update
-    if current_user.update(onboarding_params)
-      redirect_to onboarding_path
-    else
-      redirect_to onboarding_path, alert: current_user.errors.full_messages.join(", ")
+    # with_lock prevents concurrent requests from double-advancing the onboarding state
+    current_user.with_lock do
+      if current_user.update(onboarding_params)
+        redirect_to onboarding_path
+      else
+        redirect_to onboarding_path, alert: current_user.errors.full_messages.join(", ")
+      end
     end
   end
 
@@ -35,10 +42,13 @@ class Web::OnboardingController < Web::ApplicationController
   end
 
   def onboarding_params
-    params.require(:onboarding).permit(
+    permitted = params.require(:onboarding).permit(
       :position, :preferred_agent_language,
-      :onboarding_state_event,
       selected_agents: []
     )
+    # Only allow forward-direction events to prevent state reversal via rapid transitions
+    event = params.dig(:onboarding, :onboarding_state_event)
+    permitted[:onboarding_state_event] = event if event.present? && ALLOWED_ONBOARDING_EVENTS.include?(event)
+    permitted
   end
 end

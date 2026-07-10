@@ -79,8 +79,11 @@ class AgentCredential < ApplicationRecord
 
     decrypted = encryptor.decrypt_and_verify(encrypted_config_data)
     JSON.parse(decrypted)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature, JSON::ParserError, TypeError
-    # Fallback: try reading as plain JSON (for existing unencrypted data)
+  rescue ActiveSupport::MessageVerifier::InvalidSignature,
+         ActiveSupport::MessageEncryptor::InvalidMessage, JSON::ParserError, TypeError
+    # Fallback: try reading as plain JSON (for existing unencrypted data).
+    # InvalidMessage (AES-GCM wrong/rotated key) is rescued too so an un-recrypted
+    # row degrades gracefully instead of 500ing during the key-migration window.
     JSON.parse(encrypted_config_data) rescue {}
   end
 

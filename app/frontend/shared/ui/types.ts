@@ -56,8 +56,8 @@ export interface SharedSettings {
   env: string;
   domain: string;
   githubAppSlug: string | null;
-  sentryFrontendDsn: string | null;
   appVersion: string | null;
+  sentryFrontendDsn: string | null;
 }
 
 export interface SharedPermissions {

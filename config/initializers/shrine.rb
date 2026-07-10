@@ -48,6 +48,8 @@ def other_setup
     type     = request.params["type"]
 
     {
+      # Inline is safe — assets live on an isolated S3 bucket origin, not an app
+      # subdomain (see assets_controller#presign / F32 accepted as low-risk).
       content_disposition: ContentDisposition.inline(filename),
       content_type: type,
       content_length_range: 0..(1024 * 1024 * 1024)

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+# Drop from root to the unprivileged app user (L-22). When bundle_cache/app_home
+# are Docker volumes they are root-owned on first mount — fix that before switching.
+# Only chown -R once (checked via top-level ownership): app_home accumulates a
+# large corepack/yarn cache, and re-walking it on every container start is slow.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /bundle_cache /home/app
+  for dir in /bundle_cache /home/app; do
+    [ "$(stat -c '%U' "$dir" 2>/dev/null)" = "app" ] || chown -R app:app "$dir" 2>/dev/null || true
+  done
+  # Worker bind-mounts the host Docker socket for container lifecycle
+  # management (docker-api gem); it's root:root 660 on the host side, so the
+  # unprivileged app user (L-22) can't connect to it unless we grant its
+  # group access. No-op when the socket isn't mounted (e.g. the web image).
+  if [ -S /var/run/docker.sock ]; then
+    chgrp app /var/run/docker.sock 2>/dev/null || true
+    chmod g+rw /var/run/docker.sock 2>/dev/null || true
+  fi
+  corepack install 2>/dev/null || true
+  exec su-exec app "$@"
+fi
+
+exec "$@"

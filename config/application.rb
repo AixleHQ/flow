@@ -19,6 +19,12 @@ module Aixle
     config.secret_key_base = Settings.rails.secret_key_base
     config.public_file_server.enabled = true
 
+    config.middleware.use Rack::Attack
+
+    # Drop the X-Runtime header — it exposes per-request server processing time
+    # (a timing side-channel / fingerprinting aid) for no operational benefit (F4).
+    config.middleware.delete Rack::Runtime
+
     # Set Sidekiq as the job processor
     # config.active_job.queue_adapter = :sidekiq
 

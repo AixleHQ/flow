@@ -118,4 +118,20 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_response :redirect
     assert_equal({ "1" => { "auto_run" => true } }, WorkflowRun.last.step_overrides)
   end
+
+  test "create keeps only auto_run in a step override and drops unknown value fields (F16)" do
+    create(:step, workflow: @workflow, position: 1, allow_non_interactive: true)
+    mock_workflow_execution_start
+
+    post company_project_workflow_runs_path(@project), params: {
+      workflow_run: {
+        workflow_id: @workflow.id,
+        mode: "mixed",
+        step_overrides: { "1" => { "auto_run" => true, "requested_model" => "sneaky", "evil" => { "x" => 1 } } }
+      }
+    }, as: :json
+
+    assert_response :redirect
+    assert_equal({ "1" => { "auto_run" => true } }, WorkflowRun.last.step_overrides)
+  end
 end

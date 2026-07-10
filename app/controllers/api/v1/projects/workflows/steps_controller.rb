@@ -37,7 +37,8 @@ module Api
 
           # @summary Reorder steps within a project workflow
           def reorder
-            positions = params.require(:positions).to_unsafe_h
+            step_ids = current_workflow.steps.not_deleted.pluck(:id).map(&:to_s)
+            positions = params.require(:positions).permit(*step_ids).to_h
             positions = positions.select { |k, v| k.match?(/\A\d+\z/) && v.to_s.match?(/\A\d+\z/) }
 
             ActiveRecord::Base.transaction do

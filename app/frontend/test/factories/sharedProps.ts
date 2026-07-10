@@ -36,8 +36,8 @@ export const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): Sh
   env: 'test',
   domain: 'localhost',
   githubAppSlug: null,
-  sentryFrontendDsn: null,
   appVersion: 'test',
+  sentryFrontendDsn: null,
   ...overrides,
 });
 

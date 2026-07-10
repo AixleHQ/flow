@@ -45,7 +45,9 @@ class Web::Company::MembersController < Web::Company::ApplicationController
 
   private
 
-  ALLOWED_ROLES = User.role.values.freeze
+  # super_admin cannot be granted by company admins — only seeded or promoted
+  # by a super_admin in the admin panel.
+  ALLOWED_ROLES = (User.role.values - [ "super_admin" ]).freeze
   ALLOWED_STATE_EVENTS = %w[activate suspend archive].freeze
 
   def create_params

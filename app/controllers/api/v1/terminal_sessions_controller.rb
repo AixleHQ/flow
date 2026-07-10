@@ -32,6 +32,9 @@ module Api
         # Session-start preflight (§4.6): block launch with a "Connect …" CTA rather
         # than starting a session doomed to fail during provisioning.
         render json: { error: e.message, reauth_required: e.connections }, status: :unprocessable_entity
+      rescue SessionService::UnsafeMcpUrlError => e
+        # F34: a selected MCP server's URL failed the launch-time safety re-check.
+        render json: { error: e.message }, status: :unprocessable_entity
       end
 
       def destroy

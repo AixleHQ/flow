@@ -52,9 +52,6 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     if run.persisted?
       redirect_to company_project_workflow_run_path(current_project, run)
     else
-      # WorkflowService.start returns an unsaved run when validation/start fails;
-      # redirecting to its (nil-id) path raised UrlGenerationError
-      # (Sentry PALAD-AI-RAILS-1W). Surface the errors and return to the launch page.
       redirect_back(
         fallback_location: company_project_workflow_runs_path(current_project),
         inertia: { errors: run.errors },
@@ -100,7 +97,25 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def workflow_run_params
     permitted = params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, :requested_model, input_asset_ids: [], repository_ids: [])
-    permitted[:step_overrides] = params[:workflow_run][:step_overrides]&.to_unsafe_h || {}
+    permitted[:step_overrides] = normalized_step_overrides(params[:workflow_run][:step_overrides])
     permitted
+  end
+
+  # step_overrides is a free-form JSONB map {step_id => override}. Build an
+  # explicit schema instead of passing to_unsafe_h through: keys must be integer
+  # step IDs, and `auto_run` is the ONLY field the engine ever reads from an
+  # override (workflow_run#step_auto_run?, WorkflowService#validate_mode!,
+  # PrepareStepListActivity). Anything else is dropped so no unfiltered value
+  # reaches the workflow engine (F16).
+  def normalized_step_overrides(raw)
+    return {} unless raw.respond_to?(:to_unsafe_h)
+
+    raw.to_unsafe_h.each_with_object({}) do |(step_id, override), acc|
+      next unless step_id.to_s.match?(/\A\d+\z/) && override.is_a?(Hash)
+
+      clean = {}
+      clean["auto_run"] = ActiveModel::Type::Boolean.new.cast(override["auto_run"]) if override.key?("auto_run")
+      acc[step_id.to_s] = clean
+    end
   end
 end

@@ -25,17 +25,23 @@ const GoogleIcon = () => (
   </svg>
 );
 
+function getCsrfToken(): string {
+  return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
 export const GoogleLoginButton = (props: Omit<ButtonProps, 'component'>) => (
-  <Button
-    component="a"
-    href={GOOGLE_AUTH_PATH}
-    variant="default"
-    fullWidth
-    size="lg"
-    leftSection={<GoogleIcon />}
-    classNames={{ root: classes.googleButton }}
-    {...props}
-  >
-    Sign in with Google
-  </Button>
+  <form method="post" action={GOOGLE_AUTH_PATH}>
+    <input type="hidden" name="authenticity_token" value={getCsrfToken()} />
+    <Button
+      type="submit"
+      variant="default"
+      fullWidth
+      size="lg"
+      leftSection={<GoogleIcon />}
+      classNames={{ root: classes.googleButton }}
+      {...props}
+    >
+      Sign in with Google
+    </Button>
+  </form>
 );

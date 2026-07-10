@@ -118,21 +118,38 @@ module UrlSafetyValidator
     ip.private? || ip.loopback? || ip.link_local? || ip.to_i.zero?
   end
 
-  # Resolve `host` EXACTLY as Net::HTTP will at connect time (libc getaddrinfo)
-  # and reject if ANY resulting address is blocked. This closes the SSRF gap
-  # where IPAddr/Resolv miss packed-numeric hosts (e.g. "2852039166" =>
-  # 169.254.169.254) that glibc's getaddrinfo happily connects to. An
-  # unresolvable host yields [] (not blocked — the connection would fail anyway).
+  # Reject the host if ANY address it resolves to is blocked, using two LOCAL
+  # resolvers:
+  #   1. Addrinfo.getaddrinfo — the SAME libc/glibc resolver Net::HTTP dials at
+  #      connect time, so packed/decimal-numeric hosts (e.g. "2852039166" =>
+  #      169.254.169.254) that IPAddr/Resolv miss are still caught.
+  #   2. Resolv.getaddresses — the system resolver.
+  # We deliberately do NOT consult public DNS (resolve_public_ipv4) here: this
+  # runs on every URL validation AND every redirect hop in OAuth discovery, and a
+  # public-DNS round-trip (multi-second timeouts) on each call stalls hot paths —
+  # badly so in a cluster where egress :53 is firewalled. DNS rebinding is
+  # defended at connect time instead, by pinning the resolved IP in the HTTP
+  # clients (resolve_public_ipv4 / pin_public_ip!). An unresolvable host yields []
+  # (not blocked — the connection would fail anyway).
   def resolves_to_blocked?(host)
-    resolve_addresses(host).any? { |ip| blocked_ip?(ip) }
+    resolved_addresses(host).any? { |ip| blocked_ip?(ip) }
   end
 
-  def resolve_addresses(host)
-    Addrinfo.getaddrinfo(host, nil, nil, :STREAM).filter_map do |info|
-      IPAddr.new(info.ip_address.split("%").first)
-    rescue IPAddr::InvalidAddressError
-      nil
-    end
+  # Union of the two LOCAL resolution sources as IPAddr objects (deduped). Each
+  # source is best-effort: a failing resolver contributes nothing, never raises.
+  def resolved_addresses(host)
+    strings = getaddrinfo_addresses(host) + system_resolver_addresses(host)
+    strings.compact.uniq.filter_map { |addr| ip_or_nil(addr) }
+  end
+
+  def getaddrinfo_addresses(host)
+    Addrinfo.getaddrinfo(host, nil, nil, :STREAM).map { |info| info.ip_address.split("%").first }
+  rescue StandardError
+    []
+  end
+
+  def system_resolver_addresses(host)
+    Array(Resolv.getaddresses(host))
   rescue StandardError
     []
   end

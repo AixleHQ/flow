@@ -1,7 +1,21 @@
 x-web-volumes: &web-volumes
   - .:/app:cached
-  - ~/.bash_history:/root/.bash_history
+  - ~/.bash_history:/home/app/.bash_history
   - bundle_cache:/bundle_cache
+  # Non-root app user's $HOME (L-22). Without this, corepack/yarn's global
+  # cache lives in the container's writable layer, which `docker compose run`
+  # throws away every invocation — yarn re-fetches every package each time
+  # a one-off container starts (e.g. `dcr web bash`).
+  - app_home:/home/app
+  - ./docker/remote/db_dumps:/db_dumps:cached
+
+# Worker needs Docker socket access for container lifecycle management (docker-api gem).
+# Web does not — it uses kubeclient for k8s in production.
+x-worker-volumes: &worker-volumes
+  - .:/app:cached
+  - ~/.bash_history:/home/app/.bash_history
+  - bundle_cache:/bundle_cache
+  - app_home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
 
@@ -19,6 +33,7 @@ x-web-environment: &web-environment
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   RAILS_LOG_TO_STDOUT: 'true'
   PORT: 4000
   REDIS_URL: redis://redis:6379/1
@@ -106,7 +121,7 @@ services:
 
   worker:
     image: web
-    volumes: *web-volumes
+    volumes: *worker-volumes
     environment:
       <<: *web-environment
       TEMPORAL_ENABLED: 'true'
@@ -208,6 +223,7 @@ services:
 
 volumes:
   bundle_cache:
+  app_home:
   pg_data:
   redis_data:
 

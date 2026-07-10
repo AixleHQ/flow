@@ -9,3 +9,10 @@ archive_extractor:
 
 authorization:
   otp_enabled: false
+
+# Safe non-production defaults — production requires real env vars (required_env.rb).
+encryption:
+  credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || 'test secret key' %>
+  config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || 'config items test key' %>
+  integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || 'integrations test key' %>
+  oauth_key: <%= ENV['OAUTH_SECRET_KEY'] || 'oauth test key' %>

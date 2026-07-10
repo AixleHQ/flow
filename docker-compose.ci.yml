@@ -25,6 +25,7 @@ services:
       RAILS_ENV: test
       RAILS_LOG_TO_STDOUT: "true"
       RAILS_SECRET_KEY_BASE: secret
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
 
   db:
     # Pulled from Google's Docker Hub mirror to avoid Docker Hub's anonymous

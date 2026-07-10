@@ -1,12 +1,32 @@
 #!/usr/bin/env bash
 set -e
 
+# docker-compose overrides the image ENTRYPOINT with this script. Mirror
+# bin/run-as-app so bundle_cache/app_home stay writable under the non-root
+# app user (app_home holds corepack/yarn's global cache — see docker-compose.yml).
+# Only chown -R once (checked via top-level ownership): app_home accumulates a
+# large corepack/yarn cache, and re-walking it on every container start is slow.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /bundle_cache /home/app
+  for dir in /bundle_cache /home/app; do
+    [ "$(stat -c '%U' "$dir" 2>/dev/null)" = "app" ] || chown -R app:app "$dir" 2>/dev/null || true
+  done
+  # See bin/run-as-app: grant the app user access to the host Docker socket
+  # when it's mounted (root:root 660 on the host side). No-op otherwise.
+  if [ -S /var/run/docker.sock ]; then
+    chgrp app /var/run/docker.sock 2>/dev/null || true
+    chmod g+rw /var/run/docker.sock 2>/dev/null || true
+  fi
+  exec su-exec app:app "$0" "$@"
+fi
+
 if [ -z "${LD_PRELOAD+x}" ]; then
     LD_PRELOAD=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
     export LD_PRELOAD
 fi
 
 bundle check || bundle install
+corepack install
 yarn install
 bundle exec rails db:prepare
 

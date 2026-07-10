@@ -101,6 +101,10 @@ jobs:
           ARTIFACT_PATH="${{ inputs.artifact-path }}"
           if [ -n "$ARTIFACT_PATH" ]; then
             mkdir -p "$ARTIFACT_PATH"
+            # web runs as the non-root `app` user (L-22), whose uid won't match
+            # the runner's uid that owns this freshly-created host directory.
+            # Ephemeral, single-job runner — world-writable is fine here.
+            chmod 777 "$ARTIFACT_PATH"
             docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
               -v "$GITHUB_WORKSPACE/$ARTIFACT_PATH:/app/$ARTIFACT_PATH" \
               web make ${{ inputs.command }}

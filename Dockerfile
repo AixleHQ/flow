@@ -3,7 +3,7 @@ FROM ruby:4.0.5-alpine
 RUN apk update && \
     apk add --no-cache build-base postgresql-dev tzdata bash git vim curl nodejs npm postgresql-client \
         less vips vips-dev vips-tools gcompat build-base yaml-dev file-dev openssh-client \
-        chromium ttf-freefont font-noto nss freetype harfbuzz
+        chromium ttf-freefont font-noto nss freetype harfbuzz su-exec
 
 # Coder CLI — used by Coder::SshRunner to exec commands on workspaces (N1 / DD-1).
 # Only present in the Rails image; the workflow-step image deliberately does NOT
@@ -51,6 +51,7 @@ RUN yarn install --immutable
 COPY . /app
 
 ENV PATH=/app/bin:/app/node_modules/.bin:$PATH
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 ARG APP_VERSION
 ENV APP_VERSION=${APP_VERSION}
@@ -66,10 +67,17 @@ ENV ASSET_HOST=${ASSET_HOST}
 ENV VITE_RUBY_ASSET_HOST=${ASSET_HOST}
 
 RUN RAILS_SECRET_KEY_BASE=secret \
+    CREDENTIALS_SECRET_KEY=build_placeholder_32bytes_000000 \
+    CONFIG_ITEMS_SECRET_KEY=build_placeholder_32bytes_000000 \
+    INTEGRATIONS_SECRET_KEY=build_placeholder_32bytes_000000 \
+    OAUTH_SECRET_KEY=build_placeholder_32bytes_000000 \
     RAILS_ENV=production \
     AWS_EC2_METADATA_DISABLED=true \
     ASSET_HOST="${ASSET_HOST}" \
     VITE_RUBY_ASSET_HOST="${ASSET_HOST}" \
     rails assets:precompile
 
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /app
+
+ENTRYPOINT ["bin/run-as-app"]
 CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

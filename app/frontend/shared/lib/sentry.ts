@@ -3,7 +3,10 @@ import * as Sentry from '@sentry/react';
 import type { SharedSettings } from 'shared/ui/types';
 
 export const initSentry = (settings: SharedSettings): void => {
-  const { sentryFrontendDsn: dsn, env, appVersion, domain } = settings;
+  const { env, appVersion, domain, sentryFrontendDsn } = settings;
+  // A browser Sentry DSN is public by design (write-only ingest for one project),
+  // so it rides in shared props — runtime-configurable via ENV, no rebuild needed.
+  const dsn = sentryFrontendDsn ?? undefined;
 
   if (!dsn || env === 'development') return;
 

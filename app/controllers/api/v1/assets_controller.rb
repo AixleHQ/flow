@@ -19,6 +19,12 @@ module Api
           uid = "#{SecureRandom.hex(30)}#{extension}"
           presign_data = storage.presign(uid,
             content_type: params[:type],
+            # Inline disposition is safe here: user assets are served from an
+            # isolated S3 bucket origin (palad-assets-prod.s3.amazonaws.com), not
+            # an app subdomain, so an inline HTML/SVG asset's scripts run in that
+            # separate origin with no access to app cookies/session (F32 accepted
+            # as low-risk). Re-add a download/sandbox disposition IF user assets
+            # ever move behind an app subdomain (e.g. static.flow.aixle.com).
             content_disposition: ::ContentDisposition.inline(params[:filename]),
             content_length_range: 0..(1024 * 1024 * 1024)
           )
