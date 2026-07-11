@@ -421,11 +421,11 @@ function TaskCardUI({
         color: 'inherit',
         textDecoration: 'none',
       }}
-      onMouseEnter={(e) => {
+      onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
       }}
-      onMouseLeave={(e) => {
+      onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
         (e.currentTarget as HTMLElement).style.boxShadow = isDragOverlay
           ? 'var(--mantine-shadow-lg)'
           : 'var(--mantine-shadow-xs)';
