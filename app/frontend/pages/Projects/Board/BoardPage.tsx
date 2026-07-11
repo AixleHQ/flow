@@ -327,15 +327,7 @@ function avatarInitials(name: string): string {
 
 // --- TaskCard (no grip handle, legacy style) ---
 
-function SortableTaskCard({
-  task,
-  href,
-  onClick,
-}: {
-  task: Task;
-  href?: string;
-  onClick?: (t: Task) => void;
-}) {
+function SortableTaskCard({ task, href, onClick }: { task: Task; href?: string; onClick?: (t: Task) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
     data: { type: 'task', task },
@@ -385,14 +377,7 @@ function TaskCardUI({
       onClick?.(task);
       return;
     }
-    if (
-      e.defaultPrevented ||
-      e.button !== 0 ||
-      e.metaKey ||
-      e.ctrlKey ||
-      e.shiftKey ||
-      e.altKey
-    ) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
       // Let the browser handle modifier/middle/right clicks natively.
       return;
     }
