@@ -160,6 +160,32 @@ describe('Projects/Board/BoardPage', () => {
     );
   });
 
+  it('renders each task card as a real link pointing to that task', () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    const card = screen.getByText('Wire up authentication').closest('a') as HTMLAnchorElement;
+    expect(card).not.toBeNull();
+    // The whole card is the anchor, and it points at the task detail URL.
+    expect(card).toHaveAttribute('href', '/company/projects/7/board?task=1');
+    // Native drag is disabled so dnd-kit's pointer drag keeps working.
+    expect(card).toHaveAttribute('draggable', 'false');
+  });
+
+  it('leaves modifier-clicks to the browser instead of doing SPA navigation', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    const card = screen.getByText('Wire up authentication').closest('a') as HTMLAnchorElement;
+    // Ctrl/Cmd+click is how the browser opens a link in a new tab: we must NOT
+    // intercept it with a router.get, so native link behavior is preserved. A
+    // single userEvent session is needed so the held Meta key carries into the click.
+    const user = userEvent.setup();
+    await user.keyboard('{Meta>}');
+    await user.click(card);
+    await user.keyboard('{/Meta}');
+
+    expect(router.get).not.toHaveBeenCalled();
+  });
+
   // --- toolbar filters ---
 
   it('filters by task type via the Type select and shows a Clear control', async () => {
