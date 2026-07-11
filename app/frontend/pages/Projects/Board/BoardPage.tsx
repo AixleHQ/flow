@@ -327,7 +327,15 @@ function avatarInitials(name: string): string {
 
 // --- TaskCard (no grip handle, legacy style) ---
 
-function SortableTaskCard({ task, onClick }: { task: Task; onClick?: (t: Task) => void }) {
+function SortableTaskCard({
+  task,
+  href,
+  onClick,
+}: {
+  task: Task;
+  href?: string;
+  onClick?: (t: Task) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
     data: { type: 'task', task },
@@ -346,37 +354,72 @@ function SortableTaskCard({ task, onClick }: { task: Task; onClick?: (t: Task) =
 
   return (
     <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCardUI task={task} onClick={onClick} />
+      <TaskCardUI task={task} href={href} onClick={onClick} />
     </Box>
   );
 }
 
 function TaskCardUI({
   task,
+  href,
   onClick,
   isDragOverlay,
 }: {
   task: Task;
+  href?: string;
   onClick?: (t: Task) => void;
   isDragOverlay?: boolean;
 }) {
   const visibleTags = (task.tags ?? []).slice(0, 3);
   const overflowCount = (task.tags ?? []).length - 3;
 
+  // Render the whole card as a genuine anchor so native browser link gestures
+  // (right-click context menu, Cmd/Ctrl+click and middle-click to open in a new
+  // tab) work. A plain left-click is intercepted below and handed to onClick so
+  // in-app SPA navigation stays exactly as before; modifier/middle/right clicks
+  // are left to the browser. draggable={false} keeps dnd-kit's pointer drag from
+  // being pre-empted by the browser's native link-drag.
+  const isLink = !isDragOverlay && !!href;
+  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (!isLink) {
+      onClick?.(task);
+      return;
+    }
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.metaKey ||
+      e.ctrlKey ||
+      e.shiftKey ||
+      e.altKey
+    ) {
+      // Let the browser handle modifier/middle/right clicks natively.
+      return;
+    }
+    e.preventDefault();
+    onClick?.(task);
+  };
+
   return (
     <Paper
+      component={isLink ? 'a' : 'div'}
+      href={isLink ? href : undefined}
+      draggable={isLink ? false : undefined}
       shadow={isDragOverlay ? 'lg' : 'xs'}
       radius="sm"
       p="xs"
       mb={8}
       withBorder
       bg="var(--app-bg-elevated)"
-      onClick={() => onClick?.(task)}
+      onClick={handleClick}
       style={{
         cursor: 'pointer',
         transition: 'box-shadow 0.15s, border-color 0.15s',
         borderColor: 'var(--app-border-strong)',
         opacity: task.archived ? 0.6 : 1,
+        display: 'block',
+        color: 'inherit',
+        textDecoration: 'none',
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
@@ -499,6 +542,7 @@ function TaskCardUI({
 function BoardColumn({
   column,
   tasks,
+  taskHref,
   onAddTask,
   onTaskClick,
   collapsed,
@@ -509,6 +553,7 @@ function BoardColumn({
 }: {
   column: Column;
   tasks: Task[];
+  taskHref: (task: Task) => string;
   onAddTask: (columnId: number) => void;
   onTaskClick: (task: Task) => void;
   collapsed: boolean;
@@ -697,7 +742,9 @@ function BoardColumn({
               {isFiltered ? 'No matching tasks' : 'No tasks yet'}
             </Text>
           ) : (
-            tasks.map((task) => <SortableTaskCard key={task.id} task={task} onClick={onTaskClick} />)
+            tasks.map((task) => (
+              <SortableTaskCard key={task.id} task={task} href={taskHref(task)} onClick={onTaskClick} />
+            ))
           )}
         </Box>
       </SortableContext>
@@ -2799,6 +2846,10 @@ const BoardPage = () => {
     [boardUrl],
   );
 
+  // URL each task card links to. Kept in sync with openTask so a plain click and
+  // "open in new tab" land on the same task detail view.
+  const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.id}`, [boardUrl]);
+
   const closeTask = useCallback(() => {
     router.get(boardUrl, {}, { preserveState: true, preserveScroll: true });
   }, [boardUrl]);
@@ -3212,6 +3263,7 @@ const BoardPage = () => {
                 key={col.id}
                 column={col}
                 tasks={tasksByColumn[col.id] ?? []}
+                taskHref={taskHref}
                 onAddTask={openCreateForColumn}
                 onTaskClick={openTask}
                 collapsed={collapsedColumns.has(col.id)}
