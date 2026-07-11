@@ -5,7 +5,6 @@
 #
 # Key derivation: HKDF-SHA256 (RFC 5869) with a versioned salt so any future
 # KDF migration can be identified by changing the salt string.
-# Run db/migrate/*_recrypt_encryptable_fields.rb before deploying this change.
 module Encryptable
   extend ActiveSupport::Concern
 
