@@ -176,10 +176,12 @@ describe('Projects/Board/BoardPage', () => {
 
     const card = screen.getByText('Wire up authentication').closest('a') as HTMLAnchorElement;
     // Ctrl/Cmd+click is how the browser opens a link in a new tab: we must NOT
-    // intercept it with a router.get, so native link behavior is preserved.
-    await userEvent.keyboard('{Meta>}');
-    await userEvent.click(card);
-    await userEvent.keyboard('{/Meta}');
+    // intercept it with a router.get, so native link behavior is preserved. A
+    // single userEvent session is needed so the held Meta key carries into the click.
+    const user = userEvent.setup();
+    await user.keyboard('{Meta>}');
+    await user.click(card);
+    await user.keyboard('{/Meta}');
 
     expect(router.get).not.toHaveBeenCalled();
   });
