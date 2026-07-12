@@ -39,8 +39,12 @@ class Web::Company::MembersController < Web::Company::ApplicationController
 
   def destroy
     user = current_company.users.find(params[:id])
-    user.destroy
-    redirect_to company_members_path, notice: "Member removed"
+
+    if user.destroy
+      redirect_to company_members_path, notice: "Member removed"
+    else
+      redirect_to company_members_path, alert: user.errors.full_messages.to_sentence.presence || "Member could not be removed"
+    end
   end
 
   private
