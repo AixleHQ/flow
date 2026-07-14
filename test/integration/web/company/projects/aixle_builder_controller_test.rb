@@ -24,6 +24,26 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/AixleBuilder/LandingPage"
   end
 
+  test "show does not issue N+1 queries when multiple sessions exist" do
+    tools = create_list(:tool, 2, scope: @project)
+    skills = create_list(:skill, 2, scope: @project)
+    3.times do
+      session = create(:terminal_session, :aixle_builder, user: @user, project: @project)
+      session.tools << tools
+      session.skills << skills
+    end
+
+    query_count = 0
+    counter = ->(*) { query_count += 1 }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      get company_project_aixle_builder_path(@project)
+    end
+
+    assert_response :success
+    # O(1) queries regardless of session count: 1 primary + ≤7 association batch queries
+    assert_operator query_count, :<=, 15, "Expected bounded query count, got #{query_count}"
+  end
+
   # ── start ─────────────────────────────────────────
 
   test "start creates session and redirects to session page" do

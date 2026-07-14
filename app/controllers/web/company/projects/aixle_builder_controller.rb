@@ -3,9 +3,11 @@
 class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::ApplicationController
   def show
     sessions = current_project.terminal_sessions
+                       .with_cached_resource_counts
+                       .includes(:user, :project, :tools, :skills, :mcp_servers,
+                                 :input_assets, :repositories)
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)
-                       .includes(:user)
                        .order(created_at: :desc)
                        .limit(20)
 
