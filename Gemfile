@@ -151,7 +151,7 @@ group :test do
 end
 
 gem "shrine", "~> 3.8"
-gem "aws-sdk-s3", "~> 1.226"
+gem "aws-sdk-s3", "~> 1.227"
 gem "image_processing", "~> 1.14"
 
 gem "faraday-retry", "~> 2.3"
