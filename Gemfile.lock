@@ -252,7 +252,7 @@ GEM
       temple (>= 0.8.2)
       thor
       tilt
-    haml-rails (3.0.0)
+    haml-rails (3.1.0)
       actionpack (>= 5.1)
       activesupport (>= 5.1)
       haml (>= 4.0.6)
@@ -683,7 +683,7 @@ GEM
     thruster (0.1.22)
     thruster (0.1.22-aarch64-linux)
     thruster (0.1.22-x86_64-linux)
-    tilt (2.7.0)
+    tilt (2.8.0)
     timeout (0.6.1)
     tomlrb (2.0.4)
     ts_routes (1.0.3)
