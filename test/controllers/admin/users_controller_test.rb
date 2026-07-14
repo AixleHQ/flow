@@ -80,7 +80,7 @@ module Admin
         board: board, event_type: :task_created, actor: @user, actor_type: :human
       )
 
-      assert_no_difference(["User.count", "BoardActivity.count"]) do
+      assert_no_difference([ "User.count", "BoardActivity.count" ]) do
         delete :destroy, params: { id: @user.id }
       end
 
