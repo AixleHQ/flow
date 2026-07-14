@@ -4,6 +4,7 @@ import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
 
+import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
 import { InertiaRouteIndicator } from 'shared/ui';
@@ -35,6 +36,10 @@ try {
 } catch {
   // Sentry init will be skipped if page data is missing or malformed
 }
+
+// Recover from stale Vite chunk 404s after a deploy: prompt the user to reload
+// into the new version instead of landing on a broken page.
+registerPreloadErrorReload();
 
 createInertiaApp({
   strictMode: true,
