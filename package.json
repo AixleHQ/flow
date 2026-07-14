@@ -9,7 +9,7 @@
     "@testing-library/react": "^16",
     "@testing-library/user-event": "^14",
     "@types/lodash": "^4.17.16",
-    "@types/rails__actioncable": "^6.1.11",
+    "@types/rails__actioncable": "^8.0.3",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@types/react-syntax-highlighter": "^15",
