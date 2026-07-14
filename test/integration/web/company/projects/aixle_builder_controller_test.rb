@@ -25,8 +25,8 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
   end
 
   test "show does not issue N+1 queries when multiple sessions exist" do
-    tools = create_list(:tool, 2)
-    skills = create_list(:skill, 2)
+    tools = create_list(:tool, 2, scope: @project)
+    skills = create_list(:skill, 2, scope: @project)
     3.times do
       session = create(:terminal_session, :aixle_builder, user: @user, project: @project)
       session.tools << tools
