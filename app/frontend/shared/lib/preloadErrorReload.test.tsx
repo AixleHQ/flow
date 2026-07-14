@@ -2,14 +2,18 @@ import '@testing-library/jest-dom/vitest';
 import { notifications } from '@mantine/notifications';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { registerPreloadErrorReload } from './preloadErrorReload';
 
 const RELOAD_AT_KEY = 'vitePreloadReloadedAt';
 
+// Dispatch synchronously updates the global Mantine notifications store, which
+// re-renders the mounted <Notifications>; wrap it in act() to keep React happy.
 const dispatchPreloadError = () =>
-  window.dispatchEvent(new Event('vite:preloadError', { cancelable: true }));
+  act(() => {
+    window.dispatchEvent(new Event('vite:preloadError', { cancelable: true }));
+  });
 
 describe('registerPreloadErrorReload', () => {
   let unregister: () => void;
