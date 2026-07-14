@@ -60,11 +60,32 @@ module Admin
       assert_redirected_to admin_user_path(@user)
     end
 
-    test "should destroy user" do
-      assert_difference("User.count", -1) do
+    test "should soft delete user" do
+      # Soft delete: the row is kept (count unchanged) but marked deleted.
+      assert_no_difference("User.count") do
         delete :destroy, params: { id: @user.id }
       end
 
+      assert @user.reload.deleted?
+      assert_redirected_to admin_root_path
+    end
+
+    test "should soft delete user who has board activities without FK violation" do
+      # Regression for the Sentry FK violation on board_activities.actor_id:
+      # deleting a user who authored board activities must not raise and must
+      # preserve those activities.
+      project = create(:project, company: @user.company, owner: @user)
+      board = create(:board, project: project)
+      activity = BoardActivity.create!(
+        board: board, event_type: :task_created, actor: @user, actor_type: :human
+      )
+
+      assert_no_difference(["User.count", "BoardActivity.count"]) do
+        delete :destroy, params: { id: @user.id }
+      end
+
+      assert @user.reload.deleted?
+      assert_equal @user.id, activity.reload.actor_id
       assert_redirected_to admin_root_path
     end
 
@@ -73,6 +94,7 @@ module Admin
         delete :destroy, params: { id: @super_admin.id }
       end
 
+      assert_not @super_admin.reload.deleted?
       assert_redirected_to admin_users_path
     end
 

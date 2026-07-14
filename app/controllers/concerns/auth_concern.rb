@@ -27,7 +27,10 @@ module AuthConcern
   end
 
   def current_user
-    @current_user ||= User.active.find_by(id: session[:user_id])
+    # `active` is the AASM account-state scope; `not_deleted` additionally
+    # excludes soft-deleted users so an admin-deleted account cannot stay
+    # authenticated on an existing session.
+    @current_user ||= User.active.not_deleted.find_by(id: session[:user_id])
   end
 
   def true_user

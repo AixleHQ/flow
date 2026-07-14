@@ -16,7 +16,14 @@ module Admin
       if requested_resource.super_admin?
         redirect_to admin_users_path, alert: "Cannot delete super admin user"
       else
-        super
+        # Soft delete instead of a hard destroy: board activities (and other
+        # historical records) referencing this user must be preserved, and a real
+        # DELETE would violate the FK on board_activities.actor_id.
+        requested_resource.soft_delete!
+        redirect_to(
+          after_resource_destroyed_path(requested_resource),
+          notice: "User was successfully deleted."
+        )
       end
     end
 

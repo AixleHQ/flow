@@ -78,10 +78,34 @@ class User < ApplicationRecord
   # Scopes
   scope :for_company, ->(company) { where(company: company) }
   scope :invited, -> { where.not(invited_by_id: nil) }
+  # Soft-delete scopes. NOTE: we deliberately do NOT name the positive scope
+  # `active` (as Asset/Workflow/Tool do) because AASM already generates an
+  # `active` scope for the :active account state, which authentication relies on
+  # (AuthConcern#current_user). `not_deleted` keeps the two concepts orthogonal.
+  scope :not_deleted, -> { where(deleted_at: nil) }
+  scope :deleted, -> { where.not(deleted_at: nil) }
+
+  # Soft delete — mirrors the deleted_at pattern used by Asset/Workflow/Tool.
+  # Deleting a user hard-deletes nothing: board activities and other historical
+  # records referencing the user are preserved, and the FK on
+  # board_activities.actor_id is never violated.
+  def soft_delete!
+    update!(deleted_at: Time.current)
+  end
+
+  def restore!
+    raise ActiveRecord::RecordNotFound, "User is not deleted" unless deleted?
+
+    update!(deleted_at: nil)
+  end
+
+  def deleted?
+    deleted_at.present?
+  end
 
   # Ransack configuration
   def self.ransackable_attributes(_auth_object = nil)
-    %w[email name role state]
+    %w[email name role state deleted_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)
