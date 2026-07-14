@@ -43,10 +43,14 @@ class TriggerBinding < ApplicationRecord
     end
   }
 
-  # A schedule trigger is reconciled onto a Temporal Schedule (async, off the
-  # request) whenever it is created/updated, and removed when destroyed.
-  after_commit :enqueue_schedule_reconcile, on: %i[create update], if: :schedule?
-  after_commit :enqueue_schedule_remove, on: :destroy, if: :schedule?
+  # A schedule trigger is reconciled onto its Temporal Schedule synchronously
+  # (inline, in the request) whenever it is created/updated, and removed on
+  # destroy — so a scheduling failure surfaces immediately instead of being
+  # silently lost by a dropped background job. The worker-boot sync
+  # (ScheduleReconciler.reconcile_all) is the durable backstop. Skipped when
+  # Temporal is off (e.g. test) so a save never spins up a Temporal client.
+  after_commit :reconcile_schedule, on: %i[create update], if: :reconcile_schedule?
+  after_commit :remove_schedule, on: :destroy, if: :reconcile_schedule?
 
   def schedule?
     event_type == SCHEDULE_EVENT_TYPE
@@ -95,11 +99,15 @@ class TriggerBinding < ApplicationRecord
       "can't run unattended — enable auto-run on these steps first: #{manual_steps.map(&:name).join(', ')}")
   end
 
-  def enqueue_schedule_reconcile
-    ScheduleReconcileJob.perform_later("reconcile", id)
+  def reconcile_schedule?
+    schedule? && TemporalService.enabled?
   end
 
-  def enqueue_schedule_remove
-    ScheduleReconcileJob.perform_later("remove", id)
+  def reconcile_schedule
+    ScheduleReconciler.reconcile(self)
+  end
+
+  def remove_schedule
+    ScheduleReconciler.remove(id)
   end
 end
