@@ -3,8 +3,6 @@
 require "test_helper"
 
 class ScheduleReconcilerTest < ActiveSupport::TestCase
-  include ActiveJob::TestHelper
-
   setup do
     @user = create(:user, :with_company)
     @project = create(:project, owner: @user, company: @user.company)
@@ -40,16 +38,31 @@ class ScheduleReconcilerTest < ActiveSupport::TestCase
     ScheduleReconciler.remove(42)
   end
 
-  test "saving a schedule binding enqueues reconciliation (off the request)" do
-    assert_enqueued_jobs(1, only: ScheduleReconcileJob) do
-      schedule_binding
-    end
+  test "saving a schedule binding reconciles inline when Temporal is enabled" do
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalService.stubs(:delete_binding_schedule)
+    TemporalService.expects(:create_binding_schedule).once
+
+    schedule_binding
   end
 
-  test "destroying a schedule binding enqueues removal" do
-    binding = schedule_binding
-    assert_enqueued_with(job: ScheduleReconcileJob, args: [ "remove", binding.id ]) do
-      binding.destroy
-    end
+  test "destroying a schedule binding removes its schedule inline" do
+    binding = schedule_binding # created with Temporal off in test → no reconcile on create
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalService.expects(:delete_binding_schedule).with("schedule-trigger-#{binding.id}").once
+
+    binding.destroy
+  end
+
+  test "reconcile_all (re)creates schedules for enabled schedule bindings only" do
+    enabled = schedule_binding(enabled: true)
+    schedule_binding(enabled: false) # disabled → skipped
+
+    TemporalService.stubs(:delete_binding_schedule)
+    TemporalService.expects(:create_binding_schedule).with(
+      has_entry(schedule_id: "schedule-trigger-#{enabled.id}")
+    ).once
+
+    ScheduleReconciler.reconcile_all
   end
 end
