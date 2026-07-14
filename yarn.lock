@@ -3521,18 +3521,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-theme-vscode@npm:^4.25.10":
-  version: 4.25.10
-  resolution: "@uiw/codemirror-theme-vscode@npm:4.25.10"
+"@uiw/codemirror-theme-vscode@npm:^4.25.11":
+  version: 4.25.11
+  resolution: "@uiw/codemirror-theme-vscode@npm:4.25.11"
   dependencies:
-    "@uiw/codemirror-themes": "npm:4.25.10"
-  checksum: 10c0/dd072c3c605453f45fb26144a7f5fc448983496c27c1d9109fd2fcf68f51fd715adb8a73428d57c4fad38af87326408fc42fbfb7ef687bac2354470c8a8dc9a2
+    "@uiw/codemirror-themes": "npm:4.25.11"
+  checksum: 10c0/e107ae56a5902b6423124324421b29ffc353b5399cb4d1867bfd9cf2aecbbb130cae2377249ea78a3b906cb1f106d584d33bad0aac45d377289e23cdc6231de1
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-themes@npm:4.25.10":
-  version: 4.25.10
-  resolution: "@uiw/codemirror-themes@npm:4.25.10"
+"@uiw/codemirror-themes@npm:4.25.11":
+  version: 4.25.11
+  resolution: "@uiw/codemirror-themes@npm:4.25.11"
   dependencies:
     "@codemirror/language": "npm:^6.0.0"
     "@codemirror/state": "npm:^6.0.0"
@@ -3541,7 +3541,7 @@ __metadata:
     "@codemirror/language": ">=6.0.0"
     "@codemirror/state": ">=6.0.0"
     "@codemirror/view": ">=6.0.0"
-  checksum: 10c0/d6c1056faf110436afaa65b263c3d030f7554a263e232e9c0fdab32b665ef942c446f016715780f4bc91c7e3a42b62df0df460268c1d846b5aa5a3a3e50f2039
+  checksum: 10c0/205298cd3e30b1aa873858accd2c2e15642de2e6b740a7ccf7765857d79b14a1ecc82c5612a3f49aaea86741ec2d88bbbfaf21374bb09989533985f1f8d9fa0b
   languageName: node
   linkType: hard
 
@@ -9534,7 +9534,7 @@ __metadata:
     "@typescript-eslint/eslint-plugin": "npm:^8.64.0"
     "@typescript-eslint/parser": "npm:^8.62.1"
     "@uiw/codemirror-extensions-langs": "npm:^4.25.10"
-    "@uiw/codemirror-theme-vscode": "npm:^4.25.10"
+    "@uiw/codemirror-theme-vscode": "npm:^4.25.11"
     "@uiw/react-codemirror": "npm:^4.23.12"
     "@uppy/aws-s3": "npm:^5.1.0"
     "@uppy/core": "npm:^5.2.0"
