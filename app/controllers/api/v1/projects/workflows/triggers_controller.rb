@@ -11,6 +11,11 @@ module Api
         # A webhook trigger additionally provisions a generic WebhookEndpoint and
         # returns its URL + secret.
         class TriggersController < Workflows::ApplicationController
+          # Raised when a column trigger is requested for a project that has no
+          # board — column triggers bind to a board column, which can't exist
+          # without a board. Rescued in #create as a 422 (not a 500).
+          BoardMissingError = Class.new(StandardError)
+
           def index
             render json: { triggers: serialized_triggers }
           end
@@ -26,6 +31,8 @@ module Api
               end
 
             render json: result, status: :created
+          rescue BoardMissingError
+            render json: { errors: [ "This project has no board. Create a board before adding a column trigger." ] }, status: :unprocessable_entity
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           rescue Temporalio::Error => e
@@ -72,7 +79,10 @@ module Api
           # ---- creators ----
 
           def create_column_trigger
-            column = current_project.board.board_columns.find(params.dig(:trigger, :board_column_id))
+            board = current_project.board
+            raise BoardMissingError unless board
+
+            column = board.board_columns.find(params.dig(:trigger, :board_column_id))
             binding = ColumnWorkflowBinding.create!(
               board_column: column,
               workflow: current_workflow,
