@@ -370,6 +370,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   );
 
   const renderTerminalPanels = () => {
+    if (finishRequested || isFinishing) return null;
     if (!isReady || !canShowTerminal) return renderWaiting();
 
     if (!hasIde) {
