@@ -68,6 +68,12 @@ class TemporalService
       schedule_definitions.each do |schedule_def|
         create_schedule(schedule_def)
       end
+      # Recreate per-binding schedule triggers too: delete_schedules only prunes
+      # the static set, but a worker redeploy must also restore the dynamic
+      # schedule-trigger-* schedules (they exist only in the DB otherwise).
+      ScheduleReconciler.reconcile_all
+    rescue StandardError => e
+      Rails.logger.error("[Temporal] reconcile_all during sync_schedules failed: #{e.message}")
     end
 
     def start_workflow(workflow, input, options = {})
@@ -181,6 +187,11 @@ class TemporalService
       with_test_environment_handling do |cl|
         ids = cl.list_schedules.map { |x| x.id }
         ids.each do |id|
+          # Never delete per-binding schedule triggers here — they are owned by
+          # ScheduleReconciler, not schedules.yml. This sync only manages the
+          # static set; wiping them wiped every user schedule trigger on deploy.
+          next if id.start_with?(ScheduleReconciler::SCHEDULE_ID_PREFIX)
+
           cl.schedule_handle(id).delete
         rescue Temporalio::Error::RPCError => e
           Rails.logger.warn("[Temporal] Failed to delete schedule #{id}: #{e.message}")

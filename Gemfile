@@ -5,7 +5,7 @@ ruby file: ".ruby-version"
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
 gem "rails", "~> 8.1.3"
 # Use postgresql as the database for Active Record
-gem "pg", "~> 1.1"
+gem "pg", "~> 1.6"
 gem "responders"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
@@ -151,7 +151,7 @@ group :test do
 end
 
 gem "shrine", "~> 3.8"
-gem "aws-sdk-s3", "~> 1.226"
+gem "aws-sdk-s3", "~> 1.227"
 gem "image_processing", "~> 1.14"
 
 gem "faraday-retry", "~> 2.3"

@@ -361,13 +361,32 @@ class TemporalServiceTest < ActiveSupport::TestCase
     TemporalService.delete_schedule(schedule_def)
   end
 
-  test "sync_schedules deletes and recreates schedules" do
+  test "sync_schedules deletes and recreates static schedules, then reconciles per-binding ones" do
     TemporalService.expects(:delete_schedules).once
     TemporalService.stubs(:schedule_definitions).returns([
       OpenStruct.new(workflow: "test", cron: "0 * * * *", enabled: true)
     ])
     TemporalService.expects(:create_schedule).once
+    ScheduleReconciler.expects(:reconcile_all).once
 
     TemporalService.sync_schedules
+  end
+
+  test "delete_schedules prunes static schedules but preserves per-binding schedule triggers" do
+    static  = OpenStruct.new(id: "stale_static_workflow")
+    dynamic = OpenStruct.new(id: "schedule-trigger-3")
+
+    mock_client = mock("client")
+    mock_client.expects(:list_schedules).returns([ static, dynamic ])
+    static_handle = mock("static_handle")
+    static_handle.expects(:delete).once
+    mock_client.expects(:schedule_handle).with("stale_static_workflow").returns(static_handle)
+    mock_client.expects(:schedule_handle).with("schedule-trigger-3").never
+
+    mock_env = OpenStruct.new(client: mock_client)
+    Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
+    Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env)
+
+    TemporalService.delete_schedules
   end
 end

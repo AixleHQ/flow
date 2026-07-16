@@ -28,6 +28,12 @@ module Api
             render json: result, status: :created
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+          rescue Temporalio::Error => e
+            # Schedule triggers reconcile onto Temporal synchronously on save; the
+            # binding is persisted but scheduling failed. Surface it (the user can
+            # re-save to retry; the worker-boot sync also re-reconciles).
+            Rails.logger.error("[triggers] Temporal scheduling failed: #{e.message}")
+            render json: { errors: [ "Trigger saved, but scheduling it failed — re-save to retry. (#{e.message})" ] }, status: :bad_gateway
           end
 
           def update
@@ -43,6 +49,12 @@ module Api
             end
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
+          rescue Temporalio::Error => e
+            # Schedule triggers reconcile onto Temporal synchronously on save; the
+            # binding is persisted but scheduling failed. Surface it (the user can
+            # re-save to retry; the worker-boot sync also re-reconciles).
+            Rails.logger.error("[triggers] Temporal scheduling failed: #{e.message}")
+            render json: { errors: [ "Trigger saved, but scheduling it failed — re-save to retry. (#{e.message})" ] }, status: :bad_gateway
           end
 
           def destroy
