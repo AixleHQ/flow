@@ -37,6 +37,24 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  # Regression: deleting a member who owns projects used to raise a 500
+  # (projects.owner_id is NOT NULL, so dependent: :nullify violated the DB
+  # constraint). The owned_projects association now uses
+  # dependent: :restrict_with_error, so the deletion is blocked with a flash
+  # alert instead of crashing, and the member is preserved.
+  test "destroy is blocked with alert when member owns projects" do
+    member = create(:user, company: @company)
+    create(:project, company: @company, owner: member)
+
+    assert_no_difference -> { @company.users.count } do
+      delete company_member_path(member)
+    end
+
+    assert_response :redirect
+    assert flash[:alert].present?
+    assert User.exists?(member.id)
+  end
+
   test "invite as viewer with mismatched email domain succeeds" do
     assert_difference -> { @company.users.where(role: "viewer").count }, 1 do
       post company_members_path, params: {
