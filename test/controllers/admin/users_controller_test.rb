@@ -89,6 +89,29 @@ module Admin
       assert_redirected_to admin_root_path
     end
 
+    test "admin user show page surfaces the deleted_at attribute" do
+      # Review feedback on task 304: the soft-delete worked at the DB level but
+      # "there is no deleted at value in the admin panel". The UserDashboard must
+      # now expose deleted_at so admins can see which accounts are soft-deleted.
+      @user.soft_delete!
+
+      get :show, params: { id: @user.id }
+
+      assert_response :success
+      assert_includes @response.body, "Deleted at"
+      assert_includes @response.body,
+                      @user.reload.deleted_at.strftime("%B %-d, %Y at %l:%M %p")
+    end
+
+    test "admin users index renders with a soft-deleted user present" do
+      @user.soft_delete!
+
+      get :index
+
+      assert_response :success
+      assert_includes @response.body, @user.email
+    end
+
     test "should not destroy super_admin user" do
       assert_no_difference("User.count") do
         delete :destroy, params: { id: @super_admin.id }

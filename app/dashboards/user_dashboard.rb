@@ -33,7 +33,11 @@ class UserDashboard < Administrate::BaseDashboard
     collaborated_projects: Field::HasMany,
     project_collaborators: Field::HasMany,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
-    updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p")
+    updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
+    # Soft-delete timestamp. Blank for active users; set when an admin deletes a
+    # user (see Admin::UsersController#destroy / User#soft_delete!). Surfaced here
+    # so admins can see which accounts have been soft-deleted and when.
+    deleted_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p")
   }.freeze
 
   COLLECTION_ATTRIBUTES = %i[
@@ -44,6 +48,7 @@ class UserDashboard < Administrate::BaseDashboard
     state
     company
     created_at
+    deleted_at
   ].freeze
 
   SHOW_PAGE_ATTRIBUTES = %i[
@@ -57,6 +62,7 @@ class UserDashboard < Administrate::BaseDashboard
     collaborated_projects
     created_at
     updated_at
+    deleted_at
   ].freeze
 
   FORM_ATTRIBUTES = %i[
@@ -75,7 +81,9 @@ class UserDashboard < Administrate::BaseDashboard
     archived: ->(resources) { resources.archived },
     super_admin: ->(resources) { resources.super_admin },
     admin: ->(resources) { resources.admin },
-    collaborator: ->(resources) { resources.collaborator }
+    collaborator: ->(resources) { resources.collaborator },
+    deleted: ->(resources) { resources.deleted },
+    not_deleted: ->(resources) { resources.not_deleted }
   }.freeze
 
   def display_resource(user)
