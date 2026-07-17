@@ -795,18 +795,21 @@ describe('Projects/Workflows/BuilderPage', () => {
     // Typing the path debounce-saves the output specs to the step endpoint.
     await userEvent.type(screen.getByPlaceholderText('e.g. tasks/report.md'), 'out.md');
 
+    // Clicking "Add" and each keystroke both schedule a debounced save, so several
+    // PATCHes can land for the step endpoint (the empty spec from "Add", then the
+    // partial values) before "out.md" settles. Assert on the LAST such PATCH and
+    // poll until the trailing debounced call carries the fully typed value —
+    // grabbing the first matching call races the debounce and sees an empty name.
     await waitFor(
-      () =>
-        expect(fetchSpy).toHaveBeenCalledWith(
-          '/api/v1/projects/7/workflows/3/steps/1',
-          expect.objectContaining({ method: 'PATCH' }),
-        ),
+      () => {
+        const stepCalls = fetchSpy.mock.calls.filter(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+        expect(stepCalls.length).toBeGreaterThan(0);
+        const body = JSON.parse((stepCalls.at(-1)![1] as RequestInit).body as string);
+        expect(Array.isArray(body.step.outputAssetSpecs)).toBe(true);
+        expect(body.step.outputAssetSpecs[0].name).toBe('out.md');
+      },
       { timeout: 2000 },
     );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(Array.isArray(body.step.outputAssetSpecs)).toBe(true);
-    expect(body.step.outputAssetSpecs[0].name).toBe('out.md');
   });
 
   it('renders a read-only project workflow with disabled editing affordances', () => {

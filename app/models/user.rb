@@ -53,7 +53,7 @@ class User < ApplicationRecord
   has_many :invited_users, class_name: "User", foreign_key: :invited_by_id, dependent: :nullify, inverse_of: :invited_by
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
-  has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :nullify, inverse_of: :owner
+  has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
   has_many :agent_credentials, dependent: :destroy
   has_one :namespace_resource_quota, as: :scope, dependent: :destroy
