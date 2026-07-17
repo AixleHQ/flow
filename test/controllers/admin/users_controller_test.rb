@@ -60,12 +60,56 @@ module Admin
       assert_redirected_to admin_user_path(@user)
     end
 
-    test "should destroy user" do
-      assert_difference("User.count", -1) do
+    test "should soft delete user" do
+      # Soft delete: the row is kept (count unchanged) but marked deleted.
+      assert_no_difference("User.count") do
         delete :destroy, params: { id: @user.id }
       end
 
+      assert @user.reload.deleted?
       assert_redirected_to admin_root_path
+    end
+
+    test "should soft delete user who has board activities without FK violation" do
+      # Regression for the Sentry FK violation on board_activities.actor_id:
+      # deleting a user who authored board activities must not raise and must
+      # preserve those activities.
+      project = create(:project, company: @user.company, owner: @user)
+      board = create(:board, project: project)
+      activity = BoardActivity.create!(
+        board: board, event_type: :task_created, actor: @user, actor_type: :human
+      )
+
+      assert_no_difference([ "User.count", "BoardActivity.count" ]) do
+        delete :destroy, params: { id: @user.id }
+      end
+
+      assert @user.reload.deleted?
+      assert_equal @user.id, activity.reload.actor_id
+      assert_redirected_to admin_root_path
+    end
+
+    test "admin user show page surfaces the deleted_at attribute" do
+      # Review feedback on task 304: the soft-delete worked at the DB level but
+      # "there is no deleted at value in the admin panel". The UserDashboard must
+      # now expose deleted_at so admins can see which accounts are soft-deleted.
+      @user.soft_delete!
+
+      get :show, params: { id: @user.id }
+
+      assert_response :success
+      assert_includes @response.body, "Deleted at"
+      assert_includes @response.body,
+                      @user.reload.deleted_at.strftime("%B %-d, %Y at %l:%M %p")
+    end
+
+    test "admin users index renders with a soft-deleted user present" do
+      @user.soft_delete!
+
+      get :index
+
+      assert_response :success
+      assert_includes @response.body, @user.email
     end
 
     test "should not destroy super_admin user" do
@@ -73,6 +117,7 @@ module Admin
         delete :destroy, params: { id: @super_admin.id }
       end
 
+      assert_not @super_admin.reload.deleted?
       assert_redirected_to admin_users_path
     end
 

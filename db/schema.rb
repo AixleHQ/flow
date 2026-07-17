@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_10_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_14_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -790,6 +790,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_10_120000) do
     t.bigint "company_id"
     t.datetime "created_at", null: false
     t.bigint "default_agent_credential_id"
+    t.datetime "deleted_at"
     t.citext "email", null: false
     t.datetime "invited_at"
     t.bigint "invited_by_id"
@@ -810,6 +811,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_10_120000) do
     t.index ["company_id", "email"], name: "index_users_on_company_id_and_email", unique: true, where: "(company_id IS NOT NULL)"
     t.index ["company_id"], name: "index_users_on_company_id"
     t.index ["default_agent_credential_id"], name: "index_users_on_default_agent_credential_id"
+    t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["invited_by_id"], name: "index_users_on_invited_by_id"
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
