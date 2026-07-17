@@ -70,6 +70,21 @@ module Api
             assert_equal 7, json["cooldown_seconds"]
           end
 
+          test "create column trigger returns 422 when the project has no board" do
+            boardless_project = create(:project, company: @company, owner: @user)
+            boardless_workflow = create(:workflow, scope: boardless_project)
+
+            assert_no_difference -> { ColumnWorkflowBinding.count } do
+              post :create, params: {
+                project_id: boardless_project.id, workflow_id: boardless_workflow.id,
+                trigger: { kind: "column", board_column_id: 0, trigger_mode: "auto", cooldown_seconds: 5 }
+              }
+            end
+
+            assert_response :unprocessable_entity
+            assert_match(/no board/i, json["errors"].first)
+          end
+
           test "create schedule trigger persists schedule_config" do
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {
