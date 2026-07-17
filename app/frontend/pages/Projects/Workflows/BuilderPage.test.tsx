@@ -802,9 +802,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     // grabbing the first matching call races the debounce and sees an empty name.
     await waitFor(
       () => {
-        const stepCalls = fetchSpy.mock.calls.filter(
-          ([url]) => url === '/api/v1/projects/7/workflows/3/steps/1',
-        );
+        const stepCalls = fetchSpy.mock.calls.filter(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
         expect(stepCalls.length).toBeGreaterThan(0);
         const body = JSON.parse((stepCalls.at(-1)![1] as RequestInit).body as string);
         expect(Array.isArray(body.step.outputAssetSpecs)).toBe(true);
