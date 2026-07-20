@@ -91,6 +91,36 @@ module Api
         assert_response :success
       end
 
+      test "terminal_log streams the captured log for a finished session" do
+        ts = create(:terminal_session, user: @user, project: @project, state: "finished")
+        body = "\e[31mred\e[0m output"
+        io = StringIO.new(body)
+        io.define_singleton_method(:original_filename) { "terminal_output.log" }
+        SessionLog.create!(terminal_session: ts, name: "terminal_output.log", file: io,
+                           file_size: body.bytesize, content_type: "text/plain; charset=utf-8")
+
+        get :terminal_log, params: { id: ts.id }
+
+        assert_response :success
+        assert_includes response.body, "red"
+      end
+
+      test "terminal_log returns 404 when the session has no terminal log" do
+        ts = create(:terminal_session, user: @user, project: @project, state: "finished")
+
+        get :terminal_log, params: { id: ts.id }
+
+        assert_response :not_found
+      end
+
+      test "terminal_log returns 404 for a non-terminal session" do
+        ts = create(:terminal_session, :running, user: @user, project: @project)
+
+        get :terminal_log, params: { id: ts.id }
+
+        assert_response :not_found
+      end
+
       # === viewer (read-only) enforcement ===
 
       class ViewerTest < ActionController::TestCase

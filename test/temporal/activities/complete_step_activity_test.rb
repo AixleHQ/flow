@@ -90,6 +90,28 @@ module Activities
         assert_equal credential.id, @run.failed_agent_credential_id
       end
 
+      test "detects quota error even when the terminal log is wrapped in ANSI escape codes" do
+        session = create(:terminal_session,
+          user: @user,
+          agent_type: "cursor_cli",
+          session_type: :workflow_step,
+          state: "finished")
+        SessionLog.create!(
+          terminal_session: session,
+          name: "terminal_output.log",
+          file: StringIO.new("\e[1m\e[31mError: You've reached your normal usage limit.\e[0m\r\n"),
+          file_size: 60,
+          content_type: "text/plain; charset=utf-8"
+        )
+        create(:agent_credential, user: @user, agent_type: "cursor_cli")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["quota_error"]
+        assert_equal "quota_exceeded", step_run.reload.error_category
+      end
+
       test "handles session with no matching credential gracefully" do
         session = create(:terminal_session, :failed,
           user: @user,

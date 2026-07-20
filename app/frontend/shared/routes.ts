@@ -72,6 +72,11 @@ export function mcpPath(options?: object): string {
   return "/" + "mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /csp-violation-report-endpoint(.:format) */
+export function cspViolationReportEndpointPath(options?: object): string {
+  return "/" + "csp-violation-report-endpoint" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /webhooks/github(.:format) */
 export function webhooksGithubPath(options?: object): string {
   return "/" + "webhooks" + "/" + "github" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -90,6 +95,16 @@ export function webhookIngressPath(slug: ScalarType, options?: object): string {
 /** /webhooks/slack/events(.:format) */
 export function slackEventsWebhookPath(options?: object): string {
   return "/" + "webhooks" + "/" + "slack" + "/" + "events" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /share/:token(.:format) */
+export function publicAssetPath(token: ScalarType, options?: object): string {
+  return "/" + "share" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /share/:token/raw(.:format) */
+export function publicAssetRawPath(token: ScalarType, options?: object): string {
+  return "/" + "share" + "/" + token + "/" + "raw" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
 }
 
 /** /auth/:provider/callback(.:format) */
@@ -125,6 +140,11 @@ export function apiV1InternalUsageStatisticsPath(options?: object): string {
 /** /api/v1/terminal_sessions/:id/finish(.:format) */
 export function finishApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "finish" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/terminal_sessions/:id/terminal_log(.:format) */
+export function terminalLogApiV1TerminalSessionPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + "/" + "terminal_log" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/terminal_sessions(.:format) */
@@ -622,6 +642,26 @@ export function adminMCPServerPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "mcp_servers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /admin/oauth_clients(.:format) */
+export function adminOauthClientsPath(options?: object): string {
+  return "/" + "admin" + "/" + "oauth_clients" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/oauth_clients/:id(.:format) */
+export function adminOauthClientPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "oauth_clients" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/oauth_credentials(.:format) */
+export function adminOauthCredentialsPath(options?: object): string {
+  return "/" + "admin" + "/" + "oauth_credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/oauth_credentials/:id(.:format) */
+export function adminOauthCredentialPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "oauth_credentials" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /admin/repositories(.:format) */
 export function adminRepositoriesPath(options?: object): string {
   return "/" + "admin" + "/" + "repositories" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -887,6 +927,26 @@ export function slackOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /oauth/client-metadata.json(.:format) */
+export function oauthClientMetadataPath(options?: object): string {
+  return "/" + "oauth" + "/" + "client-metadata" + "." + "json" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /oauth/:provider/authorize(.:format) */
+export function oauthAuthorizePath(provider: ScalarType, options?: object): string {
+  return "/" + "oauth" + "/" + provider + "/" + "authorize" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
+}
+
+/** /oauth/callback(.:format) */
+export function oauthCallbackPath(options?: object): string {
+  return "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /oauth/mcp/:mcp_server_id/connect(.:format) */
+export function oauthMCPConnectPath(mcp_server_id: ScalarType, options?: object): string {
+  return "/" + "oauth" + "/" + "mcp" + "/" + mcp_server_id + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["mcp_server_id","format"]);
+}
+
 /** /company/members(.:format) */
 export function companyMembersPath(options?: object): string {
   return "/" + "company" + "/" + "members" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1050,6 +1110,11 @@ export function companyProjectRepositoryPath(project_id: ScalarType, id: ScalarT
 /** /company/projects/:project_id/integrations/slack_oauth_start(.:format) */
 export function slackOauthStartCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "slack_oauth_start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/github_app_install(.:format) */
+export function githubAppInstallCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "github_app_install" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/integrations(.:format) */

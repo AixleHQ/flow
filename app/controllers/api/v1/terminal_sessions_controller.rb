@@ -56,7 +56,38 @@ module Api
         render json: { error: e.message }, status: :bad_request
       end
 
+      # Cap the bytes served (and buffered) per replay request. The raw PTY stream
+      # can be large (TUI redraw spam); serve only the tail so neither the server
+      # nor the browser buffers an unbounded blob.
+      MAX_LOG_BYTES = 2 * 1024 * 1024
+
+      # @summary Stream a finished session's captured terminal log (raw ANSI bytes)
+      def terminal_log
+        session = find_session(params[:id])
+        return head :not_found unless session.state.in?(%w[finished failed])
+
+        log = session.session_logs.find_by(name: "terminal_output.log")
+        return head :not_found unless log&.file
+
+        response.set_header("X-Log-Truncated", "true") if log.file_size.to_i > MAX_LOG_BYTES
+        send_data read_log_tail(log), type: "text/plain; charset=utf-8", disposition: "inline"
+      end
+
       private
+
+      # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on
+      # the underlying IO so large files are not fully loaded; fall back to a
+      # read-then-slice if the storage IO is not seekable.
+      def read_log_tail(log)
+        size = log.file_size.to_i
+        log.file.open do |io|
+          io.seek(size - MAX_LOG_BYTES) if size > MAX_LOG_BYTES
+          io.read
+        end
+      rescue StandardError
+        content = log.file.read.to_s
+        content.bytesize > MAX_LOG_BYTES ? content.byteslice(-MAX_LOG_BYTES, MAX_LOG_BYTES) : content
+      end
 
       def session_params
         params.require(:terminal_session).permit(

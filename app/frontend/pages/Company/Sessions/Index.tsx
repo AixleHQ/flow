@@ -7,6 +7,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
+import { companySessionPath } from 'shared/routes';
+
+// Sessions whose show page is worth opening (a live or completed run, not a
+// half-provisioned one). Mirrors the project-scoped sessions list.
+const CLICKABLE_STATES = new Set(['ready', 'running', 'finished', 'failed', 'cancelled', 'stopped']);
 
 interface Session {
   id: number;
@@ -264,6 +269,8 @@ function SessionRow({ session: s }: { session: Session }) {
   const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
   const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
   const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
+  const isClickable = CLICKABLE_STATES.has(s.state);
+  const sessionUrl = companySessionPath(s.id);
 
   const tokenBreakdown = [
     s.inputTokens > 0 && `in: ${formatTokens(s.inputTokens)}`,
@@ -275,7 +282,10 @@ function SessionRow({ session: s }: { session: Session }) {
     .join(', ');
 
   return (
-    <Table.Tr>
+    <Table.Tr
+      style={isClickable ? { cursor: 'pointer' } : undefined}
+      onClick={isClickable ? () => router.visit(sessionUrl) : undefined}
+    >
       <Table.Td>
         <Text size="xs" ff="monospace" c="dimmed">
           #{s.id}
@@ -349,9 +359,9 @@ function SessionRow({ session: s }: { session: Session }) {
         </Tooltip>
       </Table.Td>
       <Table.Td>
-        {s.state === 'ready' && (
+        {isClickable && (
           <Tooltip label="Open session">
-            <a href={`/company/sessions/${s.id}`} target="_blank" rel="noreferrer">
+            <a href={sessionUrl} onClick={(e) => e.stopPropagation()}>
               <IconExternalLink size={16} />
             </a>
           </Tooltip>

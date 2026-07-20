@@ -127,11 +127,9 @@ module ContainerStrategies
     end
 
     def collect_terminal_output(container, session)
-      runtime.exec(container, [
-        "sh", "-c",
-        "tmux capture-pane -t agent -p -S - > /tmp/terminal_output.log 2>/dev/null"
-      ])
-
+      # The file is populated live by the `agent` pane's tmux pipe-pane, set up in
+      # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
+      # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
       content = read_file_from_container(container, "/tmp/terminal_output.log")
       return 0 if content.blank?
 
@@ -143,7 +141,7 @@ module ContainerStrategies
         name: "terminal_output.log",
         file: io,
         file_size: content.bytesize,
-        content_type: "text/plain"
+        content_type: "text/plain; charset=utf-8"
       )
       1
     rescue StandardError => e
