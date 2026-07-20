@@ -1,3 +1,58 @@
+/* ── Role option cards (Step 1) ─────────────── */
+
+.roleOpt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background-color: var(--app-bg-elevated);
+  color: var(--mantine-color-text);
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+  text-align: center;
+  width: 100%;
+}
+
+.roleOpt:hover {
+  border-color: var(--app-border-strong);
+  background-color: rgba(207, 107, 74, 0.07);
+}
+
+.roleOptSelected {
+  border-color: rgba(207, 107, 74, 0.30) !important;
+  background-color: rgba(207, 107, 74, 0.12) !important;
+  color: var(--mantine-color-brand-6);
+}
+
+/* ── Agent auth rows (Connect Agents step) ──── */
+
+.authRow {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--app-border-default);
+  transition: background-color 150ms ease;
+}
+
+.authRow:last-child {
+  border-bottom: none;
+}
+
+.authRow:hover {
+  background-color: var(--app-bg-elevated);
+}
+
+/* ── Agent logo bubble ──────────────────────── */
+
+.agentLogo {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
 /* ── Welcome card ──────────────────────────── */
 
 @keyframes fadeSlideUp {
@@ -28,7 +83,9 @@
   }
 
   .agentCard,
-  .summaryCard {
+  .summaryCard,
+  .roleOpt,
+  .authRow {
     transition: none;
   }
 }

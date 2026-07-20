@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   Center,
-  Checkbox,
   Group,
   Loader,
   Progress,
@@ -16,9 +15,21 @@ import {
   Stepper,
   Text,
   ThemeIcon,
+  UnstyledButton,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconCheck, IconChevronLeft, IconChevronRight, IconLock, IconRocket, IconUser } from '@tabler/icons-react';
+import {
+  IconBrush,
+  IconBuilding,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCode,
+  IconClipboardList,
+  IconRocket,
+  IconTestPipe,
+  IconUser,
+} from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -31,12 +42,15 @@ import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 import classes from './OnboardingPage.module.css';
 
 const POSITION_OPTIONS = [
-  { value: 'dev', label: 'Developer' },
-  { value: 'qa', label: 'QA Engineer' },
-  { value: 'pm_po_ba', label: 'Product Manager / BA' },
-  { value: 'designer', label: 'Designer' },
-  { value: 'cto', label: 'CTO' },
+  { value: 'dev', label: 'Developer', icon: IconCode },
+  { value: 'qa', label: 'QA Engineer', icon: IconTestPipe },
+  { value: 'pm_po_ba', label: 'Product Manager / BA', icon: IconClipboardList },
+  { value: 'designer', label: 'Designer', icon: IconBrush },
+  { value: 'cto', label: 'CTO', icon: IconBuilding },
 ];
+
+// Kept for label lookups only (no icon needed in non-grid contexts)
+const POSITION_LABEL_MAP = Object.fromEntries(POSITION_OPTIONS.map((o) => [o.value, o.label]));
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -75,6 +89,22 @@ const AGENT_COLORS: Record<string, string> = {
   cursor_cli: '#7c3aed',
   codex: '#10a37f',
   gemini_cli: '#3b82f6',
+};
+
+interface ViewerWorkflowPreview {
+  workflowName: string;
+  workflowDescription: string;
+  steps: Array<{ name: string; description: string }>;
+}
+
+// Viewer step map: server state → visual step index
+// step1 → 0 (Profile), step2/step3 → 1 (See the platform), step4/completed → 2 (Complete)
+const viewerStepMap: Record<string, number> = {
+  step1: 0,
+  step2: 1,
+  step3: 1,
+  step4: 2,
+  completed: 2,
 };
 
 // ── Agent Auth Terminal ────────────────────────────
@@ -259,104 +289,117 @@ function AgentAuthTerminal({
   );
 }
 
-// ── Step 3: Authenticate ───────────────────────────
+// ── Step 2+3: Connect Agents (unified) ────────────
 
-function AuthenticateStep({
-  selectedAgents,
+function ConnectAgentsStep({
   configuredAgents,
-  configuredCount,
   authSessions,
   loading,
   onBack,
   onNext,
 }: {
-  selectedAgents: AgentType[];
   configuredAgents: AgentType[];
-  configuredCount: number;
   authSessions: TerminalSession[];
   loading: boolean;
   onBack: () => void;
   onNext: () => void;
 }) {
-  const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const configuredCount = AVAILABLE_AGENTS.filter((a) => configuredAgents.includes(a.type)).length;
+
+  const handleConnect = useCallback((agentType: string) => {
+    setExpandedAgent((prev) => (prev === agentType ? null : agentType));
+  }, []);
 
   return (
     <Card withBorder p={0} style={{ overflow: 'hidden' }}>
-      <Box style={{ display: 'flex', minHeight: 500 }}>
-        <Box w={280} p="md" style={{ borderRight: '1px solid var(--app-border-default)', flexShrink: 0 }}>
-          <Text fw={600} size="lg" mb="xs">
-            Authenticate Your Agents
-          </Text>
-          <Text size="sm" c="dimmed" mb="md">
-            Sign in to at least one agent&apos;s service to enable it.
-          </Text>
-          <Stack gap="xs">
-            {selectedAgents.map((agentType) => {
-              const agent = AVAILABLE_AGENTS.find((a) => a.type === agentType);
-              const isConfigured = configuredAgents.includes(agentType);
-              const hasActiveSession = authSessions.some((s) => s.agentType === agentType);
-              const isActive = activeAgent === agentType;
-              return (
+      <Box p="xl" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
+        <Text fw={600} size="lg" mb={4}>
+          Connect your agents
+        </Text>
+        <Text size="sm" c="dimmed">
+          Sign in to at least one agent to enable it for your workflows.
+        </Text>
+      </Box>
+
+      <Stack gap={0}>
+        {AVAILABLE_AGENTS.map((agent) => {
+          const isConfigured = configuredAgents.includes(agent.type);
+          const session = authSessions.find((s) => s.agentType === agent.type);
+          const hasActiveSession = !!session;
+          const isExpanded = expandedAgent === agent.type;
+
+          let chipEl: React.ReactNode;
+          if (isConfigured) {
+            chipEl = (
+              <Badge variant="light" color="green" size="sm" leftSection={<IconCheck size={10} />}>
+                Connected
+              </Badge>
+            );
+          } else if (hasActiveSession && session?.state !== 'failed') {
+            chipEl = (
+              <Badge variant="outline" color="gray" size="sm" leftSection={<Loader size={10} />}>
+                Connecting
+              </Badge>
+            );
+          } else {
+            chipEl = (
+              <Badge variant="outline" color="gray" size="sm">
+                NOT CONNECTED
+              </Badge>
+            );
+          }
+
+          return (
+            <Box key={agent.type} className={classes.authRow}>
+              <Group justify="space-between" wrap="nowrap">
+                <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                  <Box className={classes.agentLogo} style={{ backgroundColor: AGENT_COLORS[agent.type] ?? '#666' }} />
+                  <Box style={{ minWidth: 0 }}>
+                    <Text size="sm" fw={500} truncate>
+                      {agent.name}
+                    </Text>
+                    <Text size="xs" c="dimmed" truncate>
+                      {agent.description}
+                    </Text>
+                  </Box>
+                </Group>
+                <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+                  {chipEl}
+                  {!isConfigured && (
+                    <Button size="xs" variant="outline" color="brand" onClick={() => handleConnect(agent.type)}>
+                      {isExpanded ? 'Collapse' : 'Connect'}
+                    </Button>
+                  )}
+                </Group>
+              </Group>
+
+              {isExpanded && !isConfigured && (
                 <Box
-                  key={agentType}
-                  onClick={() => setActiveAgent(agentType)}
-                  p="sm"
+                  mt="sm"
                   style={{
-                    border: `1px solid ${isActive ? 'var(--mantine-color-brand-6)' : 'var(--app-border-default)'}`,
-                    borderLeft: `4px solid ${AGENT_COLORS[agentType] ?? '#666'}`,
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--app-bg-elevated)' : undefined,
+                    height: 280,
+                    border: '1px solid var(--app-border-default)',
+                    borderRadius: 6,
+                    overflow: 'hidden',
                   }}
                 >
-                  <Group justify="space-between">
-                    <Text size="sm" fw={500}>
-                      {agent?.name ?? agentType}
-                    </Text>
-                    {isConfigured ? (
-                      <Badge size="sm" color="green" variant="filled" leftSection={<IconCheck size={10} />}>
-                        Authenticated
-                      </Badge>
-                    ) : hasActiveSession ? (
-                      <Badge size="sm" color="yellow" variant="filled">
-                        In progress
-                      </Badge>
-                    ) : (
-                      <Badge size="sm" color="gray" variant="outline">
-                        Click to authenticate
-                      </Badge>
-                    )}
-                  </Group>
+                  <AgentAuthTerminal
+                    key={agent.type}
+                    agentType={agent.type}
+                    session={session}
+                    isConfigured={false}
+                    onAuthenticated={() => {
+                      setExpandedAgent(null);
+                      router.reload();
+                    }}
+                  />
                 </Box>
-              );
-            })}
-          </Stack>
-          <Text size="xs" c="dimmed" mt="md">
-            {configuredCount > 0
-              ? `${configuredCount} of ${selectedAgents.length} authenticated.`
-              : 'No agents authenticated yet.'}
-          </Text>
-        </Box>
-
-        <Box style={{ flex: 1, minHeight: 500, display: 'flex', flexDirection: 'column' }}>
-          {activeAgent ? (
-            <AgentAuthTerminal
-              key={activeAgent}
-              agentType={activeAgent}
-              session={authSessions.find((s) => s.agentType === activeAgent)}
-              isConfigured={configuredAgents.includes(activeAgent as AgentType)}
-              onAuthenticated={() => router.reload()}
-            />
-          ) : (
-            <Stack align="center" justify="center" style={{ flex: 1 }} gap="sm">
-              <IconLock size={48} color="var(--mantine-color-dimmed)" />
-              <Text size="sm" c="dimmed">
-                Select an agent to authenticate
-              </Text>
-            </Stack>
-          )}
-        </Box>
-      </Box>
+              )}
+            </Box>
+          );
+        })}
+      </Stack>
 
       <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--app-border-default)' }}>
         <Button
@@ -368,23 +411,26 @@ function AuthenticateStep({
         >
           Back
         </Button>
-        <Button
-          size="md"
-          rightSection={<IconChevronRight size={16} />}
-          onClick={onNext}
-          loading={loading}
-          disabled={configuredCount === 0}
-        >
-          Continue ({configuredCount}/{selectedAgents.length})
-        </Button>
+        <Group gap="xs">
+          <Text size="xs" c="dimmed">
+            {configuredCount} of {AVAILABLE_AGENTS.length} connected
+          </Text>
+          <Button
+            size="md"
+            rightSection={<IconChevronRight size={16} />}
+            onClick={onNext}
+            loading={loading}
+            disabled={configuredCount === 0}
+          >
+            Continue
+          </Button>
+        </Group>
       </Group>
     </Card>
   );
 }
 
 // ── Main Page ──────────────────────────────────────
-
-const STEP_PROGRESS: Record<number, number> = { 0: 0, 1: 33, 2: 66, 3: 100 };
 
 const CONFETTI_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -422,43 +468,48 @@ function Confetti() {
   );
 }
 
-const stateToStep: Record<string, number> = { step1: 0, step2: 1, step3: 2, step4: 3 };
+const contributorStepMap: Record<string, number> = {
+  step1: 0,
+  step2: 1,
+  step3: 1,
+  step4: 2,
+  completed: 2,
+};
 
 const OnboardingPage = () => {
   const {
     currentUser,
     authSessions = [],
     cableStream,
-  } = usePage<SharedProps & { authSessions: TerminalSession[]; cableStream?: string }>().props;
+    viewerWorkflowPreview = null,
+  } = usePage<
+    SharedProps & {
+      authSessions: TerminalSession[];
+      cableStream?: string;
+      viewerWorkflowPreview?: ViewerWorkflowPreview | null;
+    }
+  >().props;
 
   useInertiaCableStream(cableStream);
 
   const company = currentUser?.currentCompany ?? null;
   const isViewer = currentUser?.currentRole === 'viewer';
-  const serverStep = stateToStep[currentUser?.onboardingState ?? ''] ?? 0;
-  // Viewers (external clients) never configure/authenticate agents, so their
-  // onboarding collapses to Profile → Complete. The server still walks the
-  // linear step1..step4 states; we present step1 as "Profile" and step4 as
-  // "Complete", auto-advancing through the hidden intermediate states.
-  const activeStep = isViewer ? (serverStep >= 3 ? 1 : 0) : serverStep;
+  const onboardingState = currentUser?.onboardingState ?? 'step1';
+  // Viewers see: Profile (0) → See the platform (1) → Complete (2)
+  // Contributors see: Profile (0) → Connect Agents (1) → Complete (2)
+  const activeStep = isViewer ? (viewerStepMap[onboardingState] ?? 0) : (contributorStepMap[onboardingState] ?? 0);
 
   const [position, setPosition] = useState(currentUser?.position ?? '');
   const [language, setLanguage] = useState(currentUser?.preferredAgentLanguage ?? '');
-  const [selectedAgents, setSelectedAgents] = useState<AgentType[]>(currentUser?.selectedAgents ?? []);
+  const selectedAgents = currentUser?.selectedAgents ?? [];
   const [loading, setLoading] = useState(false);
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
 
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const canAdvanceStep1 = !!position && !!language;
-  const canAdvanceStep2 = isViewer || selectedAgents.length > 0;
 
   const configuredAgents = currentUser?.configuredAgents ?? [];
-
-  const configuredCount = useMemo(
-    () => selectedAgents.filter((a) => configuredAgents.includes(a)).length,
-    [selectedAgents, configuredAgents],
-  );
 
   const autoSave = useCallback((data: Record<string, unknown>) => {
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -475,18 +526,6 @@ const OnboardingPage = () => {
       if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
     };
   }, []);
-
-  const toggleAgent = useCallback(
-    (type: AgentType) => {
-      setSelectedAgents((prev) => {
-        const next = prev.includes(type) ? prev.filter((a) => a !== type) : [...prev, type];
-        autoSave({ selectedAgents: next });
-        return next;
-      });
-      setValidationWarning(null);
-    },
-    [autoSave],
-  );
 
   const handlePositionChange = useCallback(
     (v: string | null) => {
@@ -516,15 +555,6 @@ const OnboardingPage = () => {
     });
   }, []);
 
-  // Viewers skip the agent select/authenticate steps: once past the profile
-  // step, walk the (relaxed) state machine straight through to step4.
-  useEffect(() => {
-    if (!isViewer) return;
-    if (serverStep === 1 || serverStep === 2) {
-      submitStep({ onboardingStateEvent: 'go_next' });
-    }
-  }, [isViewer, serverStep, submitStep]);
-
   const handleNext = useCallback(() => {
     if (activeStep === 0) {
       if (!canAdvanceStep1) {
@@ -537,20 +567,23 @@ const OnboardingPage = () => {
         selectedAgents: selectedAgents,
         onboardingStateEvent: 'go_next',
       });
-    } else if (activeStep === 1 && !isViewer) {
-      if (!canAdvanceStep2) {
-        setValidationWarning('Select at least one agent to continue');
-        return;
-      }
-      submitStep({ selectedAgents: selectedAgents, onboardingStateEvent: 'go_next' });
-    } else if (activeStep === 2) {
-      submitStep({ onboardingStateEvent: 'go_next' });
+    } else if (activeStep === 1 && isViewer) {
+      // Viewer "See the platform" step → viewer_advance jumps step2→step4
+      submitStep({ onboardingStateEvent: 'viewer_advance' });
     }
-  }, [activeStep, position, language, selectedAgents, canAdvanceStep1, canAdvanceStep2, submitStep]);
+  }, [activeStep, isViewer, position, language, selectedAgents, canAdvanceStep1, submitStep]);
 
   const handleBack = useCallback(() => {
     setValidationWarning(null);
     submitStep({ onboardingStateEvent: 'go_previous' });
+  }, [submitStep]);
+
+  const handleConnectAgentsNext = useCallback(() => {
+    // Server may be at step2 (first time on Connect Agents) or step3 (re-visiting).
+    // Send go_next once; if server is at step2 it advances to step3, which triggers
+    // another go_next via a follow-up call since step3→step4 guard passes for contributors
+    // who have at least one configured agent.
+    submitStep({ onboardingStateEvent: 'go_next' });
   }, [submitStep]);
 
   const handleComplete = useCallback(() => {
@@ -559,25 +592,38 @@ const OnboardingPage = () => {
 
   if (!currentUser) return null;
 
+  const inviteSubtitle = company?.name
+    ? `You've been invited to join ${company.name} — you can change everything later.`
+    : 'Set up your profile to get started.';
+
   return (
     <PageShell variant="narrow" py={60}>
       <Center mb="xl" className={classes.welcomeCard}>
         <Stack align="center" gap={4}>
           {company?.logoUrl && <img src={company.logoUrl} alt={company.name} className={classes.companyLogo} />}
-          <ThemeIcon size="xl" radius="xl" variant="gradient" gradient={{ from: 'brand', to: 'orange' }}>
-            <IconRocket size={28} />
-          </ThemeIcon>
           <Text size="xl" fw={700}>
-            Welcome to {company?.name ?? 'the Platform'}!
+            Set up your workspace
           </Text>
           <Text size="sm" c="dimmed" className={classes.subtitle}>
-            Let&apos;s set up your profile and AI agents to get started
+            {inviteSubtitle}
           </Text>
         </Stack>
       </Center>
 
       <Progress
-        value={isViewer ? (activeStep === 0 ? 0 : 100) : (STEP_PROGRESS[activeStep] ?? 0)}
+        value={
+          isViewer
+            ? activeStep === 0
+              ? 0
+              : activeStep === 1
+                ? 50
+                : 100
+            : activeStep === 0
+              ? 0
+              : activeStep === 1
+                ? 50
+                : 100
+        }
         animated
         size="sm"
         mb="lg"
@@ -586,8 +632,8 @@ const OnboardingPage = () => {
 
       <Stepper active={activeStep} mb="xl" allowNextStepsSelect={false}>
         <Stepper.Step label="Your Profile" icon={<IconUser size={18} />} />
-        {!isViewer && <Stepper.Step label="Select Agents" />}
-        {!isViewer && <Stepper.Step label="Authenticate" />}
+        {!isViewer && <Stepper.Step label="Connect Agents" />}
+        {isViewer && <Stepper.Step label="See the platform" />}
         <Stepper.Step label="Complete" icon={<IconCheck size={18} />} />
       </Stepper>
 
@@ -599,15 +645,30 @@ const OnboardingPage = () => {
               Tell us about yourself
             </Text>
             <Stack gap="md">
-              <Select
-                label="Your Position"
-                placeholder="Select your role"
-                data={POSITION_OPTIONS}
-                value={position}
-                onChange={handlePositionChange}
-                required
-                size="md"
-              />
+              <Box>
+                <Text size="sm" fw={500} mb="xs">
+                  Your Position
+                </Text>
+                <SimpleGrid cols={2} spacing="xs">
+                  {POSITION_OPTIONS.map((opt) => {
+                    const Icon = opt.icon;
+                    const selected = position === opt.value;
+                    return (
+                      <UnstyledButton
+                        key={opt.value}
+                        className={`${classes.roleOpt} ${selected ? classes.roleOptSelected : ''}`}
+                        onClick={() => handlePositionChange(opt.value)}
+                        aria-pressed={selected}
+                      >
+                        <Icon size={18} />
+                        <Text size="sm" fw={500} mt={4}>
+                          {opt.label}
+                        </Text>
+                      </UnstyledButton>
+                    );
+                  })}
+                </SimpleGrid>
+              </Box>
               <Select
                 label="Preferred Agent Language"
                 placeholder="Select language"
@@ -625,71 +686,13 @@ const OnboardingPage = () => {
               </Text>
             )}
             <Group justify="flex-end" mt="xl">
-              <Button size="md" rightSection={<IconChevronRight size={16} />} onClick={handleNext} loading={loading}>
-                Continue
-              </Button>
-            </Group>
-          </Card>
-        </Box>
-      )}
-
-      {/* Step 2: Select Agents */}
-      {activeStep === 1 && !isViewer && (
-        <Box key="step-1" className={classes.stepContent}>
-          <Card withBorder p="xl">
-            <Text fw={600} size="lg" mb="xs">
-              Select your AI agents
-            </Text>
-            <Text size="sm" c="dimmed" mb="md">
-              Choose at least one agent to work with. You can change this later.
-            </Text>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-              {AVAILABLE_AGENTS.map((agent) => {
-                const selected = selectedAgents.includes(agent.type);
-                return (
-                  <Card
-                    key={agent.type}
-                    withBorder
-                    p="md"
-                    className={classes.agentCard}
-                    style={{
-                      borderLeftColor: AGENT_COLORS[agent.type] ?? '#666',
-                      borderRightColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
-                      borderTopColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
-                      borderBottomColor: selected ? 'var(--mantine-color-brand-6)' : undefined,
-                      backgroundColor: selected ? 'var(--mantine-color-brand-light)' : undefined,
-                    }}
-                    onClick={() => toggleAgent(agent.type)}
-                  >
-                    <Group justify="space-between" mb="xs">
-                      <Text fw={500} size="sm">
-                        {agent.name}
-                      </Text>
-                      <Checkbox checked={selected} onChange={() => toggleAgent(agent.type)} size="sm" />
-                    </Group>
-                    <Text size="xs" c="dimmed">
-                      {agent.description}
-                    </Text>
-                  </Card>
-                );
-              })}
-            </SimpleGrid>
-            {validationWarning && (
-              <Text size="sm" c="yellow" mt="md">
-                ⚠ {validationWarning}
-              </Text>
-            )}
-            <Group justify="space-between" mt="xl">
               <Button
-                variant="outline"
                 size="md"
-                leftSection={<IconChevronLeft size={16} />}
-                onClick={handleBack}
+                rightSection={<IconChevronRight size={16} />}
+                onClick={handleNext}
                 loading={loading}
+                disabled={!canAdvanceStep1}
               >
-                Back
-              </Button>
-              <Button size="md" rightSection={<IconChevronRight size={16} />} onClick={handleNext} loading={loading}>
                 Continue
               </Button>
             </Group>
@@ -697,24 +700,79 @@ const OnboardingPage = () => {
         </Box>
       )}
 
-      {/* Step 3: Authenticate */}
-      {activeStep === 2 && !isViewer && (
-        <Box key="step-2" className={classes.stepContent}>
-          <AuthenticateStep
-            selectedAgents={selectedAgents}
+      {/* Step 2: Connect Agents (contributors only) */}
+      {activeStep === 1 && !isViewer && (
+        <Box key="step-connect" className={classes.stepContent}>
+          <ConnectAgentsStep
             configuredAgents={configuredAgents}
-            configuredCount={configuredCount}
             authSessions={authSessions}
             loading={loading}
             onBack={handleBack}
-            onNext={handleNext}
+            onNext={handleConnectAgentsNext}
           />
         </Box>
       )}
 
-      {/* Step 4: Complete */}
-      {((!isViewer && activeStep === 3) || (isViewer && activeStep === 1)) && (
-        <Box key="step-3" className={classes.stepContent} pos="relative">
+      {/* Step 2: See the platform (viewers only) */}
+      {activeStep === 1 && isViewer && (
+        <Box key="step-viewer" className={classes.stepContent}>
+          <Card withBorder p="xl">
+            {viewerWorkflowPreview ? (
+              <>
+                <Text fw={600} size="lg" mb={4}>
+                  Here&apos;s what a workflow looks like in action
+                </Text>
+                <Text size="sm" c="dimmed" mb="md">
+                  {viewerWorkflowPreview.workflowName}
+                </Text>
+                <Text size="sm" mb="xs">
+                  {viewerWorkflowPreview.workflowDescription}
+                </Text>
+                {viewerWorkflowPreview.steps.length > 0 && (
+                  <Stack gap="xs" mb="md">
+                    {viewerWorkflowPreview.steps.map((step, i) => (
+                      <Card key={i} withBorder p="sm">
+                        <Text size="sm" fw={500}>
+                          {i + 1}. {step.name}
+                        </Text>
+                        {step.description && (
+                          <Text size="xs" c="dimmed">
+                            {step.description}
+                          </Text>
+                        )}
+                      </Card>
+                    ))}
+                  </Stack>
+                )}
+                <Text size="xs" c="dimmed" mb="xl">
+                  You can explore the full board once you&apos;re in.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text fw={600} size="lg" mb={4}>
+                  See the platform in action
+                </Text>
+                <Text size="sm" c="dimmed" mb="md">
+                  Once you&apos;re in, you&apos;ll see your team&apos;s workflows here.
+                </Text>
+                <Text size="sm" mb="xl">
+                  Each workflow automates a step of your process — from code review to bug triage to deployment.
+                </Text>
+              </>
+            )}
+            <Group justify="flex-end">
+              <Button size="md" rightSection={<IconChevronRight size={16} />} onClick={handleNext} loading={loading}>
+                Continue
+              </Button>
+            </Group>
+          </Card>
+        </Box>
+      )}
+
+      {/* Step 3/2: Complete */}
+      {((!isViewer && activeStep === 2) || (isViewer && activeStep === 2)) && (
+        <Box key="step-complete" className={classes.stepContent} pos="relative">
           <Confetti />
           <Card withBorder p="xl">
             <Center mb="md">
@@ -736,7 +794,7 @@ const OnboardingPage = () => {
                     Position
                   </Text>
                   <Text size="sm" fw={500}>
-                    {POSITION_OPTIONS.find((o) => o.value === position)?.label ?? position}
+                    {POSITION_LABEL_MAP[position] ?? position}
                   </Text>
                 </Group>
               </Card>
@@ -751,28 +809,29 @@ const OnboardingPage = () => {
                 </Group>
               </Card>
 
-              {selectedAgents.map((a) => {
-                const agent = AVAILABLE_AGENTS.find((ag) => ag.type === a);
-                const isAuth = configuredAgents.includes(a);
-                return (
-                  <Card
-                    key={a}
-                    withBorder
-                    p="sm"
-                    className={`${classes.summaryCard} ${classes.agentCard}`}
-                    style={{ borderLeftColor: AGENT_COLORS[a] ?? '#666' }}
-                  >
-                    <Group justify="space-between">
-                      <Text size="sm" fw={500}>
-                        {agent?.name ?? a}
-                      </Text>
-                      <Badge size="sm" color={isAuth ? 'green' : 'yellow'} variant="filled">
-                        {isAuth ? '✓ Authenticated' : '⚠ Not authenticated'}
-                      </Badge>
-                    </Group>
-                  </Card>
-                );
-              })}
+              {!isViewer &&
+                selectedAgents.map((a) => {
+                  const agent = AVAILABLE_AGENTS.find((ag) => ag.type === a);
+                  const isAuth = configuredAgents.includes(a);
+                  return (
+                    <Card
+                      key={a}
+                      withBorder
+                      p="sm"
+                      className={`${classes.summaryCard} ${classes.agentCard}`}
+                      style={{ borderLeftColor: AGENT_COLORS[a] ?? '#666' }}
+                    >
+                      <Group justify="space-between">
+                        <Text size="sm" fw={500}>
+                          {agent?.name ?? a}
+                        </Text>
+                        <Badge size="sm" color={isAuth ? 'green' : 'yellow'} variant="filled">
+                          {isAuth ? '✓ Authenticated' : '⚠ Not authenticated'}
+                        </Badge>
+                      </Group>
+                    </Card>
+                  );
+                })}
             </Stack>
 
             <Group justify={isViewer ? 'flex-end' : 'space-between'}>

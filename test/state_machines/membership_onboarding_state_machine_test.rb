@@ -41,6 +41,18 @@ class MembershipOnboardingStateMachineTest < ActiveSupport::TestCase
     assert m.onboarding_completed_at.present?
   end
 
+  test "viewer_advance transitions viewer from step2 to step4" do
+    m = membership(:viewer, state: "step2")
+    assert m.viewer_advance!
+    assert_equal "step4", m.reload.onboarding_state
+  end
+
+  test "viewer_advance is blocked for non-viewer at step2" do
+    m = membership(:employee, state: "step2")
+    assert_raises(AASM::InvalidTransition) { m.viewer_advance! }
+    assert_equal "step2", m.reload.onboarding_state
+  end
+
   # A credential in ANOTHER company must not satisfy this company's agent gate —
   # that is the whole point of per-company credentials.
   test "a credential in another company does not unblock step3 here" do

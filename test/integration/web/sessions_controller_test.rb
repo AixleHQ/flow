@@ -117,6 +117,28 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path(error: "invalid_credentials")
   end
 
+  test "omniauth with unrecognized domain redirects to login with no_workspace error and creates no user" do
+    unknown_domain = "unknowndomain#{SecureRandom.hex(4)}.xyz"
+    unknown_email = "test@#{unknown_domain}"
+
+    # No company exists with this domain — GoogleOmniAuthService will raise NoWorkspaceError
+    assert_nil Company.find_by(email_domain: unknown_domain)
+
+    auth_hash = OmniAuth::AuthHash.new(
+      provider: "google_oauth2",
+      uid: "google-uid-unknown",
+      info: { email: unknown_email, name: "Ghost User" }
+    )
+
+    assert_no_difference "User.count" do
+      get auth_callback_path(provider: "google_oauth2"),
+        env: { "omniauth.auth" => auth_hash }
+    end
+
+    assert_redirected_to login_path(error: "no_workspace")
+    assert_nil User.find_by(email: unknown_email)
+  end
+
   test "inertia visit by a super admin is sent to the admin panel with a full-page visit" do
     super_admin = create(:user, :super_admin, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
     sign_in_as(super_admin)

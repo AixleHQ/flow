@@ -56,4 +56,23 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
     assert_equal "completed", viewer.company_memberships.sole.reload.onboarding_state
   end
+
+  test "viewer PATCH with viewer_advance event advances from step2 to step4" do
+    viewer = create(:user, :viewer, company: @company, onboarding_state: "step2",
+                                    position: "dev", preferred_agent_language: "en",
+                                    email: "client3@ext.com",
+                                    password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(viewer)
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
+    assert_redirected_to onboarding_path
+    assert_equal "step4", viewer.reload.onboarding_state
+  end
+
+  test "non-viewer cannot use viewer_advance event" do
+    @user.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
+    assert_equal "step2", @user.reload.onboarding_state
+  end
 end

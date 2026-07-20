@@ -73,6 +73,8 @@ class Web::SessionsController < Web::ApplicationController
     sign_in(user)
     target = user.super_admin? ? admin_root_path : onboarding_path
     redirect_to target
+  rescue GoogleOmniAuthService::NoWorkspaceError
+    redirect_to login_path(error: "no_workspace")
   rescue StandardError
     redirect_to login_path(error: "oauth_failed")
   end

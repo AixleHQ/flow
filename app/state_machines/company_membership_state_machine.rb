@@ -58,6 +58,10 @@ module CompanyMembershipStateMachine
         transitions from: :step4, to: :step3
       end
 
+      event :viewer_advance, guard: :viewer? do
+        transitions from: :step2, to: :step4
+      end
+
       event :complete, guard: :can_complete_onboarding?, after: :set_onboarding_completed_at do
         transitions from: :step4, to: :completed
       end
