@@ -98,23 +98,28 @@ describe('Company/Sessions/Index', () => {
     expect(within(table).getByText('Billing Service')).toBeInTheDocument();
   });
 
-  it('exposes an external open link only for sessions in the ready state', () => {
+  it('exposes an open link for openable sessions but not for pending ones', () => {
     renderAuthedPage(
       <SessionsIndex
         sessions={[
           makeSession({ id: 301, state: 'ready' }),
           makeSession({ id: 302, state: 'finished', finishedAt: '2026-06-26T10:05:00Z' }),
+          makeSession({ id: 303, state: 'not_started' }),
         ]}
         filters={{}}
         perPage={20}
       />,
     );
 
-    // Only the ready session (#301) gets the "Open session" tooltip link to its show page.
-    const openLinks = screen.getAllByRole('link', { name: '' }).filter((a) => a.getAttribute('target') === '_blank');
-    const hrefs = openLinks.map((a) => a.getAttribute('href'));
+    // Ready and finished sessions are openable (row + link to their show page);
+    // a not-yet-started session has no open affordance.
+    const hrefs = screen
+      .getAllByRole('link')
+      .map((a) => a.getAttribute('href'))
+      .filter((href) => href?.startsWith('/company/sessions/'));
     expect(hrefs).toContain('/company/sessions/301');
-    expect(hrefs).not.toContain('/company/sessions/302');
+    expect(hrefs).toContain('/company/sessions/302');
+    expect(hrefs).not.toContain('/company/sessions/303');
   });
 
   it('formats large token counts with k/M suffixes and a dash for zero', () => {
