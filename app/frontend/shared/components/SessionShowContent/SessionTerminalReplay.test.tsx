@@ -1,3 +1,4 @@
+import { Terminal } from '@xterm/xterm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, waitFor } from 'test/renderPage';
@@ -33,6 +34,20 @@ describe('SessionTerminalReplay', () => {
     open.mockClear();
     loadAddon.mockClear();
     fit.mockClear();
+    vi.mocked(Terminal).mockClear();
+  });
+
+  it('sizes the terminal to the widest captured line so box-art aligns', async () => {
+    // Widest content line is 40 cols; the terminal must render at that width.
+    const body = ['short', '#'.repeat(40), 'x'.repeat(12)].join('\n');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
+
+    renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+
+    await waitFor(() => expect(Terminal).toHaveBeenCalled());
+    const opts = vi.mocked(Terminal).mock.calls.at(-1)?.[0];
+    expect(opts?.cols).toBe(40);
+    fetchSpy.mockRestore();
   });
 
   it('fetches the log and writes the raw ANSI bytes into the terminal', async () => {

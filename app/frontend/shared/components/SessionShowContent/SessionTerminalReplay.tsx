@@ -29,6 +29,36 @@ function readTerminalTheme() {
   };
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-Z\\-_()][0-9A-Za-z]?/g;
+
+// The captured stream was drawn at the agent pane's column width; TUI box-art
+// only lines up if xterm renders at that same width. Infer it from the widest
+// rendered line (ANSI stripped, \r segments split so overwrites don't inflate).
+function detectCols(text: string): number {
+  let cols = 0;
+  for (const line of text.replace(ANSI, '').split('\n')) {
+    for (const seg of line.split('\r')) {
+      const len = [...seg].length;
+      if (len > cols) cols = len;
+    }
+  }
+  return Math.min(Math.max(cols || 80, 20), 400);
+}
+
+// Pick a font size so `cols` columns exactly fill the container width — this is
+// what makes the box borders align and fit instead of wrapping/clipping. rows
+// follow from the height; the rest of the session scrolls in the scrollback.
+function computeLayout(text: string, el: HTMLElement) {
+  const cols = detectCols(text);
+  const width = (el.clientWidth || 700) - 16; // minus padding
+  const height = (el.clientHeight || 420) - 16;
+  const CHAR_W = 0.6; // monospace advance ≈ 0.6em
+  const fontSize = Math.min(Math.max(Math.floor(width / (cols * CHAR_W)), 6), 14);
+  const rows = Math.max(Math.floor(height / (fontSize * 1.25)), 4);
+  return { cols, rows, fontSize };
+}
+
 export function SessionTerminalReplay({ logUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import('@xterm/xterm').Terminal | null>(null);
@@ -71,26 +101,34 @@ export function SessionTerminalReplay({ logUrl }: Props) {
           if (nl >= 0) text = text.slice(nl + 1);
         }
 
-        const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
+        const { Terminal } = await import('@xterm/xterm');
         await import('@xterm/xterm/css/xterm.css');
         if (disposed || !containerRef.current) return;
 
+        const el = containerRef.current;
         const { fontFamily, theme } = readTerminalTheme();
+        const { cols, rows, fontSize } = computeLayout(text, el);
         const term = new Terminal({
           disableStdin: true,
           convertEol: false, // raw PTY stream already contains \r\n
           scrollback: 100_000,
+          cols,
+          rows,
+          fontSize,
           fontFamily,
           theme,
         });
-        const fit = new FitAddon();
-        term.loadAddon(fit);
-        term.open(containerRef.current);
-        fit.fit();
+        term.open(el);
         term.write(text);
         termRef.current = term;
 
-        onResize = () => fit.fit();
+        // On container resize keep the inferred column count; only rescale the
+        // font (and rows) so the fixed-width box-art stays aligned and fitted.
+        onResize = () => {
+          const layout = computeLayout(text, el);
+          term.options.fontSize = layout.fontSize;
+          term.resize(cols, layout.rows);
+        };
         window.addEventListener('resize', onResize);
 
         setTruncated(isTruncated);
