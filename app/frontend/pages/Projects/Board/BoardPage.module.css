@@ -114,6 +114,10 @@
   animation: workflowPulse 1.5s ease-in-out infinite;
 }
 
+.statusChipPulse {
+  animation: workflowPulse 1.4s ease-in-out infinite;
+}
+
 .childTaskRow:hover {
   background-color: var(--app-bg-elevated);
 }
@@ -121,4 +125,127 @@
 :global(@keyframes priorityBarPulse) {
   0%, 100% { opacity: 1; transform: scaleY(1); }
   50% { opacity: 0.5; transform: scaleY(1.15); }
+}
+
+.addColumnBtn {
+  border: 1px dashed var(--app-border-strong);
+  border-radius: 10px;
+  color: var(--mantine-color-dimmed);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  user-select: none;
+  background: transparent;
+}
+
+.addColumnBtn:hover {
+  color: var(--mantine-color-text);
+  border-color: var(--mantine-color-dimmed);
+  background: var(--app-bg-elevated);
+}
+
+.dangerHover:hover {
+  background: rgba(200, 90, 90, 0.1) !important;
+  color: var(--mantine-color-red-6) !important;
+}
+
+/* Task detail panel — title ghost input */
+.ptTitle {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--mantine-color-text);
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 2px 6px;
+  margin-left: -6px;
+  outline: none;
+  cursor: text;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  line-height: 1.3;
+  resize: none;
+  display: block;
+}
+
+.ptTitle:hover {
+  border-color: var(--app-border-default);
+  background: var(--app-bg-elevated);
+}
+
+.ptTitle:focus {
+  border-color: var(--mantine-color-brand-5);
+  background: var(--app-bg-paper);
+}
+
+/* Detail tab description ghost field */
+.ptDesc {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--mantine-color-dimmed);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 4px 6px;
+  margin-left: -6px;
+  outline: none;
+  cursor: text;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 40px;
+}
+
+.ptDesc:hover {
+  border-color: var(--app-border-default);
+  background: var(--app-bg-elevated);
+}
+
+.ptDesc:focus {
+  border-color: var(--mantine-color-brand-5);
+  background: var(--app-bg-paper);
+  color: var(--mantine-color-text);
+}
+
+.cmtAct:hover {
+  color: var(--mantine-color-text) !important;
+  background: var(--app-bg-elevated) !important;
+}
+
+/* Task detail panel — tabs list */
+.detailTabsList {
+  border-bottom: 1px solid var(--app-border-default);
+  padding-left: 16px;
+  padding-right: 16px;
+  gap: 0;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.detailTabsList::-webkit-scrollbar {
+  display: none;
+}
+
+/* Task detail panel — individual tab */
+.detailTab {
+  padding: 9px 11px;
+  font-size: 14px;
+  color: var(--mantine-color-dimmed);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-weight: 400;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.detailTab:hover {
+  color: var(--mantine-color-text);
+}
+
+.detailTab[data-active] {
+  color: var(--mantine-color-brand-5);
+  border-bottom-color: var(--mantine-color-brand-5);
+  font-weight: 500;
 }

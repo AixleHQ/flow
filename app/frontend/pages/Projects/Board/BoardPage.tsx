@@ -12,7 +12,13 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
@@ -28,15 +34,12 @@ import {
   Loader,
   Menu,
   Modal,
-  MultiSelect,
   Paper,
-  ScrollArea,
   Select,
   SimpleGrid,
   Skeleton,
   Stack,
   Tabs,
-  TagsInput,
   Text,
   TextInput,
   Textarea,
@@ -46,33 +49,49 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import {
+  IconActivity,
+  IconAdjustmentsHorizontal,
   IconArchive,
   IconArchiveOff,
+  IconArrowLeft,
+  IconArrowRight,
   IconArrowsMaximize,
   IconArrowsMinimize,
+  IconAlertCircle,
+  IconBolt,
   IconBookmark,
   IconBug,
-  IconChevronLeft,
-  IconChevronRight,
+  IconCheck,
+  IconChevronDown,
+  IconChevronsRight,
   IconCircleCheck,
   IconClock,
   IconCloudUpload,
   IconCoin,
   IconColumns,
+  IconDots,
   IconDownload,
-  IconFilter,
+  IconFlag,
+  IconFold,
   IconGripVertical,
   IconHourglass,
+  IconLayoutGrid,
   IconLayoutKanban,
+  IconListDetails,
   IconLink,
   IconMessage,
+  IconPencil,
   IconPlus,
+  IconRefresh,
+  IconRobot,
   IconSearch,
   IconSend,
   IconSettings,
+  IconTag,
   IconTrash,
   IconChartBar,
   IconExternalLink,
+  IconFileTypePdf,
   IconPlayerPlay,
   IconUser,
   IconX,
@@ -95,7 +114,6 @@ import { z } from 'zod';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
-import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -180,7 +198,14 @@ interface Task {
   commentsCount: number;
   childrenCount: number;
   assetsCount?: number;
-  recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string }>;
+  recentWorkflowRuns: Array<{
+    id: number;
+    state: string;
+    createdAt: string;
+    durationSeconds?: number | null;
+    totalCostCents?: number | null;
+    errorMessage?: string | null;
+  }>;
   pendingGates: Gate[];
   createdAt: string;
   updatedAt: string;
@@ -242,6 +267,14 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
 
+// Helper to get workflow status indicator color
+const workflowStatusColor = (state: string): string => {
+  if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--mantine-color-yellow-5)';
+  if (state === 'failed') return 'var(--mantine-color-red-5)';
+  if (state === 'completed' || state === 'succeeded') return 'var(--mantine-color-green-5)';
+  return 'var(--mantine-color-gray-5)';
+};
+
 const CHART_COLORS = [
   '#2196f3',
   '#9c27b0',
@@ -261,13 +294,6 @@ const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   fontSize: 12,
   color: 'var(--app-text-primary)',
 };
-
-function workflowStatusColor(state: string): string {
-  if (WORKFLOW_ACTIVE_STATES.has(state)) return '#1976d2';
-  if (state === 'failed') return '#d32f2f';
-  if (state === 'cancelled') return '#9e9e9e';
-  return '#2e7d32';
-}
 
 function formatCostCents(cents: number): string {
   return cents >= 100 ? `$${(cents / 100).toFixed(2)}` : `${cents}¢`;
@@ -327,7 +353,17 @@ function avatarInitials(name: string): string {
 
 // --- TaskCard (no grip handle, legacy style) ---
 
-function SortableTaskCard({ task, href, onClick }: { task: Task; href?: string; onClick?: (t: Task) => void }) {
+function SortableTaskCard({
+  task,
+  href,
+  onClick,
+  onRetry,
+}: {
+  task: Task;
+  href?: string;
+  onClick?: (t: Task) => void;
+  onRetry?: (task: Task) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
     data: { type: 'task', task },
@@ -346,7 +382,7 @@ function SortableTaskCard({ task, href, onClick }: { task: Task; href?: string; 
 
   return (
     <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCardUI task={task} href={href} onClick={onClick} />
+      <TaskCardUI task={task} href={href} onClick={onClick} onRetry={onRetry} />
     </Box>
   );
 }
@@ -356,31 +392,42 @@ function TaskCardUI({
   href,
   onClick,
   isDragOverlay,
+  onRetry,
 }: {
   task: Task;
   href?: string;
   onClick?: (t: Task) => void;
   isDragOverlay?: boolean;
+  onRetry?: (task: Task) => void;
 }) {
   const visibleTags = (task.tags ?? []).slice(0, 3);
   const overflowCount = (task.tags ?? []).length - 3;
 
-  // Render the whole card as a genuine anchor so native browser link gestures
-  // (right-click context menu, Cmd/Ctrl+click and middle-click to open in a new
-  // tab) work. A plain left-click is intercepted below and handed to onClick so
-  // in-app SPA navigation stays exactly as before; modifier/middle/right clicks
-  // are left to the browser. draggable={false} keeps dnd-kit's pointer drag from
-  // being pre-empted by the browser's native link-drag.
+  const latestRun = (task.recentWorkflowRuns ?? [])[0] ?? null;
+  const isRunning = latestRun && WORKFLOW_ACTIVE_STATES.has(latestRun.state);
+  const isFailed = latestRun?.state === 'failed';
+  const isSuccess = latestRun && (latestRun.state === 'completed' || latestRun.state === 'succeeded');
+
+  let dotColor: string | undefined;
+  let runLabel: string | undefined;
+  if (isRunning && latestRun) {
+    dotColor = 'var(--mantine-color-yellow-5)';
+    runLabel = latestRun.state;
+  } else if (isFailed) {
+    dotColor = 'var(--mantine-color-red-5)';
+    runLabel = 'failed';
+  } else if (isSuccess && latestRun) {
+    dotColor = 'var(--mantine-color-green-5)';
+    runLabel = latestRun.state;
+  }
+
   const isLink = !isDragOverlay && !!href;
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
     if (!isLink) {
       onClick?.(task);
       return;
     }
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
-      // Let the browser handle modifier/middle/right clicks natively.
-      return;
-    }
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     onClick?.(task);
   };
@@ -390,7 +437,6 @@ function TaskCardUI({
       component={isLink ? 'a' : 'div'}
       href={isLink ? href : undefined}
       draggable={isLink ? false : undefined}
-      shadow={isDragOverlay ? 'lg' : 'xs'}
       radius="sm"
       p="xs"
       mb={8}
@@ -399,22 +445,22 @@ function TaskCardUI({
       onClick={handleClick}
       style={{
         cursor: 'pointer',
-        transition: 'box-shadow 0.15s, border-color 0.15s',
+        transition: 'border-color 0.15s, background-color 0.15s',
         borderColor: 'var(--app-border-strong)',
         opacity: task.archived ? 0.6 : 1,
         display: 'block',
         color: 'inherit',
         textDecoration: 'none',
+        borderRadius: 8,
+        padding: '12px 13px',
       }}
       onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = 'var(--mantine-shadow-md)';
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
       }}
       onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = isDragOverlay
-          ? 'var(--mantine-shadow-lg)'
-          : 'var(--mantine-shadow-xs)';
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
+        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
       }}
     >
       {/* Title row with priority dot */}
@@ -433,10 +479,35 @@ function TaskCardUI({
             />
           </Tooltip>
         )}
-        <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word' }}>
+        <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
           {task.title}
         </Text>
       </Group>
+
+      {/* Workflow status chip — filled colored badge (AC-11) */}
+      {latestRun && dotColor && runLabel && (
+        <Group gap={4} mt={6} align="center">
+          <ActionIcon size="xs" variant="subtle" color="orange" style={{ cursor: 'default', flexShrink: 0 }}>
+            <IconBolt size={11} />
+          </ActionIcon>
+          <Badge
+            size="xs"
+            variant="filled"
+            color={isFailed ? 'red' : isRunning ? 'orange' : 'green'}
+            leftSection={
+              <Box
+                w={5}
+                h={5}
+                className={isRunning ? styles.workflowDotActive : undefined}
+                style={{ borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
+              />
+            }
+            style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
+          >
+            {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
+          </Badge>
+        </Group>
+      )}
 
       {/* Type chip + tags */}
       <Group gap={4} mt={6} wrap="wrap">
@@ -471,7 +542,50 @@ function TaskCardUI({
         )}
       </Group>
 
-      {/* Footer: assignee + workflow dots + comments */}
+      {/* Error message on failed cards */}
+      {isFailed && latestRun?.errorMessage && (
+        <Text size="xs" c="red.4" mt={4} style={{ fontSize: 11, lineHeight: 1.4 }} lineClamp={2}>
+          {latestRun.errorMessage}
+        </Text>
+      )}
+
+      {/* Retry button on failed cards (AC-12) */}
+      {isFailed && onRetry && (
+        <Box mt={6}>
+          <Button
+            size="compact-xs"
+            variant="subtle"
+            color="red"
+            leftSection={<IconRefresh size={11} />}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRetry?.(task);
+            }}
+            style={{ fontSize: 11, paddingLeft: 0 }}
+          >
+            Retry run
+          </Button>
+        </Box>
+      )}
+
+      {/* Duration + cost on succeeded cards */}
+      {isSuccess && latestRun && (latestRun.durationSeconds != null || latestRun.totalCostCents != null) && (
+        <Group gap={8} mt={4}>
+          {latestRun.durationSeconds != null && (
+            <Text size="xs" c="dimmed" style={{ fontSize: 11 }}>
+              ⏱ {formatDuration(latestRun.durationSeconds)}
+            </Text>
+          )}
+          {latestRun.totalCostCents != null && (
+            <Text size="xs" c="dimmed" style={{ fontSize: 11 }}>
+              {formatCostCents(latestRun.totalCostCents)}
+            </Text>
+          )}
+        </Group>
+      )}
+
+      {/* Footer: assignee + comments */}
       <Group justify="space-between" mt={6}>
         <Group gap={6}>
           {task.assigneeName && (
@@ -479,24 +593,6 @@ function TaskCardUI({
               <Avatar size={20} radius="xl" color="brand" style={{ fontSize: 10 }}>
                 {avatarInitials(task.assigneeName)}
               </Avatar>
-            </Tooltip>
-          )}
-          {(task.recentWorkflowRuns ?? []).length > 0 && (
-            <Tooltip label={(task.recentWorkflowRuns ?? []).map((r) => r.state).join(', ')}>
-              <Group gap={3} align="center" style={{ lineHeight: 1 }}>
-                {[...(task.recentWorkflowRuns ?? [])].reverse().map((run) => (
-                  <Box
-                    key={run.id}
-                    w={7}
-                    h={7}
-                    className={WORKFLOW_ACTIVE_STATES.has(run.state) ? styles.workflowDotActive : undefined}
-                    style={{
-                      borderRadius: '50%',
-                      backgroundColor: workflowStatusColor(run.state),
-                    }}
-                  />
-                ))}
-              </Group>
             </Tooltip>
           )}
         </Group>
@@ -530,8 +626,13 @@ function BoardColumn({
   taskHref,
   onAddTask,
   onTaskClick,
+  onRetryTask,
   collapsed,
   onToggleCollapse,
+  onMoveLeft,
+  onMoveRight,
+  onDeleteColumn,
+  onRenameColumn,
   isFiltered,
   isDropTarget,
   canExecute,
@@ -541,14 +642,55 @@ function BoardColumn({
   taskHref: (task: Task) => string;
   onAddTask: (columnId: number) => void;
   onTaskClick: (task: Task) => void;
+  onRetryTask: (task: Task) => void;
   collapsed: boolean;
   onToggleCollapse: (id: number) => void;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
+  onDeleteColumn?: () => void;
+  onRenameColumn?: (columnId: number, name: string) => void;
   isFiltered: boolean;
   isDropTarget: boolean;
   canExecute: boolean;
 }) {
-  const { setNodeRef } = useDroppable({ id: `column-${column.id}`, data: { columnId: column.id } });
+  const {
+    setNodeRef,
+    listeners: colListeners,
+    transform: colTransform,
+    transition: colTransition,
+    isDragging: colIsDragging,
+  } = useSortable({
+    id: `col-${column.id}`,
+    data: { type: 'column', columnId: column.id },
+  });
+  // Keep the droppable registration for task drop targets
+  const { setNodeRef: setDropRef } = useDroppable({ id: `column-${column.id}`, data: { columnId: column.id } });
+
+  const setRefs = (el: HTMLElement | null) => {
+    setNodeRef(el);
+    setDropRef(el);
+  };
+
+  const colStyle = {
+    transform: colTransform ? `translate3d(${colTransform.x}px, ${colTransform.y}px, 0)` : undefined,
+    transition: colTransition,
+    opacity: colIsDragging ? 0.4 : 1,
+    zIndex: colIsDragging ? 10 : undefined,
+  };
+
   const taskIds = useMemo(() => tasks.map((t) => `task-${t.id}`), [tasks]);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  // Focus the input after Mantine's Menu close has finished restoring focus to the trigger.
+  // Without the timeout, Menu focus-restoration fires after React's commit and immediately
+  // blurs the freshly-mounted input, triggering onBlur → commitRename → input disappears.
+  useEffect(() => {
+    if (!renaming) return;
+    const t = setTimeout(() => renameInputRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [renaming]);
 
   const overStyle = {
     outline: isDropTarget ? '2px solid var(--mantine-color-brand-6)' : '2px solid transparent',
@@ -556,43 +698,27 @@ function BoardColumn({
     transition: 'outline-color 0.15s ease',
   };
 
-  if (collapsed) {
-    const priorityIndicators = tasks.slice(0, 5).map((t) => {
-      const latestRun = t.recentWorkflowRuns?.[0];
-      const hasPendingGates = (t.pendingGates?.length ?? 0) > 0;
-      let color = '#9e9e9e';
-      let hasActiveRun = false;
-      if (latestRun) {
-        color = workflowStatusColor(latestRun.state);
-        hasActiveRun = WORKFLOW_ACTIVE_STATES.has(latestRun.state);
-      }
-      if (hasPendingGates) {
-        color = '#eab308';
-        hasActiveRun = false;
-      }
-      const tooltipParts: string[] = [t.title];
-      if (latestRun) {
-        if (latestRun.state === 'running' && latestRun.createdAt) {
-          tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
-        } else {
-          tooltipParts.push(`Status: ${latestRun.state}`);
-        }
-      }
-      if (hasPendingGates) {
-        const oldestGate = t.pendingGates.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
-        tooltipParts.push(`Waiting — ${formatElapsedTime(oldestGate.createdAt)}`);
-      }
-      return { id: t.id, task: t, color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
-    });
+  const startRename = () => {
+    setRenameValue(column.name);
+    setRenaming(true);
+  };
 
+  const commitRename = () => {
+    setRenaming(false);
+    const val = renameValue.trim();
+    if (!val || val === column.name) return;
+    onRenameColumn?.(column.id, val);
+  };
+
+  if (collapsed) {
     return (
       <Box
-        ref={setNodeRef}
+        ref={setRefs}
         onClick={() => onToggleCollapse(column.id)}
         style={{
-          flex: '0 0 44px',
-          minWidth: 44,
-          maxWidth: 44,
+          flex: '0 0 46px',
+          minWidth: 46,
+          maxWidth: 46,
           backgroundColor: 'var(--app-bg-elevated)',
           border: '1px solid var(--app-border-default)',
           borderRadius: 10,
@@ -600,66 +726,87 @@ function BoardColumn({
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
+          justifyContent: 'flex-start',
           cursor: 'pointer',
           padding: '12px 0',
-          gap: 8,
+          gap: 12,
           ...overStyle,
         }}
       >
-        <Box style={{ position: 'relative' }}>
-          <IconChevronRight size={16} color="var(--mantine-color-dimmed)" />
-          <Badge
-            size="xs"
-            variant="filled"
-            color="gray"
-            style={{ position: 'absolute', top: -8, right: -12, fontSize: 9, padding: '0 4px', minWidth: 16 }}
-          >
-            {tasks.length}
-          </Badge>
+        {/* Expand chevrons button */}
+        <Box
+          style={{
+            width: 22,
+            height: 22,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderRadius: 4,
+            color: 'var(--mantine-color-dimmed)',
+            flexShrink: 0,
+          }}
+        >
+          <IconChevronsRight size={14} />
         </Box>
-        {priorityIndicators.length > 0 && (
-          <Box style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
-            {priorityIndicators.map((ind) => (
-              <Tooltip key={ind.id} label={ind.tooltipLabel} position="right" withArrow color="dark">
-                <Box
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onTaskClick(ind.task);
-                  }}
-                  style={{
-                    width: 4,
-                    height: 20,
-                    borderRadius: 2,
-                    backgroundColor: ind.color,
-                    cursor: 'pointer',
-                    animation: ind.hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
-                  }}
-                />
-              </Tooltip>
-            ))}
-          </Box>
-        )}
+
+        {/* Column name — vertical-rl, no rotation, reads naturally */}
         <Tooltip label={column.name} position="right">
-          <Text
-            size="xs"
-            fw={600}
-            c="dimmed"
-            tt="uppercase"
-            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: 0.5, whiteSpace: 'nowrap' }}
+          <div
+            style={{
+              writingMode: 'vertical-rl',
+              color: 'var(--mantine-color-text)',
+              fontWeight: 600,
+              fontSize: 13,
+              letterSpacing: '-0.01em',
+              userSelect: 'none',
+              cursor: 'pointer',
+              overflow: 'hidden',
+            }}
           >
             {column.name}
-          </Text>
+          </div>
         </Tooltip>
+
+        {/* Task count — bordered pill matching reference */}
+        <div
+          style={{
+            fontSize: 10,
+            color: 'var(--mantine-color-dimmed)',
+            background: 'var(--app-bg-default)',
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 3,
+            padding: '1px 6px',
+            lineHeight: 1.6,
+            flexShrink: 0,
+          }}
+        >
+          {tasks.length}
+        </div>
+
+        {/* Workflow status indicator for automated columns */}
+        {column.workflowBinding && tasks.length > 0 && (
+          <div
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: workflowStatusColor(
+                tasks.flatMap((t) => t.recentWorkflowRuns ?? [])[0]?.state || 'idle',
+              ),
+              flexShrink: 0,
+            }}
+          />
+        )}
       </Box>
     );
   }
 
   return (
     <Box
-      ref={setNodeRef}
+      ref={setRefs}
       style={{
-        flex: '0 0 280px',
-        minWidth: 280,
+        flex: '0 0 300px',
+        minWidth: 300,
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: 'var(--app-bg-elevated)',
@@ -667,56 +814,205 @@ function BoardColumn({
         borderRadius: 10,
         overflow: 'hidden',
         ...overStyle,
+        ...colStyle,
       }}
     >
-      {/* Header */}
-      <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 12px 8px' }}>
-        <Group gap={6} style={{ overflow: 'hidden', cursor: 'pointer', flex: 1 }}>
-          <ActionIcon size="xs" variant="subtle" onClick={() => onToggleCollapse(column.id)} style={{ padding: 2 }}>
-            <IconChevronLeft size={14} color="var(--mantine-color-dimmed)" />
-          </ActionIcon>
-          {column.purpose ? (
-            <Tooltip label={column.purpose} multiline w={200}>
-              <Text
-                size="xs"
-                fw={600}
-                c="dimmed"
-                tt="uppercase"
-                style={{ letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-              >
-                {column.name}
-              </Text>
-            </Tooltip>
+      {/* Header — drag handle via grip icon only, to not swallow menu/button clicks */}
+      <Box
+        style={{
+          height: 44,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 10px 0 4px',
+          borderBottom: '1px solid var(--app-border-default)',
+          flexShrink: 0,
+          userSelect: 'none',
+        }}
+        onDoubleClick={canExecute ? startRename : undefined}
+      >
+        {/* Drag grip — carries sortable listeners so clicks on other controls are not swallowed */}
+        <Box
+          {...colListeners}
+          style={{
+            cursor: 'grab',
+            padding: '0 6px',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+            color: 'var(--mantine-color-dimmed)',
+          }}
+        >
+          <IconGripVertical size={13} />
+        </Box>
+        {/* Left: name + count + bolt chip */}
+        <Group gap={6} style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+          {renaming ? (
+            <TextInput
+              ref={renameInputRef}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.currentTarget.value)}
+              onBlur={() => {
+                // Only commit on blur if still in rename mode (Escape key sets renaming=false)
+                if (renaming) commitRename();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  commitRename();
+                  e.preventDefault();
+                }
+                if (e.key === 'Escape') {
+                  setRenaming(false);
+                  e.preventDefault();
+                }
+              }}
+              size="xs"
+              variant="unstyled"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ flex: 1 }}
+              styles={{ input: { fontSize: 13, fontWeight: 600, padding: '0 0 0 4px' } }}
+            />
           ) : (
             <Text
-              size="xs"
               fw={600}
-              c="dimmed"
-              tt="uppercase"
-              style={{ letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontSize: 13,
+                color: 'var(--mantine-color-text)',
+              }}
             >
               {column.name}
             </Text>
           )}
-          <Text
-            size="xs"
-            fw={600}
-            c="dimmed"
-            style={{
-              backgroundColor: 'var(--app-bg-elevated)',
-              borderRadius: 10,
-              padding: '1px 6px',
-              flexShrink: 0,
-            }}
-          >
+          <Text fw={500} c="dimmed" style={{ flexShrink: 0, fontSize: 12 }}>
             {tasks.length}
           </Text>
+          {column.workflowBinding && (
+            <Tooltip label={column.workflowBinding.workflowName ?? 'Automation'} withArrow>
+              <ActionIcon
+                size="xs"
+                variant="subtle"
+                color="orange"
+                style={{ flexShrink: 0, cursor: 'default' }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <IconBolt size={12} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
-        {canExecute && (
-          <ActionIcon size="sm" variant="subtle" onClick={() => onAddTask(column.id)}>
-            <IconPlus size={16} />
-          </ActionIcon>
-        )}
+
+        {/* Right: ⋯ menu + add button */}
+        <Group gap={2} style={{ flexShrink: 0 }}>
+          {canExecute && (
+            <Menu shadow="md" width={190} position="bottom-end" withinPortal>
+              <Menu.Target>
+                <ActionIcon
+                  size="sm"
+                  variant="subtle"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <IconDots size={14} />
+                </ActionIcon>
+              </Menu.Target>
+              <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+                {/* Automation info block — shown for automated columns */}
+                {column.workflowBinding && (
+                  <>
+                    <Box
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 8,
+                        padding: '7px 10px 8px',
+                        fontSize: 12,
+                        color: 'var(--mantine-color-dimmed)',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      <IconBolt
+                        size={13}
+                        color="var(--mantine-color-brand-5)"
+                        style={{ marginTop: 1, flexShrink: 0 }}
+                      />
+                      <span>
+                        Runs{' '}
+                        <strong style={{ color: 'var(--mantine-color-text)' }}>
+                          {column.workflowBinding.workflowName ?? 'workflow'}
+                        </strong>{' '}
+                        when a task enters this column.
+                      </span>
+                    </Box>
+                    <Menu.Divider />
+                  </>
+                )}
+
+                <Menu.Item
+                  leftSection={<IconPencil size={13} color="var(--mantine-color-dimmed)" />}
+                  onClick={startRename}
+                >
+                  Rename
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={<IconFold size={13} color="var(--mantine-color-dimmed)" />}
+                  onClick={() => onToggleCollapse(column.id)}
+                >
+                  Collapse
+                </Menu.Item>
+
+                <Menu.Divider />
+
+                <Menu.Item
+                  leftSection={
+                    <IconArrowLeft
+                      size={13}
+                      color={onMoveLeft ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)'}
+                    />
+                  }
+                  onClick={onMoveLeft}
+                  disabled={!onMoveLeft}
+                >
+                  Move left
+                </Menu.Item>
+                <Menu.Item
+                  leftSection={
+                    <IconArrowRight
+                      size={13}
+                      color={onMoveRight ? 'var(--mantine-color-dimmed)' : 'var(--mantine-color-placeholder)'}
+                    />
+                  }
+                  onClick={onMoveRight}
+                  disabled={!onMoveRight}
+                >
+                  Move right
+                </Menu.Item>
+
+                <Menu.Divider />
+                <Menu.Item color="red" leftSection={<IconTrash size={13} />} onClick={() => onDeleteColumn?.()}>
+                  Delete column
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
+          )}
+          {canExecute && (
+            <ActionIcon
+              size="sm"
+              variant="subtle"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddTask(column.id);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <IconPlus size={16} />
+            </ActionIcon>
+          )}
+        </Group>
       </Box>
 
       {/* Task list */}
@@ -728,7 +1024,13 @@ function BoardColumn({
             </Text>
           ) : (
             tasks.map((task) => (
-              <SortableTaskCard key={task.id} task={task} href={taskHref(task)} onClick={onTaskClick} />
+              <SortableTaskCard
+                key={task.id}
+                task={task}
+                href={taskHref(task)}
+                onClick={onTaskClick}
+                onRetry={onRetryTask}
+              />
             ))
           )}
         </Box>
@@ -753,6 +1055,7 @@ interface ActivityItem {
   id: number;
   eventType: string;
   actorName: string;
+  actorType: string;
   description: string;
   createdAt: string;
 }
@@ -821,6 +1124,16 @@ interface TaskWorkflowRun {
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  totalCostCents?: number;
+  totalTokens?: number;
+  durationSeconds?: number;
+  steps?: Array<{
+    name: string;
+    state: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    durationSeconds: number | null;
+  }>;
 }
 
 function useBoardActivitiesLoadMore(projectId: number, initialActivities: ActivityItem[]) {
@@ -879,6 +1192,193 @@ interface TaskStatistics {
   }>;
 }
 
+// --- Neutral Status Chip (AC-13, AC-28) ---
+
+function NeutralStatusChip({ state, size = 'xs' }: { state: string; size?: string }) {
+  const isRunning = WORKFLOW_ACTIVE_STATES.has(state);
+  const isSuccess = state === 'completed' || state === 'succeeded';
+  const isFailed = state === 'failed';
+  let dotColor = 'var(--mantine-color-gray-5)';
+  if (isRunning) dotColor = 'var(--mantine-color-yellow-5)';
+  else if (isSuccess) dotColor = 'var(--mantine-color-green-5)';
+  else if (isFailed) dotColor = 'var(--mantine-color-red-5)';
+
+  return (
+    <Badge
+      size={size as 'xs' | 'sm'}
+      variant="outline"
+      color="gray"
+      leftSection={
+        <Box
+          w={6}
+          h={6}
+          className={isRunning ? styles.workflowDotActive : undefined}
+          style={{ borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }}
+        />
+      }
+      style={{ fontSize: 10, cursor: 'default' }}
+    >
+      {state}
+    </Badge>
+  );
+}
+
+// --- Inline tags editor (matches reference .tag / .add-tag / .tag-input pattern) ---
+
+function InlineTagsEditor({
+  tags,
+  onChange,
+  disabled,
+}: {
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [inputVisible, setInputVisible] = useState(false);
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const showInput = () => {
+    setInputVisible(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const commitTag = () => {
+    const trimmed = inputValue.trim();
+    if (trimmed && !tags.includes(trimmed)) {
+      onChange([...tags, trimmed]);
+    }
+    setInputValue('');
+    setInputVisible(false);
+  };
+
+  const removeTag = (tag: string) => onChange(tags.filter((t) => t !== tag));
+
+  return (
+    <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginLeft: -9 }}>
+      {tags.map((tag) => (
+        <Box
+          key={tag}
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.02em',
+            padding: '4px 5px 4px 9px',
+            borderRadius: 5,
+            border: '1px solid rgba(209,207,205,0.14)',
+            background: 'rgba(209,207,205,0.05)',
+            color: 'var(--mantine-color-dimmed)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 2,
+            whiteSpace: 'nowrap',
+            lineHeight: 1,
+          }}
+        >
+          {tag}
+          {!disabled && (
+            <Box
+              component="button"
+              onClick={() => removeTag(tag)}
+              style={{
+                cursor: 'pointer',
+                fontSize: 12,
+                opacity: 0.5,
+                width: 16,
+                height: 16,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 3,
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                padding: 0,
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = '1';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--mantine-color-red-5)';
+                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(200,90,90,0.12)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.opacity = '0.5';
+                (e.currentTarget as HTMLButtonElement).style.color = 'inherit';
+                (e.currentTarget as HTMLButtonElement).style.background = 'none';
+              }}
+            >
+              ×
+            </Box>
+          )}
+        </Box>
+      ))}
+      {!disabled && !inputVisible && (
+        <Box
+          component="button"
+          onClick={showInput}
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            letterSpacing: '0.02em',
+            padding: '4px 10px',
+            borderRadius: 5,
+            border: '1px dashed var(--app-border-strong)',
+            background: 'transparent',
+            color: 'var(--mantine-color-placeholder)',
+            cursor: 'pointer',
+            lineHeight: 1,
+            transition: 'color 0.12s, border-color 0.12s',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--mantine-color-dimmed)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--mantine-color-dimmed)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = 'var(--mantine-color-placeholder)';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--app-border-strong)';
+          }}
+        >
+          + Add
+        </Box>
+      )}
+      {!disabled && inputVisible && (
+        <input
+          ref={inputRef}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              commitTag();
+            }
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setInputValue('');
+              setInputVisible(false);
+            }
+          }}
+          onBlur={() => {
+            // Only commit on blur if still in input mode (Escape key sets inputVisible=false)
+            if (inputVisible) commitTag();
+          }}
+          placeholder="Tag name"
+          style={{
+            width: 120,
+            background: 'var(--app-bg-paper)',
+            border: '1px solid var(--mantine-color-brand-5)',
+            borderRadius: 5,
+            fontFamily: 'inherit',
+            fontSize: 12,
+            padding: '4px 10px',
+            lineHeight: 1,
+            color: 'var(--mantine-color-text)',
+            outline: 'none',
+          }}
+        />
+      )}
+    </Box>
+  );
+}
+
 // --- Task Detail Sidebar ---
 
 function TaskDetailSidebar({
@@ -924,12 +1424,12 @@ function TaskDetailSidebar({
   const [commentBody, setCommentBody] = useState('');
   const [commentTags, setCommentTags] = useState<string[]>([]);
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [collapsedComments, setCollapsedComments] = useState<Set<number>>(new Set());
   const [authorFilter, setAuthorFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
+  const [showAllSteps, setShowAllSteps] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -946,25 +1446,6 @@ function TaskDetailSidebar({
       return true;
     });
   }, [comments, authorFilter, tagFilter]);
-
-  const allCommentsCollapsed = useMemo(
-    () => filteredComments.length > 0 && filteredComments.every((c) => collapsedComments.has(c.id)),
-    [filteredComments, collapsedComments],
-  );
-
-  const toggleComment = useCallback((id: number) => {
-    setCollapsedComments((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const toggleAllComments = useCallback(() => {
-    if (allCommentsCollapsed) setCollapsedComments(new Set());
-    else setCollapsedComments(new Set(filteredComments.map((c) => c.id)));
-  }, [allCommentsCollapsed, filteredComments]);
 
   const epicTasks = useMemo(
     () => allTasks.filter((t) => t.taskType === 'epic' && t.id !== task?.id),
@@ -988,7 +1469,6 @@ function TaskDetailSidebar({
       setDeleteConfirm(false);
       setCommentBody('');
       setCommentTags([]);
-      setCollapsedComments(new Set());
       setAuthorFilter('');
       setTagFilter('');
     }
@@ -1123,7 +1603,7 @@ function TaskDetailSidebar({
       opened={!!task}
       onClose={onClose}
       position="right"
-      size={wide ? '50vw' : 480}
+      size={wide ? '50vw' : 620}
       withCloseButton={false}
       padding={0}
       styles={{
@@ -1131,679 +1611,1255 @@ function TaskDetailSidebar({
         body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
       }}
     >
-      {/* Header */}
-      <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)', flexShrink: 0 }}>
-        <Group justify="space-between" mb="xs">
-          <Group gap="xs">
-            <ActionIcon variant="subtle" size="sm" onClick={() => setWide(!wide)}>
-              {wide ? <IconArrowsMinimize size={16} /> : <IconArrowsMaximize size={16} />}
-            </ActionIcon>
-            {task.taskType && task.taskType !== 'not_specified' && (
-              <Badge
-                size="sm"
-                variant="filled"
-                style={{ backgroundColor: TASK_TYPE_COLORS[task.taskType] ?? '#9e9e9e', color: '#fff' }}
-              >
-                {task.taskType}
-              </Badge>
-            )}
-            {task.priority && (
-              <Badge
-                size="sm"
-                variant="outline"
-                style={{
-                  borderColor: PRIORITY_COLORS[task.priority] ?? '#9e9e9e',
-                  color: PRIORITY_COLORS[task.priority] ?? '#9e9e9e',
-                }}
-              >
-                {task.priority}
-              </Badge>
-            )}
-          </Group>
-          <Group gap="xs">
-            {canExecute && canTriggerWorkflow && (
-              <Button
-                variant="light"
-                size="compact-sm"
-                leftSection={<IconPlayerPlay size={14} />}
-                onClick={handleTriggerWorkflow}
-                loading={triggeringWorkflow}
-              >
-                Run workflow
-              </Button>
-            )}
-            {canExecute && (
-              <Tooltip label={task.archived ? 'Unarchive' : 'Archive'}>
-                <ActionIcon
-                  variant="subtle"
-                  color={task.archived ? 'brand' : 'gray'}
-                  size="sm"
-                  onClick={handleToggleArchive}
-                  loading={archiving}
-                >
-                  {task.archived ? <IconArchiveOff size={16} /> : <IconArchive size={16} />}
-                </ActionIcon>
-              </Tooltip>
-            )}
-            {canExecute && (
-              <ActionIcon variant="subtle" color="red" size="sm" onClick={() => setDeleteConfirm(true)}>
-                <IconTrash size={16} />
-              </ActionIcon>
-            )}
-            <ActionIcon variant="subtle" size="sm" onClick={onClose}>
-              <IconX size={16} />
-            </ActionIcon>
-          </Group>
-        </Group>
-        {editingTitle ? (
-          <TextInput
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.currentTarget.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') saveTitle();
-              if (e.key === 'Escape') {
-                setTitleValue(task.title);
-                setEditingTitle(false);
-              }
+      {/* Panel bar — icon actions only, no title here */}
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--app-border-default)',
+          flexShrink: 0,
+        }}
+      >
+        <ActionIcon variant="subtle" size="sm" title={wide ? 'Collapse' : 'Expand'} onClick={() => setWide(!wide)}>
+          {wide ? <IconArrowsMinimize size={16} /> : <IconArrowsMaximize size={16} />}
+        </ActionIcon>
+        <Box style={{ flex: 1 }} />
+        {canExecute && canTriggerWorkflow && (
+          <Button
+            size="compact-sm"
+            leftSection={<IconPlayerPlay size={13} />}
+            onClick={handleTriggerWorkflow}
+            loading={triggeringWorkflow}
+            styles={{
+              root: {
+                background: 'var(--mantine-color-brand-5)',
+                color: '#0a0908',
+                border: 'none',
+                fontWeight: 600,
+                fontSize: 13,
+                height: 28,
+                paddingLeft: 10,
+                paddingRight: 10,
+              },
             }}
-            autoFocus
-            size="md"
-            styles={{ input: { fontWeight: 700, fontSize: 18, padding: 0, border: 'none', background: 'transparent' } }}
-          />
-        ) : (
-          <Text
-            size="lg"
-            fw={700}
-            onClick={() => canExecute && setEditingTitle(true)}
-            style={{ cursor: canExecute ? 'pointer' : 'default' }}
           >
-            {pendingTitle ?? task.title}
-          </Text>
+            Run workflow
+          </Button>
         )}
+        {canExecute && (
+          <Tooltip label={task.archived ? 'Unarchive' : 'Archive'}>
+            <ActionIcon
+              variant="subtle"
+              color={task.archived ? 'brand' : 'gray'}
+              size="sm"
+              onClick={handleToggleArchive}
+              loading={archiving}
+            >
+              {task.archived ? <IconArchiveOff size={16} /> : <IconArchive size={16} />}
+            </ActionIcon>
+          </Tooltip>
+        )}
+        {canExecute && (
+          <ActionIcon
+            variant="subtle"
+            size="sm"
+            title="Delete"
+            onClick={() => setDeleteConfirm(true)}
+            style={{ color: 'var(--mantine-color-dimmed)' }}
+            className={styles.dangerHover}
+          >
+            <IconTrash size={16} />
+          </ActionIcon>
+        )}
+        <ActionIcon variant="subtle" size="sm" title="Close" onClick={onClose}>
+          <IconX size={16} />
+        </ActionIcon>
       </Box>
 
       <Tabs
         value={tab}
         onChange={setTab}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        classNames={{
+          tab: styles.detailTab,
+          list: styles.detailTabsList,
+        }}
       >
-        <Tabs.List px="md" style={{ flexShrink: 0 }}>
+        <Tabs.List>
           <Tabs.Tab value="details">Details</Tabs.Tab>
+          {columnWorkflowBinding && <Tabs.Tab value="runs">Runs ({(workflowRuns ?? []).length})</Tabs.Tab>}
           <Tabs.Tab value="comments">
-            Comments{' '}
-            {(comments ?? []).length > 0
-              ? `(${(comments ?? []).length})`
-              : task.commentsCount > 0
-                ? `(${task.commentsCount})`
-                : ''}
+            Comments ({(comments ?? []).length > 0 ? (comments ?? []).length : task.commentsCount})
           </Tabs.Tab>
-          <Tabs.Tab value="assets">Assets{assetsCount > 0 ? ` (${assetsCount})` : ''}</Tabs.Tab>
+          <Tabs.Tab value="assets">Assets ({assetsCount})</Tabs.Tab>
           <Tabs.Tab value="activity">Activity</Tabs.Tab>
-          <Tabs.Tab value="statistics">
-            <IconChartBar size={16} />
-          </Tabs.Tab>
+          <Tabs.Tab value="statistics">Analytics</Tabs.Tab>
         </Tabs.List>
 
         {/* Details — fully editable fields */}
-        <Tabs.Panel value="details" p="md" style={{ flex: 1, overflow: 'auto' }}>
-          <Stack gap="md">
-            {/* Description — click to edit */}
-            <Box>
-              <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-                Description
-              </Text>
-              {editingDesc ? (
-                <Textarea
-                  value={descValue}
-                  onChange={(e) => setDescValue(e.currentTarget.value)}
-                  onBlur={saveDescription}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setDescValue(task.description ?? '');
-                      setEditingDesc(false);
-                    }
-                  }}
-                  autoFocus
-                  autosize
-                  minRows={3}
-                  size="sm"
-                />
-              ) : (
+        <Tabs.Panel value="details" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+          {/* Panel header: title, chips, description */}
+          <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+            {/* Editable title */}
+            {editingTitle ? (
+              <textarea
+                className={styles.ptTitle}
+                value={titleValue}
+                rows={1}
+                onChange={(e) => {
+                  setTitleValue(e.currentTarget.value);
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = e.currentTarget.scrollHeight + 'px';
+                }}
+                onBlur={saveTitle}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveTitle();
+                  }
+                  if (e.key === 'Escape') {
+                    setTitleValue(task.title);
+                    setEditingTitle(false);
+                  }
+                }}
+                autoFocus
+              />
+            ) : (
+              <div
+                className={styles.ptTitle}
+                onClick={() => canExecute && setEditingTitle(true)}
+                style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {pendingTitle ?? task.title}
+              </div>
+            )}
+
+            {/* Status chips: type, priority, workflow */}
+            <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
+              {task.taskType && task.taskType !== 'not_specified' && (
                 <Box
-                  onClick={() => {
-                    if (!canExecute) return;
-                    setDescValue(task.description ?? '');
-                    setEditingDesc(true);
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(209,207,205,0.12)',
+                    background: 'rgba(209,207,205,0.05)',
+                    color: 'var(--mantine-color-dimmed)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
                   }}
-                  style={{ cursor: canExecute ? 'pointer' : 'default', minHeight: 40 }}
                 >
-                  {(pendingDesc ?? task.description) ? (
-                    <Box className={styles.commentMd}>
-                      <Markdown remarkPlugins={[remarkGfm]}>{pendingDesc ?? task.description ?? ''}</Markdown>
-                    </Box>
-                  ) : (
-                    <Text size="sm" c="dimmed">
-                      Click to add description...
-                    </Text>
-                  )}
+                  {task.taskType.replace('_', ' ')}
+                </Box>
+              )}
+              {task.priority && (
+                <Box
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(209,207,205,0.12)',
+                    background: 'rgba(209,207,205,0.05)',
+                    color: 'var(--mantine-color-dimmed)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  {task.priority}
+                </Box>
+              )}
+              {columnWorkflowBinding && (
+                <Box
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    padding: '2px 8px',
+                    borderRadius: 4,
+                    border: '1px solid var(--mantine-color-brand-light-hover)',
+                    background: 'var(--mantine-color-brand-light)',
+                    color: 'var(--mantine-color-brand-5)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <IconBolt size={11} />
+                  {columnWorkflowBinding.workflowName}
                 </Box>
               )}
             </Box>
 
-            <Select
-              label="Column"
-              data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
-              value={String(task.boardColumnId)}
-              onChange={(v) => {
-                if (v && v !== String(task.boardColumnId)) moveToColumn(v);
-              }}
-              size="sm"
-              disabled={!canExecute}
-            />
-            <Select
-              label="Type"
-              data={[
-                { value: 'not_specified', label: 'Not specified' },
-                { value: 'epic', label: 'Epic' },
-                { value: 'story', label: 'Story' },
-                { value: 'bug', label: 'Bug' },
-              ]}
-              value={task.taskType}
-              onChange={(v) => saveField('taskType', v)}
-              size="sm"
-              disabled={!canExecute}
-            />
-            <Select
-              label="Priority"
-              data={[
-                { value: '', label: 'None' },
-                { value: 'critical', label: 'Critical' },
-                { value: 'high', label: 'High' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'low', label: 'Low' },
-              ]}
-              value={task.priority ?? ''}
-              onChange={(v) => saveField('priority', v || null)}
-              clearable
-              size="sm"
-              disabled={!canExecute}
-            />
-            <Select
-              label="Assignee"
-              data={members.map((m) => ({ value: String(m.id), label: m.name }))}
-              value={task.assigneeId ? String(task.assigneeId) : null}
-              onChange={(v) => saveField('assigneeId', v)}
-              clearable
-              searchable
-              size="sm"
-              disabled={!canExecute}
-            />
-
-            {/* Parent epic — for non-epic tasks */}
-            {task.taskType !== 'epic' && epicTasks.length > 0 && (
-              <Select
-                label="Parent Epic"
-                data={epicTasks.map((e) => ({ value: String(e.id), label: e.title }))}
-                value={task.parentTaskId ? String(task.parentTaskId) : null}
-                onChange={(v) => saveField('parentTaskId', v)}
-                clearable
-                searchable
-                size="sm"
-                disabled={!canExecute}
+            {/* Editable description */}
+            {editingDesc ? (
+              <textarea
+                className={styles.ptDesc}
+                value={descValue}
+                rows={3}
+                autoFocus
+                onChange={(e) => setDescValue(e.currentTarget.value)}
+                onBlur={saveDescription}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setDescValue(task.description ?? '');
+                    setEditingDesc(false);
+                  }
+                }}
               />
-            )}
-
-            {/* Tags — editable free-text input */}
-            <TagsInput
-              label="Tags"
-              value={task.tags ?? []}
-              onChange={(tags) => saveField('tags', tags)}
-              placeholder="Add tag and press Enter"
-              size="sm"
-              clearable
-              disabled={!canExecute}
-            />
-
-            <Box>
-              <Text size="xs" c="dimmed" mb={4}>
-                Created
-              </Text>
-              <Text size="sm">{formatDateTime(task.createdAt)}</Text>
-            </Box>
-
-            {/* Workflow Runs */}
-            {(workflowRuns ?? []).length > 0 && (
-              <Box>
-                <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-                  Workflow Runs ({(workflowRuns ?? []).length})
-                </Text>
-                <Stack gap={4}>
-                  {(workflowRuns ?? []).map((run) => (
-                    <Group key={run.id} gap="xs" align="center" style={{ fontSize: 13 }}>
-                      <Badge
-                        size="xs"
-                        variant="filled"
-                        color={
-                          run.state === 'completed'
-                            ? 'green'
-                            : run.state === 'failed'
-                              ? 'red'
-                              : run.state === 'running'
-                                ? 'blue'
-                                : 'gray'
-                        }
-                        style={{ fontSize: 10, fontWeight: 600 }}
-                      >
-                        {run.state}
-                      </Badge>
-                      <Text
-                        component="a"
-                        href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
-                        target="_blank"
-                        rel="noopener"
-                        size="sm"
-                        c="brand"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, textDecoration: 'none' }}
-                        onMouseEnter={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                          e.currentTarget.style.textDecoration = 'underline';
-                        }}
-                        onMouseLeave={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                          e.currentTarget.style.textDecoration = 'none';
-                        }}
-                      >
-                        {run.workflowName}
-                        <IconExternalLink size={12} />
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {formatDateTime(run.createdAt)}
-                      </Text>
-                    </Group>
-                  ))}
-                </Stack>
-              </Box>
-            )}
-
-            {/* Child tasks — for epics */}
-            {task.taskType === 'epic' && (
-              <Box>
-                <Group justify="space-between" mb={4}>
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                    Child Tasks ({childTasks.length})
-                  </Text>
-                </Group>
-                {childTasks.length === 0 ? (
-                  <Text size="xs" c="dimmed">
-                    No child tasks yet
-                  </Text>
+            ) : (
+              <div
+                className={styles.ptDesc}
+                onClick={() => {
+                  if (!canExecute) return;
+                  setDescValue(task.description ?? '');
+                  setEditingDesc(true);
+                }}
+                style={{
+                  cursor: canExecute ? 'text' : 'default',
+                  color:
+                    (pendingDesc ?? task.description)
+                      ? 'var(--mantine-color-dimmed)'
+                      : 'var(--mantine-color-placeholder)',
+                }}
+              >
+                {(pendingDesc ?? task.description) ? (
+                  <Box className={styles.commentMd}>
+                    <Markdown remarkPlugins={[remarkGfm]}>{pendingDesc ?? task.description ?? ''}</Markdown>
+                  </Box>
                 ) : (
-                  <Stack gap={2}>
-                    {childTasks.map((child) => (
-                      <UnstyledButton
-                        key={child.id}
-                        onClick={() => onOpenTask(child)}
-                        px={6}
-                        py={4}
-                        style={{
-                          borderRadius: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          transition: 'background 0.1s',
-                        }}
-                        className={styles.childTaskRow}
-                      >
-                        <Badge
-                          size="xs"
-                          variant="filled"
-                          style={{
-                            backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? '#9e9e9e',
-                            color: '#fff',
-                            fontSize: 10,
-                            fontWeight: 600,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {child.taskType.replace('_', ' ')}
-                        </Badge>
-                        <Text size="xs" c="brand" style={{ flex: 1 }} lineClamp={1}>
-                          {child.title}
-                        </Text>
-                      </UnstyledButton>
-                    ))}
-                  </Stack>
+                  <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
+                    Click to add description…
+                  </span>
                 )}
-              </Box>
+              </div>
             )}
+          </Box>
 
-            {/* Parent epic link — for non-epic tasks with parent */}
-            {task.taskType !== 'epic' && parentTask && (
-              <Box>
-                <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-                  Parent Epic
-                </Text>
-                <UnstyledButton onClick={() => onOpenTask(parentTask)}>
-                  <Text
-                    size="sm"
-                    c="brand"
-                    style={{ textDecoration: 'none' }}
-                    onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-                      e.currentTarget.style.textDecoration = 'underline';
-                    }}
-                    onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-                      e.currentTarget.style.textDecoration = 'none';
+          {/* Latest run summary (AC-19) — only for automated columns */}
+          {columnWorkflowBinding &&
+            (workflowRuns ?? []).length > 0 &&
+            (() => {
+              const latestRun = (workflowRuns ?? [])[0];
+              const dur = latestRun.durationSeconds;
+              return (
+                <Box style={{ marginBottom: 20 }}>
+                  {/* sec-label */}
+                  <Box
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: 'var(--mantine-color-dimmed)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingBottom: 10,
+                      borderBottom: '1px solid var(--app-border-default)',
+                      marginBottom: 14,
                     }}
                   >
-                    {parentTask.title}
-                  </Text>
-                </UnstyledButton>
-              </Box>
-            )}
+                    <IconBolt size={14} color="var(--mantine-color-brand-5)" />
+                    Latest run
+                  </Box>
+                  {/* run-summary card */}
+                  <Box
+                    style={{
+                      display: 'flex',
+                      gap: 16,
+                      alignItems: 'center',
+                      padding: '12px 14px',
+                      border: '1px solid var(--app-border-default)',
+                      borderRadius: 8,
+                      background: 'var(--app-bg-paper)',
+                    }}
+                  >
+                    <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          color: 'var(--mantine-color-placeholder)',
+                        }}
+                      >
+                        Status
+                      </Text>
+                      <NeutralStatusChip state={latestRun.state} />
+                    </Box>
+                    {dur != null && (
+                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            color: 'var(--mantine-color-placeholder)',
+                          }}
+                        >
+                          Duration
+                        </Text>
+                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
+                          {formatDuration(dur)}
+                        </Text>
+                      </Box>
+                    )}
+                    {latestRun.totalCostCents != null && (
+                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <Text
+                          style={{
+                            fontSize: 10,
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            color: 'var(--mantine-color-placeholder)',
+                          }}
+                        >
+                          Cost
+                        </Text>
+                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
+                          {formatCostCents(latestRun.totalCostCents)}
+                        </Text>
+                      </Box>
+                    )}
+                    <Box
+                      component="button"
+                      onClick={() => setTab('runs')}
+                      style={{
+                        marginLeft: 'auto',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--mantine-color-brand-5)',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '4px 0',
+                      }}
+                    >
+                      View runs <IconArrowRight size={12} />
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            })()}
 
-            {/* Pending waits */}
-            {(task.pendingGates ?? []).length > 0 && (
-              <Box>
-                <Group gap={6} mb={4}>
-                  <ThemeIcon size={18} variant="light" color="yellow" radius="xl">
-                    <IconHourglass size={12} />
-                  </ThemeIcon>
-                  <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                    Pending Waits ({(task.pendingGates ?? []).length})
+          {/* Properties */}
+          <Box style={{ marginBottom: 20 }}>
+            {/* sec-label */}
+            <Box
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--mantine-color-dimmed)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                paddingBottom: 10,
+                borderBottom: '1px solid var(--app-border-default)',
+                marginBottom: 14,
+              }}
+            >
+              <IconListDetails size={14} color="var(--mantine-color-brand-5)" />
+              Properties
+            </Box>
+
+            {/* props grid */}
+            <Box
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '92px 1fr',
+                gap: '10px 12px',
+                padding: '4px 0 14px',
+                alignItems: 'center',
+              }}
+            >
+              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                Column
+              </Text>
+              <Select
+                data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
+                value={String(task.boardColumnId)}
+                onChange={(v) => {
+                  if (v && v !== String(task.boardColumnId)) moveToColumn(v);
+                }}
+                aria-label="Column"
+                size="xs"
+                variant="unstyled"
+                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                disabled={!canExecute}
+              />
+
+              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                Type
+              </Text>
+              <Select
+                data={[
+                  { value: 'not_specified', label: 'Not specified' },
+                  { value: 'epic', label: 'Epic' },
+                  { value: 'story', label: 'Story' },
+                  { value: 'bug', label: 'Bug' },
+                ]}
+                value={task.taskType}
+                onChange={(v) => saveField('taskType', v)}
+                size="xs"
+                variant="unstyled"
+                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                disabled={!canExecute}
+              />
+
+              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                Priority
+              </Text>
+              <Select
+                data={[
+                  { value: '', label: 'None' },
+                  { value: 'critical', label: 'Critical' },
+                  { value: 'high', label: 'High' },
+                  { value: 'medium', label: 'Medium' },
+                  { value: 'low', label: 'Low' },
+                ]}
+                value={task.priority ?? ''}
+                onChange={(v) => saveField('priority', v || null)}
+                clearable
+                size="xs"
+                variant="unstyled"
+                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                disabled={!canExecute}
+              />
+
+              <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                Assignee
+              </Text>
+              <Select
+                data={members.map((m) => ({ value: String(m.id), label: m.name }))}
+                value={task.assigneeId ? String(task.assigneeId) : null}
+                onChange={(v) => saveField('assigneeId', v)}
+                clearable
+                searchable
+                size="xs"
+                variant="unstyled"
+                styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                disabled={!canExecute}
+              />
+
+              {/* Parent epic — for non-epic tasks */}
+              {task.taskType !== 'epic' && epicTasks.length > 0 && (
+                <>
+                  <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                    Parent Epic
                   </Text>
-                </Group>
-                <Stack gap={4}>
-                  {(task.pendingGates ?? []).map((wait) => (
-                    <Group key={wait.id} gap="xs" align="flex-start" wrap="nowrap">
+                  <Select
+                    data={epicTasks.map((e) => ({ value: String(e.id), label: e.title }))}
+                    value={task.parentTaskId ? String(task.parentTaskId) : null}
+                    onChange={(v) => saveField('parentTaskId', v)}
+                    clearable
+                    searchable
+                    size="xs"
+                    variant="unstyled"
+                    styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                    disabled={!canExecute}
+                  />
+                </>
+              )}
+
+              <Text size="xs" c="dimmed" style={{ alignSelf: 'flex-start', paddingTop: 5 }}>
+                Tags
+              </Text>
+              <InlineTagsEditor
+                tags={task.tags ?? []}
+                onChange={(tags) => saveField('tags', tags)}
+                disabled={!canExecute}
+              />
+
+              <Text size="xs" c="dimmed">
+                Created
+              </Text>
+              <Text size="xs" c="dimmed">
+                {formatDateTime(task.createdAt)}
+              </Text>
+            </Box>
+          </Box>
+
+          {/* Child tasks — for epics */}
+          {task.taskType === 'epic' && (
+            <Box>
+              <Group justify="space-between" mb={4}>
+                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                  Child Tasks ({childTasks.length})
+                </Text>
+              </Group>
+              {childTasks.length === 0 ? (
+                <Text size="xs" c="dimmed">
+                  No child tasks yet
+                </Text>
+              ) : (
+                <Stack gap={2}>
+                  {childTasks.map((child) => (
+                    <UnstyledButton
+                      key={child.id}
+                      onClick={() => onOpenTask(child)}
+                      px={6}
+                      py={4}
+                      style={{
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        transition: 'background 0.1s',
+                      }}
+                      className={styles.childTaskRow}
+                    >
                       <Badge
                         size="xs"
-                        color="yellow"
                         variant="filled"
-                        style={{ fontSize: 10, fontWeight: 600, flexShrink: 0 }}
+                        style={{
+                          backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? '#9e9e9e',
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 600,
+                          flexShrink: 0,
+                        }}
                       >
-                        {wait.gateType.replace(/_/g, ' ')}
+                        {child.taskType.replace('_', ' ')}
                       </Badge>
-                      <Box style={{ flex: 1, minWidth: 0 }}>
-                        {wait.gateType === 'github_checks_completed' &&
-                          wait.metadata.repoFullName &&
-                          wait.metadata.prNumber && (
-                            <Text
-                              component="a"
-                              href={`https://github.com/${wait.metadata.repoFullName}/pull/${wait.metadata.prNumber}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              size="xs"
-                              c="brand"
-                              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                            >
-                              <IconLink size={10} />
-                              {String(wait.metadata.repoFullName)} #{String(wait.metadata.prNumber)}
-                            </Text>
-                          )}
-                        {wait.gateType === 'github_workflow_completed' &&
-                          wait.metadata.repoFullName &&
-                          wait.metadata.runId && (
-                            <Text
-                              component="a"
-                              href={`https://github.com/${wait.metadata.repoFullName}/actions/runs/${wait.metadata.runId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              size="xs"
-                              c="brand"
-                              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
-                            >
-                              <IconLink size={10} />
-                              {String(wait.metadata.repoFullName)} #{String(wait.metadata.runId)}
-                            </Text>
-                          )}
-                      </Box>
-                      {canExecute && (
-                        <ActionIcon
-                          size="xs"
-                          variant="subtle"
-                          color="gray"
-                          onClick={() => handleDeleteGate(wait.id)}
-                          loading={deletingGateId === wait.id}
-                        >
-                          <IconX size={12} />
-                        </ActionIcon>
-                      )}
-                    </Group>
+                      <Text size="xs" c="brand" style={{ flex: 1 }} lineClamp={1}>
+                        {child.title}
+                      </Text>
+                    </UnstyledButton>
                   ))}
                 </Stack>
-              </Box>
-            )}
-          </Stack>
+              )}
+            </Box>
+          )}
+
+          {/* Parent epic link — for non-epic tasks with parent */}
+          {task.taskType !== 'epic' && parentTask && (
+            <Box>
+              <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
+                Parent Epic
+              </Text>
+              <UnstyledButton onClick={() => onOpenTask(parentTask)}>
+                <Text
+                  size="sm"
+                  c="brand"
+                  style={{ textDecoration: 'none' }}
+                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
+                    e.currentTarget.style.textDecoration = 'underline';
+                  }}
+                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
+                    e.currentTarget.style.textDecoration = 'none';
+                  }}
+                >
+                  {parentTask.title}
+                </Text>
+              </UnstyledButton>
+            </Box>
+          )}
+
+          {/* Pending waits */}
+          {(task.pendingGates ?? []).length > 0 && (
+            <Box>
+              <Group gap={6} mb={4}>
+                <ThemeIcon size={18} variant="light" color="yellow" radius="xl">
+                  <IconHourglass size={12} />
+                </ThemeIcon>
+                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                  Pending Waits ({(task.pendingGates ?? []).length})
+                </Text>
+              </Group>
+              <Stack gap={4}>
+                {(task.pendingGates ?? []).map((wait) => (
+                  <Group key={wait.id} gap="xs" align="flex-start" wrap="nowrap">
+                    <Badge
+                      size="xs"
+                      color="yellow"
+                      variant="filled"
+                      style={{ fontSize: 10, fontWeight: 600, flexShrink: 0 }}
+                    >
+                      {wait.gateType.replace(/_/g, ' ')}
+                    </Badge>
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      {wait.gateType === 'github_checks_completed' &&
+                        wait.metadata.repoFullName &&
+                        wait.metadata.prNumber && (
+                          <Text
+                            component="a"
+                            href={`https://github.com/${wait.metadata.repoFullName}/pull/${wait.metadata.prNumber}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="xs"
+                            c="brand"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                          >
+                            <IconLink size={10} />
+                            {String(wait.metadata.repoFullName)} #{String(wait.metadata.prNumber)}
+                          </Text>
+                        )}
+                      {wait.gateType === 'github_workflow_completed' &&
+                        wait.metadata.repoFullName &&
+                        wait.metadata.runId && (
+                          <Text
+                            component="a"
+                            href={`https://github.com/${wait.metadata.repoFullName}/actions/runs/${wait.metadata.runId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="xs"
+                            c="brand"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                          >
+                            <IconLink size={10} />
+                            {String(wait.metadata.repoFullName)} #{String(wait.metadata.runId)}
+                          </Text>
+                        )}
+                    </Box>
+                    {canExecute && (
+                      <ActionIcon
+                        size="xs"
+                        variant="subtle"
+                        color="gray"
+                        onClick={() => handleDeleteGate(wait.id)}
+                        loading={deletingGateId === wait.id}
+                      >
+                        <IconX size={12} />
+                      </ActionIcon>
+                    )}
+                  </Group>
+                ))}
+              </Stack>
+            </Box>
+          )}
         </Tabs.Panel>
 
-        {/* Comments — collapsible + markdown */}
-        <Tabs.Panel value="comments" style={{ flex: 1, overflow: 'auto' }}>
-          <Group gap="sm" p="md" pb={0}>
-            <Select
-              size="xs"
-              placeholder="Author"
-              data={AUTHOR_TYPES}
-              value={authorFilter}
-              onChange={(v) => setAuthorFilter(v ?? '')}
-              clearable
-              w={100}
-            />
-            <TextInput
-              size="xs"
-              placeholder="Filter by tag"
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.currentTarget.value)}
-              style={{ flex: 1 }}
-            />
-          </Group>
+        {/* Runs tab — hidden for manual tasks (AC-22) */}
+        {columnWorkflowBinding && (
+          <Tabs.Panel value="runs" p="md" style={{ flex: 1, overflow: 'auto' }}>
+            <Stack gap="md">
+              {(workflowRuns ?? []).length === 0 ? (
+                <Text size="sm" c="dimmed" ta="center" py="xl">
+                  No runs yet.
+                </Text>
+              ) : (
+                <>
+                  {/* Totals row */}
+                  <Group gap="lg" wrap="wrap">
+                    <Box>
+                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
+                        Runs
+                      </Text>
+                      <Text size="sm" fw={600}>
+                        {(workflowRuns ?? []).length}
+                      </Text>
+                    </Box>
+                    <Box>
+                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
+                        Success rate
+                      </Text>
+                      <Text size="sm" fw={600}>
+                        {Math.round(
+                          ((workflowRuns ?? []).filter((r) => r.state === 'completed' || r.state === 'succeeded')
+                            .length /
+                            (workflowRuns ?? []).length) *
+                            100,
+                        )}
+                        %
+                      </Text>
+                    </Box>
+                    {(workflowRuns ?? []).some((r) => r.totalCostCents != null) && (
+                      <Box>
+                        <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
+                          Total cost
+                        </Text>
+                        <Text size="sm" ff="monospace" fw={600}>
+                          {formatCostCents((workflowRuns ?? []).reduce((s, r) => s + (r.totalCostCents ?? 0), 0))}
+                        </Text>
+                      </Box>
+                    )}
+                  </Group>
 
+                  {/* Run history */}
+                  <Stack gap={4}>
+                    {(workflowRuns ?? []).map((run) => (
+                      <Box
+                        key={run.id}
+                        p="xs"
+                        style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
+                      >
+                        <Group justify="space-between" wrap="nowrap">
+                          <NeutralStatusChip state={run.state} />
+                          <Text size="xs" c="dimmed">
+                            {formatDateTime(run.createdAt)}
+                          </Text>
+                          <Text
+                            component="a"
+                            href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
+                            target="_blank"
+                            rel="noopener"
+                            size="xs"
+                            c="brand"
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                          >
+                            <IconExternalLink size={11} />
+                          </Text>
+                        </Group>
+
+                        {/* Step timeline for first (latest) run */}
+                        {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
+                          <Box mt="xs">
+                            {(run.steps ?? []).map((step, i) => {
+                              const isHidden = !showAllSteps && i > 2;
+                              return (
+                                <Box
+                                  key={i}
+                                  style={{
+                                    display: isHidden ? 'none' : 'flex',
+                                    gap: 10,
+                                    paddingTop: 8,
+                                    paddingBottom: 8,
+                                    borderBottom: '1px solid var(--app-border-default)',
+                                  }}
+                                >
+                                  <Box
+                                    w={8}
+                                    h={8}
+                                    mt={4}
+                                    style={{
+                                      borderRadius: '50%',
+                                      flexShrink: 0,
+                                      backgroundColor:
+                                        step.state === 'done'
+                                          ? 'var(--mantine-color-green-5)'
+                                          : step.state === 'running'
+                                            ? 'var(--mantine-color-yellow-5)'
+                                            : step.state === 'failed'
+                                              ? 'var(--mantine-color-red-5)'
+                                              : 'var(--mantine-color-gray-5)',
+                                    }}
+                                  />
+                                  <Box style={{ flex: 1 }}>
+                                    <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
+                                      {step.name}
+                                    </Text>
+                                    <Text size="xs" c="dimmed" ff="monospace">
+                                      {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
+                                    </Text>
+                                  </Box>
+                                </Box>
+                              );
+                            })}
+                            {(run.steps ?? []).length > 3 && (
+                              <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
+                                {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
+                              </Button>
+                            )}
+                          </Box>
+                        )}
+
+                        {/* Retry in Runs tab for failed run (AC-56) */}
+                        {run.state === 'failed' && canExecute && (
+                          <Box mt="xs">
+                            <Button
+                              size="compact-xs"
+                              variant="outline"
+                              color="red"
+                              leftSection={<IconRefresh size={11} />}
+                              loading={triggeringWorkflow}
+                              onClick={handleTriggerWorkflow}
+                            >
+                              Retry run
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                    ))}
+                  </Stack>
+                </>
+              )}
+            </Stack>
+          </Tabs.Panel>
+        )}
+
+        {/* Comments — composer on top, filter row below (AC-24) */}
+        <Tabs.Panel value="comments" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+          {/* Composer */}
           {canExecute && (
-            <Box p="md" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
+            <Box style={{ paddingBottom: 20, marginBottom: 4, borderBottom: '1px solid var(--app-border-default)' }}>
               <Textarea
-                placeholder="Write a comment... (⌘+Enter to send)"
+                placeholder="Write a comment… (⌘+Enter to send)"
                 value={commentBody}
                 onChange={(e) => setCommentBody(e.currentTarget.value)}
                 autosize
-                minRows={2}
+                minRows={3}
                 maxRows={6}
-                size="sm"
-                mb="xs"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && e.metaKey) {
                     e.preventDefault();
                     handleSubmitComment();
                   }
                 }}
+                styles={{
+                  input: {
+                    background: 'var(--app-bg-paper)',
+                    border: '1px solid var(--app-border-default)',
+                    borderRadius: 5,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    padding: '8px 11px',
+                    color: 'var(--mantine-color-text)',
+                    transition: 'border-color .12s',
+                  },
+                }}
+                variant="unstyled"
               />
-              <Group gap="xs" mb="xs" wrap="wrap">
-                {COMMENT_TAG_SUGGESTIONS.map((tag) => (
-                  <Badge
-                    key={tag}
-                    size="xs"
-                    variant={commentTags.includes(tag) ? 'filled' : 'outline'}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() =>
-                      setCommentTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
-                    }
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </Group>
-              <Button
-                size="xs"
-                rightSection={<IconSend size={14} />}
-                onClick={handleSubmitComment}
-                loading={submittingComment}
-                disabled={!commentBody.trim()}
-              >
-                Send
-              </Button>
+              {/* Tag toggles */}
+              <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {COMMENT_TAG_SUGGESTIONS.map((tag) => {
+                  const active = commentTags.includes(tag);
+                  return (
+                    <Box
+                      key={tag}
+                      component="button"
+                      onClick={() =>
+                        setCommentTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+                      }
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 500,
+                        letterSpacing: '0.02em',
+                        padding: '4px 10px',
+                        borderRadius: 5,
+                        border: `1px solid ${active ? 'var(--mantine-color-brand-light-hover)' : 'rgba(209,207,205,0.14)'}`,
+                        background: active ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.05)',
+                        color: active ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+                        cursor: 'pointer',
+                        lineHeight: 1,
+                        transition: 'all .12s',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {tag
+                        .split('_')
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join('_')}
+                    </Box>
+                  );
+                })}
+              </Box>
+              {/* Send row */}
+              <Box style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
+                <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)' }}>⌘ + Enter to send</Text>
+                <Button
+                  size="compact-sm"
+                  rightSection={<IconSend size={13} />}
+                  onClick={handleSubmitComment}
+                  loading={submittingComment}
+                  disabled={!commentBody.trim()}
+                  styles={{
+                    root: {
+                      background: commentBody.trim() ? 'var(--mantine-color-brand-5)' : undefined,
+                      color: commentBody.trim() ? '#0a0908' : undefined,
+                      border: 'none',
+                      fontWeight: 600,
+                    },
+                  }}
+                >
+                  Send
+                </Button>
+              </Box>
             </Box>
           )}
 
-          {filteredComments.length > 1 && (
-            <Group justify="flex-end" px="md" pt="xs">
-              <Button
-                variant="subtle"
+          {/* List header + filters */}
+          <Box style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0 4px' }}>
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--mantine-color-placeholder)',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Comments <span style={{ color: 'var(--mantine-color-dimmed)' }}>({filteredComments.length})</span>
+            </Text>
+            <Box style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+              <Select
                 size="xs"
-                leftSection={allCommentsCollapsed ? <IconArrowsMaximize size={14} /> : <IconArrowsMinimize size={14} />}
-                onClick={toggleAllComments}
-                styles={{ root: { textTransform: 'none' } }}
+                data={AUTHOR_TYPES}
+                value={authorFilter}
+                onChange={(v) => setAuthorFilter(v ?? '')}
+                clearable
+                w={90}
+                aria-label="Author type filter"
+                styles={{ input: { fontSize: 12 } }}
+              />
+              <Select
+                size="xs"
+                data={[
+                  { value: 'newest', label: 'Newest' },
+                  { value: 'oldest', label: 'Oldest' },
+                ]}
+                defaultValue="newest"
+                w={90}
+                styles={{ input: { fontSize: 12 } }}
+              />
+              {/* Tag filter */}
+              <Box
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  background: 'var(--app-bg-paper)',
+                  border: '1px solid var(--app-border-default)',
+                  borderRadius: 5,
+                  padding: '0 9px',
+                  height: 30,
+                  transition: 'border-color .12s',
+                }}
               >
-                {allCommentsCollapsed ? 'Expand all' : 'Collapse all'}
-              </Button>
-            </Group>
-          )}
+                <IconTag size={12} color="var(--mantine-color-placeholder)" />
+                <input
+                  placeholder="Filter by tag"
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.currentTarget.value)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--mantine-color-text)',
+                    fontFamily: 'inherit',
+                    fontSize: 12,
+                    width: 96,
+                  }}
+                />
+              </Box>
+            </Box>
+          </Box>
 
-          <ScrollArea p="md">
-            {filteredComments.length === 0 ? (
-              <Text size="sm" c="dimmed" ta="center" py="xl">
-                No comments yet.
-              </Text>
-            ) : (
-              filteredComments.map((c) => {
-                const isCollapsed = collapsedComments.has(c.id);
-                return (
-                  <Paper key={c.id} p="sm" radius="sm" mb="sm" style={{ backgroundColor: 'var(--app-bg-elevated)' }}>
-                    <Group
-                      gap="xs"
-                      style={{ cursor: 'pointer', userSelect: 'none' }}
-                      onClick={() => toggleComment(c.id)}
-                      mb={isCollapsed ? 0 : 4}
+          {/* Comment list */}
+          {filteredComments.length === 0 ? (
+            <Text size="sm" c="dimmed" ta="center" py="xl">
+              No comments yet.
+            </Text>
+          ) : (
+            filteredComments.map((c) => {
+              const isAgent = c.authorType === 'agent';
+              const initials = (c.authorName ?? 'U')
+                .split(' ')
+                .map((w: string) => w[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase();
+              return (
+                <Box key={c.id} style={{ padding: '16px 0', borderBottom: '1px solid rgba(41,39,38,0.6)' }}>
+                  {/* Comment header */}
+                  <Box style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Avatar */}
+                    <Box
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: isAgent ? 'var(--mantine-color-brand-light)' : 'var(--mantine-color-brand-light)',
+                        border: '1px solid var(--mantine-color-brand-light-hover)',
+                        color: 'var(--mantine-color-brand-5)',
+                      }}
                     >
-                      <Avatar size={22} radius="xl" color="brand" style={{ fontSize: 10 }}>
-                        {(c.authorName ?? 'U')[0]}
-                      </Avatar>
-                      <Text size="xs" fw={600}>
-                        {c.authorName ?? 'System'}
-                      </Text>
-                      {c.authorType && (
-                        <Badge size="xs" variant="light">
-                          {c.authorType}
-                        </Badge>
-                      )}
-                      <Text size="xs" c="dimmed" style={{ marginLeft: 'auto' }}>
-                        {formatDateTime(c.createdAt)}
-                      </Text>
-                    </Group>
-                    {isCollapsed ? (
-                      <Text size="xs" c="dimmed" lineClamp={1} mt={4}>
-                        {c.body.split('\n')[0]}
-                      </Text>
-                    ) : (
-                      <Box className={styles.commentMd} style={{ fontSize: 13, lineHeight: 1.5 }}>
-                        <Markdown remarkPlugins={[remarkGfm]}>{c.body}</Markdown>
+                      {initials}
+                    </Box>
+                    <Text style={{ fontSize: 13, fontWeight: 600, color: 'var(--mantine-color-text)' }}>
+                      {c.authorName ?? 'System'}
+                    </Text>
+                    {c.authorType && (
+                      <Box
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 600,
+                          letterSpacing: '0.05em',
+                          padding: '1px 7px',
+                          borderRadius: 4,
+                          background: isAgent ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.05)',
+                          border: `1px solid ${isAgent ? 'var(--mantine-color-brand-light-hover)' : 'rgba(209,207,205,0.14)'}`,
+                          color: isAgent ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {c.authorType}
                       </Box>
                     )}
-                    {c.tags && c.tags.length > 0 && (
-                      <Group gap={4} mt={6}>
-                        {c.tags.map((t) => (
-                          <Badge key={t} size="xs" variant="outline">
-                            {t}
-                          </Badge>
-                        ))}
-                      </Group>
-                    )}
-                  </Paper>
-                );
-              })
-            )}
-          </ScrollArea>
+                    <Text style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mantine-color-placeholder)' }}>
+                      {formatDateTime(c.createdAt)}
+                    </Text>
+                  </Box>
+
+                  {/* Comment body */}
+                  <Box
+                    className={styles.commentMd}
+                    style={{ fontSize: 13, color: 'var(--mantine-color-dimmed)', lineHeight: 1.6, marginTop: 8 }}
+                  >
+                    <Markdown remarkPlugins={[remarkGfm]}>{c.body}</Markdown>
+                  </Box>
+
+                  {/* Tags */}
+                  {c.tags && c.tags.length > 0 && (
+                    <Box style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                      {c.tags.map((t) => (
+                        <Box
+                          key={t}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 600,
+                            letterSpacing: '0.04em',
+                            textTransform: 'uppercase',
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            border: '1px solid rgba(209,207,205,0.14)',
+                            background: 'rgba(209,207,205,0.05)',
+                            color: 'var(--mantine-color-dimmed)',
+                          }}
+                        >
+                          {t}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+
+                  {/* Actions */}
+                  <Box style={{ display: 'flex', gap: 2, marginTop: 8 }}>
+                    <Box
+                      component="button"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--mantine-color-placeholder)',
+                        fontFamily: 'inherit',
+                        fontSize: 12,
+                        padding: '4px 8px',
+                        borderRadius: 5,
+                        cursor: 'pointer',
+                        transition: 'color .12s, background .12s',
+                      }}
+                      className={styles.cmtAct}
+                    >
+                      <IconMessage size={13} />
+                      Reply
+                    </Box>
+                    <Box
+                      component="button"
+                      onClick={() =>
+                        navigator.clipboard?.writeText(`${window.location.href}#comment-${c.id}`).catch(() => undefined)
+                      }
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--mantine-color-placeholder)',
+                        fontFamily: 'inherit',
+                        fontSize: 12,
+                        padding: '4px 8px',
+                        borderRadius: 5,
+                        cursor: 'pointer',
+                        transition: 'color .12s, background .12s',
+                      }}
+                      className={styles.cmtAct}
+                    >
+                      <IconLink size={13} />
+                      Copy link
+                    </Box>
+                  </Box>
+                </Box>
+              );
+            })
+          )}
         </Tabs.Panel>
 
         {/* Assets — with upload and delete */}
-        <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto' }}>
-          {canExecute && (
-            <Group justify="flex-end" p="md" pb={0}>
-              <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
-              <Button
-                variant="outline"
-                size="xs"
-                leftSection={<IconCloudUpload size={14} />}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Upload File
-              </Button>
-            </Group>
-          )}
-          <ScrollArea p="md">
-            {(taskAssets ?? []).length === 0 ? (
-              <Text size="sm" c="dimmed" ta="center" py="xl">
-                No assets attached.
-              </Text>
-            ) : (
-              <Stack gap="sm">
-                {(taskAssets ?? []).map((a) => (
-                  <Paper key={a.id} p="xs" radius="sm" withBorder>
-                    <Group justify="space-between" wrap="nowrap">
-                      <Box style={{ flex: 1, minWidth: 0 }}>
-                        <Text size="sm" fw={500} lineClamp={1}>
-                          {a.name}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {a.contentType ?? ''}
-                          {a.fileSize
-                            ? ` · ${a.fileSize < 1024 ? `${a.fileSize} B` : a.fileSize < 1024 * 1024 ? `${(a.fileSize / 1024).toFixed(1)} KB` : `${(a.fileSize / (1024 * 1024)).toFixed(1)} MB`}`
-                            : ''}
-                        </Text>
-                      </Box>
-                      <Group gap={4}>
-                        {a.authorType && (
-                          <Badge size="xs" variant="light">
-                            {a.authorType}
-                          </Badge>
-                        )}
-                        {a.fileUrl && (
-                          <ActionIcon component="a" href={a.fileUrl} target="_blank" variant="subtle" size="sm">
-                            <IconDownload size={14} />
-                          </ActionIcon>
-                        )}
-                        {canExecute && (
-                          <ActionIcon variant="subtle" color="red" size="sm" onClick={() => handleDeleteAsset(a.id)}>
-                            <IconTrash size={14} />
-                          </ActionIcon>
-                        )}
-                      </Group>
-                    </Group>
-                    {a.tags && a.tags.length > 0 && (
-                      <Group gap={4} mt={4}>
-                        {a.tags.map((t) => (
-                          <Badge key={t} size="xs" variant="outline">
-                            {t}
-                          </Badge>
-                        ))}
-                      </Group>
-                    )}
-                  </Paper>
-                ))}
-              </Stack>
+        <Tabs.Panel value="assets" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+          {/* Assets header: sec-label + upload button */}
+          <Box
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: 14,
+            }}
+          >
+            <Box
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                color: 'var(--mantine-color-dimmed)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <IconCloudUpload size={14} color="var(--mantine-color-brand-5)" />
+              Assets
+            </Box>
+            {canExecute && (
+              <>
+                <input ref={fileInputRef} type="file" hidden onChange={handleUploadAsset} />
+                <Button
+                  size="compact-sm"
+                  leftSection={<IconCloudUpload size={13} />}
+                  onClick={() => fileInputRef.current?.click()}
+                  styles={{
+                    root: {
+                      background: 'transparent',
+                      border: '1px solid var(--mantine-color-brand-5)',
+                      color: 'var(--mantine-color-brand-5)',
+                      fontWeight: 600,
+                      fontSize: 13,
+                    },
+                  }}
+                >
+                  Upload new
+                </Button>
+              </>
             )}
-          </ScrollArea>
+          </Box>
+
+          {/* Asset list */}
+          {(taskAssets ?? []).length === 0 ? (
+            <Text size="sm" c="dimmed" ta="center" py="xl">
+              No assets attached.
+            </Text>
+          ) : (
+            <Stack gap={8}>
+              {(taskAssets ?? []).map((a) => {
+                const ext = a.name.split('.').pop()?.toLowerCase() ?? '';
+                const isPdf = ext === 'pdf';
+                const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext);
+                const sizeStr = a.fileSize
+                  ? a.fileSize < 1024
+                    ? `${a.fileSize} B`
+                    : a.fileSize < 1024 * 1024
+                      ? `${(a.fileSize / 1024).toFixed(1)} KB`
+                      : `${(a.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                  : null;
+                const subText = [a.contentType, sizeStr].filter(Boolean).join(' · ');
+                return (
+                  <Box
+                    key={a.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '10px 12px',
+                      border: '1px solid var(--app-border-default)',
+                      borderRadius: 8,
+                      background: 'var(--app-bg-paper)',
+                    }}
+                  >
+                    {/* File type icon */}
+                    <Box style={{ flexShrink: 0, color: 'var(--mantine-color-placeholder)' }}>
+                      {isPdf ? (
+                        <IconFileTypePdf size={18} />
+                      ) : isImg ? (
+                        <IconLayoutGrid size={18} />
+                      ) : (
+                        <IconCloudUpload size={18} />
+                      )}
+                    </Box>
+
+                    {/* Name + sub */}
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 13, color: 'var(--mantine-color-text)', fontWeight: 500 }} lineClamp={1}>
+                        {a.name}
+                      </Text>
+                      {subText && (
+                        <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)' }}>{subText}</Text>
+                      )}
+                    </Box>
+
+                    {/* Actions */}
+                    <Box style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {a.fileUrl && (
+                        <ActionIcon component="a" href={a.fileUrl} target="_blank" variant="subtle" size="sm">
+                          <IconDownload size={15} />
+                        </ActionIcon>
+                      )}
+                      {canExecute && (
+                        <ActionIcon
+                          variant="subtle"
+                          size="sm"
+                          onClick={() => handleDeleteAsset(a.id)}
+                          className={styles.dangerHover}
+                          style={{ color: 'var(--mantine-color-placeholder)' }}
+                        >
+                          <IconTrash size={15} />
+                        </ActionIcon>
+                      )}
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Stack>
+          )}
         </Tabs.Panel>
 
         {/* Activity */}
-        <Tabs.Panel value="activity" p="md" style={{ flex: 1, overflow: 'auto' }}>
+        <Tabs.Panel value="activity" style={{ flex: 1, overflow: 'auto', padding: 20 }}>
           {(activities ?? []).length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" py="xl">
               No activity yet.
             </Text>
           ) : (
             (activities ?? []).map((a) => (
-              <Group key={a.id} gap="sm" py="xs" style={{ borderBottom: '1px solid var(--app-bg-elevated)' }}>
+              <Box
+                key={a.id}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  padding: '12px 0',
+                  borderBottom: '1px solid rgba(41,39,38,0.6)',
+                }}
+              >
+                <ActivityAvatar actorType={a.actorType} actorName={a.actorName} />
                 <Box style={{ flex: 1, minWidth: 0 }}>
-                  <Text size="sm" lineClamp={2}>
-                    {a.description}
+                  <Text style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--mantine-color-text)' }}>
+                    <strong>{a.actorName}</strong>{' '}
+                    {a.description.startsWith(a.actorName)
+                      ? a.description.slice(a.actorName.length).trim()
+                      : a.description}
                   </Text>
-                  <Text size="xs" c="dimmed">
-                    {a.actorName} · {formatDateTime(a.createdAt)}
+                  <Text style={{ fontSize: 11, color: 'var(--mantine-color-placeholder)', marginTop: 2 }}>
+                    {formatRelativeTime(a.createdAt)}
                   </Text>
                 </Box>
-              </Group>
+              </Box>
             ))
           )}
         </Tabs.Panel>
 
-        {/* Statistics */}
+        {/* Analytics */}
         <Tabs.Panel value="statistics" p="md" style={{ flex: 1, overflow: 'auto' }}>
           {stats === undefined ? (
             <Stack gap="sm" pt={4}>
@@ -1894,7 +2950,7 @@ function TaskDetailSidebar({
                           />
                           <Bar dataKey="costCents" radius={[0, 4, 4, 0]}>
                             {stats.workflowBreakdowns.map((_, i) => (
-                              <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                              <Cell key={i} fill="var(--mantine-color-brand-5)" />
                             ))}
                           </Bar>
                         </BarChart>
@@ -2349,62 +3405,129 @@ function BoardSettingsDialog({
   );
 }
 
-// --- Activity Feed (collapsible, real data) ---
+// --- Activity Feed (slide-over, non-modal — AC-27) ---
 
-function ActivityFeedPanel({ projectId, initialActivities }: { projectId: number; initialActivities: ActivityItem[] }) {
-  const [open, setOpen] = useState(false);
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return value;
+  const diff = (Date.now() - date.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  const days = Math.floor(diff / 86400);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+function ActivityAvatar({ actorType, actorName }: { actorType: string; actorName: string }) {
+  const isAgent = actorType === 'agent';
+  return (
+    <Box
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 11,
+        fontWeight: 600,
+        background: isAgent ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.07)',
+        border: `1px solid ${isAgent ? 'var(--mantine-color-brand-light-hover)' : 'var(--app-border-default)'}`,
+        color: isAgent ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+      }}
+    >
+      {isAgent ? (
+        <IconRobot size={13} />
+      ) : (
+        actorName
+          .split(' ')
+          .map((w) => w[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase()
+      )}
+    </Box>
+  );
+}
+
+function ActivityFeedPanel({
+  projectId,
+  initialActivities,
+  opened,
+  onClose,
+}: {
+  projectId: number;
+  initialActivities: ActivityItem[];
+  opened: boolean;
+  onClose: () => void;
+}) {
   const { activities, loading, loadMore, hasMore } = useBoardActivitiesLoadMore(projectId, initialActivities);
 
   return (
-    <Box mt="sm">
-      <Group
-        gap="sm"
-        onClick={() => setOpen(!open)}
-        style={{ cursor: 'pointer', userSelect: 'none' }}
-        justify="space-between"
-        p="xs"
-      >
-        <Text size="xs" fw={700} tt="uppercase" style={{ letterSpacing: 0.5 }}>
-          Activity Feed
+    <Drawer
+      opened={opened}
+      onClose={onClose}
+      position="right"
+      size={340}
+      withOverlay={false}
+      lockScroll={false}
+      withCloseButton
+      title={
+        <Text fw={600} size="sm">
+          Activity
         </Text>
-        <Box style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-          <IconChevronRight size={14} style={{ transform: 'rotate(90deg)' }} />
+      }
+      styles={{
+        header: { borderBottom: '1px solid var(--app-border-default)', padding: '12px 16px' },
+        body: { padding: '0 16px' },
+      }}
+    >
+      {loading && activities.length === 0 ? (
+        <Box ta="center" py="xl">
+          <Loader size="sm" />
         </Box>
-      </Group>
-      {open && (
-        <Paper withBorder p="sm" radius="sm" mah={260} style={{ overflow: 'auto' }}>
-          {loading && activities.length === 0 ? (
-            <Box ta="center" py="md">
-              <Loader size="sm" />
+      ) : activities.length === 0 ? (
+        <Text size="xs" c="dimmed" ta="center" py="xl">
+          No activity yet.
+        </Text>
+      ) : (
+        <>
+          {activities.map((a) => (
+            <Box
+              key={a.id}
+              style={{
+                display: 'flex',
+                gap: 10,
+                padding: '12px 0',
+                borderBottom: '1px solid rgba(41,39,38,0.6)',
+              }}
+            >
+              <ActivityAvatar actorType={a.actorType} actorName={a.actorName} />
+              <Box style={{ flex: 1, minWidth: 0 }}>
+                <Text size="xs" style={{ lineHeight: 1.5, color: 'var(--mantine-color-text)' }}>
+                  <strong>{a.actorName}</strong>{' '}
+                  {a.description
+                    .replace(a.actorName, '')
+                    .trim()
+                    .replace(/^moved '(.+?)' from/, "moved '$1' from")}
+                </Text>
+                <Text size="10px" c="dimmed" mt={2}>
+                  {formatRelativeTime(a.createdAt)}
+                </Text>
+              </Box>
             </Box>
-          ) : activities.length === 0 ? (
-            <Text size="xs" c="dimmed" ta="center" py="md">
-              No activity yet.
-            </Text>
-          ) : (
-            <>
-              {activities.map((a) => (
-                <Group key={a.id} gap="sm" py={4} style={{ borderBottom: '1px solid var(--app-bg-elevated)' }}>
-                  <Box style={{ flex: 1, minWidth: 0 }}>
-                    <Text size="xs" lineClamp={1}>
-                      {a.description}
-                    </Text>
-                    <Text size="10px" c="dimmed">
-                      {a.actorName} · {formatDateTime(a.createdAt)}
-                    </Text>
-                  </Box>
-                </Group>
-              ))}
-              {hasMore && (
-                <Button variant="subtle" size="xs" fullWidth mt="xs" onClick={loadMore} loading={loading}>
-                  Load more
-                </Button>
-              )}
-            </>
+          ))}
+          {hasMore && (
+            <Button variant="subtle" size="xs" fullWidth mt="xs" onClick={loadMore} loading={loading}>
+              Load more
+            </Button>
           )}
-        </Paper>
+        </>
       )}
-    </Box>
+    </Drawer>
   );
 }
 
@@ -2615,7 +3738,13 @@ function ViewPresetMenu({
     <>
       <Menu shadow="md" width={220} position="bottom-start">
         <Menu.Target>
-          <Button variant="subtle" size="sm" leftSection={<IconFilter size={14} />} px="xs">
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={<IconAdjustmentsHorizontal size={13} />}
+            rightSection={<IconChevronDown size={11} />}
+            styles={{ root: { fontWeight: 400 } }}
+          >
             Presets
           </Button>
         </Menu.Target>
@@ -2767,6 +3896,11 @@ const BoardPage = () => {
     setLocalTasks(showArchived ? mergeTasksById(base, archivedTasks) : base);
   }, [serverTasks, archivedTasks, showArchived]);
 
+  const [localColumns, setLocalColumns] = useState<Column[]>(() => columns ?? []);
+  useEffect(() => {
+    setLocalColumns(columns ?? []);
+  }, [columns]);
+
   useEffect(() => {
     if (!showArchived || !board) {
       if (!showArchived) setArchivedTasks([]);
@@ -2816,6 +3950,7 @@ const BoardPage = () => {
   });
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2945,19 +4080,29 @@ const BoardPage = () => {
 
   const preDragSnapshotRef = useRef<Task[]>([]);
   const draggedIdRef = useRef<number | null>(null);
+  const dragTypeRef = useRef<'task' | 'column' | null>(null);
 
   const handleDragStart = useCallback(
     (event: DragStartEvent) => {
-      const taskData = event.active.data.current?.task as Task | undefined;
-      setActiveTask(taskData ?? null);
+      const data = event.active.data.current;
+      if (data?.type === 'column') {
+        dragTypeRef.current = 'column';
+        setActiveTask(null);
+      } else {
+        dragTypeRef.current = 'task';
+        const taskData = data?.task as Task | undefined;
+        setActiveTask(taskData ?? null);
+        draggedIdRef.current = taskData?.id ?? null;
+        preDragSnapshotRef.current = localTasks.map((t) => ({ ...t }));
+      }
       setHoverColumnId(null);
-      draggedIdRef.current = taskData?.id ?? null;
-      preDragSnapshotRef.current = localTasks.map((t) => ({ ...t }));
     },
-    [localTasks],
+    [], // no dependencies needed; only reads refs and sets state
   );
 
   const handleDragOver = useCallback((event: DragOverEvent) => {
+    if (dragTypeRef.current === 'column') return; // columns handled in dragEnd only
+
     const { over } = event;
     if (!over) {
       setHoverColumnId(null);
@@ -2993,7 +4138,36 @@ const BoardPage = () => {
     async (event: DragEndEvent) => {
       setActiveTask(null);
       setHoverColumnId(null);
-      const { over } = event;
+      const { active, over } = event;
+
+      // ── Column reorder ──────────────────────────────────────────────────────
+      if (dragTypeRef.current === 'column') {
+        dragTypeRef.current = null;
+        if (!over || active.id === over.id) return;
+
+        const oldIdx = localColumns.findIndex((c) => `col-${c.id}` === active.id);
+        const newIdx = localColumns.findIndex((c) => `col-${c.id}` === over.id);
+        if (oldIdx === -1 || newIdx === -1) return;
+
+        const newOrder = arrayMove(localColumns, oldIdx, newIdx);
+        setLocalColumns(newOrder);
+
+        // persist to server with error recovery
+        apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
+          method: 'PATCH',
+          headers: jsonHeaders,
+          body: JSON.stringify({ columnIds: newOrder.map((c) => c.id) }),
+        })
+          .then(() => router.reload({ only: ['columns'] }))
+          .catch(() => {
+            setLocalColumns(localColumns); // revert on error
+            // Error toast would be shown by global error handler
+          });
+        return;
+      }
+
+      // ── Task move ──────────────────────────────────────────────────────────
+      dragTypeRef.current = null;
       if (!over || !board) {
         draggedIdRef.current = null;
         return;
@@ -3068,7 +4242,7 @@ const BoardPage = () => {
         setLocalTasks(preDragSnapshotRef.current);
       }
     },
-    [board, project.id],
+    [board, project.id, localColumns],
   );
 
   const openCreateForColumn = (columnId: number) => {
@@ -3089,6 +4263,54 @@ const BoardPage = () => {
     const allIds = columns.map((c) => c.id);
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
   }, [columns]);
+
+  const handleRetryTask = useCallback(
+    async (task: Task) => {
+      try {
+        await apiFetch(triggerWorkflowApiV1ProjectTaskPath(project.id, task.id), {
+          method: 'POST',
+          headers: jsonHeaders,
+        });
+        router.reload({ only: ['tasks', 'selected_task', 'task_workflow_runs'] });
+      } catch (error) {
+        console.error('Failed to retry task:', error);
+        // Error toast would be shown by global error handler
+      }
+    },
+    [project.id, jsonHeaders],
+  );
+
+  const handleRenameColumn = useCallback(
+    async (columnId: number, name: string) => {
+      await apiFetch(apiV1ProjectColumnPath(project.id, columnId), {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ boardColumn: { name } }),
+      });
+      router.reload({ only: ['columns'] });
+    },
+    [project.id],
+  );
+
+  const handleDeleteColumn = useCallback(
+    async (columnId: number) => {
+      if (!window.confirm('Delete this column? Tasks inside will be moved to the first column.')) return;
+      await apiFetch(apiV1ProjectColumnPath(project.id, columnId), { method: 'DELETE' });
+      router.reload({ only: ['columns', 'tasks'] });
+    },
+    [project.id],
+  );
+
+  const handleAddColumnInline = useCallback(async () => {
+    const res = await apiFetch(apiV1ProjectColumnsPath(project.id), {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ boardColumn: { name: 'New column' } }),
+    });
+    if (res.ok) {
+      router.reload({ only: ['columns'] });
+    }
+  }, [project.id]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -3124,8 +4346,35 @@ const BoardPage = () => {
     <>
       <Head title={`Board — ${project.name}`} />
       <Box className={styles.boardRoot}>
-        {/* Filter bar */}
-        <Group gap="sm" mb="sm" wrap="wrap" align="center">
+        {/* Page header */}
+        <Box mb="md">
+          <Text fw={700} size="xl" lh={1.2}>
+            Tasks
+          </Text>
+          <Text size="sm" c="dimmed" mt={4}>
+            Plan manual and agent work side by side — drop a task into an automated column to run its workflow, and
+            track every run&apos;s progress, status, and cost right on the card.
+          </Text>
+        </Box>
+
+        {/* Filter toolbar */}
+        <Group gap={6} mb="sm" wrap="nowrap" align="center">
+          {/* Search */}
+          <TextInput
+            ref={searchInputRef}
+            placeholder="Search tasks"
+            leftSection={<IconSearch size={12} />}
+            value={filters.search}
+            onChange={(e) => {
+              // Capture before the functional updater — see the Archived toggle below.
+              const search = e.currentTarget.value;
+              setFilters((f) => ({ ...f, search }));
+            }}
+            size="xs"
+            w={180}
+          />
+
+          {/* Presets */}
           <ViewPresetMenu
             projectId={project.id}
             viewPresets={viewPresets ?? []}
@@ -3133,105 +4382,218 @@ const BoardPage = () => {
             filters={filters}
             onApplyFilters={setFilters}
           />
-          <Select
-            placeholder="Assignee"
-            data={[{ value: '', label: 'All' }, ...members.map((m) => ({ value: String(m.id), label: m.name }))]}
-            value={filters.assigneeId ?? ''}
-            onChange={(v) => setFilters((f) => ({ ...f, assigneeId: v || null }))}
-            clearable
-            size="sm"
-            w={140}
-          />
-          <Select
-            placeholder="Type"
-            data={[
-              { value: '', label: 'All types' },
-              { value: 'epic', label: 'Epic' },
-              { value: 'story', label: 'Story' },
-              { value: 'bug', label: 'Bug' },
-            ]}
-            value={filters.taskType ?? ''}
-            onChange={(v) => setFilters((f) => ({ ...f, taskType: v || null }))}
-            clearable
-            size="sm"
-            w={120}
-          />
-          <Select
-            placeholder="Priority"
-            data={[
-              { value: '', label: 'All priorities' },
-              { value: 'critical', label: 'Critical' },
-              { value: 'high', label: 'High' },
-              { value: 'medium', label: 'Medium' },
-              { value: 'low', label: 'Low' },
-            ]}
-            value={filters.priority ?? ''}
-            onChange={(v) => setFilters((f) => ({ ...f, priority: v || null }))}
-            clearable
-            size="sm"
-            w={130}
-          />
+
+          {/* Assignee */}
+          <Menu shadow="md" width={180} position="bottom-start">
+            <Menu.Target>
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconUser size={12} />}
+                styles={{
+                  root: {
+                    fontWeight: 400,
+                    color: filters.assigneeId ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+                  },
+                }}
+              >
+                Assignee:{' '}
+                {filters.assigneeId
+                  ? (members.find((m) => String(m.id) === filters.assigneeId)?.name ?? 'Unknown')
+                  : 'All'}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item onClick={() => setFilters((f) => ({ ...f, assigneeId: null }))}>All</Menu.Item>
+              {members.map((m) => (
+                <Menu.Item
+                  key={m.id}
+                  onClick={() => setFilters((f) => ({ ...f, assigneeId: String(m.id) }))}
+                  fw={filters.assigneeId === String(m.id) ? 600 : 400}
+                >
+                  {m.name}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+
+          {/* Type */}
+          <Menu shadow="md" width={160} position="bottom-start">
+            <Menu.Target>
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconLayoutGrid size={12} />}
+                styles={{
+                  root: {
+                    fontWeight: 400,
+                    color: filters.taskType ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+                  },
+                }}
+              >
+                Type: {filters.taskType ? filters.taskType.charAt(0).toUpperCase() + filters.taskType.slice(1) : 'All'}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {[
+                { value: null, label: 'All' },
+                { value: 'epic', label: 'Epic' },
+                { value: 'story', label: 'Story' },
+                { value: 'bug', label: 'Bug' },
+              ].map(({ value, label }) => (
+                <Menu.Item
+                  key={label}
+                  onClick={() => setFilters((f) => ({ ...f, taskType: value }))}
+                  fw={filters.taskType === value ? 600 : 400}
+                >
+                  {label}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+
+          {/* Priority */}
+          <Menu shadow="md" width={160} position="bottom-start">
+            <Menu.Target>
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconFlag size={12} />}
+                styles={{
+                  root: {
+                    fontWeight: 400,
+                    color: filters.priority ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+                  },
+                }}
+              >
+                Priority:{' '}
+                {filters.priority ? filters.priority.charAt(0).toUpperCase() + filters.priority.slice(1) : 'All'}
+              </Button>
+            </Menu.Target>
+            <Menu.Dropdown>
+              {[
+                { value: null, label: 'All' },
+                { value: 'critical', label: 'Critical' },
+                { value: 'high', label: 'High' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'low', label: 'Low' },
+              ].map(({ value, label }) => (
+                <Menu.Item
+                  key={label}
+                  onClick={() => setFilters((f) => ({ ...f, priority: value }))}
+                  fw={filters.priority === value ? 600 : 400}
+                >
+                  {label}
+                </Menu.Item>
+              ))}
+            </Menu.Dropdown>
+          </Menu>
+
+          {/* Tags — only when there are tags */}
           {allTags.length > 0 && (
-            <MultiSelect
-              placeholder="Tags"
-              data={allTags}
-              value={filters.tags}
-              onChange={(v) => setFilters((f) => ({ ...f, tags: v }))}
-              clearable
-              searchable
-              size="sm"
-              w={160}
-              maxDropdownHeight={200}
-            />
+            <Menu shadow="md" width={200} position="bottom-start" closeOnItemClick={false}>
+              <Menu.Target>
+                <Button
+                  variant="default"
+                  size="xs"
+                  leftSection={<IconTag size={12} />}
+                  styles={{
+                    root: {
+                      fontWeight: 400,
+                      color: filters.tags.length > 0 ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+                    },
+                  }}
+                >
+                  Tags:{' '}
+                  {filters.tags.length === 0
+                    ? 'All'
+                    : filters.tags.length === 1
+                      ? filters.tags[0]
+                      : `${filters.tags.length} selected`}
+                </Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                {allTags.map((tag) => (
+                  <Menu.Item
+                    key={tag}
+                    onClick={() =>
+                      setFilters((f) => ({
+                        ...f,
+                        tags: f.tags.includes(tag) ? f.tags.filter((t) => t !== tag) : [...f.tags, tag],
+                      }))
+                    }
+                    rightSection={filters.tags.includes(tag) ? <IconCheck size={12} /> : null}
+                    fw={filters.tags.includes(tag) ? 600 : 400}
+                  >
+                    {tag}
+                  </Menu.Item>
+                ))}
+                {filters.tags.length > 0 && (
+                  <>
+                    <Menu.Divider />
+                    <Menu.Item color="gray" onClick={() => setFilters((f) => ({ ...f, tags: [] }))}>
+                      Clear tags
+                    </Menu.Item>
+                  </>
+                )}
+              </Menu.Dropdown>
+            </Menu>
           )}
-          <TextInput
-            ref={searchInputRef}
-            placeholder="Search title..."
-            leftSection={<IconSearch size={14} />}
-            value={filters.search}
-            onChange={(e) => {
-              const v = e.currentTarget.value;
-              setFilters((f) => ({ ...f, search: v }));
-            }}
-            size="sm"
-            w={180}
-          />
+
+          {/* Show archived toggle */}
           <Checkbox
-            label="Show archived"
-            size="sm"
+            label="Archived"
+            size="xs"
             checked={filters.showArchived}
             onChange={(e) => {
+              // Read the event synchronously — the functional updater below runs
+              // after React has recycled the synthetic event, so reading
+              // e.currentTarget inside it would throw on a null target.
               const checked = e.currentTarget.checked;
               setFilters((f) => ({ ...f, showArchived: checked }));
             }}
           />
+
+          {/* Clear active filters */}
           {(hasActiveFilters || filters.showArchived) && (
-            <Button
+            <ActionIcon
               variant="subtle"
               size="sm"
-              leftSection={<IconX size={12} />}
+              color="gray"
+              aria-label="Clear filters"
               onClick={() => setFilters(EMPTY_FILTERS)}
             >
-              Clear
-            </Button>
-          )}
-          <Box style={{ flex: 1 }} />
-          <Tooltip label={collapsedColumns.size === columns.length ? 'Expand all' : 'Collapse all'}>
-            <ActionIcon variant="subtle" size="sm" onClick={handleToggleAll}>
-              {collapsedColumns.size === columns.length ? (
-                <IconArrowsMaximize size={16} />
-              ) : (
-                <IconArrowsMinimize size={16} />
-              )}
+              <IconX size={12} />
             </ActionIcon>
-          </Tooltip>
-          {canExecute && (
-            <Tooltip label="Board settings">
-              <ActionIcon variant="subtle" size="sm" onClick={() => setSettingsOpen(true)}>
-                <IconSettings size={16} />
-              </ActionIcon>
-            </Tooltip>
           )}
+
+          <Box style={{ flex: 1 }} />
+
+          {/* Collapse all */}
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={
+              collapsedColumns.size === columns.length ? (
+                <IconArrowsMaximize size={12} />
+              ) : (
+                <IconArrowsMinimize size={12} />
+              )
+            }
+            onClick={handleToggleAll}
+          >
+            {collapsedColumns.size === columns.length ? 'Expand all' : 'Collapse all'}
+          </Button>
+
+          {/* Activity */}
+          <Button
+            variant="default"
+            size="xs"
+            leftSection={<IconActivity size={12} />}
+            onClick={() => setActivityOpen(true)}
+          >
+            Activity
+          </Button>
         </Group>
 
         {/* Board area */}
@@ -3243,21 +4605,109 @@ const BoardPage = () => {
           onDragEnd={handleDragEnd}
         >
           <Box className={styles.boardArea}>
-            {columns.map((col) => (
-              <BoardColumn
-                key={col.id}
-                column={col}
-                tasks={tasksByColumn[col.id] ?? []}
-                taskHref={taskHref}
-                onAddTask={openCreateForColumn}
-                onTaskClick={openTask}
-                collapsed={collapsedColumns.has(col.id)}
-                onToggleCollapse={handleToggleCollapse}
-                isFiltered={hasActiveFilters}
-                isDropTarget={hoverColumnId === col.id}
-                canExecute={canExecute}
-              />
-            ))}
+            <SortableContext items={localColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
+              {localColumns.map((col, idx) => (
+                <BoardColumn
+                  key={col.id}
+                  column={col}
+                  tasks={tasksByColumn[col.id] ?? []}
+                  taskHref={taskHref}
+                  onAddTask={openCreateForColumn}
+                  onTaskClick={openTask}
+                  onRetryTask={handleRetryTask}
+                  collapsed={collapsedColumns.has(col.id)}
+                  onToggleCollapse={handleToggleCollapse}
+                  onMoveLeft={
+                    idx > 0
+                      ? () => {
+                          const ids = localColumns.map((c) => c.id);
+                          const next = [...ids];
+                          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                          apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
+                            method: 'PATCH',
+                            headers: jsonHeaders,
+                            body: JSON.stringify({ columnIds: next }),
+                          }).then(() => router.reload({ only: ['columns'] }));
+                        }
+                      : undefined
+                  }
+                  onMoveRight={
+                    idx < localColumns.length - 1
+                      ? () => {
+                          const ids = localColumns.map((c) => c.id);
+                          const next = [...ids];
+                          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                          apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
+                            method: 'PATCH',
+                            headers: jsonHeaders,
+                            body: JSON.stringify({ columnIds: next }),
+                          }).then(() => router.reload({ only: ['columns'] }));
+                        }
+                      : undefined
+                  }
+                  onDeleteColumn={() => handleDeleteColumn(col.id)}
+                  onRenameColumn={handleRenameColumn}
+                  isFiltered={hasActiveFilters}
+                  isDropTarget={hoverColumnId === col.id}
+                  canExecute={canExecute}
+                />
+              ))}
+            </SortableContext>
+
+            {/* Add column button — strip when all columns are collapsed, pill otherwise */}
+            {(() => {
+              const allCollapsed = columns.length > 0 && collapsedColumns.size === columns.length;
+              return allCollapsed ? (
+                <Box
+                  onClick={handleAddColumnInline}
+                  className={styles.addColumnBtn}
+                  style={{
+                    flex: '0 0 46px',
+                    minWidth: 46,
+                    maxWidth: 46,
+                    alignSelf: 'stretch',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    gap: 10,
+                    padding: '12px 0',
+                  }}
+                >
+                  <IconPlus size={15} />
+                  <div
+                    style={{
+                      writingMode: 'vertical-rl',
+                      fontSize: 13,
+                      fontWeight: 500,
+                      userSelect: 'none',
+                    }}
+                  >
+                    Add column
+                  </div>
+                </Box>
+              ) : (
+                <Box
+                  onClick={handleAddColumnInline}
+                  className={styles.addColumnBtn}
+                  style={{
+                    flex: '0 0 220px',
+                    minWidth: 220,
+                    alignSelf: 'flex-start',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    height: 44,
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  <IconPlus size={15} />
+                  Add column
+                </Box>
+              );
+            })()}
           </Box>
           <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }}>
             {activeTask ? (
@@ -3268,7 +4718,12 @@ const BoardPage = () => {
           </DragOverlay>
         </DndContext>
 
-        <ActivityFeedPanel projectId={project.id} initialActivities={recentActivities ?? []} />
+        <ActivityFeedPanel
+          projectId={project.id}
+          initialActivities={recentActivities ?? []}
+          opened={activityOpen}
+          onClose={() => setActivityOpen(false)}
+        />
       </Box>
 
       <TaskDetailSidebar
@@ -3294,58 +4749,237 @@ const BoardPage = () => {
         columns={columns}
       />
 
-      {/* Create Task Modal */}
-      <Modal opened={canExecute && createOpen} onClose={() => setCreateOpen(false)} title="New Task" centered>
-        <form onSubmit={form.onSubmit(handleCreateTask)}>
-          <Stack gap="md">
-            <TextInput label="Title" required {...form.getInputProps('title')} />
-            <Textarea label="Description" autosize minRows={2} {...form.getInputProps('description')} />
-            <Select
-              label="Type"
-              data={[
-                { value: 'not_specified', label: 'Not specified' },
-                { value: 'epic', label: 'Epic' },
-                { value: 'story', label: 'Story' },
-                { value: 'bug', label: 'Bug' },
-              ]}
-              {...form.getInputProps('taskType')}
+      {/* Create Task Drawer (AC-15) */}
+      <Drawer
+        opened={canExecute && createOpen}
+        onClose={() => {
+          setCreateOpen(false);
+          form.reset();
+        }}
+        position="right"
+        size={620}
+        withCloseButton
+        title={
+          <Text fw={600} size="sm" style={{ letterSpacing: '-0.01em' }}>
+            Create task
+          </Text>
+        }
+        styles={{
+          header: { borderBottom: '1px solid var(--app-border-default)', padding: '12px 16px' },
+          body: { padding: 0, display: 'flex', flexDirection: 'column', height: 'calc(100% - 53px)' },
+        }}
+      >
+        <form
+          onSubmit={form.onSubmit(handleCreateTask)}
+          style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}
+        >
+          {/* Scrollable body */}
+          <Box style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {/* Title — large ghost input */}
+            <Box>
+              <TextInput
+                placeholder="Task title"
+                required
+                {...form.getInputProps('title')}
+                styles={{
+                  input: {
+                    fontSize: 19,
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
+                    padding: '2px 8px',
+                    marginLeft: -8,
+                    background: 'transparent',
+                    border: '1px solid transparent',
+                    borderRadius: 5,
+                    color: 'var(--mantine-color-text)',
+                    transition: 'border-color .12s, background .12s',
+                  },
+                  wrapper: { marginBottom: form.errors.title ? 4 : 0 },
+                }}
+                variant="unstyled"
+              />
+              {form.errors.title && (
+                <Text size="xs" c="red" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <IconAlertCircle size={13} /> {form.errors.title}
+                </Text>
+              )}
+            </Box>
+
+            {/* Description */}
+            <Textarea
+              placeholder="Add a description…"
+              autosize
+              minRows={2}
+              styles={{
+                input: {
+                  background: 'transparent',
+                  borderColor: 'transparent',
+                  padding: '6px 8px',
+                  marginLeft: -8,
+                  fontSize: 14,
+                  lineHeight: 1.6,
+                  resize: 'vertical',
+                  minHeight: 60,
+                  transition: 'border-color .12s, background .12s',
+                },
+              }}
+              variant="unstyled"
+              {...form.getInputProps('description')}
             />
-            <Select
-              label="Priority"
-              data={[
-                { value: '', label: 'None' },
-                { value: 'critical', label: 'Critical' },
-                { value: 'high', label: 'High' },
-                { value: 'medium', label: 'Medium' },
-                { value: 'low', label: 'Low' },
-              ]}
-              clearable
-              {...form.getInputProps('priority')}
-            />
-            <Select
-              label="Assignee"
-              data={members.map((m) => ({ value: String(m.id), label: m.name }))}
-              clearable
-              searchable
-              {...form.getInputProps('assigneeId')}
-            />
-            <Select
-              label="Column"
-              data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
-              required
-              {...form.getInputProps('boardColumnId')}
-            />
-            <Group justify="flex-end">
-              <Button variant="outline" onClick={() => setCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" loading={loading}>
-                Create
-              </Button>
-            </Group>
-          </Stack>
+
+            {/* Properties section */}
+            <Box>
+              <Box
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  color: 'var(--mantine-color-dimmed)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingBottom: 10,
+                  borderBottom: '1px solid var(--app-border-default)',
+                  marginBottom: 14,
+                }}
+              >
+                <IconListDetails size={14} color="var(--mantine-color-brand-5)" />
+                Properties
+              </Box>
+
+              {/* Props grid */}
+              <Box
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '92px 1fr',
+                  gap: '10px 12px',
+                  padding: '4px 0 14px',
+                  alignItems: 'center',
+                }}
+              >
+                <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                  Column
+                </Text>
+                <Select
+                  data={columns.map((c) => ({ value: String(c.id), label: c.name }))}
+                  required
+                  size="xs"
+                  variant="unstyled"
+                  styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                  {...form.getInputProps('boardColumnId')}
+                />
+
+                <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                  Type
+                </Text>
+                <Select
+                  data={[
+                    { value: 'not_specified', label: 'Not specified' },
+                    { value: 'epic', label: 'Epic' },
+                    { value: 'story', label: 'Story' },
+                    { value: 'bug', label: 'Bug' },
+                  ]}
+                  size="xs"
+                  variant="unstyled"
+                  styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                  {...form.getInputProps('taskType')}
+                />
+
+                <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                  Priority
+                </Text>
+                <Select
+                  data={[
+                    { value: '', label: 'None' },
+                    { value: 'critical', label: 'Critical' },
+                    { value: 'high', label: 'High' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'low', label: 'Low' },
+                  ]}
+                  clearable
+                  size="xs"
+                  variant="unstyled"
+                  styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                  {...form.getInputProps('priority')}
+                />
+
+                <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                  Assignee
+                </Text>
+                <Select
+                  data={members.map((m) => ({ value: String(m.id), label: m.name }))}
+                  clearable
+                  searchable
+                  size="xs"
+                  variant="unstyled"
+                  styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                  {...form.getInputProps('assigneeId')}
+                />
+              </Box>
+
+              {/* Automation note (AC-17) */}
+              {(() => {
+                const selColId = form.values.boardColumnId;
+                const selCol = selColId ? columns.find((c) => String(c.id) === selColId) : null;
+                if (!selCol?.workflowBinding) return null;
+                return (
+                  <Box
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      marginTop: 4,
+                      padding: '10px 12px',
+                      borderLeft: '2px solid var(--mantine-color-brand-5)',
+                      background: 'var(--mantine-color-brand-light)',
+                      borderRadius: '0 5px 5px 0',
+                      fontSize: 12,
+                      color: 'var(--mantine-color-dimmed)',
+                    }}
+                  >
+                    <IconBolt size={14} color="var(--mantine-color-brand-5)" style={{ marginTop: 1, flexShrink: 0 }} />
+                    <Text size="xs">
+                      Placing this in <strong style={{ color: 'var(--mantine-color-text)' }}>{selCol.name}</strong> will
+                      run the{' '}
+                      <strong style={{ color: 'var(--mantine-color-text)' }}>
+                        {selCol.workflowBinding.workflowName ?? 'workflow'}
+                      </strong>{' '}
+                      workflow on entry.
+                    </Text>
+                  </Box>
+                );
+              })()}
+            </Box>
+          </Box>
+
+          {/* Footer */}
+          <Group
+            justify="flex-end"
+            gap={8}
+            style={{
+              padding: '12px 20px',
+              borderTop: '1px solid var(--app-border-default)',
+              background: 'var(--app-bg-elevated)',
+              flexShrink: 0,
+            }}
+          >
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => {
+                setCreateOpen(false);
+                form.reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" size="sm" loading={loading}>
+              Create task
+            </Button>
+          </Group>
         </form>
-      </Modal>
+      </Drawer>
     </>
   );
 };
