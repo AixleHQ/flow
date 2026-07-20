@@ -85,7 +85,7 @@ class Web::OnboardingController < Web::ApplicationController
       workflow_description: workflow.description.presence || "An automated workflow",
       steps: limited_steps.map { |s| { name: s.name, description: s.description } }
     }
-  rescue => e
+  rescue ActiveRecord::ActiveRecordError, NoMethodError => e
     Rails.logger.warn("viewer workflow preview failed: #{e.message}")
     nil
   end

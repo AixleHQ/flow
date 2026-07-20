@@ -722,15 +722,18 @@ const OnboardingPage = () => {
                 <Text fw={600} size="lg" mb={4}>
                   Here&apos;s what a workflow looks like in action
                 </Text>
+                <Badge size="sm" variant="outline" mb="md">
+                  Read-only preview
+                </Badge>
                 <Text size="sm" c="dimmed" mb="md">
                   {viewerWorkflowPreview.workflowName}
                 </Text>
                 <Text size="sm" mb="xs">
                   {viewerWorkflowPreview.workflowDescription}
                 </Text>
-                {viewerWorkflowPreview.steps.length > 0 && (
+                {viewerWorkflowPreview.steps?.length > 0 && (
                   <Stack gap="xs" mb="md">
-                    {viewerWorkflowPreview.steps.map((step, i) => (
+                    {viewerWorkflowPreview.steps?.map((step, i) => (
                       <Card key={i} withBorder p="sm">
                         <Text size="sm" fw={500}>
                           {i + 1}. {step.name}

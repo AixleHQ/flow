@@ -98,6 +98,83 @@ const LoginPage = () => {
     <PageShell variant="centered">
       {error === 'no_workspace' ? (
         <NoWorkspaceScreen />
+      ) : error ? (
+        <Paper
+          className={classes.formCard}
+          p="xl"
+          radius="md"
+          w="100%"
+          maw={420}
+          shadow="0 8px 32px rgba(0, 0, 0, 0.4)"
+        >
+          <Center mb={32}>
+            <span className={classes.brand}>
+              <Logo width={96} colorScheme="dark" />
+              <span className={classes.brandFlow}>Flow</span>
+            </span>
+          </Center>
+
+          <GoogleLoginButton />
+
+          <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
+
+          <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
+            Enter your credentials to access your workspace
+          </Text>
+
+          <form onSubmit={handleSubmit}>
+            <Stack gap="md">
+              <TextInput
+                label="Email"
+                value={data.email}
+                onChange={(e) => {
+                  setData('email', e.currentTarget.value);
+                  if (clientErrors.email) setClientErrors((prev) => ({ ...prev, email: undefined }));
+                }}
+                placeholder="you@company.com"
+                error={clientErrors.email || errors.email}
+                autoComplete="username"
+                classNames={{ input: classes.input, label: classes.label }}
+              />
+
+              <PasswordInput
+                label="Password"
+                value={data.password}
+                onChange={(e) => {
+                  setData('password', e.currentTarget.value);
+                  if (clientErrors.password) setClientErrors((prev) => ({ ...prev, password: undefined }));
+                }}
+                placeholder="••••••••"
+                error={clientErrors.password || errors.password}
+                autoComplete="current-password"
+                classNames={{ input: classes.input, label: classes.label, visibilityToggle: classes.visibilityToggle }}
+                visibilityToggleButtonProps={{ 'aria-label': 'Toggle password visibility' }}
+              />
+
+              <Checkbox
+                label="Remember me"
+                size="sm"
+                checked={data.rememberMe}
+                onChange={(e) => setData('rememberMe', e.currentTarget.checked)}
+              />
+
+              <Button
+                type="submit"
+                fullWidth
+                size="lg"
+                loading={processing}
+                mt="sm"
+                classNames={{ root: classes.submitButton }}
+              >
+                {processing ? 'Signing in...' : 'Sign in'}
+              </Button>
+            </Stack>
+          </form>
+
+          <Text ta="center" size="xs" c="dimmed" mt="lg" className={classes.subtitle}>
+            AI Agent Orchestration Platform
+          </Text>
+        </Paper>
       ) : (
         <Paper
           className={classes.formCard}
