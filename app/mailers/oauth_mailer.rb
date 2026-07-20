@@ -2,9 +2,6 @@
 
 # Refresh-failure notifications for OAuth credentials (oauth-unification §4.6).
 class OauthMailer < ApplicationMailer
-  # No shared mailer layout exists in this app yet; render the template standalone.
-  layout false
-
   # Sent once when a credential is escalated to status:error after
   # MAX_REFRESH_FAILURES consecutive refresh failures — the owner must reconnect.
   # Gated to User owners by the caller (OauthCredential#notify_refresh_failure).
