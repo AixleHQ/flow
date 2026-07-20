@@ -367,6 +367,39 @@ module ContainerStrategies
       strategy.send(:launch_agent_in_tmux, container_mock)
     end
 
+    # == collect_terminal_output (raw pipe-pane log → single SessionLog) ==
+
+    test "collect_terminal_output stores the raw terminal log as a text/plain SessionLog" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/tmp/terminal_output.log" => "\e[31mred\e[0m done"
+      })
+      ContainerRuntime.stubs(:build).returns(fake)
+      strategy = build_strategy
+
+      assert_difference "SessionLog.count", 1 do
+        assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session)
+      end
+
+      log = @session.session_logs.last
+      assert_equal "terminal_output.log", log.name
+      assert_equal "text/plain; charset=utf-8", log.content_type
+      assert_equal "\e[31mred\e[0m done".bytesize, log.file_size
+      refute fake.execs.any? { |cmd| cmd.join(" ").include?("capture-pane") },
+             "collect_terminal_output must not run capture-pane (pipe-pane already wrote the file)"
+    end
+
+    test "collect_terminal_output skips blank content" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
+        "/tmp/terminal_output.log" => ""
+      })
+      ContainerRuntime.stubs(:build).returns(fake)
+      strategy = build_strategy
+
+      assert_no_difference "SessionLog.count" do
+        assert_equal 0, strategy.send(:collect_terminal_output, "abc123", @session)
+      end
+    end
+
     # == persist_refreshed_credentials (#2: capture tokens refreshed mid-session) ==
 
     test "persist_refreshed_credentials updates existing credential when token changed" do

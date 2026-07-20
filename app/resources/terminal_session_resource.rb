@@ -32,6 +32,18 @@ class TerminalSessionResource < ApplicationResource
     "#{Settings.traefik.ws_base}/t/#{session.route_token}/tty/ws"
   end
 
+  # Endpoint that streams the captured terminal log so a finished session can be
+  # replayed in the browser. Gated on terminal state only (a column read, so no
+  # per-session query / N+1 when lists are serialized); the endpoint returns 404
+  # for the rare finished session that captured no log, which the frontend treats
+  # as an empty state.
+  typelize :string?
+  attribute :terminal_log_url do |session|
+    next nil unless session.state.in?(%w[finished failed])
+
+    "/api/v1/terminal_sessions/#{session.id}/terminal_log"
+  end
+
   typelize :string?
   attribute :watcher_url do |session|
     next nil unless session.route_token.present?

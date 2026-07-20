@@ -116,7 +116,11 @@ fi
 export TMUX_TMPDIR="/dev/shm/tmux"
 mkdir -p "$TMUX_TMPDIR" && chmod 777 "$TMUX_TMPDIR"
 tmux -u new -d -s agent bash
-tmux pipe-pane -t agent "cat >> /proc/1/fd/1"
+# Single pipe on the agent pane: stream raw PTY output to the container log
+# (/proc/1/fd/1) AND capture it (ANSI preserved) to a file the session-cleanup
+# collector uploads as the replayable terminal_output.log. tmux allows only one
+# pipe per pane, so both sinks must share this one `tee`.
+tmux pipe-pane -t agent "tee -a /tmp/terminal_output.log > /proc/1/fd/1"
 if [ -n "$TTYD_CMD" ] && [ "$TTYD_CMD" != "bash" ]; then
     tmux send-keys -t agent "$TTYD_CMD" Enter
 fi

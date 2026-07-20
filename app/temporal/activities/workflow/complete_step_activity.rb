@@ -57,11 +57,30 @@ module Activities
       def quota_detection_text(session)
         parts = [ session.error_message ]
         log = session.session_logs.find_by(name: "terminal_output.log")
-        parts << log.file.read if log&.file
+        # The terminal log now carries raw ANSI escape sequences (see
+        # AgentSessionStrategy#start_terminal_capture). Strip them so quota-error
+        # patterns still match on the plain text.
+        parts << strip_ansi(log.file.read) if log&.file
         parts.compact_blank.join("\n")
       rescue StandardError => e
         Rails.logger.warn("[CompleteStepActivity] Failed to read terminal log: #{e.message}")
         session.error_message.to_s
+      end
+
+      # The terminal log is now the raw PTY stream (see AgentSessionStrategy#collect_terminal_output),
+      # so strip the full family of escape sequences a redrawing TUI emits — CSI (colors/cursor),
+      # OSC (window title), and the 2-char charset/other escapes — before quota matching. Carriage
+      # returns (in-place redraws) become newlines so overwritten phrases still match.
+      ANSI_CSI = /\e\[[0-9;?]*[ -\/]*[@-~]/
+      ANSI_OSC = /\e\][^\a\e]*(?:\a|\e\\)/
+      ANSI_OTHER = /\e[@-Z\\-_()][0-9A-Za-z]?/
+
+      def strip_ansi(text)
+        text.to_s
+            .gsub(ANSI_OSC, "")
+            .gsub(ANSI_CSI, "")
+            .gsub(ANSI_OTHER, "")
+            .tr("\r", "\n")
       end
 
       def quota_failure_result(step_run, session, detection)

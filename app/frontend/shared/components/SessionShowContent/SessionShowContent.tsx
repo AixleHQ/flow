@@ -14,6 +14,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 
 import classes from './SessionShowContent.module.css';
+import { SessionTerminalReplay } from './SessionTerminalReplay';
 
 export interface SessionShowContext {
   backPath: string;
@@ -325,6 +326,8 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
               </Text>
             </Box>
           )}
+
+          {s.terminalLogUrl && <SessionTerminalReplay logUrl={s.terminalLogUrl} />}
 
           <Group mt="md" gap="sm">
             {s.pendingArtifactsCount > 0 && (

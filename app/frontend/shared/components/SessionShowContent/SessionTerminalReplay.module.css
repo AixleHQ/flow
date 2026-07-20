@@ -1,0 +1,25 @@
+.terminal {
+  height: 420px;
+  border: 1px solid var(--app-border-default);
+  border-radius: var(--mantine-radius-sm);
+  background-color: var(--app-bg-deep);
+  /* xterm scrolls vertically inside its own viewport; allow horizontal scroll
+     for captures wider than the panel rather than clipping the right edge. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.xterm {
+  height: 100%;
+  width: 100%;
+  padding: 8px;
+}
+
+.loaderOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
