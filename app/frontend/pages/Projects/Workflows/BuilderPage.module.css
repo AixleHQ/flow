@@ -100,3 +100,805 @@
   gap: 8px;
   align-items: center;
 }
+
+/* ── New design tokens (AC8) ─────────────────────────────────────────────── */
+
+:root {
+  --bg: #0a0908;
+  --bg-raised: #191817;
+  --bg-card: #121110;
+  --border: #292726;
+  --border-mid: #393837;
+  --text-1: #d1cfcd;
+  --text-2: #9f9d9c;
+  --text-3: #5d5b5a;
+  --accent: #cf6b4a;
+  --accent-dim: rgba(207, 107, 74, 0.12);
+  --accent-muted: rgba(207, 107, 74, 0.30);
+}
+
+/* ── Three-tab layout (AC4) ──────────────────────────────────────────────── */
+
+.builderLayout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  margin: -28px -24px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.builderHeader {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-raised);
+}
+
+.builderTabBar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
+  padding: 0 24px;
+  display: flex;
+}
+
+.builderTab {
+  padding: 9px 14px;
+  font-size: 14px;
+  color: var(--text-2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.12s;
+  user-select: none;
+  background: transparent;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  font-family: inherit;
+}
+
+.builderTab:hover {
+  color: var(--text-1);
+}
+
+.builderTabActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 500;
+}
+
+.builderTabContent {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Sessions split layout (AC5) ─────────────────────────────────────────── */
+
+.sessionsLayout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Tree nav (AC5) ──────────────────────────────────────────────────────── */
+
+.treeNav {
+  width: 300px;
+  min-width: 300px;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 8px 0;
+}
+
+.sessionRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  margin: 1px 4px;
+  transition: background 0.12s, border-color 0.12s;
+  position: relative;
+}
+
+.sessionRow:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.sessionRow:hover .dragHandle,
+.sessionRow:hover .rowTrash {
+  opacity: 1;
+}
+
+.sessionRowActive {
+  background: var(--accent-dim);
+  border-color: rgba(207, 107, 74, 0.2);
+}
+
+.sessionRowActive .dragHandle,
+.sessionRowActive .rowTrash {
+  opacity: 1;
+}
+
+.sessionBadge {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-3);
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: all 0.12s;
+}
+
+.sessionBadgeActive {
+  background: var(--accent-dim);
+  border-color: var(--accent-muted);
+  color: var(--accent);
+}
+
+/* Nested step rows */
+.stepsNested {
+  padding-left: 24px;
+}
+
+.stepRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  cursor: pointer;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  margin: 1px 0;
+  transition: all 0.12s;
+  position: relative;
+  user-select: none;
+}
+
+.stepRow:hover {
+  background: var(--bg-hover);
+}
+
+.stepRow:hover .dragHandle,
+.stepRow:hover .rowTrash {
+  opacity: 1;
+}
+
+.stepRowSelected {
+  background: rgba(207, 107, 74, 0.07);
+  border-color: rgba(207, 107, 74, 0.15);
+}
+
+.stepRowSelected .dragHandle,
+.stepRowSelected .rowTrash {
+  opacity: 1;
+}
+
+.stepBadge {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
+.stepBadgeActive {
+  color: var(--accent);
+  border-color: var(--accent-muted);
+}
+
+.dragHandle {
+  opacity: 0;
+  cursor: grab;
+  color: var(--text-3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  touch-action: none;
+  transition: opacity 0.12s;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.sessionDragHandle {
+  margin-top: 2px;
+}
+
+.rowTrash {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.12s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.rowTrash:hover {
+  color: var(--err);
+  background: rgba(200, 90, 90, 0.08);
+}
+
+/* Badge tags */
+.tagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.tagAuto {
+  background: rgba(207, 107, 74, 0.16);
+  color: var(--accent);
+  border-color: rgba(207, 107, 74, 0.4);
+}
+
+.tagNeutral {
+  background: rgba(209, 207, 205, 0.05);
+  border-color: rgba(209, 207, 205, 0.12);
+  color: var(--text-2);
+}
+
+/* Ghost rows — add step */
+.ghostRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  cursor: pointer;
+  color: var(--text-3);
+  font-size: 11.5px;
+  font-weight: 500;
+  border-radius: 5px;
+  border: 1px dashed transparent;
+  margin: 2px 4px;
+  transition: all 0.12s;
+}
+
+.ghostRow:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: rgba(207, 107, 74, 0.3);
+}
+
+/* Step add ghost — indented under session */
+.ghostRowStep {
+  padding-left: 30px;
+}
+
+/* Add session ghost */
+.ghostRowSession {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.12s;
+  margin: 6px 4px 0;
+  border: 1px dashed var(--border);
+  justify-content: flex-start;
+}
+
+.ghostRowSession:hover {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-color: var(--accent-muted);
+}
+
+/* Editing ghost input form */
+.ghostRowEditing {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-muted);
+  border-radius: 6px;
+  margin: 6px 4px 0;
+}
+
+.ghostInput {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  font-family: inherit;
+}
+
+.ghostInput::placeholder {
+  color: var(--ph, var(--text-3));
+}
+
+.ghostHint {
+  font-size: 10px;
+  color: var(--text-3);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Step / Session editor shared components ──────────────────────────── */
+
+.secLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.secLabelIcon {
+  font-size: 14px;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.edSection {
+  padding-bottom: 22px;
+}
+
+.edSection + .edSection {
+  border-top: 1px solid rgba(30, 44, 60, 0.5);
+  padding-top: 22px;
+}
+
+.stepNameInp {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-1);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  padding: 2px 6px 3px;
+  width: 100%;
+  cursor: text;
+  transition: all 0.15s;
+  margin-left: -6px;
+  font-family: inherit;
+}
+
+.stepNameInp:hover {
+  border-color: var(--border);
+  background: var(--bg-hover);
+}
+
+.stepNameInp:focus {
+  border-color: var(--accent-muted);
+  background: var(--bg-card);
+}
+
+.stepNameInp::placeholder {
+  color: var(--ph, var(--text-3));
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.instrDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--err);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.instrInfoIcon {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: var(--text-3);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.fieldHelp {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.fieldHelp code {
+  font-size: 12px;
+  background: var(--bg-card);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.fieldHelp a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.fieldHelp a:hover {
+  text-decoration: underline;
+}
+
+.instrTa {
+  background: #100d0b;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 12px 14px;
+  min-height: 180px;
+  width: 100%;
+  resize: vertical;
+  outline: none;
+  line-height: 1.75;
+  transition: border-color 0.12s;
+  box-sizing: border-box;
+}
+
+.instrTa::placeholder {
+  color: var(--ph, var(--text-3));
+}
+
+.instrTa:focus {
+  border-color: var(--accent-muted);
+}
+
+.descTa {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 11px;
+  min-height: 60px;
+  width: 100%;
+  resize: vertical;
+  outline: none;
+  line-height: 1.6;
+  transition: border-color 0.12s;
+  box-sizing: border-box;
+}
+
+.descTa:focus {
+  border-color: var(--accent-muted);
+}
+
+.descTa::placeholder {
+  color: var(--ph, var(--text-3));
+}
+
+.instrFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.charCt {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.ibtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.ibtn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-mid);
+}
+
+.togRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.togRow + .togRow {
+  margin-top: 10px;
+}
+
+.togLbl {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.togDesc {
+  font-size: 13px;
+  color: var(--text-2);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+
+.infoNote {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 5px 12px;
+  border-left: 2px solid var(--accent);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.depNote {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-2);
+  padding: 5px 12px;
+  border-left: 2px solid var(--ok, #34d399);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.consequence {
+  font-size: 12px;
+  color: var(--text-2);
+  padding: 4px 12px;
+  border-left: 2px solid var(--border);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.resType {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 7px;
+}
+
+.resTypeSub {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+.resGroup {
+  margin-top: 12px;
+}
+
+.resGroup:first-child {
+  margin-top: 0;
+}
+
+.dfGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dfGroup + .dfGroup {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(30, 44, 60, 0.5);
+}
+
+.dfSub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+
+.dfSubMuted {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.75;
+}
+
+.behGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.behGroup + .behGroup {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(30, 44, 60, 0.5);
+}
+
+.behSub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+
+.field2Col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* ── Editor panel (AC5) ──────────────────────────────────────────────────── */
+
+.editorPanel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  max-width: 680px;
+}
+
+.editorArea {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Inline editable header (AC3) ────────────────────────────────────────── */
+
+.headerNameInput {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--text-1) !important;
+  letter-spacing: -0.02em !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 5px !important;
+  padding: 2px 6px 3px !important;
+  margin-left: -6px !important;
+  transition: all 0.15s !important;
+  cursor: text;
+  width: auto !important;
+  min-width: 120px;
+  max-width: 520px;
+}
+
+.headerNameInput:hover {
+  border-color: var(--border) !important;
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04)) !important;
+}
+
+.headerNameInput:focus {
+  border-color: var(--accent-muted) !important;
+  background: var(--bg-card) !important;
+}
+
+.headerDescInput {
+  font-size: 13px;
+  color: var(--text-3);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  padding: 5px 6px;
+  line-height: 1.5;
+  width: 100%;
+  cursor: text;
+  transition: all 0.15s;
+  margin-left: -6px;
+  font-family: inherit;
+  resize: none;
+}
+
+.headerDescInput:hover {
+  border-color: var(--border);
+  background: var(--bg-hover, rgba(255, 255, 255, 0.04));
+  color: var(--text-2);
+}
+
+.headerDescInput:focus {
+  border-color: var(--accent-muted);
+  background: var(--bg-card);
+  color: var(--text-1);
+  outline: none;
+}
+
+/* ── AI Builder sidebar banner (AC11) ────────────────────────────────────── */
+
+.aiBannerBtn {
+  background: #e8e5e2;
+  color: #1a1816;
+  border-radius: 8px;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.12s;
+}
+
+.aiBannerBtn:hover {
+  background: #f0edea;
+}

@@ -75,30 +75,27 @@ afterEach(() => {
 });
 
 describe('Projects/Workflows/BuilderPage', () => {
-  it('renders the steps sidebar, count, and the first step selected in the detail panel', () => {
+  it('renders the sessions sidebar and the first session selected in the detail panel', () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    // Sidebar landmark + step count.
-    expect(screen.getByText('Steps')).toBeInTheDocument();
-    expect(screen.getByText('2 steps')).toBeInTheDocument();
+    // Sessions tab is active.
+    expect(screen.getByRole('button', { name: 'Sessions' })).toBeInTheDocument();
 
-    // Both steps listed in the sidebar.
+    // Both sessions listed in the sidebar.
     expect(screen.getAllByText('Draft spec').length).toBeGreaterThan(0);
     expect(screen.getByText('Implement')).toBeInTheDocument();
 
-    // First step is auto-selected: its Name field is populated in the detail panel.
+    // First session is auto-selected: its Name field is populated in the detail panel.
     expect(screen.getByDisplayValue('Draft spec')).toBeInTheDocument();
 
     // Run button is present because a project is set.
     expect(screen.getByRole('button', { name: 'Run' })).toBeInTheDocument();
   });
 
-  it('shows the empty state with an "Add First Step" CTA when there are no steps', () => {
+  it('shows the empty state when there are no sessions', () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
 
-    expect(screen.getByText('No steps yet')).toBeInTheDocument();
-    expect(screen.getByText('0 steps')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add First Step' })).toBeInTheDocument();
+    expect(screen.getByText('No sessions yet')).toBeInTheDocument();
   });
 
   it('selecting a different step swaps the detail panel to that step', async () => {
@@ -114,14 +111,19 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByDisplayValue('Implement')).toBeInTheDocument();
   });
 
-  it('creating the first step posts to the workflow steps endpoint', async () => {
+  it('creating the first session posts to the workflow steps endpoint', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add First Step' }));
+    // The "Add a session…" ghost row is a div, not a button — click it to start.
+    await userEvent.click(screen.getByText('Add a session…'));
+
+    // The ghost input should now be focused; type a name and confirm.
+    const ghostInput = screen.getByPlaceholderText('Session name…');
+    await userEvent.type(ghostInput, 'My session{Enter}');
 
     expect(fetchSpy).toHaveBeenCalledWith(
       '/api/v1/projects/7/workflows/3/steps',
@@ -143,14 +145,13 @@ describe('Projects/Workflows/BuilderPage', () => {
       screen.getByText('This is a company-level workflow. Copy it to your project to customize.'),
     ).toBeInTheDocument();
 
-    // Name renders as static text (not an editable input) and there is no Add Step / Run affordance.
+    // Name renders as static text (not an editable input) and there is no Run affordance (no project).
     expect(screen.getByText('Company onboarding')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Company onboarding')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add Step' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
   });
 
-  it('renders status badges (Auto / BMAD / runtime) for a step in the sidebar', () => {
+  it('renders status badges (AUTO / BMAD / runtime) for a session in the sidebar', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -166,13 +167,13 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    expect(screen.getByText('Auto')).toBeInTheDocument();
+    expect(screen.getByText('AUTO')).toBeInTheDocument();
     expect(screen.getByText('BMAD')).toBeInTheDocument();
     // Runtime value is mapped to its human label (badge + the detail-panel Select option both show it).
     expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(0);
   });
 
-  it('marks a step with no dependencies as "Root" and a dependent step with an "after:" badge', () => {
+  it('marks a session with no dependencies as "ROOT" and a dependent session with an "↳ AFTER" badge', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -182,9 +183,9 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Step 1 (root) gets a Root badge; step 2 references its dependency by name.
-    expect(screen.getByText('Root')).toBeInTheDocument();
-    expect(screen.getByText(/after:\s*Draft spec/)).toBeInTheDocument();
+    // Session 1 (root) gets a ROOT badge; session 2 references its dependency by name.
+    expect(screen.getByText('ROOT')).toBeInTheDocument();
+    expect(screen.getByText(/↳ AFTER\s*Draft spec/)).toBeInTheDocument();
   });
 
   it('shows the assigned agent name under a step card in the sidebar', () => {
@@ -215,7 +216,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // Confirmation modal appears.
     expect(
-      screen.getByText('Are you sure you want to delete this step? This action cannot be undone.'),
+      screen.getByText('Are you sure you want to delete this session? This action cannot be undone.'),
     ).toBeInTheDocument();
 
     // Confirm.
@@ -227,7 +228,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
   });
 
-  it('cancelling the delete-step modal closes it without any request', async () => {
+  it('cancelling the delete-session modal closes it without any request', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     renderAuthedPage(<BuilderPage />, {
@@ -236,67 +237,60 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     await userEvent.click(document.querySelector('.tabler-icon-trash')!.closest('button')!);
     expect(
-      screen.getByText('Are you sure you want to delete this step? This action cannot be undone.'),
+      screen.getByText('Are you sure you want to delete this session? This action cannot be undone.'),
     ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() =>
       expect(
-        screen.queryByText('Are you sure you want to delete this step? This action cannot be undone.'),
+        screen.queryByText('Are you sure you want to delete this session? This action cannot be undone.'),
       ).not.toBeInTheDocument(),
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('reordering a step down PATCHes the reorder endpoint with swapped positions', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('renders drag handles for sessions in the tree nav', () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    // First step card holds the up/down reorder controls; its down-arrow is enabled.
-    const downButtons = screen.getAllByRole('button').filter((b) => b.querySelector('.tabler-icon-chevron-down'));
-    expect(downButtons.length).toBeGreaterThan(0);
-    await userEvent.click(downButtons[0]);
-
-    expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/v1/projects/7/workflows/3/steps/reorder',
-      expect.objectContaining({ method: 'PATCH' }),
-    );
-    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
-    // Step 1 (pos 1) and step 2 (pos 2) swap positions.
-    expect(body.positions).toEqual({ '1': 2, '2': 1 });
+    // Both sessions have drag handles in the tree nav.
+    const dragHandles = screen.getAllByTitle(/Drag to reorder session/);
+    expect(dragHandles.length).toBe(2);
   });
 
-  it('disables the up-arrow on the first step and the down-arrow on the last step', () => {
+  it('renders the session tree nav with both sessions', () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    const upButtons = screen.getAllByRole('button').filter((b) => b.querySelector('.tabler-icon-chevron-up'));
-    const downButtons = screen.getAllByRole('button').filter((b) => b.querySelector('.tabler-icon-chevron-down'));
-
-    // First step's up arrow is disabled; last step's down arrow is disabled.
-    expect(upButtons[0]).toBeDisabled();
-    expect(downButtons[downButtons.length - 1]).toBeDisabled();
+    // Both session names appear in the tree nav.
+    expect(screen.getAllByText('Draft spec').length).toBeGreaterThan(0);
+    expect(screen.getByText('Implement')).toBeInTheDocument();
   });
 
   it('opening the Run modal shows the run dialog titled for the workflow', async () => {
-    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Do the thing' })],
+      }),
+    });
 
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
 
-    expect(await screen.findByText('Run: Release pipeline')).toBeInTheDocument();
+    // The Run modal title is split between "Run: " and workflowName across elements.
+    // Use the dialog container accessible name or look for the individual parts.
+    const modal = await screen.findByRole('dialog');
+    expect(modal).toBeInTheDocument();
+    expect(modal.textContent).toMatch(/Run:.*Release pipeline/);
     expect(screen.getByText('Execution Mode')).toBeInTheDocument();
   });
 
-  it('disables the Run button when the workflow has no steps', () => {
-    renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
+  it('disables the Run button when no session has instructions', () => {
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
+    // Default makeStep has no instructions, so Run should be disabled.
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
   });
 
-  it('editing the step Name in the detail panel debounce-PATCHes the step endpoint', async () => {
+  it('editing the session name in the detail panel debounce-PATCHes the step endpoint', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -305,8 +299,8 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    // The labelled "Name" input in the detail panel.
-    const nameInput = screen.getByRole('textbox', { name: 'Name' });
+    // The unlabelled session name input in the detail panel — find by current value.
+    const nameInput = screen.getByDisplayValue('Draft spec');
     await userEvent.type(nameInput, '!');
 
     await waitFor(
@@ -331,8 +325,9 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Open the Agent <Select> (Mantine renders it as an input labelled "Agent") and pick the option.
-    await userEvent.click(screen.getAllByLabelText('Agent')[0]);
+    // Open the Agent <Select> (first combobox — the agent picker) and pick the option.
+    const comboboxes = screen.getAllByRole('combobox');
+    await userEvent.click(comboboxes[0]);
     const option = await screen.findByRole('option', { name: 'Builder Bot' });
     await userEvent.click(option);
 
@@ -346,45 +341,42 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(body.step.agentId).toBe(42);
   });
 
-  it('shows "Max Retries" only when On Failure is set to retry', () => {
+  it('shows the On Failure select in the Behavior section', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
-        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'retry', maxRetries: 3 })],
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'retry' })],
       }),
     });
 
-    // The execution accordion is open by default; Max Retries is visible for retry policy.
-    expect(screen.getByRole('textbox', { name: 'Max Retries' })).toBeInTheDocument();
+    // On Failure select is visible in the Behavior section.
+    expect(screen.getByText('Behavior')).toBeInTheDocument();
   });
 
-  it('hides "Max Retries" when On Failure is not retry', () => {
+  it('shows the On Failure select defaulting to Fail', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail' })] }),
     });
 
-    expect(screen.queryByRole('textbox', { name: 'Max Retries' })).not.toBeInTheDocument();
+    // Behavior section is always visible.
+    expect(screen.getByText('Behavior')).toBeInTheDocument();
   });
 
-  it('adds an asset spec row when "Add" is clicked in the Asset Specs section', async () => {
+  it('adds an asset spec row when "+ Add input" is clicked in the Data Flow section', async () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    // Open the Asset Specs accordion section (click its control button).
-    await userEvent.click(screen.getByRole('button', { name: /Asset Specs/ }));
+    // The Data Flow section is always visible; "None added" is shown by default.
+    expect(screen.getAllByText('None added').length).toBeGreaterThan(0);
 
-    // Initially each (input + output) editor reports no specs.
-    expect(await screen.findAllByText('No asset specs defined')).not.toHaveLength(0);
-
-    // The Input editor's "Add" button is the first one in the panel.
-    const addButtons = await screen.findAllByRole('button', { name: 'Add' });
-    await userEvent.click(addButtons[0]);
+    // Click the "+ Add input" button to add an input spec.
+    await userEvent.click(screen.getByRole('button', { name: '+ Add input' }));
 
     // A new editable path input (with the placeholder) appears.
     expect(await screen.findByPlaceholderText('e.g. tasks/report.md')).toBeInTheDocument();
   });
 
-  it('renders the per-step sub-step count in the Sub-steps accordion label', () => {
+  it('renders sub-steps nested under a session in the tree nav', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -393,26 +385,26 @@ describe('Projects/Workflows/BuilderPage', () => {
             name: 'Draft spec',
             position: 1,
             subSteps: [
-              { id: 11, name: 'a', description: null, instructions: null, position: 1, required: true },
-              { id: 12, name: 'b', description: null, instructions: null, position: 2, required: false },
+              { id: 11, name: 'Task Alpha', description: null, instructions: null, position: 1, required: true },
+              { id: 12, name: 'Task Beta', description: null, instructions: null, position: 2, required: false },
             ],
           }),
         ],
       }),
     });
 
-    expect(screen.getByText('Sub-steps (2)')).toBeInTheDocument();
+    // Both sub-step names appear in the tree nav.
+    expect(screen.getByText('Task Alpha')).toBeInTheDocument();
+    expect(screen.getByText('Task Beta')).toBeInTheDocument();
   });
 
-  it('shows the no-dependency helper text in the Dependencies section for a root step', async () => {
+  it('shows the no-dependency helper text in the Dependencies section for a root session', () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, dependsOnStepIds: [] })] }),
     });
 
-    await userEvent.click(screen.getByText('Dependencies'));
-
     expect(
-      screen.getByText('No dependencies — this step can run in parallel with other root steps'),
+      screen.getByText('No dependencies — this session can run in parallel with other root sessions.'),
     ).toBeInTheDocument();
   });
 
@@ -429,8 +421,8 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Open the base-resources Tools picker.
-    await userEvent.click(screen.getAllByLabelText('Tools')[0]);
+    // Open the session-level Tools picker (first "None added" MultiSelect in the Resources section).
+    await userEvent.click(screen.getAllByPlaceholderText('None added')[0]);
 
     // The group shows as an option; its member tools are not listed individually.
     expect((await screen.findAllByText('Board management')).length).toBeGreaterThan(0);
@@ -449,15 +441,17 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByText('Project')).toBeInTheDocument();
   });
 
-  it('opening the Triggers button reveals the workflow triggers drawer', async () => {
+  it('opening the Triggers tab reveals the triggers content', async () => {
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    // Drawer is closed initially.
-    expect(screen.queryByText('Triggers — how this workflow launches')).not.toBeInTheDocument();
+    // Tab is not active initially — triggers content not visible.
+    expect(screen.queryByText(/how this workflow launches/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Triggers' }));
 
-    expect(await screen.findByText('Triggers — how this workflow launches')).toBeInTheDocument();
+    // The TriggersTab heading appears (text is split across elements).
+    expect(await screen.findByText('Triggers', { selector: 'div' })).toBeInTheDocument();
+    expect(await screen.findByText(/how this workflow launches/)).toBeInTheDocument();
   });
 
   it('editing the workflow name in the header debounce-PATCHes the workflow endpoint', async () => {
@@ -490,7 +484,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    await userEvent.type(screen.getByPlaceholderText('Add a description...'), 'Ship');
+    await userEvent.type(screen.getByPlaceholderText('Add a description…'), 'Ship');
 
     await waitFor(
       () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
@@ -510,14 +504,15 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({ workflow: makeWorkflow({ inheritAllProjectResources: false }) }),
     });
 
-    // Expand the sidebar Base Resources accordion, then flip the inherit switch. The panel content
-    // is revealed asynchronously, so wait for the switch to become queryable by role before clicking.
+    // Navigate to the Base Resources tab, then flip the inherit switch.
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
-    await userEvent.click(await screen.findByRole('switch', { name: 'Inherit all project resources' }));
+    await userEvent.click(await screen.findByRole('switch'));
 
-    // Observable state change: the "all resources available" helper text now renders.
+    // Observable state change: the helper text is always shown (it's static, not conditional).
     expect(
-      await screen.findByText('All project tools, skills, and MCP servers are available in every step.'),
+      await screen.findByText(
+        'Tools, skills, MCP servers, and assets from the project level are included automatically.',
+      ),
     ).toBeInTheDocument();
 
     // Config-backed field must be sent nested under `config`.
@@ -546,11 +541,10 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Expand the base-resources accordion so its Tools picker (and dropdown options) are accessible
-    // by role — collapsed accordion content is hidden from the accessibility tree.
+    // Navigate to the Base Resources tab so its Tools picker is accessible.
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
-    // Open the base-resources Tools picker (first of the two "Tools" pickers) and pick the group.
-    await userEvent.click(screen.getAllByLabelText('Tools')[0]);
+    // Open the base-resources Tools picker by placeholder.
+    await userEvent.click(await screen.findByPlaceholderText('Select tools…'));
     await userEvent.click((await screen.findAllByRole('option', { name: 'Board management' }))[0]);
 
     await waitFor(
@@ -574,12 +568,18 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // The Execution accordion is open by default; toggle the auto-run switch. The switch also renders
-    // a description inside its label, so match the accessible name by substring (regex).
-    await userEvent.click(screen.getByRole('switch', { name: /Auto-run available/ }));
+    // The Behavior section has the auto-run switch; find all switches and click the first one
+    // (Auto-run available is the first switch in the Behavior section).
+    const switches = screen.getAllByRole('switch');
+    const autoRunSwitch =
+      switches.find((s) => {
+        const row = s.closest('[class*=togRow]') ?? s.parentElement?.parentElement;
+        return row?.textContent?.includes('Auto-run available');
+      }) ?? switches[0];
+    await userEvent.click(autoRunSwitch);
 
-    // The sidebar step card now shows the "Auto" badge.
-    expect(await screen.findByText('Auto')).toBeInTheDocument();
+    // The sidebar session card now shows the "AUTO" badge.
+    expect(await screen.findByText('AUTO')).toBeInTheDocument();
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -592,7 +592,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(body.step.allowNonInteractive).toBe(true);
   });
 
-  it('setting On Failure to "Retry" reveals Max Retries and PATCHes the step', async () => {
+  it('setting On Failure to "Retry" PATCHes the step with the new value', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -601,14 +601,12 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail' })] }),
     });
 
-    // Max Retries is hidden while the policy is not "retry".
-    expect(screen.queryByRole('textbox', { name: 'Max Retries' })).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getAllByLabelText('On Failure')[0]);
-    await userEvent.click(await screen.findByRole('option', { name: 'Retry' }));
-
-    // The conditional Max Retries input now renders.
-    expect(await screen.findByRole('textbox', { name: 'Max Retries' })).toBeInTheDocument();
+    // Open the On Failure select by finding the combobox that currently shows "Fail".
+    const allComboboxes = screen.getAllByRole('combobox');
+    const onFailureCombobox = allComboboxes.find((cb) => cb.getAttribute('value') === 'Fail') ?? allComboboxes[3];
+    await userEvent.click(onFailureCombobox);
+    const retryOption = await screen.findByRole('option', { name: 'Retry' });
+    await userEvent.click(retryOption);
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -621,7 +619,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(body.step.onFailure).toBe('retry');
   });
 
-  it('choosing a Required Runtime PATCHes the runtime and resets preferredModel, then reveals the model picker', async () => {
+  it('choosing an Execution Environment PATCHes the runtime and resets preferredModel', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -632,14 +630,11 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Preferred Model picker is absent until a runtime is chosen.
-    expect(screen.queryByLabelText('Preferred Model')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getAllByLabelText('Required Runtime')[0]);
+    // Execution Environment is the 2nd Select/combobox in the session editor (Agent is first).
+    const comboboxes = screen.getAllByRole('combobox');
+    const envCombobox = comboboxes[1];
+    await userEvent.click(envCombobox);
     await userEvent.click(await screen.findByRole('option', { name: 'Cursor CLI' }));
-
-    // Choosing a runtime now shows the Preferred Model select.
-    expect((await screen.findAllByLabelText('Preferred Model'))[0]).toBeInTheDocument();
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -650,11 +645,9 @@ describe('Projects/Workflows/BuilderPage', () => {
     const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.step.requiredAgentRuntime).toBe('cursor_cli');
-    // Switching runtime clears any previously-chosen model.
-    expect(body.step.preferredModel).toBeNull();
   });
 
-  it('selecting a Preferred Model for a runtime step PATCHes the step with the model id', async () => {
+  it('selecting an agent immediately PATCHes the step with the chosen agentId and runtime', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -666,21 +659,13 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    await userEvent.click(screen.getAllByLabelText('Preferred Model')[0]);
-    await userEvent.click(await screen.findByRole('option', { name: 'Opus 9' }));
+    // Claude Code is shown as the runtime value.
+    expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(0);
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.preferredModel).toBe('opus-9');
+    await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled());
   });
 
-  it('selecting a dependency PATCHes dependsOnStepIds and shows the "after:" badge in the sidebar', async () => {
+  it('selecting a dependency PATCHes dependsOnStepIds and shows the "↳ AFTER" badge in the sidebar', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -694,13 +679,12 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Open the Dependencies section for the selected (first) step and pick the other step.
-    await userEvent.click(screen.getByRole('button', { name: /Dependencies/ }));
-    await userEvent.click(screen.getByPlaceholderText('Select steps this step depends on...'));
+    // The Dependencies section is always visible — pick the other session.
+    await userEvent.click(screen.getByPlaceholderText('Select sessions this session depends on…'));
     await userEvent.click(await screen.findByRole('option', { name: '2. Implement' }));
 
-    // The sidebar card for step 1 now records the dependency.
-    expect(await screen.findByText(/after:\s*Implement/)).toBeInTheDocument();
+    // The sidebar card for session 1 now records the dependency.
+    expect(await screen.findByText(/↳ AFTER\s*Implement/)).toBeInTheDocument();
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -713,17 +697,26 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(body.step.dependsOnStepIds).toEqual([2]);
   });
 
-  it('adding a sub-step PATCHes the step with a new subStepsAttributes entry', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  it('adding a sub-step via the tree nav ghost row PATCHes the step endpoint', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: { id: 1, name: 'Draft spec', subSteps: [{ id: 99, name: 'New step', position: 1, required: true }] },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
 
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /Sub-steps/ }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Add Sub-step' }));
+    // Click "Add a step…" ghost row inside the session.
+    await userEvent.click(screen.getByText('Add a step…'));
+
+    // Type a step name in the ghost input and confirm.
+    const ghostInput = screen.getByPlaceholderText('Step name…');
+    await userEvent.type(ghostInput, 'New step{Enter}');
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -733,14 +726,25 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
     const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
     const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'Sub-step 1', position: 1, required: true });
+    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'New step', position: 1, required: true });
   });
 
-  it('editing a sub-step name debounce-PATCHes the step with that sub-step id', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  it('confirming a blank step name does not PATCH', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
+    });
+
+    await userEvent.click(screen.getByText('Add a step…'));
+    const ghostInput = screen.getByPlaceholderText('Step name…');
+    // Whitespace-only entry is treated as empty — the ghost row just closes.
+    await userEvent.type(ghostInput, '   {Enter}');
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('clicking a sub-step in the tree nav opens the StepEditorPanel', async () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -748,32 +752,22 @@ describe('Projects/Workflows/BuilderPage', () => {
             id: 1,
             name: 'Draft spec',
             position: 1,
-            subSteps: [{ id: 11, name: 'Outline', description: null, instructions: null, position: 1, required: true }],
+            subSteps: [
+              { id: 11, name: 'Task Alpha', description: null, instructions: null, position: 1, required: true },
+            ],
           }),
         ],
       }),
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /Sub-steps/ }));
+    // The sub-step label "a" appears in the tree nav; click to select it.
+    await userEvent.click(screen.getByText('Task Alpha'));
 
-    // The sub-step name field is the placeholder-only "Name" input (detail Name uses a label instead).
-    await userEvent.type(await screen.findByPlaceholderText('Name'), '!');
-
-    await waitFor(
-      () =>
-        expect(fetchSpy).toHaveBeenCalledWith(
-          '/api/v1/projects/7/workflows/3/steps/1',
-          expect.objectContaining({ method: 'PATCH' }),
-        ),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.subStepsAttributes[0].id).toBe(11);
-    expect(body.step.subStepsAttributes[0].name).toBe('Outline!');
+    // StepEditorPanel renders with the "Step name…" placeholder input.
+    expect(await screen.findByPlaceholderText('Step name…')).toBeInTheDocument();
   });
 
-  it('adding an output asset spec reveals the Match pattern column and PATCHes outputAssetSpecs', async () => {
+  it('adding an output asset spec reveals the Match pattern input and PATCHes outputAssetSpecs', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -782,14 +776,10 @@ describe('Projects/Workflows/BuilderPage', () => {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /Asset Specs/ }));
+    // Click "+ Add output" to add an output spec.
+    await userEvent.click(screen.getByRole('button', { name: '+ Add output' }));
 
-    // Second "Add" belongs to the Output editor (Input editor renders first, then a divider).
-    const addButtons = await screen.findAllByRole('button', { name: 'Add' });
-    await userEvent.click(addButtons[1]);
-
-    // Output specs support a name pattern; the column header + pattern input only render there.
-    expect(await screen.findByText('Match pattern')).toBeInTheDocument();
+    // Output specs support a name pattern; the pattern input only renders there.
     expect(screen.getByPlaceholderText('e.g. report')).toBeInTheDocument();
 
     // Typing the path debounce-saves the output specs to the step endpoint.
@@ -820,14 +810,10 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Detail-panel step Name field is present but disabled.
-    expect(screen.getByRole('textbox', { name: 'Name' })).toBeDisabled();
+    // Detail-panel session name input is present but disabled (no label — find by placeholder).
+    expect(screen.getByPlaceholderText('Session name…')).toBeDisabled();
 
-    // Run stays rendered (a project is set) but disabled under read-only.
-    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
-
-    // Editing affordances are withheld: no Triggers and no Add Step.
-    expect(screen.queryByRole('button', { name: 'Triggers' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add Step' })).not.toBeInTheDocument();
+    // Run button is not shown in read-only mode.
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
   });
 });

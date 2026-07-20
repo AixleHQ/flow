@@ -25,6 +25,7 @@ import {
   IconTool,
   IconUser,
   IconUsers,
+  IconWand,
 } from '@tabler/icons-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 
@@ -160,6 +161,127 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+// ─── AI Builder sidebar banner (AC11) ────────────────────────────────────────
+
+interface AiBannerProps {
+  collapsed: boolean;
+  projectId?: string | null;
+}
+
+function AiBanner({ collapsed, projectId }: AiBannerProps) {
+  const handleClick = () => {
+    if (projectId) {
+      router.visit(`/company/projects/${projectId}/aixle_builder`);
+    } else {
+      router.visit('/company/aixle_builder');
+    }
+  };
+
+  if (collapsed) {
+    return (
+      <div
+        style={{
+          margin: '8px 0 4px',
+          padding: '0',
+          display: 'flex',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <Tooltip label="AI Builder" position="right" withArrow>
+          <UnstyledButton
+            onClick={handleClick}
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 7,
+              background: 'var(--accent-dim, rgba(207,107,74,0.12))',
+              border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#cf6b4a',
+              transition: 'background 0.12s, border-color 0.12s',
+            }}
+          >
+            <IconWand size={16} />
+          </UnstyledButton>
+        </Tooltip>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        margin: '8px 10px 4px',
+        padding: '13px',
+        border: '1px solid var(--app-border-default)',
+        borderRadius: 8,
+        background: 'var(--app-bg-paper, #121110)',
+        flexShrink: 0,
+      }}
+    >
+      <div
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 7,
+          background: 'var(--accent-dim, rgba(207,107,74,0.12))',
+          border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#cf6b4a',
+          marginBottom: 10,
+        }}
+      >
+        <IconWand size={16} />
+      </div>
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 700,
+          color: 'var(--app-text-primary)',
+          letterSpacing: '-0.01em',
+          marginBottom: 4,
+        }}
+      >
+        AI Builder
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--app-text-secondary)', lineHeight: 1.45, marginBottom: 12 }}>
+        Tasks, boards, and workflows — connected, from one prompt.
+      </div>
+      <button
+        type="button"
+        onClick={handleClick}
+        style={{
+          background: '#d1cfcd',
+          color: '#0a0908',
+          borderRadius: 5,
+          width: '100%',
+          border: '1px solid transparent',
+          cursor: 'pointer',
+          padding: '8px 12px',
+          fontSize: 12,
+          fontWeight: 600,
+          fontFamily: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 5,
+          transition: 'background 0.12s',
+        }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#e3e1df')}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#d1cfcd')}
+      >
+        <IconSparkles size={13} color="#0a0908" />✦ Build with AI
+      </button>
+    </div>
+  );
+}
 
 // ─── SidebarNav ───────────────────────────────────────────────────────────────
 
@@ -486,6 +608,8 @@ function SidebarContent({
       <ScrollArea className={classes.scrollArea} type="never">
         <SidebarNav groups={navGroups} collapsed={collapsed} isAdmin={isAdmin} onNavigate={onNavigate} />
       </ScrollArea>
+
+      <AiBanner collapsed={collapsed} projectId={projectId} />
 
       <div className={`${classes.collapseRow} ${collapsed ? classes.collapseRowCollapsed : ''}`}>
         <ColorSchemeToggle className={classes.collapseBtn} tooltipPosition={collapsed ? 'right' : 'top'} />
