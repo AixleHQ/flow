@@ -1,9 +1,11 @@
 import { Terminal } from '@xterm/xterm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { SessionTerminalReplay } from './SessionTerminalReplay';
+
+const expand = () => userEvent.click(screen.getByRole('button', { name: /terminal session log/i }));
 
 // xterm.js is a vendor module (jsdom has no canvas/WebGL), so per docs/testing.md R8
 // the third-party seam may be mocked. We assert the component feeds fetched bytes into
@@ -37,12 +39,28 @@ describe('SessionTerminalReplay', () => {
     vi.mocked(Terminal).mockClear();
   });
 
+  it('is collapsed by default and only fetches the log once expanded', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('hi', { status: 200 }));
+
+    renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+
+    expect(screen.getByRole('button', { name: /terminal session log/i })).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(write).not.toHaveBeenCalled();
+
+    await expand();
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(LOG_URL, expect.anything()));
+    fetchSpy.mockRestore();
+  });
+
   it('sizes the terminal to the widest captured line so box-art aligns', async () => {
     // Widest content line is 40 cols; the terminal must render at that width.
     const body = ['short', '#'.repeat(40), 'x'.repeat(12)].join('\n');
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
 
     renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+    await expand();
 
     await waitFor(() => expect(Terminal).toHaveBeenCalled());
     const opts = vi.mocked(Terminal).mock.calls.at(-1)?.[0];
@@ -55,6 +73,7 @@ describe('SessionTerminalReplay', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }));
 
     renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+    await expand();
 
     await waitFor(() => expect(write).toHaveBeenCalledWith(body));
     expect(fetchSpy).toHaveBeenCalledWith(LOG_URL, expect.anything());
@@ -65,6 +84,7 @@ describe('SessionTerminalReplay', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
 
     renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+    await expand();
 
     expect(await screen.findByText(/no terminal output was captured/i)).toBeInTheDocument();
     expect(write).not.toHaveBeenCalled();
@@ -79,6 +99,7 @@ describe('SessionTerminalReplay', () => {
       .mockResolvedValue(new Response(body, { status: 200, headers: { 'X-Log-Truncated': 'true' } }));
 
     renderPage(<SessionTerminalReplay logUrl={LOG_URL} />);
+    await expand();
 
     expect(await screen.findByText(/log truncated/i)).toBeInTheDocument();
     await waitFor(() => expect(write).toHaveBeenCalled());
