@@ -181,7 +181,7 @@ interface SortableSessionRowProps {
   onSelectStep: (sessionId: number, stepId: number) => void;
   onDeleteSession: (id: number) => void;
   onDeleteStep: (sessionId: number, stepId: number) => void;
-  onAddStep: (sessionId: number) => void;
+  onAddStep: (sessionId: number, stepName: string) => void;
   onReorderSteps: (sessionId: number, oldIndex: number, newIndex: number) => void;
   readOnly: boolean;
 }
@@ -315,7 +315,7 @@ function SortableSessionRow({
 
 interface AddStepGhostProps {
   sessionId: number;
-  onAdd: (sessionId: number) => void;
+  onAdd: (sessionId: number, stepName: string) => void;
 }
 
 function AddStepGhost({ sessionId, onAdd }: AddStepGhostProps) {
@@ -330,7 +330,7 @@ function AddStepGhost({ sessionId, onAdd }: AddStepGhostProps) {
 
   const handleConfirm = () => {
     if (value.trim()) {
-      onAdd(sessionId);
+      onAdd(sessionId, value.trim());
     }
     setEditing(false);
     setValue('');
@@ -439,7 +439,7 @@ interface SessionTreeNavProps {
   onDeleteSession: (id: number) => void;
   onDeleteStep: (sessionId: number, stepId: number) => void;
   onAddSession: (name: string) => void;
-  onAddStep: (sessionId: number) => void;
+  onAddStep: (sessionId: number, stepName: string) => void;
   onReorderSessions: (oldIndex: number, newIndex: number) => void;
   onReorderSteps: (sessionId: number, oldIndex: number, newIndex: number) => void;
 }

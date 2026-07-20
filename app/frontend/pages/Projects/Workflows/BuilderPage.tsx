@@ -316,16 +316,17 @@ const BuilderPage = () => {
 
   // --- Sub-step (Step) management ---
   const addSubStep = useCallback(
-    async (sessionId: number) => {
+    async (sessionId: number, stepName?: string) => {
       const step = steps.find((s) => s.id === sessionId);
       if (!step) return;
       const nextPos = step.subSteps.length + 1;
+      const name = stepName?.trim() || `Step ${nextPos}`;
       const res = await apiFetch(stepApi(projectId, workflow.id, sessionId), {
         method: 'PATCH',
         headers: jsonHeaders,
         body: JSON.stringify({
           step: {
-            subStepsAttributes: [{ name: `Step ${nextPos}`, position: nextPos, required: true }],
+            subStepsAttributes: [{ name, position: nextPos, required: true }],
           },
         }),
       });

@@ -726,7 +726,22 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
     const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
     const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'Step 1', position: 1, required: true });
+    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'New step', position: 1, required: true });
+  });
+
+  it('confirming a blank step name does not PATCH', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
+    });
+
+    await userEvent.click(screen.getByText('Add a step…'));
+    const ghostInput = screen.getByPlaceholderText('Step name…');
+    // Whitespace-only entry is treated as empty — the ghost row just closes.
+    await userEvent.type(ghostInput, '   {Enter}');
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('clicking a sub-step in the tree nav opens the StepEditorPanel', async () => {
