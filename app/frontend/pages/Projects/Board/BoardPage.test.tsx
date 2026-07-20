@@ -89,6 +89,30 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
   });
 
+  it('toggling the Archived filter fetches and reveals archived tasks without crashing', async () => {
+    const archived = makeTask({ id: 3, title: 'Retired epic', boardColumnId: 100, position: 1, archived: true });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify([archived]), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Archived tasks are hidden by default.
+    expect(screen.queryByText('Retired epic')).not.toBeInTheDocument();
+
+    // Toggling the checkbox must not throw (regression: the onChange read
+    // e.currentTarget.checked inside a functional setState updater, which
+    // crashed once React nulled the recycled event's currentTarget).
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Archived' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('archived=archived'), expect.anything()),
+    );
+    expect(await screen.findByText('Retired epic')).toBeInTheDocument();
+  });
+
   it('renders an empty-column placeholder when a column has no tasks', () => {
     renderAuthedPage(<BoardPage />, {
       props: {

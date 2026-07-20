@@ -4365,7 +4365,11 @@ const BoardPage = () => {
             placeholder="Search tasks"
             leftSection={<IconSearch size={12} />}
             value={filters.search}
-            onChange={(e) => setFilters((f) => ({ ...f, search: e.currentTarget.value }))}
+            onChange={(e) => {
+              // Capture before the functional updater — see the Archived toggle below.
+              const search = e.currentTarget.value;
+              setFilters((f) => ({ ...f, search }));
+            }}
             size="xs"
             w={180}
           />
@@ -4541,7 +4545,13 @@ const BoardPage = () => {
             label="Archived"
             size="xs"
             checked={filters.showArchived}
-            onChange={(e) => setFilters((f) => ({ ...f, showArchived: e.currentTarget.checked }))}
+            onChange={(e) => {
+              // Read the event synchronously — the functional updater below runs
+              // after React has recycled the synthetic event, so reading
+              // e.currentTarget inside it would throw on a null target.
+              const checked = e.currentTarget.checked;
+              setFilters((f) => ({ ...f, showArchived: checked }));
+            }}
           />
 
           {/* Clear active filters */}
