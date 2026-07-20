@@ -3,7 +3,10 @@
   border: 1px solid var(--app-border-default);
   border-radius: var(--mantine-radius-sm);
   background-color: var(--app-bg-deep);
-  overflow: hidden;
+  /* xterm scrolls vertically inside its own viewport; allow horizontal scroll
+     for captures wider than the panel rather than clipping the right edge. */
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .xterm {

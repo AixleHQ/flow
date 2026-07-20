@@ -55,7 +55,10 @@ function computeLayout(text: string, el: HTMLElement) {
   const width = (el.clientWidth || 700) - 16; // minus padding
   const height = (el.clientHeight || 420) - 16;
   const CHAR_W = 0.6; // monospace advance ≈ 0.6em
-  const fontSize = Math.min(Math.max(Math.floor(width / (cols * CHAR_W)), 6), 14);
+  // Keep a readable floor. Very wide captures (e.g. a legacy snapshot taken at a
+  // transiently resized pane) then overflow the container and scroll horizontally
+  // instead of shrinking to an illegible size.
+  const fontSize = Math.min(Math.max(Math.floor(width / (cols * CHAR_W)), 9), 14);
   const rows = Math.max(Math.floor(height / (fontSize * 1.25)), 4);
   return { cols, rows, fontSize };
 }
