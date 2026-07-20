@@ -276,9 +276,7 @@ GEM
       multi_xml (>= 0.5.2)
     i18n (1.15.2)
       concurrent-ruby (~> 1.0)
-    image_processing (1.14.0)
-      mini_magick (>= 4.9.5, < 6)
-      ruby-vips (>= 2.0.17, < 3)
+    image_processing (2.0.2)
     inertia_cable (0.2.2)
       actioncable (>= 7.0)
       activejob (>= 7.0)
@@ -372,9 +370,6 @@ GEM
       logger
       mime-types-data (~> 3.2025, >= 3.2025.0507)
     mime-types-data (3.2026.0203)
-    mini_magick (5.2.0)
-      benchmark
-      logger
     mini_mime (1.1.5)
     minitar (1.1.0)
     minitest (5.27.0)
@@ -638,7 +633,7 @@ GEM
       bigdecimal
       concurrent-ruby (~> 1.0, >= 1.0.2)
       logger
-    shrine (3.8.0)
+    shrine (3.9.0)
       content_disposition (~> 1.0)
       down (~> 5.1)
     simplecov (0.22.0)
@@ -773,7 +768,7 @@ DEPENDENCIES
   gitlab
   haml-rails
   hashie
-  image_processing (~> 1.14)
+  image_processing (~> 2.0)
   inertia_cable
   inertia_rails
   json_schemer
@@ -821,9 +816,10 @@ DEPENDENCIES
   rubocop-rails
   rubocop-rails-omakase
   ruby-filemagic!
+  ruby-vips (~> 2.2)
   sentry-rails
   sentry-ruby
-  shrine (~> 3.8)
+  shrine (~> 3.9)
   simplecov
   site_prism
   spring
