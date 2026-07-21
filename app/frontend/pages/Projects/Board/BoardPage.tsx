@@ -2297,11 +2297,8 @@ function TaskDetailSidebar({
                         p="xs"
                         style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
                       >
-                        <Group justify="space-between" wrap="nowrap">
+                        <Group justify="space-between" wrap="nowrap" gap="xs">
                           <NeutralStatusChip state={run.state} />
-                          <Text size="xs" c="dimmed">
-                            {formatDateTime(run.createdAt)}
-                          </Text>
                           <Text
                             component="a"
                             href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
@@ -2309,9 +2306,25 @@ function TaskDetailSidebar({
                             rel="noopener"
                             size="xs"
                             c="brand"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              flex: 1,
+                              minWidth: 0,
+                              textDecoration: 'none',
+                            }}
                           >
-                            <IconExternalLink size={11} />
+                            <Box
+                              component="span"
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                              {run.workflowName ?? 'Workflow run'}
+                            </Box>
+                            <IconExternalLink size={11} style={{ flexShrink: 0 }} />
+                          </Text>
+                          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                            {formatDateTime(run.createdAt)}
                           </Text>
                         </Group>
 

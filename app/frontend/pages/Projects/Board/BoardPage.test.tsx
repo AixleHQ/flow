@@ -345,8 +345,8 @@ describe('Projects/Board/BoardPage', () => {
     const runsPanel = screen.getByRole('tabpanel');
     // The run state chip appears.
     expect(within(runsPanel).getByText('completed')).toBeInTheDocument();
-    // External link to the run.
-    const link = within(runsPanel).getByRole('link');
+    // The launched workflow name is shown for each run (regression: #338).
+    const link = within(runsPanel).getByRole('link', { name: /Implement Feature/ });
     expect(link).toHaveAttribute('href', '/company/projects/7/workflow_runs/55');
   });
 
