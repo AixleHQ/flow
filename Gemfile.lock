@@ -455,7 +455,7 @@ GEM
       actionpack (>= 4.2)
       omniauth (~> 2.0)
     ostruct (0.6.3)
-    pagy (43.6.0)
+    pagy (43.6.1)
       json
       uri
       yaml
