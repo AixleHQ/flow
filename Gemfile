@@ -157,7 +157,7 @@ gem "ruby-vips", "~> 2.2" # image_processing 2.0 no longer declares it; shrine.r
 
 gem "faraday-retry", "~> 2.3"
 
-gem "lograge", "~> 0.14.0"
+gem "lograge", "~> 0.15.0"
 gem "minitar"
 
 gem "rotp", "~> 6.3"
