@@ -378,6 +378,29 @@ module Agents
       assert_includes toml, 'url = "https://mcp.example.com"'
     end
 
+    test "mcp_config emits the baked Playwright browsers path for stdio servers (task #340)" do
+      # Codex does not forward the container environment to STDIO MCP servers, so the
+      # browsers path must be written into config.toml explicitly or the Playwright
+      # MCP cannot find the baked Chrome for Testing and fails with
+      # "Browser chrome-for-testing is not installed".
+      server = OpenStruct.new(
+        name: "playwright",
+        transport: "stdio",
+        command: "npx @playwright/mcp",
+        args: [ "--headless" ],
+        env: {}
+      )
+
+      toml = @adapter.mcp_config([ server ])["/home/codex/.codex/config.toml"]
+
+      # Build the expected env fragment through the adapter's own TOML escaper so
+      # the assertion stays correct regardless of how special characters (the
+      # hyphen in the path, spaces in the command) are escaped.
+      key = @adapter.toml_string("PLAYWRIGHT_BROWSERS_PATH")
+      val = @adapter.toml_string("/opt/playwright-browsers")
+      assert_includes toml, "env = { #{key} = #{val} }"
+    end
+
     private
 
     # Minimal unsigned JWT carrying an `exp` claim (seconds). Signature segment is

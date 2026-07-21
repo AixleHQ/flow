@@ -364,6 +364,9 @@ module Agents
       assert_equal "http", config["mcpServers"]["ctx"]["type"]
       assert_equal "https://mcp.example.com", config["mcpServers"]["ctx"]["url"]
       assert_equal "stdio", config["mcpServers"]["stdio"]["type"]
+      # The baked Playwright browsers path is injected into every stdio server (task #340).
+      assert_equal "/opt/playwright-browsers",
+                   config["mcpServers"]["stdio"]["env"]["PLAYWRIGHT_BROWSERS_PATH"]
     end
 
     # == Env ==

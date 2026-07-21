@@ -188,6 +188,35 @@ module Agents
       :fresh
     end
 
+    # Baseline environment variables that every STDIO MCP subprocess must receive,
+    # regardless of whether the launching agent CLI forwards the container's
+    # environment to the servers it spawns.
+    #
+    # The Playwright MCP resolves its baked browser through PLAYWRIGHT_BROWSERS_PATH
+    # (set to /opt/playwright-browsers as an ENV in docker/base/Dockerfile). Claude
+    # Code forwards the full parent environment to STDIO MCP servers, so it picks the
+    # var up automatically — but Codex (and other CLIs) spawn STDIO servers with a
+    # restricted environment that drops custom vars. Without the path the MCP falls
+    # back to ~/.cache/ms-playwright, where no browser is baked, and fails with:
+    #   Error: Browser "chrome-for-testing" is not installed.
+    # Emitting the var explicitly in the MCP config makes the baked browser reachable
+    # under every agent CLI (task #340). Unrelated MCP servers ignore it.
+    #
+    # Keep the value in sync with ENV PLAYWRIGHT_BROWSERS_PATH in docker/base/Dockerfile.
+    # The Rails app runs on the host, not inside the agent container, so the path
+    # cannot be read from the process environment here — it must be a constant.
+    MCP_STDIO_BASE_ENV = { "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers" }.freeze
+
+    # Environment for a STDIO MCP server config entry: the baseline vars every MCP
+    # subprocess needs, overlaid with the server's own configured env (the server's
+    # values win on conflict). Always returns a non-empty hash.
+    # @param server [#env] resolved MCP server
+    # @return [Hash<String, String>]
+    def mcp_stdio_env(server)
+      server_env = server.respond_to?(:env) && server.env.present? ? server.env.to_h : {}
+      MCP_STDIO_BASE_ENV.merge(server_env)
+    end
+
     # =================================================================
     # Environment Variables (from session/credential metadata)
     # Used for agent-specific config like GOOGLE_CLOUD_PROJECT

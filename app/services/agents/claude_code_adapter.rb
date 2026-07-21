@@ -271,7 +271,7 @@ module Agents
         if s.transport.to_s == "stdio"
           entry["command"] = s.command if s.respond_to?(:command)
           entry["args"] = s.args if s.respond_to?(:args)
-          entry["env"] = s.env if s.respond_to?(:env) && s.env.present?
+          entry["env"] = mcp_stdio_env(s)
         else
           entry["url"] = s.url if s.url.present?
           entry["headers"] = s.headers if s.headers.present? && s.headers.any?

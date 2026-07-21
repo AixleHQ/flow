@@ -97,6 +97,36 @@ module Agents
       assert_equal 1001, @adapter.container_uid
     end
 
+    # == MCP STDIO Environment Tests ==
+
+    test "mcp_stdio_env injects the baked Playwright browsers path (task #340)" do
+      server = OpenStruct.new(env: {})
+
+      assert_equal "/opt/playwright-browsers",
+                   @adapter.mcp_stdio_env(server)["PLAYWRIGHT_BROWSERS_PATH"]
+    end
+
+    test "mcp_stdio_env injects the browsers path even when the server has no env" do
+      server = OpenStruct.new(name: "playwright")
+
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers" },
+                   @adapter.mcp_stdio_env(server))
+    end
+
+    test "mcp_stdio_env merges the server env on top of the baseline" do
+      server = OpenStruct.new(env: { "KEY" => "v" })
+
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers", "KEY" => "v" },
+                   @adapter.mcp_stdio_env(server))
+    end
+
+    test "mcp_stdio_env lets the server override the baseline browsers path" do
+      server = OpenStruct.new(env: { "PLAYWRIGHT_BROWSERS_PATH" => "/custom/path" })
+
+      assert_equal "/custom/path",
+                   @adapter.mcp_stdio_env(server)["PLAYWRIGHT_BROWSERS_PATH"]
+    end
+
     # == Environment Variables Tests ==
 
     test "required_env_fields returns empty array by default" do

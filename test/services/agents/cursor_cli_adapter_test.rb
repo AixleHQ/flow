@@ -186,10 +186,13 @@ module Agents
       mcp = JSON.parse(result["/workspace/.cursor/mcp.json"])
       servers = mcp["mcpServers"]
 
-      # stdio server: command/args/env, no url
+      # stdio server: command/args/env, no url. The baked-browser path is injected
+      # into every stdio server's env (task #340) and the server's own env is merged
+      # on top of it.
       assert_equal "npx @playwright/mcp", servers["playwright"]["command"]
       assert_equal [ "--headless" ], servers["playwright"]["args"]
-      assert_equal({ "KEY" => "v" }, servers["playwright"]["env"])
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers", "KEY" => "v" },
+                   servers["playwright"]["env"])
       refute servers["playwright"].key?("url")
 
       # remote (sse) server: url + headers, no command
