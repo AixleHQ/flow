@@ -197,6 +197,35 @@ const p=pw.chromium.executablePath({channel:'chrome-for-testing'}); \
 require('fs').accessSync(p); \
 console.log('Verified chrome-for-testing browser at ' + p);"
 
+# Make the baked browser discoverable WITHOUT relying on PLAYWRIGHT_BROWSERS_PATH
+# reaching the MCP subprocess (task #340).
+#
+# PLAYWRIGHT_BROWSERS_PATH is set as an ENV above, so it is present in the
+# container environment — but a STDIO MCP server only sees it if the launching
+# agent CLI forwards the parent env to the subprocess. Claude Code forwards the
+# full env, so it works there; Codex (and potentially other CLIs) spawn STDIO
+# servers with a restricted environment that DROPS custom vars. With the var
+# gone, playwright-core falls back to its Linux default browser location,
+# $HOME/.cache/ms-playwright, where nothing is baked — producing:
+#   Error: Browser "chrome-for-testing" is not installed.
+#
+# Symlinking that default location to the shared browser dir makes the baked
+# browser resolvable under the fallback too, so Chrome launches regardless of
+# whether any given CLI forwards the env var. We seed the symlink into /etc/skel
+# so every derived agent image's `useradd -m <user>` copies it into that user's
+# home automatically (all four agents — claude/codex/cursor/gemini — create
+# their user with -m), keeping this a single, DRY, forward-compatible fix.
+# The symlink is copied verbatim (not dereferenced) by useradd, and a later
+# `chown -R` on the home operates on the link itself (lchown), never on the
+# shared target, so /opt/playwright-browsers ownership/permissions are unchanged.
+RUN mkdir -p /etc/skel/.cache \
+    && ln -sfn "${PLAYWRIGHT_BROWSERS_PATH}" /etc/skel/.cache/ms-playwright \
+    && PLAYWRIGHT_BROWSERS_PATH=/etc/skel/.cache/ms-playwright \
+       node -e "const pw=require('$(npm root -g)/@playwright/mcp/node_modules/playwright-core'); \
+const p=pw.chromium.executablePath({channel:'chrome-for-testing'}); \
+require('fs').accessSync(p); \
+console.log('Verified chrome-for-testing resolvable via default-cache fallback symlink at ' + p);"
+
 # -----------------------------------------------------------------------------
 # Workspace setup
 # -----------------------------------------------------------------------------
