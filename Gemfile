@@ -153,7 +153,7 @@ end
 gem "shrine", "~> 3.9"
 gem "aws-sdk-s3", "~> 1.227"
 gem "image_processing", "~> 2.0"
-gem "ruby-vips", "~> 2.2" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
+gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
 gem "faraday-retry", "~> 2.3"
 
