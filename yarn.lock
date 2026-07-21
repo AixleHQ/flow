@@ -1462,15 +1462,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mantine/modals@npm:^9.4.0":
-  version: 9.4.0
-  resolution: "@mantine/modals@npm:9.4.0"
+"@mantine/modals@npm:^9.4.2":
+  version: 9.4.2
+  resolution: "@mantine/modals@npm:9.4.2"
   peerDependencies:
-    "@mantine/core": 9.4.0
-    "@mantine/hooks": 9.4.0
+    "@mantine/core": 9.4.2
+    "@mantine/hooks": 9.4.2
     react: ^19.2.0
     react-dom: ^19.2.0
-  checksum: 10c0/2841717c8d0dd778b04aa7c02048ab81ba10e34d375acf75038ced746cd774b8026582a3f4091dc8ec33c4683e1bec3a2dda8759db011bf39de9c77fbe3fb9bf
+  checksum: 10c0/20ef8c2ae87da6d3c3448fc6b24ff3cdafc2ec966612dfda913296a3b9868483b46516e14e0fd361054d29c951dace36487490280d2badb279a03c39f4ec0be1
   languageName: node
   linkType: hard
 
@@ -9396,7 +9396,7 @@ __metadata:
     "@mantine/dates": "npm:^9.4.0"
     "@mantine/form": "npm:^9.4.1"
     "@mantine/hooks": "npm:^9.4.1"
-    "@mantine/modals": "npm:^9.4.0"
+    "@mantine/modals": "npm:^9.4.2"
     "@mantine/notifications": "npm:^9.4.1"
     "@rails/actioncable": "npm:^8.1.300"
     "@sentry/react": "npm:^10.43.0"
