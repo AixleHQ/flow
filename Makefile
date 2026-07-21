@@ -129,6 +129,9 @@ define summarize_checks
 	  fe=$$(ruby -rjson -e 'begin; puts JSON.parse(File.read("coverage/frontend/coverage-summary.json"))["total"]["lines"]["pct"]; rescue; puts "n/a"; end' 2>/dev/null); \
 	  printf "  frontend (vitest / v8):       %s%%\n" "$$fe"; \
 	fi; \
+	if [ ! -f coverage/.last_run.json ] && [ ! -f coverage/frontend/coverage-summary.json ]; then \
+	  printf "  (skipped — coverage instrumentation runs only when RUN_COVERAGE=1: develop CI and local check_all)\n"; \
+	fi; \
 	if [ $$fail -ne 0 ]; then \
 	  echo ""; \
 	  echo "=== Failure output (full log per failed check) ==="; \

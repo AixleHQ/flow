@@ -33,15 +33,26 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
       session.skills << skills
     end
 
+    # Count only real content queries. SCHEMA reflection and query-cache hits are
+    # issued non-deterministically depending on process warmth (a cold isolated run
+    # vs a warm parallel-suite run differ by ~8 queries) and shift with unrelated
+    # gem internals, which made a raw count flaky. Filtering them leaves the actual
+    # association loading — what an N+1 guard cares about — which is stable at 15.
     query_count = 0
-    counter = ->(*) { query_count += 1 }
+    counter = lambda do |_name, _start, _finish, _id, payload|
+      next if payload[:name] == "SCHEMA" || payload[:cached]
+      next if %w[BEGIN COMMIT ROLLBACK].include?(payload[:sql])
+
+      query_count += 1
+    end
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
       get company_project_aixle_builder_path(@project)
     end
 
     assert_response :success
-    # O(1) queries regardless of session count: 1 primary + ≤7 association batch queries
-    assert_operator query_count, :<=, 15, "Expected bounded query count, got #{query_count}"
+    # O(1) regardless of session count: 1 primary + a bounded set of association
+    # batch loads (verified flat at 15 for 3 and for 8 sessions).
+    assert_operator query_count, :<=, 15, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────
