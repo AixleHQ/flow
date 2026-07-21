@@ -243,6 +243,9 @@ GEM
     google-protobuf (4.35.1-aarch64-linux-musl)
       bigdecimal
       rake (~> 13.3)
+    google-protobuf (4.35.1-arm64-darwin)
+      bigdecimal
+      rake (~> 13.3)
     google-protobuf (4.35.1-x86_64-linux-gnu)
       bigdecimal
       rake (~> 13.3)
@@ -659,19 +662,22 @@ GEM
     spring (4.7.0)
     stackprof (0.2.28)
     temple (0.10.4)
-    temporalio (1.5.0)
+    temporalio (1.6.0)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.5.0-aarch64-linux)
+    temporalio (1.6.0-aarch64-linux)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.5.0-aarch64-linux-musl)
+    temporalio (1.6.0-aarch64-linux-musl)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.5.0-x86_64-linux)
+    temporalio (1.6.0-arm64-darwin)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.5.0-x86_64-linux-musl)
+    temporalio (1.6.0-x86_64-linux)
+      google-protobuf (>= 3.25.0)
+      logger
+    temporalio (1.6.0-x86_64-linux-musl)
       google-protobuf (>= 3.25.0)
       logger
     terminal-table (4.0.0)
