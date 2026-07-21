@@ -146,22 +146,36 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod -R 755 /opt/openvscode-server
 
 # -----------------------------------------------------------------------------
-# Playwright MCP + Chromium (headless browser for agent automation)
+# Playwright MCP + Chrome for Testing (headless browser for agent automation)
 #
 # Installs @playwright/mcp globally so `npx @playwright/mcp` resolves instantly.
-# Chromium is installed using the playwright CLI bundled INSIDE @playwright/mcp
-# to ensure the browser revision exactly matches what the MCP expects at runtime.
-# Using a mismatched playwright version (e.g. the global `npx playwright`) would
-# install the wrong chromium revision, causing EACCES errors when the MCP tries
-# to download the correct revision into the root-owned /opt/playwright-browsers/.
+#
+# IMPORTANT — pin the MCP version. @playwright/mcp bundles its own playwright-core,
+# and recent versions resolve the default Chromium browser to the
+# "chrome-for-testing" CHANNEL (its executable lives inside the `chromium-<rev>`
+# browser folder). If @playwright/mcp floats unpinned, a rebuild can bake one
+# browser revision/channel while the version agents actually launch at runtime
+# expects another — producing:
+#     Error: Browser "chrome-for-testing" is not installed.
+#     Run `npx @playwright/mcp install-browser chrome-for-testing` to install
+# Pinning the version locks the build-time browser bake to the runtime MCP so
+# the browser stays available across rebuilds (see task #340).
+#
+# The browser is installed with the playwright CLI bundled INSIDE the pinned
+# @playwright/mcp so the revision matches by construction. We install the exact
+# "chrome-for-testing" channel the MCP launches by default (not the generic
+# `chrome` system channel, which would point at a non-existent system Chrome).
 # Browsers stored in /opt/playwright-browsers (shared, readable by all users).
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
-RUN npm install -g @playwright/mcp
+# Pin to the version verified against task #340. Bump deliberately, rebuild, and
+# confirm the build-time browser assertion below still passes.
+ARG PLAYWRIGHT_MCP_VERSION=0.0.78
+RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
 
 RUN apt-get update \
-    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chromium \
+    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chrome-for-testing \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -173,6 +187,15 @@ RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chro
     && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
     && npm cache clean --force \
     && rm -rf /tmp/*
+
+# Fail the build if the browser the MCP launches by default is not actually
+# present. This guarantees the "chrome-for-testing is not installed" error can
+# never ship silently: the exact executable the MCP resolves at runtime must
+# exist at build time, or `docker build` stops here.
+RUN node -e "const pw=require('$(npm root -g)/@playwright/mcp/node_modules/playwright-core'); \
+const p=pw.chromium.executablePath({channel:'chrome-for-testing'}); \
+require('fs').accessSync(p); \
+console.log('Verified chrome-for-testing browser at ' + p);"
 
 # -----------------------------------------------------------------------------
 # Workspace setup
