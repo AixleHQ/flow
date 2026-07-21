@@ -1425,18 +1425,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mantine/dates@npm:^9.4.0":
-  version: 9.4.0
-  resolution: "@mantine/dates@npm:9.4.0"
+"@mantine/dates@npm:^9.4.2":
+  version: 9.4.2
+  resolution: "@mantine/dates@npm:9.4.2"
   dependencies:
     clsx: "npm:^2.1.1"
   peerDependencies:
-    "@mantine/core": 9.4.0
-    "@mantine/hooks": 9.4.0
+    "@mantine/core": 9.4.2
+    "@mantine/hooks": 9.4.2
     dayjs: ">=1.0.0"
     react: ^19.2.0
     react-dom: ^19.2.0
-  checksum: 10c0/728db2261964d3c5ae2169a8848584c9c83e9b9cd1af1609c370e8758b21437fb0c1b9e4a85d0cb0f4cc8d4cae8df4081f24961dc8e0f6518324a2c7afa709b4
+  checksum: 10c0/328784e80e803ba37f03ce09be6ba24740ff00e523f14f048893e230af9b2f045a2f17ab87fc2566995de55f6f2a0e994e3f6943219f2f225b8981425e7c62e3
   languageName: node
   linkType: hard
 
@@ -9391,7 +9391,7 @@ __metadata:
     "@inertiajs/react": "npm:^3.6.0"
     "@inertiajs/vite": "npm:^3.4.0"
     "@mantine/core": "npm:^9.4.2"
-    "@mantine/dates": "npm:^9.4.0"
+    "@mantine/dates": "npm:^9.4.2"
     "@mantine/form": "npm:^9.4.1"
     "@mantine/hooks": "npm:^9.4.1"
     "@mantine/modals": "npm:^9.4.2"
