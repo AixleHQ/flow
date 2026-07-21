@@ -46,7 +46,7 @@
     "@inertia-cable/react": "^0.2.2",
     "@inertiajs/react": "^3.6.0",
     "@inertiajs/vite": "^3.4.0",
-    "@mantine/core": "^9.4.1",
+    "@mantine/core": "^9.4.2",
     "@mantine/dates": "^9.4.0",
     "@mantine/form": "^9.4.1",
     "@mantine/hooks": "^9.4.1",
