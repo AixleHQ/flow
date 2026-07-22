@@ -52,6 +52,18 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal "Test task", data.first["title"]
   end
 
+  test "board_list_tasks does not produce N+1 queries" do
+    create_list(:board_task, 10, board: @board, board_column: @col1)
+
+    query_count = 0
+    counter = ->(*) { query_count += 1 }
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      InternalTools::BoardListTasks.new(params: {}, session: @session).execute
+    end
+
+    assert_operator query_count, :<=, 10
+  end
+
   # === board_get_task ===
 
   test "board_get_task returns full task details" do
