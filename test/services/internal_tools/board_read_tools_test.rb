@@ -56,12 +56,16 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     create_list(:board_task, 10, board: @board, board_column: @col1)
 
     query_count = 0
-    counter = ->(*) { query_count += 1 }
+    counter = lambda do |_name, _start, _finish, _id, payload|
+      next if payload[:name] == "SCHEMA" || payload[:cached]
+      next if %w[BEGIN COMMIT ROLLBACK].include?(payload[:sql])
+      query_count += 1
+    end
     ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
       InternalTools::BoardListTasks.new(params: {}, session: @session).execute
     end
 
-    assert_operator query_count, :<=, 10
+    assert_operator query_count, :<=, 8
   end
 
   # === board_get_task ===
