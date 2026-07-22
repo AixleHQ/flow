@@ -30,7 +30,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     JSON.parse(body.dig("result", "content").first["text"])
   end
 
-  def tool_tool_error?(body) = body.dig("result", "isError")
+  def tool_error?(body) = body.dig("result", "isError")
 
   test "list_board_columns returns the project's columns" do
     cols = payload(call_tool("list_board_columns", { project_id: @project.id }))["columns"]
