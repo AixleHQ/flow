@@ -102,11 +102,13 @@
 }
 
 /* ── New design tokens (AC8) ─────────────────────────────────────────────── */
+/* Scoped per Mantine's color-scheme attribute so they switch with the theme.  */
 
-:root {
+[data-mantine-color-scheme='dark'] {
   --bg: #0a0908;
   --bg-raised: #191817;
   --bg-card: #121110;
+  --bg-hover: rgba(209, 207, 205, 0.05);
   --border: #292726;
   --border-mid: #393837;
   --text-1: #d1cfcd;
@@ -115,6 +117,27 @@
   --accent: #cf6b4a;
   --accent-dim: rgba(207, 107, 74, 0.12);
   --accent-muted: rgba(207, 107, 74, 0.30);
+  --err: #ff6b6b;
+  --ok: #34d399;
+  --ph: #5d5b5a;
+}
+
+[data-mantine-color-scheme='light'] {
+  --bg: #ffffff;
+  --bg-raised: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: rgba(208, 215, 222, 0.32);
+  --border: #d1d9e0;
+  --border-mid: #afb8c1;
+  --text-1: #1f2328;
+  --text-2: #59636e;
+  --text-3: #818b98;
+  --accent: #b95331;
+  --accent-dim: rgba(185, 83, 49, 0.10);
+  --accent-muted: rgba(185, 83, 49, 0.25);
+  --err: #cf222e;
+  --ok: #1a7f37;
+  --ph: #818b98;
 }
 
 /* ── Three-tab layout (AC4) ──────────────────────────────────────────────── */
@@ -587,7 +610,7 @@
 }
 
 .instrTa {
-  background: #100d0b;
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 5px;
   color: var(--text-1);
@@ -883,8 +906,8 @@
 /* ── AI Builder sidebar banner (AC11) ────────────────────────────────────── */
 
 .aiBannerBtn {
-  background: #e8e5e2;
-  color: #1a1816;
+  background: var(--bg-raised);
+  color: var(--text-1);
   border-radius: 8px;
   width: 100%;
   border: none;
@@ -900,5 +923,5 @@
 }
 
 .aiBannerBtn:hover {
-  background: #f0edea;
+  background: var(--border);
 }
