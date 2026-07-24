@@ -92,7 +92,7 @@ export function TriggerFormPanel({
   projectId,
   workflowId,
   columns,
-  sessions,
+  sessions: _sessions,
   editing,
   defaultKind,
   onClose,
@@ -143,7 +143,7 @@ export function TriggerFormPanel({
   }));
   const sessionOptions = [
     { value: 'none', label: 'None — project-level run' },
-    ...sessions.map((s) => ({ value: String(s.id), label: `Create a task · ${s.name}` })),
+    { value: 'create_task', label: 'Create a task' },
   ];
   const cronDesc = describeCron(cron);
 
@@ -463,7 +463,7 @@ export function TriggerFormPanel({
                     },
                   }}
                 />
-                <div style={{ fontSize: 12, color: cronDesc.ok ? 'var(--accent)' : 'var(--text-3)', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: cronDesc.ok ? 'var(--mantine-color-green-6)' : 'var(--text-3)', marginTop: 6 }}>
                   {cronDesc.ok ? `Runs: ${cronDesc.text}` : cronDesc.text}
                 </div>
               </div>
