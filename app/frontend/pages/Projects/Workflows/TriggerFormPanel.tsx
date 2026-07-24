@@ -92,7 +92,6 @@ export function TriggerFormPanel({
   projectId,
   workflowId,
   columns,
-  sessions: _sessions,
   editing,
   defaultKind,
   onClose,
@@ -463,7 +462,13 @@ export function TriggerFormPanel({
                     },
                   }}
                 />
-                <div style={{ fontSize: 12, color: cronDesc.ok ? 'var(--mantine-color-green-6)' : 'var(--text-3)', marginTop: 6 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: cronDesc.ok ? 'var(--mantine-color-green-6)' : 'var(--text-3)',
+                    marginTop: 6,
+                  }}
+                >
                   {cronDesc.ok ? `Runs: ${cronDesc.text}` : cronDesc.text}
                 </div>
               </div>
