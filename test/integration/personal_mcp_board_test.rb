@@ -30,7 +30,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     JSON.parse(body.dig("result", "content").first["text"])
   end
 
-  def error?(body) = body.dig("result", "isError")
+  def tool_error?(body) = body.dig("result", "isError")
 
   test "list_board_columns returns the project's columns" do
     cols = payload(call_tool("list_board_columns", { project_id: @project.id }))["columns"]
@@ -54,26 +54,26 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     body = call_tool("create_board_task",
                      { project_id: @project.id, column_id: @todo.id, title: "New", description: "d" })
     created = payload(body)
-    assert_not error?(body)
+    assert_not tool_error?(body)
     assert BoardTask.exists?(created["id"])
     assert_equal "To Do", created["column"]
   end
 
   test "update_board_task updates fields" do
     body = call_tool("update_board_task", { project_id: @project.id, task_id: @task.id, priority: "high" })
-    assert_not error?(body)
+    assert_not tool_error?(body)
     assert_equal "high", @task.reload.priority
   end
 
   test "move_board_task moves to another column" do
     body = call_tool("move_board_task", { project_id: @project.id, task_id: @task.id, column_id: @done.id })
-    assert_not error?(body)
+    assert_not tool_error?(body)
     assert_equal @done.id, @task.reload.board_column_id
   end
 
   test "add_board_comment and list_board_comments round-trip" do
     body = call_tool("add_board_comment", { project_id: @project.id, task_id: @task.id, body: "hello" })
-    assert_not error?(body)
+    assert_not tool_error?(body)
     comments = payload(call_tool("list_board_comments", { project_id: @project.id, task_id: @task.id }))["comments"]
     assert_equal "hello", comments.first["body"]
     assert_equal "human", comments.first["author_type"]
@@ -84,21 +84,21 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     cid = created["id"]
     assert BoardColumn.exists?(cid)
 
-    assert_not error?(call_tool("update_board_column", { project_id: @project.id, column_id: cid, name: "In Review" }))
+    assert_not tool_error?(call_tool("update_board_column", { project_id: @project.id, column_id: cid, name: "In Review" }))
     assert_equal "In Review", BoardColumn.find(cid).name
 
     reordered = call_tool("reorder_board_columns",
                           { project_id: @project.id, column_ids: [ @done.id, cid, @todo.id ] })
-    assert_not error?(reordered)
+    assert_not tool_error?(reordered)
     assert_equal [ @done.id, cid, @todo.id ], @board.board_columns.order(:position).pluck(:id)
 
-    assert_not error?(call_tool("delete_board_column", { project_id: @project.id, column_id: cid }))
+    assert_not tool_error?(call_tool("delete_board_column", { project_id: @project.id, column_id: cid }))
     assert_not BoardColumn.exists?(cid)
   end
 
   test "delete_board_column is rejected when the column has tasks" do
     body = call_tool("delete_board_column", { project_id: @project.id, column_id: @todo.id })
-    assert error?(body)
+    assert tool_error?(body)
     assert_match(/has tasks/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
   end
 
@@ -108,7 +108,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     mtoken = member.regenerate_mcp_token!
 
     body = call_tool("create_board_column", { project_id: @project.id, name: "X" }, token: mtoken)
-    assert error?(body)
+    assert tool_error?(body)
     assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
   end
 
@@ -117,7 +117,7 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     other_project = create(:project, company: other.company, owner: other)
 
     body = call_tool("list_board_columns", { project_id: other_project.id })
-    assert error?(body)
+    assert tool_error?(body)
     assert_match(/not found/i, body.dig("result", "content").first["text"])
   end
 
@@ -127,11 +127,11 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     vtoken = viewer.regenerate_mcp_token!
 
     read = call_tool("list_board_tasks", { project_id: @project.id }, token: vtoken)
-    assert_not error?(read)
+    assert_not tool_error?(read)
 
     write = call_tool("create_board_task",
                       { project_id: @project.id, column_id: @todo.id, title: "nope" }, token: vtoken)
-    assert error?(write)
+    assert tool_error?(write)
     assert_match(/not allowed/i, write.dig("result", "content").first["text"])
   end
 end

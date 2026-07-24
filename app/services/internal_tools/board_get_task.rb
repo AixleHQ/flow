@@ -27,7 +27,9 @@ module InternalTools
       task_id = params[:task_id] || workflow_run&.board_task_id
       return error("task_id is required") unless task_id
 
-      task = board.board_tasks.find_by(id: task_id)
+      task = board.board_tasks
+                  .includes(:workflow_runs, :pending_gates)
+                  .find_by(id: task_id)
       return error("Task not found on this board") unless task
 
       success(BoardTaskResource.new(task).to_h.to_json)
