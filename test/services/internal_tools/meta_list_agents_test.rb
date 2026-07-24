@@ -10,13 +10,14 @@ class InternalTools::MetaListAgentsTest < ActiveSupport::TestCase
     @session = create(:terminal_session, :agent_session, user: @user, project: @project)
   end
 
-  test "lists company- and project-scoped agents visible for the session's project" do
-    company_agent = create(:agent, scope: @company, name: "company_helper", title: "Company Helper")
-    project_agent = create(:agent, scope: @project, name: "project_helper", title: "Project Helper")
+  test "lists project-scoped agents visible for the session's project" do
+    first_agent = create(:agent, scope: @project, name: "first_helper", title: "First Helper")
+    second_agent = create(:agent, scope: @project, name: "second_helper", title: "Second Helper")
 
     # Agents that must NOT show up for this project
     other_company = create(:company)
-    create(:agent, scope: other_company, name: "foreign_company_agent")
+    other_company_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    create(:agent, scope: other_company_project, name: "foreign_company_agent")
     other_project = create(:project, company: @company, owner: @user)
     create(:agent, scope: other_project, name: "sibling_project_agent")
 
@@ -30,13 +31,13 @@ class InternalTools::MetaListAgentsTest < ActiveSupport::TestCase
     assert_equal data["agents_count"], data["agents"].size
 
     by_id = data["agents"].index_by { |a| a["id"] }
-    assert_equal %w[company_helper project_helper].sort,
+    assert_equal %w[first_helper second_helper].sort,
                  data["agents"].map { |a| a["name"] }.sort
 
-    assert_equal "Company Helper", by_id[company_agent.id]["title"]
-    assert_equal "Company", by_id[company_agent.id]["scope_type"]
-    assert_equal "Project Helper", by_id[project_agent.id]["title"]
-    assert_equal "Project", by_id[project_agent.id]["scope_type"]
+    assert_equal "First Helper", by_id[first_agent.id]["title"]
+    assert_equal "Project", by_id[first_agent.id]["scope_type"]
+    assert_equal "Second Helper", by_id[second_agent.id]["title"]
+    assert_equal "Project", by_id[second_agent.id]["scope_type"]
 
     # Foreign agents are excluded
     listed_names = data["agents"].map { |a| a["name"] }
@@ -50,7 +51,7 @@ class InternalTools::MetaListAgentsTest < ActiveSupport::TestCase
     # ...but we ask about a different project in the same company.
     other_project = create(:project, company: @company, owner: @user)
     target_agent = create(:agent, scope: other_project, name: "target_project_agent")
-    shared_company_agent = create(:agent, scope: @company, name: "shared_company_agent")
+    second_target_agent = create(:agent, scope: other_project, name: "second_target_agent")
 
     result = InternalTools::MetaListAgents.new(
       params: { project_id: other_project.id },
@@ -62,7 +63,7 @@ class InternalTools::MetaListAgentsTest < ActiveSupport::TestCase
 
     listed_ids = data["agents"].map { |a| a["id"] }
     assert_includes listed_ids, target_agent.id
-    assert_includes listed_ids, shared_company_agent.id
+    assert_includes listed_ids, second_target_agent.id
     # The session project's own agent is not part of the targeted project's view.
     assert_not_includes data["agents"].map { |a| a["name"] }, "session_project_agent"
     assert_equal 2, data["agents_count"]

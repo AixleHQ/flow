@@ -19,8 +19,9 @@ module InternalTools
             type: "string"
           },
           scope_type: {
-            enum: %w[Project Company],
-            type: "string"
+            enum: %w[Project],
+            type: "string",
+            description: "Scope type. Always Project."
           },
           description: {
             type: "string"
@@ -79,15 +80,8 @@ module InternalTools
     private
 
     def resolve_scope
-      scope_type = params[:scope_type] || "Project"
-      case scope_type
-      when "Project"
-        target_project
-      when "Company"
-        target_project&.company || Company.find(params[:scope_id])
-      else
-        target_project
-      end
+      # Custom tools are Project-scoped only.
+      params[:scope_id] ? Project.find(params[:scope_id]) : target_project
     end
   end
 end

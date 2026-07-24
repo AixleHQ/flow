@@ -7,7 +7,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     @company = @user.company
     @project = create(:project, owner: @user, company: @company)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
   end
 
   test "valid binding for a project-accessible workflow" do
@@ -20,7 +20,8 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
   test "invalid when workflow is not accessible from the project" do
     other_company = create(:company)
-    foreign_workflow = create(:workflow, scope: other_company)
+    other_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    foreign_workflow = create(:workflow, scope: other_project)
 
     binding = TriggerBinding.new(
       project: @project, workflow: foreign_workflow, created_by: @user,
@@ -72,7 +73,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "invalid when a workflow step requires user interaction (no auto-run)" do
-    wf = create(:workflow, scope: @company)
+    wf = create(:workflow, scope: @project)
     wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
 
     binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
@@ -82,7 +83,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "valid when every workflow step allows auto-run" do
-    wf = create(:workflow, scope: @company)
+    wf = create(:workflow, scope: @project)
     wf.steps.create!(name: "Auto step", position: 1, allow_non_interactive: true)
 
     binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user, event_type: "slack.message")
@@ -91,7 +92,7 @@ class TriggerBindingTest < ActiveSupport::TestCase
   end
 
   test "a disabled binding skips the auto-run validation" do
-    wf = create(:workflow, scope: @company)
+    wf = create(:workflow, scope: @project)
     wf.steps.create!(name: "Manual step", position: 1, allow_non_interactive: false)
 
     binding = TriggerBinding.new(project: @project, workflow: wf, created_by: @user,

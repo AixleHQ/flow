@@ -19,6 +19,7 @@ module Gitlab
     setup do
       @company = create(:company)
       @user = create(:user, :employee, company: @company)
+      @project = create(:project, company: @company, owner: @user)
       @integration = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
 
       Settings.stubs(:gitlab).returns(OpenStruct.new(endpoint: GITLAB_API))
@@ -87,7 +88,7 @@ module Gitlab
     end
 
     test "configure stores a secret and registers a pipeline webhook via POST /hooks" do
-      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @company)
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
 
       stub_request(:post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
         .to_return(status: 201, headers: { "Content-Type" => "application/json" },
@@ -106,7 +107,7 @@ module Gitlab
 
     test "remove deletes only the webhook whose url matches this deployment" do
       repository = create(:repository, full_name: "group/app", integration: @integration,
-        scope: @company, webhook_secret: "existing-secret")
+        scope: @project, webhook_secret: "existing-secret")
 
       stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
         .to_return(status: 200, headers: { "Content-Type" => "application/json" },
@@ -127,7 +128,7 @@ module Gitlab
 
     test "remove makes no GitLab call when webhook_secret is blank" do
       repository = create(:repository, full_name: "group/app", integration: @integration,
-        scope: @company, webhook_secret: nil)
+        scope: @project, webhook_secret: nil)
 
       hooks = stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
         .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "[]")

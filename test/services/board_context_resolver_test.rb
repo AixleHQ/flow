@@ -11,7 +11,7 @@ class BoardContextResolverTest < ActiveSupport::TestCase
     @column = create(:board_column, board: @board, position: 1)
     @task = create(:board_task, board: @board, board_column: @column)
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)
@@ -28,7 +28,7 @@ class BoardContextResolverTest < ActiveSupport::TestCase
   end
 
   test "resolves board from project when no board_task" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: nil)
     sr = create(:step_run, workflow_run: run, step: step)

@@ -18,7 +18,7 @@ class ContextBuilders::AgentRoleTest < ActiveSupport::TestCase
 
   test "applicable returns true with configured agent" do
     agent = Agent.create!(name: "test_agent", title: "Test Agent", persona: "You are helpful.",
-      scope: @company)
+      scope: @project)
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive", configured_agent: agent)
     builder = ContextBuilders::AgentRole.new(session)
@@ -27,7 +27,7 @@ class ContextBuilders::AgentRoleTest < ActiveSupport::TestCase
 
   test "build returns section with agent system prompt" do
     agent = Agent.create!(name: "architect", title: "Architect", persona: "Senior architect.",
-      communication_style: "Direct", scope: @company)
+      communication_style: "Direct", scope: @project)
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive", configured_agent: agent)
 

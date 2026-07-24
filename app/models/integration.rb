@@ -12,7 +12,6 @@ class Integration < ApplicationRecord
   belongs_to :connected_by, class_name: "User"
   has_many :repositories, dependent: :destroy
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
-  has_one  :mcp_server, dependent: :destroy
 
   validates :name, presence: true
   validates :provider, presence: true

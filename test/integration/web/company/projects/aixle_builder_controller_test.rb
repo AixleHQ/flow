@@ -41,7 +41,7 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     query_count = 0
     counter = lambda do |_name, _start, _finish, _id, payload|
       next if payload[:name] == "SCHEMA" || payload[:cached]
-      next if %w[BEGIN COMMIT ROLLBACK].include?(payload[:sql])
+      next if payload[:sql].to_s.match?(/\A\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)/i)
 
       query_count += 1
     end

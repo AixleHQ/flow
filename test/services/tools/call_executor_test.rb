@@ -19,7 +19,7 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
   end
 
   test "container tools create a processing ToolResult and return its execution_id as stdout" do
-    tool = create(:tool, scope: @user.company, name: "my_linter", docker_image: "linter:1.0")
+    tool = create(:tool, scope: @project, name: "my_linter", docker_image: "linter:1.0")
     TemporalService.stubs(:start_workflow).returns({ ok: true, workflow_id: "wf", run_id: "r" })
 
     result = Tools::CallExecutor.execute(tool, { "path" => "/workspace" }, @session)

@@ -67,7 +67,6 @@ describe('AppSidebar', () => {
 
     // Admin-only items must not be rendered.
     expect(screen.queryByRole('link', { name: 'Assets' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Config Items' })).not.toBeInTheDocument();
   });
 
   it('shows admin-only links when the viewer is an admin', () => {
@@ -76,7 +75,6 @@ describe('AppSidebar', () => {
     });
 
     expect(screen.getByRole('link', { name: 'Assets' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Config Items' })).toBeInTheDocument();
   });
 
   it('renders project-scoped navigation with project-prefixed hrefs in project context', () => {

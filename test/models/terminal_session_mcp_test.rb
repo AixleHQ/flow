@@ -44,7 +44,7 @@ class TerminalSessionMCPTest < ActiveSupport::TestCase
   end
 
   test "available_tools returns tools from HABTM association" do
-    tool = create(:tool, scope: @company)
+    tool = create(:tool, scope: @project)
     session = create(:terminal_session, user: @user, project: @project)
     session.tools << tool
 

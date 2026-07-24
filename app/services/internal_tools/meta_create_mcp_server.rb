@@ -37,7 +37,7 @@ module InternalTools
             description: "Default: http"
           },
           scope_type: {
-            enum: %w[Project Company],
+            enum: %w[Project],
             type: "string"
           },
           description: {
@@ -52,19 +52,8 @@ module InternalTools
     def execute
       require_project_context!
 
-      scope_type = params[:scope_type] || "Company"
-      scope_id = params[:scope_id]
-
-      case scope_type
-      when "Project"
-        scope_id ||= target_project&.id
-        scope_record = Project.find(scope_id)
-      when "Company"
-        scope_id ||= target_project&.company_id
-        scope_record = Company.find(scope_id)
-      else
-        return error("Invalid scope_type: #{scope_type}")
-      end
+      scope_id = params[:scope_id] || target_project&.id
+      scope_record = Project.find(scope_id)
 
       mcp = MCPServer.create!(
         scope: scope_record,

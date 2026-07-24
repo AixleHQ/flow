@@ -54,16 +54,14 @@ class ToolTest < ActiveSupport::TestCase
   # ── platform-namespace protection (code-first registry) ──
 
   test "custom tool cannot claim a platform tool name" do
-    company = create(:company)
-    tool = build(:tool, name: "slack_post_message", scope: company)
+    tool = build(:tool, name: "slack_post_message", scope: @project)
 
     assert_not tool.valid?
     assert_match(/collides with the platform tool/, tool.errors[:name].first)
   end
 
   test "custom tool cannot use the reserved mcp__ namespace" do
-    company = create(:company)
-    tool = build(:tool, name: "mcp__coder_1__coder_ssh_exec", scope: company)
+    tool = build(:tool, name: "mcp__coder_1__coder_ssh_exec", scope: @project)
 
     assert_not tool.valid?
     assert_match(/reserved mcp__ namespace/, tool.errors[:name].first)
@@ -77,15 +75,14 @@ class ToolTest < ActiveSupport::TestCase
 
   # ── ui_visible (management UI list) ──
 
-  test "ui_visible shows custom tools and managed platform tools only" do
-    company = create(:company)
-    custom = create(:tool, scope: company, name: "my_linter")
+  test "ui_visible shows custom tools only (no platform/code tools)" do
+    custom = create(:tool, scope: @project, name: "my_linter")
     Tools::Reconciler.run!
 
     visible = Tool.ui_visible.pluck(:name)
 
     assert_includes visible, "my_linter"
-    assert_includes visible, "coder_ssh_exec"
+    refute_includes visible, "coder_ssh_exec"
     refute_includes visible, "board_list_tasks"
     refute_includes visible, "meta_create_tool"
     refute_includes visible, "read_tool_result"

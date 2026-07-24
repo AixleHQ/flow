@@ -32,18 +32,19 @@ class Web::Company::WorkflowCatalogAuthorizationTest < ActionDispatch::Integrati
   setup do
     setup_company_authz_personas
 
-    # A published, company-scoped workflow the in-company personas can copy, and
-    # a project every in-company persona can reach (owner via ownership, admin via
-    # admin?, the rest as collaborators) so duplicate hits the clean success path.
-    @workflow = create(:workflow, scope: @company, published_at: Time.current)
+    # A project every in-company persona can reach (owner via ownership, admin via
+    # admin?, the rest as collaborators) plus a published workflow living in that
+    # project, so duplicate hits the clean success path. Workflows are Project-
+    # scoped now, and the catalog surfaces them via Workflow.published_in_company.
     @project = create(:project, company: @company, owner: @owner)
+    @workflow = create(:workflow, scope: @project, published_at: Time.current)
     [ @collaborator, @viewer, @stranger ].each { |u| @project.add_collaborator(u) }
 
     # The foreign admin is authorized too (company_id present), but is scoped to
-    # their OWN company's records — give them a matching published workflow +
-    # project so their allowed request also lands on the success path.
-    @foreign_workflow = create(:workflow, scope: @foreign_company, published_at: Time.current)
+    # their OWN company's records — give them a project in their company plus a
+    # published workflow in it so their allowed request also lands on the success path.
     @foreign_project = create(:project, company: @foreign_company, owner: @foreign_admin)
+    @foreign_workflow = create(:workflow, scope: @foreign_project, published_at: Time.current)
   end
 
   teardown { teardown_authz }

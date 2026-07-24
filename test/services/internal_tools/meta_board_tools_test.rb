@@ -11,7 +11,7 @@ class InternalTools::MetaBoardToolsTest < ActiveSupport::TestCase
     @col1 = create(:board_column, board: @board, name: "Backlog", position: 1)
     @col2 = create(:board_column, board: @board, name: "In Progress", position: 2)
 
-    builder_workflow = create(:workflow, scope: @company)
+    builder_workflow = create(:workflow, scope: @project)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: builder_step)

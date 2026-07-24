@@ -3,8 +3,8 @@
 # Tool — one row per callable tool.
 #
 # source:
-# - db:   user-created custom tool (docker_image + command), scoped to a
-#         Company or Project, authored via the UI or meta_create_tool
+# - db:   user-created custom tool (docker_image + command), Project-scoped,
+#         authored via the UI or meta_create_tool
 # - code: reconciler-owned shadow row of a code-defined platform tool; the
 #         definition (schema, tags, availability, injection) lives on the
 #         InternalTools::* class — see Tools::Registry / Tools::Reconciler
@@ -37,6 +37,7 @@ class Tool < ApplicationRecord
                                  message: "already exists in this scope" }
   validates :display_name, presence: true
   validates :scope, presence: true, if: :db_source?
+  validates :scope_type, inclusion: { in: %w[Project], message: "must be a project" }, if: :db_source?
   validates :docker_image, presence: true, if: :db_source?
   validate :name_outside_platform_namespace, if: -> { db_source? && (new_record? || name_changed?) }
   validate :custom_definition_hygiene, if: :db_source?
@@ -49,23 +50,17 @@ class Tool < ApplicationRecord
   scope :db_source, -> { where(source: "db") }
   scope :deleted, -> { where.not(deleted_at: nil) }
 
-  scope :for_company, ->(company) { not_deleted.db_source.where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { not_deleted.db_source.where(scope_type: "Project", scope_id: project.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Tools shown in UI management: custom tools plus the "big" platform tools
-  # surfaced through a managed MCP server (registry is the source of truth
-  # for which those are — currently the coder_* trio).
-  scope :ui_visible, -> {
-    managed = Tools::Registry.definitions.values.select(&:managed_mcp_provider).map(&:name)
-    db_source.or(where(source: "code", name: managed))
-  }
+  # Tools shown in UI management: user-authored custom tools only. Platform
+  # (code) tools are injected/gated automatically and are not managed here.
+  scope :ui_visible, -> { db_source }
   # Pickers: attachable platform tools (user_attachable false hides the Aixle
   # Builder meta_* tools) plus in-scope custom tools, gated on the
   # reconciler-owned requires_integration projection.
   scope :visible_for_project, ->(project) {
     not_deleted.enabled.where(source: "code", user_attachable: true)
-               .or(not_deleted.enabled.where(scope_type: "Company", scope_id: project.company_id))
                .or(not_deleted.enabled.where(scope_type: "Project", scope_id: project.id))
                .where("tools.requires_integration IS NULL OR tools.requires_integration IN (?)",
                       active_integration_providers(project))
@@ -82,10 +77,10 @@ class Tool < ApplicationRecord
                       pid: project.id, cid: project.company_id)
                .distinct.pluck(:provider)
   end
-  # Like visible_for_project, Builder meta_* tools are excluded via user_attachable.
-  scope :visible_for_company, ->(company) {
+  # Projectless sessions can still attach platform (code) tools; custom tools
+  # are Project-scoped only, so none surface at the company level.
+  scope :visible_for_company, ->(_company) {
     not_deleted.enabled.where(source: "code", user_attachable: true)
-               .or(not_deleted.enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
   def picker_name
@@ -94,7 +89,7 @@ class Tool < ApplicationRecord
 
   def scope_indicator
     return "system" if platform_tool?
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
   WORKFLOW_TIMEOUT = 3600 # 1 hour

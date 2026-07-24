@@ -7,7 +7,7 @@ module Webhooks
     setup do
       @user = create(:user, :with_company)
       @project = create(:project, owner: @user, company: @user.company)
-      @workflow = create(:workflow, scope: @user.company)
+      @workflow = create(:workflow, scope: @project)
       # Slack endpoints are company-scoped (one workspace serves every project).
       @endpoint = create(:webhook_endpoint, provider: :slack, project: nil, company: @user.company)
       @binding = create(:trigger_binding,
@@ -42,7 +42,7 @@ module Webhooks
 
     test "a company-scoped Slack event fans out to bindings across the company's projects" do
       project_b = create(:project, owner: @user, company: @user.company)
-      workflow_b = create(:workflow, scope: @user.company)
+      workflow_b = create(:workflow, scope: project_b)
       create(:trigger_binding, project: project_b, workflow: workflow_b, created_by: @user,
         event_type: "slack.message", filter_predicate: { "channel" => "C1" })
 

@@ -2,30 +2,27 @@
 
 # McpServer — MCP (Model Context Protocol) server configuration
 #
-# kind: internal | custom | managed
+# kind: internal | custom
 # - internal: system-provided by Aixle (e.g., aixle-tools), no scope
-# - custom:   user-configured servers (Context7, Tavily, etc.) with Company/Project scope
-# - managed:  auto-provisioned by an integration (e.g., Coder); 1:1 with `integration_id`.
-#             Lifecycle bound to the integration via FK cascade. The MCP tools surfaced
-#             through a managed server are dispatched in-process by `execution_mode: :app`,
-#             so the `url` / `transport` columns are cosmetic for managed rows.
+# - custom:   user-configured servers (Context7, Tavily, etc.), Project-scoped only
 #
-# scope: Company | Project (polymorphic, null for internal; inherited from integration for managed)
+# Integration-provided tools (Slack, Coder, ...) are NOT modelled as MCP servers;
+# they surface in-process through the internal aixle-tools server, gated on the
+# project having an active integration (see `requires_integration` on the tool).
+#
+# scope: Project only (polymorphic, null for internal)
 class MCPServer < ApplicationRecord
   extend Enumerize
 
-  enumerize :kind, in: %i[internal custom managed], default: :custom, predicates: true
+  enumerize :kind, in: %i[internal custom], default: :custom, predicates: true
   enumerize :transport, in: %i[http sse stdio], default: :http
   enumerize :auth_type, in: %i[none static oauth],
                         default: :none, predicates: { prefix: true }, scope: true
   enumerize :credential_scope, in: %i[shared per_user],
                                default: :shared, predicates: { prefix: true }, scope: true
 
-  # Polymorphic scope (Company or Project, null for internal)
+  # Polymorphic scope (Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
-
-  # Owning integration for managed servers
-  belongs_to :integration, optional: true
 
   # OAuth credentials attached to this server (auth_type:oauth). dependent: :destroy
   # so deleting the server cleans them up — the FK is RESTRICT, so without this a
@@ -54,31 +51,21 @@ class MCPServer < ApplicationRecord
   validates :kind, presence: true
   validates :url, presence: true, if: -> { custom? && !transport_stdio? }
   validates :command, presence: true, if: :transport_stdio?
-  validates :scope, presence: true, if: -> { custom? || managed? }
-  validates :integration, presence: true, if: :managed?
-  validates :integration, absence:  true, unless: :managed?
+  validates :scope, presence: true, if: :custom?
+  validates :scope_type, inclusion: { in: %w[Project], message: "must be a project" }, if: :custom?
   validate :url_safety, if: -> { custom? && url.present? }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
   scope :custom_servers, -> { where(kind: "custom") }
-  scope :managed_servers, -> { where(kind: "managed") }
-  scope :for_company, ->(company) { custom_servers.where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { custom_servers.where(scope_type: "Project", scope_id: project.id) }
-  scope :for_integration, ->(integration) { where(integration_id: integration.id) }
   scope :enabled, -> { where(enabled: true) }
 
-  # Visibility includes internal servers, plus any custom / managed server scoped
-  # to the same Company or Project. Managed servers (e.g. Coder integrations)
-  # surface alongside custom ones because they share the same scope semantics.
+  # Visibility includes internal servers plus any custom server scoped to the
+  # given project. MCP servers exist only at Project scope (or as internal).
   scope :visible_for_project, ->(project) {
     enabled.internal_servers
-           .or(enabled.where(scope_type: "Company", scope_id: project.company_id))
            .or(enabled.where(scope_type: "Project", scope_id: project.id))
-  }
-  scope :visible_for_company, ->(company) {
-    enabled.internal_servers
-           .or(enabled.where(scope_type: "Company", scope_id: company.id))
   }
 
   def transport_stdio?
@@ -107,7 +94,7 @@ class MCPServer < ApplicationRecord
 
   def scope_indicator
     return "internal" if internal?
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
   # Ransack

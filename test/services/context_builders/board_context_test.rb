@@ -9,7 +9,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
     @board = create(:board, name: "Sprint Board", project: @project)
     @column = create(:board_column, name: "In Progress", board: @board)
-    @workflow = create(:workflow, scope: @company, name: "Dev Workflow")
+    @workflow = create(:workflow, scope: @project, name: "Dev Workflow")
     @step = create(:step, workflow: @workflow, name: "Implement", position: 1)
   end
 

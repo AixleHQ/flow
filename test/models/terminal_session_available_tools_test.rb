@@ -10,8 +10,10 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
     # Platform tools come from the code registry; shadow rows materialize on
     # demand. static_analyzer stands in for an explicitly attached container
-    # tool (a custom docker tool row).
-    @system_tool = create(:tool, name: "static_analyzer", scope: @company,
+    # tool. It lives in a SIBLING project so it is never auto-inherited into
+    # @project's sessions — it only shows up when a test attaches it explicitly.
+    @other_project = create(:project, company: @company, owner: @user)
+    @system_tool = create(:tool, name: "static_analyzer", scope: @other_project,
       display_name: "Static Analyzer", docker_image: "analyzer:latest",
       execution_mode: :container)
   end
@@ -110,7 +112,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   end
 
   test "internal tools are auto-injected when custom container tool is attached" do
-    custom_tool = create(:tool, scope: @company, name: "my_linter",
+    custom_tool = create(:tool, scope: @project, name: "my_linter",
       display_name: "My Linter", docker_image: "linter:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
@@ -136,7 +138,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   # == Custom tools ==
 
   test "custom tools from session.tools are included" do
-    custom_tool = create(:tool, scope: @company, name: "my_linter",
+    custom_tool = create(:tool, scope: @project, name: "my_linter",
       display_name: "My Linter", docker_image: "linter:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
@@ -161,7 +163,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   test "does not fall back to project tools when custom tools are explicitly selected" do
     create(:tool, scope: @project, name: "project_tool",
       display_name: "Project Tool", docker_image: "pt:1.0")
-    custom_tool = create(:tool, scope: @company, name: "my_tool",
+    custom_tool = create(:tool, scope: @project, name: "my_tool",
       display_name: "My Tool", docker_image: "mt:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)

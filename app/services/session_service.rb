@@ -186,8 +186,12 @@ class SessionService
     def scoped_resources(klass, ids, session)
       base = if session.project
                klass.visible_for_project(session.project)
-      else
+      elsif klass.respond_to?(:visible_for_company)
                klass.visible_for_company(session.user.company)
+      else
+               # Project-only resources (Skill, MCPServer) have nothing to attach
+               # to a projectless session; internal MCP still arrives separately.
+               klass.none
       end
       base.where(id: ids)
     end

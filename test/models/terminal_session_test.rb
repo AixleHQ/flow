@@ -140,8 +140,8 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "HABTM tools association works" do
     session = create(:terminal_session, user: @user)
-    tool1 = create(:tool, scope: @company)
-    tool2 = create(:tool, scope: @company, name: "other-tool")
+    tool1 = create(:tool, scope: @project)
+    tool2 = create(:tool, scope: @project, name: "other-tool")
     session.tools << [ tool1, tool2 ]
 
     assert_equal 2, session.tools.count
@@ -151,7 +151,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "HABTM skills association works" do
     session = create(:terminal_session, user: @user)
-    skill = create(:skill, scope: @company)
+    skill = create(:skill, scope: @project)
     session.skills << skill
 
     assert_equal 1, session.skills.count
@@ -160,7 +160,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "HABTM mcp_servers association works" do
     session = create(:terminal_session, user: @user)
-    mcp = create(:mcp_server, scope: @company)
+    mcp = create(:mcp_server, scope: @project)
     session.mcp_servers << mcp
 
     assert_equal 1, session.mcp_servers.count
@@ -183,8 +183,8 @@ class TerminalSessionTest < ActiveSupport::TestCase
   # == available_tools ==
 
   test "available_tools returns tools from HABTM association" do
-    tool1 = create(:tool, scope: @company)
-    tool2 = create(:tool, scope: @company, name: "other-tool")
+    tool1 = create(:tool, scope: @project)
+    tool2 = create(:tool, scope: @project, name: "other-tool")
 
     session = create(:terminal_session, user: @user, project: @project)
     session.tools << [ tool1, tool2 ]
@@ -209,7 +209,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "deleting a Tool cascade-removes session_tools records" do
     session = create(:terminal_session, user: @user)
-    tool = create(:tool, scope: @company)
+    tool = create(:tool, scope: @project)
     session.tools << tool
 
     assert_equal 1, session.tools.count
@@ -220,7 +220,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "deleting a Skill cascade-removes session_skills records" do
     session = create(:terminal_session, user: @user)
-    skill = create(:skill, scope: @company)
+    skill = create(:skill, scope: @project)
     session.skills << skill
 
     assert_equal 1, session.skills.count
@@ -231,7 +231,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "deleting an MCP server cascade-removes session_mcp_servers records" do
     session = create(:terminal_session, user: @user)
-    mcp = create(:mcp_server, scope: @company)
+    mcp = create(:mcp_server, scope: @project)
     session.mcp_servers << mcp
 
     assert_equal 1, session.mcp_servers.count

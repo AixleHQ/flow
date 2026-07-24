@@ -13,7 +13,7 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     @col3 = create(:board_column, board: @board, name: "QA", position: 3)
     @task = create(:board_task, board: @board, board_column: @col1, title: "Test task")
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)

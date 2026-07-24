@@ -174,12 +174,12 @@ module Agents
     # =========================================================================
 
     test "mcp_config emits mcp.json + pre-approvals for stdio and remote servers" do
-      company = create(:company)
+      project = create(:project, :standalone)
       stdio = create(:mcp_server, :stdio_transport,
                      name: "playwright", command: "npx @playwright/mcp",
-                     args: [ "--headless" ], env: { "KEY" => "v" }, scope: company)
+                     args: [ "--headless" ], env: { "KEY" => "v" }, scope: project)
       remote = create(:mcp_server, :with_headers,
-                      name: "context7", url: "https://mcp.context7.com/v1", scope: company)
+                      name: "context7", url: "https://mcp.context7.com/v1", scope: project)
 
       result = @adapter.mcp_config([ stdio, remote ])
 

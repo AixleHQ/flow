@@ -10,7 +10,7 @@ module Tools
   class Definition
     ATTRS = %i[name display_name description input_schema tags inject_rules
                requires_integration availability unavailable_message annotations
-               user_attachable managed_mcp_provider handler_class_name audience].freeze
+               user_attachable handler_class_name audience].freeze
 
     attr_reader(*ATTRS)
 

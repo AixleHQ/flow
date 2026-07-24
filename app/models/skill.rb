@@ -6,7 +6,7 @@
 # Actual installation into agent containers is handled by `npx skills add`
 # at session start (see SessionContextService#inject_skills).
 #
-# scope: Company | Project (polymorphic)
+# scope: Project only (polymorphic)
 # package: "owner/repo@skill-name" (unique identifier in skills.sh)
 # source: "owner/repo" (GitHub repository)
 # content: SKILL.md content (used for title/description extraction and context summary)
@@ -19,13 +19,11 @@ class Skill < ApplicationRecord
   validates :package, presence: true
   validates :source, presence: true
   validates :content, presence: true
-  validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
+  validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validates :scope_id, presence: true
 
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
-  scope :visible_for_company, ->(company) { for_company(company) }
-  scope :visible_for_project, ->(project) { for_company(project.company).or(for_project(project)) }
+  scope :visible_for_project, ->(project) { for_project(project) }
 
   def name=(val)
     super(val&.downcase&.gsub(/[^a-z0-9_:-]/, "_"))
@@ -36,7 +34,7 @@ class Skill < ApplicationRecord
   end
 
   def scope_indicator
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
   def registry_url

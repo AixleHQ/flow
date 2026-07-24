@@ -15,7 +15,7 @@ module Api
           @col1 = create(:board_column, board: @board, name: "Todo")
           @col2 = create(:board_column, board: @board, name: "Done")
           @task = create(:board_task, board: @board, board_column: @col1)
-          @workflow = create(:workflow, scope: @company)
+          @workflow = create(:workflow, scope: @project)
           sign_in @user
         end
 

@@ -8,7 +8,7 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
     @admin = create(:user, :admin, company: @company)
     @employee = create(:user, :employee, company: @company)
     @project = create(:project, company: @company, owner: @admin)
-    @workflow = create(:workflow, :with_company_scope, scope: @company)
+    @workflow = create(:workflow, :with_project_scope, scope: @project)
   end
 
   # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ class WorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
   # ─── Aggregate totals ────────────────────────────────────────────────────────
 
   test "aggregate_totals sums cost and tokens across all workflow rows" do
-    workflow2 = create(:workflow, :with_company_scope, scope: @company)
+    workflow2 = create(:workflow, :with_project_scope, scope: @project)
     run2 = create(:workflow_run, workflow: workflow2, project: @project, user: @admin)
     session2 = create(:terminal_session, user: @admin, project: @project)
     step2 = create(:step, workflow: workflow2)

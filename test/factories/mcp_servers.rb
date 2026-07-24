@@ -9,8 +9,8 @@ FactoryBot.define do
     description { "Test MCP server" }
     enabled { true }
 
-    # Custom servers need a scope
-    scope { nil }
+    # Custom servers are Project-scoped only.
+    scope factory: %i[project standalone]
 
     # == Kind Traits ==
 
@@ -22,7 +22,7 @@ FactoryBot.define do
 
     trait :custom do
       kind { :custom }
-      # Scope must be set explicitly for custom servers
+      scope factory: %i[project standalone]
     end
 
     # == Common Configurations ==

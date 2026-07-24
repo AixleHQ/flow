@@ -30,14 +30,4 @@ class Web::Company::Projects::SkillsControllerTest < ActionDispatch::Integration
     assert_redirected_to company_project_skills_path(@project)
     assert_equal "Skill removed", flash[:notice]
   end
-
-  test "destroy company skill redirects with alert" do
-    skill = create(:skill, :with_company_scope, scope: @company)
-
-    delete company_project_skill_path(@project, skill)
-
-    assert_redirected_to company_project_skills_path(@project)
-    assert_equal "Company skills can only be removed from Company Skills by a company admin", flash[:alert]
-    assert Skill.exists?(skill.id)
-  end
 end

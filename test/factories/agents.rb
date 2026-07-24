@@ -9,20 +9,11 @@ FactoryBot.define do
     principles { "Be accurate. Be helpful." }
     icon { "robot" }
     source { :custom }
-    scope { nil }
-
-    trait :with_company_scope do
-      scope factory: %i[company]
-    end
+    # Agents are Project-scoped only.
+    scope factory: %i[project standalone]
 
     trait :with_project_scope do
-      scope factory: %i[project]
-    end
-
-    trait :system do
-      scope_type { "System" }
-      scope_id { 0 }
-      scope { nil }
+      scope factory: %i[project standalone]
     end
   end
 end

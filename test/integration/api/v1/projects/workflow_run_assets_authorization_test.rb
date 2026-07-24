@@ -28,7 +28,7 @@ class Api::V1::Projects::WorkflowRunAssetsAuthorizationTest < ActionDispatch::In
   setup do
     setup_project_authz_personas
 
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @run = create(:workflow_run, workflow: @workflow, project: @project, user: @owner)
     @wra = create(:workflow_run_asset, workflow_run: @run)
     @wra.file = WorkflowRunAssetUploader.upload(StringIO.new("workflow run asset content"), :store)

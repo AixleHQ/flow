@@ -9,22 +9,38 @@ module Seeds
     def self.seed!
       puts "Creating Aixle Builder..."
 
-      agent = seed_agent!
-      workflow = seed_workflow!(agent)
+      workflow = seed_workflow!
 
-      puts "  Aixle Builder: workflow ##{workflow.id}, agent ##{agent.id}, #{workflow.steps.count} step(s)"
-      { agent: agent, workflow: workflow }
+      puts "  Aixle Builder: workflow ##{workflow.id}, #{workflow.steps.count} step(s)"
+      { workflow: workflow }
     end
 
-    def self.seed_agent!
-      Agent.find_or_initialize_by(
+    def self.seed_workflow!
+      workflow = Workflow.find_or_initialize_by(
         scope_type: SYSTEM_SCOPE_TYPE,
         scope_id: SYSTEM_SCOPE_ID,
-        name: "workflow_architect"
-      ).tap do |a|
-        a.title = "Workflow Architect"
-        a.source = :custom
-        a.persona = <<~PERSONA
+        name: "Aixle Builder"
+      ).tap do |w|
+        w.description = "Build workflows, agents, and board automation with AI assistance"
+        w.config = {}
+        w.save!
+      end
+
+      archive_replaced_steps!(workflow, keep_names: [ "Build Workflow" ])
+
+      # meta_* tools are kind :meta (hidden from pickers); workflow kept for safety.
+      all_tool_ids = Tool.shadow_rows_for_names(tool_names).map(&:id)
+
+      # The persona lives inline in the step instructions — there is no System
+      # agent. Agents are Project-scoped only; the Builder is a System workflow
+      # with its role/methodology baked into the single step.
+      workflow.steps.find_or_initialize_by(name: "Build Workflow").update!(
+        position: 1,
+        agent: nil,
+        allow_non_interactive: false,
+        tool_ids: all_tool_ids,
+        instructions: <<~MD
+          # Your Role
           You are a Workflow Architect for the Aixle platform. Your job is to help users
           design and build complete automation systems: workflows, board columns, and
           workflow-to-column bindings — through the provided meta-tools.
@@ -76,6 +92,7 @@ module Seeds
           ## Agent
 
           An LLM persona: title, persona (system prompt), communication_style, principles.
+          Agents are Project-scoped.
 
           ## Board & Automation
 
@@ -86,36 +103,23 @@ module Seeds
 
           # Design Methodology
 
-          ## Workflow Design Process
-
-          1. Understand the goal and deliverables
-          2. Identify stages (each stage = one Step)
-          3. Design each step: agent, instructions, sub-steps, resources, dependencies
-          4. Write focused step instructions (the CORE of each step) — the task-specific WHAT and OUTPUT only
-          5. Configure board integration if applicable
-
-          ## Common Patterns
-
           - Linear Pipeline: Step 1 → Step 2 → Step 3
           - Fan-Out/Fan-In: Step 1 → Steps 2a,2b,2c (parallel) → Step 3
           - Board-Triggered: Task enters column → Workflow runs non_interactive
           - Conditional Skip: skip_policy: if_outputs_exist
+          - Avoid micro-steps, vague instructions, tool overload, and missing
+            non-interactive support for auto-triggered workflows.
 
-          ## Anti-Patterns to Avoid
+          # Communication Style
 
-          - Micro-steps: don't split one logical unit across steps
-          - Vague instructions: be specific about WHAT, HOW, and OUTPUT
-          - Tool overload: give agents only what they need
-          - Missing non-interactive support for auto-triggered workflows
-        PERSONA
-        a.communication_style = <<~STYLE
           - Always propose structure before creating entities
           - Explain your reasoning for each design decision
           - Show the current state of the workflow being built after each creation
           - Ask for confirmation before creating/modifying entities
           - When requirements are ambiguous, ask clarifying questions
-        STYLE
-        a.principles = <<~PRINCIPLES
+
+          # Principles
+
           1. Each Step = one terminal session = one agent = one major deliverable
           2. SubSteps are trackable work units, NOT interactive menu items
           3. Instructions should be specific and focused — say what to do and what to produce, and omit anything the platform already injects (completion rules, workspace layout, sub-step tracking, tool availability)
@@ -123,33 +127,7 @@ module Seeds
           5. Think about input/output asset specs for step validation
           6. Board columns represent STATES, workflows represent ACTIONS
           7. Not every column needs a binding — only automate what benefits from AI
-        PRINCIPLES
-        a.save!
-      end
-    end
 
-    def self.seed_workflow!(agent)
-      workflow = Workflow.find_or_initialize_by(
-        scope_type: SYSTEM_SCOPE_TYPE,
-        scope_id: SYSTEM_SCOPE_ID,
-        name: "Aixle Builder"
-      ).tap do |w|
-        w.description = "Build workflows, agents, and board automation with AI assistance"
-        w.config = {}
-        w.save!
-      end
-
-      archive_replaced_steps!(workflow, keep_names: [ "Build Workflow" ])
-
-      # meta_* tools are kind :meta (hidden from pickers); workflow kept for safety.
-      all_tool_ids = Tool.shadow_rows_for_names(tool_names).map(&:id)
-
-      workflow.steps.find_or_initialize_by(name: "Build Workflow").update!(
-        position: 1,
-        agent: agent,
-        allow_non_interactive: false,
-        tool_ids: all_tool_ids,
-        instructions: <<~MD
           ## Your Task
           Help the user design and build a complete workflow automation system in Aixle.
           You have ALL meta-tools available — use them to create entities interactively.

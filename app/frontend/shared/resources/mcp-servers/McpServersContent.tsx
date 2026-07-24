@@ -19,7 +19,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { DeleteMcpServerModal } from './DeleteMcpServerModal';
 import { McpServerFormModal } from './McpServerFormModal';
 
-type McpServerKind = 'internal' | 'custom' | 'managed';
+type McpServerKind = 'internal' | 'custom';
 type Transport = 'http' | 'sse' | 'stdio';
 
 export interface McpServer {
@@ -35,8 +35,6 @@ export interface McpServer {
   scopeIndicator: string;
   enabled: boolean;
   internal: boolean;
-  managed: boolean;
-  integrationId: number | null;
   command: string | null;
   env: Record<string, string> | null;
   // OAuth (oauth-unification §4.3/§4.6). oauthStatus is per-current-user and read-only.
@@ -75,7 +73,6 @@ function canEditServer(server: McpServer, editableScope?: EditableScope): boolea
 
 function readOnlyLabel(server: McpServer, editableScope?: EditableScope): string {
   if (server.internal) return 'System';
-  if (server.managed) return 'Managed';
   if (editableScope === 'project' && server.scopeIndicator === 'company') return 'Company';
   return 'Read-only';
 }

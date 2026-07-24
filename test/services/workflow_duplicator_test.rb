@@ -6,16 +6,18 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
     @user = create(:user, company: @company)
+    @source_project = create(:project, company: @company, owner: @user)
     @project = create(:project, company: @company, owner: @user)
 
-    # Real company-scoped dependency resources referenced by the source workflow.
-    @agent = create(:agent, scope: @company, name: "researcher", title: "Researcher",
+    # Real project-scoped dependency resources referenced by the source workflow.
+    # They live in the SOURCE project so duplicating into @project exercises the copy path.
+    @agent = create(:agent, scope: @source_project, name: "researcher", title: "Researcher",
                             persona: "You research things.")
-    @skill = create(:skill, scope: @company)
-    @mcp = create(:mcp_server, scope: @company, name: "context7")
-    @tool = create(:tool, :with_company_scope, name: "my_tool")
+    @skill = create(:skill, scope: @source_project)
+    @mcp = create(:mcp_server, scope: @source_project, name: "context7")
+    @tool = create(:tool, scope: @source_project, name: "my_tool")
 
-    @source = create(:workflow, scope: @company, name: "Source WF",
+    @source = create(:workflow, scope: @source_project, name: "Source WF",
                                 config: {
                                   "base_tool_ids" => [ @tool.id ],
                                   "base_skill_ids" => [ @skill.id ],
@@ -51,7 +53,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal [ 42, 43 ], copied_steps[0].asset_ids
   end
 
-  test "copies referenced Company agent into the target project and remaps agent_id" do
+  test "copies a source-project agent into the target project and remaps agent_id" do
     copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
     new_step = copy.steps.not_deleted.order(:position).first
 
@@ -64,7 +66,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert_equal "You research things.", new_agent.persona
   end
 
-  test "copies referenced Company skill mcp tool and remaps step arrays + config" do
+  test "copies referenced skill, mcp, and tool and remaps step arrays + config" do
     copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
     new_step = copy.steps.not_deleted.order(:position).first
 
@@ -107,52 +109,25 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     end
   end
 
-  test "pass-through: System agent, platform tool, internal MCP keep original IDs and create no rows" do
-    sys_agent = create(:agent, :system, name: "system_agent")
+  test "pass-through: platform tool and internal MCP keep original IDs and create no project rows" do
     sys_tool = create(:tool, :system, name: "system_tool")
     internal_mcp = create(:mcp_server, :internal, name: "aixle-internal")
 
-    @step1.update!(agent_id: sys_agent.id, tool_ids: [ sys_tool.id ], mcp_server_ids: [ internal_mcp.id ])
+    @step1.update!(agent_id: nil, tool_ids: [ sys_tool.id ], mcp_server_ids: [ internal_mcp.id ])
 
     copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
     new_step = copy.steps.not_deleted.order(:position).first
 
-    assert_equal sys_agent.id, new_step.agent_id
+    assert_nil new_step.agent_id
     assert_equal [ sys_tool.id ], new_step.tool_ids
     assert_equal [ internal_mcp.id ], new_step.mcp_server_ids
-    refute_predicate Agent.for_project(@project), :exists?
-  end
-
-  test "managed MCP that stays visible in target is kept by ID and not copied" do
-    integration = create(:integration, :coder, :active, company: @company, project: nil, connected_by: @user)
-    managed = create(:mcp_server, kind: :managed, scope: @company, integration: integration,
-                                  name: "coder-mcp", url: "https://coder.example.com")
-    @step1.update!(mcp_server_ids: [ managed.id ])
-
-    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
-    new_step = copy.steps.not_deleted.order(:position).first
-
-    assert_equal [ managed.id ], new_step.mcp_server_ids
-    assert_equal 0, MCPServer.managed_servers.for_integration(integration).where(scope: @project).count
-  end
-
-  test "managed MCP not visible in target has its reference dropped and is summarized" do
-    other_project = create(:project, company: @company, owner: @user)
-    integration = create(:integration, :coder, :active, company: @company, project: other_project, connected_by: @user)
-    managed = create(:mcp_server, kind: :managed, scope: other_project, integration: integration,
-                                  name: "other-coder", url: "https://coder.example.com")
-    @step1.update!(mcp_server_ids: [ managed.id ])
-
-    duplicator = WorkflowDuplicator.new(@source, target_scope: @project)
-    copy = duplicator.duplicate!
-    new_step = copy.steps.not_deleted.order(:position).first
-
-    assert_equal [], new_step.mcp_server_ids
-    assert(duplicator.summary[:needs_setup].any? { |m| m.include?("Managed MCP") })
+    # Platform/internal resources are passed through by ID, never deep-copied into the project.
+    refute MCPServer.for_project(@project).exists?(name: internal_mcp.name)
+    refute Tool.for_project(@project).exists?(name: sys_tool.name)
   end
 
   test "copies binary tool file via Shrine file_data, and text tool file via content" do
-    binary_tool = create(:tool, :with_company_scope, name: "binary_tool")
+    binary_tool = create(:tool, scope: @source_project, name: "binary_tool")
     binary_tool.tool_files.create!(path: "/workspace/bin/tool", file: StringIO.new("\x00\x01BINARY\x02"))
     binary_tool.tool_files.create!(path: "/workspace/readme.txt", content: "hello text")
     @step1.update!(tool_ids: [ binary_tool.id ])
@@ -169,7 +144,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
   end
 
   test "copies requires_integration tool as gated: excluded from pickers until integration active" do
-    gated_tool = create(:tool, :with_company_scope, name: "slack_tool", requires_integration: "slack")
+    gated_tool = create(:tool, scope: @source_project, name: "slack_tool", requires_integration: "slack")
     @step1.update!(tool_ids: [ gated_tool.id ])
 
     duplicator = WorkflowDuplicator.new(@source, target_scope: @project)
@@ -185,7 +160,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
   end
 
   test "secrets boundary: MCP env/headers copied VERBATIM and no ConfigItem rows created" do
-    server = create(:mcp_server, scope: @company, name: "secured",
+    server = create(:mcp_server, scope: @source_project, name: "secured",
                                  headers: { "Authorization" => "Bearer config_item:API_KEY" },
                                  env: { "BASE_URL" => "https://api.example.com", "MODEL" => "gpt-4o" })
     @step1.update!(mcp_server_ids: [ server.id ])
