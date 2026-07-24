@@ -26,7 +26,6 @@ class WorkflowDuplicator
       @project = target_project
       @not_copied = {
         config_items: [],   # config_item:NAME refs the workflow relies on
-        managed_mcp_servers: [], # dropped managed MCP servers (not visible in target)
         gated_tools: [],    # copied tools hidden until an integration is connected
         assets: false,      # assets intentionally not copied
         repositories: false, # repositories intentionally not copied
@@ -67,11 +66,6 @@ class WorkflowDuplicator
         messages << "Secrets/config are not copied — add these config items in the project: #{names}."
       end
 
-      if @not_copied[:managed_mcp_servers].any?
-        names = @not_copied[:managed_mcp_servers].uniq.sort.join(", ")
-        messages << "Managed MCP servers were not copied (connect the integration): #{names}."
-      end
-
       if @not_copied[:gated_tools].any?
         names = @not_copied[:gated_tools].uniq.sort.join(", ")
         messages << "Some tools require an integration before they are usable: #{names}."
@@ -102,7 +96,6 @@ class WorkflowDuplicator
     def copy_agent(id)
       agent = Agent.find_by(id: id)
       return id unless agent                                  # unknown → leave as-is (defensive)
-      return id if agent.system?                              # System → shared, pass through
       return id if project_local?(agent)                      # already target-local
 
       existing = @project.agents.find_by(name: agent.name)    # name unique per scope → reuse
@@ -139,16 +132,6 @@ class WorkflowDuplicator
       server = MCPServer.find_by(id: id)
       return id unless server
       return id if server.internal?                           # internal → shared, pass through
-
-      if server.managed?
-        # Never deep-copy managed servers (owned by an Integration via FK
-        # cascade). Pass through if still visible in the target; drop otherwise.
-        return id if MCPServer.visible_for_project(@project).exists?(id: server.id)
-
-        @not_copied[:managed_mcp_servers] << server.picker_name
-        return nil
-      end
-
       return id if project_local?(server)
 
       collect_config_item_refs(server.env)

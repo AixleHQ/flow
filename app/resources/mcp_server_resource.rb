@@ -3,10 +3,10 @@
 class MCPServerResource < ApplicationResource
   preserve_keys :env, :headers
 
-  typelize headers: "Record<string, unknown>", env: "Record<string, unknown>", integration_id: :number?
+  typelize headers: "Record<string, unknown>", env: "Record<string, unknown>"
   attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
-             :command, :integration_id, :created_at, :updated_at
+             :command, :created_at, :updated_at
 
   # SECURITY (oauth-unification §7): header/env VALUES can carry secrets (bearer
   # tokens, API keys, resolved config-item references) and must never round-trip to
@@ -27,12 +27,7 @@ class MCPServerResource < ApplicationResource
     server.internal?
   end
 
-  typelize :boolean
-  attribute :managed do |server|
-    server.managed?
-  end
-
-  typelize %w[internal company project]
+  typelize %w[internal project]
   attribute :scope_indicator do |server|
     server.scope_indicator
   end

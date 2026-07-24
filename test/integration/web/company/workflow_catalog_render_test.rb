@@ -13,7 +13,7 @@ class Web::Company::WorkflowCatalogRenderTest < ActionDispatch::IntegrationTest
   teardown { Bullet.enable = true }
 
   test "index renders the workflow catalog page" do
-    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    workflow = create(:workflow, scope: @project, published_at: Time.current, published_by: @user)
 
     get company_workflow_catalog_index_path
     assert_response :success

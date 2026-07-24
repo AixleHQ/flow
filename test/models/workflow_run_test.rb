@@ -7,7 +7,7 @@ class WorkflowRunTest < ActiveSupport::TestCase
     @company = create(:company, name: "wrtest-co-#{SecureRandom.hex(4)}")
     @admin = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @admin, name: "wrtest-proj-#{SecureRandom.hex(4)}")
-    @workflow = create(:workflow, scope: @company, name: "wrtest-wf-#{SecureRandom.hex(4)}")
+    @workflow = create(:workflow, scope: @project, name: "wrtest-wf-#{SecureRandom.hex(4)}")
   end
 
   test "default state is pending" do

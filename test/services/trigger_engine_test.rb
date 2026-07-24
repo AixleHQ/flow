@@ -7,7 +7,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     @company = @user.company
     @project = create(:project, owner: @user, company: @company)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
   end
 
   # == publish + dispatch (Slack / webhook path) ==

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_14_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_24_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -297,7 +297,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_120000) do
     t.boolean "enabled", default: true, null: false
     t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
-    t.bigint "integration_id"
     t.string "kind", default: "custom", null: false
     t.string "name", null: false
     t.bigint "scope_id"
@@ -305,7 +304,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_120000) do
     t.string "transport", default: "sse"
     t.datetime "updated_at", null: false
     t.string "url"
-    t.index ["integration_id"], name: "index_mcp_servers_on_integration_id"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
   end
@@ -930,7 +928,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_14_120000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
-  add_foreign_key "mcp_servers", "integrations", on_delete: :cascade
   add_foreign_key "oauth_credentials", "mcp_servers"
   add_foreign_key "oauth_credentials", "oauth_clients"
   add_foreign_key "project_collaborators", "projects"

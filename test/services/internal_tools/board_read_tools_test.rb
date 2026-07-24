@@ -12,7 +12,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     @col2 = create(:board_column, board: @board, name: "In Dev", position: 2, purpose: "Active dev")
     @task = create(:board_task, board: @board, board_column: @col1, title: "Test task", description: "Do something", tags: [ "frontend" ])
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)

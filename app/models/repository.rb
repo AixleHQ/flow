@@ -11,26 +11,20 @@ class Repository < ApplicationRecord
   validates :full_name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :source_branch, presence: true
   validates :clone_url, presence: true
-  validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
+  validates :scope_type, presence: true, inclusion: { in: %w[Project] }
 
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
   scope :for_integration, ->(integration) { where(integration: integration) }
 
   scope :visible_for_project, ->(project) {
-    where(scope_type: "Company", scope_id: project.company_id)
-      .or(where(scope_type: "Project", scope_id: project.id))
+    where(scope_type: "Project", scope_id: project.id)
   }
-  scope :visible_for_company, ->(company) { for_company(company) }
 
-  # Project ids connected to a repo by full_name — directly (Project-scoped repo)
-  # or via the company (Company-scoped repo applies to all the company's projects).
-  # Used to fan an inbound CI webhook out to every project that owns the repo.
+  # Project ids connected to a repo by full_name. Repositories are Project-scoped,
+  # so this maps a repo directly to the projects that registered it. Used to fan
+  # an inbound CI webhook out to every project that owns the repo.
   def self.project_ids_for(repo_full_name)
-    from_project = where(full_name: repo_full_name, scope_type: "Project").pluck(:scope_id)
-    company_ids = where(full_name: repo_full_name, scope_type: "Company").pluck(:scope_id)
-    from_company = company_ids.any? ? Project.where(company_id: company_ids).pluck(:id) : []
-    (from_project + from_company).uniq
+    where(full_name: repo_full_name, scope_type: "Project").pluck(:scope_id).uniq
   end
 
   def picker_name
@@ -38,7 +32,7 @@ class Repository < ApplicationRecord
   end
 
   def scope_indicator
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
   def repo_name

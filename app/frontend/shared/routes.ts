@@ -957,16 +957,6 @@ export function companyMemberPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "members" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /company/config_items(.:format) */
-export function companyConfigItemsPath(options?: object): string {
-  return "/" + "company" + "/" + "config_items" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /company/config_items/:id(.:format) */
-export function companyConfigItemPath(id: ScalarType, options?: object): string {
-  return "/" + "company" + "/" + "config_items" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
 /** /company/integrations/github_setup(.:format) */
 export function companyIntegrationsGithubSetupPath(options?: object): string {
   return "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

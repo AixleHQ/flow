@@ -11,7 +11,10 @@ module Tools
       # kind :internal — read_tool_result, needed to poll async container tools
       container_tools_present: ->(ctx) { ctx.candidate_tools.any? { |t| t.execution_mode.container? } },
       # kind :internal — finish_session/fail_session lifecycle tools
-      non_interactive_session: ->(ctx) { ctx.mode == "non_interactive" }
+      non_interactive_session: ->(ctx) { ctx.mode == "non_interactive" },
+      # coder_* tools — surface through aixle-tools whenever the project has an
+      # active Coder integration (mirrors how slack_post_message is gated).
+      coder_integration_connected: ->(ctx) { ctx.connected?(:coder) }
     }.freeze
 
     def self.fetch(rule)

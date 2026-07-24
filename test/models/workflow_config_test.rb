@@ -5,7 +5,7 @@ require "test_helper"
 class WorkflowConfigTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
-    @workflow = create(:workflow, :with_company_scope, config: {})
+    @workflow = create(:workflow, :with_project_scope, config: {})
   end
 
   test "base_tool_ids returns empty array by default" do

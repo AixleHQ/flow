@@ -14,7 +14,7 @@ module InternalTools
       display_name "Coder: Run Command (SSH)"
       description "Run a shell command on a Coder workspace previously allocated by this step. Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget."
       tags :coder
-      managed_mcp_provider :coder
+      inject_when :coder_integration_connected
       requires_integration :coder
       input_schema({
         type: "object",

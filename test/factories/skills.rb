@@ -10,14 +10,11 @@ FactoryBot.define do
     source { "test-org/skills" }
     source_url { "https://github.com/test-org/skills" }
     install_count { 0 }
-    scope { nil }
-
-    trait :with_company_scope do
-      scope factory: %i[company]
-    end
+    # Skills are Project-scoped only.
+    scope factory: %i[project standalone]
 
     trait :with_project_scope do
-      scope factory: %i[project]
+      scope factory: %i[project standalone]
     end
   end
 end

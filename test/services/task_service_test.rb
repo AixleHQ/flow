@@ -37,7 +37,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "create checks auto-trigger on column with auto binding" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     WorkflowService.expects(:start).with(
@@ -156,7 +156,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "move to column with auto binding triggers workflow" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     new_column = create(:board_column, board: @board)
     ColumnWorkflowBinding.create!(board_column: new_column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
@@ -170,8 +170,8 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "move to column with auto binding triggers workflow even when active run exists" do
-    prior_workflow = create(:workflow, scope: @company)
-    auto_workflow = create(:workflow, scope: @company)
+    prior_workflow = create(:workflow, scope: @project)
+    auto_workflow = create(:workflow, scope: @project)
     new_column = create(:board_column, board: @board)
     ColumnWorkflowBinding.create!(board_column: new_column, workflow: auto_workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
@@ -188,7 +188,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   # == trigger_workflow ==
 
   test "trigger_workflow starts workflow for manual binding" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column)
 
@@ -209,7 +209,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "trigger_workflow returns error when active run exists" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column)
     create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task_id: task.id, state: "running")
@@ -237,7 +237,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "resolve_gate triggers auto-workflow when all gates resolved" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
@@ -255,7 +255,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "resolve_gate does not trigger auto-workflow when other pending gates remain" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
@@ -289,7 +289,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "remove_gate triggers auto-workflow when it removes the last pending gate" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
@@ -309,7 +309,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   # == check_auto_trigger (pending gates guard) ==
 
   test "check_auto_trigger does not start workflow when task has pending gates" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
@@ -325,7 +325,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "check_auto_trigger starts workflow when task has no pending gates" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
@@ -338,7 +338,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "check_auto_trigger does not start workflow when last run failed with quota_exceeded" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
     run = create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
     run.update_columns(failure_reason: "quota_exceeded")
@@ -351,7 +351,7 @@ class TaskServiceTest < ActiveSupport::TestCase
   end
 
   test "check_auto_trigger starts workflow when last run has no quota failure" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
     create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
 

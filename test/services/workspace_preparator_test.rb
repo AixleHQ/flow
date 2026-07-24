@@ -14,7 +14,7 @@ class WorkspacePreparatorTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @workflow_run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
     # A distinct earlier step_run that "produced" prior run assets.
     @previous_step_run = create(:step_run, workflow_run: @workflow_run,

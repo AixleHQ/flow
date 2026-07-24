@@ -29,7 +29,7 @@ class ToolResource < ApplicationResource
     tool.platform_tool?
   end
 
-  typelize %w[system company project]
+  typelize %w[system project]
   attribute :scope_indicator do |tool|
     tool.scope_indicator
   end

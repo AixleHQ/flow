@@ -7,7 +7,7 @@ class OutputValidatorTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @workflow_run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
   end
 

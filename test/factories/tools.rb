@@ -8,16 +8,13 @@ FactoryBot.define do
     enabled { true }
     required_config_items { [] }
     input_schema { {} }
-    scope { nil }  # Default: no scope (requires explicit scope:)
+    # Custom (db-source) tools are Project-scoped only; code traits below reset to nil.
+    scope factory: %i[project standalone]
 
     # == Association Traits ==
 
-    trait :with_company_scope do
-      scope factory: %i[company]
-    end
-
     trait :with_project_scope do
-      scope factory: %i[project]
+      scope factory: %i[project standalone]
     end
 
     trait :project do

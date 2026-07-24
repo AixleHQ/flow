@@ -12,7 +12,7 @@ module PersonalTools
       @user = create(:user, :with_company)
       @company = @user.company
       @project = create(:project, owner: @user, company: @company)
-      @workflow = create(:workflow, scope: @company)
+      @workflow = create(:workflow, scope: @project)
       @step = create(:step, workflow: @workflow, position: 1)
       @run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
     end

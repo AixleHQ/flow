@@ -75,15 +75,14 @@ class InternalTools::MetaCreateToolTest < ActiveSupport::TestCase
     assert_equal @project, tool.scope
   end
 
-  test "creates a company-scoped app-mode tool when scope_type is Company" do
+  test "creates an app-mode tool scoped to the session project" do
     result = nil
 
     assert_difference -> { Tool.count }, 1 do
       result = InternalTools::MetaCreateTool.new(
         params: {
-          name: "company_wide",
+          name: "project_wide",
           docker_image: "alpine:latest",
-          scope_type: "Company",
           execution_mode: "app"
         },
         session: @session
@@ -93,8 +92,8 @@ class InternalTools::MetaCreateToolTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code], result[:stderr]
 
     tool = Tool.find(JSON.parse(result[:stdout])["id"])
-    assert_equal @company, tool.scope # resolve_scope -> target_project.company
-    assert_equal "Company", tool.scope_type
+    assert_equal @project, tool.scope
+    assert_equal "Project", tool.scope_type
     assert_equal "app", tool.execution_mode
   end
 

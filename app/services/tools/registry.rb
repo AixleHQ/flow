@@ -52,14 +52,6 @@ module Tools
         definitions.values.select { |d| d.audience == audience.to_sym }
       end
 
-      def managed_tool_names(provider)
-        return [] if provider.blank?
-
-        definitions.values
-                   .select { |d| d.managed_mcp_provider.to_s == provider.to_s }
-                   .map(&:name)
-      end
-
       def reset!
         @definitions = nil
       end

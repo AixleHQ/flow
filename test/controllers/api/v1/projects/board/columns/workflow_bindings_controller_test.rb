@@ -14,7 +14,7 @@ module Api
               @project = create(:project, company: @company, owner: @user)
               @board = create(:board, project: @project)
               @column = create(:board_column, board: @board)
-              @workflow = create(:workflow, scope: @company)
+              @workflow = create(:workflow, scope: @project)
               sign_in @user
             end
 

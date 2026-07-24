@@ -57,7 +57,7 @@ module ContainerStrategies
     # == build_env_vars ==
 
     test "build_env_vars sets AGENT_PROMPT from step instructions and agent persona/principles" do
-      agent = create(:agent, :with_company_scope, persona: "You are a QA reviewer.", principles: "Verify everything.")
+      agent = create(:agent, :with_project_scope, persona: "You are a QA reviewer.", principles: "Verify everything.")
       session, = create_workflow_step_session(instructions: "Review the pull request", agent: agent)
       strategy = build_strategy(session: session)
 
@@ -120,7 +120,7 @@ module ContainerStrategies
       fake = stub_container_runtime(agent_type: "claude_code")
       Settings.stubs(:container_asset_host).returns(nil)
 
-      workflow = create(:workflow, scope: @company)
+      workflow = create(:workflow, scope: @project)
       dep_step = create(:step, workflow: workflow, position: 1)
       current_step = create(:step, workflow: workflow, position: 2, depends_on_step_ids: [ dep_step.id ])
       workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
@@ -198,7 +198,7 @@ module ContainerStrategies
     # Builds the workflow → step → run → step_run → session chain the strategy reads.
     # Returns [session, step_run, step, workflow_run].
     def create_workflow_step_session(instructions: "Do the thing", agent: nil)
-      workflow = create(:workflow, scope: @company)
+      workflow = create(:workflow, scope: @project)
       step = create(:step, workflow: workflow, instructions: instructions, agent: agent)
       workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
       session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")

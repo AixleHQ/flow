@@ -7,7 +7,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company, name: "Product Planning", description: "End-to-end product planning workflow")
+    @workflow = create(:workflow, scope: @project, name: "Product Planning", description: "End-to-end product planning workflow")
 
     @step1 = create(:step, workflow: @workflow, name: "Analyze", position: 1, description: "Analyze the codebase", instructions: "Run code analysis tools")
     @step2 = create(:step, workflow: @workflow, name: "Implement", position: 2, description: "Implement changes", instructions: "Write the code")

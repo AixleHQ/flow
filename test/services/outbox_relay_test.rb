@@ -7,7 +7,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     @company = @user.company
     @project = create(:project, owner: @user, company: @company)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @board = create(:board, project: @project)
     @column = create(:board_column, board: @board)
     @task = create(:board_task, board: @board, board_column: @column)

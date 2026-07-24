@@ -9,7 +9,7 @@ class InternalTools::MetaReorderStepsTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
 
     # Builder workflow context (simulating Aixle Builder running)
-    builder_workflow = create(:workflow, scope: @company)
+    builder_workflow = create(:workflow, scope: @project)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: builder_step)

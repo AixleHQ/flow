@@ -23,13 +23,13 @@ class WorkflowSystemScopeTest < ActiveSupport::TestCase
     refute_includes names, "Hidden WF"
   end
 
-  test "system workflow excluded from visible_for_company" do
+  test "belonging_to_company includes project workflows and excludes system" do
     Workflow.create!(scope_type: "System", scope_id: 0, name: "System Only")
-    create(:workflow, scope: @company, name: "Company WF")
+    create(:workflow, scope: @project, name: "Project WF")
 
-    visible = Workflow.visible_for_company(@company)
+    visible = Workflow.belonging_to_company(@company)
     names = visible.pluck(:name)
-    assert_includes names, "Company WF"
+    assert_includes names, "Project WF"
     refute_includes names, "System Only"
   end
 
@@ -55,11 +55,14 @@ class WorkflowSystemScopeTest < ActiveSupport::TestCase
     assert_equal "system", wf.scope_indicator
   end
 
-  test "system agent is valid" do
+  test "company-scoped agent is invalid (agents are project-only)" do
+    # System scope has no backing model; a company scope exercises the same
+    # inclusion rule (Agent may only be Project-scoped).
     agent = Agent.new(
-      scope_type: "System", scope_id: 0,
-      name: "sys_agent", title: "System Agent", persona: "A system agent."
+      scope: @company,
+      name: "co_agent", title: "Company Agent", persona: "A company agent."
     )
-    assert agent.valid?, "System agent should be valid: #{agent.errors.full_messages}"
+    assert_not agent.valid?
+    assert_includes agent.errors[:scope_type], "is not included in the list"
   end
 end

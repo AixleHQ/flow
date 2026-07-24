@@ -8,7 +8,7 @@ class MCPServerDashboard < Administrate::BaseDashboard
     name: Field::String,
     kind: Field::Select.with_options(
       include_blank: false,
-      collection: %w[internal custom managed]
+      collection: %w[internal custom]
     ),
     transport: Field::Select.with_options(
       include_blank: false,

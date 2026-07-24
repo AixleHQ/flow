@@ -8,8 +8,8 @@
 class Agent < ApplicationRecord
   extend Enumerize
 
-  # Polymorphic scope (Company, Project, or System)
-  belongs_to :scope, polymorphic: true, optional: true
+  # Polymorphic scope (Project only)
+  belongs_to :scope, polymorphic: true
 
   # Source: custom (created in UI) or bmad_import (imported from BMAD files)
   enumerize :source, in: %i[custom bmad_import], default: :custom, predicates: true
@@ -25,21 +25,18 @@ class Agent < ApplicationRecord
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :title, presence: true
   validates :persona, presence: true
-  validates :scope_type, presence: true, inclusion: { in: %w[Company Project System] }
+  validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validates :scope_id, presence: true
-  validates :scope, presence: true, unless: -> { scope_type == "System" }
 
   # Scopes
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
   scope :visible_for_project, ->(project) {
-    where(scope_type: "Company", scope_id: project.company_id)
-      .or(where(scope_type: "Project", scope_id: project.id))
+    where(scope_type: "Project", scope_id: project.id)
   }
+  # Every agent this company can see: the agents of all its projects.
   scope :belonging_to_company, ->(company) {
-    where(scope_type: "Company", scope_id: company.id)
-      .or(where(scope_type: "Project", scope_id: company.project_ids))
+    where(scope_type: "Project", scope_id: company.project_ids)
   }
 
   def picker_name
@@ -47,13 +44,7 @@ class Agent < ApplicationRecord
   end
 
   def scope_indicator
-    return "system" if scope_type == "System"
-
-    scope_type == "Company" ? "company" : "project"
-  end
-
-  def system?
-    scope_type == "System"
+    "project"
   end
 
   # Ransack

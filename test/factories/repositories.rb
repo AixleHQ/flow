@@ -8,14 +8,11 @@ FactoryBot.define do
     is_private { false }
     description { "Repository #{full_name}" }
     integration
-    scope { nil }
-
-    trait :company_scope do
-      scope factory: %i[company]
-    end
+    # Repositories are Project-scoped only.
+    scope factory: %i[project standalone]
 
     trait :project_scope do
-      scope factory: %i[project]
+      scope factory: %i[project standalone]
     end
 
     trait :private do

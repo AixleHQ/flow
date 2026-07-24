@@ -11,7 +11,7 @@ class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::Integrati
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     Bullet.enable = false # eager-loaded collections trip the unused-eager-loading gate
     sign_in_as(@user)
   end

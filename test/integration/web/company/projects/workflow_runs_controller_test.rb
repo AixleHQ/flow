@@ -7,7 +7,7 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     sign_in_as(@user)
   end
 

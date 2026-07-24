@@ -13,7 +13,7 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     )
     @integration.update!(credentials_data: { "bot_token" => "xoxb-1", "team_id" => "T1" })
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       shared_context: { "slack" => { "channel" => "C1", "thread_ts" => "111.2", "integration_id" => @integration.id } })

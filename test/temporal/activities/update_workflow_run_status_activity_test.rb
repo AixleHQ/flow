@@ -9,7 +9,7 @@ module Activities
         @company = create(:company)
         @user = create(:user, :admin, company: @company)
         @project = create(:project, company: @company, owner: @user)
-        @workflow = create(:workflow, scope: @company)
+        @workflow = create(:workflow, scope: @project)
 
         Rails.logger.stubs(:info)
         Rails.logger.stubs(:warn)
