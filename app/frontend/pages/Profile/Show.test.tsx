@@ -486,4 +486,87 @@ describe('Profile/Show', () => {
       expect(fetchSpy).toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.objectContaining({ method: 'POST' })),
     );
   });
+
+  // == AWS Bedrock connection ==
+  //
+  // Claude Code hides Bedrock errors, so a broken connection otherwise presents as an
+  // agent that never answers. The profile is where the user finds out why.
+
+  const stubAwsFetch = (state: object, health?: object) =>
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const json = (body: object) =>
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+      if (url.includes('/cloud/aws_connection/health')) return json(health ?? {});
+      if (url.includes('/cloud/aws_connection')) return json(state);
+      return json({});
+    });
+
+  // There is deliberately no separate cloud entry point: the user declares that intent by
+  // picking Amazon Bedrock inside Claude Code's own login wizard, and the auth modal offers
+  // the connect step when the credential helper reports there is nothing to vend.
+  it('offers no separate Connect AWS button', async () => {
+    stubAwsFetch({ connected: false, reason: null });
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Authenticate' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: /Connect AWS/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Reconnect AWS/i })).not.toBeInTheDocument();
+  });
+
+  // The one question the card has to answer is "will this actually run".
+  it('states plainly that a healthy connection bills to the user AWS, and where', async () => {
+    stubAwsFetch({
+      connected: true,
+      reason: null,
+      account_id: '111122223333',
+      role_name: 'BedrockUser',
+      region: 'us-east-1',
+    });
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(await screen.findByText('Billing to your AWS')).toBeInTheDocument();
+    expect(screen.getByText(/111122223333 \/ BedrockUser · us-east-1/)).toBeInTheDocument();
+  });
+
+  it('says a rotten connection needs reconnecting, with the reason', async () => {
+    stubAwsFetch({ connected: false, reason: 'registration_expired' });
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(await screen.findByText('AWS needs reconnecting')).toBeInTheDocument();
+    expect(screen.getByText(/registration expired/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Test' })).toBeInTheDocument();
+  });
+
+  it('surfaces the provider message verbatim when the connection test fails', async () => {
+    stubAwsFetch(
+      { connected: true, reason: null },
+      {
+        ok: false,
+        stage: 'invoke',
+        error_code: 'AccessDeniedException',
+        error_message: 'not authorized to perform bedrock:InvokeModel',
+      },
+    );
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Test' }));
+
+    expect(await screen.findByText('not authorized to perform bedrock:InvokeModel')).toBeInTheDocument();
+  });
+
+  it('reports a reachable connection with the model it probed', async () => {
+    stubAwsFetch({ connected: true, reason: null }, { ok: true, model_id: 'us.anthropic.claude-sonnet-4-6' });
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Test' }));
+
+    expect(await screen.findByText(/AWS Bedrock reachable/i)).toBeInTheDocument();
+  });
 });

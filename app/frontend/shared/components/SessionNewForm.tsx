@@ -503,8 +503,14 @@ export const SessionNewForm = ({
                   variant="light"
                   color="yellow"
                   onClick={() => {
-                    // OAuth is a top-level browser navigation, not an Inertia visit.
-                    window.location.href = `${r.connectUrl}?return_to=${encodeURIComponent(window.location.pathname)}`;
+                    // A top-level browser navigation, not an Inertia visit. Some connect
+                    // URLs already carry a query (the cloud CTA points at the profile page
+                    // with the modal to open), so pick the separator rather than always
+                    // appending "?".
+                    const separator = r.connectUrl.includes('?') ? '&' : '?';
+                    window.location.href = `${r.connectUrl}${separator}return_to=${encodeURIComponent(
+                      window.location.pathname,
+                    )}`;
                   }}
                 >
                   Connect {r.name}

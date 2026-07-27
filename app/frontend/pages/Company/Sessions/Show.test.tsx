@@ -45,6 +45,7 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     repositoryIds: [],
     pendingArtifactsCount: 0,
     sessionLogsCount: 0,
+    cloudConnectRequested: false,
     ...overrides,
   };
 }

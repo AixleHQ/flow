@@ -1,5 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import {
+  Alert,
   Badge,
   Box,
   Button,
@@ -31,12 +32,15 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
 import {
+  apiV1CloudAwsConnectionPath,
   apiV1TerminalSessionPath,
   apiV1TerminalSessionsPath,
   companyMembershipPath,
   disableMCPTokenProfilePath,
   finishApiV1TerminalSessionPath,
+  healthApiV1CloudAwsConnectionPath,
   regenerateMCPTokenProfilePath,
   usageProfilePath,
 } from 'shared/routes';
@@ -105,10 +109,12 @@ type AuthKind = 'agent' | 'design';
 
 // Agent-credential connection status (derived from token expiry — agents have no
 // error state). Functional labels + colour so it reads without relying on hue.
+// A badge states what IS, never what to do — the action next to it is already a button
+// labelled "Re-authenticate", and having both say the same thing reads as a duplicate.
 const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { color: string; label: string }> = {
   active: { color: 'green', label: 'Connected' },
   expiring: { color: 'yellow', label: 'Expiring soon' },
-  expired: { color: 'red', label: 'Re-authenticate' },
+  expired: { color: 'red', label: 'Expired' },
 };
 
 const formatDate = (d: string | null) => {
@@ -430,6 +436,10 @@ function AgentAuthModal({
   const [watcherUrl, setWatcherUrl] = useState<string | null>(null);
   const [cableStream, setCableStream] = useState<string | null>(null);
   const [authDetected, setAuthDetected] = useState(false);
+  // Bedrock writes no auth file, so `authDetected` stays false forever on that path — the
+  // signal that the user chose it is the credential helper asking us for credentials.
+  const [cloudRequested, setCloudRequested] = useState(false);
+  const [cloudConnected, setCloudConnected] = useState(false);
   const [finishError, setFinishError] = useState(false);
   const cableSubRef = useRef<Subscription | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -448,6 +458,9 @@ function AgentAuthModal({
       setTtydUrl(base);
     }
     if (s.watcherUrl) setWatcherUrl(s.watcherUrl as string);
+    // Set once the in-container credential helper reported no cloud connection, which only
+    // happens because Claude Code's own Bedrock wizard asked it for credentials.
+    if (s.cloudConnectRequested) setCloudRequested(true);
   }, []);
 
   const fetchSession = useCallback(
@@ -632,6 +645,29 @@ function AgentAuthModal({
       );
     }
 
+    // The wizard's credential helper is blocking while it waits, so completing this form is
+    // what lets its verification pass on the first attempt instead of reporting a
+    // credential error the user has to click past. The terminal stays visible below.
+    if (cloudRequested && !cloudConnected) {
+      return (
+        <Stack p="md" gap="md" mah={620} style={{ overflowY: 'auto' }}>
+          <Alert color="blue">
+            You picked Amazon Bedrock in the terminal. Connect the AWS account to bill it, and the terminal will
+            continue on its own.
+          </Alert>
+          <AwsConnectionModal
+            embedded
+            opened
+            onClose={() => setCloudRequested(false)}
+            onConnected={() => {
+              setCloudConnected(true);
+              notifications.show({ message: 'AWS connected — the terminal will continue', color: 'green' });
+            }}
+          />
+        </Stack>
+      );
+    }
+
     if (sessionState === 'ready' && ttydUrl) {
       return (
         <Box style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
@@ -714,6 +750,78 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
   const [opened, { open, close }] = useDisclosure(false);
   const [disconnecting, setDisconnecting] = useState<AgentType | null>(null);
 
+  // The AWS connection is not part of the Inertia profile payload, so read it directly.
+  // It is deliberately independent of whether Claude itself is configured: a user may
+  // bill everything to their own Bedrock account without ever holding a Claude login.
+  const [awsState, setAwsState] = useState<{
+    connected: boolean;
+    reason?: string | null;
+    accountId?: string | null;
+    roleName?: string | null;
+    region?: string | null;
+  } | null>(null);
+  const [awsTesting, setAwsTesting] = useState(false);
+  const awsConnected = awsState?.connected ?? null;
+  const hasAwsConnection = awsState !== null && (awsState.connected || Boolean(awsState.reason));
+
+  const loadAwsConnection = useCallback(async () => {
+    try {
+      const res = await apiFetch(apiV1CloudAwsConnectionPath());
+      if (!res.ok) return;
+      const body = await res.json();
+      setAwsState({
+        connected: Boolean(body.connected),
+        reason: body.reason ?? null,
+        accountId: body.account_id ?? null,
+        roleName: body.role_name ?? null,
+        region: body.region ?? null,
+      });
+    } catch {
+      // A profile page must still render when this probe fails.
+    }
+  }, []);
+
+  // Claude Code hides Bedrock errors, so a broken connection otherwise shows up as an
+  // agent that never answers. This surfaces the provider's own wording instead.
+  const testAwsConnection = useCallback(async () => {
+    setAwsTesting(true);
+    try {
+      const res = await apiFetch(healthApiV1CloudAwsConnectionPath(), { method: 'POST' });
+      const body = await res.json();
+      if (body.ok) {
+        notifications.show({ message: `AWS Bedrock reachable (${body.model_id})`, color: 'green' });
+      } else {
+        notifications.show({
+          title: body.stage === 'credentials' ? 'Credentials failed' : 'Bedrock rejected the request',
+          message: body.error_message ?? body.error_code ?? 'Unknown failure',
+          color: 'red',
+          autoClose: false,
+        });
+      }
+      void loadAwsConnection();
+    } catch {
+      notifications.show({ message: 'Could not run the connection test', color: 'red' });
+    } finally {
+      setAwsTesting(false);
+    }
+  }, [loadAwsConnection]);
+
+  useEffect(() => {
+    void loadAwsConnection();
+  }, [loadAwsConnection]);
+
+  // A session-start preflight CTA navigates here with ?authenticate=claude_code. Open the
+  // AUTH modal, not a separate cloud one: the user reconnects the same way they connected
+  // in the first place — by picking Amazon Bedrock in Claude Code's own wizard.
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('authenticate');
+    if (requested === 'claude_code') {
+      setAuthAgent('claude_code');
+      setAuthKind('agent');
+      open();
+    }
+  }, [open]);
+
   const handleAuth = (agentType: AgentType, kind: AuthKind = 'agent') => {
     setAuthAgent(agentType);
     setAuthKind(kind);
@@ -764,7 +872,7 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
               <Box className={classes.agentCardContent}>
                 <Box className={classes.colorBar} style={{ backgroundColor: agent.color }} />
 
-                <Box style={{ flex: 1 }} miw={0}>
+                <Box className={classes.agentCardBody}>
                   <Text fw={600}>{agent.name}</Text>
                   <Text size="xs" c="dimmed" lh={1.4}>
                     {agent.description}
@@ -775,6 +883,37 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                       {credential.lastUsedAt && ` · Last used ${formatDate(credential.lastUsedAt)}`}
                       {credential.expiresAt && ` · Expires ${formatDate(credential.expiresAt)}`}
                     </Text>
+                  )}
+                  {/* Billing target lives in the card body, not among the action buttons: it is
+                      a sentence about whether this agent can run, and the one question it has
+                      to answer is "will it work". */}
+                  {agent.type === 'claude_code' && hasAwsConnection && (
+                    <Group gap={6} mt={6} wrap="wrap">
+                      <Text size="xs" c={awsConnected ? 'green.6' : 'red.6'} fw={500}>
+                        {awsConnected ? 'Billing to your AWS' : 'AWS needs reconnecting'}
+                      </Text>
+                      {awsState?.accountId && (
+                        <Text size="xs" c="dimmed">
+                          · {awsState.accountId}
+                          {awsState.roleName && ` / ${awsState.roleName}`}
+                          {awsState.region && ` · ${awsState.region}`}
+                        </Text>
+                      )}
+                      {!awsConnected && awsState?.reason && (
+                        <Text size="xs" c="dimmed">
+                          · {awsState.reason.replace(/_/g, ' ')}
+                        </Text>
+                      )}
+                      <Button
+                        variant="transparent"
+                        size="compact-xs"
+                        px={0}
+                        loading={awsTesting}
+                        onClick={() => void testAwsConnection()}
+                      >
+                        Test
+                      </Button>
+                    </Group>
                   )}
                 </Box>
 
@@ -803,6 +942,10 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                         {credential.configKeys.includes('designOauth') ? 'Reconnect Design' : 'Connect Design'}
                       </Button>
                     )}
+                  {/* No separate "Connect AWS" entry point, and no AWS status here: the user
+                      declares that intent by picking Amazon Bedrock inside Claude Code's own
+                      login wizard, and the billing target is a sentence in the card body
+                      rather than another chip competing with the login actions. */}
                   {isConfigured && credential && (
                     <Tooltip label="Remove credentials">
                       <Button
