@@ -15,6 +15,7 @@ class SessionService
       # "Connect …" CTA when a selected OAuth MCP server has no usable credential for
       # this user, instead of starting a session that fails silently at provisioning.
       preflight_oauth!(user, params[:mcp_server_ids])
+      preflight_cloud!(user)
       preflight_url_safety!(params[:mcp_server_ids])
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
@@ -129,6 +130,15 @@ class SessionService
       servers = MCPServer.where(id: mcp_server_ids, enabled: true)
       missing = Oauth::Preflight.missing_connections(servers, user: user)
       raise Oauth::PreflightError, missing if missing.any?
+    end
+
+    # Raises CloudAuth::PreflightError when the user's cloud connection is present but
+    # rotten. A credential source inside the container cannot talk to the user, and
+    # Claude Code hides Bedrock errors — so without this the session would launch and
+    # then simply not answer. A user with no cloud connection at all is unaffected.
+    def preflight_cloud!(user)
+      broken = CloudAuth::Preflight.broken_connections(user)
+      raise CloudAuth::PreflightError, broken if broken.any?
     end
 
     # Re-validate selected custom MCP server URLs right before launch (F34). The

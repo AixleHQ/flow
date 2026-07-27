@@ -89,6 +89,70 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal 0, @user.terminal_sessions.count, "must not create a session it can't launch"
   end
 
+  # == create_and_start: cloud-connection preflight ==
+  #
+  # A credential source inside the container cannot talk to the user and Claude Code
+  # hides Bedrock errors, so a rotten connection has to be caught before launch or the
+  # session simply never answers.
+
+  test "create_and_start blocks launch when the user's AWS connection has rotted" do
+    AgentCredential.from_artifacts(@user.id, "claude_code", {
+      "awsBedrock" => {
+        "region" => "us-east-1", "profile" => "aixle-bedrock",
+        "credential_process" => "/usr/local/bin/aixle-aws-creds",
+        "identity_center" => {
+          "account_id" => "111122223333", "role_name" => "BedrockUser", "sso_region" => "us-west-2",
+          # Registrations die at 90 days and refresh cannot cross that boundary.
+          "registration" => { "client_id" => "c", "expires_at" => 1.day.ago.iso8601 },
+          "token" => { "access_token" => "t", "refresh_token" => "r", "expires_at" => 1.hour.from_now.iso8601 }
+        }
+      }
+    })
+
+    error = assert_raises(CloudAuth::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+      )
+    end
+
+    assert_equal 1, error.connections.size
+    assert_equal "registration_expired", error.connections.first[:reason]
+    assert_equal CloudAuth::Preflight::CONNECT_PATH, error.connections.first[:connect_url]
+    assert_equal 0, @user.terminal_sessions.count, "must not create a session it can't launch"
+  end
+
+  test "create_and_start launches for a user with a healthy AWS connection" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, "claude_code", {
+      "awsBedrock" => {
+        "region" => "us-east-1", "profile" => "aixle-bedrock",
+        "credential_process" => "/usr/local/bin/aixle-aws-creds",
+        "identity_center" => {
+          "account_id" => "111122223333", "role_name" => "BedrockUser", "sso_region" => "us-west-2",
+          "registration" => { "client_id" => "c", "expires_at" => 60.days.from_now.iso8601 },
+          "token" => { "access_token" => "t", "refresh_token" => "r", "expires_at" => 1.hour.from_now.iso8601 }
+        }
+      }
+    })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+    )
+
+    assert session.persisted?
+  end
+
+  # Not using Bedrock must never be treated as a broken connection.
+  test "create_and_start launches for a user with no cloud connection at all" do
+    mock_temporal_start
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+    )
+
+    assert session.persisted?
+  end
+
   test "create_and_start launches when the OAuth MCP server is connected for the user" do
     mock_temporal_start
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,
