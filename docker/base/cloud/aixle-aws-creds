@@ -1,0 +1,45 @@
+#!/bin/bash
+# AWS SDK credential_process helper.
+#
+# The container holds no AWS material of its own: it asks the platform, which exchanges
+# the user's stored Identity Center refresh token for role credentials.
+#
+# Two contract details that are easy to break:
+#   - stdout must contain ONLY the credential-process JSON document; the SDK parses it
+#     verbatim, so a stray echo anywhere here breaks credential resolution.
+#   - stderr is discarded by every AWS SDK and by Claude Code, so diagnostics written
+#     here are invisible. A non-zero exit is the only signal that travels outward; the
+#     real reason is logged server-side by CloudCredentialsController.
+#
+# See docs/research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md
+set -euo pipefail
+
+: "${AIXLE_CLOUD_CREDENTIALS_URL:?not set — this session has no cloud connection}"
+: "${AIXLE_CLOUD_KEY:?not set — this session has no cloud connection}"
+: "${SESSION_ID:?not set}"
+
+# A 409 means the user has no cloud connection yet. Inside an auth container that is the
+# expected first answer: asking is what tells the platform to show the connect step in the
+# browser, and the user then completes it while we wait here. Waiting rather than failing
+# is what lets Claude Code's own wizard verification pass on the first attempt instead of
+# reporting a credential error the user has to click past.
+#
+# The total budget must stay under Claude Code's chain-resolve timeout (we set 120s), or
+# the CLI gives up first and orphans this process.
+DEADLINE=$((SECONDS + 100))
+
+while :; do
+  # --max-time guards each attempt: botocore imposes no timeout of its own on a
+  # credential_process.
+  if body=$(curl -fsS --max-time 15 -X POST \
+      -H "X-Session-Id: ${SESSION_ID}" \
+      -H "X-Cloud-Key: ${AIXLE_CLOUD_KEY}" \
+      "${AIXLE_CLOUD_CREDENTIALS_URL}"); then
+    # stdout must carry ONLY the credential document.
+    printf '%s' "$body"
+    exit 0
+  fi
+
+  [ "$SECONDS" -lt "$DEADLINE" ] || exit 1
+  sleep 3
+done
