@@ -578,6 +578,36 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
   });
 
+  it('collapses a single column via the header collapse toggle', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Expanded columns show their task cards.
+    expect(screen.getByText('Wire up authentication')).toBeInTheDocument();
+
+    // The header collapse toggle (chevron) replaces the old drag grip; one per column.
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    expect(toggles.length).toBe(2);
+    await userEvent.click(toggles[0]);
+
+    // Backlog collapses (its card disappears); In Progress stays expanded.
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+    expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
+  });
+
+  it('keeps a collapsed non-empty column’s tickets draggable so they can be moved out', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Collapse the Backlog column (it holds "Wire up authentication").
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    await userEvent.click(toggles[0]);
+
+    // The full card is hidden while collapsed…
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+    // …but the ticket stays in the DOM as a draggable chip, so a drag can still be initiated from
+    // the collapsed source column (board requirement 3 / QA TC-07).
+    expect(screen.getByLabelText('Drag Wire up authentication')).toBeInTheDocument();
+  });
+
   // --- create-task modal submit + validation ---
 
   it('submits the create-task form, POSTs the new task and renders its card', async () => {

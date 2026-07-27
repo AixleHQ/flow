@@ -387,6 +387,44 @@ function SortableTaskCard({
   );
 }
 
+// A compact, draggable stand-in for a task shown inside a collapsed column strip.
+// It keeps the ticket present in the DOM as a sortable item so a drag can still be
+// initiated from a collapsed source column (board requirement 3). It renders no task
+// title text — only a small grab bar — so a collapsed column stays lightweight and does
+// not reveal card content while folded.
+function CollapsedTaskChip({ task }: { task: Task }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `task-${task.id}`,
+    data: { type: 'task', task },
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <Box
+      ref={setNodeRef}
+      aria-label={`Drag ${task.title}`}
+      title={task.title}
+      style={{
+        ...style,
+        width: 30,
+        height: 12,
+        borderRadius: 3,
+        backgroundColor: 'var(--app-border-default)',
+        cursor: 'grab',
+        touchAction: 'none',
+        flexShrink: 0,
+      }}
+      {...attributes}
+      {...listeners}
+    />
+  );
+}
+
 function TaskCardUI({
   task,
   href,
@@ -797,6 +835,29 @@ function BoardColumn({
             }}
           />
         )}
+
+        {/* Draggable ticket chips — keep the tickets reachable so they can be dragged out of a
+            collapsed source column (board requirement 3). No title text is rendered here. */}
+        {tasks.length > 0 && (
+          <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+            <Box
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 6,
+                width: '100%',
+                overflowY: 'auto',
+                paddingTop: 2,
+              }}
+            >
+              {tasks.map((task) => (
+                <CollapsedTaskChip key={task.id} task={task} />
+              ))}
+            </Box>
+          </SortableContext>
+        )}
       </Box>
     );
   }
@@ -817,7 +878,7 @@ function BoardColumn({
         ...colStyle,
       }}
     >
-      {/* Header — drag handle via grip icon only, to not swallow menu/button clicks */}
+      {/* Header — collapse toggle icon; the column title carries the drag-to-reorder handle */}
       <Box
         style={{
           height: 44,
@@ -831,21 +892,22 @@ function BoardColumn({
         }}
         onDoubleClick={canExecute ? startRename : undefined}
       >
-        {/* Drag grip — carries sortable listeners so clicks on other controls are not swallowed */}
-        <Box
-          {...colListeners}
-          style={{
-            cursor: 'grab',
-            padding: '0 6px',
-            display: 'flex',
-            alignItems: 'center',
-            flexShrink: 0,
-            color: 'var(--mantine-color-dimmed)',
+        {/* Collapse toggle — replaces the old drag grip; chevron folds the column into a strip */}
+        <ActionIcon
+          size="sm"
+          variant="subtle"
+          color="gray"
+          aria-label="Collapse column"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleCollapse(column.id);
           }}
+          onMouseDown={(e) => e.stopPropagation()}
+          style={{ flexShrink: 0, marginRight: 2 }}
         >
-          <IconGripVertical size={13} />
-        </Box>
-        {/* Left: name + count + bolt chip */}
+          <IconChevronDown size={15} />
+        </ActionIcon>
+        {/* Left: name (drag handle) + count + bolt chip */}
         <Group gap={6} style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
           {renaming ? (
             <TextInput
@@ -875,13 +937,17 @@ function BoardColumn({
             />
           ) : (
             <Text
+              {...colListeners}
               fw={600}
+              title="Drag to reorder column"
               style={{
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 fontSize: 13,
                 color: 'var(--mantine-color-text)',
+                cursor: 'grab',
+                touchAction: 'none',
               }}
             >
               {column.name}
@@ -4263,19 +4329,28 @@ const BoardPage = () => {
     setCreateOpen(true);
   };
 
-  const handleToggleCollapse = useCallback((colId: number) => {
-    setCollapsedColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(colId)) next.delete(colId);
-      else next.add(colId);
-      return next;
-    });
-  }, []);
+  const handleToggleCollapse = useCallback(
+    (colId: number) => {
+      setCollapsedColumns((prev) => {
+        const next = new Set(prev);
+        if (next.has(colId)) next.delete(colId);
+        else next.add(colId);
+        return next;
+      });
+    },
+    [setCollapsedColumns],
+  );
 
   const handleToggleAll = useCallback(() => {
-    const allIds = columns.map((c) => c.id);
+    // Drive the id list off localColumns — it is the live list (reorders, renames and freshly
+    // added columns land there first), so the `columns` prop can lag behind it.
+    const allIds = localColumns.map((c) => c.id);
     setCollapsedColumns((prev) => (prev.size === allIds.length ? new Set() : new Set(allIds)));
-  }, [columns]);
+  }, [localColumns, setCollapsedColumns]);
+
+  // Whether every column is currently collapsed — drives the Collapse all / Expand all toggle
+  // and the compact "add column" strip.
+  const allColumnsCollapsed = localColumns.length > 0 && localColumns.every((c) => collapsedColumns.has(c.id));
 
   const handleRetryTask = useCallback(
     async (task: Task) => {
@@ -4586,16 +4661,10 @@ const BoardPage = () => {
           <Button
             variant="default"
             size="xs"
-            leftSection={
-              collapsedColumns.size === columns.length ? (
-                <IconArrowsMaximize size={12} />
-              ) : (
-                <IconArrowsMinimize size={12} />
-              )
-            }
+            leftSection={allColumnsCollapsed ? <IconArrowsMaximize size={12} /> : <IconArrowsMinimize size={12} />}
             onClick={handleToggleAll}
           >
-            {collapsedColumns.size === columns.length ? 'Expand all' : 'Collapse all'}
+            {allColumnsCollapsed ? 'Expand all' : 'Collapse all'}
           </Button>
 
           {/* Activity */}
@@ -4619,6 +4688,10 @@ const BoardPage = () => {
         >
           <Box className={styles.boardArea}>
             <SortableContext items={localColumns.map((c) => `col-${c.id}`)} strategy={horizontalListSortingStrategy}>
+              {/*
+                A collapsed column still renders its tickets as compact draggable chips, so tickets
+                can always be dragged out to another column instead of being trapped there.
+              */}
               {localColumns.map((col, idx) => (
                 <BoardColumn
                   key={col.id}
@@ -4669,7 +4742,7 @@ const BoardPage = () => {
 
             {/* Add column button — strip when all columns are collapsed, pill otherwise */}
             {(() => {
-              const allCollapsed = columns.length > 0 && collapsedColumns.size === columns.length;
+              const allCollapsed = allColumnsCollapsed;
               return allCollapsed ? (
                 <Box
                   onClick={handleAddColumnInline}
