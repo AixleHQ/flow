@@ -146,22 +146,38 @@ RUN ARCH=$(dpkg --print-architecture) && \
     chmod -R 755 /opt/openvscode-server
 
 # -----------------------------------------------------------------------------
-# Playwright MCP + Chromium (headless browser for agent automation)
+# Playwright MCP + Chrome for Testing (headless browser for agent automation)
 #
 # Installs @playwright/mcp globally so `npx @playwright/mcp` resolves instantly.
-# Chromium is installed using the playwright CLI bundled INSIDE @playwright/mcp
-# to ensure the browser revision exactly matches what the MCP expects at runtime.
-# Using a mismatched playwright version (e.g. the global `npx playwright`) would
-# install the wrong chromium revision, causing EACCES errors when the MCP tries
-# to download the correct revision into the root-owned /opt/playwright-browsers/.
+#
+# IMPORTANT — pin the MCP version. @playwright/mcp bundles its own playwright-core,
+# and recent versions resolve the default Chromium browser to the
+# "chrome-for-testing" CHANNEL (its executable lives inside the `chromium-<rev>`
+# browser folder). If @playwright/mcp floats unpinned, a rebuild can bake one
+# browser revision/channel while the version agents actually launch at runtime
+# expects another — producing:
+#     Error: Browser "chrome-for-testing" is not installed.
+#     Run `npx @playwright/mcp install-browser chrome-for-testing` to install
+# Pinning the version locks the build-time browser bake to the runtime MCP so
+# the browser stays available across rebuilds (see task #340).
+#
+# The browser is installed with the playwright CLI bundled INSIDE the pinned
+# @playwright/mcp so the revision matches by construction. We install the exact
+# "chrome-for-testing" channel the MCP launches by default (not the generic
+# `chrome` system channel, which would point at a non-existent system Chrome).
 # Browsers stored in /opt/playwright-browsers (shared, readable by all users).
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
-RUN npm install -g @playwright/mcp
+# Pin to the version verified against task #340. Keep in sync with
+# PLAYWRIGHT_MCP_VERSION in app/services/agents/base_adapter.rb (the runtime MCP
+# command is pinned to the same version so it cannot float off this baked browser).
+# Bump deliberately and rebuild.
+ARG PLAYWRIGHT_MCP_VERSION=0.0.78
+RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
 
 RUN apt-get update \
-    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chromium \
+    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chrome-for-testing \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -173,6 +189,30 @@ RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chro
     && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
     && npm cache clean --force \
     && rm -rf /tmp/*
+
+# Make the baked browser discoverable WITHOUT relying on PLAYWRIGHT_BROWSERS_PATH
+# reaching the MCP subprocess (task #340).
+#
+# PLAYWRIGHT_BROWSERS_PATH is set as an ENV above, so it is present in the
+# container environment — but a STDIO MCP server only sees it if the launching
+# agent CLI forwards the parent env to the subprocess. Claude Code forwards the
+# full env, so it works there; Codex (and potentially other CLIs) spawn STDIO
+# servers with a restricted environment that DROPS custom vars. With the var
+# gone, playwright-core falls back to its Linux default browser location,
+# $HOME/.cache/ms-playwright, where nothing is baked — producing:
+#   Error: Browser "chrome-for-testing" is not installed.
+#
+# Symlinking that default location to the shared browser dir makes the baked
+# browser resolvable under the fallback too, so Chrome launches regardless of
+# whether any given CLI forwards the env var. We seed the symlink into /etc/skel
+# so every derived agent image's `useradd -m <user>` copies it into that user's
+# home automatically (all four agents — claude/codex/cursor/gemini — create
+# their user with -m), keeping this a single, DRY, forward-compatible fix.
+# The symlink is copied verbatim (not dereferenced) by useradd, and a later
+# `chown -R` on the home operates on the link itself (lchown), never on the
+# shared target, so /opt/playwright-browsers ownership/permissions are unchanged.
+RUN mkdir -p /etc/skel/.cache \
+    && ln -sfn "${PLAYWRIGHT_BROWSERS_PATH}" /etc/skel/.cache/ms-playwright
 
 # -----------------------------------------------------------------------------
 # Workspace setup

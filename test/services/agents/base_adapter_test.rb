@@ -97,6 +97,79 @@ module Agents
       assert_equal 1001, @adapter.container_uid
     end
 
+    # == MCP STDIO Environment Tests ==
+
+    test "mcp_stdio_env injects the baked Playwright browsers path (task #340)" do
+      server = OpenStruct.new(env: {})
+
+      assert_equal "/opt/playwright-browsers",
+                   @adapter.mcp_stdio_env(server)["PLAYWRIGHT_BROWSERS_PATH"]
+    end
+
+    test "mcp_stdio_env injects the browsers path even when the server has no env" do
+      server = OpenStruct.new(name: "playwright")
+
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers" },
+                   @adapter.mcp_stdio_env(server))
+    end
+
+    test "mcp_stdio_env merges the server env on top of the baseline" do
+      server = OpenStruct.new(env: { "KEY" => "v" })
+
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers", "KEY" => "v" },
+                   @adapter.mcp_stdio_env(server))
+    end
+
+    test "mcp_stdio_env lets the server override the baseline browsers path" do
+      server = OpenStruct.new(env: { "PLAYWRIGHT_BROWSERS_PATH" => "/custom/path" })
+
+      assert_equal "/custom/path",
+                   @adapter.mcp_stdio_env(server)["PLAYWRIGHT_BROWSERS_PATH"]
+    end
+
+    # == MCP STDIO Args Pinning Tests (task #340) ==
+
+    test "mcp_stdio_args pins an unversioned @playwright/mcp spec to the baked version" do
+      server = OpenStruct.new(args: [ "@playwright/mcp", "--headless" ])
+
+      assert_equal [ "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}", "--headless" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args re-pins a floating @playwright/mcp@latest to the baked version" do
+      server = OpenStruct.new(args: [ "-y", "@playwright/mcp@latest" ])
+
+      assert_equal [ "-y", "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args re-pins an @playwright/mcp spec already at a different version" do
+      server = OpenStruct.new(args: [ "@playwright/mcp@0.0.1" ])
+
+      assert_equal [ "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args never emits a bare, floatable @playwright/mcp spec" do
+      server = OpenStruct.new(args: [ "@playwright/mcp" ])
+
+      emitted = @adapter.mcp_stdio_args(server)
+      refute_includes emitted, "@playwright/mcp",
+                      "emitted command must not float independently of PLAYWRIGHT_MCP_VERSION"
+      assert(emitted.all? { |a| a !~ %r{\A@playwright/mcp@latest\z} })
+    end
+
+    test "mcp_stdio_args leaves non-Playwright args untouched" do
+      server = OpenStruct.new(args: [ "-y", "some-other-mcp", "--flag" ])
+
+      assert_equal [ "-y", "some-other-mcp", "--flag" ], @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args returns an empty array when the server has no args" do
+      assert_equal [], @adapter.mcp_stdio_args(OpenStruct.new(name: "remote"))
+      assert_equal [], @adapter.mcp_stdio_args(OpenStruct.new(args: []))
+    end
+
     # == Environment Variables Tests ==
 
     test "required_env_fields returns empty array by default" do

@@ -188,6 +188,70 @@ module Agents
       :fresh
     end
 
+    # Baseline environment variables that every STDIO MCP subprocess must receive,
+    # regardless of whether the launching agent CLI forwards the container's
+    # environment to the servers it spawns.
+    #
+    # The Playwright MCP resolves its baked browser through PLAYWRIGHT_BROWSERS_PATH
+    # (set to /opt/playwright-browsers as an ENV in docker/base/Dockerfile). Claude
+    # Code forwards the full parent environment to STDIO MCP servers, so it picks the
+    # var up automatically — but Codex (and other CLIs) spawn STDIO servers with a
+    # restricted environment that drops custom vars. Without the path the MCP falls
+    # back to ~/.cache/ms-playwright, where no browser is baked, and fails with:
+    #   Error: Browser "chrome-for-testing" is not installed.
+    # Emitting the var explicitly in the MCP config makes the baked browser reachable
+    # under every agent CLI (task #340). Unrelated MCP servers ignore it.
+    #
+    # Keep the value in sync with ENV PLAYWRIGHT_BROWSERS_PATH in docker/base/Dockerfile.
+    # The Rails app runs on the host, not inside the agent container, so the path
+    # cannot be read from the process environment here — it must be a constant.
+    MCP_STDIO_BASE_ENV = { "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers" }.freeze
+
+    # Environment for a STDIO MCP server config entry: the baseline vars every MCP
+    # subprocess needs, overlaid with the server's own configured env (the server's
+    # values win on conflict). Always returns a non-empty hash.
+    # @param server [#env] resolved MCP server
+    # @return [Hash<String, String>]
+    def mcp_stdio_env(server)
+      server_env = server.respond_to?(:env) && server.env.present? ? server.env.to_h : {}
+      MCP_STDIO_BASE_ENV.merge(server_env)
+    end
+
+    # The Playwright MCP npm package and the exact version baked into the agent
+    # base image. Baking the browser and pinning the *global* install is not
+    # enough on its own: agents launch the MCP at runtime via `npx @playwright/mcp`,
+    # and an unqualified spec lets npx resolve/download a different (newer) release
+    # into its cache — whose bundled browser revision can differ from the one baked
+    # at build time, re-introducing the "chrome-for-testing is not installed" drift
+    # this task fixes (#340). Pinning the version in the *emitted* command keeps the
+    # launched MCP locked to the baked browser regardless of npx cache state.
+    #
+    # Keep PLAYWRIGHT_MCP_VERSION in sync with ARG PLAYWRIGHT_MCP_VERSION in
+    # docker/base/Dockerfile. The Rails app runs on the host, not inside the agent
+    # container, so the version cannot be read from the image here — it is a constant.
+    PLAYWRIGHT_MCP_PACKAGE = "@playwright/mcp"
+    PLAYWRIGHT_MCP_VERSION = "0.0.78"
+
+    # A STDIO server's command args with the Playwright MCP package spec pinned to
+    # PLAYWRIGHT_MCP_VERSION, so the launched MCP cannot float independently of the
+    # baked browser. Any arg that is `@playwright/mcp` or `@playwright/mcp@<tag>`
+    # (e.g. `@playwright/mcp@latest`) is rewritten to `@playwright/mcp@<version>`;
+    # every other arg (and every non-Playwright server) passes through untouched.
+    # @param server [#args] resolved MCP server
+    # @return [Array<String>]
+    def mcp_stdio_args(server)
+      return [] unless server.respond_to?(:args) && server.args.present?
+
+      Array(server.args).map do |arg|
+        a = arg.to_s
+        if a == PLAYWRIGHT_MCP_PACKAGE || a.start_with?("#{PLAYWRIGHT_MCP_PACKAGE}@")
+          "#{PLAYWRIGHT_MCP_PACKAGE}@#{PLAYWRIGHT_MCP_VERSION}"
+        else
+          a
+        end
+      end
+    end
+
     # =================================================================
     # Environment Variables (from session/credential metadata)
     # Used for agent-specific config like GOOGLE_CLOUD_PROJECT

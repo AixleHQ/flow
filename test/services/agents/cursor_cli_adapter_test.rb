@@ -186,10 +186,13 @@ module Agents
       mcp = JSON.parse(result["/workspace/.cursor/mcp.json"])
       servers = mcp["mcpServers"]
 
-      # stdio server: command/args/env, no url
+      # stdio server: command/args/env, no url. The baked-browser path is injected
+      # into every stdio server's env (task #340) and the server's own env is merged
+      # on top of it.
       assert_equal "npx @playwright/mcp", servers["playwright"]["command"]
       assert_equal [ "--headless" ], servers["playwright"]["args"]
-      assert_equal({ "KEY" => "v" }, servers["playwright"]["env"])
+      assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers", "KEY" => "v" },
+                   servers["playwright"]["env"])
       refute servers["playwright"].key?("url")
 
       # remote (sse) server: url + headers, no command
@@ -202,6 +205,21 @@ module Agents
       assert_equal 2, approvals.size
       assert(approvals.all? { |a| a.match?(/\A(playwright|context7)-[0-9a-f]{16}\z/) },
              "approvals should be name-hash pairs, got #{approvals.inspect}")
+    end
+
+    test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
+      project = create(:project, :standalone)
+      stdio = create(:mcp_server, :stdio_transport,
+                     name: "playwright", command: "npx",
+                     args: [ "@playwright/mcp@latest", "--headless" ], scope: project)
+
+      mcp = JSON.parse(@adapter.mcp_config([ stdio ])["/workspace/.cursor/mcp.json"])
+      args = mcp["mcpServers"]["playwright"]["args"]
+
+      pinned = "@playwright/mcp@#{Agents::BaseAdapter::PLAYWRIGHT_MCP_VERSION}"
+      assert_equal [ pinned, "--headless" ], args
+      # Emitted command cannot float independently of PLAYWRIGHT_MCP_VERSION.
+      refute_includes args, "@playwright/mcp@latest"
     end
 
     # =========================================================================
