@@ -11,7 +11,6 @@ module PersonalTools
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
       param :name, type: :string, description: "Step name.", required: true
       param :instructions, type: :string, description: "Task-specific instructions (markdown)."
-      param :description, type: :string, description: "Short description for the UI."
       param :agent_id, type: :integer, description: "Agent id to run this step."
       param :position, type: :integer, description: "0-based position; auto-assigned if omitted."
     end
@@ -24,7 +23,7 @@ module PersonalTools
 
       position = params[:position] || (workflow.steps.maximum(:position).to_i + 1)
       step = workflow.steps.create!(
-        name: params[:name], position: position, description: params[:description],
+        name: params[:name], position: position,
         instructions: params[:instructions], agent_id: params[:agent_id]
       )
       success(id: step.id, workflow_id: workflow.id, name: step.name, position: step.position)

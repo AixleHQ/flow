@@ -10,7 +10,6 @@ class SubStepDashboard < Administrate::BaseDashboard
     id: Field::Number.with_options(searchable: true),
     step: Field::BelongsTo,
     name: Field::String.with_options(searchable: true),
-    description: Field::Text.with_options(truncate: 80),
     instructions: Field::Text.with_options(truncate: 80),
     position: Field::Number,
     required: Field::Boolean,
@@ -31,7 +30,6 @@ class SubStepDashboard < Administrate::BaseDashboard
     id
     step
     name
-    description
     instructions
     position
     required

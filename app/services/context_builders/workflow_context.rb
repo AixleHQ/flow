@@ -106,8 +106,6 @@ module ContextBuilders
       lines = []
       lines << "## Step: #{step.name}"
       lines << ""
-      lines << step.description if step.description.present?
-      lines << ""
       lines << "### Instructions"
       lines << ""
       lines << step.instructions if step.instructions.present?
@@ -125,9 +123,7 @@ module ContextBuilders
         icon = status_icon(status)
         id_ref = ssr ? " `id: #{ssr.id}`" : ""
 
-        line = "#{ss.position}. #{icon} **#{ss.name}**#{id_ref} [#{status}]"
-        line += " — #{ss.description}" if ss.description.present?
-        lines << line
+        lines << "#{ss.position}. #{icon} **#{ss.name}**#{id_ref} [#{status}]"
 
         if ss.instructions.present?
           lines << ""

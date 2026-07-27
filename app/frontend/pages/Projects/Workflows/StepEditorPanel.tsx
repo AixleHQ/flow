@@ -7,7 +7,6 @@ import classes from './BuilderPage.module.css';
 interface SubStep {
   id: number;
   name: string;
-  description: string | null;
   instructions: string | null;
   position: number;
   required: boolean;
@@ -51,19 +50,6 @@ export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPan
           onChange={(e) => onFieldChange('name', e.currentTarget.value)}
           disabled={readOnly}
         />
-
-        {/* Description */}
-        <div style={{ marginTop: 12, marginBottom: 12 }}>
-          <label className={classes.fieldLabel}>Description</label>
-          <textarea
-            className={classes.descTa}
-            rows={2}
-            placeholder="One-line summary of what this does…"
-            value={step.description ?? ''}
-            onChange={(e) => onFieldChange('description', e.currentTarget.value)}
-            disabled={readOnly}
-          />
-        </div>
 
         {/* Instructions */}
         <div style={{ marginTop: 12 }}>

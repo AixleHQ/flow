@@ -12,8 +12,8 @@ class InternalTools::ListSubStepsTest < ActiveSupport::TestCase
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: workflow_run, step: @step)
 
-    @sub_step_a = create(:sub_step, step: @step, name: "Analyze", position: 1, description: "Analyze code")
-    @sub_step_b = create(:sub_step, step: @step, name: "Report", position: 2, description: "Write report")
+    @sub_step_a = create(:sub_step, step: @step, name: "Analyze", position: 1, instructions: "Analyze code")
+    @sub_step_b = create(:sub_step, step: @step, name: "Report", position: 2, instructions: "Write report")
 
     @ssr_a = create(:sub_step_run, step_run: @step_run, sub_step: @sub_step_a, state: :completed,
       note: "Found 3 issues", data: { "issues" => 3 })
@@ -44,7 +44,7 @@ class InternalTools::ListSubStepsTest < ActiveSupport::TestCase
     assert_equal @ssr_a.id, first["id"]
     assert_equal 1, first["position"]
     assert_equal "Analyze", first["name"]
-    assert_equal "Analyze code", first["description"]
+    assert_equal "Analyze code", first["instructions"]
     assert_equal "completed", first["status"]
     assert_equal "Found 3 issues", first["note"]
     assert_equal({ "issues" => 3 }, first["data"])

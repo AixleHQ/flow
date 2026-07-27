@@ -52,7 +52,6 @@ interface SubStepRun {
   id: number;
   state: string;
   subStepName: string | null;
-  subStepDescription: string | null;
   startedAt: string | null;
   completedAt: string | null;
 }
@@ -149,10 +148,7 @@ const MODE_LABELS: Record<string, string> = {
 // ── Helpers ────────────────────────────────────────
 
 function subStepLabel(ss: SubStepRun, fallback: string): string {
-  const name = ss.subStepName;
-  const isDefault = !name || /^Sub-step \d+$/i.test(name);
-  if (!isDefault) return name;
-  return ss.subStepDescription || fallback;
+  return ss.subStepName || fallback;
 }
 
 function stepIcon(state: string) {

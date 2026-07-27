@@ -31,7 +31,6 @@ module InternalTools
           id: step.id,
           name: step.name,
           position: step.position,
-          description: step.description,
           instructions: step.instructions&.truncate(500),
           agent: step.agent ? { id: step.agent.id, title: step.agent.title } : nil,
           allow_non_interactive: step.allow_non_interactive,
@@ -48,7 +47,7 @@ module InternalTools
               id: ss.id,
               name: ss.name,
               position: ss.position,
-              description: ss.description,
+              instructions: ss.instructions,
               required: ss.required
             }
           end

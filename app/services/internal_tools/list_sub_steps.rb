@@ -26,7 +26,7 @@ module InternalTools
           id: ssr.id,
           position: ssr.sub_step.position,
           name: ssr.sub_step.name,
-          description: ssr.sub_step.description,
+          instructions: ssr.sub_step.instructions,
           status: ssr.state,
           note: ssr.note,
           data: ssr.data

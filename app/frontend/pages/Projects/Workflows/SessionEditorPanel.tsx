@@ -36,7 +36,6 @@ interface AssetSpec {
 interface Step {
   id: number;
   name: string;
-  description: string | null;
   instructions: string | null;
   position: number;
   agentId: number | null;
@@ -249,18 +248,6 @@ export function SessionEditorPanel({
           onChange={(e) => onFieldChange('name', e.currentTarget.value)}
           disabled={readOnly}
         />
-
-        <div style={{ marginTop: 10, marginBottom: 12 }}>
-          <label className={classes.fieldLabel}>Description</label>
-          <textarea
-            className={classes.descTa}
-            rows={2}
-            placeholder="One-line summary of what this does…"
-            value={step.description ?? ''}
-            onChange={(e) => onFieldChange('description', e.currentTarget.value)}
-            disabled={readOnly}
-          />
-        </div>
 
         <div style={{ marginTop: 12 }}>
           <label className={classes.fieldLabel}>

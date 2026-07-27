@@ -27,13 +27,9 @@ module InternalTools
             type: "boolean",
             description: "Must be completed for step to finish. Default: true"
           },
-          description: {
-            type: "string",
-            description: "What this unit of work involves"
-          },
           instructions: {
             type: "string",
-            description: "Additional guidance"
+            description: "What the agent must do in this unit of work"
           }
         }
       })
@@ -50,7 +46,6 @@ module InternalTools
       sub_step = step.sub_steps.create!(
         name: params[:name],
         position: position,
-        description: params[:description],
         instructions: params[:instructions],
         required: params.fetch(:required, true)
       )
