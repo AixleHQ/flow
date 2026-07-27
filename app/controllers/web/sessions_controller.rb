@@ -23,17 +23,23 @@ class Web::SessionsController < Web::ApplicationController
 
   def create
     user_form = UserSignInForm.new(session_params)
+    return redirect_to(login_path, inertia: { errors: user_form.errors }) unless user_form.valid?
 
-    if user_form.valid?
-      sign_in(user_form.user)
-      # A parked invitation (login-continuation) is accepted before the
-      # redirect so the inviting company is already the current one.
-      accept_pending_invitation(user_form.user)
-      target = user_form.user.onboarding_state == "completed" ? company_projects_path : onboarding_path
-      redirect_to target
-    else
-      redirect_to login_path, inertia: { errors: user_form.errors }
-    end
+    user = user_form.user
+    # A parked invitation (login-continuation) is accepted before the gate below
+    # so the invited membership is already active, and the inviting company is
+    # already the current one.
+    accept_pending_invitation(user)
+
+    # Same gate as #omniauth, and it must run BEFORE sign_in: a user with no
+    # active membership would otherwise be walked all the way through
+    # onboarding (enforce_onboarding runs before require_active_membership!)
+    # and only then signed out at the first company-scoped page.
+    return redirect_to login_path(error: "pending_approval") if no_active_membership?(user)
+
+    sign_in(user)
+    target = user.onboarding_state == "completed" ? company_projects_path : onboarding_path
+    redirect_to target
   end
 
   def destroy
@@ -54,7 +60,12 @@ class Web::SessionsController < Web::ApplicationController
     # Pending = platform-level pending account state OR no active membership
     # yet (fresh OAuth user with no domain match, or auto-joined into a company
     # that requires admin approval). Super admins have no memberships.
-    if user.pending? || (!user.super_admin? && user.company_memberships.active.none?)
+    # A soft-deleted account must not get a session: find_or_initialize_by finds
+    # it by email, but AuthConcern#current_user filters it out, so signing it in
+    # produces a redirect loop instead of a refusal.
+    return redirect_to login_path(error: "account_deleted") if user.deleted?
+
+    if user.pending? || no_active_membership?(user)
       redirect_to login_path(error: "pending_approval")
       return
     end
@@ -72,6 +83,16 @@ class Web::SessionsController < Web::ApplicationController
   end
 
   private
+
+  # Super admins legitimately have none (they live in /admin). For everyone
+  # else, no active membership means there is nothing to sign in to: a fresh
+  # OAuth user whose domain matched nothing, a company that requires admin
+  # approval (membership still `invited`), or a fully revoked member.
+  # Deliberately a live query — the invitation just accepted above may have
+  # flipped a membership active.
+  def no_active_membership?(user)
+    !user.super_admin? && user.company_memberships.active.none?
+  end
 
   def session_params
     if params.key?(:user)

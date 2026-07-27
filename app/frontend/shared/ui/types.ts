@@ -43,6 +43,9 @@ export interface SharedUser {
   defaultAgentRuntime: AgentType | null;
   configuredAgents: AgentType[];
   agentCredentials: AgentCredential[];
+  // True when onboarding skipped the agent step (viewer everywhere) but the user
+  // has since gained a role that can run things — drives the sidebar nudge.
+  needsAgentSetup: boolean;
   // Request-scoped: the company/role of the session's current membership.
   currentCompany: SharedCompany | null;
   currentRole: UserRole | null;

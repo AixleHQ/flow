@@ -4,6 +4,10 @@ class Web::Company::MembersController < Web::Company::ApplicationController
   def index
     memberships = current_company.company_memberships
                                  .where.not(state: "revoked")
+                                 # Soft-deleted accounts are gone from the
+                                 # product; their membership row stays for
+                                 # history but must not be listed or actionable.
+                                 .joins(:user).where(users: { deleted_at: nil })
                                  .includes(:user, :invited_by)
                                  .ransack(params[:q])
                                  .result

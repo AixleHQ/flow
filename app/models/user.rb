@@ -67,8 +67,12 @@ class User < ApplicationRecord
   broadcasts_to ->(user) { user }, on: :update
 
   # Scopes
+  # Members of a company, soft-deleted accounts excluded: a deleted user must not
+  # surface in member lists, pickers or session scopes. Membership STATE is left
+  # to the caller (`.merge(CompanyMembership.active)`), since the members screen
+  # deliberately shows invited/suspended rows too.
   scope :for_company, ->(company) {
-    joins(:company_memberships).where(company_memberships: { company_id: company.id })
+    joins(:company_memberships).not_deleted.where(company_memberships: { company_id: company.id })
   }
   # Soft-delete scopes. NOTE: we deliberately do NOT name the positive scope
   # `active` (as Asset/Workflow/Tool do) because AASM already generates an
@@ -81,6 +85,15 @@ class User < ApplicationRecord
   # Deleting a user hard-deletes nothing: board activities and other historical
   # records referencing the user are preserved, and the FK on
   # board_activities.actor_id is never violated.
+  #
+  # Memberships are deliberately left ALONE rather than revoked. Two reasons:
+  # revoking would make restore! lossy (it cannot know which companies to
+  # rejoin, or at which role), and revoking the sole admin of a company would
+  # either trip the last-admin guard or force us to bypass validations. Instead
+  # `deleted_at` is the single source of truth and is filtered at every read:
+  # authentication (AuthConcern#current_user, UserSignInForm, the omniauth
+  # guard), Company#users, and User.for_company. A deleted user therefore cannot
+  # sign in and appears nowhere, while restore! brings back exactly what existed.
   def soft_delete!
     update!(deleted_at: Time.current)
   end
@@ -204,6 +217,23 @@ class User < ApplicationRecord
     agent_models_by_type.map do |agent_type, models|
       { agent_type: agent_type, models: models }
     end
+  end
+
+  # A user who finished onboarding but now needs an agent credential and has
+  # none. Reachable because onboarding's agent step is skipped for
+  # viewers-everywhere (onboarding_requires_agent?) and onboarding never
+  # re-runs: a viewer who is later given an employee/admin membership may now
+  # act, but has no agent connected and nothing in the flow says so — they just
+  # find empty agent pickers.
+  def needs_agent_setup?
+    return false if super_admin?
+    return false if active_memberships.none?
+
+    # `agent_credentials.none?` rather than has_configured_agents?: this runs on
+    # every request via CurrentUserResource, which already serialises
+    # `many :agent_credentials`, so reading the loaded association costs nothing.
+    # (Unloaded, Relation#none? still issues an exists?, not a full load.)
+    onboarding_completed? && onboarding_requires_agent? && agent_credentials.none?
   end
 
   def can_complete_onboarding?

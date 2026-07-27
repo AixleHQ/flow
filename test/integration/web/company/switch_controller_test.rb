@@ -69,4 +69,33 @@ class Web::Company::SwitchControllerTest < ActionDispatch::IntegrationTest
     get company_projects_path
     assert_redirected_to login_path
   end
+  # === stickiness across sessions (users.last_company_id) ===
+  # session[:current_company_id] dies with the cookie. Without a persisted hint
+  # the user silently snaps back to their OLDEST company on the next login,
+  # which for a consultant whose home company is the newest one is wrong every
+  # single time.
+
+  test "the switched-to company is still current after signing out and back in" do
+    post company_switch_path, params: { company_id: @company_b.id }
+    assert_equal @company_b.id, current_company_id
+    assert_equal @company_b.id, @user.reload.last_company_id
+
+    # A fresh session: the switcher choice lives only in the cookie, so without
+    # the persisted hint this would resolve back to A (oldest accepted).
+    delete logout_path
+    sign_in_as(@user)
+
+    assert_equal @company_b.id, current_company_id
+  end
+
+  test "a remembered company that is no longer active falls back instead of resolving" do
+    delete logout_path
+    @user.update_column(:last_company_id, @company_b.id)
+    @membership_b.update!(state: "revoked")
+    sign_in_as(@user)
+
+    # Falls back to the remaining active membership, and re-points the hint.
+    assert_equal @company_a.id, current_company_id
+    assert_equal @company_a.id, @user.reload.last_company_id
+  end
 end

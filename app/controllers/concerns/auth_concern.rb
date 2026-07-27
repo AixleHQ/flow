@@ -110,17 +110,41 @@ module AuthConcern
     # (instead of a fresh `.active.find_by`) keeps the whole request — policies,
     # project permissions, current-user props — on ONE membership query.
     memberships = current_user.active_memberships
-    if session[:current_company_id].present?
-      wanted = session[:current_company_id].to_i
-      membership = memberships.find { |m| m.company_id == wanted }
-    end
+
+    # Resolution order, each candidate re-validated against ACTIVE memberships
+    # (a revoked company must never resolve, whatever the session says):
+    #   1. this session's switcher choice
+    #   2. users.last_company_id — the same choice from a PREVIOUS session, so
+    #      it survives logout and cookie expiry instead of snapping back to the
+    #      oldest membership
+    #   3. the oldest accepted membership
+    membership = find_membership(memberships, session[:current_company_id])
+    membership ||= find_membership(memberships, current_user.last_company_id)
     membership ||= default_membership(memberships)
+    return nil unless membership
 
     # Persist the resolved company so a fallback (first login, revoked
     # membership) becomes the "last used" company on subsequent requests.
-    session[:current_company_id] = membership.company_id if membership && session[:current_company_id] != membership.company_id
+    session[:current_company_id] = membership.company_id if session[:current_company_id] != membership.company_id
+    remember_last_company(membership)
 
     membership
+  end
+
+  def find_membership(memberships, company_id)
+    return nil if company_id.blank?
+
+    wanted = company_id.to_i
+    memberships.find { |m| m.company_id == wanted }
+  end
+
+  # update_column: a bare hint, so it must not bump updated_at (which
+  # `broadcasts_to ->(user) { user }` would turn into a cable broadcast on every
+  # first request of a session) or run validations.
+  def remember_last_company(membership)
+    return if current_user.last_company_id == membership.company_id
+
+    current_user.update_column(:last_company_id, membership.company_id)
   end
 
   # Ruby mirror of CompanyMembership.default_order (accepted_at ASC NULLS FIRST,

@@ -194,4 +194,63 @@ class CompanyMembershipTest < ActiveSupport::TestCase
       assert_nil CompanyMembership.find_by_token_for(:invitation, token)
     end
   end
+
+  # === owned-project transfer on revocation ===
+  # Project#owner_belongs_to_company requires an ACTIVE membership, so a revoked
+  # owner leaves the project failing validation on any later save. Revocation
+  # therefore either moves ownership or refuses.
+
+  test "revoking an owner transfers their projects to the company's oldest active admin" do
+    owner = create(:user, :employee, company: @company)
+    newer_admin = create(:user, :admin, company: @company)
+    newer_admin.company_memberships.sole.update!(accepted_at: 1.hour.ago)
+    oldest_admin = create(:user, :admin, company: @company)
+    oldest_admin.company_memberships.sole.update!(accepted_at: 3.days.ago)
+    project = create(:project, company: @company, owner: owner)
+
+    membership = owner.company_memberships.sole
+    membership.aasm(:state).fire(:revoke)
+    assert membership.save, membership.errors.full_messages.to_sentence
+
+    assert_equal oldest_admin.id, project.reload.owner_id
+    assert project.valid?
+  end
+
+  test "revoking an owner is refused when the company has no other active admin" do
+    owner = create(:user, :employee, company: @company)
+    create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+
+    membership = owner.company_memberships.sole
+    membership.aasm(:state).fire(:revoke)
+
+    assert_not membership.save
+    assert_includes membership.errors[:base].to_sentence, "no other admin"
+    assert_equal owner.id, project.reload.owner_id
+    assert membership.reload.active?
+  end
+
+  test "revoking a member who owns nothing needs no heir" do
+    member = create(:user, :employee, company: @company)
+
+    membership = member.company_memberships.sole
+    membership.aasm(:state).fire(:revoke)
+
+    assert membership.save, membership.errors.full_messages.to_sentence
+    assert membership.reload.revoked?
+  end
+
+  test "projects in OTHER companies are left alone when a membership is revoked" do
+    other_company = create(:company)
+    owner = create(:user, :employee, company: @company)
+    create(:company_membership, user: owner, company: other_company)
+    create(:user, :admin, company: @company)
+    elsewhere = create(:project, company: other_company, owner: owner)
+
+    membership = owner.company_memberships.find_by!(company: @company)
+    membership.aasm(:state).fire(:revoke)
+    assert membership.save, membership.errors.full_messages.to_sentence
+
+    assert_equal owner.id, elsewhere.reload.owner_id
+  end
 end

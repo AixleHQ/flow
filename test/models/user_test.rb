@@ -125,4 +125,45 @@ class UserTest < ActiveSupport::TestCase
     assert_no_difference("BoardActivity.count") { user.soft_delete! }
     assert_equal user.id, activity.reload.actor_id
   end
+  # === needs_agent_setup? ===
+  # Onboarding skips the agent step for a user who is a viewer everywhere, and
+  # onboarding never re-runs. Gaining a role that can run things therefore
+  # leaves the user with no agent credential and nothing telling them so.
+
+  test "needs_agent_setup? is false for a viewer everywhere (they never need an agent)" do
+    company = create(:company)
+    user = create(:user, :viewer, :onboarding_completed, company: company)
+
+    assert_not user.needs_agent_setup?
+  end
+
+  test "needs_agent_setup? becomes true once a viewer gains a non-viewer membership" do
+    company = create(:company)
+    user = create(:user, :viewer, :onboarding_completed, company: company)
+    assert_not user.needs_agent_setup?
+
+    # The factory's default role is already "employee".
+    create(:company_membership, user: user, company: create(:company))
+
+    assert user.reload.needs_agent_setup?
+  end
+
+  test "needs_agent_setup? is false once an agent credential exists" do
+    company = create(:company)
+    user = create(:user, :employee, :onboarding_completed, :with_agent_credential, company: company)
+
+    assert_not user.needs_agent_setup?
+  end
+
+  test "needs_agent_setup? is false mid-onboarding (the flow itself still asks for an agent)" do
+    company = create(:company)
+    user = create(:user, :employee, company: company)
+
+    assert_not user.needs_agent_setup?
+  end
+
+  test "needs_agent_setup? is false for a super admin and for a membership-less user" do
+    assert_not create(:user, :super_admin, :onboarding_completed).needs_agent_setup?
+    assert_not create(:user, :onboarding_completed).needs_agent_setup?
+  end
 end

@@ -149,6 +149,9 @@ interface McpProps {
 
 interface Props {
   profile: SharedUser;
+  // Memberships still in the `invited` state — profile.memberships is active-only.
+  // Optional: only ProfileController#show sends it.
+  pendingInvitations?: SharedMembership[];
   languageOptions: string[];
   agentModels: AgentModelsEntry[];
   cableStream?: string;
@@ -297,7 +300,13 @@ function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; a
   );
 }
 
-function CompaniesSection({ profile }: { profile: SharedUser }) {
+function CompaniesSection({
+  profile,
+  pendingInvitations,
+}: {
+  profile: SharedUser;
+  pendingInvitations: SharedMembership[];
+}) {
   const memberships = profile.memberships ?? [];
   const [leaving, setLeaving] = useState<SharedMembership | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -332,6 +341,32 @@ function CompaniesSection({ profile }: { profile: SharedUser }) {
         </Text>
       )}
 
+      {pendingInvitations.length > 0 && (
+        <>
+          <Text size="sm" fw={500} mt={memberships.length === 0 ? 0 : 'lg'} mb="xs">
+            Pending invitations
+          </Text>
+          <Text size="xs" c="dimmed" mb="sm">
+            Open the link in the invitation email to accept. Invitations expire 7 days after they are sent.
+          </Text>
+          <Stack gap="xs" mb="md">
+            {pendingInvitations.map((invitation) => (
+              <Group key={invitation.id} gap="sm" wrap="nowrap" miw={0}>
+                <Text fw={500} truncate>
+                  {invitation.company.name}
+                </Text>
+                <Badge color={ROLE_COLORS[invitation.role]} size="sm" variant="light">
+                  {ROLE_LABELS[invitation.role]}
+                </Badge>
+                <Badge color="blue" size="sm" variant="outline">
+                  Invited
+                </Badge>
+              </Group>
+            ))}
+          </Stack>
+        </>
+      )}
+
       <Stack gap="sm">
         {memberships.map((membership) => (
           <Group key={membership.id} justify="space-between" wrap="nowrap">
@@ -342,6 +377,13 @@ function CompaniesSection({ profile }: { profile: SharedUser }) {
               <Badge color={ROLE_COLORS[membership.role]} size="sm" variant="light">
                 {ROLE_LABELS[membership.role]}
               </Badge>
+              {/* Suspended members keep the membership but lose access, so the
+                  row would otherwise look identical to an active one. */}
+              {membership.state === 'suspended' && (
+                <Badge color="orange" size="sm" variant="outline">
+                  Suspended
+                </Badge>
+              )}
             </Group>
             <Button variant="subtle" color="red" size="xs" onClick={() => setLeaving(membership)}>
               Leave company
@@ -846,7 +888,7 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
   );
 }
 
-function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
+function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp }: Props) {
   useInertiaCableStream(cableStream, { only: ['profile', 'agentModels'] });
 
   const { data, setData, patch, processing, errors, isDirty } = useForm({
@@ -964,7 +1006,7 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
           </form>
         </Card>
 
-        <CompaniesSection profile={profile} />
+        <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
         <DefaultAgentSelector profile={profile} />
         <DefaultModelSelector profile={profile} agentModels={agentModels} />
         <AgentRuntimesSection profile={profile} />

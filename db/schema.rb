@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_27_100004) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_27_100006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -229,6 +229,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_100004) do
     t.datetime "created_at", null: false
     t.datetime "invited_at"
     t.bigint "invited_by_id"
+    t.datetime "reminded_at"
     t.string "role", default: "employee", null: false
     t.string "state", default: "invited", null: false
     t.datetime "updated_at", null: false
@@ -803,6 +804,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_27_100004) do
     t.bigint "default_agent_credential_id"
     t.datetime "deleted_at"
     t.citext "email", null: false
+    t.bigint "last_company_id"
     t.string "mcp_token_digest"
     t.datetime "mcp_token_last_used_at"
     t.string "name", null: false

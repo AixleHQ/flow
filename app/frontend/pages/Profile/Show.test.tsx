@@ -30,6 +30,7 @@ const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
   defaultAgentCredentialId: null,
   defaultAgentRuntime: null,
   configuredAgents: [],
+  needsAgentSetup: false,
   agentCredentials: [],
   currentRole: 'admin',
   currentCompany: acmeCompany,

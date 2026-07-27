@@ -41,14 +41,10 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
 
   # Regression (originally #379): removing a member who owns projects used to
   # raise a 500, because projects.owner_id is NOT NULL and the destroy nullified
-  # it. Removal no longer touches the User row at all — it revokes the
-  # MEMBERSHIP — so the owner FK can never be violated and the guard that used
-  # to block this is unnecessary. What must still hold: no crash, the user row
-  # survives, and the project keeps its owner.
-  #
-  # NOTE: this deliberately leaves a project owned by a non-member. Reassigning
-  # or blocking that is a product decision, tracked separately.
-  test "destroy revokes the membership without touching a project-owning member" do
+  # it. Removal now revokes the MEMBERSHIP and never touches the User row, so
+  # that FK can't be violated — but Project#owner_belongs_to_company requires an
+  # ACTIVE membership, so ownership has to move or the project becomes unsaveable.
+  test "destroy revokes the membership and transfers the member's projects to an admin" do
     member = create(:user, company: @company)
     project = create(:project, company: @company, owner: member)
 
@@ -57,10 +53,17 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :redirect
-    assert User.exists?(member.id)
-    assert_equal member.id, project.reload.owner_id
+    assert User.exists?(member.id), "the user row must survive; only the membership is revoked"
     assert_equal "revoked", @company.company_memberships.find_by(user_id: member.id).state
+    # @user is the acting admin and the company's only other admin.
+    assert_equal @user.id, project.reload.owner_id
+    assert project.valid?, "transferred project must satisfy owner_belongs_to_company"
   end
+
+  # The no-heir branch is NOT reachable here: destroy? requires an admin of this
+  # company and not_self?, so the acting admin is always a valid heir. It is
+  # covered at the model level (CompanyMembershipTest), which is where a company
+  # with no active admin can actually be constructed.
 
   test "invite as viewer with mismatched email domain succeeds" do
     assert_difference -> { @company.company_memberships.with_role(:viewer).count }, 1 do

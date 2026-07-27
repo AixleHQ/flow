@@ -145,6 +145,9 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
 
   test "revoking the membership in B strips a B-project owner of access" do
     owner_b = create(:user, :employee, :onboarding_completed, company: @company_b)
+    # Revoking an owner needs an admin to inherit their projects, otherwise the
+    # membership refuses to change state (CompanyMembership#owned_projects_have_an_heir).
+    admin_b = create(:user, :admin, :onboarding_completed, company: @company_b)
     project = create(:project, name: "Owned in Beta", company: @company_b, owner: owner_b)
 
     assert Project.for_user(owner_b).exists?(id: project.id)
@@ -154,6 +157,9 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
 
     assert_not Project.for_user(owner_b).exists?(id: project.id), "owner keeps for_user access after revocation"
     assert_not project.reload.accessible_by?(owner_b), "owner keeps accessible_by? after revocation"
+    # Ownership moved, so the project stays valid and reachable by the company.
+    assert_equal admin_b.id, project.owner_id
+    assert project.valid?
   end
 
   test "revoking the membership in B strips a B-project collaborator of access" do

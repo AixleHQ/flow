@@ -2,7 +2,9 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { Drawer, Menu, Popover, ScrollArea, Tooltip, UnstyledButton } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
+  IconAlertTriangle,
   IconArrowsExchange,
+  IconBuilding,
   IconChartBar,
   IconCheck,
   IconCheckbox,
@@ -55,6 +57,7 @@ import {
   companySessionsPath,
   companySwitchPath,
   companyWorkflowCatalogIndexPath,
+  profilePath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
@@ -161,6 +164,37 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+// ─── "Connect an agent" nudge ────────────────────────────────────────────────
+// Onboarding skips the agent step for a user who is a viewer in every company.
+// If they are later given a role that can run things, onboarding never re-runs,
+// so without this they just find empty agent pickers with no explanation.
+
+function AgentSetupNudge({ collapsed }: { collapsed: boolean }) {
+  const label = 'Connect an agent to start running workflows';
+
+  if (collapsed) {
+    return (
+      <Tooltip label={label} position="right" withArrow>
+        <UnstyledButton
+          component={Link}
+          href={profilePath()}
+          aria-label={label}
+          className={classes.agentNudgeCollapsed}
+        >
+          <IconAlertTriangle size={16} />
+        </UnstyledButton>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <UnstyledButton component={Link} href={profilePath()} className={classes.agentNudge}>
+      <IconAlertTriangle size={15} className={classes.agentNudgeIcon} />
+      <span className={classes.agentNudgeText}>{label}</span>
+    </UnstyledButton>
+  );
+}
 
 // ─── AI Builder sidebar banner (AC11) ────────────────────────────────────────
 
@@ -436,23 +470,34 @@ function SidebarWorkspaceSwitcher({
 
   return (
     <div className={`${classes.swArea} ${collapsed ? classes.swAreaCollapsed : ''}`}>
-      {multiCompany && !collapsed && (
+      {multiCompany && (
         <Menu
           opened={companyMenuOpen}
           onChange={setCompanyMenuOpen}
-          position="bottom-start"
+          position={collapsed ? 'right-start' : 'bottom-start'}
           width={200}
           shadow="md"
           offset={2}
         >
           <Menu.Target>
-            <UnstyledButton className={classes.coBtn} aria-label="Switch company">
-              <span className={classes.coName}>{companyName}</span>
-              <IconChevronDown
-                size={11}
-                className={`${classes.swCaret} ${companyMenuOpen ? classes.swCaretOpen : ''}`}
-              />
-            </UnstyledButton>
+            {/* Collapsed, there is no room for the company name — but a
+                multi-company user still has to be able to tell which company
+                they are in and switch, so fall back to an icon + tooltip. */}
+            {collapsed ? (
+              <Tooltip label={`${companyName} — switch company`} position="right" withArrow>
+                <UnstyledButton className={classes.coBtnCollapsed} aria-label="Switch company">
+                  <IconBuilding size={16} />
+                </UnstyledButton>
+              </Tooltip>
+            ) : (
+              <UnstyledButton className={classes.coBtn} aria-label="Switch company">
+                <span className={classes.coName}>{companyName}</span>
+                <IconChevronDown
+                  size={11}
+                  className={`${classes.swCaret} ${companyMenuOpen ? classes.swCaretOpen : ''}`}
+                />
+              </UnstyledButton>
+            )}
           </Menu.Target>
           <Menu.Dropdown>
             <Menu.Label>Companies</Menu.Label>
@@ -674,6 +719,8 @@ function SidebarContent({
       <ScrollArea className={classes.scrollArea} type="never">
         <SidebarNav groups={navGroups} collapsed={collapsed} isAdmin={isAdmin} onNavigate={onNavigate} />
       </ScrollArea>
+
+      {currentUser?.needsAgentSetup && <AgentSetupNudge collapsed={collapsed} />}
 
       <AiBanner collapsed={collapsed} projectId={projectId} />
 

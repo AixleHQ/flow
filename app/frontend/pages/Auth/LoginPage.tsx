@@ -19,6 +19,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   pending_approval: 'Your account is pending approval. Please contact your company administrator.',
   no_active_membership: 'You no longer have access to any workspace. Please contact your company administrator.',
   deactivated: 'Your account has been deactivated. Please contact your company administrator.',
+  account_deleted: 'This account has been deleted. Please contact your company administrator.',
   oauth_failed: 'Failed to authenticate with Google. Please try again.',
   oauth_error: 'An error occurred during authentication. Please try again.',
 };

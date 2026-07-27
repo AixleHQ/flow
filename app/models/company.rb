@@ -12,7 +12,7 @@ class Company < ApplicationRecord
   # Only ACTIVE members: revoked/invited/suspended users must not leak into
   # consumers (member pickers, session scopes). Screens that need non-active
   # rows (e.g. the members index) go through :company_memberships directly.
-  has_many :users, -> { merge(CompanyMembership.active) }, through: :company_memberships
+  has_many :users, -> { merge(CompanyMembership.active).not_deleted }, through: :company_memberships
   has_many :projects, dependent: :destroy
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy

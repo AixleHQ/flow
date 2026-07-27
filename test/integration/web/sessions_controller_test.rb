@@ -139,4 +139,58 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to admin_root_path
   end
+  # === active-membership gate on password login ===
+  # enforce_onboarding (Web::ApplicationController) runs BEFORE
+  # require_active_membership! (Web::Company::ApplicationController), so a
+  # membership-less user that reaches sign_in would be walked through the whole
+  # onboarding flow and only then signed out. The gate has to be at login.
+
+  test "create refuses a user whose only membership is still invited (approval pending)" do
+    company = create(:company, auto_accept_users: false)
+    invitee = create(:user, :employee, :onboarding_completed, company: company,
+                                       membership_state: "invited",
+                                       password: AuthHelper::TEST_PASSWORD)
+
+    post login_path, params: { user: { email: invitee.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_redirected_to login_path(error: "pending_approval")
+    # Not signed in: the next request must not be treated as authenticated.
+    get onboarding_path
+    assert_redirected_to login_path
+  end
+
+  test "create refuses a user whose memberships were all revoked" do
+    revoked = create(:user, :employee, :onboarding_completed, company: @company,
+                                       password: AuthHelper::TEST_PASSWORD)
+    revoked.company_memberships.each { |m| m.update!(state: "revoked") }
+
+    post login_path, params: { user: { email: revoked.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_redirected_to login_path(error: "pending_approval")
+  end
+
+  test "create still signs in a super admin, who legitimately has no memberships" do
+    super_admin = create(:user, :super_admin, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
+
+    post login_path, params: { user: { email: super_admin.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_response :redirect
+    assert_not_equal login_path(error: "pending_approval"), response.location
+  end
+
+  test "create accepts a parked invitation before the membership gate runs" do
+    company = create(:company)
+    invitee = create(:user, :employee, :onboarding_completed, company: company,
+                                       membership_state: "invited",
+                                       password: AuthHelper::TEST_PASSWORD)
+    membership = invitee.company_memberships.sole
+
+    # Visiting the invitation link parks the token in the session.
+    get invitation_path(membership.generate_token_for(:invitation))
+    post login_path, params: { user: { email: invitee.email, password: AuthHelper::TEST_PASSWORD } }
+
+    # Accepting flipped the membership active, so the gate must NOT fire.
+    assert membership.reload.active?
+    assert_not_equal login_path(error: "pending_approval"), response.location
+  end
 end

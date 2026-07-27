@@ -593,3 +593,67 @@
 .mobileToggle:hover {
   background-color: var(--app-action-hover);
 }
+
+/* "Connect an agent" nudge — shown when onboarding skipped the agent step but
+   the user now has a role that can run things. */
+.agentNudge {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 8px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-warning-border, var(--app-border));
+  border-radius: 6px;
+  background: var(--app-warning-bg, var(--app-action-hover));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agentNudge:hover {
+  background: var(--app-action-hover);
+}
+
+.agentNudgeIcon {
+  color: var(--app-warning-fg, var(--app-text-secondary));
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.agentNudgeText {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--app-text-secondary);
+}
+
+.agentNudgeCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 4px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--app-warning-fg, var(--app-text-secondary));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agentNudgeCollapsed:hover {
+  background: var(--app-action-hover);
+}
+
+/* Collapsed company switcher: no room for the name, so an icon carries it. */
+.coBtnCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 5px 0;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+}
+
+.coBtnCollapsed:hover {
+  background: var(--app-action-hover);
+}

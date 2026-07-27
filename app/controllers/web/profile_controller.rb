@@ -8,6 +8,14 @@ class Web::ProfileController < Web::ApplicationController
   def show
     render inertia: "Profile/Show", props: {
       profile: CurrentUserResource.new(current_user, params: { current_membership: current_membership }).to_h,
+      # Invitations the user has NOT accepted yet. `profile.memberships` is
+      # active-only, so without this an outstanding invitation is visible
+      # nowhere in the product — only in the email, which may be lost.
+      # Profile-only (not a shared prop): pointless weight on every request.
+      pending_invitations: current_user.company_memberships
+                                       .invited
+                                       .includes(:company)
+                                       .map { |m| MembershipResource.new(m).to_h },
       language_options: User::AGENT_LANGUAGES,
       agent_models: current_user.agent_models_for_props,
       cable_stream: inertia_cable_stream(current_user),

@@ -1,0 +1,7 @@
+Your invitation to <%= @company.branded_name %> on Aixle Flow expires soon.
+
+<%= @inviter&.name || "An administrator" %> invited you as <%= @role.humanize %>. The invitation expires on <%= @expires_at.strftime("%d %b %Y") %>.
+
+Accept the invitation: <%= @accept_url %>
+
+After it expires an administrator can send you a new one.

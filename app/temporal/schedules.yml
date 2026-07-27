@@ -42,3 +42,11 @@ schedules:
     cron: "*/5 * * * *"
     overlap: skip
     enabled: true
+
+  # Reminds invitees whose invitation is unaccepted and within 2 days of the
+  # 7-day expiry. Hourly is plenty: `reminded_at` makes it idempotent, so the
+  # cadence only affects how promptly the single reminder goes out.
+  - workflow: membership_invitation_reminder_workflow
+    cron: "30 * * * *"
+    overlap: skip
+    enabled: true

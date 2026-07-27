@@ -51,9 +51,9 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
 
     assert_response :success
     # O(1) regardless of session count: 1 primary + a bounded set of association
-    # batch loads (verified flat at 18 for both 3 and 8 sessions).
+    # batch loads (verified flat at 19 for both 3 and 8 sessions).
     #
-    # 15 -> 18 with CompanyMembership. All three additions are constant, and the
+    # 15 -> 19 with CompanyMembership. All four additions are constant, and the
     # flatness above is what this guard actually protects:
     #   +1  the active-membership list, which used to come free from
     #       users.company_id on the already-loaded user row. Memoized per User
@@ -65,7 +65,11 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     #   +1  the companies preload behind the current-user `memberships` prop,
     #       which feeds the company switcher. There was no membership list to
     #       serialize before, so this has no pre-membership counterpart.
-    assert_operator query_count, :<=, 18, "Expected bounded content query count, got #{query_count}"
+    #   +1  the users.last_company_id write that makes the switcher choice
+    #       survive a new session. Once per session, on the first request that
+    #       resolves a membership — which a test always starts fresh, so it is
+    #       always counted here.
+    assert_operator query_count, :<=, 19, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────

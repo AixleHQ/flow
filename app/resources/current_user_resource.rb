@@ -50,4 +50,11 @@ class CurrentUserResource < ApplicationResource
   attribute :default_agent_runtime do |user|
     user.default_agent_runtime
   end
+
+  # Drives the "connect an agent" nudge: onboarding skipped the agent step for a
+  # viewer who has since been given a role that can actually run things.
+  typelize :boolean
+  attribute :needs_agent_setup do |user|
+    user.needs_agent_setup?
+  end
 end
