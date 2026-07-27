@@ -28,6 +28,14 @@ module CloudAuth
     # the org's portal session is.
     REGISTRATION_MAX_AGE = 90.days
 
+    # Both portal listings are paginated, and an organisation whose users are assigned to
+    # more accounts than one page holds is the normal case, not the edge: reading only the
+    # first page hides accounts the user was actually granted, with no error to notice.
+    # `max_result` is deliberately not sent — the SDK model carries no range for it, so a
+    # value we cannot verify against a real instance risks a validation failure on the one
+    # call the whole connect depends on. The service's own page size applies instead.
+    MAX_PAGES = 20
+
     Registration = Data.define(:client_id, :client_secret, :expires_at)
     DeviceAuthorization = Data.define(
       :device_code, :user_code, :verification_uri, :verification_uri_complete, :interval, :expires_in
@@ -107,16 +115,20 @@ module CloudAuth
     # Portal calls take the cached access token verbatim; the SDK puts it in the
     # x-amz-sso_bearer_token header against portal.sso.<region>.amazonaws.com.
     def list_accounts(access_token:)
-      portal.list_accounts(access_token: access_token).account_list.map do |a|
-        Account.new(account_id: a.account_id, account_name: a.account_name, email: a.email_address)
-      end
+      each_page(:list_accounts) { |token| portal.list_accounts({ access_token: access_token, next_token: token }.compact) }
+        .flat_map do |page|
+          page.account_list.map do |a|
+            Account.new(account_id: a.account_id, account_name: a.account_name, email: a.email_address)
+          end
+        end
     rescue ::Aws::SSO::Errors::ServiceError => e
       raise translate(e)
     end
 
     def list_account_roles(access_token:, account_id:)
-      portal.list_account_roles(access_token: access_token, account_id: account_id)
-            .role_list.map(&:role_name)
+      each_page(:list_account_roles) do |token|
+        portal.list_account_roles({ access_token: access_token, account_id: account_id, next_token: token }.compact)
+      end.flat_map { |page| page.role_list.map(&:role_name) }
     rescue ::Aws::SSO::Errors::ServiceError => e
       raise translate(e)
     end
@@ -137,6 +149,27 @@ module CloudAuth
     end
 
     private
+
+    # Walks `next_token` to the end, bounded. A hit bound is logged rather than swallowed:
+    # a truncated account list looks exactly like "your administrator did not grant you
+    # that account", which is the wrong thing for a user to be told.
+    def each_page(operation)
+      pages = []
+      token = nil
+
+      MAX_PAGES.times do
+        page = yield(token)
+        pages << page
+        token = page.next_token
+        break if token.blank?
+      end
+
+      if token.present?
+        Rails.logger.warn("[AwsSsoClient] #{operation} truncated at #{MAX_PAGES} pages; results are incomplete")
+      end
+
+      pages
+    end
 
     def build_token(resp)
       Token.new(

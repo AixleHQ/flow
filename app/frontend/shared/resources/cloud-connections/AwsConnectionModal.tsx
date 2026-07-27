@@ -240,6 +240,10 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
                 </Badge>
                 <Select
                   label="AWS account"
+                  // Searchable because an organisation routinely grants one person dozens of
+                  // accounts — scrolling a plain list to find one is the wrong shape.
+                  searchable
+                  nothingFoundMessage="No account matches"
                   data={accounts.map((a) => ({
                     value: a.account_id,
                     label: a.account_name ? `${a.account_name} (${a.account_id})` : a.account_id,
