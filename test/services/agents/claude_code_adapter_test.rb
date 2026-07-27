@@ -892,6 +892,9 @@ module Agents
     # A static list can never name an account's own application inference profiles, and those
     # ARNs are exactly what an enterprise deployment pins.
 
+    # An account that curates its models scopes bedrock:InvokeModel to its own application
+    # profile ARNs, which leaves every system-defined profile visible but denied. Offering
+    # both is how an unusable model reaches the picker.
     test "a bedrock connection lists what the account can actually invoke" do
       credential = connect_bedrock
       catalog = stub_catalog([
@@ -904,11 +907,31 @@ module Agents
       result = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
 
       assert_equal :api, result[:source]
-      # Newest first: the application profile points at Opus 4.8, which outranks Sonnet 4.6.
-      assert_equal [ "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow",
-                     "us.anthropic.claude-sonnet-4-6" ],
+      assert_equal [ "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow" ],
                    result[:models].map { |m| m[:model_id] }
       assert_equal 1, catalog.calls
+    end
+
+    # Regression: a Fable system profile sorted above the account's own profiles and was
+    # picked first, then failed on the first invocation because the permission set allowed
+    # only the four ids behind its application profiles.
+    test "a newer shared profile does not displace the account's own profiles" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile(
+          "us.anthropic.claude-fable-5",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-fable-5"
+        ),
+        FakeAwsModelCatalog.application_profile(
+          "arn:aws:bedrock:us-east-1:1:application-inference-profile/flow-opus-4-8", name: "flow opus-4-8",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-4-8"
+        )
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "arn:aws:bedrock:us-east-1:1:application-inference-profile/flow-opus-4-8" ],
+                   models.map { |m| m[:model_id] }
     end
 
     test "models the CLI cannot run are left out" do

@@ -476,14 +476,25 @@ module Agents
     # account here, including Claude 3.x (a 2x extended-access surcharge, retiring on its own
     # calendar) and the same models listed once per geography. Newest first, legacy dropped,
     # one geography per model, so the obvious pick is also the right one.
+    #
+    # ListInferenceProfiles answers "what exists in this account", NOT "what this connection
+    # may invoke" — there is no API that answers the second question. An account that curates
+    # its models does it by creating application inference profiles and scoping
+    # bedrock:InvokeModel to exactly those ARNs, which leaves every system-defined profile
+    # visible but denied. So once the account has application profiles of its own, they ARE
+    # the offer: otherwise a shared profile that merely happens to be newer sorts to the top
+    # of the picker and fails on first use, which is how a Fable profile got offered in an
+    # account whose permission set allowed four Opus/Sonnet/Haiku ids. Dropping the
+    # system-defined ones also keeps invocations on the profiles the account tags for cost
+    # attribution — calling the shared profile directly bypasses that.
     def usable_bedrock_profiles(profiles)
       candidates = profiles.select { |p| p.anthropic? && !p.legacy? }
       # Application profiles are the account's own objects, not geographic variants of a
       # shared model, so they are never collapsed into each other.
       application, system = candidates.partition(&:application?)
 
-      preferred = system.group_by(&:model_key).map { |_key, group| cheapest_geo(group) }
-      (application + preferred).sort_by { |p| [ -p.generation[0], -p.generation[1], p.model_id.to_s ] }
+      offered = application.presence || system.group_by(&:model_key).map { |_key, group| cheapest_geo(group) }
+      offered.sort_by { |p| [ -p.generation[0], -p.generation[1], p.model_id.to_s ] }
     end
 
     # Falls through to whatever the account has when the preferred geography is absent, so a

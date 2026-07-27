@@ -672,9 +672,22 @@ models as **application inference profiles** whose ARNs are account-specific, an
 list can name them. It also feeds `available_models`, which narrows Claude Code's own `/model`
 picker — refreshed on every reconnect, so a newly enabled model appears after reconnecting.
 
-Measured against one real account: 25 profiles in, 12 offered. Three filters, each with a
+One correction to "only truthful": `ListInferenceProfiles` answers *what exists in this
+account*, not *what this connection may invoke*, and there is no API that answers the second
+question. An account that curates its models does it by creating application profiles and
+scoping `bedrock:InvokeModel` to exactly those ARNs — every system-defined profile then stays
+**visible but denied**. Measured against the real `541894707537` account, whose permission set
+allows four Opus/Sonnet/Haiku ids: a system-defined *Fable* profile was listed, sorted to the
+top as the newest generation, and was denied on the first invocation.
+
+Measured against one real account: 25 profiles in, 12 offered. Four filters, each with a
 reason worth keeping:
 
+- **Application profiles win outright.** If the account has any of its own, only those are
+  offered and the system-defined ones are dropped — their existence is the signal that the
+  account curates its model set, and it also keeps invocations on the profiles the account
+  tags for cost attribution (calling the shared profile directly bypasses that). An account
+  with no application profiles falls through to the system-defined list unchanged.
 - **Claude 3.x dropped.** A 2x "extended access" surcharge on Bedrock, retiring on a calendar
   that differs from Anthropic's own. The discriminator is where the version sits in the name —
   legacy puts it before the family (`claude-3-sonnet`), current after (`claude-sonnet-4-6`).
