@@ -218,6 +218,15 @@ Root cause: `TerminalSession` has no `company_id`; company is implicit via `user
 1. Denormalize `company_id` onto `terminal_sessions` (set at creation; backfill from `project.company_id`). Makes the tenant boundary explicit on the highest-volume table and follows the row-level tenancy rule "every tenant-owned table carries the tenant id" ([Clerk](https://clerk.com/blog/how-to-design-multitenant-saas-architecture), [acts_as_tenant](https://github.com/ErwinM/acts_as_tenant)).
 2. **Join through `projects.company_id`.** ✅ Recommended given a product constraint confirmed during research: starting project-less sessions is now disabled, and all usage analytics filter on `USAGE_SESSION_TYPES = %w[agent_session workflow_step]` (`user_agent_activity_service.rb:7`) — both project-bound. So `joins(:project).where(projects: { company_id: })` fully covers the #303 services with no migration. The only project-less rows are `auth_setup` sessions (credential setup, excluded from usage analytics) and possibly historical data — verify with a one-off count before relying on the join; if legacy usage rows with `project_id IS NULL` exist, backfill or accept their exclusion. Option 1 remains an optional hardening step later (DB-level guarantee, cheaper aggregates), not a prerequisite.
 
+> **Update (2026-07-28): Option 1 shipped after all.** The join covers the #303
+> dashboards as described, but per-company agent credentials made the column
+> mandatory for a different reason: `auth_setup` sessions are project-less and
+> they are the sessions that CREATE a credential, which is billed to one
+> company. With no `terminal_sessions.company_id`, that tenant had to be guessed
+> from "the user's first membership" — a coin flip for a multi-company user, and
+> the thing being guessed is who pays. `SessionCompany` now resolves it from the
+> column, falling back to the project, and never from a membership.
+
 `WorkflowRun` already reaches company via `project` — scoping `for_user_in_period` by company is a join filter. `TriggerEvent`/`BoardActivity` already carry or imply company and stay as-is; container strategy scope `["Company", user.company_id]` (`agent_session_strategy.rb:231`) switches to session/project-derived company.
 
 Product rule for `/profile/usage`: the dashboard always renders **current-company data only** (both self-view and colleague-view); switching company re-renders with that company's slice. Cross-company "all my activity" view is deliberately out of scope — it would surface company A's cost data while in company B's context.
@@ -230,6 +239,18 @@ Product rule for `/profile/usage`: the dashboard always renders **current-compan
 - ActionCable: `SessionListChannel` re-validates membership at subscription; existing subscriptions die on page visit after switch.
 
 ### Deployment & Migration Sequencing
+
+> **Superseded by what shipped (2026-07-28).** The five phases below were never
+> executed as separate deploys. The work landed as a **single cutover** — no
+> dual-write phase — in four commits on `feat/multi-company-membership`, each
+> `check_all`-green: the membership model + invitations + switcher together, then
+> the gaps the rebase onto develop exposed, then per-company re-onboarding, then
+> per-company agent credentials. Two decisions also diverge from the plan below:
+> `terminal_sessions.company_id` WAS added after all (phase 2 called it
+> optional) because project-less `auth_setup` sessions create a per-company
+> billed credential and their tenant cannot be inferred; and onboarding moved
+> wholesale onto `company_memberships` (the plan assumed it stayed per-user).
+> Kept for the reasoning, not as a runbook.
 
 Phased, each phase shippable and `check_all`-green (per project convention; data migrations idempotent):
 
