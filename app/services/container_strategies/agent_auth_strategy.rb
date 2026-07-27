@@ -27,9 +27,19 @@ module ContainerStrategies
     def before_exec(container_id:, **)
       container = resolve_container(container_id)
 
+      # uid/gid must be the agent user, not root. A root-owned file under the agent's
+      # HOME is readable but not writable, which breaks any login flow that needs to
+      # create sibling state next to its config (e.g. `aws sso login` writing
+      # ~/.aws/sso/cache/ next to a seeded ~/.aws/config).
+      uid = adapter.container_uid
+
       adapter.auth_setup_files_for(auth_kind, current_credential_config).each do |path, content|
-        runtime.write_file(container, path, content)
-        Rails.logger.info("[AgentAuth] Wrote auth setup file: #{path}")
+        wrote = runtime.write_file(container, path, content, uid: uid, gid: uid)
+        if wrote == false
+          Rails.logger.error("[AgentAuth] FAILED to write auth setup file: #{path}")
+        else
+          Rails.logger.info("[AgentAuth] Wrote auth setup file: #{path}")
+        end
       end
 
       {}

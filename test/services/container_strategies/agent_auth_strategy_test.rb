@@ -354,6 +354,7 @@ module ContainerStrategies
       strategy = build_strategy
       container = mock("container")
       strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude.json")
               .returns({ "numStartups" => 5, "projects" => { "/x" => {} },
@@ -381,7 +382,8 @@ module ContainerStrategies
 
     test "normal auth watches the base login keys" do
       env_vars = build_strategy.build_env_vars
-      assert_includes env_vars, "AUTH_REQUIRED_KEYS=primaryApiKey,claudeAiOauth.accessToken"
+      assert_includes env_vars,
+                      "AUTH_REQUIRED_KEYS=primaryApiKey,claudeAiOauth.accessToken,env.CLAUDE_CODE_USE_BEDROCK"
     end
 
     test "design auth watches the designOauth key instead" do
@@ -429,6 +431,30 @@ module ContainerStrategies
       assert_includes creds, "sk-ant-oat01-base", "base login must still be injected"
       refute_includes creds, "sk-ant-oat01-OLD-design",
                       "the design token being re-minted must NOT be injected (would complete instantly)"
+    end
+
+    # A root-owned file under the agent's HOME is readable but not writable, so any
+    # login flow that has to create sibling state next to its seeded config breaks
+    # (e.g. `aws sso login` writing ~/.aws/sso/cache/ next to ~/.aws/config).
+    test "before_exec writes auth setup files owned by the agent user, not root" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      AgentCredential.from_artifacts(@user.id, "claude_code",
+                                     { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } })
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      ownership = {}
+      runtime_mock.stubs(:write_file).with { |_c, path, _content, **kw| ownership[path] = kw; true }
+
+      strategy.before_exec(container_id: "abc")
+
+      assert ownership.any?, "expected at least one auth setup file to be written"
+      ownership.each do |path, kw|
+        assert_equal 1001, kw[:uid], "#{path} must be owned by the agent uid"
+        assert_equal 1001, kw[:gid], "#{path} must be owned by the agent gid"
+      end
     end
 
     test "design auth is NOT complete with only the injected base token" do

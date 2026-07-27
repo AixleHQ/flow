@@ -333,6 +333,34 @@ module ContainerStrategies
       refute env_vars.any? { |v| v == "GOOGLE_CLOUD_PROJECT=my-project" }
     end
 
+    # == Conflicting provider env ==
+    #
+    # A ConfigItem-sourced ANTHROPIC_API_KEY would shadow a Bedrock connection, and
+    # Claude Code hides Bedrock errors — the symptom would be an agent that never
+    # answers. Scrubbing runs after every other env source has been merged.
+
+    test "build_env_vars drops env that would shadow an active bedrock connection" do
+      @credential.update!(config_data: { "awsBedrock" => {
+        "region" => "us-east-1", "profile" => "aixle-bedrock",
+        "credential_process" => "/usr/local/bin/aixle-aws-creds"
+      } })
+      SessionContextService.stubs(:resolve_env_vars).returns({
+        "ANTHROPIC_API_KEY" => "sk-ant-leftover",
+        "MY_APP_TOKEN" => "keep-me"
+      })
+
+      env_vars = build_strategy.build_env_vars
+
+      assert_not env_vars.any? { |v| v.start_with?("ANTHROPIC_API_KEY=") }
+      assert_includes env_vars, "MY_APP_TOKEN=keep-me"
+    end
+
+    test "build_env_vars leaves env alone when there is no bedrock connection" do
+      SessionContextService.stubs(:resolve_env_vars).returns({ "ANTHROPIC_API_KEY" => "sk-ant-legit" })
+
+      assert_includes build_strategy.build_env_vars, "ANTHROPIC_API_KEY=sk-ant-legit"
+    end
+
     test "builds env vars skips blank credential metadata values" do
       @credential.update!(metadata: { "empty_key" => "" })
       strategy = build_strategy
@@ -407,6 +435,7 @@ module ContainerStrategies
       strategy = build_strategy
       container = mock("container")
       agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude/.credentials.json")
@@ -422,6 +451,7 @@ module ContainerStrategies
       strategy = build_strategy
       container = mock("container")
       agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude/.credentials.json")
@@ -439,6 +469,7 @@ module ContainerStrategies
       strategy = build_strategy
       container = mock("container")
       agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude/.credentials.json")
@@ -470,6 +501,7 @@ module ContainerStrategies
       strategy = build_strategy
       container = mock("container")
       agent_service = AgentCredentialsService.for("claude_code")
+      strategy.stubs(:read_file_from_container).returns(nil)
       strategy.stubs(:read_file_from_container).with(container, "/home/claude/.claude.json").returns({}.to_json)
       strategy.stubs(:read_file_from_container)
               .with(container, "/home/claude/.claude/.credentials.json")

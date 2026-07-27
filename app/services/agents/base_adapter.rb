@@ -264,6 +264,15 @@ module Agents
       {}
     end
 
+    # Env keys that must NOT reach the container given this credential's active provider
+    # config, because the CLI would silently prefer them over what we configured.
+    # Filtered by AgentSessionStrategy after every other env source has been merged.
+    # @param _credentials [Hash] the credential's config_data
+    # @return [Array<String>]
+    def conflicting_env_keys(_credentials)
+      []
+    end
+
     # Fields that must be configured before starting container
     # Shown in UI before auth terminal starts
     # @return [Array<Hash>] list of field definitions

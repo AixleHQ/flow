@@ -246,8 +246,16 @@ module ContainerStrategies
           next
         end
 
-        # settings.json carries no secrets we persist (auth method marker only).
-        next if basename == "settings.json"
+        # settings.json carries no secrets we persist (auth method marker only). An adapter
+        # may still want the non-secret choices recorded there — Claude Code's Bedrock
+        # wizard writes its region and model pins here and nowhere else, and those pins are
+        # what keep the next session off Opus-rate billing.
+        if basename == "settings.json"
+          if adapter.respond_to?(:extract_settings_config)
+            config_data.merge!(adapter.extract_settings_config(content))
+          end
+          next
+        end
 
         config_data.merge!(adapter.extract_credentials(content))
       rescue StandardError => e

@@ -518,10 +518,15 @@ class SessionContextService
 
     # == Container File Operations ==
 
+    # A runtime that returns false has swallowed the error (DockerRuntime rescues
+    # StandardError). Without this log a failed write is completely silent and only
+    # surfaces later as the agent behaving as if the file were never provisioned.
     def write_file(container_id, path, content, uid = 1001)
       return if path.blank?
 
-      runtime.write_file(container_id, path, content, uid: uid.to_i, gid: uid.to_i)
+      result = runtime.write_file(container_id, path, content, uid: uid.to_i, gid: uid.to_i)
+      Rails.logger.error("[SessionContext] FAILED to write container file: #{path}") if result == false
+      result
     end
 
     def download_file_to_container(container_id, url, target_path, uid)

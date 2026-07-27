@@ -24,7 +24,10 @@ module Agents
     def auth_file_paths
       [
         "#{home_dir}/.claude.json",
-        "#{home_dir}/.claude/.credentials.json"
+        "#{home_dir}/.claude/.credentials.json",
+        # Bedrock writes no token anywhere — the wizard records the choice here instead, so
+        # this is the only file that can tell us a Bedrock login finished.
+        "#{home_dir}/.claude/settings.json"
       ]
     end
 
@@ -57,13 +60,19 @@ module Agents
     #   - claudeAiOauth.accessToken    — written to ~/.claude/.credentials.json after claude.ai (OAuth)
     # We wait specifically for these because oauthAccount alone is just metadata
     # and lands before the token, causing a race.
+    # The watcher checks these against every watched path, any-match, so the Bedrock marker
+    # simply becomes a third way to be finished. No watcher change needed.
     def auth_required_keys
-      %w[primaryApiKey claudeAiOauth.accessToken]
+      %w[primaryApiKey claudeAiOauth.accessToken env.CLAUDE_CODE_USE_BEDROCK]
     end
 
     def auth_complete?(config_content)
       config = parse_json(config_content)
-      config["primaryApiKey"].present? || config.dig("claudeAiOauth", "accessToken").present?
+      config["primaryApiKey"].present? ||
+        config.dig("claudeAiOauth", "accessToken").present? ||
+        # Bedrock produces no token to wait for. The wizard writing this marker into
+        # settings.json is the completion signal.
+        config.dig("env", "CLAUDE_CODE_USE_BEDROCK").present?
     end
 
     # /design-login layers a `designOauth` block onto an EXISTING Claude login. It is
@@ -76,9 +85,14 @@ module Agents
     # designOauth matters on RECONNECT — otherwise the token the watcher waits for is
     # present from the start and completes instantly.
     def auth_setup_files_for(kind, current_config = nil)
-      return super unless kind == DESIGN_KIND
+      return config_files((current_config || {}).except("designOauth")) if kind == DESIGN_KIND
 
-      config_files((current_config || {}).except("designOauth"))
+      # Seed the platform's AWS profile into the auth container so Claude Code's own
+      # Bedrock wizard lists it. The helper it points at has no connection yet — and the
+      # wizard EXECUTES credential_process during verification, so the helper reporting
+      # "not connected" is precisely how we learn the user chose Bedrock inside the TUI,
+      # before anything is written to disk.
+      super.merge(aws_config_file(AUTH_SEED_BEDROCK))
     end
 
     # Wait for the design block specifically (the base token is injected up-front).
@@ -104,12 +118,62 @@ module Agents
     # a full re-scrape would resurrect a stale base login (e.g. an old claudeAiOauth)
     # next to the real one → Claude's "Both claude.ai and /login managed key set".
     def reconcile_captured_credentials(kind, current, captured)
-      return super unless kind == DESIGN_KIND
+      if kind == DESIGN_KIND
+        design = captured[DESIGN_KEY]
+        return current || {} unless design.is_a?(Hash) && design["accessToken"].present?
 
-      design = captured["designOauth"]
-      return current || {} unless design.is_a?(Hash) && design["accessToken"].present?
+        return (current || {}).merge(DESIGN_KEY => design)
+      end
 
-      (current || {}).merge("designOauth" => design)
+      current ||= {}
+
+      # A cloud connection is NOT scraped from the container — the connect flow stored it
+      # server-side. The default behaviour here is a full replace, which would destroy it
+      # (refresh token included) the moment an auth session completed. So merge the stored
+      # block forward, folding in whatever non-secret config the wizard chose.
+      merged_block = merge_bedrock_blocks(current[BEDROCK_KEY], captured[BEDROCK_KEY])
+
+      result = captured.except(BEDROCK_KEY)
+      result[BEDROCK_KEY] = merged_block if merged_block.present?
+
+      # Carry the design token across a login it had nothing to do with.
+      stored_design = current[DESIGN_KEY]
+      result[DESIGN_KEY] = stored_design if stored_design.present? && result[DESIGN_KEY].blank?
+
+      keep_single_inference(result, chosen_inference(captured) || chosen_inference(current))
+    end
+
+    # An auth session is the only place a base actually changes, so it is the only place the
+    # other inference credentials are dropped. A working session's read-back must never do
+    # this: nothing was chosen there, and the container legitimately lacks whatever the
+    # active provider does not render.
+    def keep_single_inference(config, active)
+      return config if active.blank?
+
+      config.except(*(INFERENCE_KEYS - [ active ]))
+    end
+
+    # What the given config says inference runs on. A Bedrock block means Claude Code's own
+    # wizard wrote CLAUDE_CODE_USE_BEDROCK, which beats any Anthropic-side token.
+    def chosen_inference(config)
+      return nil if config.blank?
+      return BEDROCK_KEY if config[BEDROCK_KEY].present?
+      return "claudeAiOauth" if config.dig("claudeAiOauth", "accessToken").present?
+      return "primaryApiKey" if config["primaryApiKey"].present?
+
+      nil
+    end
+
+    def merge_bedrock_blocks(stored, from_wizard)
+      return stored if from_wizard.blank?
+      return from_wizard if stored.blank?
+
+      # The wizard's values win for what it actually decided; everything it knows nothing
+      # about (identity_center, role, credential_process) survives untouched.
+      merged = stored.merge(from_wizard.except("models"))
+      models = (stored["models"] || {}).merge(from_wizard["models"] || {})
+      merged["models"] = models if models.present?
+      merged
     end
 
     # Soonest OAuth-token expiry (epoch ms) across all present blocks
@@ -142,6 +206,18 @@ module Agents
           merged.delete(block)
         end
       end
+
+      # The cloud connection must never be treated as a scalar. The container only ever sees
+      # the rendered half of it (region, profile, model pins) — the Identity Center
+      # registration and tokens live server-side and are absent from anything scraped back
+      # out. Letting incoming win wholesale destroys them, refresh token included.
+      cloud = merge_bedrock_blocks(current[BEDROCK_KEY], incoming[BEDROCK_KEY])
+      if cloud.present?
+        merged[BEDROCK_KEY] = cloud
+      else
+        merged.delete(BEDROCK_KEY)
+      end
+
       merged
     end
 
@@ -226,12 +302,18 @@ module Agents
     def config_files(credentials, workflow_config = {})
       mcp_names = workflow_config[:enabled_mcp_servers] || []
       model = workflow_config[:model]
+      bedrock = bedrock_block(credentials)
+      # Render only the credential inference actually runs on. Handing the container a second
+      # one produces Claude Code's "Both claude.ai and /login managed key set" state, and
+      # makes it unknowable from the outside which credential a request used.
+      credentials = keep_single_inference(credentials, chosen_inference(credentials))
       files = {
         # Main config (includes primaryApiKey for API-key path users)
         config_path => generate_config(credentials, workflow_config).to_json,
         # Settings with permissions and optional model override
-        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model).to_json
+        "#{home_dir}/.claude/settings.json" => generate_settings(mcp_names, model: model, bedrock: bedrock).to_json
       }
+      files.merge!(aws_config_file(bedrock)) if bedrock
 
       # .credentials.json carries the claude.ai OAuth token and, if the user has run
       # /design-login, the separate designOauth token (user:design:read/write). Both
@@ -244,6 +326,244 @@ module Agents
       files["#{home_dir}/.claude/.credentials.json"] = creds_file.to_json if creds_file.any?
 
       files
+    end
+
+    # == Amazon Bedrock (bring-your-own cloud account) ==
+    #
+    # A user who bills through their own AWS account carries an `awsBedrock` block in
+    # the credential, alongside claudeAiOauth/primaryApiKey. The block is config, not a
+    # secret: it names a credential source (a credential_process helper backed by our
+    # vending endpoint, or an IAM Identity Center profile) that is resolved inside the
+    # container at use time.
+    #
+    # Everything here is rendered into the USER settings file and ~/.aws/config — never
+    # into managed settings and never into process env — so a repo's own committed
+    # .claude/settings.json (project scope, which outranks user scope) still wins.
+    # See docs/research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md.
+    BEDROCK_KEY = "awsBedrock"
+
+    # Where a Claude model's tokens are billed. Exactly one of these is ever stored: Claude
+    # Code picks its provider from env, so a second one would sit there doing nothing while
+    # the UI could not say which is live. Ordered by which wins at runtime — the Bedrock env
+    # beats any Anthropic-side token.
+    INFERENCE_KEYS = [ BEDROCK_KEY, "claudeAiOauth", "primaryApiKey" ].freeze
+
+    # Design has its own authorization and is orthogonal to where inference is billed, so it
+    # survives a change of inference credential.
+    DESIGN_KEY = "designOauth"
+
+    # Alias → the env var Claude Code reads for it on Bedrock. Pinning is mandatory:
+    # an unpinned deployment resolves the primary model to Opus and bills at Opus rates.
+    BEDROCK_MODEL_ENV = {
+      "opus" => "ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "sonnet" => "ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "haiku" => "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+    }.freeze
+
+    # Claude Code aborts credential-chain resolution after 60s by default. A brokered
+    # source needs a network round-trip, so give it room — without letting a hung
+    # helper wedge the session for minutes.
+    BEDROCK_CHAIN_RESOLVE_TIMEOUT_MS = 120_000
+
+    # The profile handed to an auth container, before any connection exists. Region is
+    # Claude Code's own Bedrock fallback; the real one comes from the connection once the
+    # user has made one.
+    AUTH_SEED_BEDROCK = {
+      "region" => "us-east-1",
+      "profile" => CloudAuth::AwsDeviceFlow::DEFAULT_PROFILE,
+      "credential_process" => CloudAuth::AwsDeviceFlow::CREDENTIAL_PROCESS_PATH
+    }.freeze
+
+    # With Bedrock active, any of these shadows it: an API key or auth token wins over
+    # the AWS credential chain, another provider toggle switches endpoints outright, and
+    # ANTHROPIC_BASE_URL points at the first-party API. The Bedrock gateway override is
+    # ANTHROPIC_BEDROCK_BASE_URL and is deliberately not on this list.
+    BEDROCK_CONFLICTING_ENV = %w[
+      ANTHROPIC_API_KEY
+      ANTHROPIC_AUTH_TOKEN
+      ANTHROPIC_BASE_URL
+      CLAUDE_CODE_USE_VERTEX
+      CLAUDE_CODE_USE_FOUNDRY
+    ].freeze
+
+    # What we keep from the settings file the Bedrock wizard wrote.
+    #
+    # This follows the platform's existing pattern: whatever the CLI itself persisted during
+    # login gets sliced and stored, exactly as `primaryApiKey` is. The doctrine in
+    # oauth-implementation.md §9 rules out a static-key *form* as the primary UX, not keeping
+    # a credential the CLI wrote — and without keeping it, a user who pastes a Bedrock API
+    # key at the wizard's prompt loses it the moment the container is replaced.
+    #
+    # The model pins matter for a different reason: we regenerate this settings file from the
+    # connection every session, so a pin that is not stored here disappears — and an unpinned
+    # deployment on Bedrock resolves to Opus and bills at Opus rates.
+    WIZARD_MODEL_ENV = BEDROCK_MODEL_ENV.invert.freeze
+
+    def extract_settings_config(content)
+      settings = parse_json(content)
+      env = settings["env"] || {}
+      return {} if env["CLAUDE_CODE_USE_BEDROCK"].blank?
+
+      block = {
+        "region" => env["AWS_REGION"],
+        "profile" => env["AWS_PROFILE"],
+        "bearer_token" => env["AWS_BEARER_TOKEN_BEDROCK"]
+      }.compact_blank
+
+      static = static_credentials_from(env)
+      block["static_credentials"] = static if static.present?
+
+      models = WIZARD_MODEL_ENV.each_with_object({}) do |(env_key, model_alias), acc|
+        acc[model_alias] = env[env_key] if env[env_key].present?
+      end
+      block["models"] = models if models.present?
+      available = settings["availableModels"]
+      block["available_models"] = available if available.is_a?(Array) && available.any?
+
+      { BEDROCK_KEY => block }
+    end
+
+    # Long-term access keys only. A pair accompanied by AWS_SESSION_TOKEN is a temporary
+    # STS session — storing it would hand the next session credentials that already expired,
+    # which fails in exactly the opaque way Bedrock errors do. Better to have no connection
+    # (preflight then says so) than a stale one.
+    def static_credentials_from(env)
+      return {} if env["AWS_SESSION_TOKEN"].present?
+      return {} if env["AWS_ACCESS_KEY_ID"].blank? || env["AWS_SECRET_ACCESS_KEY"].blank?
+
+      { "access_key_id" => env["AWS_ACCESS_KEY_ID"], "secret_access_key" => env["AWS_SECRET_ACCESS_KEY"] }
+    end
+
+    def conflicting_env_keys(credentials)
+      bedrock_block(credentials) ? BEDROCK_CONFLICTING_ENV : []
+    end
+
+    # Lists what this connection can actually invoke. Only an Identity Center connection can
+    # be asked: a key entered in the CLI wizard is injected straight into the container and
+    # never reaches us in a form we can sign a control-plane call with, so those fall back to
+    # the static list.
+    #
+    # Failure is never fatal — a permission set without bedrock:ListInferenceProfiles is
+    # common, and a model picker is not worth breaking a page over.
+    def bedrock_available_models(credentials, credential)
+      block = bedrock_block(credentials)
+      return [] if block.nil? || credential&.user.nil?
+      return [] if block["identity_center"].blank?
+
+      vended = CloudAuth::AwsCredentialVendor.new(user: credential.user).call
+      profiles = CloudAuth::AwsModelCatalog.new(
+        region: block["region"],
+        access_key_id: vended.access_key_id,
+        secret_access_key: vended.secret_access_key,
+        session_token: vended.session_token
+      ).inference_profiles
+
+      usable_bedrock_profiles(profiles).map do |profile|
+        { model_id: profile.model_id, display_name: profile.name, description: profile.description }
+      end
+    rescue CloudAuth::Error => e
+      Rails.logger.warn("[ClaudeCodeAdapter] Bedrock model list unavailable: #{e.message}")
+      []
+    end
+
+    # Cheapest and broadest first. A global inference profile costs about 10% less than the
+    # regional one for the same model and draws on a much larger capacity pool, so it is the
+    # right default — but an organisation with data-residency rules can SCP-block `global`,
+    # and then only the regional profile works.
+    GEO_PREFERENCE = %w[global us eu apac jp].freeze
+
+    # Bedrock only. An account's catalogue is a long historical list — 25 profiles for one
+    # account here, including Claude 3.x (a 2x extended-access surcharge, retiring on its own
+    # calendar) and the same models listed once per geography. Newest first, legacy dropped,
+    # one geography per model, so the obvious pick is also the right one.
+    def usable_bedrock_profiles(profiles)
+      candidates = profiles.select { |p| p.anthropic? && !p.legacy? }
+      # Application profiles are the account's own objects, not geographic variants of a
+      # shared model, so they are never collapsed into each other.
+      application, system = candidates.partition(&:application?)
+
+      preferred = system.group_by(&:model_key).map { |_key, group| cheapest_geo(group) }
+      (application + preferred).sort_by { |p| [ -p.generation[0], -p.generation[1], p.model_id.to_s ] }
+    end
+
+    # Falls through to whatever the account has when the preferred geography is absent, so a
+    # model offered only regionally is still offered.
+    def cheapest_geo(group)
+      group.min_by { |p| [ GEO_PREFERENCE.index(p.geo) || GEO_PREFERENCE.size, p.model_id.to_s ] }
+    end
+
+    def bedrock_block(credentials)
+      block = credentials.is_a?(Hash) ? credentials[BEDROCK_KEY] : nil
+      block.is_a?(Hash) && block["region"].present? ? block : nil
+    end
+
+    def bedrock_settings_env(bedrock)
+      env = {
+        "CLAUDE_CODE_USE_BEDROCK" => "1",
+        # Set explicitly rather than relying on the profile's region.
+        "AWS_REGION" => bedrock["region"],
+        "CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS" =>
+          (bedrock["chain_resolve_timeout_ms"] || BEDROCK_CHAIN_RESOLVE_TIMEOUT_MS).to_s
+      }
+      env["AWS_PROFILE"] = bedrock["profile"] if bedrock["profile"].present?
+      env["AWS_BEARER_TOKEN_BEDROCK"] = bedrock["bearer_token"] if bedrock["bearer_token"].present?
+
+      # Long-term access keys the user configured in the wizard. Restored so the next session
+      # starts authenticated instead of dropping them back into the login flow.
+      static = bedrock["static_credentials"]
+      if static.is_a?(Hash) && static["access_key_id"].present?
+        env["AWS_ACCESS_KEY_ID"] = static["access_key_id"]
+        env["AWS_SECRET_ACCESS_KEY"] = static["secret_access_key"]
+      end
+
+      (bedrock["models"] || {}).each do |model_alias, model_id|
+        key = BEDROCK_MODEL_ENV[model_alias.to_s]
+        env[key] = model_id if key && model_id.present?
+      end
+
+      guardrail = bedrock["guardrail"]
+      if guardrail.is_a?(Hash) && guardrail["identifier"].present?
+        env["ANTHROPIC_CUSTOM_HEADERS"] = [
+          "X-Amzn-Bedrock-GuardrailIdentifier: #{guardrail['identifier']}",
+          "X-Amzn-Bedrock-GuardrailVersion: #{guardrail['version'] || 1}"
+        ].join("\n")
+      end
+
+      env
+    end
+
+    # The native Bedrock setup wizard lists profiles by scanning the process HOME for
+    # [profile ...] sections and IGNORES AWS_CONFIG_FILE, so this has to land at the
+    # literal $HOME/.aws/config or the profile is silently absent from the picker.
+    def aws_config_file(bedrock)
+      profile = bedrock["profile"]
+      return {} if profile.blank?
+
+      sso = bedrock["sso_session"]
+      sso = nil unless sso.is_a?(Hash) && sso["start_url"].present?
+      sections = []
+
+      if sso
+        sections << [
+          "[sso-session #{profile}]",
+          "sso_start_url = #{sso['start_url']}",
+          "sso_region = #{sso['region'].presence || bedrock['region']}",
+          # Required, or Identity Center returns no refresh token.
+          "sso_registration_scopes = sso:account:access"
+        ].join("\n")
+      end
+
+      lines = [ "[profile #{profile}]" ]
+      if sso
+        lines << "sso_session = #{profile}"
+        lines << "sso_account_id = #{sso['account_id']}" if sso["account_id"].present?
+        lines << "sso_role_name = #{sso['role_name']}" if sso["role_name"].present?
+      end
+      lines << "credential_process = #{bedrock['credential_process']}" if bedrock["credential_process"].present?
+      lines << "region = #{bedrock['region']}"
+      sections << lines.join("\n")
+
+      { "#{home_dir}/.aws/config" => "#{sections.join("\n\n")}\n" }
     end
 
     # Session command for agent terminal.
@@ -295,6 +615,12 @@ module Agents
     # OAuth support matters because claude.ai logins have no API key, so without
     # it those users would always fall back to the hardcoded (stale) list.
     def fetch_available_models_with_source(credentials, credential: nil)
+      # A Bedrock connection has no Anthropic-side token to ask, and its real catalogue is
+      # account-specific: enterprise deployments expose models as application inference
+      # profiles whose ARNs no static list can name.
+      bedrock_models = bedrock_available_models(credentials, credential)
+      return { models: bedrock_models, source: :api } if bedrock_models.present?
+
       api_key = credentials["primaryApiKey"]
       oauth_token = credentials.dig("claudeAiOauth", "accessToken")
 
@@ -345,7 +671,23 @@ module Agents
         "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes,
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
         "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
-      }.compact
+      }.merge(cloud_credential_env(session)).compact
+    end
+
+    # Only a session that actually vends gets a vending key. These go in process env
+    # rather than the settings file because the helper is spawned by the AWS SDK, not by
+    # Claude Code, and must work regardless of which process resolves credentials.
+    def cloud_credential_env(session)
+      block = bedrock_block(session.user&.agent_credentials&.find_by(agent_type: "claude_code")&.config_data || {})
+      connected = block.present? && block["credential_process"].present?
+      # An auth container gets the vending env even with no connection: reporting that
+      # none exists is the helper's whole job there.
+      return {} unless connected || session.session_type == "auth_setup"
+
+      {
+        "AIXLE_CLOUD_CREDENTIALS_URL" => Settings.cloud.credentials_url,
+        "AIXLE_CLOUD_KEY" => CloudAuth::SessionKey.generate(session)
+      }
     end
 
     # Parse OTLP payload, collect events, and persist usage statistics.
@@ -610,7 +952,7 @@ module Agents
     # via skipDangerousModePermissionPrompt (see generate_settings).
     PERMISSION_DEFAULT_MODE = "bypassPermissions"
 
-    def generate_settings(mcp_server_names = [], model: nil)
+    def generate_settings(mcp_server_names = [], model: nil, bedrock: nil)
       settings = {
         "permissions" => {
           "defaultMode" => PERMISSION_DEFAULT_MODE,
@@ -631,6 +973,20 @@ module Agents
         }
       }
       settings["model"] = model if model.present?
+
+      if bedrock
+        settings["env"] = settings["env"].merge(bedrock_settings_env(bedrock))
+        available = bedrock["available_models"]
+        settings["availableModels"] = available if available.is_a?(Array) && available.any?
+        # Only awsAuthRefresh renders its output to the user (an "Authentication" panel),
+        # and only while the command is still running — so a browser-based re-auth must
+        # print its URL and then block. It fires only when credentials are already
+        # invalid, and must exit non-zero rather than retry (a retrying command loops
+        # forever behind a proxy that interrupts the browser flow).
+        refresh = bedrock["auth_refresh_command"]
+        settings["awsAuthRefresh"] = refresh if refresh.present?
+      end
+
       settings
     end
 

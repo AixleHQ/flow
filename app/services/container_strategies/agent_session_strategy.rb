@@ -39,7 +39,28 @@ module ContainerStrategies
       SessionContextService.resolve_env_vars(session)
         .each { |k, v| upsert_env_var(env_vars_list, k, v) }
 
-      env_vars_list
+      scrub_conflicting_auth_env(env_vars_list)
+    end
+
+    # Last step, after every other source has had its say: drop env the active provider
+    # config would silently lose to. A leftover ANTHROPIC_API_KEY shadows a Bedrock
+    # connection, and Claude Code hides Bedrock errors — so the symptom is an agent that
+    # simply does not answer. The corporate runbook works around exactly this by
+    # scrubbing stray keys before launch.
+    def scrub_conflicting_auth_env(env_vars_list)
+      credential = input[:credential]
+      return env_vars_list if credential.nil?
+
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      conflicting = adapter.conflicting_env_keys(credential.config_data)
+      return env_vars_list if conflicting.empty?
+
+      env_vars_list.reject do |entry|
+        key = entry.to_s.split("=", 2).first
+        conflicting.include?(key).tap do |dropped|
+          Rails.logger.info("[AgentSession] dropped #{key}: conflicts with the active provider") if dropped
+        end
+      end
     end
 
     def build_labels
