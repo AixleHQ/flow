@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class StepResource < ApplicationResource
-  attributes :id, :name, :description, :instructions, :position,
+  attributes :id, :name, :instructions, :position,
              :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
              :mount_repositories, :bmad_enabled, :preferred_model,
              :created_at, :updated_at

@@ -34,7 +34,6 @@ module Api
               workflow_id: @workflow.id,
               step: {
                 name: "p_step",
-                description: "D",
                 instructions: "Run",
                 position: 2
               }
@@ -48,7 +47,7 @@ module Api
               project_id: @project.id,
               workflow_id: @workflow.id,
               id: @step.id,
-              step: { description: "U" }
+              step: { instructions: "U" }
             }
 
             assert_response :success

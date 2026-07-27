@@ -13,13 +13,13 @@ module Api
 
           def step_params
             params.require(:step).permit(
-              :name, :description, :instructions, :position, :agent_id,
+              :name, :instructions, :position, :agent_id,
               :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
               :mount_repositories, :bmad_enabled, :required_agent_runtime, :preferred_model,
               input_asset_specs: [ :name, :asset_type, :required ],
               output_asset_specs: [ :name, :asset_type, :required, :name_pattern ],
               tool_ids: [], mcp_server_ids: [], skill_ids: [], asset_ids: [], depends_on_step_ids: [],
-              sub_steps_attributes: %i[id position name description instructions required _destroy]
+              sub_steps_attributes: %i[id position name instructions required _destroy]
             )
           end
         end

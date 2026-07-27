@@ -11,8 +11,7 @@ module PersonalTools
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
       param :step_id, type: :integer, description: "Step id.", required: true
       param :name, type: :string, description: "Sub-step name.", required: true
-      param :description, type: :string, description: "What this sub-step covers."
-      param :instructions, type: :string, description: "Detailed instructions (markdown)."
+      param :instructions, type: :string, description: "What the agent must do in this sub-step (markdown)."
       param :position, type: :integer, description: "0-based position; auto-assigned if omitted."
       param :required, type: :boolean, description: "Whether the sub-step is required (default true)."
     end
@@ -24,7 +23,7 @@ module PersonalTools
 
       position = params[:position] || (step.sub_steps.maximum(:position).to_i + 1)
       sub = step.sub_steps.create!(
-        name: params[:name], position: position, description: params[:description],
+        name: params[:name], position: position,
         instructions: params[:instructions], required: params.fetch(:required, true)
       )
       success(id: sub.id, step_id: step.id, name: sub.name, position: sub.position)

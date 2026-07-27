@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_24_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_27_000002) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -514,7 +514,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_000001) do
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.jsonb "depends_on_step_ids", default: [], null: false
-    t.text "description"
     t.jsonb "input_asset_specs", default: [], null: false
     t.text "instructions"
     t.integer "max_retries", default: 0, null: false
@@ -554,7 +553,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_24_000001) do
   create_table "sub_steps", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
-    t.text "description"
     t.text "instructions"
     t.string "name", null: false
     t.integer "position", null: false

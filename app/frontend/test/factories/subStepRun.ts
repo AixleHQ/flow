@@ -8,7 +8,7 @@ export const buildSubStepRun = (overrides: Partial<SubStepRun> = {}): SubStepRun
   startedAt: '2026-01-01T00:00:00Z',
   completedAt: '2026-01-01T00:00:30Z',
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
-  // `subStepDescription` is `string | undefined` (not nullable): omit for "absent".
+  // `subStepName` is `string | undefined` (not nullable): omit for "absent".
   subStepName: 'Fetch data',
   ...overrides,
 });

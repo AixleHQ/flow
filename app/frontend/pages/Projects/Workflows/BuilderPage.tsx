@@ -44,7 +44,6 @@ interface ToolGroup {
 interface SubStep {
   id: number;
   name: string;
-  description: string | null;
   instructions: string | null;
   position: number;
   required: boolean;
@@ -58,7 +57,6 @@ interface AssetSpec {
 interface Step {
   id: number;
   name: string;
-  description: string | null;
   instructions: string | null;
   position: number;
   agentId: number | null;

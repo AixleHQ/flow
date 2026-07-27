@@ -5,7 +5,6 @@ FactoryBot.define do
     workflow
     sequence(:name) { |n| "Step #{n}" }
     sequence(:position) { |n| n }
-    description { "A test step" }
     instructions { "Do the thing" }
     allow_non_interactive { false }
     skip_policy { :never }

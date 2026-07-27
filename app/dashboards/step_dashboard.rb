@@ -11,7 +11,6 @@ class StepDashboard < Administrate::BaseDashboard
     workflow: Field::BelongsTo,
     agent: Field::BelongsTo.with_options(optional: true),
     name: Field::String.with_options(searchable: true),
-    description: Field::Text.with_options(truncate: 80),
     instructions: Field::Text.with_options(truncate: 80),
     position: Field::Number,
     skip_policy: Field::String,
@@ -47,7 +46,6 @@ class StepDashboard < Administrate::BaseDashboard
     workflow
     agent
     name
-    description
     instructions
     position
     skip_policy

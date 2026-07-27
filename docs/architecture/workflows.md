@@ -164,7 +164,6 @@ class Step < ApplicationRecord
 
   # position: integer
   # name: string ("Create Architecture")
-  # description: text (what the step does)
   # instructions: text (detailed instructions for the agent — entire session)
   #
   # allow_non_interactive: boolean (default: false)
@@ -207,9 +206,8 @@ class SubStep < ApplicationRecord
   belongs_to :step
 
   # position: integer
-  # name: string ("Core Architectural Decisions")
-  # description: text (what needs to be accomplished)
-  # instructions: text (optional — additional context for this sub-step)
+  # name: string ("Core Architectural Decisions") — short checklist label
+  # instructions: text (optional — what the agent must do in this sub-step)
   # required: boolean (default: true)
 end
 ```
@@ -676,7 +674,6 @@ class ContextBuilders::WorkflowContext < ContextBuilders::Base
     context << ""
     context << "## Current Step: #{step.name} (Step #{step.position} of #{workflow.steps.count})"
     context << "Agent: #{step.agent&.title || 'Not specified'}"
-    context << "Description: #{step.description}"
     context << ""
 
     # Sub-steps

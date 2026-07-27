@@ -10,7 +10,6 @@ import BuilderPage from './BuilderPage';
 const makeStep = (overrides: Record<string, unknown> = {}) => ({
   id: 1,
   name: 'Draft spec',
-  description: null,
   instructions: null,
   position: 1,
   agentId: null,
@@ -31,7 +30,6 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   subSteps: [] as {
     id: number;
     name: string;
-    description: string | null;
     instructions: string | null;
     position: number;
     required: boolean;
@@ -385,8 +383,8 @@ describe('Projects/Workflows/BuilderPage', () => {
             name: 'Draft spec',
             position: 1,
             subSteps: [
-              { id: 11, name: 'Task Alpha', description: null, instructions: null, position: 1, required: true },
-              { id: 12, name: 'Task Beta', description: null, instructions: null, position: 2, required: false },
+              { id: 11, name: 'Task Alpha', instructions: null, position: 1, required: true },
+              { id: 12, name: 'Task Beta', instructions: null, position: 2, required: false },
             ],
           }),
         ],
@@ -752,9 +750,7 @@ describe('Projects/Workflows/BuilderPage', () => {
             id: 1,
             name: 'Draft spec',
             position: 1,
-            subSteps: [
-              { id: 11, name: 'Task Alpha', description: null, instructions: null, position: 1, required: true },
-            ],
+            subSteps: [{ id: 11, name: 'Task Alpha', instructions: null, position: 1, required: true }],
           }),
         ],
       }),

@@ -81,7 +81,6 @@ class WorkflowDuplicator
   def duplicate_step(step, workflow)
     new_step = workflow.steps.create!(
       name: step.name,
-      description: step.description,
       instructions: step.instructions,
       position: step.position,
       agent_id: @dep_copier.map_agent_id(step.agent_id),
@@ -105,7 +104,6 @@ class WorkflowDuplicator
     step.sub_steps.active.each do |ss|
       new_step.sub_steps.create!(
         name: ss.name,
-        description: ss.description,
         instructions: ss.instructions,
         position: ss.position,
         required: ss.required

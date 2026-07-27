@@ -9,9 +9,9 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
     @workflow = create(:workflow, scope: @project, name: "Product Planning", description: "End-to-end product planning workflow")
 
-    @step1 = create(:step, workflow: @workflow, name: "Analyze", position: 1, description: "Analyze the codebase", instructions: "Run code analysis tools")
-    @step2 = create(:step, workflow: @workflow, name: "Implement", position: 2, description: "Implement changes", instructions: "Write the code")
-    @step3 = create(:step, workflow: @workflow, name: "Review", position: 3, description: "Review output", instructions: "Check results")
+    @step1 = create(:step, workflow: @workflow, name: "Analyze", position: 1, instructions: "Run code analysis tools")
+    @step2 = create(:step, workflow: @workflow, name: "Implement", position: 2, instructions: "Write the code")
+    @step3 = create(:step, workflow: @workflow, name: "Review", position: 3, instructions: "Check results")
 
     @workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, mode: "non_interactive")
     @step_run = create(:step_run, :running, workflow_run: @workflow_run, step: @step2)
@@ -72,14 +72,13 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     assert_equal :middle, step_section.position_hint
   end
 
-  test "current-step content includes step name, description, and instructions" do
+  test "current-step content includes step name and instructions" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
     builder = ContextBuilders::WorkflowContext.new(session)
     sections = builder.build
 
     content = sections.find { |s| s.tag == "current-step" }.content
     assert_includes content, "Implement"
-    assert_includes content, "Implement changes"
     assert_includes content, "Write the code"
   end
 

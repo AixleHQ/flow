@@ -49,10 +49,6 @@ module InternalTools
             type: "string",
             description: "Failure behavior"
           },
-          description: {
-            type: "string",
-            description: "Brief description for UI"
-          },
           max_retries: {
             type: "integer",
             description: "Retry count on failure"
@@ -115,7 +111,6 @@ module InternalTools
       step = workflow.steps.create!(
         name: params[:name],
         position: position,
-        description: params[:description],
         instructions: params[:instructions],
         agent_id: params[:agent_id],
         allow_non_interactive: params.fetch(:allow_non_interactive, false),

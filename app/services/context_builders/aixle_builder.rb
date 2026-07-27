@@ -138,8 +138,8 @@ module ContextBuilders
 
         **SubSteps** are progress milestones inside ONE session — the agent marks them with
         `mark_sub_step`. Create them when a step has 3+ distinct phases worth tracking, but they
-        are optional. Useful fields: `name` (shown in the dashboard), `instructions` (extra
-        guidance for that phase), `required` (set false for optional phases).
+        are optional. Fields: `name` (short label, shown in the dashboard), `instructions`
+        (what the agent must do in that phase), `required` (set false for optional phases).
 
         ## Writing Step Instructions — Keep Them Lean
 
@@ -154,7 +154,7 @@ module ContextBuilders
           reasonable assumptions, and save results to `/workspace/outputs/`.
         - **Workspace layout** — `/workspace/outputs/`, `/workspace/assets/` (read-only) and
           `/workspace/repo/<name>/` are already explained.
-        - **Sub-step protocol** — each sub-step's runtime id, description and instructions are
+        - **Sub-step protocol** — each sub-step's runtime id, name and instructions are
           already listed, along with how to call `mark_sub_step` / `list_sub_steps`.
         - **Tool & MCP availability** — the standard shell tools (`tree`, `rg`, `fd`, `jq`,
           `git`, `curl`, `cloc`) and every connected MCP server are already listed, plus the

@@ -5,7 +5,7 @@ FactoryBot.define do
     step
     sequence(:name) { |n| "SubStep #{n}" }
     sequence(:position) { |n| n }
-    description { "A test sub-step" }
+    instructions { "Do the test sub-step work" }
     required { true }
   end
 end
