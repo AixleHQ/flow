@@ -217,6 +217,41 @@ module Agents
       MCP_STDIO_BASE_ENV.merge(server_env)
     end
 
+    # The Playwright MCP npm package and the exact version baked into the agent
+    # base image. Baking the browser and pinning the *global* install is not
+    # enough on its own: agents launch the MCP at runtime via `npx @playwright/mcp`,
+    # and an unqualified spec lets npx resolve/download a different (newer) release
+    # into its cache — whose bundled browser revision can differ from the one baked
+    # at build time, re-introducing the "chrome-for-testing is not installed" drift
+    # this task fixes (#340). Pinning the version in the *emitted* command keeps the
+    # launched MCP locked to the baked browser regardless of npx cache state.
+    #
+    # Keep PLAYWRIGHT_MCP_VERSION in sync with ARG PLAYWRIGHT_MCP_VERSION in
+    # docker/base/Dockerfile. The Rails app runs on the host, not inside the agent
+    # container, so the version cannot be read from the image here — it is a constant.
+    PLAYWRIGHT_MCP_PACKAGE = "@playwright/mcp"
+    PLAYWRIGHT_MCP_VERSION = "0.0.78"
+
+    # A STDIO server's command args with the Playwright MCP package spec pinned to
+    # PLAYWRIGHT_MCP_VERSION, so the launched MCP cannot float independently of the
+    # baked browser. Any arg that is `@playwright/mcp` or `@playwright/mcp@<tag>`
+    # (e.g. `@playwright/mcp@latest`) is rewritten to `@playwright/mcp@<version>`;
+    # every other arg (and every non-Playwright server) passes through untouched.
+    # @param server [#args] resolved MCP server
+    # @return [Array<String>]
+    def mcp_stdio_args(server)
+      return [] unless server.respond_to?(:args) && server.args.present?
+
+      Array(server.args).map do |arg|
+        a = arg.to_s
+        if a == PLAYWRIGHT_MCP_PACKAGE || a.start_with?("#{PLAYWRIGHT_MCP_PACKAGE}@")
+          "#{PLAYWRIGHT_MCP_PACKAGE}@#{PLAYWRIGHT_MCP_VERSION}"
+        else
+          a
+        end
+      end
+    end
+
     # =================================================================
     # Environment Variables (from session/credential metadata)
     # Used for agent-specific config like GOOGLE_CLOUD_PROJECT

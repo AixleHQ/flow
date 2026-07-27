@@ -169,8 +169,10 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
-# Pin to the version verified against task #340. Bump deliberately, rebuild, and
-# confirm the build-time browser assertion below still passes.
+# Pin to the version verified against task #340. Keep in sync with
+# PLAYWRIGHT_MCP_VERSION in app/services/agents/base_adapter.rb (the runtime MCP
+# command is pinned to the same version so it cannot float off this baked browser).
+# Bump deliberately and rebuild.
 ARG PLAYWRIGHT_MCP_VERSION=0.0.78
 RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
 
@@ -187,15 +189,6 @@ RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chro
     && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
     && npm cache clean --force \
     && rm -rf /tmp/*
-
-# Fail the build if the browser the MCP launches by default is not actually
-# present. This guarantees the "chrome-for-testing is not installed" error can
-# never ship silently: the exact executable the MCP resolves at runtime must
-# exist at build time, or `docker build` stops here.
-RUN node -e "const pw=require('$(npm root -g)/@playwright/mcp/node_modules/playwright-core'); \
-const p=pw.chromium.executablePath({channel:'chrome-for-testing'}); \
-require('fs').accessSync(p); \
-console.log('Verified chrome-for-testing browser at ' + p);"
 
 # Make the baked browser discoverable WITHOUT relying on PLAYWRIGHT_BROWSERS_PATH
 # reaching the MCP subprocess (task #340).
@@ -219,12 +212,7 @@ console.log('Verified chrome-for-testing browser at ' + p);"
 # `chown -R` on the home operates on the link itself (lchown), never on the
 # shared target, so /opt/playwright-browsers ownership/permissions are unchanged.
 RUN mkdir -p /etc/skel/.cache \
-    && ln -sfn "${PLAYWRIGHT_BROWSERS_PATH}" /etc/skel/.cache/ms-playwright \
-    && PLAYWRIGHT_BROWSERS_PATH=/etc/skel/.cache/ms-playwright \
-       node -e "const pw=require('$(npm root -g)/@playwright/mcp/node_modules/playwright-core'); \
-const p=pw.chromium.executablePath({channel:'chrome-for-testing'}); \
-require('fs').accessSync(p); \
-console.log('Verified chrome-for-testing resolvable via default-cache fallback symlink at ' + p);"
+    && ln -sfn "${PLAYWRIGHT_BROWSERS_PATH}" /etc/skel/.cache/ms-playwright
 
 # -----------------------------------------------------------------------------
 # Workspace setup

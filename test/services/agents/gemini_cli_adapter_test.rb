@@ -386,5 +386,20 @@ module Agents
       assert_equal 60, stat.cache_write_tokens
       assert_equal 210, stat.tokens
     end
+
+    test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
+      servers = [
+        OpenStruct.new(name: "playwright", transport: "stdio",
+                       command: "npx", args: [ "@playwright/mcp@latest", "--headless" ])
+      ]
+
+      settings = JSON.parse(@adapter.mcp_config(servers)["/home/gemini/.gemini/settings.json"])
+      args = settings["mcpServers"]["playwright"]["args"]
+
+      pinned = "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}"
+      assert_equal [ pinned, "--headless" ], args
+      # Emitted command cannot float independently of PLAYWRIGHT_MCP_VERSION.
+      refute_includes args, "@playwright/mcp@latest"
+    end
   end
 end

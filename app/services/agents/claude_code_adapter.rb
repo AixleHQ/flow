@@ -270,7 +270,7 @@ module Agents
         entry = { "type" => mcp_transport_type(s.transport) }
         if s.transport.to_s == "stdio"
           entry["command"] = s.command if s.respond_to?(:command)
-          entry["args"] = s.args if s.respond_to?(:args)
+          entry["args"] = mcp_stdio_args(s) if s.respond_to?(:args)
           entry["env"] = mcp_stdio_env(s)
         else
           entry["url"] = s.url if s.url.present?

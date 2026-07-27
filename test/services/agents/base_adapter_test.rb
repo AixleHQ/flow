@@ -127,6 +127,49 @@ module Agents
                    @adapter.mcp_stdio_env(server)["PLAYWRIGHT_BROWSERS_PATH"]
     end
 
+    # == MCP STDIO Args Pinning Tests (task #340) ==
+
+    test "mcp_stdio_args pins an unversioned @playwright/mcp spec to the baked version" do
+      server = OpenStruct.new(args: [ "@playwright/mcp", "--headless" ])
+
+      assert_equal [ "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}", "--headless" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args re-pins a floating @playwright/mcp@latest to the baked version" do
+      server = OpenStruct.new(args: [ "-y", "@playwright/mcp@latest" ])
+
+      assert_equal [ "-y", "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args re-pins an @playwright/mcp spec already at a different version" do
+      server = OpenStruct.new(args: [ "@playwright/mcp@0.0.1" ])
+
+      assert_equal [ "@playwright/mcp@#{BaseAdapter::PLAYWRIGHT_MCP_VERSION}" ],
+                   @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args never emits a bare, floatable @playwright/mcp spec" do
+      server = OpenStruct.new(args: [ "@playwright/mcp" ])
+
+      emitted = @adapter.mcp_stdio_args(server)
+      refute_includes emitted, "@playwright/mcp",
+                      "emitted command must not float independently of PLAYWRIGHT_MCP_VERSION"
+      assert(emitted.all? { |a| a !~ %r{\A@playwright/mcp@latest\z} })
+    end
+
+    test "mcp_stdio_args leaves non-Playwright args untouched" do
+      server = OpenStruct.new(args: [ "-y", "some-other-mcp", "--flag" ])
+
+      assert_equal [ "-y", "some-other-mcp", "--flag" ], @adapter.mcp_stdio_args(server)
+    end
+
+    test "mcp_stdio_args returns an empty array when the server has no args" do
+      assert_equal [], @adapter.mcp_stdio_args(OpenStruct.new(name: "remote"))
+      assert_equal [], @adapter.mcp_stdio_args(OpenStruct.new(args: []))
+    end
+
     # == Environment Variables Tests ==
 
     test "required_env_fields returns empty array by default" do

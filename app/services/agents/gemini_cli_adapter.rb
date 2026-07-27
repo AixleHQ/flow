@@ -163,7 +163,7 @@ module Agents
         entry = { "trust" => true }
         if s.transport.to_s == "stdio"
           entry["command"] = s.command if s.respond_to?(:command)
-          entry["args"] = s.args if s.respond_to?(:args) && s.args.present?
+          entry["args"] = mcp_stdio_args(s) if s.respond_to?(:args) && s.args.present?
           entry["env"] = mcp_stdio_env(s)
         else
           entry["httpUrl"] = s.url if s.url.present?

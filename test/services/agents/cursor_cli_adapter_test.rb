@@ -207,6 +207,21 @@ module Agents
              "approvals should be name-hash pairs, got #{approvals.inspect}")
     end
 
+    test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
+      project = create(:project, :standalone)
+      stdio = create(:mcp_server, :stdio_transport,
+                     name: "playwright", command: "npx",
+                     args: [ "@playwright/mcp@latest", "--headless" ], scope: project)
+
+      mcp = JSON.parse(@adapter.mcp_config([ stdio ])["/workspace/.cursor/mcp.json"])
+      args = mcp["mcpServers"]["playwright"]["args"]
+
+      pinned = "@playwright/mcp@#{Agents::BaseAdapter::PLAYWRIGHT_MCP_VERSION}"
+      assert_equal [ pinned, "--headless" ], args
+      # Emitted command cannot float independently of PLAYWRIGHT_MCP_VERSION.
+      refute_includes args, "@playwright/mcp@latest"
+    end
+
     # =========================================================================
     # fetch_available_models
     # =========================================================================

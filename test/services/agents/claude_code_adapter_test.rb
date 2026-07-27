@@ -369,6 +369,21 @@ module Agents
                    config["mcpServers"]["stdio"]["env"]["PLAYWRIGHT_BROWSERS_PATH"]
     end
 
+    test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
+      servers = [
+        OpenStruct.new(name: "playwright", transport: "stdio",
+                       command: "npx", args: [ "@playwright/mcp@latest", "--headless" ])
+      ]
+
+      config = JSON.parse(@adapter.mcp_config(servers)["/workspace/.mcp.json"])
+      args = config["mcpServers"]["playwright"]["args"]
+
+      pinned = "@playwright/mcp@#{Agents::BaseAdapter::PLAYWRIGHT_MCP_VERSION}"
+      assert_equal [ pinned, "--headless" ], args
+      # Emitted command cannot float independently of PLAYWRIGHT_MCP_VERSION.
+      refute_includes args, "@playwright/mcp@latest"
+    end
+
     # == Env ==
 
     test "default_env_vars includes MITM and OTLP settings" do
