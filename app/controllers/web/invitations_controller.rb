@@ -50,9 +50,10 @@ class Web::InvitationsController < Web::ApplicationController
     session[:current_company_id] = membership.company_id
     session.delete(:pending_invitation_token)
 
-    # The new company becomes current either way; if it also brings a role that
-    # needs an agent the user never connected, finish onboarding first.
-    target = current_user.reopen_onboarding_if_setup_needed! ? onboarding_path : company_projects_path
+    # The new company becomes current either way. Its onboarding is its own, so
+    # anything short of completed sends the invitee through the flow for it.
+    membership.reopen_onboarding_if_setup_needed!
+    target = membership.reload.onboarding_completed? ? company_projects_path : onboarding_path
     redirect_to target, notice: "Welcome to #{membership.company.name}!"
   end
 
@@ -84,8 +85,8 @@ class Web::InvitationsController < Web::ApplicationController
       sign_in(invitee)
       session[:current_company_id] = membership.company_id
       session.delete(:pending_invitation_token)
-      invitee.reopen_onboarding_if_setup_needed!
-      target = invitee.onboarding_state == "completed" ? company_projects_path : onboarding_path
+      membership.reopen_onboarding_if_setup_needed!
+      target = membership.reload.onboarding_completed? ? company_projects_path : onboarding_path
       redirect_to target, notice: "Welcome to #{membership.company.name}!"
     else
       redirect_to invitation_path(params[:token]), inertia: { errors: invitee.errors }

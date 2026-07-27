@@ -59,6 +59,10 @@ class SessionConfigResolver
   # --- Session navigation ---
 
   def user            = session.user
+  # Per-company: credentials and the default runtime hang off the membership in
+  # the session's company, never off the user (billing must not cross tenants).
+  def membership      = (@membership ||= SessionCompany.membership_for(session))
+  def credentials     = SessionCompany.agent_credentials_for(session)
   def project         = session.project
   def step_run        = session.step_run
   def workflow_run    = step_run&.workflow_run
@@ -87,8 +91,8 @@ class SessionConfigResolver
 
     step&.required_agent_runtime.presence ||
       workflow_run&.agent_runtime.presence ||
-      user&.default_agent_runtime ||
-      user&.agent_credentials&.order(created_at: :desc)&.first&.agent_type ||
+      membership&.default_agent_runtime ||
+      credentials.order(created_at: :desc).first&.agent_type ||
       "claude_code"
   end
 
@@ -188,8 +192,8 @@ class SessionConfigResolver
     return "session_direct" if standalone_session?
     return "step_required" if step&.required_agent_runtime.present?
     return "run_override" if workflow_run&.agent_runtime.present?
-    return "user_default" if user&.default_agent_credential.present?
-    return "latest_credential" if user&.agent_credentials&.exists?
+    return "membership_default" if membership&.default_agent_credential.present?
+    return "latest_credential" if credentials.exists?
 
     "fallback"
   end

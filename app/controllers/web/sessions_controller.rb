@@ -8,7 +8,7 @@ class Web::SessionsController < Web::ApplicationController
 
   def new
     if signed_in?
-      target = current_user.onboarding_state == "completed" ? company_projects_path : onboarding_path
+      target = onboarding_done?(current_user) ? company_projects_path : onboarding_path
       redirect_to target
       return
     end
@@ -38,7 +38,7 @@ class Web::SessionsController < Web::ApplicationController
     return redirect_to login_path(error: "pending_approval") if no_active_membership?(user)
 
     sign_in(user)
-    target = user.onboarding_state == "completed" ? company_projects_path : onboarding_path
+    target = onboarding_done?(user) ? company_projects_path : onboarding_path
     redirect_to target
   end
 
@@ -83,6 +83,21 @@ class Web::SessionsController < Web::ApplicationController
   end
 
   private
+
+  # Onboarding lives on the membership the user will land in — the switcher's
+  # remembered company, else the oldest. Resolved here rather than read off the
+  # user, which no longer carries onboarding at all.
+  def onboarding_done?(user)
+    return true if user.super_admin?
+
+    landing_membership(user)&.onboarding_completed? || false
+  end
+
+  def landing_membership(user)
+    memberships = user.company_memberships.active.to_a
+    memberships.find { |m| m.company_id == user.last_company_id } ||
+      memberships.min_by { |m| [ m.accepted_at ? 1 : 0, m.accepted_at || Time.at(0), m.id ] }
+  end
 
   # Super admins legitimately have none (they live in /admin). For everyone
   # else, no active membership means there is nothing to sign in to: a fresh

@@ -19,8 +19,7 @@ module Admin
             password: initial_admin_password,
             password_confirmation: initial_admin_password,
             name: initial_admin_email.split("@").first.titleize, # Generate name from email
-            state: "active",
-            onboarding_state: "step1"
+            state: "active"
           )
           admin_user.company_memberships.build(
             company: company, role: "admin", state: "active", accepted_at: Time.current

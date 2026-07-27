@@ -16,9 +16,9 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
       sessions: -> { sessions.map { |s| TerminalSessionResource.new(s).to_h } },
       active_session_id: -> { active_session&.id },
-      configured_agents: -> { current_user.configured_agents },
+      configured_agents: -> { current_project_membership&.configured_agents || [] },
       assets: -> { Asset.accessible_from_project(current_project).map { |a| PickerResource.new(a).to_h } },
-      agent_models: InertiaRails.defer { current_user.agent_models_for_props }
+      agent_models: InertiaRails.defer { current_project_membership&.agent_models_for_props || [] }
     }
   end
 
@@ -31,7 +31,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       user: current_user,
       project: current_project,
       session_type: "agent_session",
-      agent_type: params[:agent_runtime] || current_user.default_agent_runtime || "claude_code",
+      agent_type: params[:agent_runtime] || current_project_membership&.default_agent_runtime || "claude_code",
       params: {
         mode: "interactive",
         initial_prompt: "First read the reference files in /workspace/references/ (aixle-system-reference.md and bmad-llms-full.txt) to understand the platform. Then help me build a workflow automation — start by asking what process I want to automate.",

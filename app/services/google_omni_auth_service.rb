@@ -26,8 +26,6 @@ class GoogleOmniAuthService
     user = User.find_or_initialize_by(email: email)
 
     if user.new_record?
-      user.position = nil
-      user.preferred_agent_language = "en"
     end
 
     # Update OAuth-related identity attributes. We deliberately do NOT persist the

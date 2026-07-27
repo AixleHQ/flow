@@ -23,7 +23,7 @@ module Api
       # Per-company viewer when a company context exists. FAIL CLOSED:
       # - company context + no active membership there → read-only (no write);
       # - no company context + zero active memberships → read-only
-      #   (viewer_everywhere? is false for an empty set — never rely on it
+      #   (an empty set must fail CLOSED — `all?` is vacuously true, so the
       #   alone to gate writes). Super admins (no memberships by design) are
       #   exempt from the zero-membership rule.
       def read_only?
@@ -31,7 +31,7 @@ module Api
         return true if context.company
         return false if current_user.super_admin?
 
-        current_user.active_memberships.none? || current_user.viewer_everywhere?
+        current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
       end
 
       def project

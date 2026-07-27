@@ -279,7 +279,7 @@ module ContainerStrategies
         merged = adapter.merge_refreshed_credentials(current, config_data)
         next if merged == current
 
-        AgentCredential.from_artifacts(session.user_id, input[:agent_type], merged)
+        AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], merged)
         Rails.logger.info("[AgentSession] Persisted refreshed #{input[:agent_type]} credentials for user #{session.user_id}")
       end
     rescue StandardError => e

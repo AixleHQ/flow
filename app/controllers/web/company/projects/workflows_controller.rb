@@ -12,7 +12,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
           steps: w.steps.not_deleted.map { |s| StepResource.new(s).to_h }
         )
       },
-      configured_agents: current_user.configured_agents,
+      configured_agents: current_project_membership&.configured_agents || [],
       assets: InertiaRails.defer(group: "resources") {
         current_project.assets.active.map { |r| PickerResource.new(r).to_h }
       },
@@ -20,7 +20,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       agent_models: InertiaRails.defer(group: "resources") {
-        current_user.agent_models_for_props
+        current_project_membership&.agent_models_for_props || []
       }
     }
   end
@@ -38,7 +38,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       board_columns: current_project.board&.board_columns&.includes(column_workflow_binding: :workflow)&.map { |c|
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
       } || [],
-      configured_agents: current_user.configured_agents,
+      configured_agents: current_project_membership&.configured_agents || [],
       agents: InertiaRails.defer(group: "resources") {
         Agent.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
@@ -63,7 +63,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       agent_models: InertiaRails.defer(group: "resources") {
-        current_user.agent_models_for_props
+        current_project_membership&.agent_models_for_props || []
       }
     }
   end

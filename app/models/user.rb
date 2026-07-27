@@ -35,14 +35,6 @@ class User < ApplicationRecord
     mcp_token_digest.present?
   end
 
-  # Constants
-  AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
-  POSITIONS = %w[qa pm_po_ba dev designer cto].freeze
-  AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
-
-  # Enumerize for positions (roles live on CompanyMembership; super_admin is a boolean)
-  enumerize :position, in: POSITIONS, predicates: true
-
   # Associations
   has_many :company_memberships, dependent: :destroy
   has_many :companies, through: :company_memberships
@@ -50,9 +42,10 @@ class User < ApplicationRecord
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
+  # Credentials belong to a (user, company) pair — the default for a company
+  # lives on that CompanyMembership, not here.
   has_many :agent_credentials, dependent: :destroy
   has_one :namespace_resource_quota, as: :scope, dependent: :destroy
-  belongs_to :default_agent_credential, class_name: "AgentCredential", optional: true
 
   # Validations
   validates :email, presence: true,
@@ -60,9 +53,6 @@ class User < ApplicationRecord
                     format: { with: URI::MailTo::EMAIL_REGEXP }
   validates :name, presence: true
   validates :password, length: { minimum: 8 }, if: :password_digest_changed?, allow_blank: true
-  validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
-  validate :selected_agents_valid
-  validate :default_agent_credential_belongs_to_user
 
   broadcasts_to ->(user) { user }, on: :update
 
@@ -118,30 +108,10 @@ class User < ApplicationRecord
     []
   end
 
-  # Helper: check if onboarding is completed (based on state machine)
-  def onboarding_completed?
-    return true if super_admin?
-
-    onboarding_state == "completed"
-  end
-
-  # List of configured agent types (derived from credentials)
-  def configured_agents
-    agent_credentials.pluck(:agent_type)
-  end
-
-  def default_agent_runtime
-    default_agent_credential&.agent_type
-  end
-
   # All projects user has access to (owned + collaborated)
   def projects
     Project.where(id: owned_projects.select(:id))
            .or(Project.where(id: collaborated_projects.select(:id)))
-  end
-
-  def has_configured_agents?
-    agent_credentials.exists?
   end
 
   # Active memberships, loaded once per User instance. Every company-scoped
@@ -175,130 +145,11 @@ class User < ApplicationRecord
   def reload_active_memberships
     @active_memberships = nil
     @active_memberships_company_preloaded = false
-    remove_instance_variable(:@viewer_everywhere) if defined?(@viewer_everywhere)
     self
   end
 
   def reload(...)
     reload_active_memberships
     super
-  end
-
-  # A pure external observer: every active membership is a viewer membership.
-  # Used by onboarding guards — such users never connect/run an agent.
-  # NOTE: false for zero memberships — callers gating writes must fail closed
-  # on `active_memberships.none?` separately (see Api::V1::ApplicationPolicy).
-  def viewer_everywhere?
-    return @viewer_everywhere if defined?(@viewer_everywhere)
-
-    @viewer_everywhere = active_memberships.any? && active_memberships.all?(&:viewer?)
-  end
-
-  # Viewers-everywhere never connect/run an agent, so onboarding must not require one.
-  def onboarding_requires_agent?
-    !viewer_everywhere?
-  end
-
-  def can_advance_to_authenticated?
-    onboarding_requires_agent? ? has_configured_agents? : true
-  end
-
-  def agent_models_by_type
-    agent_credentials.each_with_object({}) do |cred, hash|
-      models = fetch_or_cache_agent_models(cred)
-
-      hash[cred.agent_type] = models.map do |m|
-        { model_id: m[:model_id] || m["model_id"], display_name: m[:display_name] || m["display_name"], description: m[:description] || m["description"] }
-      end
-    end
-  end
-
-  def agent_models_for_props
-    agent_models_by_type.map do |agent_type, models|
-      { agent_type: agent_type, models: models }
-    end
-  end
-
-  # A user who finished onboarding but now needs an agent credential and has
-  # none. Reachable because onboarding's agent step is skipped for
-  # viewers-everywhere (onboarding_requires_agent?) and onboarding never
-  # re-runs: a viewer who is later given an employee/admin membership may now
-  # act, but has no agent connected and nothing in the flow says so — they just
-  # find empty agent pickers.
-  def needs_agent_setup?
-    return false if super_admin?
-    return false if active_memberships.none?
-
-    # `agent_credentials.none?` rather than has_configured_agents?: this runs on
-    # every request via CurrentUserResource, which already serialises
-    # `many :agent_credentials`, so reading the loaded association costs nothing.
-    # (Unloaded, Relation#none? still issues an exists?, not a full load.)
-    onboarding_completed? && onboarding_requires_agent? && agent_credentials.none?
-  end
-
-  # Called right after an invitation is accepted: if the new membership means the
-  # user now needs an agent they never connected, send them back through the
-  # agent steps instead of leaving them with empty pickers. Returns true when
-  # onboarding was re-opened, so callers can redirect there.
-  def reopen_onboarding_if_setup_needed!
-    # The membership flipped to active moments ago; drop the memoized list so
-    # needs_agent_setup? sees it.
-    reload_active_memberships
-    return false unless needs_agent_setup?
-
-    aasm(:onboarding_state).fire(:reopen)
-    save!
-    true
-  end
-
-  def can_complete_onboarding?
-    position.present? &&
-      preferred_agent_language.present? &&
-      (viewer_everywhere? || has_configured_agents?)
-  end
-
-  private
-
-  # Fetch the model list for a credential, caching per-credential (not globally —
-  # the old key collided across users, so one user's fallback poisoned everyone).
-  # API-sourced lists are cached for a day; fallback lists only briefly, so a
-  # transient API failure or an expired token doesn't pin a stale list for 24h.
-  # The cache is also busted whenever the credential's auth data changes
-  # (re-auth / refreshed token) — see AgentCredential#invalidate_models_cache.
-  def fetch_or_cache_agent_models(cred)
-    cache_key = cred.models_cache_key
-    cached = Rails.cache.read(cache_key)
-    return cached if cached
-
-    adapter = AgentCredentialsService.for(cred.agent_type).adapter
-    result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
-    models = result[:models] || []
-
-    if models.any?
-      ttl = result[:source] == :api ? 1.day : 1.hour
-      Rails.cache.write(cache_key, models, expires_in: ttl)
-    end
-
-    models
-  end
-
-  def set_onboarding_completed_at
-    self.onboarding_completed_at = Time.current
-  end
-
-  def selected_agents_valid
-    return if selected_agents.blank?
-
-    invalid_agents = selected_agents - AVAILABLE_AGENTS
-    return if invalid_agents.empty?
-
-    errors.add(:selected_agents, "contains invalid agents: #{invalid_agents.join(', ')}")
-  end
-
-  def default_agent_credential_belongs_to_user
-    return if default_agent_credential_id.blank?
-    return if agent_credentials.exists?(id: default_agent_credential_id)
-
-    errors.add(:default_agent_credential_id, "must belong to this user")
   end
 end

@@ -5,18 +5,26 @@ class AgentCredential < ApplicationRecord
   include Encryptable
 
   belongs_to :user
+  # Credentials are per (user, company): the same person authenticates a separate
+  # agent account per company so vendor spend is billed to the company that
+  # incurred it, never pooled across tenants.
+  belongs_to :company
 
   # Validations
   validates :agent_type, presence: true, inclusion: {
-    in: User::AVAILABLE_AGENTS,
+    in: CompanyMembership::AVAILABLE_AGENTS,
     message: "%{value} is not a valid agent type"
   }
-  validates :agent_type, uniqueness: { scope: :user_id }
+  validates :agent_type, uniqueness: { scope: %i[user_id company_id] }
+  validate :owner_is_a_member_of_the_company
   validates :encrypted_config_data, presence: true
 
+  # Scope helper: this company's credentials only.
+  scope :for_company, ->(company) { where(company: company) }
+
   # Callbacks
-  after_create :set_as_user_default
-  before_destroy :reassign_user_default
+  after_create :set_as_membership_default
+  before_destroy :reassign_membership_default
   # Bust the cached model list whenever the stored auth data changes (re-auth or a
   # refreshed token) or the record is removed, so the profile select never serves
   # models fetched with a stale token. See User#fetch_or_cache_agent_models.
@@ -56,8 +64,11 @@ class AgentCredential < ApplicationRecord
   # (the user's default_model, env-field values like google_cloud_project) are
   # not auth data, so they survive re-auth — only the two bookkeeping keys are
   # refreshed.
-  def self.from_artifacts(user_id, agent_type, artifacts_hash)
-    credential = find_or_initialize_by(user_id: user_id, agent_type: agent_type)
+  # company_id is part of the identity: the same user holds one credential per
+  # company, so a re-auth must replace the right row and never overwrite another
+  # company's (separately billed) token.
+  def self.from_artifacts(user_id, company_id, agent_type, artifacts_hash)
+    credential = find_or_initialize_by(user_id: user_id, company_id: company_id, agent_type: agent_type)
     credential.config_data = artifacts_hash
     preserved = (credential.metadata || {}).except("collected_at", "artifact_keys")
     credential.metadata = preserved.merge(
@@ -111,15 +122,34 @@ class AgentCredential < ApplicationRecord
 
   private
 
-  def set_as_user_default
-    user.update!(default_agent_credential: self)
+  # The default is per membership, so a credential can only ever become the
+  # default for the company it belongs to.
+  def set_as_membership_default
+    membership&.update!(default_agent_credential: self)
   end
 
-  def reassign_user_default
-    return unless user.default_agent_credential_id == id
+  def reassign_membership_default
+    m = membership
+    return unless m && m.default_agent_credential_id == id
 
-    fallback = user.agent_credentials.where.not(id: id).order(created_at: :desc).first
-    user.update!(default_agent_credential: fallback)
+    fallback = AgentCredential.where(user_id: user_id, company_id: company_id)
+                              .where.not(id: id)
+                              .order(created_at: :desc)
+                              .first
+    m.update!(default_agent_credential: fallback)
+  end
+
+  def membership
+    @membership ||= CompanyMembership.find_by(user_id: user_id, company_id: company_id)
+  end
+
+  # A credential only makes sense while its owner belongs to that company;
+  # otherwise it would bill a company the user has no relationship with.
+  def owner_is_a_member_of_the_company
+    return if user_id.blank? || company_id.blank?
+    return if CompanyMembership.exists?(user_id: user_id, company_id: company_id)
+
+    errors.add(:company, "must be one the user is a member of")
   end
 
   def invalidate_models_cache

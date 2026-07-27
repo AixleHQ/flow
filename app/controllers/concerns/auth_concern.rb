@@ -98,9 +98,10 @@ module AuthConcern
 
     session[:current_company_id] = membership.company_id
     reset_membership_memoization
-    # Joining a company that needs setup the user never did re-opens onboarding;
-    # callers route on onboarding_state, so nothing else to do here.
-    user.reopen_onboarding_if_setup_needed!
+    # This company's onboarding is its own; re-open it when the accepted role
+    # needs an agent this company has none for. Callers route on the
+    # membership's onboarding state.
+    membership.reopen_onboarding_if_setup_needed!
     membership
   end
 

@@ -5,18 +5,23 @@ FactoryBot.define do
     name
     password { generate(:password) }
     password_confirmation { password }
-    onboarding_state { "step1" }
-    position { nil }
-    preferred_agent_language { "en" }
     super_admin { false }
 
-    # Company/role now live on CompanyMembership. Pass a transient `company:`
-    # (or use a role trait) to get an active membership created after :create.
+    # Company, role AND onboarding all live on CompanyMembership now — onboarding
+    # is per company (different role, different agents, a separate agent
+    # credential for billing). Pass a transient `company:` (or a role trait) to
+    # get a membership created after :create; the onboarding transients below
+    # land on that membership, not on the user.
     transient do
       email_sequence { SecureRandom.hex(4) }
       company { nil }
       membership_role { nil }
       membership_state { "active" }
+      onboarding_state { "step1" }
+      onboarding_completed_at { nil }
+      position { nil }
+      preferred_agent_language { "en" }
+      selected_agents { [] }
     end
 
     # Generate email based on the (transient) company domain if present
@@ -37,7 +42,12 @@ FactoryBot.define do
         user: user,
         company: evaluator.company || create(:company),
         role: evaluator.membership_role || "employee",
-        state: evaluator.membership_state
+        state: evaluator.membership_state,
+        onboarding_state: evaluator.onboarding_state,
+        onboarding_completed_at: evaluator.onboarding_completed_at,
+        position: evaluator.position,
+        preferred_agent_language: evaluator.preferred_agent_language,
+        selected_agents: evaluator.selected_agents
       )
     end
 
@@ -67,6 +77,9 @@ FactoryBot.define do
 
     # == State Traits ==
 
+    # Onboarding completion is a property of the MEMBERSHIP. Using this trait
+    # without a company therefore has nothing to mark complete — pass `company:`
+    # or combine with a role trait.
     trait :onboarding_completed do
       onboarding_state { "completed" }
       onboarding_completed_at { Time.current }
@@ -81,13 +94,18 @@ FactoryBot.define do
 
     # == Nested Associations ==
 
+    # The credential belongs to a (user, company) pair, so it needs the same
+    # company the membership was created in.
     trait :with_agent_credential do
       transient do
         agent_type { "claude_code" }
       end
 
       after(:create) do |user, evaluator|
-        create(:agent_credential, user: user, agent_type: evaluator.agent_type)
+        company = user.company_memberships.first&.company || evaluator.company
+        next if company.nil?
+
+        create(:agent_credential, user: user, company: company, agent_type: evaluator.agent_type)
       end
     end
   end

@@ -22,6 +22,10 @@ module Api
         session = SessionService.create_and_start(
           user: current_user,
           project: project,
+          # Project-less auth_setup sessions authenticate a credential, which is
+          # billed to a company — so name it explicitly rather than let anything
+          # downstream guess.
+          company: project ? nil : auth_setup_company,
           session_type: session_params[:session_type],
           agent_type: session_params[:agent_type],
           configured_agent: agent,
@@ -75,6 +79,19 @@ module Api
       end
 
       private
+
+      # Which company an auth_setup session authenticates a credential for. The
+      # API has no switcher, so the client must name it when the user belongs to
+      # more than one company; a single-membership user is unambiguous.
+      def auth_setup_company
+        memberships = current_user.active_memberships
+        if params[:company_id].present?
+          wanted = params[:company_id].to_i
+          return memberships.find { |m| m.company_id == wanted }&.company
+        end
+
+        memberships.one? ? memberships.first.company : nil
+      end
 
       # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on
       # the underlying IO so large files are not fully loaded; fall back to a
@@ -135,7 +152,7 @@ module Api
           membership = current_user.company_memberships.active.find_by(company_id: project.company_id)
           membership.nil? || membership.viewer?
         else
-          current_user.viewer_everywhere?
+          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
         end
       end
     end

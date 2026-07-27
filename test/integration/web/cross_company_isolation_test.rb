@@ -12,7 +12,13 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
 
     @user = create(:user, :admin, :onboarding_completed, company: @company_a, password: AuthHelper::TEST_PASSWORD)
     @membership_a = @user.company_memberships.find_by!(company: @company_a).tap { |m| m.update!(accepted_at: 2.days.ago) }
-    @membership_b = create(:company_membership, :viewer, user: @user, company: @company_b, accepted_at: 1.day.ago)
+    # Onboarding is per company, so B needs its own completed onboarding or every
+    # B-scoped request would bounce to /onboarding instead of showing B's data.
+    @membership_b = create(:company_membership, :viewer, user: @user, company: @company_b,
+                                                accepted_at: 1.day.ago,
+                                                onboarding_state: "completed",
+                                                onboarding_completed_at: Time.current,
+                                                position: "dev", preferred_agent_language: "en")
 
     @colleague_b = create(:user, :employee, :onboarding_completed, company: @company_b)
 

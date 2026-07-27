@@ -7,62 +7,9 @@ class UserTest < ActiveSupport::TestCase
     @company = create(:company)
   end
 
-  # === membership-derived predicates ===
-
-  test "viewer_everywhere? is true when every active membership is viewer" do
-    user = create(:user, :viewer, company: @company)
-    assert user.viewer_everywhere?
-  end
-
-  test "viewer_everywhere? is false for employee/admin/super_admin" do
-    assert_not create(:user, :employee, company: @company).viewer_everywhere?
-    assert_not create(:user, :admin, company: @company).viewer_everywhere?
-    assert_not create(:user, :super_admin).viewer_everywhere?
-  end
-
-  test "viewer_everywhere? is false with no memberships and false for mixed roles" do
-    user = create(:user)
-    assert_not user.viewer_everywhere?
-
-    create(:company_membership, :viewer, user: user, company: @company)
-    # viewer_everywhere? is memoized per instance — reload clears it.
-    assert user.reload.viewer_everywhere?
-
-    create(:company_membership, :admin, user: user, company: create(:company))
-    assert_not user.reload.viewer_everywhere?
-  end
-
-  # === onboarding helpers ===
-
-  test "can_complete_onboarding? true for viewer with position+language and no agents" do
-    user = create(:user, :viewer, company: @company, position: "dev", preferred_agent_language: "en")
-    assert_not user.has_configured_agents?
-    assert user.can_complete_onboarding?
-  end
-
-  test "can_complete_onboarding? false for viewer missing position or language" do
-    user = create(:user, :viewer, company: @company, position: nil, preferred_agent_language: "en")
-    assert_not user.can_complete_onboarding?
-  end
-
-  test "can_complete_onboarding? still requires agents for non-viewer" do
-    user = create(:user, :employee, company: @company, position: "dev", preferred_agent_language: "en")
-    assert_not user.can_complete_onboarding?
-    create(:agent_credential, user: user, agent_type: "claude_code")
-    assert user.reload.can_complete_onboarding?
-  end
-
-  test "can_advance_to_authenticated? true for viewer regardless of credentials" do
-    user = create(:user, :viewer, company: @company)
-    assert user.can_advance_to_authenticated?
-  end
-
-  test "can_advance_to_authenticated? requires agents for non-viewer" do
-    user = create(:user, :employee, company: @company)
-    assert_not user.can_advance_to_authenticated?
-    create(:agent_credential, user: user, agent_type: "claude_code")
-    assert user.reload.can_advance_to_authenticated?
-  end
+  # NOTE: onboarding predicates (can_complete_onboarding?, needs_agent_setup?,
+  # viewer/agent gates) are per COMPANY and live on CompanyMembership — see
+  # MembershipOnboardingStateMachineTest and CompanyMembershipTest.
 
   # === email domain no longer constrains identity (invite-any-domain) ===
 
@@ -124,46 +71,5 @@ class UserTest < ActiveSupport::TestCase
 
     assert_no_difference("BoardActivity.count") { user.soft_delete! }
     assert_equal user.id, activity.reload.actor_id
-  end
-  # === needs_agent_setup? ===
-  # Onboarding skips the agent step for a user who is a viewer everywhere, and
-  # onboarding never re-runs. Gaining a role that can run things therefore
-  # leaves the user with no agent credential and nothing telling them so.
-
-  test "needs_agent_setup? is false for a viewer everywhere (they never need an agent)" do
-    company = create(:company)
-    user = create(:user, :viewer, :onboarding_completed, company: company)
-
-    assert_not user.needs_agent_setup?
-  end
-
-  test "needs_agent_setup? becomes true once a viewer gains a non-viewer membership" do
-    company = create(:company)
-    user = create(:user, :viewer, :onboarding_completed, company: company)
-    assert_not user.needs_agent_setup?
-
-    # The factory's default role is already "employee".
-    create(:company_membership, user: user, company: create(:company))
-
-    assert user.reload.needs_agent_setup?
-  end
-
-  test "needs_agent_setup? is false once an agent credential exists" do
-    company = create(:company)
-    user = create(:user, :employee, :onboarding_completed, :with_agent_credential, company: company)
-
-    assert_not user.needs_agent_setup?
-  end
-
-  test "needs_agent_setup? is false mid-onboarding (the flow itself still asks for an agent)" do
-    company = create(:company)
-    user = create(:user, :employee, company: company)
-
-    assert_not user.needs_agent_setup?
-  end
-
-  test "needs_agent_setup? is false for a super admin and for a membership-less user" do
-    assert_not create(:user, :super_admin, :onboarding_completed).needs_agent_setup?
-    assert_not create(:user, :onboarding_completed).needs_agent_setup?
   end
 end

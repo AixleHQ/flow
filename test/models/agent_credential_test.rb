@@ -6,23 +6,24 @@ class AgentCredentialTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
     @user = create(:user, company: @company)
+    # The default agent credential is a per-company property, so it lives on the
+    # membership: one separately-billed credential per company.
+    @membership = @user.company_memberships.sole
   end
 
   # --- Auto-set default on creation ---
 
-  test "first credential sets user default_agent_credential" do
+  test "first credential sets the membership default_agent_credential" do
     credential = create(:agent_credential, user: @user, agent_type: "claude_code")
 
-    @user.reload
-    assert_equal credential.id, @user.default_agent_credential_id
+    assert_equal credential.id, @membership.reload.default_agent_credential_id
   end
 
-  test "subsequent credential updates user default_agent_credential" do
-    first = create(:agent_credential, user: @user, agent_type: "claude_code")
+  test "subsequent credential updates the membership default_agent_credential" do
+    create(:agent_credential, user: @user, agent_type: "claude_code")
     second = create(:agent_credential, user: @user, agent_type: "gemini_cli")
 
-    @user.reload
-    assert_equal second.id, @user.default_agent_credential_id
+    assert_equal second.id, @membership.reload.default_agent_credential_id
   end
 
   # --- Reassign on deletion ---
@@ -30,41 +31,39 @@ class AgentCredentialTest < ActiveSupport::TestCase
   test "deleting default credential falls back to most recent remaining" do
     first = create(:agent_credential, user: @user, agent_type: "claude_code")
     second = create(:agent_credential, user: @user, agent_type: "gemini_cli")
-    assert_equal second.id, @user.reload.default_agent_credential_id
+    assert_equal second.id, @membership.reload.default_agent_credential_id
 
     second.destroy!
 
-    @user.reload
-    assert_equal first.id, @user.default_agent_credential_id
+    assert_equal first.id, @membership.reload.default_agent_credential_id
   end
 
   test "deleting last credential sets default to nil" do
     credential = create(:agent_credential, user: @user, agent_type: "claude_code")
-    assert_equal credential.id, @user.reload.default_agent_credential_id
+    assert_equal credential.id, @membership.reload.default_agent_credential_id
 
     credential.destroy!
 
-    @user.reload
-    assert_nil @user.default_agent_credential_id
+    assert_nil @membership.reload.default_agent_credential_id
   end
 
   test "deleting non-default credential does not change default" do
     first = create(:agent_credential, user: @user, agent_type: "claude_code")
     second = create(:agent_credential, user: @user, agent_type: "gemini_cli")
-    assert_equal second.id, @user.reload.default_agent_credential_id
+    assert_equal second.id, @membership.reload.default_agent_credential_id
 
     first.destroy!
 
     @user.reload
-    assert_equal second.id, @user.default_agent_credential_id
+    assert_equal second.id, @membership.reload.default_agent_credential_id
   end
 
   # --- from_artifacts: clean replacement + preserved preferences ---
 
   test "from_artifacts fully replaces config_data (no merge with previous auth)" do
-    AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-old", "oauthAccount" => { "id" => "a" } })
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-old", "oauthAccount" => { "id" => "a" } })
 
-    cred = AgentCredential.from_artifacts(@user.id, "claude_code", { "claudeAiOauth" => { "accessToken" => "sk-ant-new" } })
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "claudeAiOauth" => { "accessToken" => "sk-ant-new" } })
 
     assert_equal({ "claudeAiOauth" => { "accessToken" => "sk-ant-new" } }, cred.config_data)
     refute cred.config_data.key?("primaryApiKey")
@@ -75,7 +74,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
     cred = create(:agent_credential, user: @user, agent_type: "claude_code")
     cred.update!(metadata: (cred.metadata || {}).merge("default_model" => "claude-opus-4-8"))
 
-    updated = AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-fresh" })
+    updated = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-fresh" })
 
     assert_equal "claude-opus-4-8", updated.metadata["default_model"]
     assert_equal({ "primaryApiKey" => "sk-fresh" }, updated.config_data)
@@ -127,7 +126,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
 
   test "from_artifacts populates expires_at from the persisted token" do
     token_exp = 30.minutes.from_now
-    cred = AgentCredential.from_artifacts(@user.id, "claude_code", claude_config(expires_at: token_exp))
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config(expires_at: token_exp))
 
     assert_in_delta token_exp.to_i, cred.reload.expires_at.to_i, 2
   end
@@ -162,7 +161,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
                                      config_data: claude_config(expires_at: 1.hour.from_now))
     assert_not_nil cred.expires_at
 
-    AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-ant" })
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-ant" })
 
     assert_nil cred.reload.expires_at
   end

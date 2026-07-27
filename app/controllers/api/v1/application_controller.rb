@@ -55,7 +55,7 @@ module Api
           membership = current_user.company_memberships.active.find_by(company_id: company.id)
           membership.nil? || membership.viewer?
         else
-          current_user.active_memberships.none? || current_user.viewer_everywhere?
+          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
         end
       end
 

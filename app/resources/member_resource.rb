@@ -35,7 +35,8 @@ class MemberResource < ApplicationResource
 
   typelize :string?
   attribute :position do |membership|
-    membership.user.position
+    # Per company: the same person can hold a different position in each.
+    membership.position&.to_s
   end
 
   typelize :string

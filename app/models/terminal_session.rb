@@ -11,6 +11,9 @@ class TerminalSession < ApplicationRecord
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
+  # Explicit tenant, needed because auth_setup sessions are project-less and
+  # create a per-company (billed) agent credential — see SessionCompany.
+  belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
   has_one :usage_statistic, dependent: :destroy
   has_many :session_logs, dependent: :destroy
@@ -224,9 +227,13 @@ class TerminalSession < ApplicationRecord
     # Project sessions go to the project's company; project-less sessions go to
     # EVERY company where the user is an active member — matching the listing
     # rule in Web::Company::ApplicationController#company_sessions_scope.
-    company_ids = if project&.company_id
-      [ project.company_id ]
+    explicit = company_id || project&.company_id
+    company_ids = if explicit
+      [ explicit ]
     else
+      # Legacy rows only: nothing recorded the tenant, so fall back to every
+      # company the user is an active member of (matches the listing rule in
+      # Web::Company::ApplicationController#company_sessions_scope).
       user&.company_memberships&.active&.pluck(:company_id) || []
     end
     return if company_ids.empty?

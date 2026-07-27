@@ -276,7 +276,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "strategy resolves credential for agent_session" do
     credential = AgentCredential.create!(
-      user: @user, agent_type: "claude_code",
+      user: @user, company: @company, agent_type: "claude_code",
       config_data: { "key" => "val" }
     )
     session = create(:terminal_session, :agent_session, user: @user)
@@ -308,7 +308,12 @@ class TerminalSessionTest < ActiveSupport::TestCase
     revoked_company = create(:company)
     create(:company_membership, :revoked, user: @user, company: revoked_company)
 
-    session = create(:terminal_session, :auth_setup, user: @user, project: nil)
+    # company_id nil on purpose: the "every active membership" fan-out is the
+    # LEGACY path for rows that never recorded a tenant. New sessions carry
+    # company_id and broadcast to that one company only.
+    session = build(:terminal_session, :auth_setup, user: @user, project: nil)
+    session.company_id = nil
+    session.save!(validate: false)
 
     ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
     ActionCable.server.expects(:broadcast).with("session_list:company:#{company_b.id}", anything)

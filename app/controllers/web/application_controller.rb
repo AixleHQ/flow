@@ -80,7 +80,11 @@ class Web::ApplicationController < ApplicationController
 
   def enforce_onboarding
     return unless signed_in?
-    return if current_user.onboarding_state == "completed"
+    # Onboarding is per company: completing it for company A says nothing about
+    # company B, which needs its own role, agents and (separately billed)
+    # credential. Super admins have no membership and no onboarding.
+    return if current_membership.nil?
+    return if current_membership.onboarding_completed?
 
     redirect_to onboarding_path unless request.path == onboarding_path
   end

@@ -4,6 +4,16 @@ FactoryBot.define do
   factory :terminal_session do
     user { nil }     # Default: no user (requires explicit user:)
     project { nil }  # Default: no project
+
+    # Sessions carry an explicit tenant: project-bound ones inherit the project's
+    # company, and project-less ones (auth_setup) need it stated because they
+    # create a per-company, separately-billed agent credential.
+    before(:create) do |session|
+      next if session.company_id.present?
+
+      session.company_id = session.project&.company_id ||
+                           session.user&.company_memberships&.first&.company_id
+    end
     session_type { "auth_setup" }
     agent_type { "claude_code" }
     state { "not_started" }

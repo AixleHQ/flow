@@ -16,8 +16,8 @@ class Web::ProfileController < Web::ApplicationController
                                        .invited
                                        .includes(:company)
                                        .map { |m| MembershipResource.new(m).to_h },
-      language_options: User::AGENT_LANGUAGES,
-      agent_models: current_user.agent_models_for_props,
+      language_options: CompanyMembership::AGENT_LANGUAGES,
+      agent_models: current_membership&.agent_models_for_props || [],
       cable_stream: inertia_cable_stream(current_user),
       mcp: {
         enabled: current_user.mcp_enabled?,
@@ -139,6 +139,6 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   def profile_params
-    params.require(:profile).permit(:name, :preferred_agent_language, :default_agent_credential_id)
+    params.require(:profile).permit(:name)
   end
 end

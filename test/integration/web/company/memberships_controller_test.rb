@@ -8,7 +8,12 @@ class Web::Company::MembershipsControllerTest < ActionDispatch::IntegrationTest
     @company_b = create(:company, name: "Beta")
     @user = create(:user, :employee, :onboarding_completed, company: @company_a, password: AuthHelper::TEST_PASSWORD)
     @membership_a = @user.company_memberships.find_by!(company: @company_a).tap { |m| m.update!(accepted_at: 2.days.ago) }
-    @membership_b = create(:company_membership, :viewer, user: @user, company: @company_b, accepted_at: 1.day.ago)
+    # Per-company onboarding: B needs its own, or B-scoped pages redirect away.
+    @membership_b = create(:company_membership, :viewer, user: @user, company: @company_b,
+                                                accepted_at: 1.day.ago,
+                                                onboarding_state: "completed",
+                                                onboarding_completed_at: Time.current,
+                                                position: "dev", preferred_agent_language: "en")
     sign_in_as(@user)
   end
 

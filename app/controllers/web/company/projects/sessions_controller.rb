@@ -37,7 +37,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
       assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
-      agent_models: current_user.agent_models_for_props
+      agent_models: current_project_membership&.agent_models_for_props || []
     }
   end
 
