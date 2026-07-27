@@ -236,6 +236,21 @@ class User < ApplicationRecord
     onboarding_completed? && onboarding_requires_agent? && agent_credentials.none?
   end
 
+  # Called right after an invitation is accepted: if the new membership means the
+  # user now needs an agent they never connected, send them back through the
+  # agent steps instead of leaving them with empty pickers. Returns true when
+  # onboarding was re-opened, so callers can redirect there.
+  def reopen_onboarding_if_setup_needed!
+    # The membership flipped to active moments ago; drop the memoized list so
+    # needs_agent_setup? sees it.
+    reload_active_memberships
+    return false unless needs_agent_setup?
+
+    aasm(:onboarding_state).fire(:reopen)
+    save!
+    true
+  end
+
   def can_complete_onboarding?
     position.present? &&
       preferred_agent_language.present? &&

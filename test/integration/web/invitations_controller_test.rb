@@ -64,6 +64,7 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
     # The permissions shared props live on company screens — complete
     # onboarding so the projects page renders for the fresh account.
     invitee.update!(onboarding_state: "completed", position: "dev")
+    create(:agent_credential, user: invitee)
     get company_projects_path
     assert_response :success
     assert_inertia_props do |props|
@@ -101,6 +102,8 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
   test "signup variant parks the token and the Google callback accepts the invitation" do
     invitee = passwordless_invitee(email: "fresh@external.com")
     invitee.update!(onboarding_state: "completed", position: "dev")
+    # A completed non-viewer must have an agent, or accepting re-opens onboarding.
+    create(:agent_credential, user: invitee)
     membership, token = invite(invitee)
 
     get invitation_path(token)
@@ -144,7 +147,7 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
   # === login variant (existing credentials) + continuation through sessions#create ===
 
   test "login variant parks the token and sign-in auto-accepts into the inviting company" do
-    invitee = create(:user, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
+    invitee = create(:user, :onboarding_completed, :with_agent_credential, password: AuthHelper::TEST_PASSWORD)
     membership, token = invite(invitee)
 
     get invitation_path(token)
@@ -177,7 +180,11 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
   # === accept variant (signed-in invitee) ===
 
   test "signed-in invitee sees the accept variant and accepts one-click" do
-    invitee = create(:user, :employee, :onboarding_completed, company: create(:company), password: AuthHelper::TEST_PASSWORD)
+    # :with_agent_credential keeps this a realistic completed employee —
+    # can_complete_onboarding? requires an agent for non-viewers, and without one
+    # accepting would (correctly) re-open onboarding instead of landing in the app.
+    invitee = create(:user, :employee, :onboarding_completed, :with_agent_credential,
+                     company: create(:company), password: AuthHelper::TEST_PASSWORD)
     membership, token = invite(invitee, role: "admin")
     sign_in_as(invitee)
 
@@ -230,7 +237,8 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "accepting twice (double click / two tabs) degrades gracefully instead of raising" do
-    invitee = create(:user, :employee, :onboarding_completed, company: create(:company), password: AuthHelper::TEST_PASSWORD)
+    invitee = create(:user, :employee, :onboarding_completed, :with_agent_credential,
+                     company: create(:company), password: AuthHelper::TEST_PASSWORD)
     membership, token = invite(invitee)
     sign_in_as(invitee)
 
@@ -267,5 +275,55 @@ class Web::InvitationsControllerTest < ActionDispatch::IntegrationTest
 
     get invitation_path(token)
     assert_inertia_props variant: "expired"
+  end
+
+  # === re-onboarding on joining a company that needs setup ===
+  # A viewer everywhere skips the agent steps and onboarding never re-runs. If a
+  # later invitation gives them a role that CAN run things, they would otherwise
+  # land on empty agent pickers with no way back into the flow.
+
+  test "accepting an employee invite re-opens onboarding for a viewer with no agent" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: create(:company),
+                                    password: AuthHelper::TEST_PASSWORD)
+    new_company = create(:company)
+    membership = create(:company_membership, :invited, user: viewer, company: new_company,
+                                             invited_by: @admin)
+    sign_in_as(viewer)
+
+    post accept_invitation_path(membership.generate_token_for(:invitation))
+
+    assert_redirected_to onboarding_path
+    # Back at agent selection, not step1 — the profile answers still stand.
+    assert_equal "step2", viewer.reload.onboarding_state
+    # The new company is the current one for the re-run.
+    assert_equal new_company.id, viewer.company_memberships.find_by!(company: new_company).company_id
+    get onboarding_path
+    assert_response :success
+  end
+
+  test "accepting an invite does NOT re-open onboarding when an agent is already connected" do
+    member = create(:user, :employee, :onboarding_completed, :with_agent_credential,
+                    company: create(:company), password: AuthHelper::TEST_PASSWORD)
+    membership = create(:company_membership, :invited, user: member, company: create(:company),
+                                             invited_by: @admin)
+    sign_in_as(member)
+
+    post accept_invitation_path(membership.generate_token_for(:invitation))
+
+    assert_redirected_to company_projects_path
+    assert_equal "completed", member.reload.onboarding_state
+  end
+
+  test "accepting a VIEWER invite leaves onboarding completed — viewers need no agent" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: create(:company),
+                                    password: AuthHelper::TEST_PASSWORD)
+    membership = create(:company_membership, :invited, :viewer, user: viewer,
+                                             company: create(:company), invited_by: @admin)
+    sign_in_as(viewer)
+
+    post accept_invitation_path(membership.generate_token_for(:invitation))
+
+    assert_redirected_to company_projects_path
+    assert_equal "completed", viewer.reload.onboarding_state
   end
 end

@@ -98,6 +98,9 @@ module AuthConcern
 
     session[:current_company_id] = membership.company_id
     reset_membership_memoization
+    # Joining a company that needs setup the user never did re-opens onboarding;
+    # callers route on onboarding_state, so nothing else to do here.
+    user.reopen_onboarding_if_setup_needed!
     membership
   end
 

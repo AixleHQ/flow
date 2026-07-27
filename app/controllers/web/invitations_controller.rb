@@ -49,7 +49,11 @@ class Web::InvitationsController < Web::ApplicationController
 
     session[:current_company_id] = membership.company_id
     session.delete(:pending_invitation_token)
-    redirect_to company_projects_path, notice: "Welcome to #{membership.company.name}!"
+
+    # The new company becomes current either way; if it also brings a role that
+    # needs an agent the user never connected, finish onboarding first.
+    target = current_user.reopen_onboarding_if_setup_needed! ? onboarding_path : company_projects_path
+    redirect_to target, notice: "Welcome to #{membership.company.name}!"
   end
 
   # POST /invitations/:token/decline — signed-in invitee only; declining
@@ -80,6 +84,7 @@ class Web::InvitationsController < Web::ApplicationController
       sign_in(invitee)
       session[:current_company_id] = membership.company_id
       session.delete(:pending_invitation_token)
+      invitee.reopen_onboarding_if_setup_needed!
       target = invitee.onboarding_state == "completed" ? company_projects_path : onboarding_path
       redirect_to target, notice: "Welcome to #{membership.company.name}!"
     else

@@ -52,6 +52,15 @@ module UserStateMachine
       event :complete, guard: :can_complete_onboarding?, after: :set_onboarding_completed_at do
         transitions from: :step4, to: :completed
       end
+
+      # Accepting an invitation into a company where the user needs setup they
+      # never did re-opens onboarding (see User#needs_agent_setup?): a
+      # viewer-everywhere user skipped the agent steps, and gaining a role that
+      # can run things otherwise leaves them at empty agent pickers forever.
+      # Back to step2 (Select Agents), not step1 — their profile answers stand.
+      event :reopen do
+        transitions from: :completed, to: :step2
+      end
     end
 
     # Validation for onboarding_state
