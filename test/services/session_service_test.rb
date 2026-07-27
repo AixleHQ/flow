@@ -236,7 +236,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   test "create_for_workflow_step creates session bound to step_run" do
     mock_temporal_start
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow, instructions: "Do the thing")
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     step_run = create(:step_run, workflow_run: workflow_run, step: step)
@@ -265,7 +265,7 @@ class SessionServiceTest < ActiveSupport::TestCase
     mock_temporal_start
 
     asset = create(:asset, scope: @project, created_by: @user, name: "step-doc.md")
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow, instructions: "Use the doc", asset_ids: [ asset.id ])
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     step_run = create(:step_run, workflow_run: workflow_run, step: step)

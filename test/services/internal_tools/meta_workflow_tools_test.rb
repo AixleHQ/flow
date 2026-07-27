@@ -9,7 +9,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
 
     # Create a "builder" workflow context (simulating Aixle Builder running)
-    builder_workflow = create(:workflow, scope: @company)
+    builder_workflow = create(:workflow, scope: @project)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: builder_step)
@@ -75,17 +75,6 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     assert_equal "Test Agent", data["title"]
     assert_equal "Project", data["scope_type"]
-  end
-
-  test "meta_create_agent creates agent in company scope" do
-    result = InternalTools::MetaCreateAgent.new(
-      params: { name: "company_agent", title: "Company Agent", persona: "A company agent.", scope_type: "Company" },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-    assert_equal "Company", data["scope_type"]
   end
 
   test "meta_create_agent fails without title" do
@@ -182,7 +171,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
 
   test "meta_list_workflows lists project and company workflows" do
     create(:workflow, scope: @project, name: "Project WF")
-    create(:workflow, scope: @company, name: "Company WF")
+    create(:workflow, scope: @project, name: "Company WF")
 
     result = InternalTools::MetaListWorkflows.new(
       params: {},
@@ -347,7 +336,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
   end
 
   test "meta_delete_workflow soft-deletes a company-scoped workflow" do
-    wf = create(:workflow, scope: @company, name: "Company Disposable")
+    wf = create(:workflow, scope: @project, name: "Company Disposable")
 
     result = InternalTools::MetaDeleteWorkflow.new(
       params: { workflow_id: wf.id },

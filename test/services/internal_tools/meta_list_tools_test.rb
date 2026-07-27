@@ -11,7 +11,7 @@ class InternalTools::MetaListToolsTest < ActiveSupport::TestCase
   end
 
   test "lists custom and system tools visible for the session's project" do
-    company_tool = create(:tool, scope: @company,
+    company_tool = create(:tool, scope: @project,
                                  name: "company_tool", display_name: "Company Tool")
     project_tool = create(:tool, scope: @project,
                                  name: "project_tool", display_name: "Project Tool")
@@ -20,7 +20,8 @@ class InternalTools::MetaListToolsTest < ActiveSupport::TestCase
 
     # Tools that must NOT show up for this project's view:
     other_company = create(:company)
-    create(:tool, scope: other_company, name: "foreign_company_tool")
+    foreign_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    create(:tool, scope: foreign_project, name: "foreign_company_tool")
     other_project = create(:project, company: @company, owner: @user)
     create(:tool, scope: other_project, name: "sibling_project_tool")
     # Soft-deleted tool in-scope — excluded by not_deleted.
@@ -42,7 +43,7 @@ class InternalTools::MetaListToolsTest < ActiveSupport::TestCase
                  data["tools"].map { |t| t["name"] }.sort
 
     assert_equal "Company Tool", by_id[company_tool.id]["display_name"]
-    assert_equal "Company", by_id[company_tool.id]["scope_type"]
+    assert_equal "Project", by_id[company_tool.id]["scope_type"]
     assert_equal "custom", by_id[company_tool.id]["kind"]
 
     assert_equal "Project", by_id[project_tool.id]["scope_type"]
@@ -65,7 +66,7 @@ class InternalTools::MetaListToolsTest < ActiveSupport::TestCase
     # ...but we ask about a different project in the same company.
     other_project = create(:project, company: @company, owner: @user)
     target_tool = create(:tool, scope: other_project, name: "target_project_tool")
-    shared_company_tool = create(:tool, scope: @company, name: "shared_company_tool")
+    shared_company_tool = create(:tool, scope: other_project, name: "shared_company_tool")
 
     result = InternalTools::MetaListTools.new(
       params: { project_id: other_project.id },

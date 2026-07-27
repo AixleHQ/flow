@@ -6,21 +6,14 @@ FactoryBot.define do
     value { "test_value" }
     description { "Test config item" }
     item_type { :variable }
-    scope { nil }  # Default: no scope (requires explicit scope:)
+    # Config items are Project-scoped only.
+    scope factory: %i[project standalone]
 
     # == Association Traits ==
 
-    trait :with_company_scope do
-      scope factory: %i[company]
-    end
-
     trait :with_project_scope do
-      scope factory: %i[project]
+      scope factory: %i[project standalone]
     end
-
-    # Note: For most tests, pass scope: explicitly:
-    #   create(:config_item, scope: company)
-    #   create(:config_item, scope: project)
 
     # == Type Traits ==
 

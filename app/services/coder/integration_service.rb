@@ -33,7 +33,6 @@ module Coder
         integration.status = :error
         integration.settings = { error: "Coder URL #{url_errors.first}" }
         integration.save
-        sync_mcp_server(integration) if integration.persisted?
         return integration
       end
 
@@ -47,7 +46,6 @@ module Coder
         integration.status = :error
         integration.settings = { error: "Lock TTL minutes is required" }
         integration.save
-        sync_mcp_server(integration) if integration.persisted?
         return integration
       end
 
@@ -76,17 +74,10 @@ module Coder
       end
 
       integration.save
-      sync_mcp_server(integration) if integration.persisted?
       integration
     end
 
     private
-
-    def sync_mcp_server(integration)
-      Coder::MCPServerSyncService.new(integration).sync!
-    rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.warn("[Coder::IntegrationService] MCP server sync failed: #{e.message}")
-    end
 
     def build_integration
       @company.integrations.build(

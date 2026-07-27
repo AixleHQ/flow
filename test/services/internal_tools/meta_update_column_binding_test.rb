@@ -19,7 +19,7 @@ class InternalTools::MetaUpdateColumnBindingTest < ActiveSupport::TestCase
 
     # A builder workflow context (simulating Aixle Builder running), mirroring
     # the fake session used across the other meta-tool tests.
-    builder_workflow = create(:workflow, scope: @company)
+    builder_workflow = create(:workflow, scope: @project)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: builder_step)

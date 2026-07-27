@@ -15,13 +15,14 @@ module Oauth
 
       @company = create(:company)
       @user = create(:user, :admin, company: @company)
+      @project = create(:project, company: @company, owner: @user)
       @client = build_client
     end
 
     # == access_token_for: selection / no-op ==
 
     test "returns nil when no credential is attached to the server" do
-      server = create(:mcp_server, :custom, scope: @company)
+      server = create(:mcp_server, :custom, scope: @project)
 
       assert_nil Oauth::TokenService.access_token_for(server: server, user: @user)
     end
@@ -172,7 +173,7 @@ module Oauth
     # == pick_credential: server scoping (scope-driven, oauth-unification §4.4) ==
 
     test "a per_user oauth server selects the acting user's own credential" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user)
       build_credential(owner: @company, mcp_server: server, access_token: "company-token",
                        expires_at: 1.hour.from_now)
       build_credential(owner: @user, mcp_server: server, access_token: "user-token",
@@ -182,17 +183,17 @@ module Oauth
     end
 
     test "a shared oauth server selects the scope owner's credential, never the user's" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
-      build_credential(owner: @company, mcp_server: server, access_token: "company-token",
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared)
+      build_credential(owner: @project, mcp_server: server, access_token: "project-token",
                        expires_at: 1.hour.from_now)
       build_credential(owner: @user, mcp_server: server, access_token: "user-token",
                        expires_at: 1.hour.from_now)
 
-      assert_equal "company-token", Oauth::TokenService.access_token_for(server: server, user: @user)
+      assert_equal "project-token", Oauth::TokenService.access_token_for(server: server, user: @user)
     end
 
     test "raises ReauthRequired (connect required) when a per_user oauth server has no credential for the user" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user)
       # A scope-owner credential must NOT satisfy a per_user server — the user connects.
       build_credential(owner: @company, mcp_server: server, access_token: "company-token",
                        expires_at: 1.hour.from_now)
@@ -203,7 +204,7 @@ module Oauth
     end
 
     test "raises ReauthRequired when a shared oauth server has no scope-owner credential" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared)
 
       assert_raises(Oauth::ReauthRequired) do
         Oauth::TokenService.access_token_for(server: server, user: @user)
@@ -211,7 +212,7 @@ module Oauth
     end
 
     test "never injects another tenant's credential — raises connect-required instead" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user)
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user)
       other = create(:user, :admin, company: create(:company))
       build_credential(owner: other, mcp_server: server, access_token: "foreign-token",
                        expires_at: 1.hour.from_now)
@@ -222,7 +223,7 @@ module Oauth
     end
 
     test "returns nil (no connect signal) for a non-oauth server with no matching credential" do
-      server = create(:mcp_server, :custom, scope: @company) # auth_type defaults to :none
+      server = create(:mcp_server, :custom, scope: @project) # auth_type defaults to :none
       other = create(:user, :admin, company: create(:company))
       build_credential(owner: other, mcp_server: server, access_token: "foreign-token",
                        expires_at: 1.hour.from_now)
@@ -232,8 +233,8 @@ module Oauth
     end
 
     test "ignores revoked credentials when picking for a server" do
-      server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared)
-      build_credential(owner: @company, mcp_server: server, status: :revoked,
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared)
+      build_credential(owner: @project, mcp_server: server, status: :revoked,
                        access_token: "revoked-token", expires_at: 1.hour.from_now)
 
       # Revoked excluded ⇒ no live credential ⇒ connect required for an oauth server.
@@ -245,9 +246,9 @@ module Oauth
     # == perform_refresh!: resource indicator + time-of-use SSRF guard (§5) ==
 
     test "sends the RFC 8707 resource indicator on refresh for an MCP-server credential" do
-      server = create(:mcp_server, :custom, scope: @company, url: "https://mcp.acme.test/v1",
+      server = create(:mcp_server, :custom, scope: @project, url: "https://mcp.acme.test/v1",
                       auth_type: :oauth, credential_scope: :shared)
-      build_credential(owner: @company, mcp_server: server, access_token: "old",
+      build_credential(owner: @project, mcp_server: server, access_token: "old",
                        refresh_token: "r", expires_at: 1.minute.from_now)
       stub_token_endpoint(access_token: "new-token", expires_in: 3600)
 

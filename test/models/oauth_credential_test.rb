@@ -6,6 +6,7 @@ class OauthCredentialTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
     @user = create(:user, company: @company)
+    @project = create(:project, company: @company, owner: @user)
     @client = OauthClient.create!(
       issuer: "https://sentry.io",
       authorization_endpoint: "https://sentry.io/oauth/authorize/",
@@ -262,7 +263,7 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "upsert_from_token! keeps a server-attached credential separate from a bare one" do
-    server = create(:mcp_server, scope: @company)
+    server = create(:mcp_server, scope: @project)
     OauthCredential.upsert_from_token!(
       owner: @company, oauth_client: @client, provider: "sentry",
       token_response: { "access_token" => "a" }
@@ -289,7 +290,7 @@ class OauthCredentialTest < ActiveSupport::TestCase
   end
 
   test "for_mcp_server filters to credentials attached to that server" do
-    server = create(:mcp_server, scope: @company)
+    server = create(:mcp_server, scope: @project)
     attached = build_credential(mcp_server: server)
     attached.save!
     detached = build_credential

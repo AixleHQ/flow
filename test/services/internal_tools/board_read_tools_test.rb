@@ -12,7 +12,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     @col2 = create(:board_column, board: @board, name: "In Dev", position: 2, purpose: "Active dev")
     @task = create(:board_task, board: @board, board_column: @col1, title: "Test task", description: "Do something", tags: [ "frontend" ])
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)
@@ -50,6 +50,22 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     assert_equal 1, data.size
     assert_equal "Test task", data.first["title"]
+  end
+
+  test "board_list_tasks does not produce N+1 queries" do
+    create_list(:board_task, 10, board: @board, board_column: @col1)
+
+    query_count = 0
+    counter = lambda do |_name, _start, _finish, _id, payload|
+      next if payload[:name] == "SCHEMA" || payload[:cached]
+      next if %w[BEGIN COMMIT ROLLBACK].include?(payload[:sql])
+      query_count += 1
+    end
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      InternalTools::BoardListTasks.new(params: {}, session: @session).execute
+    end
+
+    assert_operator query_count, :<=, 8
   end
 
   # === board_get_task ===

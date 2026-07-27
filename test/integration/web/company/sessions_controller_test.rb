@@ -16,7 +16,7 @@ class Web::Company::SessionsControllerTest < ActionDispatch::IntegrationTest
 
   test "index loads session list without N+1 queries" do
     project = create(:project, company: @company, owner: @user)
-    tool = create(:tool, scope: @company)
+    tool = create(:tool, scope: project)
     sessions = create_list(:terminal_session, 2, :agent_session, user: @user, project: project)
     sessions.each do |s|
       s.tools << tool

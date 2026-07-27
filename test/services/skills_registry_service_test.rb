@@ -5,6 +5,8 @@ require "test_helper"
 class SkillsRegistryServiceTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
+    @user = create(:user, company: @company)
+    @project = create(:project, company: @company, owner: @user)
     @api_key = "sk_live_test_key"
     Settings.skills_sh.api_key = @api_key
   end
@@ -164,7 +166,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
         headers: { "Content-Type" => "application/json" }
       )
 
-    skill = SkillsRegistryService.install(skill_id, scope: @company)
+    skill = SkillsRegistryService.install(skill_id, scope: @project)
 
     assert_equal "next-js-development", skill.name
     assert_equal "vercel-labs/agent-skills@next-js-development", skill.package
@@ -201,7 +203,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/react-best-practices/SKILL.md")
       .to_return(status: 200, body: skill_md)
 
-    skill = SkillsRegistryService.install(skill_id, scope: @company)
+    skill = SkillsRegistryService.install(skill_id, scope: @project)
 
     assert_equal "vercel-react-best-practices", skill.name
     assert_equal "vercel-labs/agent-skills@vercel-react-best-practices", skill.package
@@ -215,7 +217,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
       .to_return(status: 404, body: { error: "not_found", message: "Skill not found" }.to_json)
 
     error = assert_raises(SkillsRegistryService::RegistryError) do
-      SkillsRegistryService.install("missing/skill", scope: @company)
+      SkillsRegistryService.install("missing/skill", scope: @project)
     end
 
     assert_match(/not found/, error.message)
@@ -224,8 +226,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
   test "install updates existing skill by package" do
     existing = create(
       :skill,
-      :with_company_scope,
-      scope: @company,
+      scope: @project,
       name: "next-js-development",
       package: "vercel-labs/agent-skills@next-js-development",
       source: "vercel-labs/agent-skills",
@@ -246,7 +247,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
         headers: { "Content-Type" => "application/json" }
       )
 
-    skill = SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @company)
+    skill = SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @project)
 
     assert_equal existing.id, skill.id
     assert_equal "Updated Title", skill.reload.title

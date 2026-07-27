@@ -14,9 +14,9 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     InternalTools::MetaCreateMCPServer.new(params: params, session: @session).execute
   end
 
-  # ── default (Company) scope ──
+  # ── default (Project) scope ──
 
-  test "creates a company-scoped custom MCP server by default" do
+  test "creates a project-scoped custom MCP server by default" do
     result = nil
     assert_difference -> { MCPServer.count }, 1 do
       result = run_tool(name: "tavily", url: "https://mcp.example.com/v1")
@@ -32,8 +32,8 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     # Returned payload mirrors the persisted record
     assert_equal mcp.name, data["name"]
 
-    # Persisted state: defaults applied, scoped to the session's company
-    assert_equal @company, mcp.scope
+    # Persisted state: defaults applied, scoped to the session's project
+    assert_equal @project, mcp.scope
     assert_equal "tavily", mcp.name
     assert mcp.custom?
     assert_equal "http", mcp.transport.to_s # default transport
@@ -77,7 +77,7 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
       name: "playwright",
       transport: "stdio",
       command: "npx @playwright/mcp --headless",
-      scope_type: "Company"
+      scope_type: "Project"
     )
 
     assert_equal 0, result[:exit_code]
@@ -98,7 +98,7 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
       description: "Web search via Tavily",
       headers: { "Authorization" => "Bearer secret" },
       env: { "TAVILY_API_KEY" => "abc123" },
-      scope_type: "Company"
+      scope_type: "Project"
     )
 
     assert_equal 0, result[:exit_code]

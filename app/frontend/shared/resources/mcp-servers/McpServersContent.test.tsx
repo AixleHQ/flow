@@ -19,8 +19,6 @@ function makeServer(overrides: Partial<McpServer> = {}): McpServer {
     scopeIndicator: 'company',
     enabled: true,
     internal: false,
-    managed: false,
-    integrationId: null,
     command: null,
     env: null,
     createdAt: '2026-01-01T00:00:00Z',

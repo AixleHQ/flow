@@ -7,71 +7,24 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     @company     = create(:company)
     @user        = create(:user, :admin, company: @company)
     @project     = create(:project, company: @company, owner: @user)
+    # Company-wide (project_id nil) active Coder integration — resolved directly
+    # from the session's project by Concerns::CoderResolver.
     @integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
-    @other       = create(:integration, :coder, :active, company: @company, connected_by: @user)
-
-    @mcp_a = create_managed_server(@integration)
-    @mcp_b = create_managed_server(@other)
 
     project = @project
-    integration_id = @integration.id
     @session = Object.new
     @session.define_singleton_method(:id) { 4242 }
     @session.define_singleton_method(:project) { project }
     @session.define_singleton_method(:step_run) { OpenStruct.new(id: 1) }
     @session.define_singleton_method(:user) { nil }
 
+    # Same project (so the integration still resolves) but no step_run — exercises
+    # the tools running outside of a workflow context.
     @no_workflow_session = Object.new
     @no_workflow_session.define_singleton_method(:id) { 4242 }
-    @no_workflow_session.define_singleton_method(:project) { nil }
+    @no_workflow_session.define_singleton_method(:project) { project }
     @no_workflow_session.define_singleton_method(:step_run) { nil }
     @no_workflow_session.define_singleton_method(:user) { nil }
-  end
-
-  def create_managed_server(integration)
-    MCPServer.create!(
-      name:         "coder-#{integration.id}",
-      kind:         :managed,
-      transport:    :http,
-      integration:  integration,
-      scope:        @company,
-      enabled:      true
-    )
-  end
-
-  # ---------- coder_allocate_machine ----------
-
-  test "allocate: errors without an MCP server context" do
-    handler = InternalTools::CoderAllocateMachine.new(params: {}, session: @session)
-    result = handler.execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/managed Coder MCP server/, result[:stderr])
-  end
-
-  test "allocate: works without workflow context when MCP server is present" do
-    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
-      FakeAllocator.new(integration: integration, terminal_session: terminal_session)
-    }) do
-      handler = InternalTools::CoderAllocateMachine.new(
-        params: {}, session: @no_workflow_session, mcp_server: @mcp_a
-      )
-      result = handler.execute
-
-      assert_equal 0, result[:exit_code]
-      payload = JSON.parse(result[:stdout])
-      assert_equal "ws-1", payload["workspace_name"]
-    end
-  end
-
-  test "allocate: errors without workflow context only when MCP server is missing" do
-    handler = InternalTools::CoderAllocateMachine.new(
-      params: {}, session: @no_workflow_session
-    )
-    result = handler.execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/managed Coder MCP server/, result[:stderr])
   end
 
   class FakeAllocator
@@ -86,15 +39,24 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     end
   end
 
-  test "allocate: dispatches to the allocator with the resolved integration" do
+  # ---------- coder_allocate_machine ----------
+
+  test "allocate: errors when there is no active Coder integration for the project" do
+    @integration.update!(status: :error)
+
+    result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/No active Coder integration for this project/, result[:stderr])
+  end
+
+  test "allocate: dispatches to the allocator with the integration resolved from the session project" do
     captured = nil
     Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
       captured = integration
       FakeAllocator.new(integration: integration, terminal_session: terminal_session)
     }) do
-      result = InternalTools::CoderAllocateMachine.new(
-        params: {}, session: @session, mcp_server: @mcp_a
-      ).execute
+      result = InternalTools::CoderAllocateMachine.new(params: {}, session: @session).execute
 
       assert_equal 0, result[:exit_code]
       payload = JSON.parse(result[:stdout])
@@ -104,39 +66,18 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     assert_equal @integration.id, captured.id
   end
 
-  test "allocate: routes to the *exact* integration tied to the MCP server" do
-    received = []
+  test "allocate: works without workflow context when an active integration is present" do
     Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
-      received << integration.id
       FakeAllocator.new(integration: integration, terminal_session: terminal_session)
     }) do
-      InternalTools::CoderAllocateMachine.new(params: {}, session: @session, mcp_server: @mcp_a).execute
-      InternalTools::CoderAllocateMachine.new(params: {}, session: @session, mcp_server: @mcp_b).execute
+      result = InternalTools::CoderAllocateMachine.new(
+        params: {}, session: @no_workflow_session
+      ).execute
+
+      assert_equal 0, result[:exit_code]
+      payload = JSON.parse(result[:stdout])
+      assert_equal "ws-1", payload["workspace_name"]
     end
-
-    assert_equal [ @integration.id, @other.id ], received
-  end
-
-  test "allocate: errors when the MCP server is not managed" do
-    custom_server = create(:mcp_server, kind: :custom, scope: @company)
-    handler = InternalTools::CoderAllocateMachine.new(
-      params: {}, session: @session, mcp_server: custom_server
-    )
-    result = handler.execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/managed Coder MCP server/, result[:stderr])
-  end
-
-  test "allocate: errors when the integration is inactive" do
-    @integration.update!(status: :error)
-    handler = InternalTools::CoderAllocateMachine.new(
-      params: {}, session: @session, mcp_server: @mcp_a
-    )
-    result = handler.execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/managed Coder MCP server/, result[:stderr])
   end
 
   # ---------- coder_ssh_exec ----------
@@ -144,8 +85,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   test "ssh_exec: rejects when session does not hold the lock" do
     handler = InternalTools::CoderSshExec.new(
       params: { workspace_name: "ws-1", command: "ls" },
-      session: @session,
-      mcp_server: @mcp_a
+      session: @session
     )
     result = handler.execute
 
@@ -164,7 +104,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     result = InternalTools::CoderSshExec.new(
       params: { workspace_name: "ws-1", command: "echo hello" },
-      session: @no_workflow_session, mcp_server: @mcp_a
+      session: @no_workflow_session
     ).execute
 
     assert_equal 0, result[:exit_code]
@@ -183,28 +123,13 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     result = InternalTools::CoderSshExec.new(
       params: { workspace_name: "ws-1", command: "echo hello" },
-      session: @session, mcp_server: @mcp_a
+      session: @session
     ).execute
 
     assert_equal 0, result[:exit_code]
     payload = JSON.parse(result[:stdout])
     assert_equal 0, payload["exit_code"]
     assert_equal "hello", payload["stdout"]
-  end
-
-  test "ssh_exec: respects the per-integration lock scope" do
-    Coder::LockService.new(@integration).acquire(
-      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
-    )
-
-    handler = InternalTools::CoderSshExec.new(
-      params: { workspace_name: "ws-1", command: "echo hello" },
-      session: @session, mcp_server: @mcp_b
-    )
-    result = handler.execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/does not hold the lock/, result[:stderr])
   end
 
   # ---------- coder_release_machine ----------
@@ -216,7 +141,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     result = InternalTools::CoderReleaseMachine.new(
       params: { workspace_name: "ws-1" },
-      session: @session, mcp_server: @mcp_a
+      session: @session
     ).execute
 
     assert_equal 0, result[:exit_code]
@@ -229,7 +154,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   test "release: returns released=false when nothing was held" do
     result = InternalTools::CoderReleaseMachine.new(
       params: { workspace_name: "ws-missing" },
-      session: @session, mcp_server: @mcp_a
+      session: @session
     ).execute
 
     assert_equal 0, result[:exit_code]
@@ -244,7 +169,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     result = InternalTools::CoderReleaseMachine.new(
       params: { workspace_name: "ws-1" },
-      session: @no_workflow_session, mcp_server: @mcp_a
+      session: @no_workflow_session
     ).execute
 
     assert_equal 0, result[:exit_code]
@@ -264,7 +189,7 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     # @session.id is 4242, so this call comes from a non-owning session.
     result = InternalTools::CoderReleaseMachine.new(
       params: { workspace_name: "ws-1" },
-      session: @session, mcp_server: @mcp_a
+      session: @session
     ).execute
 
     assert_equal 0, result[:exit_code]

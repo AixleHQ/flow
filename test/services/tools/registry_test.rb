@@ -36,24 +36,16 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert builder_tools.none?(&:user_attachable)
   end
 
-  test "injectable covers the three auto-injection rule groups" do
+  test "injectable covers the auto-injection rule groups" do
     rules = Tools::Registry.injectable.flat_map(&:inject_rules).uniq.sort
 
-    assert_equal %i[container_tools_present non_interactive_session workflow_step_session], rules
-  end
-
-  test "managed_tool_names mirrors the Coder managed-MCP registry" do
-    assert_equal %w[coder_allocate_machine coder_release_machine coder_ssh_exec],
-                 Tools::Registry.managed_tool_names("coder").sort
-    assert_empty Tools::Registry.managed_tool_names("slack")
-    assert_empty Tools::Registry.managed_tool_names(nil)
+    assert_equal %i[coder_integration_connected container_tools_present non_interactive_session workflow_step_session], rules
   end
 
   test "grouping axes cover every definition" do
     defs = Tools::Registry.definitions.values
 
     assert_equal 28, defs.count { |d| d.tags.include?(:builder) }
-    assert_equal 3, defs.count { |d| d.managed_mcp_provider }
     assert_equal 17, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
   end

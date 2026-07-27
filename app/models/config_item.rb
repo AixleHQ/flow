@@ -20,7 +20,7 @@ class ConfigItem < ApplicationRecord
                    format: { with: /\A[A-Z][A-Z0-9_]*\z/, message: "must be uppercase with underscores (e.g., API_KEY)" }
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :item_type, presence: true
-  validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
+  validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validates :scope_id, presence: true
 
   # Value must be present on create
@@ -30,26 +30,20 @@ class ConfigItem < ApplicationRecord
   before_validation :encrypt_value_if_secret
 
   # Scopes
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
   scope :visible_for_project, ->(project) {
-    where(scope_type: "Company", scope_id: project.company_id)
-      .or(where(scope_type: "Project", scope_id: project.id))
+    where(scope_type: "Project", scope_id: project.id)
   }
 
   def scope_indicator
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
-  # Get effective config items for container injection (resolved overrides)
-  # Returns hash { name => decrypted_value }
+  # Get effective config items for container injection (resolved overrides).
+  # Config items are Project-scoped. Returns hash { name => decrypted_value }.
   def self.effective_for_project(project)
-    company_items = for_company(project.company).index_by(&:name)
-    project_items = for_project(project).index_by(&:name)
-
-    # Merge with project taking precedence
-    company_items.merge(project_items).transform_values(&:decrypted_value)
+    for_project(project).index_by(&:name).transform_values(&:decrypted_value)
   end
 
   # Ransack

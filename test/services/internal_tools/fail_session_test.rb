@@ -7,7 +7,7 @@ class InternalTools::FailSessionTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: workflow_run, step: step, step_note: nil)

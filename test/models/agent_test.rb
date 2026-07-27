@@ -16,26 +16,32 @@ class AgentTest < ActiveSupport::TestCase
       name: "test_agent",
       title: "Test Agent",
       persona: "You are a helpful assistant",
-      scope: @company
+      scope: @project
     )
     assert agent.valid?
   end
 
+  test "company scope is rejected (agents are project-only)" do
+    agent = Agent.new(name: "test_agent", title: "Test", persona: "Test", scope: @company)
+    refute_predicate agent, :valid?
+    assert_includes agent.errors[:scope_type], "is not included in the list"
+  end
+
   test "invalid without name" do
-    agent = Agent.new(title: "Test", persona: "Test", scope: @company)
+    agent = Agent.new(title: "Test", persona: "Test", scope: @project)
     refute_predicate agent, :valid?
     assert agent.errors[:name].present?
   end
 
   test "name is converted to lowercase automatically" do
-    agent = Agent.new(name: "TestAgent", title: "Test", persona: "Test", scope: @company)
+    agent = Agent.new(name: "TestAgent", title: "Test", persona: "Test", scope: @project)
     # Name is auto-downcased, so validation passes
     assert agent.valid?
     assert_equal "testagent", agent.name
   end
 
   test "invalid with name starting with number" do
-    agent = Agent.new(name: "1agent", title: "Test", persona: "Test", scope: @company)
+    agent = Agent.new(name: "1agent", title: "Test", persona: "Test", scope: @project)
     refute_predicate agent, :valid?
   end
 
@@ -46,61 +52,61 @@ class AgentTest < ActiveSupport::TestCase
   end
 
   test "name uniqueness is scoped" do
-    Agent.create!(name: "shared", title: "T1", persona: "P1", scope: @company)
+    project2 = create(:project, company: @company, owner: @owner)
+    Agent.create!(name: "shared", title: "T1", persona: "P1", scope: @project)
 
-    # Same name in different scope is OK
-    agent_project = Agent.new(name: "shared", title: "T2", persona: "P2", scope: @project)
-    assert agent_project.valid?
+    # Same name in a different scope (another project) is OK
+    agent_other = Agent.new(name: "shared", title: "T2", persona: "P2", scope: project2)
+    assert agent_other.valid?
 
     # Same name in same scope is NOT OK
-    agent_dup = Agent.new(name: "shared", title: "T3", persona: "P3", scope: @company)
+    agent_dup = Agent.new(name: "shared", title: "T3", persona: "P3", scope: @project)
     refute_predicate agent_dup, :valid?
     assert agent_dup.errors[:name].any? { |e| e.include?("already exists") }
   end
 
   # == Scopes ==
 
-  test "for_company returns company agents" do
-    company_agent = Agent.create!(name: "company_agent", title: "CA", persona: "P", scope: @company)
-    project_agent = Agent.create!(name: "project_agent", title: "PA", persona: "P", scope: @project)
+  test "belonging_to_company returns agents of all the company projects" do
+    project2 = create(:project, company: @company, owner: @owner)
+    other_company = create(:company, email_domain: "other-agent.com")
+    other_owner = create(:user, company: other_company)
+    other_project = create(:project, company: other_company, owner: other_owner)
 
-    result = Agent.for_company(@company)
+    a1 = Agent.create!(name: "a1", title: "A1", persona: "P", scope: @project)
+    a2 = Agent.create!(name: "a2", title: "A2", persona: "P", scope: project2)
+    foreign = Agent.create!(name: "foreign", title: "F", persona: "P", scope: other_project)
 
-    assert_includes result, company_agent
-    refute_includes result, project_agent
+    result = Agent.belonging_to_company(@company)
+
+    assert_includes result, a1
+    assert_includes result, a2
+    refute_includes result, foreign
   end
 
-  test "for_project returns project agents" do
-    company_agent = Agent.create!(name: "company_agent", title: "CA", persona: "P", scope: @company)
-    project_agent = Agent.create!(name: "project_agent", title: "PA", persona: "P", scope: @project)
+  test "for_project returns only that project's agents" do
+    project2 = create(:project, company: @company, owner: @owner)
+    mine = Agent.create!(name: "mine", title: "M", persona: "P", scope: @project)
+    other = Agent.create!(name: "other", title: "O", persona: "P", scope: project2)
 
     result = Agent.for_project(@project)
 
-    assert_includes result, project_agent
-    refute_includes result, company_agent
+    assert_includes result, mine
+    refute_includes result, other
   end
 
   # == visible_for_project ==
 
-  test "visible_for_project returns company and project agents" do
-    Agent.create!(name: "company_only", title: "CO", persona: "P", scope: @company)
-    Agent.create!(name: "project_only", title: "PO", persona: "P", scope: @project)
+  test "visible_for_project returns only that project's agents" do
+    project2 = create(:project, company: @company, owner: @owner)
+    Agent.create!(name: "mine_agent", title: "M", persona: "P", scope: @project)
+    Agent.create!(name: "other_agent", title: "O", persona: "P", scope: project2)
 
     result = Agent.visible_for_project(@project)
     names = result.pluck(:name)
 
-    assert_includes names, "company_only"
-    assert_includes names, "project_only"
-  end
-
-  test "visible_for_project includes both company and project when same name" do
-    Agent.create!(name: "shared", title: "Company", persona: "P", scope: @company)
-    Agent.create!(name: "shared", title: "Project", persona: "P", scope: @project)
-
-    result = Agent.visible_for_project(@project)
-    shared = result.where(name: "shared")
-
-    assert_equal 2, shared.count
+    assert_includes names, "mine_agent"
+    refute_includes names, "other_agent"
   end
 
   test "visible_for_project returns ActiveRecord::Relation" do
@@ -109,11 +115,6 @@ class AgentTest < ActiveSupport::TestCase
   end
 
   # == scope_indicator ==
-
-  test "#scope_indicator returns 'company' for company agent" do
-    agent = Agent.new(scope_type: "Company")
-    assert_equal "company", agent.scope_indicator
-  end
 
   test "#scope_indicator returns 'project' for project agent" do
     agent = Agent.new(scope_type: "Project")

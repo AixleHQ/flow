@@ -8,7 +8,7 @@ class InternalTools::MetaListSkillsTest < ActiveSupport::TestCase
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
 
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: step)
@@ -19,11 +19,11 @@ class InternalTools::MetaListSkillsTest < ActiveSupport::TestCase
     @session.reload
   end
 
-  test "lists project- and company-scoped skills visible for the session's project" do
-    project_skill = create(:skill, scope: @project, name: "project-skill",
-      title: "Project Skill", package: "acme/skills@project-skill", source: "acme/skills")
-    company_skill = create(:skill, scope: @company, name: "company-skill",
-      title: "Company Skill", package: "acme/skills@company-skill", source: "acme/skills")
+  test "lists project-scoped skills visible for the session's project" do
+    first_skill = create(:skill, scope: @project, name: "first-skill",
+      title: "First Skill", package: "acme/skills@first-skill", source: "acme/skills")
+    second_skill = create(:skill, scope: @project, name: "second-skill",
+      title: "Second Skill", package: "acme/skills@second-skill", source: "acme/skills")
 
     result = InternalTools::MetaListSkills.new(params: {}, session: @session).execute
 
@@ -37,16 +37,16 @@ class InternalTools::MetaListSkillsTest < ActiveSupport::TestCase
     by_id = data["skills"].index_by { |s| s["id"] }
     assert_equal %w[id name title package source scope_type].sort, by_id.values.first.keys.sort
 
-    proj_payload = by_id[project_skill.id]
-    assert_equal "project-skill", proj_payload["name"]
-    assert_equal "Project Skill", proj_payload["title"]
-    assert_equal "acme/skills@project-skill", proj_payload["package"]
-    assert_equal "acme/skills", proj_payload["source"]
-    assert_equal "Project", proj_payload["scope_type"]
+    first_payload = by_id[first_skill.id]
+    assert_equal "first-skill", first_payload["name"]
+    assert_equal "First Skill", first_payload["title"]
+    assert_equal "acme/skills@first-skill", first_payload["package"]
+    assert_equal "acme/skills", first_payload["source"]
+    assert_equal "Project", first_payload["scope_type"]
 
-    company_payload = by_id[company_skill.id]
-    assert_equal "company-skill", company_payload["name"]
-    assert_equal "Company", company_payload["scope_type"]
+    second_payload = by_id[second_skill.id]
+    assert_equal "second-skill", second_payload["name"]
+    assert_equal "Project", second_payload["scope_type"]
   end
 
   test "excludes skills scoped to other projects and other companies" do
@@ -56,7 +56,8 @@ class InternalTools::MetaListSkillsTest < ActiveSupport::TestCase
     create(:skill, scope: other_project, name: "other-project-skill")
 
     other_company = create(:company)
-    create(:skill, scope: other_company, name: "other-company-skill")
+    other_company_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    create(:skill, scope: other_company_project, name: "other-company-skill")
 
     result = InternalTools::MetaListSkills.new(params: {}, session: @session).execute
 

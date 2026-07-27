@@ -137,7 +137,7 @@ class McpControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a tampered custom tool is hidden from serving (digest fail-closed)" do
-    tool = create(:tool, scope: @company, name: "my_linter", docker_image: "l:1")
+    tool = create(:tool, scope: @project, name: "my_linter", docker_image: "l:1")
     @session.tools << tool
 
     names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
@@ -148,17 +148,16 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     refute_includes names, "my_linter"
   end
 
-  # ── managed namespace ──
+  # ── integration-gated Coder tools ──
 
-  test "managed server tools are namespaced and callable when the integration is active" do
-    integration = create(:integration, company: @company, project: @project,
+  test "Coder tools surface through aixle-tools once the Coder integration is active" do
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    refute_includes names, "coder_ssh_exec"
+
+    create(:integration, company: @company, project: @project,
                          provider: :coder, status: :active, connected_by: @user)
-    server = create(:mcp_server, kind: :managed, scope: @project, integration: integration,
-                    name: "coder-#{integration.id}")
-    @session.mcp_servers << server
 
-    tools = listed_tools(rpc("tools/list"))
-    names = tools.map { |t| t["name"] }
-    assert_includes names, "mcp__coder-#{integration.id}__coder_ssh_exec"
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+    assert_includes names, "coder_ssh_exec"
   end
 end

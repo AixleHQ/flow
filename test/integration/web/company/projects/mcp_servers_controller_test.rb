@@ -16,7 +16,7 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
   end
 
   test "index includes company and project config item names" do
-    create(:config_item, name: "COMPANY_KEY", scope: @company)
+    create(:config_item, name: "COMPANY_KEY", scope: @project)
     create(:config_item, name: "PROJECT_KEY", scope: @project)
 
     get company_project_mcp_servers_path(@project)
@@ -100,31 +100,10 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     assert_response :redirect
   end
 
-  test "update rejects company-scoped server" do
-    server = create(:mcp_server, scope: @company, kind: :custom, description: "Company MCP")
-
-    patch company_project_mcp_server_path(@project, server), params: {
-      mcp_server: { description: "Updated from project" }
-    }
-
-    assert_response :not_found
-    assert_equal "Company MCP", server.reload.description
-  end
-
   test "destroy redirects" do
     server = create(:mcp_server, scope: @project, kind: :custom)
 
     delete company_project_mcp_server_path(@project, server)
     assert_response :redirect
-  end
-
-  test "destroy rejects company-scoped server" do
-    server = create(:mcp_server, scope: @company, kind: :custom)
-
-    assert_no_difference -> { MCPServer.count } do
-      delete company_project_mcp_server_path(@project, server)
-    end
-
-    assert_response :not_found
   end
 end

@@ -42,7 +42,7 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
 
   test "list_project_tools lists visible tools" do
     Tools::Reconciler.run!
-    create(:tool, scope: @company, name: "my_linter", docker_image: "l:1")
+    create(:tool, scope: @project, name: "my_linter", docker_image: "l:1")
 
     names = payload(call_tool("list_project_tools", { project_id: @project.id }))["tools"].map { |t| t["name"] }
     assert_includes names, "my_linter"

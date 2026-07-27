@@ -9,7 +9,7 @@ class RecentActivityServiceTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
     @board = create(:board, project: @project)
     @board_column = create(:board_column, board: @board)
-    @workflow = create(:workflow, :with_company_scope, scope: @company)
+    @workflow = create(:workflow, :with_project_scope, scope: @project)
   end
 
   # ─── Helpers ────────────────────────────────────────────────────────────────

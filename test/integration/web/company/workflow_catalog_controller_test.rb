@@ -11,15 +11,15 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
   end
 
   test "index renders catalog with published workflows" do
-    create_list(:workflow, 2, scope: @company, published_at: Time.current, published_by: @user)
-    create(:workflow, scope: @company)
+    create_list(:workflow, 2, scope: @project, published_at: Time.current, published_by: @user)
+    create(:workflow, scope: @project)
 
     get company_workflow_catalog_index_path
     assert_inertia_page "Company/WorkflowCatalog/IndexPage"
   end
 
   test "duplicate creates workflow copy in target project" do
-    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    workflow = create(:workflow, scope: @project, published_at: Time.current, published_by: @user)
     create(:step, workflow: workflow, position: 1)
     create(:step, workflow: workflow, position: 2)
 
@@ -35,11 +35,15 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
   end
 
   test "duplicate copies workflow dependencies into the project without copying secrets" do
-    agent = create(:agent, scope: @company, name: "helper", title: "Helper", persona: "Helps.")
-    skill = create(:skill, scope: @company)
-    mcp = create(:mcp_server, scope: @company, name: "context7",
+    # Source workflow + deps live in a DIFFERENT project of the same company
+    # (that is what the company-wide catalog surfaces); duplicating into @project
+    # copies the project-scoped dependencies across.
+    source = create(:project, company: @company, owner: @user)
+    agent = create(:agent, scope: source, name: "helper", title: "Helper", persona: "Helps.")
+    skill = create(:skill, scope: source)
+    mcp = create(:mcp_server, scope: source, name: "context7",
                               headers: { "Authorization" => "Bearer config_item:API_KEY" })
-    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    workflow = create(:workflow, scope: source, published_at: Time.current, published_by: @user)
     create(:step, workflow: workflow, position: 1, agent_id: agent.id,
                   skill_ids: [ skill.id ], mcp_server_ids: [ mcp.id ])
 
@@ -62,8 +66,9 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
   end
 
   test "duplicate is idempotent: posting twice does not duplicate resources or config items" do
-    agent = create(:agent, scope: @company, name: "helper", title: "Helper", persona: "Helps.")
-    workflow = create(:workflow, scope: @company, published_at: Time.current, published_by: @user)
+    source = create(:project, company: @company, owner: @user)
+    agent = create(:agent, scope: source, name: "helper", title: "Helper", persona: "Helps.")
+    workflow = create(:workflow, scope: source, published_at: Time.current, published_by: @user)
     create(:step, workflow: workflow, position: 1, agent_id: agent.id)
 
     post duplicate_company_workflow_catalog_path(workflow), params: { project_id: @project.id }
@@ -74,7 +79,7 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
   end
 
   test "duplicate rejects non-published workflow" do
-    workflow = create(:workflow, scope: @company)
+    workflow = create(:workflow, scope: @project)
 
     post duplicate_company_workflow_catalog_path(workflow), params: { project_id: @project.id }
     assert_response :redirect

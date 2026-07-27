@@ -14,7 +14,7 @@ class Web::Company::Projects::ConfigItemsRenderTest < ActionDispatch::Integratio
 
   test "index renders the config page" do
     # visible_for_project surfaces both company- and project-scoped items
-    create(:config_item, scope: @company)
+    create(:config_item, scope: @project)
     create(:config_item, scope: @project)
 
     get company_project_config_items_path(@project)

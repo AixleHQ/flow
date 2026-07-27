@@ -229,7 +229,7 @@ Rails.application.routes.draw do
 
     namespace :company do
       resources :members, only: %i[index create update destroy]
-      resources :config_items, only: %i[index create update destroy]
+      # Config items are Project-scoped only — managed under company/projects/:id/config_items.
       # GitHub App setup callback (single global endpoint; project target carried in `state`).
       # Company-level integration management has been removed — integrations are project-scoped.
       get "integrations/github_setup", to: "integrations/github_setup#github_setup",

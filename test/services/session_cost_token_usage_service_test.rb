@@ -24,7 +24,7 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
 
   def create_session_linked_to_task(project:, user:, cost_cents:, total_tokens:, board_task:, created_at: Time.current)
     session = create_session_with_usage(project: project, user: user, cost_cents: cost_cents, total_tokens: total_tokens, created_at: created_at)
-    workflow = create(:workflow, :with_company_scope, scope: @company)
+    workflow = create(:workflow, :with_project_scope, scope: @project)
     step = create(:step, workflow: workflow)
     run = create(:workflow_run, workflow: workflow, project: project, user: user, board_task: board_task)
     create(:step_run, workflow_run: run, step: step, terminal_session: session)

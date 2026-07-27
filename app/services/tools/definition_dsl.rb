@@ -76,7 +76,6 @@ module Tools
 
       def unavailable_message(value) = @h[:unavailable_message] = value
       def user_attachable(value) = @h[:user_attachable] = value
-      def managed_mcp_provider(provider) = @h[:managed_mcp_provider] = provider
 
       # MCP behavior annotations (spec 2025-03-26+): serialized on the wire so
       # clients can drive confirmation policies. Untrusted display hints by

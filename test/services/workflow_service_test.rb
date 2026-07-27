@@ -7,7 +7,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     @company = @user.company
     @project = create(:project, owner: @user, company: @company)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @step1 = create(:step, workflow: @workflow, position: 1, name: "Step 1")
     @step2 = create(:step, workflow: @workflow, position: 2, name: "Step 2")
   end

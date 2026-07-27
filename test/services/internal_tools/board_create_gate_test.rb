@@ -16,7 +16,7 @@ class InternalTools::BoardCreateGateTest < ActiveSupport::TestCase
     @repo_name   = "org/app"
     create(:repository, full_name: @repo_name, scope: @project, integration: @integration)
 
-    workflow      = create(:workflow, scope: @company)
+    workflow      = create(:workflow, scope: @project)
     step          = create(:step, workflow: workflow)
     @workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: @task)
     @step_run     = create(:step_run, workflow_run: @workflow_run, step: step)

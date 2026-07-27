@@ -10,7 +10,7 @@ module Api
           @company = create(:company)
           @user = create(:user, :onboarding_completed, company: @company)
           @project = create(:project, company: @company, owner: @user)
-          @workflow = create(:workflow, scope: @company)
+          @workflow = create(:workflow, scope: @project)
           @run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
           @wra = create(:workflow_run_asset, workflow_run: @run)
           sign_in @user

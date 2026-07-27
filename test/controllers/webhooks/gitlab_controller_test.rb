@@ -7,6 +7,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     @controller = Webhooks::GitlabController.new
     @company = create(:company)
     @user = create(:user, company: @company)
+    @project = create(:project, company: @company, owner: @user)
     @integration = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
 
     @webhook_secret = "a" * 64
@@ -14,7 +15,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
       full_name: "group/app",
       integration: @integration,
       webhook_secret: @webhook_secret,
-      scope: @company)
+      scope: @project)
   end
 
   # == Authentication ==

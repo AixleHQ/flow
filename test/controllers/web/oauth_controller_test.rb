@@ -274,7 +274,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "mcp_connect discovers the client and redirects to consent with PKCE + RFC 8707 resource" do
-    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared,
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
                     url: "https://mcp.acme.test/v1")
     client = build_dcr_client
     stub_discovery!(client: client)
@@ -298,12 +298,12 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal "mcp:mcp.acme.test", payload["provider"]
     assert_equal "https://mcp.acme.test/v1", payload["resource"]
     assert_equal client.id, payload["oauth_client_id"]
-    assert_equal "Company", payload["owner_type"]
-    assert_equal @company.id, payload["owner_id"]
+    assert_equal "Project", payload["owner_type"]
+    assert_equal @project.id, payload["owner_id"]
   end
 
   test "mcp_connect pins the connecting identity to the current user for a per_user server" do
-    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :per_user,
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user,
                     url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client)
 
@@ -315,7 +315,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "mcp_connect refuses a non-oauth server (never runs discovery)" do
-    server = create(:mcp_server, :custom, scope: @company) # auth_type :none
+    server = create(:mcp_server, :custom, scope: @project) # auth_type :none
     MCP::OauthDiscoveryService.expects(:prepare).never
 
     get oauth_mcp_connect_path(mcp_server_id: server.id)
@@ -325,7 +325,8 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
 
   test "mcp_connect refuses a server the user may not act for (never runs discovery)" do
     other = create(:company)
-    server = create(:mcp_server, :custom, scope: other, auth_type: :oauth, url: "https://mcp.other.test/v1")
+    other_project = create(:project, company: other, owner: create(:user, company: other))
+    server = create(:mcp_server, :custom, scope: other_project, auth_type: :oauth, url: "https://mcp.other.test/v1")
     MCP::OauthDiscoveryService.expects(:prepare).never
 
     get oauth_mcp_connect_path(mcp_server_id: server.id)
@@ -334,7 +335,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "mcp_connect surfaces a generic error and leaks no metadata when discovery fails" do
-    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     MCP::OauthDiscoveryService.stubs(:prepare).raises(MCP::DiscoveryError.new("boom"))
 
     get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
@@ -345,7 +346,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   # --- CALLBACK: MCP (DCR) branch ------------------------------------------
 
   test "callback (mcp) loads the signed DCR client, threads the resource, and upserts an mcp:<host> credential" do
-    server = create(:mcp_server, :custom, scope: @company, auth_type: :oauth, credential_scope: :shared,
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
                     url: "https://mcp.acme.test/v1")
     client = build_dcr_client
     stub_mcp_token_success!("https://auth.mcp.test/token")

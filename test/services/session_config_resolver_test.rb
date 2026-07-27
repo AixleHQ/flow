@@ -61,7 +61,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "standalone session returns configured_agent_id" do
-    agent = Agent.create!(name: "test_agent", title: "Test Agent", persona: "A persona", scope: @company)
+    agent = Agent.create!(name: "test_agent", title: "Test Agent", persona: "A persona", scope: @project)
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       configured_agent: agent)
 
@@ -126,7 +126,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "workflow session returns step agent_id as configured_agent_id" do
-    agent = Agent.create!(name: "test_agent", title: "Test Agent", persona: "A persona", scope: @company)
+    agent = Agent.create!(name: "test_agent", title: "Test Agent", persona: "A persona", scope: @project)
     session = build_workflow_session(step_agent: agent)
 
     result = SessionConfigResolver.resolve(session)
@@ -176,7 +176,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
 
   test "board_triggered session fallback includes company repositories visible to project" do
     integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @company, integration: integration)
+    repo = create(:repository, scope: @project, integration: integration)
     session = build_board_triggered_session(
       mount_repositories: true,
       run_repository_ids: [],
@@ -330,7 +330,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "inherit_all default is false when missing from config" do
-    workflow = create(:workflow, :with_company_scope, config: {})
+    workflow = create(:workflow, :with_project_scope, config: {})
 
     # The documented contract is exactly `false`, not merely falsy (nil).
     assert_equal false, workflow.inherit_all_project_resources # rubocop:disable Minitest/RefuteFalse
@@ -521,7 +521,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
 
   test "resolve_with_breakdown repository fallback includes company repositories visible to project" do
     integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @company, integration: integration)
+    repo = create(:repository, scope: @project, integration: integration)
     session = build_board_triggered_session(
       mount_repositories: true,
       run_repository_ids: [],
@@ -649,7 +649,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
                              board_task: nil, workflow_config: {},
                              step_required_agent_runtime: nil,
                              step_bmad_enabled: false)
-    workflow = create(:workflow, :with_company_scope, config: workflow_config)
+    workflow = create(:workflow, :with_project_scope, config: workflow_config)
     step = create(:step, workflow: workflow, tool_ids: step_tool_ids, skill_ids: step_skill_ids,
       mcp_server_ids: step_mcp_server_ids, asset_ids: step_asset_ids, agent: step_agent,
       mount_repositories: mount_repositories,

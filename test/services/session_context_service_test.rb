@@ -92,7 +92,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   end
 
   test "resolve_env_vars resolves config_item references" do
-    create(:config_item, name: "ANTHROPIC_API_KEY", value: "sk-ant-test-key", item_type: :variable, scope: @company)
+    create(:config_item, name: "ANTHROPIC_API_KEY", value: "sk-ant-test-key", item_type: :variable, scope: @project)
 
     session = create(:terminal_session, user: @user, project: @project, session_config: {
       "env_vars" => { "ANTHROPIC_API_KEY" => "config_item:ANTHROPIC_API_KEY" }
@@ -161,7 +161,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config generates Claude Code format" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
 
@@ -175,7 +175,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config generates Cursor CLI format" do
     server = create(:mcp_server, :custom, name: "context7", url: "https://context7.com/mcp",
-                    transport: "sse", scope: @company, headers: { "Authorization" => "Bearer test" })
+                    transport: "sse", scope: @project, headers: { "Authorization" => "Bearer test" })
     session = create(:terminal_session, user: @user, project: @project, agent_type: "cursor_cli")
     session.mcp_servers << server
 
@@ -189,7 +189,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config generates Gemini CLI format" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli")
     session.mcp_servers << server
 
@@ -204,7 +204,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config generates Codex TOML format" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
     session.mcp_servers << server
 
@@ -219,7 +219,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config Codex uses http_headers not headers" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company,
+                    transport: "sse", scope: @project,
                     headers: { "Authorization" => "Bearer secret123" })
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
     session.mcp_servers << server
@@ -231,28 +231,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     refute_includes result[toml_path], "\nheaders = "
   end
 
-  test "generate_mcp_config skips managed servers as standalone client endpoints" do
-    custom = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
-    integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
-    managed = create(:mcp_server, name: "coder-#{integration.id}",
-                     kind: :managed, transport: :http, url: nil, scope: @company,
-                     integration: integration)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
-    session.mcp_servers << [ custom, managed ]
-
-    result = SessionContextService.generate_mcp_config(session)
-
-    toml_path = "/home/codex/.codex/config.toml"
-    assert_includes result[toml_path], '[mcp_servers."aixle-tools"]'
-    assert_includes result[toml_path], '[mcp_servers."tavily"]'
-    refute_includes result[toml_path], %([mcp_servers."#{managed.name}"])
-  end
-
   test "generate_mcp_config resolves secrets in headers" do
-    create(:config_item, name: "TAVILY_API_KEY", value: "tvly-secret", item_type: :variable, scope: @company)
+    create(:config_item, name: "TAVILY_API_KEY", value: "tvly-secret", item_type: :variable, scope: @project)
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company,
+                    transport: "sse", scope: @project,
                     headers: { "Authorization" => "Bearer config_item:TAVILY_API_KEY" })
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
@@ -265,9 +247,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config skips disabled servers" do
     enabled = create(:mcp_server, :custom, name: "enabled-server", url: "https://a.com/mcp",
-                     transport: "sse", scope: @company, enabled: true)
+                     transport: "sse", scope: @project, enabled: true)
     disabled = create(:mcp_server, :custom, name: "disabled-server", url: "https://b.com/mcp",
-                      transport: "sse", scope: @company, enabled: false)
+                      transport: "sse", scope: @project, enabled: false)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << [ enabled, disabled ]
 
@@ -291,7 +273,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config keeps aixle-tools when associated servers are missing from DB" do
     server = create(:mcp_server, :custom, name: "real", url: "https://a.com/mcp",
-                    transport: "sse", scope: @company)
+                    transport: "sse", scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
 
@@ -309,7 +291,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_mcp_config writes Claude MCP file to container" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
 
@@ -327,7 +309,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_mcp_config merges Gemini settings" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "gemini_cli")
     session.mcp_servers << server
 
@@ -354,7 +336,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_mcp_config appends Codex TOML" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
-                    transport: "sse", scope: @company, headers: {})
+                    transport: "sse", scope: @project, headers: {})
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
     session.mcp_servers << server
 
@@ -503,7 +485,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "inject_context_file includes agent persona in XML output" do
     agent = Agent.create!(name: "reviewer", title: "Code Reviewer",
-      persona: "You review code carefully.", scope: @company)
+      persona: "You review code carefully.", scope: @project)
     session = create(:terminal_session, user: @user, project: @project,
       agent_type: "claude_code", mode: "interactive", configured_agent: agent)
 
@@ -761,7 +743,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_repositories clones repos via runtime.exec with correct command" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     repo = create(:repository, full_name: "acme/my-app", source_branch: "main",
-                  integration: integration, scope: @company)
+                  integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << repo
 
@@ -791,9 +773,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_repositories reuses token for repos from same integration" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     repo1 = create(:repository, full_name: "acme/app", source_branch: "main",
-                   integration: integration, scope: @company)
+                   integration: integration, scope: @project)
     repo2 = create(:repository, full_name: "acme/infra", source_branch: "develop",
-                   integration: integration, scope: @company)
+                   integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << [ repo1, repo2 ]
 
@@ -819,9 +801,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_repositories handles clone failure gracefully" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
-                     integration: integration, scope: @company)
+                     integration: integration, scope: @project)
     repo_fail = create(:repository, full_name: "acme/bad", source_branch: "main",
-                       integration: integration, scope: @company)
+                       integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << [ repo_fail, repo_ok ]
 
@@ -863,7 +845,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_repositories retries failed clone once after delay" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     repo = create(:repository, full_name: "acme/retry-me", source_branch: "main",
-                  integration: integration, scope: @company)
+                  integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << repo
 
@@ -889,7 +871,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "inject_repositories skips inactive integration" do
     integration = create(:integration, company: @company, connected_by: @user, status: :inactive)
     repo = create(:repository, full_name: "acme/repo", source_branch: "main",
-                  integration: integration, scope: @company)
+                  integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << repo
 
@@ -920,9 +902,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   test "terminal_session repository_ids returns associated repo ids" do
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
     repo1 = create(:repository, full_name: "acme/a", source_branch: "main",
-                   integration: integration, scope: @company)
+                   integration: integration, scope: @project)
     repo2 = create(:repository, full_name: "acme/b", source_branch: "main",
-                   integration: integration, scope: @company)
+                   integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, agent_type: "claude_code")
     session.repositories << [ repo1, repo2 ]
 
@@ -1082,7 +1064,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config injects a Bearer header when a token resolves for the server" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
+                    transport: "sse", scope: @project, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).returns("resolved-token")
@@ -1095,7 +1077,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config does not inject for a non-oauth server" do
     server = create(:mcp_server, :custom, name: "plain-srv", url: "https://plain.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {}) # auth_type defaults to :none
+                    transport: "sse", scope: @project, headers: {}) # auth_type defaults to :none
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     # A non-oauth server never consults the token service (auth_type gate).
@@ -1109,7 +1091,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config leaves headers untouched when no OAuth token resolves" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
+                    transport: "sse", scope: @project, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).returns(nil)
@@ -1122,7 +1104,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config never overwrites an explicit Authorization header" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, auth_type: :oauth,
+                    transport: "sse", scope: @project, auth_type: :oauth,
                     headers: { "Authorization" => "Bearer preset" })
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
@@ -1137,7 +1119,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config propagates ReauthRequired so the session-start preflight can block launch" do
     server = create(:mcp_server, :custom, name: "oauth-srv", url: "https://oauth.example.com/mcp",
-                    transport: "sse", scope: @company, headers: {}, auth_type: :oauth)
+                    transport: "sse", scope: @project, headers: {}, auth_type: :oauth)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
     Oauth::TokenService.stubs(:access_token_for).raises(Oauth::ReauthRequired.new(nil))

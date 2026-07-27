@@ -7,7 +7,7 @@ class ContainerStrategies::CustomToolStrategyTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @tool = create(:tool, scope: @company, docker_image: "node:20", command: "node /workspace/main.js")
+    @tool = create(:tool, scope: @project, docker_image: "node:20", command: "node /workspace/main.js")
   end
 
   test "resolve_image returns tool docker_image" do

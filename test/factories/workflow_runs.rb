@@ -2,9 +2,10 @@
 
 FactoryBot.define do
   factory :workflow_run do
-    workflow factory: %i[workflow with_company_scope]
-    project
-    user
+    workflow factory: %i[workflow with_project_scope]
+    # Keep run/workflow/user in one company by default so a bare create is valid.
+    project { workflow.scope }
+    user { association(:user, company: project.company) }
     state { "pending" }
     mode { "interactive" }
     input_asset_ids { [] }

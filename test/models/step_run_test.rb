@@ -7,7 +7,7 @@ class StepRunTest < ActiveSupport::TestCase
     @company = create(:company)
     @user = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @workflow = create(:workflow, scope: @company)
+    @workflow = create(:workflow, scope: @project)
     @step = create(:step, workflow: @workflow)
     @run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
     @step_run = create(:step_run, workflow_run: @run, step: @step)

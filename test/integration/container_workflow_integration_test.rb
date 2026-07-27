@@ -63,7 +63,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   # ===========================================================================
 
   test "tool_execution | basic command" do
-    tool = create(:tool, scope: @company, command: "echo hello", docker_image: "alpine:latest")
+    tool = create(:tool, scope: @project, command: "echo hello", docker_image: "alpine:latest")
 
     state = run_phases_for_tool(tool)
 
@@ -74,7 +74,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   end
 
   test "tool_execution | with parameters in command" do
-    tool = create(:tool, scope: @company, command: "echo {{message}} > /workspace/out.txt",
+    tool = create(:tool, scope: @project, command: "echo {{message}} > /workspace/out.txt",
                          docker_image: "python:3.12-slim")
 
     state = run_phases_for_tool(tool, parameters: { "message" => "hello world" })
@@ -84,7 +84,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   end
 
   test "tool_execution | with tool_files" do
-    tool = create(:tool, scope: @company, command: "/bin/sh /workspace/scripts/run.sh",
+    tool = create(:tool, scope: @project, command: "/bin/sh /workspace/scripts/run.sh",
                          docker_image: "node:20-slim")
     tool.tool_files.create!(path: "/workspace/scripts/run.sh", content: "#!/bin/sh\necho done")
 

@@ -9,7 +9,7 @@ class InternalTools::MetaInstallSkillTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
 
     # Builder workflow context (simulates Aixle Builder running the tool)
-    builder_workflow = create(:workflow, scope: @company)
+    builder_workflow = create(:workflow, scope: @project)
     builder_step = create(:step, workflow: builder_workflow)
     @workflow_run = create(:workflow_run, workflow: builder_workflow, project: @project, user: @user)
     @step_run = create(:step_run, workflow_run: @workflow_run, step: builder_step)
@@ -73,23 +73,6 @@ class InternalTools::MetaInstallSkillTest < ActiveSupport::TestCase
     assert_equal "vercel-labs/agent-skills@next-js-development", skill.package
     assert_includes skill.content, "# Next.js"
     assert_equal 24_531, skill.install_count
-  end
-
-  test "installs a skill into company scope" do
-    stub_detail_endpoint
-
-    result = InternalTools::MetaInstallSkill.new(
-      params: { skill_id: @skill_id, scope_type: "Company", scope_id: @company.id },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-
-    data = JSON.parse(result[:stdout])
-    skill = Skill.find(data["id"])
-    assert_equal "Company", skill.scope_type
-    assert_equal @company.id, skill.scope_id
-    assert_equal "next-js-development", skill.name
   end
 
   test "defaults scope to the session's project when scope_id is omitted" do

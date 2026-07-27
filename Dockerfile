@@ -1,4 +1,4 @@
-FROM ruby:4.0.5-alpine
+FROM ruby:4.0.6-alpine
 
 RUN apk update && \
     apk add --no-cache build-base postgresql-dev tzdata bash git vim curl nodejs npm postgresql-client \

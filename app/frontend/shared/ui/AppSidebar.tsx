@@ -32,7 +32,6 @@ import { Fragment, useCallback, useMemo, useState } from 'react';
 import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
 import {
   companyAssetsPath,
-  companyConfigItemsPath,
   companyMembersPath,
   companyProjectAgentsPath,
   companyProjectAnalyticsPath,
@@ -156,7 +155,6 @@ const companyNavGroups: NavGroup[] = [
     label: 'Admin',
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
-      { label: 'Config Items', icon: <IconKey size={18} />, path: companyConfigItemsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
     ],
   },

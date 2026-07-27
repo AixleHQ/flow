@@ -9,18 +9,20 @@ module InternalTools
       user_attachable false
       input_schema({
         type: "object",
-        required: %w[skill_id scope_type scope_id],
+        required: %w[skill_id],
         properties: {
           scope_id: {
-            type: "integer"
+            type: "integer",
+            description: "Project ID. Default: current project"
           },
           skill_id: {
             type: "string",
             description: "Registry skill ID (e.g. mantinedev/skills/mantine-form)"
           },
           scope_type: {
-            enum: %w[Project Company],
-            type: "string"
+            enum: %w[Project],
+            type: "string",
+            description: "Scope type. Always Project."
           }
         }
       })
@@ -34,19 +36,8 @@ module InternalTools
       skill_id = params[:skill_id]
       return error("skill_id is required") if skill_id.blank?
 
-      scope_type = params[:scope_type] || "Project"
-      scope_id = params[:scope_id]
-
-      scope_record = case scope_type
-      when "Project"
-        scope_id ||= target_project&.id
-        Project.find(scope_id)
-      when "Company"
-        scope_id ||= target_project&.company_id
-        Company.find(scope_id)
-      else
-        return error("Invalid scope_type: #{scope_type}")
-      end
+      scope_id = params[:scope_id] || target_project&.id
+      scope_record = Project.find(scope_id)
 
       skill = SkillsRegistryService.install(skill_id, scope: scope_record)
 

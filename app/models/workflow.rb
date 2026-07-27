@@ -20,6 +20,7 @@ class Workflow < ApplicationRecord
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(deleted_at: nil) },
                                  message: "already exists in this scope" }
+  validates :scope_type, presence: true, inclusion: { in: %w[Project System] }
   validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
 
@@ -27,17 +28,14 @@ class Workflow < ApplicationRecord
   scope :published, -> { where.not(published_at: nil) }
   scope :published_in_company, ->(company) { active.published.belonging_to_company(company) }
   scope :system, -> { where(scope_type: "System") }
-  scope :for_company, ->(company) { where(scope_type: "Company", scope_id: company.id) }
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
   scope :visible_for_project, ->(project) {
     active.where(scope_type: "Project", scope_id: project.id)
-          .or(active.where(scope_type: "Company", scope_id: project.company_id))
   }
-  scope :visible_for_company, ->(company) { active.for_company(company) }
+  # Every workflow this company can see: the workflows of all its projects.
   scope :belonging_to_company, ->(company) {
-    active.where(scope_type: "Company", scope_id: company.id)
-          .or(active.where(scope_type: "Project", scope_id: company.project_ids))
+    active.where(scope_type: "Project", scope_id: company.project_ids)
   }
 
   def soft_delete!
@@ -72,7 +70,7 @@ class Workflow < ApplicationRecord
   def scope_indicator
     return "system" if scope_type == "System"
 
-    scope_type == "Company" ? "company" : "project"
+    "project"
   end
 
   def system?

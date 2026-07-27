@@ -5,7 +5,9 @@ require "test_helper"
 class ToolDefinitionDigestTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
-    @tool = create(:tool, scope: @company, name: "my_linter", docker_image: "linter:1.0",
+    @user = create(:user, company: @company)
+    @project = create(:project, company: @company, owner: @user)
+    @tool = create(:tool, scope: @project, name: "my_linter", docker_image: "linter:1.0",
                    description: "Lints things", input_schema: { "type" => "object", "properties" => {} })
   end
 
