@@ -120,7 +120,7 @@ context:
   [`company_membership.rb:40`](../../app/models/company_membership.rb#L40)
 
 - Backfill mapping (pending→invited, suspended→suspended, archived→revoked) + legacy pending unlock
-  [`20260702000003_backfill_company_memberships.rb:11`](../../db/migrate/20260702000003_backfill_company_memberships.rb#L11)
+  [`20260727100003_backfill_company_memberships.rb:11`](../../db/migrate/20260727100003_backfill_company_memberships.rb#L11)
 
 **Company context resolution & switching**
 
@@ -183,6 +183,6 @@ Pre-existing or out-of-scope issues surfaced during the 2026-07-02 reviews. Not 
 
 - **Project-less (auth_setup) sessions have no home company** — currently fan out to every company where the user is an active member (list + broadcast aligned). Product decision pending: tag sessions with the company they were launched under (`terminal_sessions.company_id` hardening step from the research report) and scope to it. (Blind Hunter M5 residual)
 
-- **Zero-downtime deploy story for the users-table contract** — old app instances selecting `users.role/company_id` during a rolling deploy will raise `UndefinedColumn` once migration 20260702000004 runs. Fine for single-instance deploys; revisit if rolling deploys arrive (`ignored_columns` two-step). (Blind Hunter M7 residual)
+- **Zero-downtime deploy story for the users-table contract** — old app instances selecting `users.role/company_id` during a rolling deploy will raise `UndefinedColumn` once migration 20260727100004 runs. Fine for single-instance deploys; revisit if rolling deploys arrive (`ignored_columns` two-step). (Blind Hunter M7 residual)
 
 - **Admin "Activate" on an invited membership accepts on the invitee's behalf** — parity with the legacy manual-activation flow, but it bypasses the emailed-link ownership proof. Product decision whether to restrict to resend-only. (Blind Hunter m9 / Auditor F8a)

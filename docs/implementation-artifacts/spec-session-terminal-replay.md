@@ -192,6 +192,6 @@ time-based/asciinema player; touching the live ttyd iframe path; raising the 1 G
 - Strategy: single `terminal_output.log`, no capture-pane.
   [`agent_session_strategy_test.rb:361`](../../test/services/container_strategies/agent_session_strategy_test.rb#L361)
 - Quota detection survives ANSI-wrapped log.
-  [`complete_step_activity_test.rb:93`](../../test/temporal/activities/workflow/complete_step_activity_test.rb#L93)
+  [`complete_step_activity_test.rb:93`](../../test/temporal/activities/complete_step_activity_test.rb#L93)
 - Component: writes bytes, empty on 404, truncation resync.
   [`SessionTerminalReplay.test.tsx:38`](../../app/frontend/shared/components/SessionShowContent/SessionTerminalReplay.test.tsx#L38)

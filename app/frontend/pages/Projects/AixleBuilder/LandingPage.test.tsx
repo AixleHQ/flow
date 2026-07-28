@@ -54,6 +54,55 @@ describe('Projects/AixleBuilder/LandingPage', () => {
     );
   });
 
+  it('posts the chosen model and project assets with the start request', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<LandingPage />, {
+      props: {
+        ...baseProps,
+        configuredAgents: ['claude_code'],
+        assets: [{ id: 12, name: 'Brand guidelines' }],
+        agentModels: [
+          {
+            agentType: 'claude_code',
+            models: [
+              { modelId: 'claude-opus-5', displayName: 'Opus 5' },
+              { modelId: 'claude-sonnet-5', displayName: 'Sonnet 5' },
+            ],
+          },
+        ],
+      },
+    });
+
+    // The model select is offered only for a runtime that publishes models.
+    await user.click(screen.getByRole('combobox', { name: /Model/i }));
+    await user.click(await screen.findByRole('option', { name: 'Sonnet 5' }));
+
+    await user.click(screen.getByRole('combobox', { name: /Project Assets/i }));
+    await user.click(await screen.findByRole('option', { name: 'Brand guidelines' }));
+
+    await user.click(screen.getByRole('button', { name: /Start Builder/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/aixle_builder/start',
+      { agentRuntime: 'claude_code', preferredModel: 'claude-sonnet-5', inputAssetIds: [12] },
+      expect.any(Object),
+    );
+  });
+
+  it('hides the start control from a viewer who cannot execute in the project', () => {
+    renderAuthedPage(<LandingPage />, {
+      props: {
+        ...baseProps,
+        configuredAgents: ['claude_code'],
+        projectPermissions: { canExecute: false, canManage: false },
+      },
+    });
+
+    // The intro still renders; only the action is withheld.
+    expect(screen.getByText('Aixle Builder')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Builder/i })).not.toBeInTheDocument();
+  });
+
   it('offers to continue an active session and navigates on click', async () => {
     renderAuthedPage(<LandingPage />, {
       props: { ...baseProps, configuredAgents: ['claude_code'], activeSessionId: 555 },

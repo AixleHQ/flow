@@ -114,61 +114,61 @@ context:
 **Data model — the membership core**
 
 - Join model owning per-company role+state, invitation tokens, last-admin guard — read this first
-  [`company_membership.rb:25`](../../.worktrees/multi-company/app/models/company_membership.rb#L25)
+  [`company_membership.rb:25`](../../app/models/company_membership.rb#L25)
 
 - Stateless invitation token embeds `[state, invited_at]` so accept/revoke/resend kills old links
-  [`company_membership.rb:40`](../../.worktrees/multi-company/app/models/company_membership.rb#L40)
+  [`company_membership.rb:40`](../../app/models/company_membership.rb#L40)
 
 - Backfill mapping (pending→invited, suspended→suspended, archived→revoked) + legacy pending unlock
-  [`20260702000003_backfill_company_memberships.rb:11`](../../.worktrees/multi-company/db/migrate/20260702000003_backfill_company_memberships.rb#L11)
+  [`20260727100003_backfill_company_memberships.rb:11`](../../db/migrate/20260727100003_backfill_company_memberships.rb#L11)
 
 **Company context resolution & switching**
 
 - Session company id is never trusted — validated against active memberships on every request
-  [`auth_concern.rb:98`](../../.worktrees/multi-company/app/controllers/concerns/auth_concern.rb#L98)
+  [`auth_concern.rb:98`](../../app/controllers/concerns/auth_concern.rb#L98)
 
 - The switch endpoint: validate membership → write session → redirect (props re-scope on the visit)
-  [`switch_controller.rb:7`](../../.worktrees/multi-company/app/controllers/web/company/switch_controller.rb#L7)
+  [`switch_controller.rb:7`](../../app/controllers/web/company/switch_controller.rb#L7)
 
 - ActionCable resolves the same session-validated company at connect time
-  [`connection.rb:9`](../../.worktrees/multi-company/app/channels/application_cable/connection.rb#L9)
+  [`connection.rb:9`](../../app/channels/application_cable/connection.rb#L9)
 
 **Authorization — membership-based, fail-closed**
 
 - API `read_only?` fails closed: no membership in the resolved company (or zero memberships) → no writes
-  [`application_policy.rb:29`](../../.worktrees/multi-company/app/policies/api/v1/application_policy.rb#L29)
+  [`application_policy.rb:29`](../../app/policies/api/v1/application_policy.rb#L29)
 
 - Owner/collaborator access now also requires an active membership in the project's company
-  [`project.rb:86`](../../.worktrees/multi-company/app/models/project.rb#L86)
+  [`project.rb:86`](../../app/models/project.rb#L86)
 
 **Invitations**
 
 - Variant branching (expired/accept/wrong_account/login/signup) + token parking for auth round-trips
-  [`invitations_controller.rb:14`](../../.worktrees/multi-company/app/controllers/web/invitations_controller.rb#L14)
+  [`invitations_controller.rb:14`](../../app/controllers/web/invitations_controller.rb#L14)
 
 - Post-login continuation: lock-guarded accept only into the matching user, before the membership gate
-  [`auth_concern.rb:79`](../../.worktrees/multi-company/app/controllers/concerns/auth_concern.rb#L79)
+  [`auth_concern.rb:79`](../../app/controllers/concerns/auth_concern.rb#L79)
 
 - Domain auto-join demoted to OAuth policy: runs only when the user has zero memberships of any state
-  [`google_omni_auth_service.rb:44`](../../.worktrees/multi-company/app/services/google_omni_auth_service.rb#L44)
+  [`google_omni_auth_service.rb:44`](../../app/services/google_omni_auth_service.rb#L44)
 
 - Invite = find-or-create user + invited membership + mailer; resend/reinvite/duplicate branches
-  [`members_controller.rb:20`](../../.worktrees/multi-company/app/controllers/web/company/members_controller.rb#L20)
+  [`members_controller.rb:20`](../../app/controllers/web/company/members_controller.rb#L20)
 
 **Analytics isolation (#303 fix)**
 
 - Usage services scope through `joins(:project)` — the current-company slice, legacy NULL-project rows excluded
-  [`user_analytics_service.rb:55`](../../.worktrees/multi-company/app/services/user_analytics_service.rb#L55)
+  [`user_analytics_service.rb:55`](../../app/services/user_analytics_service.rb#L55)
 
 **Frontend contract**
 
 - `CurrentUser` now ships `currentCompany`/`currentRole`/`memberships` (Typelizer-generated)
-  [`current_user_resource.rb:10`](../../.worktrees/multi-company/app/resources/current_user_resource.rb#L10)
+  [`current_user_resource.rb:10`](../../app/resources/current_user_resource.rb#L10)
 
 - Company switcher dropdown — renders only for multi-membership users, byte-identical otherwise
-  [`AppSidebar.tsx:271`](../../.worktrees/multi-company/app/frontend/shared/ui/AppSidebar.tsx#L271)
+  [`AppSidebar.tsx:271`](../../app/frontend/shared/ui/AppSidebar.tsx#L271)
 
 **Peripherals & proof**
 
 - The isolation suite: dual-membership user must never see the other company's slice, on any screen
-  [`cross_company_isolation_test.rb:8`](../../.worktrees/multi-company/test/integration/web/cross_company_isolation_test.rb#L8)
+  [`cross_company_isolation_test.rb:8`](../../test/integration/web/cross_company_isolation_test.rb#L8)

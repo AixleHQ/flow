@@ -34,6 +34,7 @@ import {
   companyAssetsPath,
   companyMembersPath,
   companyProjectAgentsPath,
+  companyProjectAixleBuilderPath,
   companyProjectAnalyticsPath,
   companyProjectAssetsPath,
   companyProjectBoardPath,
@@ -168,12 +169,11 @@ interface AiBannerProps {
 }
 
 function AiBanner({ collapsed, projectId }: AiBannerProps) {
+  // The builder is project-scoped (its sessions, assets and tools all hang off a
+  // project), so there is no company-level builder route to send a project-less
+  // visitor to — company context routes to the project list to pick one first.
   const handleClick = () => {
-    if (projectId) {
-      router.visit(`/company/projects/${projectId}/aixle_builder`);
-    } else {
-      router.visit('/company/aixle_builder');
-    }
+    router.visit(projectId ? companyProjectAixleBuilderPath(projectId) : companyProjectsPath());
   };
 
   if (collapsed) {
@@ -190,6 +190,7 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
         <Tooltip label="AI Builder" position="right" withArrow>
           <UnstyledButton
             onClick={handleClick}
+            aria-label="AI Builder"
             style={{
               width: 30,
               height: 30,
