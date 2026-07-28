@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
@@ -14,6 +14,10 @@ const projects: SharedProject[] = [
 ];
 
 describe('AppSidebar', () => {
+  // The collapse toggle persists to localStorage, which jsdom keeps for the whole
+  // file — clear it so a collapsing test cannot decide the next test's layout.
+  beforeEach(() => localStorage.clear());
+
   it('renders company-level navigation with the user footer name and company name', () => {
     renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
       props: {
@@ -101,6 +105,40 @@ describe('AppSidebar', () => {
     await user.click(borealis);
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/8');
+  });
+
+  it('sends "Build with AI" to the current project\'s builder in project context', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+
+    expect(screen.getByText('AI Builder')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Build with AI/ }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder');
+  });
+
+  it('sends "Build with AI" to the project list when no project is selected', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />);
+
+    await user.click(screen.getByRole('button', { name: /Build with AI/ }));
+
+    // The builder only exists under a project, so company context must pick one
+    // first — never the routeless /company/aixle_builder.
+    expect(router.visit).toHaveBeenCalledWith('/company/projects');
+    expect(router.visit).not.toHaveBeenCalledWith('/company/aixle_builder');
+  });
+
+  it('keeps the builder reachable from the collapsed sidebar', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+
+    // Collapsed, the banner shrinks to a single icon button labelled by its tooltip.
+    await user.click(screen.getByRole('button', { name: 'AI Builder' }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder');
   });
 
   it('signs out through the user footer menu', async () => {

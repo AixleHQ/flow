@@ -37,7 +37,7 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 
 Column binding and manual are **board-native** — the task already exists.
 Schedule, Slack and webhook originate **off the board** and must therefore
-answer "what task, if any, is this run about?" — that is [`subject_policy`](#subject-policy).
+answer "what task, if any, is this run about?" — that is [`subject_policy`](#subjectpolicy).
 
 > **tip** Column bindings stay configured on the Board (one workflow per column, see [Board](/docs/board)). The other sources live on the workflow, so a workflow declares how it launches — like `on:` in CI.
 
