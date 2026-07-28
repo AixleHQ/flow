@@ -285,7 +285,7 @@ GEM
       activejob (>= 7.0)
       activesupport (>= 7.0)
       railties (>= 7.0)
-    inertia_rails (3.19.0)
+    inertia_rails (3.22.0)
       railties (>= 6)
     io-console (0.8.2)
     irb (1.18.0)
@@ -554,7 +554,7 @@ GEM
       activerecord (>= 7.2)
       activesupport (>= 7.2)
       i18n
-    rbs (4.0.3)
+    rbs (4.1.0)
       logger
       prism (>= 1.6.0)
       tsort
