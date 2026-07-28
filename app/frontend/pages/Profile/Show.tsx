@@ -751,7 +751,8 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
           Agent Runtimes
         </Title>
         <Text size="sm" c="dimmed" mb="md">
-          Manage authentication for AI coding agents. Authenticate new agents or re-authenticate existing ones.
+          Manage authentication for AI coding agents in this company. Each company needs its own sign-in, so its agent
+          usage is billed to it and never shared with your other companies.
         </Text>
 
         {AVAILABLE_AGENTS.map((agent) => {
@@ -889,6 +890,7 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
 }
 
 function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp }: Props) {
+  const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agentModels'] });
 
   const { data, setData, patch, processing, errors, isDirty } = useForm({
@@ -932,9 +934,18 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
   return (
     <AuthLayout>
       <Box maw={600} mx="auto">
-        <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={24}>
+        <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={4}>
           My Profile
         </Title>
+        {/* Agents, the agent language and usage are all PER COMPANY — a separate
+            credential per company is what keeps vendor billing from pooling. Say
+            so up front, or the page reads as one shared set of agents. */}
+        {currentCompanyName && (
+          <Text size="sm" c="dimmed" mb={24}>
+            Settings for <strong>{currentCompanyName}</strong>. Your agents and agent language are set per company —
+            switch company to see or change another one.
+          </Text>
+        )}
 
         <Tabs
           value="account"
@@ -987,7 +998,7 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
             <Box mb="lg">
               <Select
                 label="Agent Language"
-                description="Language AI agents will use to communicate with you"
+                description="Language AI agents will use to communicate with you in this company"
                 value={data.profile.preferredAgentLanguage}
                 onChange={(val) => {
                   setData('profile', { ...data.profile, preferredAgentLanguage: val ?? 'en' });

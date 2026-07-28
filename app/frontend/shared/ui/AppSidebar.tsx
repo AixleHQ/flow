@@ -4,7 +4,6 @@ import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconAlertTriangle,
   IconArrowsExchange,
-  IconBuilding,
   IconChartBar,
   IconCheck,
   IconCheckbox,
@@ -164,6 +163,48 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+// ─── Company rail (Slack-style workspace switcher) ───────────────────────────
+// A narrow strip left of the sidebar, rendered ONLY for people who belong to
+// more than one company — a single-company user should never see tenancy chrome
+// at all. Each company is one square; the current one is marked. Switching is a
+// full Inertia visit, so every shared prop (projects, permissions, current user)
+// re-resolves server-side for the new company.
+
+function CompanyRail({
+  memberships,
+  currentCompanyId,
+}: {
+  memberships: SharedMembership[];
+  currentCompanyId: number | null;
+}) {
+  const switchTo = (companyId: number) => {
+    if (companyId === currentCompanyId) return;
+    router.post(companySwitchPath(), { company_id: companyId });
+  };
+
+  return (
+    <div className={classes.rail} role="navigation" aria-label="Switch company">
+      {memberships.map((membership) => {
+        const isCurrent = membership.company.id === currentCompanyId;
+        const role = MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role;
+
+        return (
+          <Tooltip key={membership.id} label={`${membership.company.name} — ${role}`} position="right" withArrow>
+            <UnstyledButton
+              onClick={() => switchTo(membership.company.id)}
+              className={`${classes.railItem} ${isCurrent ? classes.railItemActive : ''}`}
+              aria-label={`${membership.company.name} (${role})`}
+              aria-current={isCurrent ? 'true' : undefined}
+            >
+              <span className={classes.railTile}>{getInitials(membership.company.name)}</span>
+            </UnstyledButton>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── "Connect an agent" nudge ────────────────────────────────────────────────
 // Onboarding skips the agent step for a user who is a viewer in every company.
@@ -400,8 +441,6 @@ interface SidebarWorkspaceSwitcherProps {
   projects: SharedProject[];
   currentProjectId: string | null;
   companyName: string;
-  memberships: SharedMembership[];
-  currentCompanyId: number | null;
   context: 'project' | 'company';
   onExpand: () => void;
 }
@@ -411,25 +450,10 @@ function SidebarWorkspaceSwitcher({
   projects,
   currentProjectId,
   companyName,
-  memberships,
-  currentCompanyId,
   context,
   onExpand,
 }: SidebarWorkspaceSwitcherProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
-  const [companyMenuOpen, setCompanyMenuOpen] = useState(false);
-
-  // Single-company users get the same static display as before — the company
-  // switcher only appears with more than one active membership.
-  const multiCompany = memberships.length > 1;
-
-  const handleCompanySwitch = (companyId: number) => {
-    setCompanyMenuOpen(false);
-    if (companyId === currentCompanyId) return;
-    // The server validates membership, stores the company in the session and
-    // redirects to the company projects page with all props re-scoped.
-    router.post(companySwitchPath(), { company_id: companyId });
-  };
   const [search, setSearch] = useState('');
   const [createModalOpened, setCreateModalOpened] = useState(false);
 
@@ -470,55 +494,6 @@ function SidebarWorkspaceSwitcher({
 
   return (
     <div className={`${classes.swArea} ${collapsed ? classes.swAreaCollapsed : ''}`}>
-      {multiCompany && (
-        <Menu
-          opened={companyMenuOpen}
-          onChange={setCompanyMenuOpen}
-          position={collapsed ? 'right-start' : 'bottom-start'}
-          width={200}
-          shadow="md"
-          offset={2}
-        >
-          <Menu.Target>
-            {/* Collapsed, there is no room for the company name — but a
-                multi-company user still has to be able to tell which company
-                they are in and switch, so fall back to an icon + tooltip. */}
-            {collapsed ? (
-              <Tooltip label={`${companyName} — switch company`} position="right" withArrow>
-                <UnstyledButton className={classes.coBtnCollapsed} aria-label="Switch company">
-                  <IconBuilding size={16} />
-                </UnstyledButton>
-              </Tooltip>
-            ) : (
-              <UnstyledButton className={classes.coBtn} aria-label="Switch company">
-                <span className={classes.coName}>{companyName}</span>
-                <IconChevronDown
-                  size={11}
-                  className={`${classes.swCaret} ${companyMenuOpen ? classes.swCaretOpen : ''}`}
-                />
-              </UnstyledButton>
-            )}
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Label>Companies</Menu.Label>
-            {memberships.map((membership) => (
-              <Menu.Item
-                key={membership.id}
-                onClick={() => handleCompanySwitch(membership.company.id)}
-                rightSection={
-                  membership.company.id === currentCompanyId ? (
-                    <IconCheck size={13} className={classes.dpCheck} />
-                  ) : undefined
-                }
-              >
-                <div className={classes.coItemName}>{membership.company.name}</div>
-                <div className={classes.coItemRole}>{MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role}</div>
-              </Menu.Item>
-            ))}
-          </Menu.Dropdown>
-        </Menu>
-      )}
-
       <Popover
         opened={popoverOpen && !collapsed}
         onChange={setPopoverOpen}
@@ -550,8 +525,8 @@ function SidebarWorkspaceSwitcher({
             )}
             <div className={`${classes.swText} ${collapsed ? classes.swTextCollapsed : ''}`}>
               <div className={classes.swName}>{displayName}</div>
-              {/* Multi-company users see the company in the switcher row above. */}
-              {!multiCompany && <div className={classes.swSub}>{companyName}</div>}
+              {/* Company identity now lives in the left rail (CompanyRail). */}
+              <div className={classes.swSub}>{companyName}</div>
             </div>
             <IconChevronDown
               size={12}
@@ -698,8 +673,6 @@ function SidebarContent({
   const { currentUser } = usePage<SharedProps>().props;
   const isAdmin = permissions?.isAdmin ?? false;
   const companyName = currentUser?.currentCompany?.name ?? '';
-  const memberships = currentUser?.memberships ?? [];
-  const currentCompanyId = currentUser?.currentCompany?.id ?? null;
 
   const navGroups = context === 'project' && projectId ? buildProjectNavGroups(projectId) : companyNavGroups;
 
@@ -710,8 +683,6 @@ function SidebarContent({
         projects={projects}
         currentProjectId={currentProjectId}
         companyName={companyName}
-        memberships={memberships}
-        currentCompanyId={currentCompanyId}
         context={context}
         onExpand={onExpand}
       />
@@ -747,7 +718,11 @@ export const AppSidebar = ({
   currentProjectId: propCurrentProjectId,
   permissions: propPermissions,
 }: AppSidebarProps) => {
-  const { projects: pageProjects = [], permissions: pagePermissions } = usePage<SharedProps>().props;
+  const { projects: pageProjects = [], permissions: pagePermissions, currentUser } = usePage<SharedProps>().props;
+  // The rail is the only tenancy chrome a single-company user must never see.
+  const memberships = currentUser?.memberships ?? [];
+  const currentCompanyId = currentUser?.currentCompany?.id ?? null;
+  const multiCompany = memberships.length > 1;
 
   const projects = propProjects ?? pageProjects;
   const permissions = propPermissions ?? pagePermissions;
@@ -825,17 +800,20 @@ export const AppSidebar = ({
   }
 
   return (
-    <nav className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`} style={{ width, minWidth: width }}>
-      <SidebarContent
-        projectId={projectId}
-        context={context}
-        projects={projects}
-        currentProjectId={currentProjectId}
-        permissions={permissions}
-        collapsed={collapsed}
-        onExpand={onExpand}
-        toggleCollapsed={toggleCollapsed}
-      />
-    </nav>
+    <div className={classes.shell}>
+      {multiCompany && <CompanyRail memberships={memberships} currentCompanyId={currentCompanyId} />}
+      <nav className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`} style={{ width, minWidth: width }}>
+        <SidebarContent
+          projectId={projectId}
+          context={context}
+          projects={projects}
+          currentProjectId={currentProjectId}
+          permissions={permissions}
+          collapsed={collapsed}
+          onExpand={onExpand}
+          toggleCollapsed={toggleCollapsed}
+        />
+      </nav>
+    </div>
   );
 };

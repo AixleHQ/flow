@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
 import type { SharedMembership, SharedProject } from './types';
@@ -181,41 +181,46 @@ describe('AppSidebar', () => {
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
   });
 
-  it('shows no company switcher for a single-membership user', () => {
+  // The company switcher is a Slack-style rail left of the sidebar. A
+  // single-company user must see no tenancy chrome at all.
+  it('shows no company rail for a single-membership user', () => {
     renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
       props: { currentUser: buildUser() },
     });
 
-    expect(screen.queryByRole('button', { name: 'Switch company' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Switch company' })).not.toBeInTheDocument();
   });
 
-  it('switches company through the dropdown for a multi-membership user', async () => {
-    // The collapse test above persists 'sidebar-collapsed'; the company
-    // switcher only renders expanded.
-    window.localStorage.clear();
-
+  it('renders one rail tile per company, marking the current one', () => {
     renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
       props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Switch company' }));
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    expect(within(rail).getByRole('button', { name: /Vega Corp/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(rail).getByRole('button', { name: /Client Co/ })).not.toHaveAttribute('aria-current');
+  });
 
-    // Dropdown lists both companies; picking the other one posts the switch.
-    await userEvent.click(await screen.findByText('Client Co'));
+  it('switches company from the rail for a multi-membership user', async () => {
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
+      props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
+    });
+
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    await userEvent.click(within(rail).getByRole('button', { name: /Client Co/ }));
+
     expect(router.post).toHaveBeenCalledWith('/company/switch', { company_id: 2 });
   });
 
   it('does not post a switch when re-selecting the current company', async () => {
-    window.localStorage.clear();
-
     renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
       props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Switch company' }));
-    // "Vega Corp" appears both as the switcher label and as a menu item — click the menu item.
-    const items = await screen.findAllByText('Vega Corp');
-    await userEvent.click(items[items.length - 1]);
+    // Scope to the rail: the sidebar's workspace button also carries the
+    // company name as its sub-label.
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    await userEvent.click(within(rail).getByRole('button', { name: /Vega Corp/ }));
 
     expect(router.post).not.toHaveBeenCalled();
   });

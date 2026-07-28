@@ -83,7 +83,11 @@ describe('Profile/Show', () => {
     expect(screen.getByRole('heading', { name: 'My Profile' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Personal Information' })).toBeInTheDocument();
     expect(screen.getByText('maria@acme.test')).toBeInTheDocument();
-    expect(screen.getByText('Acme Robotics')).toBeInTheDocument();
+    // The company name appears twice on purpose: the scope banner under the
+    // title ("Settings for Acme Robotics") and the Companies card. Both matter —
+    // the banner is what stops the page reading as one shared set of agents.
+    expect(screen.getAllByText('Acme Robotics').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Your agents and agent language are set per company/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
   });
 

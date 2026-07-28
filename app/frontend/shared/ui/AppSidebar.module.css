@@ -657,3 +657,83 @@
 .coBtnCollapsed:hover {
   background: var(--app-action-hover);
 }
+
+/* ── Company rail (Slack-style) ───────────────────────────────────────────── */
+/* Only rendered for multi-company users — see CompanyRail. */
+
+.shell {
+  display: flex;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 52px;
+  min-width: 52px;
+  padding: 10px 0;
+  border-right: 1px solid var(--app-border-default);
+  background: var(--app-bg-default);
+  overflow-y: auto;
+  scrollbar-width: none;
+  z-index: 21;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+.railItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Active company gets the accent bar Slack uses, not just a colour change —
+   colour alone is not a reliable signal. */
+.railItemActive::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: 0 2px 2px 0;
+  background: var(--app-accent, #cf6b4a);
+}
+
+.railTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--app-text-secondary);
+  background: var(--app-action-hover);
+  border: 1px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.railItem:hover .railTile {
+  color: var(--app-text-primary);
+  border-color: var(--app-border-default);
+}
+
+.railItemActive .railTile {
+  color: var(--app-text-primary);
+  border-color: var(--app-accent, #cf6b4a);
+}
