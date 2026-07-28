@@ -151,7 +151,7 @@ group :test do
 end
 
 gem "shrine", "~> 3.9"
-gem "aws-sdk-s3", "~> 1.227"
+gem "aws-sdk-s3", "~> 1.228"
 gem "image_processing", "~> 2.0"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
