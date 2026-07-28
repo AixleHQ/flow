@@ -27,7 +27,7 @@
     "globals": "^17.7.0",
     "jsdom": "^29",
     "license-checker-rseidelsohn": "^5.0.1",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.0",
     "sass-embedded": "^1.100.0",
     "typescript": "^5.9.3",
