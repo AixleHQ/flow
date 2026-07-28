@@ -19,6 +19,28 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  # Regression: the profile form edits the name (User) AND the agent language,
+  # which is a per-company onboarding answer on the MEMBERSHIP. Permitting only
+  # :name in profile_params made language changes silently no-op.
+  test "update saves the agent language onto the CURRENT membership" do
+    patch profile_path, params: { profile: { name: "Updated Name", preferred_agent_language: "ru" } }
+
+    assert_response :redirect
+    assert_equal "Updated Name", @user.reload.name
+    assert_equal "ru", @user.company_memberships.find_by!(company: @company).preferred_agent_language
+  end
+
+  test "update leaves the OTHER company's language alone" do
+    other = create(:company)
+    other_membership = create(:company_membership, user: @user, company: other,
+                                                   preferred_agent_language: "en")
+
+    patch profile_path, params: { profile: { preferred_agent_language: "ru" } }
+
+    assert_equal "ru", @user.company_memberships.find_by!(company: @company).preferred_agent_language
+    assert_equal "en", other_membership.reload.preferred_agent_language
+  end
+
   test "update_default_model redirects on success" do
     credential = create(:agent_credential, user: @user)
 

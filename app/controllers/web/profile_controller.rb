@@ -93,11 +93,18 @@ class Web::ProfileController < Web::ApplicationController
     }
   end
 
+  # The profile form edits two records now: the name is global (User), while the
+  # agent language is a per-company onboarding answer and lives on the CURRENT
+  # membership. Permitting only :name here silently dropped language changes.
   def update
-    if current_user.update(profile_params)
+    user_ok = current_user.update(profile_params)
+    membership_ok = update_current_membership_profile
+
+    if user_ok && membership_ok
       redirect_to profile_path, notice: "Profile updated successfully"
     else
-      redirect_to profile_path, inertia: { errors: current_user.errors }
+      errors = current_user.errors.any? ? current_user.errors : current_membership&.errors
+      redirect_to profile_path, inertia: { errors: errors }
     end
   end
 
@@ -140,5 +147,20 @@ class Web::ProfileController < Web::ApplicationController
 
   def profile_params
     params.require(:profile).permit(:name)
+  end
+
+  # Per-company answers editable from the profile. Super admins have no
+  # membership, so there is nothing to write.
+  def membership_profile_params
+    params.require(:profile).permit(:preferred_agent_language, :default_agent_credential_id)
+  end
+
+  def update_current_membership_profile
+    return true if current_membership.nil?
+
+    attrs = membership_profile_params
+    return true if attrs.empty?
+
+    current_membership.update(attrs)
   end
 end

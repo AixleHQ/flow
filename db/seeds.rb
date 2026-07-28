@@ -55,11 +55,20 @@ client_company = Company.find_or_create_by!(slug: "client-co") do |company|
 end
 puts "Client company created: #{client_company.name} (#{client_company.email_domain})"
 
-ensure_membership = lambda do |user, company, role|
+# Onboarding lives on the MEMBERSHIP (per company: own role, own agents, own
+# separately-billed credential), so seeding a "ready to use" user means seeding a
+# completed membership, not user columns.
+ensure_membership = lambda do |user, company, role, position: :dev, language: "en", onboarded: true|
   CompanyMembership.find_or_create_by!(user: user, company: company) do |membership|
     membership.role = role
     membership.state = :active
     membership.accepted_at = Time.current
+    membership.position = position
+    membership.preferred_agent_language = language
+    if onboarded
+      membership.onboarding_state = "completed"
+      membership.onboarding_completed_at = Time.current
+    end
   end
 end
 
@@ -72,11 +81,8 @@ company_admin = User.find_or_create_by!(email: seed_company_admin_email) do |use
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.position = :pm_po_ba
-  user.preferred_agent_language = "en"
-  user.onboarding_completed_at = Time.current
 end
-ensure_membership.call(company_admin, test_company, :admin)
+ensure_membership.call(company_admin, test_company, :admin, position: :pm_po_ba)
 puts "User created: #{company_admin.email} (company admin)"
 
 # Company users with onboarding completed
@@ -85,13 +91,10 @@ john = User.find_or_create_by!(email: "john@#{seed_company_email_domain}") do |u
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.position = :dev
-  user.preferred_agent_language = "en"
-  user.onboarding_completed_at = Time.current
 end
-ensure_membership.call(john, test_company, :employee)
+ensure_membership.call(john, test_company, :employee, position: :dev)
 # Dual-membership demo: John is also a viewer in Client Co
-ensure_membership.call(john, client_company, :viewer)
+ensure_membership.call(john, client_company, :viewer, position: :dev)
 puts "User created: #{john.email} (also viewer in #{client_company.name})"
 
 joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do |user|
@@ -99,11 +102,8 @@ joane = User.find_or_create_by!(email: "joane@#{seed_company_email_domain}") do 
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.position = :dev
-  user.preferred_agent_language = "ru"
-  user.onboarding_completed_at = Time.current
 end
-ensure_membership.call(joane, test_company, :employee)
+ensure_membership.call(joane, test_company, :employee, position: :dev, language: "ru")
 puts "User created: #{joane.email}"
 
 ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |user|
@@ -111,25 +111,22 @@ ivan = User.find_or_create_by!(email: "ivan@#{seed_company_email_domain}") do |u
   user.password = test_password
   user.password_confirmation = test_password
   user.state = :active
-  user.position = :qa
-  user.preferred_agent_language = "en"
-  user.onboarding_completed_at = Time.current
 end
-ensure_membership.call(ivan, test_company, :employee)
+ensure_membership.call(ivan, test_company, :employee, position: :qa)
 puts "User created: #{ivan.email}"
 
 # Create agent credentials for test users
 puts "Creating test agent credentials..."
-AgentCredential.find_or_create_by!(user: john, agent_type: "claude_code") do |cred|
+AgentCredential.find_or_create_by!(user: john, company: test_company, agent_type: "claude_code") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: john, agent_type: "cursor_cli") do |cred|
+AgentCredential.find_or_create_by!(user: john, company: test_company, agent_type: "cursor_cli") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: joane, agent_type: "codex") do |cred|
+AgentCredential.find_or_create_by!(user: joane, company: test_company, agent_type: "codex") do |cred|
   cred.config_data = { "test" => "data" }
 end
-AgentCredential.find_or_create_by!(user: ivan, agent_type: "claude_code") do |cred|
+AgentCredential.find_or_create_by!(user: ivan, company: test_company, agent_type: "claude_code") do |cred|
   cred.config_data = { "test" => "data" }
 end
 puts "Agent credentials created"
