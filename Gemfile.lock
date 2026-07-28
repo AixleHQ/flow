@@ -96,7 +96,7 @@ GEM
     administrate-field-shrine (0.0.5)
       administrate (> 0.5.0)
       rails (>= 4.2)
-    alba (3.10.0)
+    alba (3.11.0)
     anonymous_loader (0.1.2)
       version_gem (~> 1.1, >= 1.1.13)
     ast (2.4.3)
