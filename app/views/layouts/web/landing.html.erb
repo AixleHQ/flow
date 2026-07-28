@@ -830,7 +830,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
         Resources <span class="nav-caret ic"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
         <span class="flyout">
           <span class="flyout-eyebrow">Develop</span>
-          <a href="https://docs.aixle.com/flow" target="_blank" rel="noopener">Documentation</a>
+          <a href="<%= docs_path %>" target="_blank" rel="noopener">Documentation</a>
           <a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a>
           <span class="flyout-eyebrow">Ecosystem</span>
           <a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a>
@@ -857,7 +857,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
     <button onclick="go('handoffs')">Handoffs</button>
     <button onclick="go('compare')">Compare</button>
     <button onclick="go('opensource')">Open source</button>
-    <button onclick="window.open('https://docs.aixle.com/flow','_blank');openSheet(false)">Docs</button>
+    <button onclick="window.open('<%= docs_path %>','_blank');openSheet(false)">Docs</button>
     <button onclick="window.location.href='<%= login_path %>'">Log in</button>
   </div>
   <button class="btn btn-primary sheet-cta" onclick="go('contact')">Get in touch</button>
@@ -1555,7 +1555,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
         </div>
         <div class="btn-row" style="margin-top:var(--sp-5)">
           <a class="btn btn-primary" href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-.88-.01-1.73-2.78.62-3.37-1.37-3.37-1.37-.45-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.27 2.75 1.05a9.4 9.4 0 0 1 2.5-.34c.85 0 1.7.12 2.5.34 1.91-1.32 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.91 0 1.38-.01 2.49-.01 2.83 0 .27.18.6.69.49A10.02 10.02 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>View on GitHub</a>
-          <a class="btn btn-outline" href="https://docs.aixle.com/flow" target="_blank" rel="noopener"><span class="ic"><svg viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;width:16px;height:16px"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21V5.5z"/><path d="M20 18.5H6.5A2.5 2.5 0 0 0 4 21"/></svg></span>Documentation</a>
+          <a class="btn btn-outline" href="<%= docs_path %>" target="_blank" rel="noopener"><span class="ic"><svg viewBox="0 0 24 24" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;width:16px;height:16px"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21V5.5z"/><path d="M20 18.5H6.5A2.5 2.5 0 0 0 4 21"/></svg></span>Documentation</a>
         </div>
         <p class="os-meta" style="margin-top:var(--sp-4)">Apache 2.0&nbsp;&nbsp;·&nbsp;&nbsp;Self-hosted or managed</p>
       </div>
@@ -1600,7 +1600,7 @@ html.js :is(.section-head>*,.witis>div:first-child>*,.handoffs-head>*,.selfhost-
         <h3>One governed surface for agents, people, and the work between them.</h3>
       </div>
       <div class="footer-col"><h4>Product</h4><a href="#" onclick="go('what');return false">How we fill the gap</a><a href="#" onclick="go('how');return false">How it works</a><a href="#" onclick="go('fits');return false">Where it fits</a><a href="#" onclick="go('handoffs');return false">Handoffs</a><a href="#" onclick="go('compare');return false">Compare</a><a href="#" onclick="go('opensource');return false">Open source</a></div>
-      <div class="footer-col"><h4>Resources</h4><a href="https://docs.aixle.com/flow" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a><a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a><a href="#" onclick="go('contact');return false">Get in touch</a></div>
+      <div class="footer-col"><h4>Resources</h4><a href="<%= docs_path %>" target="_blank" rel="noopener">Documentation</a><a href="https://github.com/aixleHQ/flow" target="_blank" rel="noopener">GitHub</a><a href="https://aixle.com" target="_blank" rel="noopener">Aixle platform</a><a href="#" onclick="go('contact');return false">Get in touch</a></div>
     </div>
     <div class="footer-bottom">
       <span>© Aixle 2026 · Apache 2.0</span>
