@@ -59,7 +59,7 @@
     "@types/recharts": "^2.0.1",
     "@uiw/codemirror-extensions-langs": "^4.25.10",
     "@uiw/codemirror-theme-vscode": "^4.25.11",
-    "@uiw/react-codemirror": "^4.23.12",
+    "@uiw/react-codemirror": "^4.25.11",
     "@uppy/aws-s3": "^5.1.0",
     "@uppy/core": "^5.2.0",
     "@uppy/utils": "^7.2.0",
