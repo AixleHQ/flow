@@ -15,8 +15,17 @@ module Tools
     end
 
     # Returns a Rack response triple.
+    #
+    # `dns_rebinding_protection: false`: the SDK's own default only accepts a
+    # loopback `Host`, which 403s every request to a deployed host. The
+    # protection it provides is aimed at localhost servers a browser can reach
+    # with implicit trust — this endpoint authenticates from an amcp_ token in
+    # a header, never a cookie, so a rebound browser request arrives without a
+    # credential and is answered with 401.
     def call(request)
-      transport = MCP::Server::Transports::StreamableHTTPTransport.new(server, stateless: true)
+      transport = MCP::Server::Transports::StreamableHTTPTransport.new(
+        server, stateless: true, dns_rebinding_protection: false
+      )
       transport.handle_request(request)
     end
 
