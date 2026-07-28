@@ -23,12 +23,19 @@ module Tools
     end
 
     # Returns a Rack response triple.
+    #
+    # `dns_rebinding_protection: false`: see PersonalMCPRequestHandler#call —
+    # the SDK default accepts only a loopback `Host` and 403s every deployed
+    # request, and this endpoint is header-token authenticated, so the browser
+    # rebinding it defends against cannot present a credential.
     def call(request)
       if (response = unavailable_tool_shim(request))
         return response
       end
 
-      transport = MCP::Server::Transports::StreamableHTTPTransport.new(server, stateless: true)
+      transport = MCP::Server::Transports::StreamableHTTPTransport.new(
+        server, stateless: true, dns_rebinding_protection: false
+      )
       transport.handle_request(request)
     end
 
