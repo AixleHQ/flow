@@ -1,7 +1,14 @@
 # Product strategy: Aixle flow — 12-month horizon
 
-> **Status:** Draft · **Version:** 0.1 · **Date:** April 2026
+> **Status:** Draft · **Version:** 0.2 · **Date:** April 2026 · **Revised:** July 2026
 > **Market:** USA · **Horizon:** 12 months
+>
+> **v0.2 (July 2026):** § 3 Competitors rewritten around the six-layer infrastructure
+> map — added OpenHands, Omnigent (Databricks), Conductor, Agent Orchestrator, Gas Town
+> + Beads, the layer-5 sandbox vendors (E2B, Daytona, K8s Agent Sandbox, …) and the
+> local-dispatcher tier. § 5 differentiator table and market evidence updated
+> accordingly. Sections 6–8 (focuses, roadmap, metrics) were **not** re-derived against
+> the new competitive picture — see the open follow-up at the end of § 3.
 
 ---
 
@@ -185,6 +192,30 @@ GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent 
 
 ## 3. Competitors
 
+> **Revised July 2026.** The April cut of this section only tracked SDLC-orchestration
+> products (Devin, Codegen, Overcut, Forge, Atum). Through H1 2026 the market
+> reorganized into six infrastructure layers, and a set of players landed directly on
+> the layers Aixle occupies — most importantly **OpenHands** and **Databricks
+> Omnigent**, neither of which was in the previous analysis. See
+> [layer map](#layer-map) for who sits where.
+
+### Layer map
+
+The 2026 stack splits into six layers. Aixle spans three of them at once, which is
+both the differentiator and the reason the competitive set is wider than a
+feature-by-feature comparison with Devin suggests.
+
+| Layer | What it decides | Who is there | Aixle's position |
+|-------|-----------------|--------------|------------------|
+| 1. Agent / harness | Quality of a single agent's work | Claude Code, Codex, Cursor CLI, Gemini CLI, OpenCode, Devin, Jules | **Consume, not compete** — adapters per agent |
+| 2. Protocol / interop | How agents reach tools and hosts | MCP (Anthropic, Nov 2024), ACP (Agent Client Protocol) | MCP-native; **ACP not supported — gap** |
+| 3. Workspace | Sessions, worktrees, diff review, UI | Orca, cmux, Conductor, Superset, Sculptor, agent-deck, Warp, Claude Squad, Coder mux | **Compete** (Board + session UI) |
+| 4. Orchestration | Queues, state, policies, PR/CI loop | OpenHands, Omnigent, Gas Town + Beads, Agent Orchestrator, GitHub Agent HQ | **Compete — core bet** (Temporal, workflow engine, assets) |
+| 5. Sandbox / runtime | Trust boundary, reproducibility | E2B, Daytona, Docker Sandboxes, Container Use, AgentTier, K8s Agent Sandbox, Anthropic sandbox-runtime | **Build our own** (`DockerRuntime`, `KubernetesRuntime`) — buy/adopt candidate |
+| 6. IDE platform | Ecosystem foundation | Eclipse Theia + Theia AI, VS Code | **Not our play** |
+
+---
+
 ### Market financial map
 
 | Player | ARR / Revenue | Funding / Valuation | Momentum | Source |
@@ -192,27 +223,59 @@ GitHub Copilot Workspace, Azure AI Foundry, Google Vertex AI, AWS Bedrock Agent 
 | **Cursor** | ~$300M ARR (estimate) | ~$50B valuation (March 2026) | ↑↑ Hypergrowth | SiliconAngle, March 2026 |
 | **Cognition / Devin** | $73M ARR (June 2025) | $25B valuation target (Apr 2026) | ↑↑ | SiliconAngle, Apr 2026 |
 | **GitHub Copilot** | Part of $44B GitHub | Microsoft, public | ↑ Steady growth | — |
+| **OpenHands** | No public ARR (OpenHands Cloud paid tier) | VC-backed OSS, ~79.6k★ | ↑↑ Largest OSS mindshare | GitHub + openhands.dev, Jul 2026 |
+| **Omnigent (Databricks)** | Bundled — no standalone revenue | Databricks balance sheet (~$100B valuation) | ↑↑ New (13 Jun 2026) | Databricks blog, Jun 2026 |
+| **Conductor** | Free product, no revenue yet | $22M Series A (Mar 2026), YC | ↑ | Public reporting, 2026 |
+| **Orca** | Free, MIT | Stably AI | ↑↑ ~27.4k★ in ~4 months | onorca.dev, Jul 2026 |
+| **E2B** | Usage-based cloud | Seed/Series A, ~13k★ | ↑ Steady since Mar 2023 | e2b.dev, 2026 |
+| **Daytona** | Usage-based cloud | VC-backed, ~72.3k★ | ↑ | daytona.io, 2026 |
 | **Codegen.ai** | $0 public data (1000+ teams) | Seed/Series A | ↑ Early traction | Website, 2026 |
 | **Overcut** | No public data | No public data | New | Website, 2026 |
 | **n8n** | ~$20M ARR (2025 estimate) | Series B, $56M (2024) | ↑ Steady | TechCrunch, 2024 |
+| **Vibe Kanban** | — | — | **Dead — shut down 10 Apr 2026** | vibekanban.com/blog/shutdown |
 
 ---
 
 ### Tier 1 — Platform giants (dominant by reach)
 
-**GitHub Copilot / Copilot Workspace**
-Built into 150M+ GitHub accounts. Agent mode added in 2025. Strength — zero install cost, existing ecosystem. Weakness — no orchestration layer, no team workflows, no Temporal-style execution. Strategic gap: Copilot solves the problem of a single developer, not a team.
+**GitHub Copilot / Copilot Workspace / Agent HQ**
+Built into 150M+ GitHub accounts. Agent mode added in 2025; **Agent HQ ("mission
+control") shipped Fall 2025** and now coordinates multiple agents natively inside
+GitHub. Strength — zero install cost, existing ecosystem, owns the repo and CI where
+the work lands. Weakness — no durable execution engine, no PM-facing workflow layer,
+no custom container images. Strategic shift vs April: Agent HQ eats the *bottom* of
+the workspace layer, so "we coordinate agents" alone is no longer a defensible pitch
+for GitHub-native teams.
 
 **Cursor**
-$50B valuation, ~300M ARR. IDE-first approach. Huge user base in the solo developer category. Weakness — no board, no multi-step team workflows, no approval gates, no container execution. Gap: Cursor is a personal superpower tool, not a team orchestrator.
+$50B valuation, ~300M ARR. IDE-first. Huge solo-developer base. Weakness — no board,
+no multi-step team workflows, no approval gates, no container execution.
+
+**OpenAI Codex app** — added worktree support Feb 2026. **Anthropic Claude Code** —
+sub-agents plus team features. Both vendors are absorbing single-user parallelism into
+the harness itself, which is what compressed the standalone dispatcher market (see
+Tier 4).
 
 ---
 
 ### Tier 2 — Direct competitors
 
+**2a. New in July 2026 — same layers as Aixle (orchestration + runtime)**
+
+| Product | What it is | Overlap with Aixle | What it lacks |
+|---------|-----------|--------------------|---------------|
+| **OpenHands** (~79.6k★, OSS + OpenHands Cloud) | Started as OpenDevin, now an agent-agnostic control center. **Agent Canvas** runs OpenHands, Claude Code, Codex, Gemini CLI, or any ACP agent side by side over local / remote / cloud backends; commands execute through a separate action server against a Docker runtime | **Closest competitor overall.** Agent-agnostic sessions, Docker runtime, web UI, automations, hosted cloud tier — and **OpenHands Cloud injects the user's subscription auth at session start**, the only public analogue of our Agent Auth onboarding | Durable execution (no Temporal-class engine), multi-tenant Company→Project scoping, usage-based billing, workflow engine with versioned assets and approval gates, PM-facing surface |
+| **Omnigent (Databricks)**, Apache-2.0, 13 Jun 2026 | "Meta-harness": a **runner** wraps any agent in a *sandboxed session* behind a uniform API; a **server** adds policies and sharing and exposes every session over terminal, app, and web APIs. Supports Claude Code SDK, Codex, Cursor, Pi, LangGraph, Agno, CrewAI, plus YAML-defined custom agents | Directly duplicates our agent-abstraction layer **and** our policy/quota layer: session budgets, escalating restrictions on risky actions, unified API across heterogeneous agents. Databricks distribution and budget | Workflow engine, board, assets/versioning, K8s-grade multi-runtime, multi-tenant SaaS with billing. It is a control plane, not a product for a team's process |
+| **Conductor** ($22M Series A, Mar 2026, YC) | Free macOS app running Claude Code, Codex, Cursor, OpenCode in isolated git worktrees. Deliberately narrow — orchestration only, no planning/docs/review | Parallel-agent UX, team ambitions, institutional funding | Local-only (macOS), worktrees not containers, no server, no workflows, no audit layer. **Note:** funded ≠ validated — it is free with no revenue model yet |
+| **Agent Orchestrator** (Composio → AgentWrapper) | Closes the PR/CI loop: feeds CI failures, review comments, and merge conflicts back to the agent, auto-rebases | Overlaps the part of our workflow engine we have **not** built — outer-loop feedback | Documented risks: agent games the tests, flaky tests cause loops, broad repo/CI token scope. Needs attempt caps, budgets, mandatory human gate before merge |
+| **Gas Town + Beads** (Steve Yegge, Jan 2026; ~15k★ + ~25k★) | Role-based agent "factory" (Mayor, Polecats, Witness, Monitor, Refinery) with structured state persisted in Git, surviving individual model sessions | Conceptually our `WorkflowRun` / `SubStepRun` / assets — proof that persistent cross-session state is a real need | Files-in-Git instead of a database, expensive in tokens and attention, no UI, no tenancy. Validates the problem, not a competing product |
+
+**2b. SDLC-orchestration products (April cut, still valid)**
+
 | Product | Description | Strengths | User pains | Strategic gap |
 |---------|---------|-----------------|-------------------|-------------------|
-| **Devin (Cognition)** | Autonomous AI software engineer | End-to-end tasks, enterprise customers | Expensive ($500+/mo team), "black box", no team board | No team workflow editor, no custom agents |
+| **Devin (Cognition)** | Autonomous AI software engineer, own cloud sandbox, opens PRs | End-to-end tasks, enterprise customers | Expensive ($500+/mo team), "black box", no team board | No team workflow editor, no custom agents, single vendor agent |
+| **Jules (Google)** | Async agent: clones the repo to a cloud VM, plans, edits, opens a PR | Zero setup, Google infrastructure | Single vendor agent, no team layer | Not a platform — one agent behind an API |
 | **Codegen.ai** | "OS for Code Agents", Linear/Jira integration | 5-min setup, 1000+ teams | Limited customization, no container isolation | No board of its own, runs on top of Linear/Jira |
 | **Overcut** | Enterprise agentic SDLC orchestration | Integrations (Jira, GitLab, GitHub), drag-and-drop workflows | Enterprise-only pricing presumably, no public data | Unknown degree of agent customization |
 | **Forge** | Tickets → merged PRs | Specialized in PR flow, cost estimate per step | Narrow scope (coding PR only), private beta | Does not work beyond coding workflows |
@@ -220,19 +283,96 @@ $50B valuation, ~300M ARR. IDE-first approach. Huge user base in the solo develo
 
 ---
 
+### Tier 3 — Layer 5 infrastructure: buy-vs-build, not competitors
+
+These do not compete with Aixle; they compete with **our own runtime code**. Each is a
+candidate to sit behind the Runtime interface next to `DockerRuntime` /
+`KubernetesRuntime`.
+
+| Product | Isolation | Why it matters to us |
+|---------|-----------|----------------------|
+| **E2B** (~13k★, since Mar 2023) | microVM, separate kernel | SDK-driven isolated Linux VMs: templates, snapshots, interactive terminal, SSH, network policies. A managed third runtime — stronger boundary than a container, no K8s to operate |
+| **Daytona** (~72.3k★, since Feb 2024) | microVM, own kernel/FS/network | Same shape as E2B, stateful snapshots, claimed sub-90 ms start. **Star count is not a security audit** — would need independent review before we route customer code through it |
+| **Docker Sandboxes** | microVM under a Docker-native UX | Closest to our current `DockerRuntime` mental model; likely the lowest-friction upgrade path for self-hosted users |
+| **Container Use** (Dagger) | Container + git branch per agent, exposed via MCP | Per-agent container with command history in plain git. Weaker boundary than microVM but MCP-native |
+| **AgentTier** | Kubernetes Pod | Overlaps `KubernetesRuntime`. A pod alone is not a strong boundary — same caveat applies to us |
+| **Kubernetes Agent Sandbox** (Mar 2026) | Pod/CRI behind a CRD | **Watch item.** If the sandbox becomes a standard platform object, our K8s runtime should target the CRD instead of hand-rolled Pod + Service + IngressRoute |
+| **Anthropic sandbox-runtime** | macOS Seatbelt / Linux bubblewrap | Built into Claude Code. Stronger than a worktree, weaker than a VM — sets the baseline users already have for free |
+
+---
+
+### Tier 4 — Local dispatchers and ADEs: adjacent, and being squeezed
+
+Local TUI/desktop tools over git worktrees: **Orca** (MIT, ~27.4k★ by Jul 2026, 30+
+CLI agents, desktop + mobile, terminal splits/editor/browser/diff review, GitHub and
+Linear, SSH environments), **cmux** (viral early 2026), **Superset**
+(source-available, not OSI), **Sculptor**, **agent-deck** (groups, forks, cost
+tracking, phone control), **Claude Squad** (tmux + worktree archetype), **Warp** (2.0
+repositioned as an ADE), **Crystal / Nimbalyst**, **Coder mux** (the only one with
+real remote-workspace infrastructure, tied to the Coder ecosystem).
+
+Overlap with Aixle is limited to session UI. Two signals matter more than the feature
+lists:
+
+1. **Vibe Kanban shut down on 10 Apr 2026** with ~27k★ and thousands of daily users —
+   Bloop found no viable business model; the project continued as community Apache-2.0.
+   The workspace layer attracts attention and does not monetize on its own.
+2. **Vendors are absorbing the layer** — Claude Code sub-agents, Codex worktrees,
+   GitHub Agent HQ. Differentiation at layer 3 has a short half-life.
+
+**Implication for us:** the Board is table stakes, not the moat. The moat is layers
+4–5 plus tenancy and accounting.
+
+---
+
 ### JTBD × Competitor Matrix
 
-| JTBD | GitHub Copilot | Cursor | Devin | Codegen | Overcut | **Aixle** |
-|------|---------------|--------|-------|---------|---------|---------|
-| Agent coordination within a team | ❌ | ❌ | ⚠️ | ⚠️ | ⚠️ | ✅ |
-| Repeatable workflows (one button for the team) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Audit log + cost tracking | ❌ | ❌ | ⚠️ | ❌ | ⚠️ | ✅ |
-| Quick start (15 minutes) | ✅ | ✅ | ⚠️ | ✅ | ❌ | ⚠️ |
-| Standardization of AI processes for the team | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ✅ |
-| Custom AI agents with Container isolation | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| PM/non-tech visibility into progress | ❌ | ❌ | ⚠️ | ❌ | ❌ | ✅ |
+| JTBD | GitHub Copilot | Cursor | Devin | Codegen | Overcut | OpenHands | Omnigent | **Aixle** |
+|------|---------------|--------|-------|---------|---------|-----------|----------|---------|
+| Agent coordination within a team | ⚠️ (Agent HQ) | ❌ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ | ✅ |
+| Repeatable workflows (one button for the team) | ❌ | ❌ | ❌ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ |
+| Audit log + cost tracking | ❌ | ❌ | ⚠️ | ❌ | ⚠️ | ⚠️ | ✅ | ✅ |
+| Quick start (15 minutes) | ✅ | ✅ | ⚠️ | ✅ | ❌ | ✅ | ⚠️ | ⚠️ |
+| Standardization of AI processes for the team | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ⚠️ | ✅ | ✅ |
+| Custom AI agents with container isolation | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| PM/non-tech visibility into progress | ❌ | ❌ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Managed agent credential onboarding | ❌ | ❌ | n/a | ❌ | ❌ | ⚠️ (Cloud only) | ❌ | ✅ |
+| Durable execution (crash/restart safe) | ❌ | ❌ | ⚠️ | ❌ | ⚠️ | ❌ | ❌ | ✅ |
 
-**Conclusion:** Aixle is the only player that covers the full set of team-level JTBD. The weak spot is time to first value (JTBD 4).
+**Conclusion (revised).** The April claim — "Aixle is the only player covering the
+full team-level JTBD set" — no longer holds. **OpenHands and Omnigent together cover
+six of the nine rows**, both under permissive OSS licences, one of them funded by
+Databricks. What is still uniquely ours:
+
+- **PM/non-tech surface** — workflow engine with steps, versioned assets, approval
+  gates. Nobody in the set builds for a non-engineer.
+- **Managed credential onboarding across 4 agent CLIs** — nobody in the article's
+  entire six-layer survey solves this; all of them assume keys already exist.
+  OpenHands Cloud injecting a subscription at session start is the nearest thing.
+- **Durable execution** — Temporal-backed runs that survive worker restarts.
+- **Multi-tenancy + usage-based accounting** — Company→Project scoping, OTLP/MITM
+  usage capture for billing.
+
+Weak spots: time to first value (JTBD 4), and no ACP support while ACP becomes the
+interop standard for exactly the agent-agnosticism we sell.
+
+---
+
+### Open follow-ups from this revision
+
+Not yet resolved — these change downstream sections and are deliberately left open
+rather than answered inside a competitor section:
+
+1. **ACP support.** Decide whether to implement ACP alongside MCP. OpenHands uses it to
+   claim any-agent support with no per-agent adapter; we pay adapter cost per agent
+   (`ClaudeCodeAdapter`, `CursorCliAdapter`, `CodexAdapter`, `GeminiCliAdapter`).
+2. **Buy vs build at layer 5.** Evaluate E2B / Daytona / Docker Sandboxes as a managed
+   runtime behind the existing Runtime interface, and whether `KubernetesRuntime`
+   should target the Kubernetes Agent Sandbox CRD.
+3. **Outer-loop feedback.** Agent Orchestrator's PR/CI→agent loop is a capability our
+   workflow engine lacks. In or out of the 12-month roadmap?
+4. **Re-derive §§ 6–8** against this competitive picture — the roadmap still assumes
+   container isolation and multi-agent support are differentiators.
 
 ---
 
@@ -297,7 +437,9 @@ This is not yet another coding assistant. It is **a level higher** — managing 
 
 2. **Enterprise pays for controllability.** Devin earns $73M ARR precisely from enterprise (Goldman, Citi, Cisco) — not because the agent is "smart," but because it has accountability. (Cognition Labs blog, 2026)
 
-3. **Temporal is a rare technical advantage.** Fewer than 5% of AI platforms have production-grade workflow orchestration under the hood. This is an architectural moat that is hard to copy quickly.
+3. **Temporal is a rare technical advantage.** Fewer than 5% of AI platforms have production-grade workflow orchestration under the hood. This is an architectural moat that is hard to copy quickly. **Confirmed July 2026:** across the six-layer infrastructure survey, no player — including OpenHands, Omnigent, and Gas Town — runs a durable execution engine. State is kept in a database, in Git, or in process memory.
+
+6. **The layers below and beside us are commoditizing (July 2026).** Agent-agnostic session management (OpenHands), the unified agent API with policies and budgets (Omnigent), and microVM sandboxing (E2B, Daytona, Docker Sandboxes) are all now available free or as a metered utility. This cuts both ways: our runtime work is less defensible, and our build cost drops if we adopt instead of rebuild. The bet must sit above them — process, assets, accountability, credentials — not in the container plumbing.
 
 4. **Market growth creates a tailwind.** AI agent orchestration: $5.8B in 2025 → $35B by 2030. This is not a niche market — it is a category. (MarketIntelo, Apr 2026)
 
@@ -307,14 +449,27 @@ This is not yet another coding assistant. It is **a level higher** — managing 
 
 ### Differentiator
 
-| Parameter | Cursor / Claude Code | Devin | Codegen | **Aixle** |
-|---------|---------------------|-------|---------|---------|
-| Team board + workflow | ❌ | ❌ | ⚠️ (external) | ✅ |
-| Container isolation | ❌ | ✅ | ❌ | ✅ |
-| Multi-runtime (claude, codex, cursor, gemini) | ❌ | ❌ | ❌ | ✅ |
-| Cost tracking per session | ❌ | ⚠️ | ❌ | ✅ |
-| DAG workflow dependencies | ❌ | ❌ | ❌ | ✅ |
-| MCP-native | ⚠️ | ❌ | ❌ | ✅ |
+Updated July 2026 to include the two players that share our layers (see
+[Tier 2a](#tier-2--direct-competitors)).
+
+| Parameter | Cursor / Claude Code | Devin | Codegen | OpenHands | Omnigent | **Aixle** |
+|---------|---------------------|-------|---------|-----------|----------|---------|
+| Team board + workflow | ❌ | ❌ | ⚠️ (external) | ⚠️ (automations) | ❌ | ✅ |
+| Container isolation | ⚠️ (sandbox-runtime) | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Multi-agent (claude, codex, cursor, gemini) | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Cost tracking per session | ❌ | ⚠️ | ❌ | ⚠️ | ✅ (budgets) | ✅ |
+| DAG workflow dependencies | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| MCP-native | ⚠️ | ❌ | ❌ | ✅ | ✅ | ✅ |
+| ACP support | ⚠️ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| Durable execution (Temporal-class) | ❌ | ⚠️ | ❌ | ❌ | ❌ | ✅ |
+| Managed agent OAuth onboarding | ❌ | n/a | ❌ | ⚠️ (Cloud) | ❌ | ✅ |
+| Multi-tenant SaaS + billing | n/a | ✅ | ⚠️ | ⚠️ (Cloud) | ❌ | ✅ |
+| Versioned assets / approval gates | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+
+Two rows are the real defensible ones — **durable execution** and **managed agent
+OAuth onboarding** — plus the workflow/asset layer above them. Container isolation and
+multi-agent support are no longer differentiators: OpenHands and Omnigent both ship
+them, free.
 
 ---
 
@@ -462,6 +617,17 @@ REST / webhook API for triggering workflows from CI/CD pipelines (GitHub Actions
 - Latchpine — AI Agents Compared 2026, 2026
 - Overcut.ai - site, 2026; Codegen.ai - site, 2026; Forge-x.dev - site, 2026; Getatum.com - site, 2026
 - n8n.io — Medium/n8n comparison vs Make 2026, 2026
+
+**Competitive data — July 2026 revision of § 3:**
+- Habr #1063558 — "Армия в терминале" ("Army in the terminal"), six-layer infrastructure retrospective, Jul 2026 — the survey that triggered this revision
+- Databricks Blog — "Introducing Omnigent: A Meta-Harness to Combine, Control and Share Your Agents", 13 Jun 2026
+- MarkTechPost — Databricks open-sources Omnigent (agent coverage, Apache-2.0), 13 Jun 2026
+- openhands.dev/blog — "Controlling any Coding Agent with the OpenHands Agent Canvas and SDK" (ACP, cloud backend, auth injection), 18 Jun 2026
+- github.com/OpenHands/OpenHands + OpenHands/agent-canvas (star counts, architecture), read Jul 2026
+- vibekanban.com/blog/shutdown — Bloop shutdown notice, 10 Apr 2026
+- onorca.dev + third-party Orca reviews (MIT licence, ~27.4k★, 30+ CLI agents), Jul 2026
+- Public reporting on Conductor's $22M Series A (YC, macOS, worktree isolation), Mar 2026
+- e2b.dev, daytona.io — sandbox-as-a-service capability and isolation model, read Jul 2026
 
 **Monetization and trial:**
 - RevenueCat State of Subscription Apps (SOSA) 2026
