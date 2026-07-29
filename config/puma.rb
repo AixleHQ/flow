@@ -42,3 +42,9 @@ pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
 
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
+
+# Run the Solid Queue supervisor inside Puma. Production deployments are managed
+# outside this repository, so a dedicated jobs process cannot be added from here;
+# Solid Queue coordinates through the database, so one supervisor per web replica
+# is a supported topology. Opt-in via env so a bare `rails server` stays quiet.
+plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"] == "true"

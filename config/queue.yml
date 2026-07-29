@@ -1,0 +1,35 @@
+# Solid Queue workers. One "default" queue is enough today — the only jobs are
+# mailers — but polling and concurrency are stated explicitly so the shape is
+# visible when more job types arrive.
+#
+# The supervisor runs inside Puma (SOLID_QUEUE_IN_PUMA, see config/puma.rb)
+# rather than as its own process: production deployments live outside this
+# repository, so a new one cannot be added from here. Solid Queue coordinates
+# through the database, so several web replicas each running a supervisor is a
+# supported setup, not a race.
+default: &default
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    - queues: "*"
+      threads: 3
+      processes: 1
+      polling_interval: 0.5
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+qa:
+  <<: *default
+
+production:
+  <<: *default
+  workers:
+    - queues: "*"
+      threads: 5
+      processes: 1
+      polling_interval: 0.5
