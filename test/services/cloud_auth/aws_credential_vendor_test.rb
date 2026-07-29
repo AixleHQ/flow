@@ -12,7 +12,7 @@ module CloudAuth
 
     # == guard rails ==
 
-    test "raises NotConnectedError when the user has no claude_code credential" do
+    test "raises NotConnectedError when this company has no claude_code credential" do
       assert_raises(NotConnectedError) { vendor.call }
     end
 
@@ -145,11 +145,14 @@ module CloudAuth
     private
 
     def vendor
-      AwsCredentialVendor.new(user: @user, client: @sso)
+      AwsCredentialVendor.new(
+        credential: CredentialLookup.claude_code(user_id: @user.id, company_id: @company.id),
+        client: @sso
+      )
     end
 
     def store(config)
-      AgentCredential.from_artifacts(@user.id, "claude_code", config)
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", config)
     end
 
     def connect(token: nil, token_expires_at: 1.hour.from_now, registration: nil, registration_expires_at: 60.days.from_now)

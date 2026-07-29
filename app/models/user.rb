@@ -44,6 +44,13 @@ class User < ApplicationRecord
   has_many :terminal_sessions, dependent: :destroy
   # Credentials belong to a (user, company) pair — the default for a company
   # lives on that CompanyMembership, not here.
+  #
+  # This association exists for lifecycle only (dependent: :destroy). Never read it to
+  # PICK a credential: `user.agent_credentials.find_by(agent_type:)` is a coin flip for
+  # a multi-company user, and losing that flip hands a container another tenant's tokens
+  # and bills that tenant. Read through the company instead —
+  # CompanyMembership#credentials_scope, SessionCompany.agent_credentials_for(session),
+  # or CloudAuth::CredentialLookup.
   has_many :agent_credentials, dependent: :destroy
   has_one :namespace_resource_quota, as: :scope, dependent: :destroy
 

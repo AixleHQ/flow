@@ -1,11 +1,15 @@
 # frozen_string_literal: true
 
 module CloudAuth
-  # Mints short-lived AWS credentials for a user's connected Identity Center account.
+  # Mints short-lived AWS credentials for a connected Identity Center account.
   #
   # This is what the in-container `credential_process` helper calls. The container holds
   # no AWS material of its own: it asks, we exchange the stored refresh token for role
   # credentials, and it gets a JSON blob that expires within the hour.
+  #
+  # Takes the credential, not a user: credentials are per (user, company) and the
+  # caller — a session via SessionCompany, or the profile page via the current
+  # company — is the only layer that can say which company is being billed.
   #
   # Refresh is single-flight under a row lock and never downgrades a fresher token —
   # same discipline as Oauth::TokenService#fresh, for the same reason: several sessions
@@ -19,14 +23,14 @@ module CloudAuth
 
     Vended = Data.define(:access_key_id, :secret_access_key, :session_token, :expiration)
 
-    def initialize(user:, client: nil)
-      @user = user
+    def initialize(credential:, client: nil)
+      @credential = credential
       @client_override = client
     end
 
     def call
-      credential = @user.agent_credentials.find_by(agent_type: "claude_code")
-      raise NotConnectedError, "no claude_code credential for this user" if credential.nil?
+      credential = @credential
+      raise NotConnectedError, "no claude_code credential for this company" if credential.nil?
 
       block = bedrock_block!(credential)
       unless identity_center?(block)

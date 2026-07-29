@@ -18,6 +18,16 @@ module CloudAuth
       assert_equal :not_connected, result.stage
     end
 
+    # The connection checked is the acting company's, not "the user's": a connection made
+    # for another company is billed there and is not this company's to probe.
+    test "reports not_connected when the only connection belongs to another company" do
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      connect(company: other_company)
+
+      assert_equal :not_connected, check.call.stage
+    end
+
     test "reports ok when credentials vend and the model answers" do
       connect
 
@@ -83,13 +93,18 @@ module CloudAuth
       end
       AwsHealthCheck.new(
         user: @user,
-        vendor: AwsCredentialVendor.new(user: @user, client: @sso),
+        company: @company,
+        vendor: AwsCredentialVendor.new(
+          credential: CredentialLookup.claude_code(user_id: @user.id, company_id: @company.id),
+          client: @sso
+        ),
         probe_factory: factory
       )
     end
 
-    def connect(models: nil, token_expires_at: 1.hour.from_now, registration_expires_at: 60.days.from_now)
-      AgentCredential.from_artifacts(@user.id, "claude_code", {
+    def connect(models: nil, token_expires_at: 1.hour.from_now, registration_expires_at: 60.days.from_now,
+                company: @company)
+      AgentCredential.from_artifacts(@user.id, company.id, "claude_code", {
         "awsBedrock" => {
           "region" => "us-east-1",
           "profile" => "aixle-bedrock",

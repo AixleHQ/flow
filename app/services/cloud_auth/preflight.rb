@@ -20,12 +20,14 @@ module CloudAuth
     module_function
 
     # @param user [User]
+    # @param company [Company, nil] whose connection the session will use — credentials
+    #   are per (user, company), so the company being billed is the one to check.
     # @return [Array<Hash>] one entry per broken connection:
     #   { provider:, name:, reason:, connect_url: }. Empty when nothing is wrong —
     #   including for a user who has no cloud connection at all, since not using
     #   Bedrock is not a problem to report.
-    def broken_connections(user)
-      credential = user&.agent_credentials&.find_by(agent_type: "claude_code")
+    def broken_connections(user:, company:)
+      credential = CredentialLookup.claude_code(user_id: user&.id, company_id: company&.id)
       return [] if credential.nil?
 
       block = credential.config_data[Agents::ClaudeCodeAdapter::BEDROCK_KEY]

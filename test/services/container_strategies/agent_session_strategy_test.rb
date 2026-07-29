@@ -15,6 +15,25 @@ module ContainerStrategies
       Rails.logger.stubs(:error)
     end
 
+    # == Model resolution is per company ==
+    #
+    # The default model is pinned on a credential, and a credential belongs to one
+    # company. A pin made against another company's Bedrock account does not exist here,
+    # so launching on it would leave every session on a model that never answers.
+
+    test "resolve_model prefers the pin on this session's company credential" do
+      @credential.update!(metadata: { "default_model" => "mine" })
+      other_credential_with_pin("other-tenant-model")
+
+      assert_equal "mine", build_strategy.send(:resolve_model, @session)
+    end
+
+    test "resolve_model ignores a pin that belongs to another company" do
+      other_credential_with_pin("other-tenant-model")
+
+      assert_nil build_strategy.send(:resolve_model, @session)
+    end
+
     # == Inheritance Tests ==
 
     test "inherits from AgentBaseStrategy" do
@@ -557,6 +576,15 @@ module ContainerStrategies
     end
 
     private
+
+    # A second company the same person works for, holding its own claude_code credential
+    # with its own default-model pin.
+    def other_credential_with_pin(model)
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      create(:agent_credential, user: @user, company: other_company, agent_type: "claude_code",
+                                metadata: { "default_model" => model })
+    end
 
     def build_strategy(agent_type: "claude_code", credential: nil)
       cred = credential.nil? ? @credential : credential

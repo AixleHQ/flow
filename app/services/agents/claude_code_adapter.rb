@@ -689,7 +689,7 @@ module Agents
     # rather than the settings file because the helper is spawned by the AWS SDK, not by
     # Claude Code, and must work regardless of which process resolves credentials.
     def cloud_credential_env(session)
-      block = bedrock_block(session.user&.agent_credentials&.find_by(agent_type: "claude_code")&.config_data || {})
+      block = bedrock_block(CloudAuth::CredentialLookup.for_session(session)&.config_data || {})
       connected = block.present? && block["credential_process"].present?
       # An auth container gets the vending env even with no connection: reporting that
       # none exists is the helper's whole job there.

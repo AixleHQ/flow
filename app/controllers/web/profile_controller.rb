@@ -109,7 +109,7 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   def update_default_model
-    credential = current_user.agent_credentials.find(params[:agent_credential_id])
+    credential = current_company_credentials.find(params[:agent_credential_id])
     meta = credential.metadata || {}
     if params[:default_model].present?
       meta["default_model"] = params[:default_model]
@@ -122,7 +122,7 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   def destroy_credential
-    credential = current_user.agent_credentials.find(params[:agent_credential_id])
+    credential = current_company_credentials.find(params[:agent_credential_id])
     credential.destroy!
 
     redirect_to profile_path, notice: "#{credential.agent_type.titleize} credentials removed"
@@ -132,6 +132,16 @@ class Web::ProfileController < Web::ApplicationController
 
   def require_auth
     redirect_to login_path unless signed_in?
+  end
+
+  # The credentials this page may edit: the acting user's, in the company they are
+  # acting for. The page only ever renders that set (CurrentUserResource serializes the
+  # current membership's credentials), so an id from another company is a 404 — editing
+  # or deleting it here would reach across a tenant boundary.
+  def current_company_credentials
+    raise ActiveRecord::RecordNotFound unless current_membership
+
+    current_membership.credentials_scope
   end
 
   # Same-company scope guard (NOT admin-gated): the target must have an ACTIVE

@@ -84,7 +84,8 @@ module Activities
       end
 
       def quota_failure_result(step_run, session, detection)
-        credential = session&.user&.agent_credentials&.find_by(agent_type: session.agent_type)
+        # The credential that hit the quota is the one this session ran on: its company's.
+        credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session&.agent_type)
         step_run.mark_failed!(detection.message, error_category: :quota_exceeded)
         step_run.workflow_run.mark_quota_failed!(credential_id: credential&.id)
         {

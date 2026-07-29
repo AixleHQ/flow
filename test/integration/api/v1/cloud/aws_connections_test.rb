@@ -195,7 +195,7 @@ module Api
         # Design authorizes separately from inference, so removing the AWS connection must not
         # cost the user their design login.
         test "destroy removes the AWS connection but keeps the design token" do
-          AgentCredential.from_artifacts(@user.id, "claude_code",
+          AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                          { "designOauth" => { "accessToken" => "sk-ant-design" } })
           handle = start_flow
           post poll_api_v1_cloud_aws_connection_path, params: { handle: handle }
@@ -206,7 +206,7 @@ module Api
 
           assert_response :success
           refute response.parsed_body["connected"]
-          config = AgentCredential.find_by(user_id: @user.id, agent_type: "claude_code").config_data
+          config = AgentCredential.find_by(user_id: @user.id, company_id: @company.id, agent_type: "claude_code").config_data
           assert_nil config["awsBedrock"]
           assert_equal "sk-ant-design", config.dig("designOauth", "accessToken")
         end

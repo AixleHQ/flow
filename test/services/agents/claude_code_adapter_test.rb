@@ -1048,7 +1048,7 @@ module Agents
     # A key typed into the CLI wizard never reaches us in a form we can sign a control-plane
     # call with.
     test "a bearer-token connection uses the static list" do
-      credential = AgentCredential.from_artifacts(@user.id, "claude_code",
+      credential = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                                   { "awsBedrock" => { "region" => "us-east-1",
                                                                       "bearer_token" => "k" } })
 
@@ -1174,7 +1174,7 @@ module Agents
     end
 
     test "a credential_process connection injects the vending url and a per-session key" do
-      AgentCredential.from_artifacts(@user.id, "claude_code", { "awsBedrock" => bedrock_block })
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "awsBedrock" => bedrock_block })
       session = agent_session
 
       env = @adapter.default_env_vars(session)
@@ -1184,7 +1184,7 @@ module Agents
     end
 
     test "a bearer-token connection needs no vending key" do
-      AgentCredential.from_artifacts(@user.id, "claude_code",
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                      { "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "x" } })
 
       assert_not_includes @adapter.default_env_vars(agent_session).keys, "AIXLE_CLOUD_KEY"
@@ -1204,7 +1204,7 @@ module Agents
     private
 
     def connect_bedrock
-      AgentCredential.from_artifacts(@user.id, "claude_code", {
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
         "awsBedrock" => {
           "region" => "us-east-1", "profile" => "aixle-bedrock",
           "credential_process" => "/usr/local/bin/aixle-aws-creds",

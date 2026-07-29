@@ -3,9 +3,9 @@
 module Api
   module V1
     module Cloud
-      # A cloud connection is per-user and always the acting user's own, so there is no
-      # record to scope against — the only gate is the read-only (viewer) predicate.
-      # Viewers must not bind an AWS account to their profile.
+      # A cloud connection is always the acting user's own, in the company they are
+      # acting for, so there is no record to scope against — the only gate is the
+      # read-only (viewer) predicate. Viewers must not bind an AWS account.
       class AwsConnectionsPolicy < Api::V1::ApplicationPolicy
         def show? = true # reading one's own connection state is a read
         def create? = !read_only?

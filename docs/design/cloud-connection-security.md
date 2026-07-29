@@ -137,6 +137,11 @@ Session containers are ephemeral and hold no persistent credential: a helper ask
 vending endpoint per session, authenticated by a key derived from the session, and that
 endpoint refuses to vend for a session that is no longer running.
 
+A connection also belongs to the one company it was made in. A developer who works for
+several companies on our platform connects each separately, and a session can only vend the
+connection of the company that session is billed to — so your grant is never reachable from
+work done for someone else.
+
 ## 6. Questions we expect, answered
 
 **Can a developer use this to reach non-Bedrock services in our account?** No. The role

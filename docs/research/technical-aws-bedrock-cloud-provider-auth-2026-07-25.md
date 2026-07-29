@@ -258,9 +258,16 @@ container, and prints only the bare URL and code.
 Two stores, because the two paths have different owners.
 
 **Per-user (path 2, 4)** → a new block inside the existing `claude_code` `AgentCredential`
-config blob, exactly as `designOauth` sits alongside `claudeAiOauth`. `AgentCredential` has a
-UNIQUE `[user_id, agent_type]` index (`db/schema.rb:28`) and no owner polymorphism, so it is one
-row per user per agent; merging is what `reconcile_captured_credentials` is for. No new model.
+config blob, exactly as `designOauth` sits alongside `claudeAiOauth`. Merging is what
+`reconcile_captured_credentials` is for. No new model.
+
+> Amended after multi-company membership landed: `AgentCredential` is UNIQUE on
+> `[user_id, company_id, agent_type]`, so it is one row per user **per company** per agent.
+> Bedrock spend is billed to the company that incurred it, so a consultant connects a
+> separate AWS account in each company and neither connection can see the other. Every read
+> therefore names a company — `CloudAuth::CredentialLookup` for a (user, company) pair, and
+> `SessionCompany` for anything reached from a session (containers, vending, preflight),
+> which is the only layer that knows who is being billed.
 
 **Org-level (path 1, 3)** → `Integration`. It is already the repo's non-OAuth,
 company-or-project-scoped encrypted store (`credentials_data`, `company_id` NOT NULL,

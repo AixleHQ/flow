@@ -34,8 +34,11 @@ module CloudAuth
     Approved = Data.define(:accounts)
     AccountChoice = Data.define(:account_id, :account_name, :roles)
 
-    def initialize(user:, client: nil, catalog_factory: nil)
+    # `company` is required: the connection lands on a per-(user, company) credential
+    # and Bedrock spend is billed to that company, so it can never be guessed.
+    def initialize(user:, company:, client: nil, catalog_factory: nil)
       @user = user
+      @company = company
       @client_override = client
       @catalog_factory = catalog_factory
     end
@@ -46,6 +49,7 @@ module CloudAuth
     def start(start_url:, sso_region:)
       raise ArgumentError, "start_url is required" if start_url.blank?
       raise ArgumentError, "sso_region is required" if sso_region.blank?
+      raise ArgumentError, "company is required" if @company.nil?
 
       sso = client(sso_region)
       registration = sso.register_client(client_name: OIDC_CLIENT_NAME)
@@ -54,6 +58,10 @@ module CloudAuth
       handle = SecureRandom.urlsafe_base64(32)
       write_state(handle, {
         "user_id" => @user.id,
+        # The company is fixed when the flow opens, not read again at #finish: the user
+        # may switch companies in another tab while approving, and the credential this
+        # authorization produces must land on the company they chose to connect.
+        "company_id" => @company.id,
         "start_url" => start_url,
         "sso_region" => sso_region,
         # stringify: Rails.cache round-trips symbol keys faithfully, so mixing key types
@@ -160,7 +168,12 @@ module CloudAuth
     end
 
     def persist!(state, token, account_id:, role_name:, region:, profile:)
-      credential = AgentCredential.find_or_initialize_by(user: @user, agent_type: "claude_code")
+      company_id = state["company_id"]
+      raise Error, "this authorization is not bound to a company" if company_id.blank?
+
+      credential = AgentCredential.find_or_initialize_by(
+        user_id: @user.id, company_id: company_id, agent_type: "claude_code"
+      )
       current = credential.persisted? ? credential.config_data : {}
 
       # Connecting Bedrock makes it the inference credential, so any Anthropic-side login is

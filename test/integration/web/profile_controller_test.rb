@@ -61,4 +61,38 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :redirect
   end
+
+  # The page only renders the CURRENT company's credentials, and these two actions take
+  # an id — so an id from another company must not resolve. Editing or deleting it here
+  # would reach across a tenant boundary into a separately-billed agent account.
+  test "update_default_model refuses a credential from another company" do
+    credential = other_company_credential
+
+    put update_default_model_profile_path, params: {
+      agent_credential_id: credential.id,
+      default_model: "claude-sonnet-4-20250514"
+    }
+
+    assert_response :not_found
+    assert_nil credential.reload.metadata["default_model"]
+  end
+
+  test "destroy_credential refuses a credential from another company" do
+    credential = other_company_credential
+
+    delete destroy_credential_profile_path, params: { agent_credential_id: credential.id }
+
+    assert_response :not_found
+    assert AgentCredential.exists?(credential.id)
+  end
+
+  private
+
+  # The same person's credential in a second company they belong to: theirs, but not
+  # this page's to touch.
+  def other_company_credential
+    other = create(:company)
+    create(:company_membership, user: @user, company: other)
+    create(:agent_credential, user: @user, company: other, agent_type: "codex", metadata: {})
+  end
 end

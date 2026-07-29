@@ -25,7 +25,13 @@ class CloudCredentialsController < ActionController::API
     # the flow, and vending it is what lets the CLI's own verification pass first time.
     return withhold_preexisting(session) if withhold_from_auth_session?(session)
 
-    render plain: CloudAuth::AwsCredentialVendor.new(user: session.user).to_credential_process_json,
+    # The credential is the session's company's, resolved by SessionCompany: a
+    # multi-company user holds one connection per company and only the session names
+    # which company is being billed for this container's tokens.
+    credential = CloudAuth::CredentialLookup.for_session(session)
+    raise CloudAuth::NotConnectedError, "no claude_code credential in this session's company" if credential.nil?
+
+    render plain: CloudAuth::AwsCredentialVendor.new(credential: credential).to_credential_process_json,
            content_type: "application/json"
   rescue CloudAuth::ExpiredError, CloudAuth::InvalidRegistrationError => e
     fail_with(session, :unauthorized, "reauthorization_required", e)
@@ -51,7 +57,7 @@ class CloudCredentialsController < ActionController::API
   def withhold_from_auth_session?(session)
     return false unless session.session_type == "auth_setup"
 
-    credential = session.user.agent_credentials.find_by(agent_type: "claude_code")
+    credential = CloudAuth::CredentialLookup.for_session(session)
     return false if credential.nil?
 
     # Anything last written before this session opened predates it.

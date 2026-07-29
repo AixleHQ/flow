@@ -104,8 +104,9 @@ module Agents
     def default_env_vars(session)
       env = { "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}" }
 
-      # Inject API key from credential
-      credential = session.user&.agent_credentials&.find_by(agent_type: "gemini_cli")
+      # Inject the API key from the credential of THIS session's company: keys are per
+      # company so the vendor bill lands on the company that ran the session.
+      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: "gemini_cli")
       env["GEMINI_API_KEY"] = credential.config_data["api_key"] if credential&.config_data&.dig("api_key").present?
 
       env.compact

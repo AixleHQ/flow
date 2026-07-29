@@ -120,10 +120,13 @@ module ContainerStrategies
       @adapter ||= AgentCredentialsService.for(input[:agent_type]).adapter
     end
 
-    # The user's currently-stored credential config for this agent (nil if none) —
-    # passed to the adapter so a kind that layers on an existing login can seed it.
+    # The currently-stored credential config for this agent in THIS session's company
+    # (nil if none) — passed to the adapter so a kind that layers on an existing login
+    # can seed it. Scoped by company because the write below is: reading unscoped would
+    # seed one tenant's token into another tenant's credential.
     def current_credential_config
-      AgentCredential.find_by(user_id: input[:user_id], agent_type: input[:agent_type])&.config_data
+      SessionCompany.agent_credentials_for(current_terminal_session)
+                    .find_by(agent_type: input[:agent_type])&.config_data
     end
 
     def save_credentials(session, auth_files, agent_service)
@@ -134,7 +137,8 @@ module ContainerStrategies
       # Reconcile the scrape against what's already stored for this kind. Default is a
       # full replace; a layering kind (e.g. design) only adds its own block so it never
       # re-captures the base it seeded into the container.
-      current = AgentCredential.find_by(user_id: session.user_id, agent_type: input[:agent_type])&.config_data
+      current = SessionCompany.agent_credentials_for(session)
+                              .find_by(agent_type: input[:agent_type])&.config_data
       config_data = adapter.reconcile_captured_credentials(auth_kind, current, captured)
       return nil if config_data.blank?
 

@@ -387,6 +387,22 @@ module Agents
       assert_equal 210, stat.tokens
     end
 
+    # API keys are per company so the vendor bill lands on the company that ran the
+    # session. Injecting another company's key would spend its quota here.
+    test "default_env_vars injects the API key of the session's company only" do
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      create(:agent_credential, user: @user, company: other_company, agent_type: "gemini_cli",
+                                config_data: { "api_key" => "other-tenant-key" })
+
+      assert_nil @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+
+      create(:agent_credential, user: @user, company: @company, agent_type: "gemini_cli",
+                                config_data: { "api_key" => "mine" })
+
+      assert_equal "mine", @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+    end
+
     test "mcp_config pins the Playwright MCP command to the baked version (task #340)" do
       servers = [
         OpenStruct.new(name: "playwright", transport: "stdio",

@@ -96,7 +96,7 @@ class SessionServiceTest < ActiveSupport::TestCase
   # session simply never answers.
 
   test "create_and_start blocks launch when the user's AWS connection has rotted" do
-    AgentCredential.from_artifacts(@user.id, "claude_code", {
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
       "awsBedrock" => {
         "region" => "us-east-1", "profile" => "aixle-bedrock",
         "credential_process" => "/usr/local/bin/aixle-aws-creds",
@@ -123,13 +123,38 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   test "create_and_start launches for a user with a healthy AWS connection" do
     mock_temporal_start
-    AgentCredential.from_artifacts(@user.id, "claude_code", {
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
       "awsBedrock" => {
         "region" => "us-east-1", "profile" => "aixle-bedrock",
         "credential_process" => "/usr/local/bin/aixle-aws-creds",
         "identity_center" => {
           "account_id" => "111122223333", "role_name" => "BedrockUser", "sso_region" => "us-west-2",
           "registration" => { "client_id" => "c", "expires_at" => 60.days.from_now.iso8601 },
+          "token" => { "access_token" => "t", "refresh_token" => "r", "expires_at" => 1.hour.from_now.iso8601 }
+        }
+      }
+    })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+    )
+
+    assert session.persisted?
+  end
+
+  # The preflight checks the connection of the company being billed — the project's.
+  # A consultant's rotten connection in another company is that company's problem.
+  test "create_and_start ignores a rotten AWS connection in another company" do
+    mock_temporal_start
+    other_company = create(:company)
+    create(:company_membership, user: @user, company: other_company)
+    AgentCredential.from_artifacts(@user.id, other_company.id, "claude_code", {
+      "awsBedrock" => {
+        "region" => "us-east-1", "profile" => "aixle-bedrock",
+        "credential_process" => "/usr/local/bin/aixle-aws-creds",
+        "identity_center" => {
+          "account_id" => "111122223333", "role_name" => "BedrockUser", "sso_region" => "us-west-2",
+          "registration" => { "client_id" => "c", "expires_at" => 1.day.ago.iso8601 },
           "token" => { "access_token" => "t", "refresh_token" => "r", "expires_at" => 1.hour.from_now.iso8601 }
         }
       }

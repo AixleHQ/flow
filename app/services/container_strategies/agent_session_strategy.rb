@@ -125,8 +125,10 @@ module ContainerStrategies
     def resolve_model(session)
       return session.requested_model if session.requested_model.present?
 
-      # Fall back to user's default model for this runtime
-      credential = session.user.agent_credentials.find_by(agent_type: session.agent_type)
+      # Fall back to the default model chosen on THIS session's company credential. The
+      # pin is per credential, and a credential is per company — a model pinned against
+      # another company's Bedrock account does not exist here.
+      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session.agent_type)
       credential&.metadata&.dig("default_model")
     end
 
@@ -286,7 +288,8 @@ module ContainerStrategies
       config_data = build_credentials_from_files(auth_files, agent_service.adapter)
       return if config_data.blank?
 
-      credential = session.user.agent_credentials.find_by(agent_type: input[:agent_type])
+      # This session's company's credential — the same row the write below targets.
+      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type])
       return unless credential
       return if credential.config_data == config_data # cheap pre-check, avoids locking on no-op
 

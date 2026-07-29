@@ -13,13 +13,13 @@ module CloudAuth
       @other = create(:user, company: @company)
       @sso = FakeAwsSsoClient.new(region: "us-west-2")
       @catalog = nil
-      factory = lambda do |**args|
+      factory = @catalog_factory = lambda do |**args|
         @catalog = FakeAwsModelCatalog.new(**args)
         @catalog.profiles = @catalog_profiles if @catalog_profiles
         @catalog.raise_on_list = @catalog_raises if @catalog_raises
         @catalog
       end
-      @flow = AwsDeviceFlow.new(user: @user, client: @sso, catalog_factory: factory)
+      @flow = AwsDeviceFlow.new(user: @user, company: @company, client: @sso, catalog_factory: factory)
     end
 
     START_URL = "https://example.awsapps.com/start"
@@ -73,7 +73,7 @@ module CloudAuth
       started = start_flow
 
       assert_raises(DeniedError) do
-        AwsDeviceFlow.new(user: @other, client: @sso).poll(handle: started.handle)
+        AwsDeviceFlow.new(user: @other, company: @company, client: @sso).poll(handle: started.handle)
       end
     end
 
@@ -118,7 +118,7 @@ module CloudAuth
     # would ignore it anyway, and keeping it makes the active provider unknowable. Design
     # authorizes separately and stays.
     test "finish replaces an anthropic-side login and keeps the design token" do
-      AgentCredential.from_artifacts(@user.id, "claude_code", {
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
         "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
         "designOauth" => { "accessToken" => "sk-ant-design" }
       })
@@ -184,6 +184,36 @@ module CloudAuth
       block = credential.config_data.fetch("awsBedrock")
       assert block["identity_center"].present?, "the connection itself must still be stored"
       assert_nil block["available_models"], "an unrestricted picker beats a failed connect"
+    end
+
+    # Bedrock spend is billed to the company whose credential holds the connection, so a
+    # user who works for two companies connects each separately and neither overwrites
+    # the other.
+    test "the connection lands on the company the flow was opened for" do
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+
+      credential = complete_flow
+
+      other_flow = AwsDeviceFlow.new(user: @user, company: other_company, client: @sso,
+                                     catalog_factory: @catalog_factory)
+      started = other_flow.start(start_url: START_URL, sso_region: "us-west-2")
+      other_flow.poll(handle: started.handle)
+      other = other_flow.finish(handle: started.handle, account_id: "111122223333",
+                                role_name: "BedrockUser", region: "eu-central-1")
+
+      assert_equal @company.id, credential.company_id
+      assert_equal other_company.id, other.company_id
+      assert_not_equal credential.id, other.id
+      assert_equal "us-east-1", credential.reload.config_data.dig("awsBedrock", "region")
+      assert_equal "eu-central-1", other.config_data.dig("awsBedrock", "region")
+    end
+
+    test "a flow with no company cannot be started" do
+      assert_raises(ArgumentError) do
+        AwsDeviceFlow.new(user: @user, company: nil, client: @sso)
+          .start(start_url: START_URL, sso_region: "us-west-2")
+      end
     end
 
     test "finish refuses an account or role the authorization did not grant" do

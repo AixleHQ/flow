@@ -73,6 +73,19 @@ class CloudCredentialsTest < ActionDispatch::IntegrationTest
     assert_includes response.body, '"Version":1'
   end
 
+  # Credentials are per (user, company) and the session names the company being billed,
+  # so a container must never vend a connection another company made.
+  test "does not vend a connection that belongs to another company" do
+    other_company = create(:company)
+    create(:company_membership, user: @user, company: other_company)
+    connect_aws(company: other_company)
+
+    post PATH, headers: headers
+
+    assert_response :conflict
+    assert_equal "not_connected", JSON.parse(response.body)["error"]
+  end
+
   # == an auth session starts with nothing connected ==
   #
   # Vending an earlier connection would silently log the user in to the very account they
@@ -142,7 +155,7 @@ class CloudCredentialsTest < ActionDispatch::IntegrationTest
 
   # A connection that exists but needs no vending is not a request to connect.
   test "a bearer-token connection does not mark the session as asking" do
-    AgentCredential.from_artifacts(@user.id, "claude_code",
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                    { "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "x" } })
 
     post PATH, headers: headers
@@ -161,7 +174,7 @@ class CloudCredentialsTest < ActionDispatch::IntegrationTest
   end
 
   test "reports a bearer-token connection as not vendable" do
-    AgentCredential.from_artifacts(@user.id, "claude_code",
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
                                    { "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "x" } })
 
     post PATH, headers: headers
@@ -175,8 +188,9 @@ class CloudCredentialsTest < ActionDispatch::IntegrationTest
     { "X-Session-Id" => @session.id.to_s, "X-Cloud-Key" => key || CloudAuth::SessionKey.generate(@session) }
   end
 
-  def connect_aws(token_expires_at: 1.hour.from_now, registration_expires_at: 60.days.from_now)
-    AgentCredential.from_artifacts(@user.id, "claude_code", {
+  def connect_aws(token_expires_at: 1.hour.from_now, registration_expires_at: 60.days.from_now,
+                  company: @company)
+    AgentCredential.from_artifacts(@user.id, company.id, "claude_code", {
       "awsBedrock" => {
         "region" => "us-east-1",
         "profile" => "aixle-bedrock",

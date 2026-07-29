@@ -18,18 +18,21 @@ module CloudAuth
       def ok? = ok
     end
 
-    def initialize(user:, vendor: nil, probe_factory: nil)
+    # `company` names whose connection is being checked: credentials are per
+    # (user, company), so a multi-company user has one connection per company.
+    def initialize(user:, company:, vendor: nil, probe_factory: nil)
       @user = user
+      @company = company
       @vendor = vendor
       @probe_factory = probe_factory
     end
 
     def call
-      credential = @user.agent_credentials.find_by(agent_type: "claude_code")
+      credential = CredentialLookup.claude_code(user_id: @user&.id, company_id: @company&.id)
       block = credential && credential.config_data[Agents::ClaudeCodeAdapter::BEDROCK_KEY]
       return failure(:not_connected, nil, "not_connected", "No AWS connection on this profile.") unless block.is_a?(Hash)
 
-      vended = vend
+      vended = vend(credential)
       probe = build_probe(block, vended)
       result = probe.probe(model_id: probe_model(block))
 
@@ -46,8 +49,8 @@ module CloudAuth
 
     private
 
-    def vend
-      (@vendor || AwsCredentialVendor.new(user: @user)).call
+    def vend(credential)
+      (@vendor || AwsCredentialVendor.new(credential: credential)).call
     end
 
     def build_probe(block, vended)

@@ -73,10 +73,12 @@ class AgentCredentialsService
 
   # Load credentials from database and write to container
   # @param user [User] user to load credentials for
+  # @param company [Company] the company whose credential to write — credentials are
+  #   per company, so the container must never receive another tenant's tokens
   # @param container_id [String] Docker container ID
   # @param workflow_config [Hash] optional workflow-specific settings
-  def load_credentials_to_container(user, container_id, workflow_config = {})
-    credential = user.agent_credentials.find_by(agent_type: agent_type)
+  def load_credentials_to_container(user, company, container_id, workflow_config = {})
+    credential = AgentCredential.find_by(user_id: user.id, company_id: company&.id, agent_type: agent_type)
     raise "No credentials found for #{agent_type}" unless credential
 
     write_to_container(container_id, credential.config_data, workflow_config)

@@ -118,16 +118,20 @@ class TerminalSession < ApplicationRecord
     when "auth_setup"
       ContainerStrategies::AgentAuthStrategy.new(**strategy_params)
     when "agent_session"
-      ContainerStrategies::AgentSessionStrategy.new(**strategy_params.merge(
-        credential: user.agent_credentials.find_by(agent_type: agent_type)
-      ))
+      ContainerStrategies::AgentSessionStrategy.new(**strategy_params.merge(credential: session_credential))
     when "workflow_step"
-      ContainerStrategies::WorkflowStepStrategy.new(**strategy_params.merge(
-        credential: user.agent_credentials.find_by(agent_type: agent_type)
-      ))
+      ContainerStrategies::WorkflowStepStrategy.new(**strategy_params.merge(credential: session_credential))
     else
       raise ArgumentError, "Cannot build strategy for session_type=#{session_type}"
     end
+  end
+
+  # The credential this session's container may use: the acting user's, in THIS
+  # session's company. Never `user.agent_credentials` — a person holds one credential
+  # per company, so an unscoped read hands a container another tenant's tokens (and
+  # bills that tenant for the tokens it spends).
+  def session_credential
+    SessionCompany.agent_credentials_for(self).find_by(agent_type: agent_type)
   end
 
   # The session's entitled tool set: explicitly attached tools, the project

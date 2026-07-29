@@ -411,6 +411,28 @@ module ContainerStrategies
       assert_includes creds, "sk-ant-oat01-base"
     end
 
+    # The credential this seeds from is written back at cleanup, scoped to the session's
+    # company. Reading it unscoped would inject one tenant's login into the container and
+    # then merge whatever came back into the other tenant's credential.
+    test "design auth before_exec never seeds a login from another company" do
+      @session.update!(metadata: { "auth_kind" => "design" })
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      AgentCredential.from_artifacts(@user.id, other_company.id, "claude_code",
+                                     { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-OTHER-TENANT" } })
+      strategy = build_strategy
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      written = {}
+      runtime_mock.stubs(:write_file).with { |_c, path, content| written[path] = content; true }
+
+      strategy.before_exec(container_id: "abc")
+
+      refute_includes written.values.join, "sk-ant-oat01-OTHER-TENANT"
+    end
+
     test "design auth before_exec strips the existing designOauth on reconnect (no instant complete)" do
       @session.update!(metadata: { "auth_kind" => "design" })
       AgentCredential.from_artifacts(@user.id, credential_company_id, "claude_code", {
@@ -438,7 +460,7 @@ module ContainerStrategies
     # (e.g. `aws sso login` writing ~/.aws/sso/cache/ next to ~/.aws/config).
     test "before_exec writes auth setup files owned by the agent user, not root" do
       @session.update!(metadata: { "auth_kind" => "design" })
-      AgentCredential.from_artifacts(@user.id, "claude_code",
+      AgentCredential.from_artifacts(@user.id, credential_company_id, "claude_code",
                                      { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } })
       strategy = build_strategy
       container = mock("container")

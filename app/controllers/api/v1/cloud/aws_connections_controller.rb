@@ -20,6 +20,7 @@ module Api
         def create
           return missing(:start_url) if params[:start_url].blank?
           return missing(:sso_region) if params[:sso_region].blank?
+          return no_company if current_company.nil?
 
           started = flow.start(start_url: params[:start_url], sso_region: params[:sso_region])
           render json: {
@@ -60,7 +61,7 @@ module Api
         # Deliberately 200 even when the connection is broken: a failed probe is a
         # successful diagnosis, and the payload carries the provider's own wording.
         def health
-          result = CloudAuth::AwsHealthCheck.new(user: current_user).call
+          result = CloudAuth::AwsHealthCheck.new(user: current_user, company: current_company).call
           render json: {
             ok: result.ok?,
             stage: result.stage,
@@ -71,7 +72,7 @@ module Api
         end
 
         def destroy
-          credential = current_user.agent_credentials.find_by(agent_type: "claude_code")
+          credential = connected_credential
           if credential
             config = credential.config_data
             config.delete(Agents::ClaudeCodeAdapter::BEDROCK_KEY)
@@ -83,8 +84,14 @@ module Api
 
         private
 
+        # Scoped to the company the user is acting for: the connection lands on that
+        # company's credential and its Bedrock spend is billed there.
         def flow
-          CloudAuth::AwsDeviceFlow.new(user: current_user)
+          CloudAuth::AwsDeviceFlow.new(user: current_user, company: current_company)
+        end
+
+        def connected_credential
+          CloudAuth::CredentialLookup.claude_code(user_id: current_user.id, company_id: current_company&.id)
         end
 
         def serialize_accounts(accounts)
@@ -96,7 +103,7 @@ module Api
         # Reports what the container will actually get, plus why it is unusable when it
         # is — the same reason codes Preflight uses at session start.
         def connection_state
-          credential = current_user.agent_credentials.find_by(agent_type: "claude_code")
+          credential = connected_credential
           block = credential && credential.config_data[Agents::ClaudeCodeAdapter::BEDROCK_KEY]
           return { connected: false } unless block.is_a?(Hash)
 
@@ -114,6 +121,13 @@ module Api
 
         def missing(key)
           render json: { error: "missing_parameter", message: "#{key} is required" },
+                 status: :unprocessable_entity
+        end
+
+        # A connection is billed to a company, so a caller acting for none (a super admin
+        # with no membership) has nowhere to put one.
+        def no_company
+          render json: { error: "no_company", message: "no active company for this user" },
                  status: :unprocessable_entity
         end
 

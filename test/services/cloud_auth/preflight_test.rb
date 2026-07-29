@@ -12,30 +12,30 @@ module CloudAuth
     # == nothing to report ==
 
     test "no credential at all is not a problem" do
-      assert_empty Preflight.broken_connections(@user)
+      assert_empty preflight
     end
 
     test "nil user is not a problem" do
-      assert_empty Preflight.broken_connections(nil)
+      assert_empty Preflight.broken_connections(user: nil, company: @company)
     end
 
     # Not using Bedrock is not a broken connection — only a rotten one is.
     test "a credential with no AWS connection is not a problem" do
       store({ "primaryApiKey" => "sk-ant-x" })
 
-      assert_empty Preflight.broken_connections(@user)
+      assert_empty preflight
     end
 
     test "a healthy identity center connection is not a problem" do
       store({ "awsBedrock" => connection })
 
-      assert_empty Preflight.broken_connections(@user)
+      assert_empty preflight
     end
 
     test "a bearer-token connection has nothing that can rot" do
       store({ "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "bedrock-api-key-x" } })
 
-      assert_empty Preflight.broken_connections(@user)
+      assert_empty preflight
     end
 
     # An expired access token is fine as long as it can be refreshed.
@@ -44,7 +44,7 @@ module CloudAuth
         "access_token" => "stale", "refresh_token" => "r", "expires_at" => 1.hour.ago.iso8601
       }) })
 
-      assert_empty Preflight.broken_connections(@user)
+      assert_empty preflight
     end
 
     # == broken ==
@@ -52,7 +52,7 @@ module CloudAuth
     test "an expired client registration demands reconnection" do
       store({ "awsBedrock" => connection(registration_expires_at: 1.day.ago) })
 
-      entry = Preflight.broken_connections(@user).sole
+      entry = preflight.sole
       assert_equal "aws", entry[:provider]
       assert_equal "registration_expired", entry[:reason]
       assert_equal Preflight::CONNECT_PATH, entry[:connect_url]
@@ -64,7 +64,7 @@ module CloudAuth
         "access_token" => "stale", "expires_at" => 1.hour.ago.iso8601
       }) })
 
-      assert_equal "reauthorization_required", Preflight.broken_connections(@user).sole[:reason]
+      assert_equal "reauthorization_required", preflight.sole[:reason]
     end
 
     test "a structurally incomplete connection reports not_connected" do
@@ -77,22 +77,44 @@ module CloudAuth
       ].each do |block|
         store({ "awsBedrock" => block })
 
-        assert_equal "not_connected", Preflight.broken_connections(@user).sole[:reason],
+        assert_equal "not_connected", preflight.sole[:reason],
                      "expected #{block.inspect} to report not_connected"
       end
+    end
+
+    # Credentials are per (user, company): a session billed to one company must not be
+    # blocked by a rotten connection the same person has in another.
+    test "a rotten connection in another company does not block this one" do
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      store({ "awsBedrock" => connection(registration_expires_at: 1.day.ago) }, company: other_company)
+      store({ "awsBedrock" => connection })
+
+      assert_empty preflight
+      assert_equal "registration_expired", preflight(company: other_company).sole[:reason]
+    end
+
+    test "no company means nothing to check" do
+      store({ "awsBedrock" => connection(registration_expires_at: 1.day.ago) })
+
+      assert_empty preflight(company: nil)
     end
 
     test "an unparseable expiry is treated as expired rather than ignored" do
       store({ "awsBedrock" => connection(registration_expires_at: "not-a-date") })
 
-      assert_equal "registration_expired", Preflight.broken_connections(@user).sole[:reason]
+      assert_equal "registration_expired", preflight.sole[:reason]
     end
 
     private
 
-    def store(config)
-      AgentCredential.find_by(user_id: @user.id, agent_type: "claude_code")&.destroy
-      AgentCredential.from_artifacts(@user.id, "claude_code", config)
+    def preflight(user: @user, company: @company)
+      Preflight.broken_connections(user: user, company: company)
+    end
+
+    def store(config, company: @company)
+      AgentCredential.find_by(user_id: @user.id, company_id: company.id, agent_type: "claude_code")&.destroy
+      AgentCredential.from_artifacts(@user.id, company.id, "claude_code", config)
     end
 
     def connection(token: nil, registration: nil, registration_expires_at: 60.days.from_now, idc_overrides: {})
