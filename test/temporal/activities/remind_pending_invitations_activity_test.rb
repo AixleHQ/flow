@@ -6,6 +6,7 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
   include ActionMailer::TestHelper
 
   setup do
+    ActionMailer::Base.deliveries.clear
     @company = create(:company)
     @inviter = create(:user, :admin, company: @company)
 
@@ -25,9 +26,10 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
   test "reminds an invitation inside the final two days of its 7-day window" do
     membership = invitation(invited_at: 6.days.ago)
 
-    assert_enqueued_email_with MembershipMailer, :invitation_reminder, args: [ membership ] do
+    assert_emails 1 do
       assert_equal({ reminded_count: 1 }, run_activity)
     end
+    assert_equal [ membership.user.email ], ActionMailer::Base.deliveries.last.to
 
     assert membership.reload.reminded_at.present?
   end
@@ -35,7 +37,7 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
   test "leaves a freshly sent invitation alone" do
     invitation(invited_at: 1.hour.ago)
 
-    assert_no_enqueued_emails do
+    assert_no_emails do
       assert_equal({ reminded_count: 0 }, run_activity)
     end
   end
@@ -43,7 +45,7 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
   test "skips invitations that already expired — their token is dead, so the link would go nowhere" do
     invitation(invited_at: 8.days.ago)
 
-    assert_no_enqueued_emails do
+    assert_no_emails do
       assert_equal({ reminded_count: 0 }, run_activity)
     end
   end
@@ -53,7 +55,7 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
     create(:company_membership, user: create(:user), company: @company,
                                 invited_by: @inviter, invited_at: 6.days.ago)
 
-    assert_no_enqueued_emails do
+    assert_no_emails do
       assert_equal({ reminded_count: 0 }, run_activity)
     end
   end
@@ -64,7 +66,7 @@ class Activities::Membership::RemindPendingInvitationsActivityTest < ActiveSuppo
     invitation(invited_at: 6.days.ago)
 
     assert_equal({ reminded_count: 1 }, run_activity)
-    assert_no_enqueued_emails do
+    assert_no_emails do
       assert_equal({ reminded_count: 0 }, run_activity)
     end
   end

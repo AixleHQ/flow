@@ -24,10 +24,17 @@ module Activities
 
         sent = 0
         pending.includes(:user, :company).find_each do |membership|
-          MembershipMailer.invitation_reminder(membership).deliver_later
+          # deliver_NOW, not later: ActiveJob runs on the in-memory async adapter,
+          # so an enqueued mail is lost on restart — and stamping reminded_at
+          # straight after enqueueing would make that loss permanent, since the
+          # stamp is exactly what stops this membership being picked up again.
+          # This already runs inside a Temporal activity, which is the durable
+          # retry layer: send first, stamp only once the send returned.
+          MembershipMailer.invitation_reminder(membership).deliver_now
           membership.update_column(:reminded_at, Time.current)
           sent += 1
         rescue StandardError => e
+          # Left unstamped on purpose — the next sweep retries this one.
           log(:warn, "Failed to remind membership #{membership.id}: #{e.message}")
         end
 
