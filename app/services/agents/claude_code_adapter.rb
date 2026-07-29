@@ -447,10 +447,12 @@ module Agents
     # common, and a model picker is not worth breaking a page over.
     def bedrock_available_models(credentials, credential)
       block = bedrock_block(credentials)
-      return [] if block.nil? || credential&.user.nil?
+      return [] if block.nil? || credential.nil?
       return [] if block["identity_center"].blank?
 
-      vended = CloudAuth::AwsCredentialVendor.new(user: credential.user).call
+      # Vending is keyed on the credential itself: it already names the (user, company)
+      # whose connection — and whose AWS bill — this list describes.
+      vended = CloudAuth::AwsCredentialVendor.new(credential: credential).call
       profiles = CloudAuth::AwsModelCatalog.new(
         region: block["region"],
         access_key_id: vended.access_key_id,

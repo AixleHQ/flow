@@ -902,7 +902,7 @@ module Agents
         FakeAwsModelCatalog.application_profile(
           "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow", name: "Flow"
         )
-      ])
+      ], credential: credential)
 
       result = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
 
@@ -1217,13 +1217,18 @@ module Agents
       })
     end
 
-    def stub_catalog(profiles)
+    # `credential:` is pinned deliberately. A bare `.stubs(:new)` accepts any arguments, so it
+    # answered a call site that had drifted to a signature the real vendor no longer has —
+    # the failure only showed up as a silently static model list in the browser.
+    def stub_catalog(profiles, credential: nil)
       vended = CloudAuth::AwsCredentialVendor::Vended.new(
         access_key_id: "ASIAFAKE", secret_access_key: "s", session_token: "t", expiration: 1.hour.from_now
       )
       vendor = mock("vendor")
       vendor.stubs(:call).returns(vended)
-      CloudAuth::AwsCredentialVendor.stubs(:new).returns(vendor)
+      expectation = CloudAuth::AwsCredentialVendor.stubs(:new)
+      expectation = expectation.with(credential: credential) if credential
+      expectation.returns(vendor)
 
       catalog = FakeAwsModelCatalog.new(region: "us-east-1", access_key_id: "ASIAFAKE",
                                        secret_access_key: "s", session_token: "t")
