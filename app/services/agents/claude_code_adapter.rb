@@ -445,6 +445,25 @@ module Agents
     #
     # Failure is never fatal — a permission set without bedrock:ListInferenceProfiles is
     # common, and a model picker is not worth breaking a page over.
+    # The container's allowlist is read from the credential, and this is the only path that
+    # asks AWS what the account can invoke today — so the answer is written back. Without it
+    # the stored list stays as it was at connect time and a session started weeks later is
+    # held to it. Never fatal: a failed write costs freshness, not a model list.
+    def refresh_bedrock_allowlist(credential, model_ids)
+      return if credential.nil? || model_ids.blank?
+
+      config = credential.config_data
+      block = config[BEDROCK_KEY]
+      return unless block.is_a?(Hash)
+      return if block["available_models"] == model_ids
+
+      block["available_models"] = model_ids
+      credential.config_data = config
+      credential.save!
+    rescue StandardError => e
+      Rails.logger.warn("[ClaudeCodeAdapter] could not refresh the Bedrock allowlist: #{e.message}")
+    end
+
     def bedrock_available_models(credentials, credential)
       block = bedrock_block(credentials)
       return [] if block.nil? || credential.nil?
@@ -632,7 +651,10 @@ module Agents
       # account-specific: enterprise deployments expose models as application inference
       # profiles whose ARNs no static list can name.
       bedrock_models = bedrock_available_models(credentials, credential)
-      return { models: bedrock_models, source: :api } if bedrock_models.present?
+      if bedrock_models.present?
+        refresh_bedrock_allowlist(credential, bedrock_models.map { |m| m[:model_id] })
+        return { models: bedrock_models, source: :api }
+      end
 
       api_key = credentials["primaryApiKey"]
       oauth_token = credentials.dig("claudeAiOauth", "accessToken")
@@ -965,6 +987,21 @@ module Agents
     # via skipDangerousModePermissionPrompt (see generate_settings).
     PERMISSION_DEFAULT_MODE = "bypassPermissions"
 
+    # Claude Code treats availableModels as an allowlist and, for anything outside it,
+    # silently substitutes its own default — "Model … is restricted by your organization's
+    # settings. Using us.anthropic.claude-sonnet-4-5 instead." The list is captured when the
+    # connection is made, so an application profile created (or first made readable) later
+    # would make the model the user pinned unusable, and the spend would land on a shared
+    # system profile instead of the account's own — losing the per-team cost split that is
+    # the whole point of an application profile. Whatever this session runs on is therefore
+    # always in the list.
+    def bedrock_allowlist(available, model)
+      return nil unless available.is_a?(Array) && available.any?
+      return available if model.blank? || available.include?(model)
+
+      available + [ model ]
+    end
+
     def generate_settings(mcp_server_names = [], model: nil, bedrock: nil)
       settings = {
         "permissions" => {
@@ -989,8 +1026,8 @@ module Agents
 
       if bedrock
         settings["env"] = settings["env"].merge(bedrock_settings_env(bedrock))
-        available = bedrock["available_models"]
-        settings["availableModels"] = available if available.is_a?(Array) && available.any?
+        available = bedrock_allowlist(bedrock["available_models"], model)
+        settings["availableModels"] = available if available.present?
         # Only awsAuthRefresh renders its output to the user (an "Authentication" panel),
         # and only while the command is still running — so a browser-based re-auth must
         # print its URL and then block. It fires only when credentials are already

@@ -696,6 +696,41 @@ module Agents
       assert_equal "/usr/local/bin/aixle-aws-connect", settings["awsAuthRefresh"]
     end
 
+    # Regression: Claude Code treats availableModels as an allowlist and answers anything
+    # outside it with "Model … is restricted by your organization's settings. Using
+    # us.anthropic.claude-sonnet-4-5 instead." A list captured at connect time then silently
+    # downgraded a session the user had pinned to the account's own application profile —
+    # and moved the spend onto a shared system profile.
+    test "the model this session runs on is always in the allowlist" do
+      arn = "arn:aws:bedrock:us-east-1:541894707537:application-inference-profile/aae1a165gwk4"
+
+      settings = settings_hash(
+        @adapter.config_files({ "awsBedrock" => bedrock_block }, { model: arn })
+      )
+
+      assert_includes settings["availableModels"], arn
+      assert_equal "opus", settings["availableModels"].first, "the stored list keeps its order"
+      assert_equal arn, settings["model"]
+    end
+
+    test "a model already in the allowlist is not duplicated" do
+      settings = settings_hash(
+        @adapter.config_files({ "awsBedrock" => bedrock_block }, { model: "sonnet" })
+      )
+
+      assert_equal %w[opus sonnet haiku], settings["availableModels"]
+    end
+
+    # No stored list means Claude Code's own picker is unrestricted; injecting a one-entry
+    # allowlist would narrow it to exactly one model.
+    test "a connection with no stored list gets no allowlist at all" do
+      block = bedrock_block.except("available_models")
+
+      settings = settings_hash(@adapter.config_files({ "awsBedrock" => block }, { model: "sonnet" }))
+
+      assert_nil settings["availableModels"]
+    end
+
     test "chain resolve timeout is overridable per connection" do
       block = bedrock_block.merge("chain_resolve_timeout_ms" => 300_000)
       env = settings_env(@adapter.config_files({ "awsBedrock" => block }))
@@ -1030,6 +1065,32 @@ module Agents
 
       assert_equal [ "us.anthropic.claude-opus-5", "us.anthropic.claude-opus-4-8", "us.anthropic.claude-sonnet-4-5" ],
                    models.map { |m| m[:model_id] }
+    end
+
+    # The container reads its allowlist from the credential, so a list left as it was at
+    # connect time holds a session started weeks later to models the account has since
+    # replaced. This is the only path that asks AWS what it can invoke today.
+    test "listing models refreshes the allowlist stored on the credential" do
+      credential = connect_bedrock
+      arn = "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow"
+      stub_catalog([ FakeAwsModelCatalog.application_profile(arn, name: "Flow") ], credential: credential)
+
+      @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+
+      assert_equal [ arn ], credential.reload.config_data.dig("awsBedrock", "available_models")
+    end
+
+    test "an unchanged list is not written back" do
+      credential = connect_bedrock
+      arn = "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow"
+      credential.update!(config_data: credential.config_data.deep_merge(
+        "awsBedrock" => { "available_models" => [ arn ] }
+      ))
+      stub_catalog([ FakeAwsModelCatalog.application_profile(arn, name: "Flow") ], credential: credential)
+
+      assert_no_changes -> { credential.reload.updated_at } do
+        @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+      end
     end
 
     # A permission set without bedrock:ListInferenceProfiles is common. A model picker is not
