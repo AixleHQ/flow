@@ -126,7 +126,7 @@ class BmadMethodInjector
   end
 
   def resolve_language
-    code = session.user&.preferred_agent_language
+    code = SessionCompany.membership_for(session)&.preferred_agent_language
     LANGUAGE_CODE_TO_NAME.fetch(code, DEFAULT_LANGUAGE)
   end
 

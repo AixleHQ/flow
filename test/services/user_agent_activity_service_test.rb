@@ -26,7 +26,7 @@ class UserAgentActivityServiceTest < ActiveSupport::TestCase
     seed_session(agent_type: "claude_code", cost_cents: 200, tokens: 2000)
     seed_session(agent_type: "cursor_cli", cost_cents: 50, tokens: 500)
 
-    result = UserAgentActivityService.new(user: @user, period: "30d").call
+    result = UserAgentActivityService.new(user: @user, period: "30d", company: @company).call
 
     by_agent = result.sessions_by_agent.index_by(&:agent_type)
     assert { by_agent["claude_code"].sessions == 2 }
@@ -43,7 +43,7 @@ class UserAgentActivityServiceTest < ActiveSupport::TestCase
                       session_type: "workflow_step", agent_type: nil)
     nil_agent.save!(validate: false)
 
-    result = UserAgentActivityService.new(user: @user, period: "30d").call
+    result = UserAgentActivityService.new(user: @user, period: "30d", company: @company).call
 
     assert { result.sessions_by_agent.size == 1 }
     assert { result.sessions_by_agent.first.agent_type == "claude_code" }

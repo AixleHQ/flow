@@ -396,7 +396,7 @@ module Agents
       credential.with_lock do
         current = credential.config_data
         merged  = merge_refreshed_credentials(current, new_config)
-        AgentCredential.from_artifacts(credential.user_id, credential.agent_type, merged) if merged != current
+        AgentCredential.from_artifacts(credential.user_id, credential.company_id, credential.agent_type, merged) if merged != current
         merged
       end
     end

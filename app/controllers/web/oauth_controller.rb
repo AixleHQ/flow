@@ -227,7 +227,7 @@ class Web::OauthController < Web::ApplicationController
 
   # Bind the owner ONLY to a record the current user may act for:
   #   User    => must be current_user
-  #   Company => must be the user's own company
+  #   Company => any company the user is an ACTIVE member of
   #   Project => any project the user can access (Project.for_user)
   # Returns nil when not permitted. The signed state is trusted for routing, but
   # the owner is still authorized against the live session (defense in depth).
@@ -236,7 +236,10 @@ class Web::OauthController < Web::ApplicationController
     when "User"
       current_user if owner_id.to_i == current_user.id
     when "Company"
-      current_user.company if current_user.company_id.present? && owner_id.to_i == current_user.company_id
+      # Deliberately NOT the session's current company: the signed state may
+      # name any company the user belongs to. An invited/suspended/revoked
+      # membership must never bind a credential to that tenant.
+      current_user.company_memberships.active.find_by(company_id: owner_id)&.company
     when "Project"
       Project.for_user(current_user).find_by(id: owner_id)
     end

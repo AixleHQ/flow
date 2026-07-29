@@ -10,7 +10,7 @@ module PersonalTools
       TemporalService.stubs(:send_signal).returns({ ok: true })
 
       @user = create(:user, :with_company)
-      @company = @user.company
+      @company = @user.companies.first
       @project = create(:project, owner: @user, company: @company)
       @workflow = create(:workflow, scope: @project)
       @step = create(:step, workflow: @workflow, position: 1)

@@ -149,6 +149,35 @@ module Api
         assert Company::AssetsPolicy.new(base_ctx(@employee), nil).create?
       end
 
+      # === fail-closed read_only? ===
+
+      test "a user with zero active memberships is read-only (fail closed)" do
+        no_membership = create(:user)
+
+        assert_not AssetsPolicy.new(base_ctx(no_membership), nil).upload?
+        assert_not TerminalSessionsPolicy.new(base_ctx(no_membership), nil).create?
+        assert_not Company::AssetsPolicy.new(base_ctx(no_membership), nil).create?
+      end
+
+      test "a user whose memberships were all revoked is read-only" do
+        revoked = create(:user, :employee, company: @company)
+        revoked.company_memberships.find_by!(company: @company).revoke!
+
+        assert_not AssetsPolicy.new(base_ctx(revoked), nil).upload?
+      end
+
+      test "a company context without an active membership there denies writes even for writers elsewhere" do
+        elsewhere_admin = create(:user, :admin, company: create(:company))
+        ctx = BaseContext.new(elsewhere_admin, {}, company: @company)
+
+        assert_not Company::AssetsPolicy.new(ctx, nil).create?
+        assert_not Company::AssetsPolicy.new(ctx, nil).destroy?
+      end
+
+      test "super admins (no memberships by design) are exempt from the zero-membership rule" do
+        assert AssetsPolicy.new(base_ctx(create(:user, :super_admin)), nil).upload?
+      end
+
       test "TerminalSessionsPolicy classification" do
         v = TerminalSessionsPolicy.new(base_ctx(@viewer), nil)
         assert v.show?

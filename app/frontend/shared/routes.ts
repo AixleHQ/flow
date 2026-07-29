@@ -877,6 +877,26 @@ export function logoutPath(options?: object): string {
   return "/" + "logout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /invitations/:token(.:format) */
+export function invitationPath(token: ScalarType, options?: object): string {
+  return "/" + "invitations" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /invitations/:token/accept(.:format) */
+export function acceptInvitationPath(token: ScalarType, options?: object): string {
+  return "/" + "invitations" + "/" + token + "/" + "accept" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /invitations/:token/decline(.:format) */
+export function declineInvitationPath(token: ScalarType, options?: object): string {
+  return "/" + "invitations" + "/" + token + "/" + "decline" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /invitations/:token/signup(.:format) */
+export function signupInvitationPath(token: ScalarType, options?: object): string {
+  return "/" + "invitations" + "/" + token + "/" + "signup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
 /** /privacy-policy(.:format) */
 export function privacyPolicyPath(options?: object): string {
   return "/" + "privacy-policy" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -945,6 +965,21 @@ export function oauthCallbackPath(options?: object): string {
 /** /oauth/mcp/:mcp_server_id/connect(.:format) */
 export function oauthMCPConnectPath(mcp_server_id: ScalarType, options?: object): string {
   return "/" + "oauth" + "/" + "mcp" + "/" + mcp_server_id + "/" + "connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["mcp_server_id","format"]);
+}
+
+/** /company/switch(.:format) */
+export function companySwitchPath(options?: object): string {
+  return "/" + "company" + "/" + "switch" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/memberships/:id(.:format) */
+export function companyMembershipPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "memberships" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/members/:id/resend(.:format) */
+export function resendCompanyMemberPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "members" + "/" + id + "/" + "resend" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /company/members(.:format) */

@@ -63,7 +63,7 @@ module ContextBuilders
     end
 
     def preferred_language
-      session.user&.preferred_agent_language
+      SessionCompany.membership_for(session)&.preferred_agent_language
     end
   end
 end

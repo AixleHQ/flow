@@ -128,7 +128,7 @@ module ContainerStrategies
       config_data = adapter.reconcile_captured_credentials(auth_kind, current, captured)
       return nil if config_data.blank?
 
-      AgentCredential.from_artifacts(session.user_id, input[:agent_type], config_data)
+      AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], config_data)
     end
   end
 end

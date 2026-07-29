@@ -11,16 +11,21 @@ module Api
       end
 
       def create
-        if current_user.read_only? && session_params[:session_type] != "auth_setup"
+        project = session_params[:project_id] ? member_company_projects.find(session_params[:project_id]) : nil
+
+        if session_params[:session_type] != "auth_setup" && viewer_for?(project)
           return render json: { error: "Viewers cannot launch sessions" }, status: :forbidden
         end
 
-        project = session_params[:project_id] ? current_user.company.projects.find(session_params[:project_id]) : nil
         agent = session_params[:configured_agent_id] ? find_accessible_agent(session_params[:configured_agent_id], project) : nil
 
         session = SessionService.create_and_start(
           user: current_user,
           project: project,
+          # Project-less auth_setup sessions authenticate a credential, which is
+          # billed to a company — so name it explicitly rather than let anything
+          # downstream guess.
+          company: project ? nil : auth_setup_company,
           session_type: session_params[:session_type],
           agent_type: session_params[:agent_type],
           configured_agent: agent,
@@ -75,6 +80,19 @@ module Api
 
       private
 
+      # Which company an auth_setup session authenticates a credential for. The
+      # API has no switcher, so the client must name it when the user belongs to
+      # more than one company; a single-membership user is unambiguous.
+      def auth_setup_company
+        memberships = current_user.active_memberships
+        if params[:company_id].present?
+          wanted = params[:company_id].to_i
+          return memberships.find { |m| m.company_id == wanted }&.company
+        end
+
+        memberships.one? ? memberships.first.company : nil
+      end
+
       # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on
       # the underlying IO so large files are not fully loaded; fall back to a
       # read-then-slice if the storage IO is not seekable.
@@ -108,8 +126,34 @@ module Api
       end
 
       def find_accessible_agent(id, project)
-        scope = project ? Agent.visible_for_project(project) : Agent.belonging_to_company(current_user.company)
+        scope = if project
+          # Agent visibility follows the PROJECT's company.
+          Agent.visible_for_project(project)
+        else
+          Agent.where(scope_type: "Company", scope_id: member_company_ids)
+        end
         scope.find(id)
+      end
+
+      # Projects reachable through the user's ACTIVE memberships (API calls
+      # carry no web session, so the company is derived per project).
+      def member_company_projects
+        Project.where(company_id: member_company_ids)
+      end
+
+      def member_company_ids
+        current_user.company_memberships.active.select(:company_id)
+      end
+
+      # Viewer check against the target project's company; without a project
+      # (auth_setup flows), fall back to the global viewer-everywhere predicate.
+      def viewer_for?(project)
+        if project
+          membership = current_user.company_memberships.active.find_by(company_id: project.company_id)
+          membership.nil? || membership.viewer?
+        else
+          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
+        end
       end
     end
   end

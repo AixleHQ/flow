@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Service to handle Google OAuth authentication with company assignment
+# Service to handle Google OAuth authentication (global identity) with a
+# domain-based company auto-join policy for membershipless users
 class GoogleOmniAuthService
   attr_reader :auth_hash, :user
 
@@ -18,20 +19,13 @@ class GoogleOmniAuthService
 
   private
 
-  # Find an existing user or create a new one with company assignment
+  # Find an existing user or create a new one. Identity lookup is GLOBAL
+  # (email is globally unique); company access lives on memberships.
   # @return [User] The user found or created
   def find_or_create_user
     user = User.find_or_initialize_by(email: email)
 
-    # Find company by email domain if user is new
     if user.new_record?
-      company = Company.find_by_email_domain(email)
-
-      user.company = company
-      user.state = company&.auto_accept_users ? "active" : "pending"
-      user.role = "employee" # Default role for OAuth users
-      user.position = nil
-      user.preferred_agent_language = "en"
     end
 
     # Update OAuth-related identity attributes. We deliberately do NOT persist the
@@ -45,7 +39,27 @@ class GoogleOmniAuthService
     )
 
     user.save!
+    ensure_domain_membership(user)
     user
+  end
+
+  # Email-domain match is an AUTO-JOIN policy, not a membership requirement:
+  # it applies only to users with ZERO memberships (any state) — an existing or
+  # pending invitation always wins over domain auto-join. `auto_accept_users`
+  # decides whether the auto-joined membership is immediately active or awaits
+  # admin approval (the former user.state = pending semantics, now per company).
+  def ensure_domain_membership(user)
+    return if user.super_admin?
+    return if user.company_memberships.exists?
+
+    company = Company.find_by_email_domain(email)
+    return unless company
+
+    if company.auto_accept_users
+      user.company_memberships.create!(company: company, role: "employee", state: "active", accepted_at: Time.current)
+    else
+      user.company_memberships.create!(company: company, role: "employee", state: "invited")
+    end
   end
 
   # Extract provider from auth hash

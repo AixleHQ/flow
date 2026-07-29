@@ -183,7 +183,7 @@ module Agents
         fresh    = credential.config_data
         incoming = fresh.merge(refreshed_blocks)                # only the blocks we refreshed change
         merged   = merge_refreshed_credentials(fresh, incoming) # existing per-block freshest guard
-        AgentCredential.from_artifacts(credential.user_id, "claude_code", merged) if merged != fresh
+        AgentCredential.from_artifacts(credential.user_id, credential.company_id, "claude_code", merged) if merged != fresh
       end
 
       { status: :refreshed, detail: error } # partial failure (one block ok, one failed) still counts as refreshed

@@ -8,7 +8,11 @@ class Company < ApplicationRecord
   include LogoUploader::Attachment(:logo)
 
   # Associations
-  has_many :users, dependent: :destroy
+  has_many :company_memberships, dependent: :destroy
+  # Only ACTIVE members: revoked/invited/suspended users must not leak into
+  # consumers (member pickers, session scopes). Screens that need non-active
+  # rows (e.g. the members index) go through :company_memberships directly.
+  has_many :users, -> { merge(CompanyMembership.active).not_deleted }, through: :company_memberships
   has_many :projects, dependent: :destroy
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy
@@ -22,7 +26,9 @@ class Company < ApplicationRecord
   # A company's workflows are the aggregate of its projects' workflows.
   # Cascade on destroy is handled by projects' own `dependent: :destroy`.
   has_many :workflows, through: :projects
-  has_many :terminal_sessions, through: :users
+  # Sessions belong to the company through its PROJECTS (not through users —
+  # a multi-company user's sessions in another company must never leak in).
+  has_many :terminal_sessions, through: :projects
 
   # Virtual attributes for initial admin creation (used in admin form)
   attr_accessor :initial_admin_email, :initial_admin_password

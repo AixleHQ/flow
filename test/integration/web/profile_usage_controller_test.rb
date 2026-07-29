@@ -70,20 +70,24 @@ class Web::ProfileUsageControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "reconciliation holds across the controller with a project-less session" do
+  test "project-less (legacy) sessions are excluded and reconciliation still holds" do
     seed_session(user: @user, project: @project, cost_cents: 100, tokens: 1000)
     seed_session(user: @user, project: nil, cost_cents: 250, tokens: 500)
 
     get usage_profile_path
     inertia_load_deferred_props("usage")
 
+    # Usage analytics are company-scoped via the project join, so NULL-project
+    # sessions (legacy only — project-less starts are disabled) never appear.
     assert_inertia_props do |props|
       s = props[:summary]
       breakdowns = s[:projectBreakdowns]
-      breakdowns.sum { |p| p[:sessions] } == s[:totalSessions] &&
-        breakdowns.sum { |p| p[:costCents] } == s[:totalCostCents] &&
-        breakdowns.sum { |p| p[:tokens] } == s[:totalTokens] &&
-        breakdowns.count { |p| p[:projectName] == "(No project)" } == 1
+      s[:totalSessions] == 1 &&
+        s[:totalCostCents] == 100 &&
+        s[:totalTokens] == 1000 &&
+        breakdowns.length == 1 &&
+        breakdowns.none? { |p| p[:projectName] == "(No project)" } &&
+        breakdowns.sum { |p| p[:costCents] } == s[:totalCostCents]
     end
   end
 

@@ -4,8 +4,6 @@ require "administrate/base_dashboard"
 
 class UserDashboard < Administrate::BaseDashboard
   include DashboardConcern
-  include SkipAdministrateCollectionIncludes
-  skip_administrate_collection_includes :company
 
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
@@ -13,10 +11,7 @@ class UserDashboard < Administrate::BaseDashboard
     name: Field::String,
     password: Field::Password.with_options(export: false),
     password_confirmation: Field::Password.with_options(export: false),
-    role: Field::Select.with_options(
-      include_blank: false,
-      collection: ->(field) { available_states_collection(field, :role) }
-    ),
+    super_admin: Field::Boolean,
     state: Field::Select.with_options(
       include_blank: false,
       collection: ->(field) { available_states_collection(field, :state) }
@@ -28,7 +23,7 @@ class UserDashboard < Administrate::BaseDashboard
       include_blank: true,
       collection: ->(field) { available_events_collection(field, :state) }
     ),
-    company: Field::BelongsTo,
+    companies: Field::HasMany,
     owned_projects: Field::HasMany,
     collaborated_projects: Field::HasMany,
     project_collaborators: Field::HasMany,
@@ -44,9 +39,8 @@ class UserDashboard < Administrate::BaseDashboard
     id
     email
     name
-    role
+    super_admin
     state
-    company
     created_at
     deleted_at
   ].freeze
@@ -55,9 +49,9 @@ class UserDashboard < Administrate::BaseDashboard
     id
     email
     name
-    role
+    super_admin
     state
-    company
+    companies
     owned_projects
     collaborated_projects
     created_at
@@ -70,18 +64,17 @@ class UserDashboard < Administrate::BaseDashboard
     name
     password
     password_confirmation
-    role
+    super_admin
     state_event
-    company
   ].freeze
 
   COLLECTION_FILTERS = {
     active: ->(resources) { resources.active },
     suspended: ->(resources) { resources.suspended },
     archived: ->(resources) { resources.archived },
-    super_admin: ->(resources) { resources.super_admin },
-    admin: ->(resources) { resources.admin },
-    collaborator: ->(resources) { resources.collaborator },
+    # `admin`/`collaborator` were Enumerize role scopes on users.role, which is
+    # gone — the per-company role lives on CompanyMembership.
+    super_admin: ->(resources) { resources.where(super_admin: true) },
     deleted: ->(resources) { resources.deleted },
     not_deleted: ->(resources) { resources.not_deleted }
   }.freeze

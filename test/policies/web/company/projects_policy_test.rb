@@ -11,7 +11,7 @@ class Web::Company::ProjectsPolicyTest < ActiveSupport::TestCase
 
   def policy_for(user, id: @project.id)
     params = ActionController::Parameters.new(id: id)
-    Web::Company::ProjectsPolicy.new(BaseContext.new(user, params), nil)
+    Web::Company::ProjectsPolicy.new(BaseContext.new(user, params, company: @company), nil)
   end
 
   test "destroy? is true for the project owner (employee role)" do

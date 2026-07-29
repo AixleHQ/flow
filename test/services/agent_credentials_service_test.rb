@@ -200,7 +200,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     })
     runtime_mock.expects(:exec).returns([ [ config_content ], [], 0 ])
 
-    credential = service.save_credentials_from_container(@user, "container123")
+    credential = service.save_credentials_from_container(@user, @user.company_memberships.first&.company, "container123")
 
     assert_instance_of AgentCredential, credential
     assert_equal "claude_code", credential.agent_type
@@ -216,7 +216,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     runtime_mock.expects(:exec).returns([ [], [], 1 ])
 
     assert_raises(RuntimeError, "No credentials found in container") do
-      service.save_credentials_from_container(@user, "container123")
+      service.save_credentials_from_container(@user, @user.company_memberships.first&.company, "container123")
     end
   end
 

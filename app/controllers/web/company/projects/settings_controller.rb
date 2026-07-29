@@ -41,7 +41,7 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
       board_tasks_count: project.board&.board_tasks&.count || 0,
       repositories_count: project.repositories.count,
       integrations_count: Integration.visible_for_project(project).count,
-      can_delete: project.admin?(current_user) || current_user.admin?
+      can_delete: project.admin?(current_user) || current_project_membership&.admin? || false
     }
   end
 

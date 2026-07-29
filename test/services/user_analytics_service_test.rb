@@ -25,7 +25,7 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
   end
 
   def call(user: @user, period: "30d", project_id: nil)
-    UserAnalyticsService.new(user:, period:, project_id:).call
+    UserAnalyticsService.new(user:, company: @company, period:, project_id:).call
   end
 
   test "aggregates only the given user's sessions across multiple projects" do
@@ -53,22 +53,20 @@ class UserAnalyticsServiceTest < ActiveSupport::TestCase
     assert { result.project_breakdowns.sum(&:tokens) == result.total_tokens }
   end
 
-  test "reconciliation invariant holds with a project-less session (No project bucket)" do
+  test "project-less (legacy) sessions are excluded from company-scoped analytics" do
     seed_session(user: @user, project: @project_a, cost_cents: 100, tokens: 1000)
     seed_session(user: @user, project: nil, cost_cents: 250, tokens: 500)
 
     result = call
 
-    # Breakdown sums reconcile exactly with summary totals.
-    assert { result.project_breakdowns.sum(&:sessions) == result.total_sessions }
+    # NULL-project sessions cannot be attributed to a company, so the inner
+    # project join drops them from totals AND breakdowns (reconciliation holds).
+    assert { result.total_sessions == 1 }
+    assert { result.total_cost_cents == 100 }
+    assert { result.total_tokens == 1000 }
+    assert { result.project_breakdowns.size == 1 }
+    assert { result.project_breakdowns.none? { |p| p.project_id.nil? } }
     assert { result.project_breakdowns.sum(&:cost_cents) == result.total_cost_cents }
-    assert { result.project_breakdowns.sum(&:tokens) == result.total_tokens }
-
-    no_project = result.project_breakdowns.select { |p| p.project_id.nil? }
-    assert { no_project.size == 1 }
-    assert { no_project.first.project_name == "(No project)" }
-    assert { no_project.first.sessions == 1 }
-    assert { no_project.first.cost_cents == 250 }
   end
 
   test "period window excludes rows older than the period" do

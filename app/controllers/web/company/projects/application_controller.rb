@@ -24,10 +24,18 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
     ProjectResource.new(current_project).to_h
   end
 
+  # Membership in the PROJECT's company (not the session's current company) —
+  # permissions must reflect the company the project belongs to.
+  def current_project_membership
+    return @current_project_membership if defined?(@current_project_membership)
+
+    @current_project_membership = current_user.active_memberships.find { |m| m.company_id == current_project.company_id }
+  end
+
   def project_permissions_props
     {
-      canExecute: !current_user.read_only?,
-      canManage: current_user.admin? || current_project.admin?(current_user)
+      canExecute: current_project_membership.present? && !current_project_membership.viewer?,
+      canManage: (current_project_membership&.admin? || false) || current_project.admin?(current_user)
     }
   end
 end

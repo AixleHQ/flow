@@ -36,12 +36,32 @@ module Api
         BaseContext.new(current_user, params)
       end
 
-      # Clients (read_only?) may issue safe (GET/HEAD) requests only.
+      # Defense-in-depth verb backstop, mirroring the policies' read_only?
+      # classification and failing CLOSED:
+      # - a resolvable company context (project's company / explicit company):
+      #   deny unless the user has a non-viewer ACTIVE membership THERE;
+      # - no company context: deny users with zero active memberships and pure
+      #   viewers. Super admins (no memberships by design) are exempt.
       def deny_read_only_mutation!
-        return unless current_user&.read_only?
         return if request.get? || request.head?
+        return unless current_user
+        return if current_user.super_admin?
 
-        render json: { error: "Not authorized" }, status: :forbidden
+        render json: { error: "Not authorized" }, status: :forbidden if read_only_request?
+      end
+
+      def read_only_request?
+        if (company = backstop_company)
+          membership = current_user.company_memberships.active.find_by(company_id: company.id)
+          membership.nil? || membership.viewer?
+        else
+          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
+        end
+      end
+
+      def backstop_company
+        ctx = policy_context
+        ctx.respond_to?(:company) ? ctx.company : nil
       end
 
       def user_not_authorized

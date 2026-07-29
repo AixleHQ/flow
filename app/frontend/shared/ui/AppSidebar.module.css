@@ -170,6 +170,47 @@
   padding: 10px 0 8px;
 }
 
+/* Company switcher row (only rendered for users with >1 active membership) */
+.coBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 4px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.coBtn:hover {
+  background: var(--app-action-hover);
+}
+
+.coName {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.coItemName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  line-height: 1.3;
+}
+
+.coItemRole {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  line-height: 1.3;
+}
+
 .swBtn {
   display: flex;
   align-items: center;
@@ -551,4 +592,148 @@
 
 .mobileToggle:hover {
   background-color: var(--app-action-hover);
+}
+
+/* "Connect an agent" nudge — shown when onboarding skipped the agent step but
+   the user now has a role that can run things. */
+.agentNudge {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 8px 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--app-warning-border, var(--app-border));
+  border-radius: 6px;
+  background: var(--app-warning-bg, var(--app-action-hover));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agentNudge:hover {
+  background: var(--app-action-hover);
+}
+
+.agentNudgeIcon {
+  color: var(--app-warning-fg, var(--app-text-secondary));
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.agentNudgeText {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--app-text-secondary);
+}
+
+.agentNudgeCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 4px;
+  padding: 6px;
+  border-radius: 6px;
+  color: var(--app-warning-fg, var(--app-text-secondary));
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.agentNudgeCollapsed:hover {
+  background: var(--app-action-hover);
+}
+
+/* Collapsed company switcher: no room for the name, so an icon carries it. */
+.coBtnCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 5px 0;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+}
+
+.coBtnCollapsed:hover {
+  background: var(--app-action-hover);
+}
+
+/* ── Company rail (Slack-style) ───────────────────────────────────────────── */
+/* Only rendered for multi-company users — see CompanyRail. */
+
+.shell {
+  display: flex;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 52px;
+  min-width: 52px;
+  padding: 10px 0;
+  border-right: 1px solid var(--app-border-default);
+  background: var(--app-bg-default);
+  overflow-y: auto;
+  scrollbar-width: none;
+  z-index: 21;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+.railItem {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Active company gets the accent bar Slack uses, not just a colour change —
+   colour alone is not a reliable signal. */
+.railItemActive::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 22px;
+  border-radius: 0 2px 2px 0;
+  background: var(--app-accent, #cf6b4a);
+}
+
+.railTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--app-text-secondary);
+  background: var(--app-action-hover);
+  border: 1px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.railItem:hover .railTile {
+  color: var(--app-text-primary);
+  border-color: var(--app-border-default);
+}
+
+.railItemActive .railTile {
+  color: var(--app-text-primary);
+  border-color: var(--app-accent, #cf6b4a);
 }

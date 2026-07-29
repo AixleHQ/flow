@@ -10,7 +10,7 @@ class ContextBuilders::CriticalRulesTest < ActiveSupport::TestCase
   end
 
   test "non_interactive mode with language produces critical-rules section" do
-    @user.update_column(:preferred_agent_language, "ru")
+    @user.company_memberships.sole.update_column(:preferred_agent_language, "ru")
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
 
@@ -38,7 +38,7 @@ class ContextBuilders::CriticalRulesTest < ActiveSupport::TestCase
   end
 
   test "interactive mode with language produces language-only section" do
-    @user.update_column(:preferred_agent_language, "en")
+    @user.company_memberships.sole.update_column(:preferred_agent_language, "en")
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "interactive")
 

@@ -78,8 +78,10 @@ module Admin
       admin_user = User.find_by(email: admin_email)
 
       assert { admin_user.present? }
-      assert { admin_user.company_id == company.id }
-      assert { admin_user.admin? }
+      membership = company.company_memberships.find_by(user: admin_user)
+      assert { membership.present? }
+      assert { membership.admin? }
+      assert { membership.active? }
       assert { admin_user.active? }
       assert { admin_user.authenticate(admin_password) }
       assert { admin_user.name.present? } # Name should be generated from email
@@ -148,13 +150,17 @@ module Admin
       assert_redirected_to admin_company_path(@company)
     end
 
-    test "should destroy company and cascade delete users" do
+    test "should destroy company and cascade delete memberships but keep users" do
       company_with_users = create(:company)
       create_list(:user, 3, :employee, company: company_with_users)
 
+      # Users are global identities now — destroying a company removes its
+      # memberships, never the user rows themselves.
       assert_difference("Company.count", -1) do
-        assert_difference("User.count", -3) do
-          delete :destroy, params: { id: company_with_users.id }
+        assert_difference("CompanyMembership.count", -3) do
+          assert_no_difference("User.count") do
+            delete :destroy, params: { id: company_with_users.id }
+          end
         end
       end
 

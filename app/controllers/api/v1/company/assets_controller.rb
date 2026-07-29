@@ -35,8 +35,21 @@ module Api
 
         private
 
+        # The policy must judge read_only? against the RESOLVED company — a
+        # viewer in their first company must not mutate its assets just because
+        # they hold a writer role elsewhere.
+        def policy_context
+          BaseContext.new(current_user, params, company: current_company)
+        end
+
+        # API calls carry no web-session company; company-level asset endpoints
+        # resolve the user's first active membership's company (agents of
+        # multi-company users should prefer project-scoped asset endpoints).
         def current_company
-          @current_company ||= current_user.company
+          @current_company ||= current_user.company_memberships.active
+                                           .default_order
+                                           .first&.company
+          @current_company || raise(ActiveRecord::RecordNotFound)
         end
 
         def find_or_initialize_asset(scope)

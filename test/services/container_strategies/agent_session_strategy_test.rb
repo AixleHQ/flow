@@ -449,6 +449,22 @@ module ContainerStrategies
       assert_equal "live", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
 
+    test "resolve_output_scope falls back to the user's active membership company" do
+      strategy = build_strategy
+      @session.update_columns(project_id: nil)
+
+      assert_equal [ "Company", @company.id ], strategy.send(:resolve_output_scope, @session.reload)
+    end
+
+    test "resolve_output_scope raises for a project-less session of a user with no active membership" do
+      strategy = build_strategy
+      @session.update_columns(project_id: nil)
+      @user.company_memberships.each { |m| m.update_columns(state: "revoked") }
+
+      error = assert_raises(RuntimeError) { strategy.send(:resolve_output_scope, @session.reload) }
+      assert_match(/no active membership/, error.message)
+    end
+
     test "persist_refreshed_credentials does not create a credential when none exists" do
       @credential.destroy!
       strategy = build_strategy

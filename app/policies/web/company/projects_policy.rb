@@ -18,7 +18,7 @@ module Web
       def destroy?
         return false unless current_project
 
-        current_project.admin?(current_user) || current_user.admin?
+        current_project.admin?(current_user) || admin?
       end
 
       private
@@ -26,7 +26,7 @@ module Web
       def current_project
         return nil unless context.params[:id]
 
-        @current_project ||= current_user.company.projects.find_by(id: context.params[:id])
+        @current_project ||= context.company&.projects&.find_by(id: context.params[:id])
       end
     end
   end

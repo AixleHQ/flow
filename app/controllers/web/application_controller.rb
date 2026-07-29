@@ -29,8 +29,17 @@ class Web::ApplicationController < ApplicationController
 
     if signed_in?
       shared.merge(
-        current_user: InertiaRails.always { CurrentUserResource.new(current_user).to_h },
-        projects: InertiaRails.always { Project.for_user(current_user).with_state(:active).with_computed_counts.order(:name).map { |p| ProjectResource.new(p).to_h } }
+        current_user: InertiaRails.always {
+          # current_membership comes from AuthConcern (session-validated); the
+          # resource needs it to render current_company/current_role.
+          CurrentUserResource.new(current_user, params: { current_membership: current_membership }).to_h
+        },
+        # Sidebar projects are the CURRENT company's slice only — a
+        # dual-membership user sees the other company's projects after a switch.
+        projects: InertiaRails.always {
+          scope = current_company ? Project.for_user(current_user).for_company(current_company) : Project.none
+          scope.with_state(:active).with_computed_counts.order(:name).map { |p| ProjectResource.new(p).to_h }
+        }
       )
     else
       shared
@@ -71,7 +80,11 @@ class Web::ApplicationController < ApplicationController
 
   def enforce_onboarding
     return unless signed_in?
-    return if current_user.onboarding_state == "completed"
+    # Onboarding is per company: completing it for company A says nothing about
+    # company B, which needs its own role, agents and (separately billed)
+    # credential. Super admins have no membership and no onboarding.
+    return if current_membership.nil?
+    return if current_membership.onboarding_completed?
 
     redirect_to onboarding_path unless request.path == onboarding_path
   end

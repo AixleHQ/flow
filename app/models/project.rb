@@ -50,11 +50,15 @@ class Project < ApplicationRecord
   }
   scope :for_company, ->(company) { where(company: company) }
   scope :for_user, ->(user) {
-    if user.admin?
-      where(company_id: user.company_id)
-    else
-      where(owner: user).or(where(id: user.collaborated_projects.select(:id)))
-    end
+    member_company_ids = user.company_memberships.active.select(:company_id)
+    admin_company_ids = user.company_memberships.active.where(role: "admin").select(:company_id)
+
+    # Owner/collaborator access requires an ACTIVE membership in the project's
+    # company — a user revoked from a company loses its projects even if they
+    # still own rows there. (Super admins don't use this scope — /admin only.)
+    where(company_id: admin_company_ids)
+      .or(where(owner: user).where(company_id: member_company_ids))
+      .or(where(id: user.collaborated_projects.select(:id)).where(company_id: member_company_ids))
   }
 
   # Ransack
@@ -76,14 +80,24 @@ class Project < ApplicationRecord
     project_collaborators.find_by(user: user)&.destroy
   end
 
-  # Check if user has access to project (owner, collaborator, or company admin)
+  # Check if user has access to project (owner, collaborator, or company admin).
+  # ALL branches require an active membership in the project's company: being
+  # revoked from the company removes access even for owners/collaborators.
+  # Deliberately a LIVE query, not User#active_memberships: that list is
+  # memoized per User instance, so a revocation followed by an access check on
+  # the same object would answer from the stale list and still grant access.
+  # This is a security predicate — it must see the current state.
+  # One find_by (not the two exists? calls it replaces) covers both the
+  # membership requirement and the company-admin branch.
   def accessible_by?(user)
     return false unless user
 
-    return true if owner_id == user.id || project_collaborators.exists?(user: user)
-    return true if user.admin? && user.company_id.present? && user.company_id == company_id
+    membership = user.company_memberships.active.find_by(company_id: company_id)
+    return false unless membership
 
-    false
+    owner_id == user.id ||
+      membership.admin? ||
+      project_collaborators.exists?(user: user)
   end
 
   # Check if user is admin of project (owner only)
@@ -116,8 +130,8 @@ class Project < ApplicationRecord
 
   def owner_belongs_to_company
     return unless owner && company
-    return if owner.company_id == company_id
+    return if owner.company_memberships.active.exists?(company_id: company_id)
 
-    errors.add(:owner, "must belong to the same company as the project")
+    errors.add(:owner, "must have an active membership in the project's company")
   end
 end

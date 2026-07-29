@@ -11,6 +11,9 @@ class TerminalSession < ApplicationRecord
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
+  # Explicit tenant, needed because auth_setup sessions are project-less and
+  # create a per-company (billed) agent credential — see SessionCompany.
+  belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
   has_one :usage_statistic, dependent: :destroy
   has_many :session_logs, dependent: :destroy
@@ -221,11 +224,22 @@ class TerminalSession < ApplicationRecord
   end
 
   def broadcast_session_list_update
-    company_id = project&.company_id || user&.company_id
-    return unless company_id
+    # Project sessions go to the project's company; project-less sessions go to
+    # EVERY company where the user is an active member — matching the listing
+    # rule in Web::Company::ApplicationController#company_sessions_scope.
+    explicit = company_id || project&.company_id
+    company_ids = if explicit
+      [ explicit ]
+    else
+      # Legacy rows only: nothing recorded the tenant, so fall back to every
+      # company the user is an active member of (matches the listing rule in
+      # Web::Company::ApplicationController#company_sessions_scope).
+      user&.company_memberships&.active&.pluck(:company_id) || []
+    end
+    return if company_ids.empty?
 
     payload = { type: "session_update", session: TerminalSessionResource.new(self).to_h }
-    ActionCable.server.broadcast("session_list:company:#{company_id}", payload)
+    company_ids.each { |cid| ActionCable.server.broadcast("session_list:company:#{cid}", payload) }
     ActionCable.server.broadcast("session_list:project:#{project_id}", payload) if project_id.present?
   end
 end

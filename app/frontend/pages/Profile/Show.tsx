@@ -34,12 +34,13 @@ import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import {
   apiV1TerminalSessionPath,
   apiV1TerminalSessionsPath,
+  companyMembershipPath,
   disableMCPTokenProfilePath,
   finishApiV1TerminalSessionPath,
   regenerateMCPTokenProfilePath,
   usageProfilePath,
 } from 'shared/routes';
-import { type AgentCredential, type AgentType, type SharedUser, type UserRole } from 'shared/ui';
+import { type AgentCredential, type AgentType, type SharedMembership, type SharedUser, type UserRole } from 'shared/ui';
 
 import classes from './Show.module.css';
 
@@ -148,6 +149,9 @@ interface McpProps {
 
 interface Props {
   profile: SharedUser;
+  // Memberships still in the `invited` state — profile.memberships is active-only.
+  // Optional: only ProfileController#show sends it.
+  pendingInvitations?: SharedMembership[];
   languageOptions: string[];
   agentModels: AgentModelsEntry[];
   cableStream?: string;
@@ -292,6 +296,116 @@ function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; a
           <CredentialModelRow key={cred.id} credential={cred} models={modelsMap[cred.agentType] ?? []} />
         ))}
       </Stack>
+    </Card>
+  );
+}
+
+function CompaniesSection({
+  profile,
+  pendingInvitations,
+}: {
+  profile: SharedUser;
+  pendingInvitations: SharedMembership[];
+}) {
+  const memberships = profile.memberships ?? [];
+  const [leaving, setLeaving] = useState<SharedMembership | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const confirmLeave = () => {
+    if (!leaving) return;
+    setProcessing(true);
+    // Self-removal revokes the membership. Server-side edge cases: the
+    // last-admin guard surfaces as a flash alert; leaving the last company
+    // signs the user out and redirects to the login page.
+    router.delete(companyMembershipPath(leaving.id), {
+      preserveScroll: true,
+      onFinish: () => {
+        setProcessing(false);
+        setLeaving(null);
+      },
+    });
+  };
+
+  return (
+    <Card p={24} mt={24}>
+      <Title order={5} mb={4}>
+        Companies
+      </Title>
+      <Text size="sm" c="dimmed" mb="md">
+        Companies you are a member of. Company assignment is managed by administrators.
+      </Text>
+
+      {memberships.length === 0 && (
+        <Text size="sm" c="dimmed">
+          {profile.currentRole === 'super_admin' ? 'Platform Administrator' : 'No company memberships'}
+        </Text>
+      )}
+
+      {pendingInvitations.length > 0 && (
+        <>
+          <Text size="sm" fw={500} mt={memberships.length === 0 ? 0 : 'lg'} mb="xs">
+            Pending invitations
+          </Text>
+          <Text size="xs" c="dimmed" mb="sm">
+            Open the link in the invitation email to accept. Invitations expire 7 days after they are sent.
+          </Text>
+          <Stack gap="xs" mb="md">
+            {pendingInvitations.map((invitation) => (
+              <Group key={invitation.id} gap="sm" wrap="nowrap" miw={0}>
+                <Text fw={500} truncate>
+                  {invitation.company.name}
+                </Text>
+                <Badge color={ROLE_COLORS[invitation.role]} size="sm" variant="light">
+                  {ROLE_LABELS[invitation.role]}
+                </Badge>
+                <Badge color="blue" size="sm" variant="outline">
+                  Invited
+                </Badge>
+              </Group>
+            ))}
+          </Stack>
+        </>
+      )}
+
+      <Stack gap="sm">
+        {memberships.map((membership) => (
+          <Group key={membership.id} justify="space-between" wrap="nowrap">
+            <Group gap="sm" wrap="nowrap" miw={0}>
+              <Text fw={500} truncate>
+                {membership.company.name}
+              </Text>
+              <Badge color={ROLE_COLORS[membership.role]} size="sm" variant="light">
+                {ROLE_LABELS[membership.role]}
+              </Badge>
+              {/* Suspended members keep the membership but lose access, so the
+                  row would otherwise look identical to an active one. */}
+              {membership.state === 'suspended' && (
+                <Badge color="orange" size="sm" variant="outline">
+                  Suspended
+                </Badge>
+              )}
+            </Group>
+            <Button variant="subtle" color="red" size="xs" onClick={() => setLeaving(membership)}>
+              Leave company
+            </Button>
+          </Group>
+        ))}
+      </Stack>
+
+      <Modal opened={leaving !== null} onClose={() => setLeaving(null)} title="Leave company" centered>
+        <Text size="sm" mb="md">
+          Are you sure you want to leave {leaving?.company.name}? You will lose access to its projects and data. You
+          will need a new invitation to rejoin.
+        </Text>
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setLeaving(null)} disabled={processing}>
+            Cancel
+          </Button>
+          <Button color="red" onClick={confirmLeave} loading={processing}>
+            Leave company
+          </Button>
+        </Group>
+      </Modal>
     </Card>
   );
 }
@@ -637,7 +751,8 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
           Agent Runtimes
         </Title>
         <Text size="sm" c="dimmed" mb="md">
-          Manage authentication for AI coding agents. Authenticate new agents or re-authenticate existing ones.
+          Manage authentication for AI coding agents in this company. Each company needs its own sign-in, so its agent
+          usage is billed to it and never shared with your other companies.
         </Text>
 
         {AVAILABLE_AGENTS.map((agent) => {
@@ -774,7 +889,8 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
   );
 }
 
-function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
+function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp }: Props) {
+  const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agentModels'] });
 
   const { data, setData, patch, processing, errors, isDirty } = useForm({
@@ -815,14 +931,21 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
     );
   }
 
-  const companyDisplayName = profile.company?.name ?? 'Platform Administrator';
-
   return (
     <AuthLayout>
       <Box maw={600} mx="auto">
-        <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={24}>
+        <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={4}>
           My Profile
         </Title>
+        {/* Agents, the agent language and usage are all PER COMPANY — a separate
+            credential per company is what keeps vendor billing from pooling. Say
+            so up front, or the page reads as one shared set of agents. */}
+        {currentCompanyName && (
+          <Text size="sm" c="dimmed" mb={24}>
+            Settings for <strong>{currentCompanyName}</strong>. Your agents and agent language are set per company —
+            switch company to see or change another one.
+          </Text>
+        )}
 
         <Tabs
           value="account"
@@ -875,7 +998,7 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
             <Box mb="lg">
               <Select
                 label="Agent Language"
-                description="Language AI agents will use to communicate with you"
+                description="Language AI agents will use to communicate with you in this company"
                 value={data.profile.preferredAgentLanguage}
                 onChange={(val) => {
                   setData('profile', { ...data.profile, preferredAgentLanguage: val ?? 'en' });
@@ -888,33 +1011,13 @@ function ProfilePage({ profile, agentModels, cableStream, mcp }: Props) {
               />
             </Box>
 
-            <Box mb="lg">
-              <Box className={classes.fieldLabel}>
-                <Text size="sm" fw={500} c="dimmed">
-                  Company
-                </Text>
-                <Tooltip label="Company assignment is managed by administrators">
-                  <IconLock size={16} color="var(--mantine-color-dimmed)" />
-                </Tooltip>
-              </Box>
-              <Text>{companyDisplayName}</Text>
-            </Box>
-
-            <Box mb="lg">
-              <Text size="sm" fw={500} c="dimmed" mb={4}>
-                Role
-              </Text>
-              <Badge color={ROLE_COLORS[profile.role]} size="sm">
-                {ROLE_LABELS[profile.role]}
-              </Badge>
-            </Box>
-
             <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>
               Save Changes
             </Button>
           </form>
         </Card>
 
+        <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
         <DefaultAgentSelector profile={profile} />
         <DefaultModelSelector profile={profile} agentModels={agentModels} />
         <AgentRuntimesSection profile={profile} />

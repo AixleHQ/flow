@@ -42,6 +42,18 @@ module Api
 
         assert_response :forbidden
       end
+
+      test "deny_read_only_mutation! backstops a user with ZERO active memberships (fail closed)" do
+        no_membership = create(:user, :onboarding_completed)
+        sign_in no_membership
+        Api::V1::TerminalSessionsPolicy.any_instance.stubs(:create?).returns(true)
+
+        post :create, params: {
+          terminal_session: { session_type: "agent_session", agent_type: "claude_code" }
+        }
+
+        assert_response :forbidden
+      end
     end
 
     class VerifyAuthorizedTripwireTest < ActiveSupport::TestCase

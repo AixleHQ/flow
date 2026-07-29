@@ -11,6 +11,8 @@ export type {
   ProjectPermissions,
   SharedUser,
   SharedCompany,
+  SharedMembership,
+  MembershipRole,
   SharedProject,
   AgentCredential,
   AgentType,

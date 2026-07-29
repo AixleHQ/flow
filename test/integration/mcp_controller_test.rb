@@ -9,7 +9,7 @@ require "test_helper"
 class McpControllerTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @session = create(:terminal_session, :agent_session, :started, user: @user, project: @project)
   end

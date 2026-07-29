@@ -276,7 +276,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "strategy resolves credential for agent_session" do
     credential = AgentCredential.create!(
-      user: @user, agent_type: "claude_code",
+      user: @user, company: @company, agent_type: "claude_code",
       config_data: { "key" => "val" }
     )
     session = create(:terminal_session, :agent_session, user: @user)
@@ -289,6 +289,37 @@ class TerminalSessionTest < ActiveSupport::TestCase
     session = build(:terminal_session, user: @user, session_type: "tool_setup", agent_type: nil)
 
     assert_raises(ArgumentError) { session.strategy }
+  end
+
+  # == session-list broadcasts ==
+
+  test "project session updates broadcast only to the project's company" do
+    session = create(:terminal_session, user: @user, project: @project)
+
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:project:#{@project.id}", anything)
+
+    session.send(:broadcast_session_list_update)
+  end
+
+  test "project-less session updates broadcast to EVERY company with an active membership" do
+    company_b = create(:company)
+    create(:company_membership, user: @user, company: company_b)
+    revoked_company = create(:company)
+    create(:company_membership, :revoked, user: @user, company: revoked_company)
+
+    # company_id nil on purpose: the "every active membership" fan-out is the
+    # LEGACY path for rows that never recorded a tenant. New sessions carry
+    # company_id and broadcast to that one company only.
+    session = build(:terminal_session, :auth_setup, user: @user, project: nil)
+    session.company_id = nil
+    session.save!(validate: false)
+
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{company_b.id}", anything)
+    ActionCable.server.expects(:broadcast).with("session_list:company:#{revoked_company.id}", anything).never
+
+    session.send(:broadcast_session_list_update)
   end
 
   # == backwards compatibility ==

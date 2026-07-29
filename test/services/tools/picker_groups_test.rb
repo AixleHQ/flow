@@ -5,7 +5,7 @@ require "test_helper"
 class Tools::PickerGroupsTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @project = create(:project, company: @user.company, owner: @user)
+    @project = create(:project, company: @user.companies.first, owner: @user)
     Tools::Reconciler.run!
   end
 

@@ -14,7 +14,7 @@ class ProjectCollaborator < ApplicationRecord
 
   def user_belongs_to_same_company
     return unless user && project
-    return if user.company_id == project.company_id
+    return if user.company_memberships.active.exists?(company_id: project.company_id)
 
     errors.add(:user, "must belong to the same company as the project")
   end

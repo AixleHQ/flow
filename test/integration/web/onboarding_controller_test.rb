@@ -35,14 +35,15 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(viewer)
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "go_next" } }
-    assert_equal "step4", viewer.reload.onboarding_state
+    assert_equal "step4", viewer.company_memberships.sole.reload.onboarding_state
   end
 
   test "non-viewer stays at step3 without agent credentials (silent no-op)" do
-    @user.update!(onboarding_state: "step3", position: "dev", preferred_agent_language: "en")
+    membership = @user.company_memberships.sole
+    membership.update!(onboarding_state: "step3", position: "dev", preferred_agent_language: "en")
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "go_next" } }
-    assert_equal "step3", @user.reload.onboarding_state
+    assert_equal "step3", membership.reload.onboarding_state
   end
 
   test "viewer completes onboarding without agents" do
@@ -53,6 +54,6 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(viewer)
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
-    assert_equal "completed", viewer.reload.onboarding_state
+    assert_equal "completed", viewer.company_memberships.sole.reload.onboarding_state
   end
 end

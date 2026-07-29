@@ -7,7 +7,7 @@ module Activities
     class FireScheduleTriggerActivityTest < ActiveSupport::TestCase
       setup do
         @user = create(:user, :with_company)
-        @project = create(:project, owner: @user, company: @user.company)
+        @project = create(:project, owner: @user, company: @user.companies.first)
         @workflow = create(:workflow, scope: @project)
         @binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
           event_type: "schedule.fired", schedule_config: { "cron" => "* * * * *" })

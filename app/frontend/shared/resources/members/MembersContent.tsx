@@ -14,13 +14,24 @@ import {
   Title,
   Tooltip,
 } from '@mantine/core';
-import { IconDotsVertical, IconPlus, IconSearch, IconTrash, IconUserCheck, IconUserOff } from '@tabler/icons-react';
+import {
+  IconDotsVertical,
+  IconMailForward,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+  IconUserCheck,
+  IconUserOff,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import type { UserRole } from 'shared/ui';
 
 import { InviteUserModal } from './InviteUserModal';
 
+// A company-membership row: `id` is the user id (member routes are keyed by
+// user id), while `role`/`state` are the PER-COMPANY membership role and state
+// (invited | active | suspended).
 export interface MemberUser {
   id: number;
   email: string;
@@ -40,11 +51,11 @@ interface MembersContentProps {
   showRoleActions?: boolean;
 }
 
+// Revoked members are never rendered (the index excludes them).
 const STATE_COLORS: Record<string, string> = {
   active: 'green',
-  pending: 'yellow',
+  invited: 'blue',
   suspended: 'orange',
-  archived: 'gray',
 };
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -74,8 +85,7 @@ const ROLE_FILTER_OPTIONS = [
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'active', label: 'Active' },
-  { value: 'pending', label: 'Pending' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'invited', label: 'Invited' },
   { value: 'suspended', label: 'Suspended' },
 ];
 
@@ -122,8 +132,12 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
     router.patch(`${basePath}/${userId}`, { user: { stateEvent: event } }, { preserveScroll: true });
   };
 
+  const handleResend = (userId: number) => {
+    router.post(`${basePath}/${userId}/resend`, {}, { preserveScroll: true });
+  };
+
   const handleDelete = (userId: number, name: string) => {
-    if (confirm(`Are you sure you want to remove ${name}?`)) {
+    if (confirm(`Are you sure you want to remove ${name} from this company?`)) {
       router.delete(`${basePath}/${userId}`, { preserveScroll: true });
     }
   };
@@ -245,17 +259,19 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
                       </Tooltip>
                     )}
                     {showRoleActions && <Menu.Divider />}
+                    {user.state === 'invited' && (
+                      <Menu.Item leftSection={<IconMailForward size={14} />} onClick={() => handleResend(user.id)}>
+                        Resend Invitation
+                      </Menu.Item>
+                    )}
                     {user.state === 'active' && (
                       <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                        <Menu.Item disabled={isLastAdmin(user)} onClick={() => handleStateEvent(user.id, 'archive')}>
-                          Archive
+                        <Menu.Item disabled={isLastAdmin(user)} onClick={() => handleStateEvent(user.id, 'suspend')}>
+                          Suspend
                         </Menu.Item>
                       </Tooltip>
                     )}
-                    {user.state === 'archived' && (
-                      <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
-                    )}
-                    {user.state === 'pending' && (
+                    {user.state === 'suspended' && (
                       <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
                     )}
                     <Menu.Divider />

@@ -6,7 +6,7 @@ module Slack
   class IntegrationServiceTest < ActiveSupport::TestCase
     setup do
       @user = create(:user, :with_company)
-      @company = @user.company
+      @company = @user.companies.first
       @project = create(:project, owner: @user, company: @company)
     end
 
@@ -71,7 +71,7 @@ module Slack
     test "rejects a workspace already connected to another company (no hijack)" do
       other = create(:user, :with_company)
       create(:webhook_endpoint, slug: "slack-team-T123", provider: :slack,
-        verification_strategy: :slack_v0, company: other.company, created_by: other,
+        verification_strategy: :slack_v0, company: other.companies.first, created_by: other,
         config: { "team_id" => "T123" })
 
       stub_slack_oauth(team_id: "T123")

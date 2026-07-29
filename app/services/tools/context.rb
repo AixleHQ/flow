@@ -14,7 +14,7 @@ module Tools
     def self.for_session(session)
       new(
         project: session.project,
-        company: session.project&.company || session.user&.company,
+        company: SessionCompany.company_for(session),
         session: session,
         mode: session.mode,
         session_type: session.session_type

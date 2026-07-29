@@ -218,6 +218,15 @@ Root cause: `TerminalSession` has no `company_id`; company is implicit via `user
 1. Denormalize `company_id` onto `terminal_sessions` (set at creation; backfill from `project.company_id`). Makes the tenant boundary explicit on the highest-volume table and follows the row-level tenancy rule "every tenant-owned table carries the tenant id" ([Clerk](https://clerk.com/blog/how-to-design-multitenant-saas-architecture), [acts_as_tenant](https://github.com/ErwinM/acts_as_tenant)).
 2. **Join through `projects.company_id`.** ✅ Recommended given a product constraint confirmed during research: starting project-less sessions is now disabled, and all usage analytics filter on `USAGE_SESSION_TYPES = %w[agent_session workflow_step]` (`user_agent_activity_service.rb:7`) — both project-bound. So `joins(:project).where(projects: { company_id: })` fully covers the #303 services with no migration. The only project-less rows are `auth_setup` sessions (credential setup, excluded from usage analytics) and possibly historical data — verify with a one-off count before relying on the join; if legacy usage rows with `project_id IS NULL` exist, backfill or accept their exclusion. Option 1 remains an optional hardening step later (DB-level guarantee, cheaper aggregates), not a prerequisite.
 
+> **Update (2026-07-28): Option 1 shipped after all.** The join covers the #303
+> dashboards as described, but per-company agent credentials made the column
+> mandatory for a different reason: `auth_setup` sessions are project-less and
+> they are the sessions that CREATE a credential, which is billed to one
+> company. With no `terminal_sessions.company_id`, that tenant had to be guessed
+> from "the user's first membership" — a coin flip for a multi-company user, and
+> the thing being guessed is who pays. `SessionCompany` now resolves it from the
+> column, falling back to the project, and never from a membership.
+
 `WorkflowRun` already reaches company via `project` — scoping `for_user_in_period` by company is a join filter. `TriggerEvent`/`BoardActivity` already carry or imply company and stay as-is; container strategy scope `["Company", user.company_id]` (`agent_session_strategy.rb:231`) switches to session/project-derived company.
 
 Product rule for `/profile/usage`: the dashboard always renders **current-company data only** (both self-view and colleague-view); switching company re-renders with that company's slice. Cross-company "all my activity" view is deliberately out of scope — it would surface company A's cost data while in company B's context.
@@ -230,6 +239,18 @@ Product rule for `/profile/usage`: the dashboard always renders **current-compan
 - ActionCable: `SessionListChannel` re-validates membership at subscription; existing subscriptions die on page visit after switch.
 
 ### Deployment & Migration Sequencing
+
+> **Superseded by what shipped (2026-07-28).** The five phases below were never
+> executed as separate deploys. The work landed as a **single cutover** — no
+> dual-write phase — in four commits on `feat/multi-company-membership`, each
+> `check_all`-green: the membership model + invitations + switcher together, then
+> the gaps the rebase onto develop exposed, then per-company re-onboarding, then
+> per-company agent credentials. Two decisions also diverge from the plan below:
+> `terminal_sessions.company_id` WAS added after all (phase 2 called it
+> optional) because project-less `auth_setup` sessions create a per-company
+> billed credential and their tenant cannot be inferred; and onboarding moved
+> wholesale onto `company_memberships` (the plan assumed it stayed per-user).
+> Kept for the reasoning, not as a runbook.
 
 Phased, each phase shippable and `check_all`-green (per project convention; data migrations idempotent):
 
@@ -311,13 +332,48 @@ The invitation mechanism builds on Rails 8.1's `generates_token_for` (stateless,
 4. Scope #303 services by current company via project join; product rule — `/profile/usage` shows only the current company's slice.
 5. Ship in 5 independent, `check_all`-green PRs (~3-4 weeks); cross-company isolation tests for a dual-membership user are the highest-value QA investment.
 
-### Open Product Decisions (flagged for PRD)
+### Open Product Decisions — RESOLVED 2026-07-27
 
-1. **Viewer semantics**: confirm migrating global viewer → per-membership viewer (recommended; behavior-preserving for current users).
-2. **Who can invite**: company admins only (assumed), and whether externals can be invited as `employee` or only `viewer`.
-3. **Default landing company** after login for multi-membership users (last used via session vs explicit default flag).
-4. **Cross-company self view**: deliberately out of scope — no "all my companies" aggregate dashboard.
-5. **Auto-join policy** per company (`auto_accept_users`) interaction with invitations — invitation should always win.
+All five were decided while rebasing `feat/multi-company-membership` onto
+develop. Recorded here because the implementation now depends on them.
+
+1. **Viewer semantics** — CONFIRMED: global viewer migrates to per-membership
+   viewer. A viewer is read-only and nothing further is hidden: they may see
+   cost/usage, members and settings of a company they are a guest in. The
+   `canExecute` write-gate is the whole of the restriction.
+2. **Who can invite** — company admins only, from the company members page, and
+   an external may be invited at **any** role (not viewer-only). Email invite
+   plus Google domain auto-join are the ONLY ways into a company: there is no
+   self-serve company creation and no public signup.
+3. **Default landing company** — last used, persisted in `users.last_company_id`.
+   Session-only storage snapped back to the oldest membership on every new
+   session. Re-validated against active memberships on each request, so a
+   revoked company can never resolve.
+4. **Cross-company self view** — CONFIRMED out of scope. `/profile/usage` is
+   always a current-company slice, and now states which company it is showing.
+5. **Auto-join vs invitations** — CONFIRMED: invitation always wins.
+   `GoogleOmniAuthService#ensure_domain_membership` skips any user who already
+   has a membership in **any** state, so an invited external is never
+   domain-auto-joined into their own-domain company.
+
+Decisions taken during implementation that this report did not anticipate:
+
+6. **Personal MCP tokens** are session-less, so there is no "current company" to
+   lean on: company is derived from the target **project**, and the few tools
+   with no project take an explicit `company_id`, erroring when the user belongs
+   to more than one company. Ambiguity is never resolved by picking one.
+7. **Removing a member** revokes the membership and never touches the `User`
+   row. Since `Project#owner_belongs_to_company` requires an active membership,
+   a revoked owner would leave their projects failing validation on any later
+   save — so revocation transfers owned projects to the company's oldest active
+   admin, and is refused outright when no other admin exists.
+8. **Soft-deleted users** keep their membership rows, so `restore!` is lossless;
+   they are filtered at every read instead — authentication (both password and
+   OAuth), `Company#users`, `User.for_company`, and the members list.
+9. **Agent credentials after a role change**: onboarding skips the agent step for
+   a viewer-everywhere user and never re-runs, so gaining a non-viewer role
+   leaves them with empty agent pickers. `User#needs_agent_setup?` drives a
+   sidebar nudge rather than dragging them back through onboarding.
 
 ### Table of Contents
 

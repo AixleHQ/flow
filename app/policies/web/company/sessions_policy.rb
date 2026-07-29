@@ -3,9 +3,9 @@
 module Web
   module Company
     class SessionsPolicy < ApplicationPolicy
-      def index? = current_user.admin?
-      def new? = current_user.admin?
-      def show? = current_user.admin?
+      def index? = admin?
+      def new? = admin?
+      def show? = admin?
     end
   end
 end

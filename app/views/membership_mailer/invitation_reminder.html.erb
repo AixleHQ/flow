@@ -1,12 +1,10 @@
 <%
-  inviter_name  = @inviter&.name.presence || @inviter&.email || "Someone"
-  inviter_email = @inviter&.email.to_s
-  company_name  = @company&.display_name.presence || "your company"
-  login_url     = login_url(host: Settings.domain, protocol: Settings.protocol)
+  company_name = @company.branded_name
+  inviter_name = @inviter&.name.presence || "An administrator"
 %>
 <!-- Preheader (hidden preview text) -->
 <div style="display:none; max-height:0; overflow:hidden; mso-hide:all;">
-  <%= inviter_name %> invited you to join <%= company_name %> on Aixle Flow. Accept to get started.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  Your invitation to <%= company_name %> on Aixle Flow expires soon.&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
 </div>
 
 <!-- Card -->
@@ -17,14 +15,14 @@
       <!-- Heading -->
       <tr>
         <td role="heading" aria-level="1" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:20px; line-height:28px; font-weight:600; letter-spacing:-0.01em; color:#d1cfcd; padding-bottom:16px;">
-          Join <%= company_name %> on Aixle Flow
+          Your invitation to <%= company_name %> expires soon
         </td>
       </tr>
 
       <!-- Body -->
       <tr>
         <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
-          <strong style="color:#d1cfcd; font-weight:600;"><%= inviter_name %></strong><% if inviter_email.present? %> (<%= inviter_email %>)<% end %> invited you to join <strong style="color:#d1cfcd; font-weight:600;"><%= company_name %></strong> as a team member. Aixle Flow is where <%= company_name %> builds and runs its AI workflows — every run logged, timed, and costed.
+          <strong style="color:#d1cfcd; font-weight:600;"><%= inviter_name %></strong> invited you to join <strong style="color:#d1cfcd; font-weight:600;"><%= company_name %></strong> as <strong style="color:#d1cfcd; font-weight:600;"><%= @role.humanize %></strong>, and the invitation has not been accepted yet. It expires on <strong style="color:#d1cfcd; font-weight:600;"><%= @expires_at.strftime("%d %b %Y") %></strong>.
         </td>
       </tr>
 
@@ -34,7 +32,7 @@
           <table role="presentation" cellpadding="0" cellspacing="0" border="0">
             <tr>
               <td bgcolor="#cf6b4a" style="background-color:#cf6b4a; border-radius:5px;">
-                <a href="<%= login_url %>" target="_blank" role="button" aria-label="Accept invitation"
+                <a href="<%= @accept_url %>" target="_blank" role="button"
                    style="display:inline-block; padding:11px 24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; font-weight:600; line-height:20px; color:#0a0908; text-decoration:none; border-radius:5px;">
                   Accept invitation
                 </a>
@@ -44,11 +42,11 @@
         </td>
       </tr>
 
-      <!-- Fallback link -->
       <tr>
         <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:12px; line-height:18px; color:#5d5b5a; border-top:1px solid #292726; padding-top:24px;">
+          After it expires an administrator can send you a new one. If you weren't expecting this invitation, you can safely ignore this email.<br><br>
           If the button doesn't work, paste this link into your browser:<br>
-          <a href="<%= login_url %>" style="color:#cf6b4a; text-decoration:underline; overflow-wrap:break-word; word-break:break-word;"><%= login_url %></a>
+          <a href="<%= @accept_url %>" style="color:#cf6b4a; text-decoration:underline; overflow-wrap:break-word; word-break:break-word;"><%= @accept_url %></a>
         </td>
       </tr>
 

@@ -2,6 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { Drawer, Menu, Popover, ScrollArea, Tooltip, UnstyledButton } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
+  IconAlertTriangle,
   IconArrowsExchange,
   IconChartBar,
   IconCheck,
@@ -53,12 +54,14 @@ import {
   companyProjectWorkflowsPath,
   companyProjectsPath,
   companySessionsPath,
+  companySwitchPath,
   companyWorkflowCatalogIndexPath,
+  profilePath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
-import type { SharedPermissions, SharedProject, SharedProps } from './types';
+import type { SharedMembership, SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED_WIDTH = 52;
@@ -160,6 +163,79 @@ const companyNavGroups: NavGroup[] = [
     ],
   },
 ];
+
+// ─── Company rail (Slack-style workspace switcher) ───────────────────────────
+// A narrow strip left of the sidebar, rendered ONLY for people who belong to
+// more than one company — a single-company user should never see tenancy chrome
+// at all. Each company is one square; the current one is marked. Switching is a
+// full Inertia visit, so every shared prop (projects, permissions, current user)
+// re-resolves server-side for the new company.
+
+function CompanyRail({
+  memberships,
+  currentCompanyId,
+}: {
+  memberships: SharedMembership[];
+  currentCompanyId: number | null;
+}) {
+  const switchTo = (companyId: number) => {
+    if (companyId === currentCompanyId) return;
+    router.post(companySwitchPath(), { company_id: companyId });
+  };
+
+  return (
+    <div className={classes.rail} role="navigation" aria-label="Switch company">
+      {memberships.map((membership) => {
+        const isCurrent = membership.company.id === currentCompanyId;
+        const role = MEMBERSHIP_ROLE_LABELS[membership.role] ?? membership.role;
+
+        return (
+          <Tooltip key={membership.id} label={`${membership.company.name} — ${role}`} position="right" withArrow>
+            <UnstyledButton
+              onClick={() => switchTo(membership.company.id)}
+              className={`${classes.railItem} ${isCurrent ? classes.railItemActive : ''}`}
+              aria-label={`${membership.company.name} (${role})`}
+              aria-current={isCurrent ? 'true' : undefined}
+            >
+              <span className={classes.railTile}>{getInitials(membership.company.name)}</span>
+            </UnstyledButton>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── "Connect an agent" nudge ────────────────────────────────────────────────
+// Onboarding skips the agent step for a user who is a viewer in every company.
+// If they are later given a role that can run things, onboarding never re-runs,
+// so without this they just find empty agent pickers with no explanation.
+
+function AgentSetupNudge({ collapsed }: { collapsed: boolean }) {
+  const label = 'Connect an agent to start running workflows';
+
+  if (collapsed) {
+    return (
+      <Tooltip label={label} position="right" withArrow>
+        <UnstyledButton
+          component={Link}
+          href={profilePath()}
+          aria-label={label}
+          className={classes.agentNudgeCollapsed}
+        >
+          <IconAlertTriangle size={16} />
+        </UnstyledButton>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <UnstyledButton component={Link} href={profilePath()} className={classes.agentNudge}>
+      <IconAlertTriangle size={15} className={classes.agentNudgeIcon} />
+      <span className={classes.agentNudgeText}>{label}</span>
+    </UnstyledButton>
+  );
+}
 
 // ─── AI Builder sidebar banner (AC11) ────────────────────────────────────────
 
@@ -354,6 +430,12 @@ function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps)
 
 // ─── SidebarWorkspaceSwitcher ─────────────────────────────────────────────────
 
+const MEMBERSHIP_ROLE_LABELS: Record<SharedMembership['role'], string> = {
+  admin: 'Admin',
+  employee: 'Employee',
+  viewer: 'Viewer',
+};
+
 interface SidebarWorkspaceSwitcherProps {
   collapsed: boolean;
   projects: SharedProject[];
@@ -443,6 +525,7 @@ function SidebarWorkspaceSwitcher({
             )}
             <div className={`${classes.swText} ${collapsed ? classes.swTextCollapsed : ''}`}>
               <div className={classes.swName}>{displayName}</div>
+              {/* Company identity now lives in the left rail (CompanyRail). */}
               <div className={classes.swSub}>{companyName}</div>
             </div>
             <IconChevronDown
@@ -589,7 +672,7 @@ function SidebarContent({
 }) {
   const { currentUser } = usePage<SharedProps>().props;
   const isAdmin = permissions?.isAdmin ?? false;
-  const companyName = currentUser?.company?.name ?? '';
+  const companyName = currentUser?.currentCompany?.name ?? '';
 
   const navGroups = context === 'project' && projectId ? buildProjectNavGroups(projectId) : companyNavGroups;
 
@@ -607,6 +690,8 @@ function SidebarContent({
       <ScrollArea className={classes.scrollArea} type="never">
         <SidebarNav groups={navGroups} collapsed={collapsed} isAdmin={isAdmin} onNavigate={onNavigate} />
       </ScrollArea>
+
+      {currentUser?.needsAgentSetup && <AgentSetupNudge collapsed={collapsed} />}
 
       <AiBanner collapsed={collapsed} projectId={projectId} />
 
@@ -633,7 +718,11 @@ export const AppSidebar = ({
   currentProjectId: propCurrentProjectId,
   permissions: propPermissions,
 }: AppSidebarProps) => {
-  const { projects: pageProjects = [], permissions: pagePermissions } = usePage<SharedProps>().props;
+  const { projects: pageProjects = [], permissions: pagePermissions, currentUser } = usePage<SharedProps>().props;
+  // The rail is the only tenancy chrome a single-company user must never see.
+  const memberships = currentUser?.memberships ?? [];
+  const currentCompanyId = currentUser?.currentCompany?.id ?? null;
+  const multiCompany = memberships.length > 1;
 
   const projects = propProjects ?? pageProjects;
   const permissions = propPermissions ?? pagePermissions;
@@ -711,17 +800,20 @@ export const AppSidebar = ({
   }
 
   return (
-    <nav className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`} style={{ width, minWidth: width }}>
-      <SidebarContent
-        projectId={projectId}
-        context={context}
-        projects={projects}
-        currentProjectId={currentProjectId}
-        permissions={permissions}
-        collapsed={collapsed}
-        onExpand={onExpand}
-        toggleCollapsed={toggleCollapsed}
-      />
-    </nav>
+    <div className={classes.shell}>
+      {multiCompany && <CompanyRail memberships={memberships} currentCompanyId={currentCompanyId} />}
+      <nav className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`} style={{ width, minWidth: width }}>
+        <SidebarContent
+          projectId={projectId}
+          context={context}
+          projects={projects}
+          currentProjectId={currentProjectId}
+          permissions={permissions}
+          collapsed={collapsed}
+          onExpand={onExpand}
+          toggleCollapsed={toggleCollapsed}
+        />
+      </nav>
+    </div>
   );
 };

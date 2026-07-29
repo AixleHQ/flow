@@ -31,6 +31,7 @@ import {
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
 
 type Period = '7d' | '30d' | '90d' | '1y';
@@ -545,6 +546,10 @@ function SessionsPanel() {
 
 const UsagePage = () => {
   const { period, viewerIsSelf, targetUser } = usePage<{ props: Props }>().props as unknown as Props;
+  // Shared props (not this page's Props): only label the company when the user
+  // actually belongs to more than one, so single-company users see no change.
+  const { currentUser } = usePage<SharedProps>().props;
+  const companyName = (currentUser?.memberships?.length ?? 0) > 1 ? currentUser?.currentCompany?.name : null;
   const tickInterval = useMemo(() => tickIntervalForPeriod(period), [period]);
 
   const navigate = (nextPeriod: string) => {
@@ -568,7 +573,11 @@ const UsagePage = () => {
             Usage
           </Text>
           <Text size="sm" c="dimmed">
+            {/* Usage is always a CURRENT-COMPANY slice (see ProfileController#usage).
+                For someone who belongs to several companies, an unlabelled total
+                reads as "everything", so name the company being shown. */}
             Cross-project agent activity, costs, and sessions
+            {companyName ? ` in ${companyName}` : ''}
           </Text>
         </Box>
         <Group gap="sm">

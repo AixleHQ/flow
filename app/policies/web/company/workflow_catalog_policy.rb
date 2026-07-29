@@ -9,7 +9,7 @@ module Web
       private
 
       def company_member?
-        current_user.company_id.present?
+        membership.present?
       end
     end
   end

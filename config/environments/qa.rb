@@ -51,7 +51,10 @@ Rails.application.configure do
   config.cache_store = :redis_cache_store, { url: Settings.redis.url, namespace: "aixle_cache", expires_in: 1.day }
 
   # Replace the default in-process and non-durable queuing backend for Active Job.
-  # config.active_job.queue_adapter = :resque
+  # Durable jobs. The default in-memory async adapter drops everything queued at
+  # the moment a pod restarts, and the invitation mail is the only way a person
+  # gets into the product.
+  config.active_job.queue_adapter = :solid_queue
 
   # Ignore bad email addresses and do not raise email delivery errors.
   # Set this to true and configure the email server for immediate delivery to raise delivery errors.

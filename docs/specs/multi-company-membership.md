@@ -17,25 +17,49 @@ context:
 
 **Approach:** Full cutover (no dual-write) to a `CompanyMembership` join model with per-company role+state, token-based email invitations, a session-based company switcher, and company-scoped analytics — per the research report in `context`.
 
+> **Amended 2026-07-29 (Artem).** Scope grew during implementation, inverting two
+> of the original non-goals below. Recorded here because the spec is the frozen
+> intent and the code now disagrees with the original text:
+> 1. **Agent credentials are per company**, requiring separate authentication in
+>    each. Reason: vendor spend must be billed to the company that incurred it
+>    instead of pooling on one token.
+> 2. **Onboarding is per company, in full** — role, chosen agents, position and
+>    agent language all live on the membership, because every answer the flow
+>    collects is company-specific.
+> Consequences: `terminal_sessions.company_id` was added (project-less
+> `auth_setup` sessions create a billed credential, so their tenant cannot be
+> inferred), and Solid Queue replaced the in-memory ActiveJob adapter (the
+> invitation mail is the only way into the product and was being dropped on
+> restart).
+
 ## Boundaries & Constraints
 
 **Always:**
-- Email stays globally unique; User keeps global identity (password/OAuth, name, onboarding, agent credentials).
+- Email stays globally unique; User keeps global identity (password/OAuth, name, avatar, `super_admin`). **Amended:** onboarding and agent credentials moved to the membership — see the amendment above.
 - `session[:current_company_id]` is validated against **active** memberships on every request; fallback = last used, then first active membership.
 - Roles `employee | admin | viewer` live ONLY on membership; `users.role` is replaced by boolean `users.super_admin` (keep `super_admin?` predicate API).
 - Any role may be granted on invite, regardless of email domain; domain-match becomes OAuth auto-join policy only (auto-join runs only when user has zero memberships; an invitation always wins).
 - `/profile/usage` and members/projects lists render current-company data only; #303 services take `company:` and scope via `joins(:project).where(projects: { company_id: })`.
 - Invitation tokens via `generates_token_for :invitation, expires_in: 7.days`; emailed link = email-ownership proof; accept only into the User whose email matches the invitation.
-- Work happens in git worktree `.worktrees/multi-company` branched from `origin/develop`; all Rails/test commands run inside the `web` container with `cd /app/.worktrees/multi-company`.
+- All Rails/test commands run inside the `web` container. (The `.worktrees/multi-company` worktree this spec originally mandated was removed once the branch landed on `origin`; work continues in the main checkout.)
 - Existing single-company behavior unchanged for single-membership users (whole existing suite must pass, adapted only where role/company storage moved).
 
 **Ask First:**
 - Renaming/dropping any table or column beyond: drop `users.company_id`, `users.role`, `users.invited_by_id`, `users.invited_at`.
+  **Approved 2026-07-29:** also dropped `users.onboarding_state`,
+  `onboarding_completed_at`, `position`, `preferred_agent_language`,
+  `selected_agents`, `default_agent_credential_id` — all moved to
+  `company_memberships` by the per-company amendment.
 - Changes to Temporal workflows or `TriggerEngine` routing.
-- Any new gem.
+  **Approved 2026-07-29:** added `membership_invitation_reminder_workflow`, an
+  hourly sweep that mails invitations nearing their 7-day expiry.
+- Any new gem. **Approved 2026-07-29:** `solid_queue`, as the durable ActiveJob
+  backend (there was none — the default in-memory adapter dropped every queued
+  webhook and mail on restart).
 
 **Never:**
-- URL-slug tenancy (`/:company_slug/...`); cross-company aggregate dashboards; dual-write/transition period; `devise_invitable`/`acts_as_tenant` gems; per-company onboarding or per-company agent credentials.
+- URL-slug tenancy (`/:company_slug/...`); cross-company aggregate dashboards; dual-write/transition period; `devise_invitable`/`acts_as_tenant` gems.
+- ~~per-company onboarding or per-company agent credentials~~ — **reversed 2026-07-29**, both are now the intended design (see the amendment under Intent).
 
 ## I/O & Edge-Case Matrix
 

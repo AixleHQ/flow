@@ -5,7 +5,7 @@ require "test_helper"
 class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @token = @user.regenerate_mcp_token!
   end
@@ -55,7 +55,7 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
 
   test "another company's project is not found" do
     other = create(:user, :with_company)
-    other_project = create(:project, company: other.company, owner: other)
+    other_project = create(:project, company: other.companies.first, owner: other)
 
     body = call_tool("list_integrations", { project_id: other_project.id })
     assert error?(body)

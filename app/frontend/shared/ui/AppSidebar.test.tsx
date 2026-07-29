@@ -3,10 +3,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
-import type { SharedProject } from './types';
+import type { SharedMembership, SharedProject } from './types';
 
 const projects: SharedProject[] = [
   { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active' },
@@ -25,7 +25,6 @@ describe('AppSidebar', () => {
           id: 1,
           email: 'nova@example.com',
           name: 'Nova Stargazer',
-          role: 'admin',
           state: 'active',
           position: null,
           preferredAgentLanguage: 'en',
@@ -36,7 +35,8 @@ describe('AppSidebar', () => {
           defaultAgentRuntime: null,
           configuredAgents: [],
           agentCredentials: [],
-          company: {
+          currentRole: 'admin',
+          currentCompany: {
             id: 1,
             name: 'Globex Labs',
             emailDomain: 'example.com',
@@ -44,6 +44,21 @@ describe('AppSidebar', () => {
             primaryColor: null,
             secondaryColor: null,
           },
+          memberships: [
+            {
+              id: 1,
+              role: 'admin',
+              state: 'active',
+              company: {
+                id: 1,
+                name: 'Globex Labs',
+                emailDomain: 'example.com',
+                logoUrl: null,
+                primaryColor: null,
+                secondaryColor: null,
+              },
+            },
+          ],
         },
       },
     });
@@ -165,14 +180,76 @@ describe('AppSidebar', () => {
     // After collapsing, the button flips to the expand affordance.
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
   });
+
+  // The company switcher is a Slack-style rail left of the sidebar. A
+  // single-company user must see no tenancy chrome at all.
+  it('shows no company rail for a single-membership user', () => {
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
+      props: { currentUser: buildUser() },
+    });
+
+    expect(screen.queryByRole('navigation', { name: 'Switch company' })).not.toBeInTheDocument();
+  });
+
+  it('renders one rail tile per company, marking the current one', () => {
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
+      props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
+    });
+
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    expect(within(rail).getByRole('button', { name: /Vega Corp/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(rail).getByRole('button', { name: /Client Co/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('switches company from the rail for a multi-membership user', async () => {
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
+      props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
+    });
+
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    await userEvent.click(within(rail).getByRole('button', { name: /Client Co/ }));
+
+    expect(router.post).toHaveBeenCalledWith('/company/switch', { company_id: 2 });
+  });
+
+  it('does not post a switch when re-selecting the current company', async () => {
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />, {
+      props: { currentUser: { ...buildUser(), memberships: dualMemberships() } },
+    });
+
+    // Scope to the rail: the sidebar's workspace button also carries the
+    // company name as its sub-label.
+    const rail = screen.getByRole('navigation', { name: 'Switch company' });
+    await userEvent.click(within(rail).getByRole('button', { name: /Vega Corp/ }));
+
+    expect(router.post).not.toHaveBeenCalled();
+  });
 });
+
+function dualMemberships(): SharedMembership[] {
+  return [
+    ...buildUser().memberships,
+    {
+      id: 2,
+      role: 'viewer',
+      state: 'active',
+      company: {
+        id: 2,
+        name: 'Client Co',
+        emailDomain: 'client-co.test',
+        logoUrl: null,
+        primaryColor: null,
+        secondaryColor: null,
+      },
+    },
+  ];
+}
 
 function buildUser() {
   return {
     id: 2,
     email: 'cassia@example.com',
     name: 'Cassia Vega',
-    role: 'admin' as const,
     state: 'active',
     position: null,
     preferredAgentLanguage: 'en',
@@ -183,7 +260,8 @@ function buildUser() {
     defaultAgentRuntime: null,
     configuredAgents: [],
     agentCredentials: [],
-    company: {
+    currentRole: 'admin' as const,
+    currentCompany: {
       id: 1,
       name: 'Vega Corp',
       emailDomain: 'example.com',
@@ -191,5 +269,20 @@ function buildUser() {
       primaryColor: null,
       secondaryColor: null,
     },
+    memberships: [
+      {
+        id: 1,
+        role: 'admin' as const,
+        state: 'active',
+        company: {
+          id: 1,
+          name: 'Vega Corp',
+          emailDomain: 'example.com',
+          logoUrl: null,
+          primaryColor: null,
+          secondaryColor: null,
+        },
+      },
+    ],
   };
 }

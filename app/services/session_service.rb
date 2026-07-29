@@ -7,7 +7,10 @@ class SessionService
   class UnsafeMcpUrlError < StandardError; end
 
   class << self
-    def create_and_start(user:, project: nil, session_type:, agent_type: nil, configured_agent: nil, params: {})
+    # `company:` is required for PROJECT-LESS sessions (auth_setup): those create
+    # an agent credential, and the credential is billed to a company, so it can
+    # never be guessed. Project-bound sessions take the project's company.
+    def create_and_start(user:, project: nil, company: nil, session_type:, agent_type: nil, configured_agent: nil, params: {})
       # Session-start preflight (oauth-unification §4.6): block the launch with a
       # "Connect …" CTA when a selected OAuth MCP server has no usable credential for
       # this user, instead of starting a session that fails silently at provisioning.
@@ -21,6 +24,7 @@ class SessionService
 
       session = user.terminal_sessions.build(
         project: project,
+        company_id: company&.id || project&.company_id,
         session_type: session_type,
         agent_type: agent_type,
         configured_agent: configured_agent,
@@ -65,8 +69,8 @@ class SessionService
       prompt = step.instructions.presence || "Execute step: #{step.name}"
       runtime = step.required_agent_runtime.presence ||
                 workflow_run.agent_runtime.presence ||
-                workflow_run.user.default_agent_runtime.presence ||
-                workflow_run.user.agent_credentials.order(created_at: :desc).first&.agent_type ||
+                run_membership(workflow_run)&.default_agent_runtime.presence ||
+                run_credentials(workflow_run).order(created_at: :desc).first&.agent_type ||
                 "cursor_cli"
 
       run_model = workflow_run.shared_context&.dig("requested_model")
@@ -74,6 +78,7 @@ class SessionService
       session = TerminalSession.create!(
         user: workflow_run.user,
         project: workflow_run.project,
+        company_id: workflow_run.project&.company_id,
         session_type: "workflow_step",
         agent_type: runtime,
         configured_agent: step.agent,
@@ -99,6 +104,20 @@ class SessionService
     end
 
     private
+
+    # Workflow runs are project-bound, so the run's project names the company
+    # whose credential (and whose bill) this step must use.
+    def run_membership(workflow_run)
+      CompanyMembership.find_by(user_id: workflow_run.user_id,
+                                company_id: workflow_run.project&.company_id)
+    end
+
+    def run_credentials(workflow_run)
+      company_id = workflow_run.project&.company_id
+      return AgentCredential.none if company_id.blank?
+
+      AgentCredential.where(user_id: workflow_run.user_id, company_id: company_id)
+    end
 
     # Raises Oauth::PreflightError (rescued by the API controller) when any selected
     # OAuth MCP server lacks a usable credential for `user`. Interactive launches
@@ -183,11 +202,14 @@ class SessionService
       session.input_assets = scoped_resources(Asset, config[:input_asset_ids], session) if config[:input_asset_ids].present?
     end
 
+    # Resources resolve against the session's PROJECT company; project-less
+    # sessions fall back to the user's first active membership's company.
     def scoped_resources(klass, ids, session)
       base = if session.project
                klass.visible_for_project(session.project)
       elsif klass.respond_to?(:visible_for_company)
-               klass.visible_for_company(session.user.company)
+               company = SessionCompany.company_for(session)
+               company ? klass.visible_for_company(company) : klass.none
       else
                # Project-only resources (Skill, MCPServer) have nothing to attach
                # to a projectless session; internal MCP still arrives separately.

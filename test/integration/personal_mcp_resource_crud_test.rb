@@ -6,7 +6,7 @@ require "test_helper"
 class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @token = @user.regenerate_mcp_token!
   end

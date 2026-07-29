@@ -5,7 +5,7 @@ require "test_helper"
 class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
   setup do
     @user = create(:user, :with_company)
-    @company = @user.company
+    @company = @user.companies.first
     @project = create(:project, company: @company, owner: @user)
     @workflow = create(:workflow, scope: @project)
     @token = @user.regenerate_mcp_token!
@@ -112,7 +112,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
   test "delete_workflow soft-deletes and cannot cross into another project" do
     other = create(:user, :with_company)
-    other_project = create(:project, company: other.company, owner: other)
+    other_project = create(:project, company: other.companies.first, owner: other)
     other_wf = create(:workflow, scope: other_project)
 
     denied = call_tool("delete_workflow", { project_id: @project.id, workflow_id: other_wf.id })

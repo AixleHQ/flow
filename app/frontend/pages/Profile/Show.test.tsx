@@ -8,11 +8,19 @@ import type { AgentCredential, SharedUser } from 'shared/ui';
 
 import ProfilePage from './Show';
 
+const acmeCompany = {
+  id: 9,
+  name: 'Acme Robotics',
+  emailDomain: 'acme.test',
+  logoUrl: null,
+  primaryColor: null,
+  secondaryColor: null,
+};
+
 const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
   id: 42,
   email: 'maria@acme.test',
   name: 'Maria Sokolova',
-  role: 'admin',
   state: 'active',
   position: null,
   preferredAgentLanguage: 'en',
@@ -22,15 +30,11 @@ const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
   defaultAgentCredentialId: null,
   defaultAgentRuntime: null,
   configuredAgents: [],
+  needsAgentSetup: false,
   agentCredentials: [],
-  company: {
-    id: 9,
-    name: 'Acme Robotics',
-    emailDomain: 'acme.test',
-    logoUrl: null,
-    primaryColor: null,
-    secondaryColor: null,
-  },
+  currentRole: 'admin',
+  currentCompany: acmeCompany,
+  memberships: [{ id: 5, role: 'admin', state: 'active', company: acmeCompany }],
   ...overrides,
 });
 
@@ -79,7 +83,11 @@ describe('Profile/Show', () => {
     expect(screen.getByRole('heading', { name: 'My Profile' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Personal Information' })).toBeInTheDocument();
     expect(screen.getByText('maria@acme.test')).toBeInTheDocument();
-    expect(screen.getByText('Acme Robotics')).toBeInTheDocument();
+    // The company name appears twice on purpose: the scope banner under the
+    // title ("Settings for Acme Robotics") and the Companies card. Both matter —
+    // the banner is what stops the page reading as one shared set of agents.
+    expect(screen.getAllByText('Acme Robotics').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/Your agents and agent language are set per company/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
   });
 
@@ -197,25 +205,28 @@ describe('Profile/Show', () => {
     expect(router.delete).not.toHaveBeenCalled();
   });
 
-  it('renders the Super Admin role badge for a super_admin profile', () => {
-    const profile = buildProfile({ role: 'super_admin' });
+  it('shows the Platform Administrator label for a super_admin with no memberships', () => {
+    const profile = buildProfile({ currentRole: 'super_admin', currentCompany: null, memberships: [] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    expect(screen.getByText('Super Admin')).toBeInTheDocument();
+    expect(screen.getByText('Platform Administrator')).toBeInTheDocument();
   });
 
-  it('renders the Employee role badge for an employee profile', () => {
-    const profile = buildProfile({ role: 'employee' });
+  it('renders the Employee role badge on an employee membership row', () => {
+    const profile = buildProfile({
+      currentRole: 'employee',
+      memberships: [{ id: 5, role: 'employee', state: 'active', company: acmeCompany }],
+    });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByText('Employee')).toBeInTheDocument();
   });
 
-  it('falls back to the Platform Administrator label when the profile has no company', () => {
-    const profile = buildProfile({ company: null });
+  it('shows the no-memberships empty state when the profile belongs to no company', () => {
+    const profile = buildProfile({ currentRole: 'employee', currentCompany: null, memberships: [] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    expect(screen.getByText('Platform Administrator')).toBeInTheDocument();
+    expect(screen.getByText('No company memberships')).toBeInTheDocument();
   });
 
   it('lists all four available agent runtimes with their names and descriptions', () => {

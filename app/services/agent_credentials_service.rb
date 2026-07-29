@@ -60,13 +60,15 @@ class AgentCredentialsService
 
   # Save credentials from container to database
   # @param user [User] user to save credentials for
+  # @param company [Company] the company this credential is authenticated for —
+  #   credentials are per company so vendor spend is billed to the right tenant
   # @param container_id [String] Docker container ID
   # @return [AgentCredential]
-  def save_credentials_from_container(user, container_id)
+  def save_credentials_from_container(user, company, container_id)
     credentials = extract_from_container(container_id)
     raise "No credentials found in container" if credentials.blank?
 
-    AgentCredential.from_artifacts(user.id, agent_type, credentials)
+    AgentCredential.from_artifacts(user.id, company&.id, agent_type, credentials)
   end
 
   # Load credentials from database and write to container

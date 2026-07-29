@@ -13,7 +13,7 @@ module Web
         private
 
         def manage_integrations?
-          project_writable? && (current_user.admin? || project_owner?)
+          project_writable? && (admin? || project_owner?)
         end
 
         def project_owner?

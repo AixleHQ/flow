@@ -24,7 +24,7 @@ class UserSessionCostTokenUsageServiceTest < ActiveSupport::TestCase
   test "7d period produces daily points with iso dates" do
     seed_session(cost_cents: 100, tokens: 1000)
 
-    result = UserSessionCostTokenUsageService.new(user: @user, period: "7d").call
+    result = UserSessionCostTokenUsageService.new(user: @user, period: "7d", company: @company).call
 
     assert { result.time_series.size == 1 }
     point = result.time_series.first
@@ -37,7 +37,7 @@ class UserSessionCostTokenUsageServiceTest < ActiveSupport::TestCase
     seed_session(cost_cents: 100, tokens: 1000, created_at: Time.current)
     seed_session(cost_cents: 200, tokens: 2000, created_at: 40.days.ago)
 
-    result = UserSessionCostTokenUsageService.new(user: @user, period: "1y").call
+    result = UserSessionCostTokenUsageService.new(user: @user, period: "1y", company: @company).call
 
     # Two different months → two monthly buckets.
     assert { result.time_series.size == 2 }

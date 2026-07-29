@@ -117,4 +117,10 @@ describe('LoginPage', () => {
       expect(await screen.findByText('Welcome back!')).toBeInTheDocument();
     });
   });
+
+  it('pre-fills the email field from the email page prop (invitation flow)', () => {
+    renderPage(<LoginPage />, { props: { email: 'invitee@client.test' } });
+
+    expect(screen.getByLabelText('Email')).toHaveValue('invitee@client.test');
+  });
 });

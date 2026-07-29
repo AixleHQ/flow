@@ -230,8 +230,19 @@ module ContainerStrategies
       0
     end
 
+    # Output scope follows the session's project; project-less sessions fall
+    # back to the user's first active membership's company. A user with zero
+    # active memberships has no valid scope — raise (collect_outputs logs and
+    # skips) instead of creating assets with a nil scope_id.
     def resolve_output_scope(session)
-      session.project.present? ? [ "Project", session.project_id ] : [ "Company", session.user.company_id ]
+      return [ "Project", session.project_id ] if session.project.present?
+
+      company_id = session.user.company_memberships.active.default_order.pick(:company_id)
+      if company_id.nil?
+        raise "cannot resolve output scope: user #{session.user_id} has no active membership (session #{session.id})"
+      end
+
+      [ "Company", company_id ]
     end
 
     def collect_usage(session, agent_service, log_contents = {})
@@ -268,7 +279,7 @@ module ContainerStrategies
         merged = adapter.merge_refreshed_credentials(current, config_data)
         next if merged == current
 
-        AgentCredential.from_artifacts(session.user_id, input[:agent_type], merged)
+        AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], merged)
         Rails.logger.info("[AgentSession] Persisted refreshed #{input[:agent_type]} credentials for user #{session.user_id}")
       end
     rescue StandardError => e

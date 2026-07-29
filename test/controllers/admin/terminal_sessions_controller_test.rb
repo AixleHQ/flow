@@ -6,7 +6,7 @@ module Admin
   class TerminalSessionsControllerTest < Admin::ActionControllerTestCase
     setup do
       @user = create(:user, :with_company)
-      @project = create(:project, company: @user.company, owner: @user)
+      @project = create(:project, company: @user.companies.first, owner: @user)
       @session = create(:terminal_session, :with_user, :with_project, user: @user, project: @project)
       @super_admin = create(:user, :super_admin)
       sign_in @super_admin

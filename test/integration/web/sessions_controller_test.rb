@@ -3,6 +3,8 @@
 require "test_helper"
 
 class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
+  include OmniAuthHelper
+
   setup do
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
@@ -43,6 +45,73 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path
   end
 
+  test "new echoes a valid email param for pre-filling (invitation flow) and drops junk" do
+    get login_path(email: "invitee@client.test")
+    assert_inertia_props email: "invitee@client.test"
+
+    get login_path(email: "<script>not-an-email</script>")
+    assert_inertia_props email: nil
+  end
+
+  # === Google OAuth callback (mocked via OmniAuth test mode) ===
+
+  test "omniauth: fresh user in an auto-accept domain gets an active membership and signs in" do
+    company = create(:company, :auto_accept, email_domain: "open-doors.io")
+
+    with_mocked_google_auth(email: "new@open-doors.io") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to onboarding_path
+    user = User.find_by!(email: "new@open-doors.io")
+    membership = user.company_memberships.sole
+    assert_equal company, membership.company
+    assert membership.active?
+
+    # Signed in: onboarding is reachable.
+    get onboarding_path
+    assert_response :success
+  end
+
+  test "omniauth: fresh user in an approval-required domain is gated and NOT signed in" do
+    create(:company, email_domain: "gated-corp.io") # auto_accept_users: false
+
+    with_mocked_google_auth(email: "new@gated-corp.io") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to login_path(error: "pending_approval")
+    membership = User.find_by!(email: "new@gated-corp.io").company_memberships.sole
+    assert membership.invited?
+
+    # No session was established.
+    get company_projects_path
+    assert_redirected_to login_path
+  end
+
+  test "omniauth: fresh user with an unknown domain gets no membership and is gated" do
+    with_mocked_google_auth(email: "solo@nowhere-known.dev") do
+      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+    end
+
+    assert_redirected_to login_path(error: "pending_approval")
+    assert User.find_by!(email: "solo@nowhere-known.dev").company_memberships.none?
+  end
+
+  test "omniauth: an existing member is signed in without any new membership" do
+    membership_count = -> { @user.company_memberships.count }
+
+    assert_no_difference membership_count do
+      with_mocked_google_auth(email: @user.email, name: @user.name) do
+        get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+      end
+    end
+
+    assert_redirected_to onboarding_path
+    get company_projects_path
+    assert_response :success
+  end
+
   test "failure redirects to login with error" do
     get auth_failure_path(message: "invalid_credentials")
     assert_redirected_to login_path(error: "invalid_credentials")
@@ -69,5 +138,59 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     get company_projects_path
 
     assert_redirected_to admin_root_path
+  end
+  # === active-membership gate on password login ===
+  # enforce_onboarding (Web::ApplicationController) runs BEFORE
+  # require_active_membership! (Web::Company::ApplicationController), so a
+  # membership-less user that reaches sign_in would be walked through the whole
+  # onboarding flow and only then signed out. The gate has to be at login.
+
+  test "create refuses a user whose only membership is still invited (approval pending)" do
+    company = create(:company, auto_accept_users: false)
+    invitee = create(:user, :employee, :onboarding_completed, company: company,
+                                       membership_state: "invited",
+                                       password: AuthHelper::TEST_PASSWORD)
+
+    post login_path, params: { user: { email: invitee.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_redirected_to login_path(error: "pending_approval")
+    # Not signed in: the next request must not be treated as authenticated.
+    get onboarding_path
+    assert_redirected_to login_path
+  end
+
+  test "create refuses a user whose memberships were all revoked" do
+    revoked = create(:user, :employee, :onboarding_completed, company: @company,
+                                       password: AuthHelper::TEST_PASSWORD)
+    revoked.company_memberships.each { |m| m.update!(state: "revoked") }
+
+    post login_path, params: { user: { email: revoked.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_redirected_to login_path(error: "pending_approval")
+  end
+
+  test "create still signs in a super admin, who legitimately has no memberships" do
+    super_admin = create(:user, :super_admin, :onboarding_completed, password: AuthHelper::TEST_PASSWORD)
+
+    post login_path, params: { user: { email: super_admin.email, password: AuthHelper::TEST_PASSWORD } }
+
+    assert_response :redirect
+    assert_not_equal login_path(error: "pending_approval"), response.location
+  end
+
+  test "create accepts a parked invitation before the membership gate runs" do
+    company = create(:company)
+    invitee = create(:user, :employee, :onboarding_completed, company: company,
+                                       membership_state: "invited",
+                                       password: AuthHelper::TEST_PASSWORD)
+    membership = invitee.company_memberships.sole
+
+    # Visiting the invitation link parks the token in the session.
+    get invitation_path(membership.generate_token_for(:invitation))
+    post login_path, params: { user: { email: invitee.email, password: AuthHelper::TEST_PASSWORD } }
+
+    # Accepting flipped the membership active, so the gate must NOT fire.
+    assert membership.reload.active?
+    assert_not_equal login_path(error: "pending_approval"), response.location
   end
 end

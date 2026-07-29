@@ -2,12 +2,13 @@
 
 class Web::Company::Projects::MembersController < Web::Company::Projects::ApplicationController
   def index
-    members = current_project.member_users
+    members = current_project.member_users.includes(:company_memberships)
 
     render inertia: "Projects/Members/MembersPage", props: {
       project: project_props,
-      members: members.map { |u| UserResource.new(u).to_h },
-      company_users: current_company.users.order(:name).map { |u| UserResource.new(u).to_h },
+      members: members.map { |u| UserResource.new(u, params: { company: current_company }).to_h },
+      company_users: current_company.users.includes(:company_memberships).order(:name)
+                                    .map { |u| UserResource.new(u, params: { company: current_company }).to_h },
       owner_id: current_project.owner_id
     }
   end

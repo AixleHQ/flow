@@ -4,10 +4,12 @@ require "test_helper"
 
 module ContainerStrategies
   class AgentAuthStrategyTest < ActiveSupport::TestCase
+    def credential_company_id = @company.id
+
     setup do
       @company = create(:company)
       @user = create(:user, :admin, company: @company)
-      @session = create(:terminal_session, user: @user, agent_type: "claude_code")
+      @session = create(:terminal_session, user: @user, company: @company, agent_type: "claude_code")
 
       Rails.logger.stubs(:info)
       Rails.logger.stubs(:warn)
@@ -390,7 +392,7 @@ module ContainerStrategies
 
     test "design auth before_exec injects the user's existing base credential" do
       @session.update!(metadata: { "auth_kind" => "design" })
-      AgentCredential.from_artifacts(@user.id, "claude_code",
+      AgentCredential.from_artifacts(@user.id, credential_company_id, "claude_code",
                                      { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" } })
       strategy = build_strategy
       container = mock("container")
@@ -409,7 +411,7 @@ module ContainerStrategies
 
     test "design auth before_exec strips the existing designOauth on reconnect (no instant complete)" do
       @session.update!(metadata: { "auth_kind" => "design" })
-      AgentCredential.from_artifacts(@user.id, "claude_code", {
+      AgentCredential.from_artifacts(@user.id, credential_company_id, "claude_code", {
         "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-base" },
         "designOauth" => { "accessToken" => "sk-ant-oat01-OLD-design" }
       })
@@ -448,7 +450,7 @@ module ContainerStrategies
     test "design auth completes by adding designOauth to the existing base, not re-scraping it" do
       @session.update!(metadata: { "auth_kind" => "design" })
       # The user is already logged in via the platform key; design layers on top.
-      AgentCredential.from_artifacts(@user.id, "claude_code", { "primaryApiKey" => "sk-ant-api-PLATFORM" })
+      AgentCredential.from_artifacts(@user.id, credential_company_id, "claude_code", { "primaryApiKey" => "sk-ant-api-PLATFORM" })
 
       strategy = build_strategy
       container = mock("container")

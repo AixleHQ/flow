@@ -8,7 +8,7 @@ class Web::Company::SessionsPolicyTest < ActiveSupport::TestCase
   end
 
   def policy_for(user)
-    Web::Company::SessionsPolicy.new(BaseContext.new(user, ActionController::Parameters.new), nil)
+    Web::Company::SessionsPolicy.new(BaseContext.new(user, ActionController::Parameters.new, company: @company), nil)
   end
 
   test "index?, new?, and show? are all true for an admin" do

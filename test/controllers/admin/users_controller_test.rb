@@ -74,7 +74,7 @@ module Admin
       # Regression for the Sentry FK violation on board_activities.actor_id:
       # deleting a user who authored board activities must not raise and must
       # preserve those activities.
-      project = create(:project, company: @user.company, owner: @user)
+      project = create(:project, company: @user.companies.first, owner: @user)
       board = create(:board, project: project)
       activity = BoardActivity.create!(
         board: board, event_type: :task_created, actor: @user, actor_type: :human
