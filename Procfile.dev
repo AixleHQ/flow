@@ -1,4 +1,3 @@
 web: bundle exec puma -C config/puma.rb
 mcp: bundle exec puma -C config/puma_mcp.rb
-jobs: bundle exec rake solid_queue:start
 vite: bin/vite dev

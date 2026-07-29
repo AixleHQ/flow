@@ -43,8 +43,18 @@ pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
-# Run the Solid Queue supervisor inside Puma. Production deployments are managed
-# outside this repository, so a dedicated jobs process cannot be added from here;
-# Solid Queue coordinates through the database, so one supervisor per web replica
-# is a supported topology. Opt-in via env so a bare `rails server` stays quiet.
-plugin :solid_queue if ENV["SOLID_QUEUE_IN_PUMA"] == "true"
+# Run the Solid Queue supervisor inside Puma, ON BY DEFAULT.
+#
+# Deliberately opt-OUT rather than opt-in: production deployments are managed
+# outside this repository, so nothing here can add a dedicated jobs process, and
+# an opt-in flag that someone forgets to set means jobs pile up in the database
+# with no one running them — mail simply stops, silently. Defaulting to on makes
+# the failure mode "jobs run in an extra place", which is harmless: Solid Queue
+# coordinates through the database, so one supervisor per web replica is a
+# supported topology.
+#
+# Only this config is affected. config/puma_mcp.rb is a separate file that never
+# loads this one, so the MCP server does not pick up a supervisor.
+#
+# Set SOLID_QUEUE_IN_PUMA=false where something else runs the jobs.
+plugin :solid_queue unless ENV["SOLID_QUEUE_IN_PUMA"] == "false"
