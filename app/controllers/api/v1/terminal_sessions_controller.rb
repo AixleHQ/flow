@@ -81,17 +81,29 @@ module Api
 
       private
 
-      # Which company an auth_setup session authenticates a credential for. The
-      # API has no switcher, so the client must name it when the user belongs to
-      # more than one company; a single-membership user is unambiguous.
+      # Which company an auth_setup session authenticates a credential for.
+      #
+      # An explicit company_id wins (validated against the user's ACTIVE memberships,
+      # so it can never name a company they left). Otherwise it is the company the
+      # request is already acting for — the one the profile page that opened this
+      # session is showing. Falling back to "only if they belong to exactly one"
+      # left every multi-company user with a company-less session, and the credential
+      # such a session writes cannot be saved at all.
       def auth_setup_company
-        memberships = current_user.active_memberships
         if params[:company_id].present?
           wanted = params[:company_id].to_i
-          return memberships.find { |m| m.company_id == wanted }&.company
+          # Membership checked on the already-loaded list, but the company is loaded
+          # directly: dereferencing :company off that list is what Bullet's "USE eager
+          # loading" gate rejects, and eager-loading it on every request trips the
+          # opposite gate. Same tension as AuthConcern#current_company.
+          return nil unless current_user.active_memberships.any? { |m| m.company_id == wanted }
+
+          # ::Company — inside Api::V1 the bare constant resolves to the controller
+          # namespace module, not the model.
+          return ::Company.find_by(id: wanted)
         end
 
-        memberships.one? ? memberships.first.company : nil
+        current_company
       end
 
       # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on

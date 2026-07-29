@@ -444,6 +444,10 @@ function AgentAuthModal({
   const cableSubRef = useRef<Subscription | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishingRef = useRef(false);
+  // One auth session per opening. The app renders under StrictMode, which invokes effects
+  // twice, and this effect POSTs — without the guard a single click launched two agent
+  // containers, each holding a session that authenticates the same credential.
+  const startedRef = useRef(false);
 
   const agentInfo = AVAILABLE_AGENTS.find((a) => a.type === agentType)!;
 
@@ -526,7 +530,13 @@ function AgentAuthModal({
   }, [agentType, isDesign, cleanup, applySessionData]);
 
   useEffect(() => {
-    if (opened) startAuth();
+    if (!opened) {
+      startedRef.current = false;
+      return;
+    }
+    if (startedRef.current) return;
+    startedRef.current = true;
+    startAuth();
   }, [opened, startAuth]);
 
   // Subscribe to Inertia Cable for session updates
