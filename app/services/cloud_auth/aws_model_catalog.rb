@@ -17,6 +17,13 @@ module CloudAuth
     MAX_PAGES = 5
     PAGE_SIZE = 100
 
+    # Each type is asked for EXPLICITLY: ListInferenceProfiles with no typeEquals returns
+    # only system-defined profiles, so an account's own application profiles are invisible
+    # by default — and those are exactly the ones an enterprise deployment invokes, bills
+    # and grants InvokeModel on. Omitting the filter offered a list of models the account
+    # was usually not permitted to call.
+    TYPES = %w[APPLICATION SYSTEM_DEFINED].freeze
+
     Profile = Data.define(:id, :arn, :name, :description, :type, :model_arns) do
       # Claude Code accepts a system-defined profile by id, but an application profile only
       # by ARN — the id of an application profile is not a routable model name.
@@ -63,11 +70,34 @@ module CloudAuth
     # @return [Array<Profile>] active profiles only; a profile that is not ACTIVE cannot be
     #   invoked, and offering it would produce a failure at the worst moment.
     def inference_profiles
+      collected = []
+      failure = nil
+
+      TYPES.each do |type|
+        collected.concat(profiles_of_type(type))
+      rescue Error => e
+        # One type failing is not the same as having no answer: a permission set may grant
+        # listing of the account's own application profiles and nothing else, or the
+        # reverse. Report only when nothing at all came back.
+        Rails.logger.warn("[AwsModelCatalog] could not list #{type} profiles: #{e.message}")
+        failure ||= e
+      end
+
+      raise failure if collected.empty? && failure
+
+      collected
+    end
+
+    private
+
+    def profiles_of_type(type)
       profiles = []
       token = nil
 
       MAX_PAGES.times do
-        resp = client.list_inference_profiles({ max_results: PAGE_SIZE, next_token: token }.compact)
+        resp = client.list_inference_profiles(
+          { type_equals: type, max_results: PAGE_SIZE, next_token: token }.compact
+        )
         profiles.concat(resp.inference_profile_summaries.filter_map { |s| build(s) })
         token = resp.next_token
         break if token.blank?
@@ -79,8 +109,6 @@ module CloudAuth
     rescue ::Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
       raise Error, "#{e.class.name.demodulize}: #{e.message}"
     end
-
-    private
 
     def build(summary)
       return nil unless summary.status.to_s.casecmp("ACTIVE").zero?
