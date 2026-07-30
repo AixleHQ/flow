@@ -10,6 +10,11 @@ Rails.application.routes.draw do
   match "/action_mcp", to: "mcp#handle", via: %i[get post delete]
   match "/mcp", to: "mcp#handle", via: %i[get post delete]
 
+  # Credential vending for agent containers (Amazon Bedrock and friends). Called by the
+  # in-container credential_process helper, authenticated by a derived per-session key
+  # rather than a user session — see CloudAuth::SessionKey.
+  post "/cloud/aws/credentials", to: "cloud_credentials#create"
+
   # CSP violation report sink (report-only mode, M-16). Browsers POST here with
   # Content-Type application/csp-report; no session/CSRF token is sent.
   post "/csp-violation-report-endpoint", to: "csp_reports#create"
@@ -60,6 +65,18 @@ Rails.application.routes.draw do
         member do
           post :finish
           get :terminal_log
+        end
+      end
+
+      # Cloud-provider connections (Amazon Bedrock via IAM Identity Center). One per
+      # user, driven from the browser: create → poll → complete.
+      namespace :cloud do
+        resource :aws_connection, only: %i[show create destroy], controller: "aws_connections" do
+          post :poll
+          post :complete
+          # Vends credentials and invokes a model, because Claude Code hides Bedrock
+          # errors and this is the only way a user sees why their connection fails.
+          post :health
         end
       end
 

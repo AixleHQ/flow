@@ -52,6 +52,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     projectName: undefined,
     pendingArtifactsCount: 0,
     sessionLogsCount: 0,
+    cloudConnectRequested: false,
     ...overrides,
   };
 }

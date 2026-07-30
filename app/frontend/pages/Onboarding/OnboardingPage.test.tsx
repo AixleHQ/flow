@@ -48,6 +48,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   repositoryIds: [],
   pendingArtifactsCount: 0,
   sessionLogsCount: 0,
+  cloudConnectRequested: false,
   ...overrides,
 });
 

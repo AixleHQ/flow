@@ -293,10 +293,12 @@ module Agents
     # Cursor Dashboard API
     # =========================================================================
 
+    # The token that paid for this session's usage: the credential of the session's
+    # company, never "the user's" — a multi-company user has one per company and the
+    # dashboard call must read the account that was actually billed.
     def resolve_access_token(terminal_session)
-      credential = terminal_session.user
-                                   .agent_credentials
-                                   .find_by(agent_type: "cursor_cli")
+      credential = SessionCompany.agent_credentials_for(terminal_session)
+                                 .find_by(agent_type: "cursor_cli")
       credential&.config_data&.dig("accessToken")
     end
 

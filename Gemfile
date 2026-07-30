@@ -157,6 +157,17 @@ end
 
 gem "shrine", "~> 3.9"
 gem "aws-sdk-s3", "~> 1.228"
+
+# Bedrock runtime, for the cloud-connection health check: the only way to tell a user
+# their permission set cannot actually invoke a model is to try. Claude Code hides
+# Bedrock errors, so without this the failure surfaces as an agent that never answers.
+# (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
+gem "aws-sdk-bedrockruntime", "~> 1.0"
+
+# Bedrock control plane, for listing the inference profiles an account can actually invoke.
+# That list is the only truthful model catalogue for a Bedrock connection — it includes the
+# account's own application inference profiles, which is what enterprise deployments pin.
+gem "aws-sdk-bedrock", "~> 1.0"
 gem "image_processing", "~> 2.0"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 

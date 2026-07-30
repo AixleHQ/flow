@@ -52,6 +52,18 @@ class TerminalSessionResource < ApplicationResource
     "#{Settings.traefik.http_base}/t/#{session.route_token}/fs"
   end
 
+  # True once the in-container credential helper reported that this user has no cloud
+  # connection — which only happens because Claude Code's own Bedrock wizard asked it for
+  # credentials. The auth modal reads this to show the connect step instead of waiting for
+  # a token that will never appear: Bedrock writes no auth file, so `authenticated` stays
+  # false forever on this path.
+  typelize :boolean
+  attribute :cloud_connect_requested do |session|
+    next false unless session.session_type == "auth_setup"
+
+    session.metadata&.dig("cloud_connect_requested_at").present?
+  end
+
   typelize :string?
   attribute :ide_url do |session|
     next nil unless session.route_token.present?

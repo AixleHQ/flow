@@ -285,6 +285,30 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal credential, strategy.input[:credential]
   end
 
+  # The container gets the credential of the session's OWN company. An unscoped read
+  # would hand it another tenant's tokens and bill that tenant for what it spends.
+  test "strategy never resolves a credential from another company" do
+    other_company = create(:company)
+    create(:company_membership, user: @user, company: other_company)
+    AgentCredential.create!(user: @user, company: other_company, agent_type: "claude_code",
+                            config_data: { "key" => "other-tenant" })
+    session = create(:terminal_session, :agent_session, user: @user, company: @company)
+
+    assert_nil session.strategy.input[:credential]
+  end
+
+  test "strategy picks the credential of the session's company when the user has several" do
+    other_company = create(:company)
+    create(:company_membership, user: @user, company: other_company)
+    AgentCredential.create!(user: @user, company: other_company, agent_type: "claude_code",
+                            config_data: { "key" => "other-tenant" })
+    mine = AgentCredential.create!(user: @user, company: @company, agent_type: "claude_code",
+                                   config_data: { "key" => "mine" })
+    session = create(:terminal_session, :agent_session, user: @user, company: @company)
+
+    assert_equal mine, session.strategy.input[:credential]
+  end
+
   test "strategy raises ArgumentError for unsupported session_type" do
     session = build(:terminal_session, user: @user, session_type: "tool_setup", agent_type: nil)
 

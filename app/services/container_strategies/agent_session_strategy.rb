@@ -39,7 +39,28 @@ module ContainerStrategies
       SessionContextService.resolve_env_vars(session)
         .each { |k, v| upsert_env_var(env_vars_list, k, v) }
 
-      env_vars_list
+      scrub_conflicting_auth_env(env_vars_list)
+    end
+
+    # Last step, after every other source has had its say: drop env the active provider
+    # config would silently lose to. A leftover ANTHROPIC_API_KEY shadows a Bedrock
+    # connection, and Claude Code hides Bedrock errors — so the symptom is an agent that
+    # simply does not answer. The corporate runbook works around exactly this by
+    # scrubbing stray keys before launch.
+    def scrub_conflicting_auth_env(env_vars_list)
+      credential = input[:credential]
+      return env_vars_list if credential.nil?
+
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      conflicting = adapter.conflicting_env_keys(credential.config_data)
+      return env_vars_list if conflicting.empty?
+
+      env_vars_list.reject do |entry|
+        key = entry.to_s.split("=", 2).first
+        conflicting.include?(key).tap do |dropped|
+          Rails.logger.info("[AgentSession] dropped #{key}: conflicts with the active provider") if dropped
+        end
+      end
     end
 
     def build_labels
@@ -104,8 +125,10 @@ module ContainerStrategies
     def resolve_model(session)
       return session.requested_model if session.requested_model.present?
 
-      # Fall back to user's default model for this runtime
-      credential = session.user.agent_credentials.find_by(agent_type: session.agent_type)
+      # Fall back to the default model chosen on THIS session's company credential. The
+      # pin is per credential, and a credential is per company — a model pinned against
+      # another company's Bedrock account does not exist here.
+      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session.agent_type)
       credential&.metadata&.dig("default_model")
     end
 
@@ -265,7 +288,8 @@ module ContainerStrategies
       config_data = build_credentials_from_files(auth_files, agent_service.adapter)
       return if config_data.blank?
 
-      credential = session.user.agent_credentials.find_by(agent_type: input[:agent_type])
+      # This session's company's credential — the same row the write below targets.
+      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type])
       return unless credential
       return if credential.config_data == config_data # cheap pre-check, avoids locking on no-op
 

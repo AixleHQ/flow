@@ -72,6 +72,11 @@ export function mcpPath(options?: object): string {
   return "/" + "mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /cloud/aws/credentials(.:format) */
+export function cloudAwsCredentialsPath(options?: object): string {
+  return "/" + "cloud" + "/" + "aws" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /csp-violation-report-endpoint(.:format) */
 export function cspViolationReportEndpointPath(options?: object): string {
   return "/" + "csp-violation-report-endpoint" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -155,6 +160,26 @@ export function apiV1TerminalSessionsPath(options?: object): string {
 /** /api/v1/terminal_sessions/:id(.:format) */
 export function apiV1TerminalSessionPath(id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "terminal_sessions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /api/v1/cloud/aws_connection/poll(.:format) */
+export function pollApiV1CloudAwsConnectionPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "cloud" + "/" + "aws_connection" + "/" + "poll" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/cloud/aws_connection/complete(.:format) */
+export function completeApiV1CloudAwsConnectionPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "cloud" + "/" + "aws_connection" + "/" + "complete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/cloud/aws_connection/health(.:format) */
+export function healthApiV1CloudAwsConnectionPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "cloud" + "/" + "aws_connection" + "/" + "health" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/cloud/aws_connection(.:format) */
+export function apiV1CloudAwsConnectionPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "cloud" + "/" + "aws_connection" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /api/v1/company/assets/:id/download(.:format) */

@@ -107,6 +107,12 @@ GEM
       version_gem (~> 1.1, >= 1.1.10)
     aws-eventstream (1.4.0)
     aws-partitions (1.1274.0)
+    aws-sdk-bedrock (1.90.0)
+      aws-sdk-core (~> 3, >= 3.254.0)
+      aws-sigv4 (~> 1.5)
+    aws-sdk-bedrockruntime (1.82.0)
+      aws-sdk-core (~> 3, >= 3.254.0)
+      aws-sigv4 (~> 1.5)
     aws-sdk-core (3.254.0)
       aws-eventstream (~> 1, >= 1.3.0)
       aws-partitions (~> 1, >= 1.992.0)
@@ -764,6 +770,8 @@ DEPENDENCIES
   administrate-field-shrine
   alba
   audited
+  aws-sdk-bedrock (~> 1.0)
+  aws-sdk-bedrockruntime (~> 1.0)
   aws-sdk-s3 (~> 1.228)
   bcrypt (~> 3.1.22)
   bootsnap

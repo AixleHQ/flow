@@ -32,8 +32,11 @@ module Agents
 
     # == Auth ==
 
-    test "auth_required_keys returns the two real-token paths" do
-      assert_equal %w[primaryApiKey claudeAiOauth.accessToken], @adapter.auth_required_keys
+    # Three ways to be finished, any-match: an API key, a claude.ai token, or — since
+    # Bedrock produces no token at all — the marker its wizard writes into settings.json.
+    test "auth_required_keys covers every way a login can finish" do
+      assert_equal %w[primaryApiKey claudeAiOauth.accessToken env.CLAUDE_CODE_USE_BEDROCK],
+                   @adapter.auth_required_keys
     end
 
     test "auth_complete? returns false with only oauthAccount metadata" do
@@ -57,8 +60,19 @@ module Agents
 
     test "the default (agent) auth kind is a fresh login via the standard hooks" do
       assert_equal @adapter.auth_required_keys, @adapter.auth_required_keys_for("agent")
-      assert_equal @adapter.auth_setup_files, @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
       assert_empty @adapter.auth_launch_commands_for("agent")
+    end
+
+    # The auth container carries no credential, but it does carry the AWS profile — Claude
+    # Code's Bedrock wizard lists profiles from ~/.aws/config, and it executes their
+    # credential_process during verification. That execution is how we learn the user chose
+    # Bedrock inside the TUI, before anything is written to disk.
+    test "the default auth kind seeds the platform AWS profile and no credential" do
+      files = @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
+
+      assert_equal [ "/home/claude/.aws/config" ], files.keys
+      assert_includes files.values.first, "[profile aixle-bedrock]"
+      assert_includes files.values.first, "credential_process = /usr/local/bin/aixle-aws-creds"
     end
 
     test "design kind watches only for the designOauth block" do
@@ -641,7 +655,675 @@ module Agents
       assert_equal "d-a", reloaded.dig("designOauth", "accessToken") # failed block left intact
     end
 
+    # == Amazon Bedrock (bring-your-own cloud account) ==
+
+    test "config_files writes no aws config and no bedrock env without an awsBedrock block" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk-ant-x" })
+
+      assert_not_includes files.keys, "/home/claude/.aws/config"
+      assert_not_includes settings_env(files).keys, "CLAUDE_CODE_USE_BEDROCK"
+    end
+
+    test "an awsBedrock block without a region is ignored" do
+      files = @adapter.config_files({ "awsBedrock" => { "profile" => "aixle" } })
+
+      assert_not_includes files.keys, "/home/claude/.aws/config"
+      assert_not_includes settings_env(files).keys, "CLAUDE_CODE_USE_BEDROCK"
+    end
+
+    test "bedrock settings env enables bedrock, pins models, and sets the guardrail header" do
+      files = @adapter.config_files({ "awsBedrock" => bedrock_block })
+      env = settings_env(files)
+
+      assert_equal "1", env["CLAUDE_CODE_USE_BEDROCK"]
+      assert_equal "us-east-1", env["AWS_REGION"]
+      assert_equal "aixle", env["AWS_PROFILE"]
+      assert_equal "120000", env["CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS"]
+      assert_equal "us.anthropic.claude-sonnet-4-6", env["ANTHROPIC_DEFAULT_SONNET_MODEL"]
+      assert_equal "us.anthropic.claude-haiku-4-5", env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]
+      assert_equal(
+        "X-Amzn-Bedrock-GuardrailIdentifier: gr-123\nX-Amzn-Bedrock-GuardrailVersion: 2",
+        env["ANTHROPIC_CUSTOM_HEADERS"]
+      )
+      # MCP_TIMEOUT must survive the merge — bedrock env is additive, not a replacement.
+      assert env["MCP_TIMEOUT"].present?
+    end
+
+    test "bedrock block carries availableModels and awsAuthRefresh into settings" do
+      settings = settings_hash(@adapter.config_files({ "awsBedrock" => bedrock_block }))
+
+      assert_equal %w[opus sonnet haiku], settings["availableModels"]
+      assert_equal "/usr/local/bin/aixle-aws-connect", settings["awsAuthRefresh"]
+    end
+
+    # Regression: Claude Code treats availableModels as an allowlist and answers anything
+    # outside it with "Model … is restricted by your organization's settings. Using
+    # us.anthropic.claude-sonnet-4-5 instead." A list captured at connect time then silently
+    # downgraded a session the user had pinned to the account's own application profile —
+    # and moved the spend onto a shared system profile.
+    test "the model this session runs on is always in the allowlist" do
+      arn = "arn:aws:bedrock:us-east-1:541894707537:application-inference-profile/aae1a165gwk4"
+
+      settings = settings_hash(
+        @adapter.config_files({ "awsBedrock" => bedrock_block }, { model: arn })
+      )
+
+      assert_includes settings["availableModels"], arn
+      assert_equal "opus", settings["availableModels"].first, "the stored list keeps its order"
+      assert_equal arn, settings["model"]
+    end
+
+    test "a model already in the allowlist is not duplicated" do
+      settings = settings_hash(
+        @adapter.config_files({ "awsBedrock" => bedrock_block }, { model: "sonnet" })
+      )
+
+      assert_equal %w[opus sonnet haiku], settings["availableModels"]
+    end
+
+    # No stored list means Claude Code's own picker is unrestricted; injecting a one-entry
+    # allowlist would narrow it to exactly one model.
+    test "a connection with no stored list gets no allowlist at all" do
+      block = bedrock_block.except("available_models")
+
+      settings = settings_hash(@adapter.config_files({ "awsBedrock" => block }, { model: "sonnet" }))
+
+      assert_nil settings["availableModels"]
+    end
+
+    test "chain resolve timeout is overridable per connection" do
+      block = bedrock_block.merge("chain_resolve_timeout_ms" => 300_000)
+      env = settings_env(@adapter.config_files({ "awsBedrock" => block }))
+
+      assert_equal "300000", env["CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS"]
+    end
+
+    test "a bearer token connection sets AWS_BEARER_TOKEN_BEDROCK and writes no profile" do
+      block = { "region" => "us-east-1", "bearer_token" => "bedrock-api-key-xyz" }
+      files = @adapter.config_files({ "awsBedrock" => block })
+      env = settings_env(files)
+
+      assert_equal "bedrock-api-key-xyz", env["AWS_BEARER_TOKEN_BEDROCK"]
+      assert_not_includes env.keys, "AWS_PROFILE"
+      assert_not_includes files.keys, "/home/claude/.aws/config"
+    end
+
+    test "aws config is written to the literal home path with a credential_process profile" do
+      files = @adapter.config_files({ "awsBedrock" => bedrock_block })
+      config = files["/home/claude/.aws/config"]
+
+      assert_equal <<~INI, config
+        [profile aixle]
+        credential_process = /usr/local/bin/aixle-aws-creds
+        region = us-east-1
+      INI
+    end
+
+    test "an sso_session connection renders both the session and profile sections" do
+      block = {
+        "region" => "us-east-1",
+        "profile" => "aixle",
+        "sso_session" => {
+          "start_url" => "https://example.awsapps.com/start",
+          "region" => "us-west-2",
+          "account_id" => "111122223333",
+          "role_name" => "BedrockUser"
+        }
+      }
+      config = @adapter.config_files({ "awsBedrock" => block })["/home/claude/.aws/config"]
+
+      assert_equal <<~INI, config
+        [sso-session aixle]
+        sso_start_url = https://example.awsapps.com/start
+        sso_region = us-west-2
+        sso_registration_scopes = sso:account:access
+
+        [profile aixle]
+        sso_session = aixle
+        sso_account_id = 111122223333
+        sso_role_name = BedrockUser
+        region = us-east-1
+      INI
+    end
+
+    # == Bedrock login completion and what the wizard's choices leave behind ==
+
+    test "a settings file carrying the bedrock marker counts as a finished login" do
+      assert @adapter.auth_complete?({ "env" => { "CLAUDE_CODE_USE_BEDROCK" => "1" } }.to_json)
+      assert_not @adapter.auth_complete?({ "env" => { "AWS_REGION" => "us-east-1" } }.to_json)
+      assert_not @adapter.auth_complete?({ "permissions" => {} }.to_json)
+    end
+
+    test "settings.json is watched, so the marker is visible to the watcher" do
+      assert_includes @adapter.auth_file_paths, "/home/claude/.claude/settings.json"
+      assert_includes @adapter.auth_watch_path, "/home/claude/.claude/settings.json"
+    end
+
+    # Pins are the load-bearing part: the settings file is regenerated from the connection
+    # every session, and an unpinned Bedrock deployment resolves to Opus and bills at Opus
+    # rates.
+    test "the wizard's region, profile and model pins are captured" do
+      settings = {
+        "env" => {
+          "CLAUDE_CODE_USE_BEDROCK" => "1",
+          "AWS_REGION" => "eu-central-1",
+          "AWS_PROFILE" => "dbp-aixle",
+          "ANTHROPIC_DEFAULT_SONNET_MODEL" => "us.anthropic.claude-sonnet-4-6",
+          "ANTHROPIC_DEFAULT_OPUS_MODEL" => "arn:aws:bedrock:eu-central-1:1:application-inference-profile/x"
+        },
+        "availableModels" => %w[opus sonnet]
+      }
+
+      block = @adapter.extract_settings_config(settings.to_json).fetch("awsBedrock")
+
+      assert_equal "eu-central-1", block["region"]
+      assert_equal "dbp-aixle", block["profile"]
+      assert_equal "us.anthropic.claude-sonnet-4-6", block.dig("models", "sonnet")
+      assert_equal "arn:aws:bedrock:eu-central-1:1:application-inference-profile/x", block.dig("models", "opus")
+      assert_equal %w[opus sonnet], block["available_models"]
+    end
+
+    # Same pattern as primaryApiKey: whatever the CLI persisted during login is sliced and
+    # kept, or a user who pastes a key at the wizard's prompt loses it with the container.
+    test "a bedrock api key configured in the wizard is captured and restored" do
+      settings = { "env" => { "CLAUDE_CODE_USE_BEDROCK" => "1", "AWS_BEARER_TOKEN_BEDROCK" => "bedrock-api-key-x" } }
+
+      block = @adapter.extract_settings_config(settings.to_json).fetch("awsBedrock")
+      assert_equal "bedrock-api-key-x", block["bearer_token"]
+
+      env = settings_env(@adapter.config_files({ "awsBedrock" => block.merge("region" => "us-east-1") }))
+      assert_equal "bedrock-api-key-x", env["AWS_BEARER_TOKEN_BEDROCK"]
+    end
+
+    test "long-term access keys are captured and restored" do
+      settings = {
+        "env" => {
+          "CLAUDE_CODE_USE_BEDROCK" => "1", "AWS_REGION" => "us-east-1",
+          "AWS_ACCESS_KEY_ID" => "AKIAEXAMPLE", "AWS_SECRET_ACCESS_KEY" => "secret-part"
+        }
+      }
+
+      block = @adapter.extract_settings_config(settings.to_json).fetch("awsBedrock")
+      assert_equal "AKIAEXAMPLE", block.dig("static_credentials", "access_key_id")
+
+      env = settings_env(@adapter.config_files({ "awsBedrock" => block }))
+      assert_equal "AKIAEXAMPLE", env["AWS_ACCESS_KEY_ID"]
+      assert_equal "secret-part", env["AWS_SECRET_ACCESS_KEY"]
+    end
+
+    # Storing a temporary STS session would hand the next session credentials that already
+    # expired — and Bedrock fails opaquely, so that is worse than having no connection.
+    test "temporary sts credentials are not captured" do
+      settings = {
+        "env" => {
+          "CLAUDE_CODE_USE_BEDROCK" => "1",
+          "AWS_ACCESS_KEY_ID" => "ASIATEMP", "AWS_SECRET_ACCESS_KEY" => "s", "AWS_SESSION_TOKEN" => "temp"
+        }
+      }
+
+      block = @adapter.extract_settings_config(settings.to_json).fetch("awsBedrock")
+
+      assert_nil block["static_credentials"]
+      assert_not_includes block.to_json, "ASIATEMP"
+    end
+
+    # Not a Bedrock credential, and the Console path is already covered by primaryApiKey in
+    # .claude.json. Keeping it here would also fight the conflicting-env scrub.
+    test "an anthropic api key is not captured from the bedrock settings" do
+      settings = { "env" => { "CLAUDE_CODE_USE_BEDROCK" => "1", "ANTHROPIC_API_KEY" => "sk-ant-secret" } }
+
+      captured = @adapter.extract_settings_config(settings.to_json)
+
+      assert_not_includes captured.to_json, "sk-ant-secret"
+    end
+
+    test "a settings file with no bedrock marker yields nothing" do
+      assert_empty @adapter.extract_settings_config({ "env" => { "AWS_REGION" => "us-east-1" } }.to_json)
+    end
+
+    # The connection is stored server-side and never appears in the container, so the
+    # default full-replace would destroy it — refresh token included — the first time an
+    # auth session completed.
+    test "completing an auth session preserves the stored cloud connection" do
+      current = {
+        "awsBedrock" => {
+          "region" => "us-east-1", "profile" => "aixle-bedrock",
+          "credential_process" => "/usr/local/bin/aixle-aws-creds",
+          "identity_center" => { "account_id" => "1", "role_name" => "R", "token" => { "refresh_token" => "keep-me" } }
+        }
+      }
+
+      # What a completed Bedrock auth session actually captures: the wizard's marker, and
+      # nothing that could stand in for the server-side connection.
+      captured = { "awsBedrock" => { "region" => "us-east-1", "profile" => "aixle-bedrock" } }
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert_equal "keep-me", merged.dig("awsBedrock", "identity_center", "token", "refresh_token")
+    end
+
+    test "the wizard's choices fold into the stored connection without touching its credentials" do
+      current = {
+        "awsBedrock" => {
+          "region" => "us-east-1", "profile" => "aixle-bedrock",
+          "credential_process" => "/usr/local/bin/aixle-aws-creds",
+          "models" => { "haiku" => "us.anthropic.claude-haiku-4-5" },
+          "identity_center" => { "account_id" => "1", "role_name" => "R" }
+        }
+      }
+      captured = { "awsBedrock" => { "region" => "eu-central-1", "models" => { "sonnet" => "pinned-sonnet" } } }
+
+      block = @adapter.reconcile_captured_credentials("agent", current, captured).fetch("awsBedrock")
+
+      assert_equal "eu-central-1", block["region"], "the wizard decided the region"
+      assert_equal "pinned-sonnet", block.dig("models", "sonnet")
+      assert_equal "us.anthropic.claude-haiku-4-5", block.dig("models", "haiku"), "existing pins survive"
+      assert_equal "1", block.dig("identity_center", "account_id")
+      assert_equal "/usr/local/bin/aixle-aws-creds", block["credential_process"]
+    end
+
+    # == Bedrock model catalogue ==
+    #
+    # A static list can never name an account's own application inference profiles, and those
+    # ARNs are exactly what an enterprise deployment pins.
+
+    # An account that curates its models scopes bedrock:InvokeModel to its own application
+    # profile ARNs, which leaves every system-defined profile visible but denied. Offering
+    # both is how an unusable model reaches the picker.
+    test "a bedrock connection lists what the account can actually invoke" do
+      credential = connect_bedrock
+      catalog = stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-sonnet-4-6", name: "Claude Sonnet 4.6"),
+        FakeAwsModelCatalog.application_profile(
+          "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow", name: "Flow"
+        )
+      ], credential: credential)
+
+      result = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+
+      assert_equal :api, result[:source]
+      assert_equal [ "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow" ],
+                   result[:models].map { |m| m[:model_id] }
+      assert_equal 1, catalog.calls
+    end
+
+    # Regression: a Fable system profile sorted above the account's own profiles and was
+    # picked first, then failed on the first invocation because the permission set allowed
+    # only the four ids behind its application profiles.
+    test "a newer shared profile does not displace the account's own profiles" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile(
+          "us.anthropic.claude-fable-5",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-fable-5"
+        ),
+        FakeAwsModelCatalog.application_profile(
+          "arn:aws:bedrock:us-east-1:1:application-inference-profile/flow-opus-4-8", name: "flow opus-4-8",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-4-8"
+        )
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "arn:aws:bedrock:us-east-1:1:application-inference-profile/flow-opus-4-8" ],
+                   models.map { |m| m[:model_id] }
+    end
+
+    test "models the CLI cannot run are left out" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-sonnet-4-6"),
+        FakeAwsModelCatalog.non_anthropic_profile("us.amazon.nova-2")
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "us.anthropic.claude-sonnet-4-6" ], models.map { |m| m[:model_id] }
+    end
+
+    # Claude 3.x carries a 2x extended-access surcharge on Bedrock and retires on its own
+    # calendar. A real account lists 25 profiles with those inside.
+    test "the surcharged legacy generation is dropped" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-3-sonnet-20240229-v1:0",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0"),
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"),
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-sonnet-4-6",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-4-6")
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "us.anthropic.claude-sonnet-4-6" ], models.map { |m| m[:model_id] }
+    end
+
+    # The same model is listed once per geography. A global profile costs ~10% less than the
+    # regional one and draws on a larger pool, so offering both invites paying more by
+    # accident.
+    test "only the cheapest geography of a model is offered" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-opus-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-5"),
+        FakeAwsModelCatalog.system_profile("global.anthropic.claude-opus-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-5"),
+        FakeAwsModelCatalog.system_profile("eu.anthropic.claude-opus-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-5")
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "global.anthropic.claude-opus-5" ], models.map { |m| m[:model_id] }
+    end
+
+    # A model AWS offers only regionally must still be offered.
+    test "a model with no global profile keeps its regional one" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-haiku-4-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-haiku-4-5")
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "us.anthropic.claude-haiku-4-5" ], models.map { |m| m[:model_id] }
+    end
+
+    # An account's own profiles are distinct objects, not geographic variants of one model.
+    test "application profiles are never collapsed into each other" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.application_profile(
+          "arn:aws:bedrock:us-east-1:1:application-inference-profile/plan", name: "Plan",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-4-8"
+        ),
+        FakeAwsModelCatalog.application_profile(
+          "arn:aws:bedrock:us-east-1:1:application-inference-profile/flow", name: "Flow",
+          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-4-8"
+        )
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal 2, models.size
+    end
+
+    test "the newest generation comes first so the obvious pick is the right one" do
+      credential = connect_bedrock
+      stub_catalog([
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-sonnet-4-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-sonnet-4-5"),
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-opus-5",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-5"),
+        FakeAwsModelCatalog.system_profile("us.anthropic.claude-opus-4-8",
+                                          model_arn: "arn:aws:bedrock:::foundation-model/anthropic.claude-opus-4-8")
+      ])
+
+      models = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)[:models]
+
+      assert_equal [ "us.anthropic.claude-opus-5", "us.anthropic.claude-opus-4-8", "us.anthropic.claude-sonnet-4-5" ],
+                   models.map { |m| m[:model_id] }
+    end
+
+    # The container reads its allowlist from the credential, so a list left as it was at
+    # connect time holds a session started weeks later to models the account has since
+    # replaced. This is the only path that asks AWS what it can invoke today.
+    test "listing models refreshes the allowlist stored on the credential" do
+      credential = connect_bedrock
+      arn = "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow"
+      stub_catalog([ FakeAwsModelCatalog.application_profile(arn, name: "Flow") ], credential: credential)
+
+      @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+
+      assert_equal [ arn ], credential.reload.config_data.dig("awsBedrock", "available_models")
+    end
+
+    test "an unchanged list is not written back" do
+      credential = connect_bedrock
+      arn = "arn:aws:bedrock:us-east-1:111122223333:application-inference-profile/flow"
+      credential.update!(config_data: credential.config_data.deep_merge(
+        "awsBedrock" => { "available_models" => [ arn ] }
+      ))
+      stub_catalog([ FakeAwsModelCatalog.application_profile(arn, name: "Flow") ], credential: credential)
+
+      assert_no_changes -> { credential.reload.updated_at } do
+        @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+      end
+    end
+
+    # A permission set without bedrock:ListInferenceProfiles is common. A model picker is not
+    # worth breaking a page over.
+    test "a denied catalogue falls back to the static list instead of raising" do
+      credential = connect_bedrock
+      catalog = stub_catalog([])
+      catalog.raise_on_list = CloudAuth::DeniedError
+
+      result = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+
+      assert_equal :fallback, result[:source]
+      assert result[:models].any?
+    end
+
+    # A key typed into the CLI wizard never reaches us in a form we can sign a control-plane
+    # call with.
+    test "a bearer-token connection uses the static list" do
+      credential = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
+                                                  { "awsBedrock" => { "region" => "us-east-1",
+                                                                      "bearer_token" => "k" } })
+
+      result = @adapter.fetch_available_models_with_source(credential.config_data, credential: credential)
+
+      assert_equal :fallback, result[:source]
+    end
+
+    # == Exactly one inference credential ==
+    #
+    # Claude Code picks its provider from env, so a second stored credential would sit there
+    # doing nothing while nobody could say which one a request used.
+
+    test "connecting bedrock in an auth session drops an anthropic-side login" do
+      current = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-old" }, "primaryApiKey" => "sk-ant-old" }
+      captured = { "awsBedrock" => { "region" => "us-east-1", "profile" => "aixle-bedrock" } }
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert merged["awsBedrock"].present?
+      assert_nil merged["claudeAiOauth"]
+      assert_nil merged["primaryApiKey"]
+    end
+
+    test "logging in with claude.ai drops a bedrock connection" do
+      current = { "awsBedrock" => { "region" => "us-east-1", "identity_center" => { "account_id" => "1" } } }
+      captured = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-new" } }
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert_equal "sk-ant-oat01-new", merged.dig("claudeAiOauth", "accessToken")
+      assert_nil merged["awsBedrock"]
+    end
+
+    # Design authorizes separately from inference, so changing where tokens are billed must
+    # not cost the user their design login.
+    test "the design token survives a change of inference credential" do
+      current = {
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-old" },
+        "designOauth" => { "accessToken" => "sk-ant-design" }
+      }
+      captured = { "awsBedrock" => { "region" => "us-east-1" } }
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert_equal "sk-ant-design", merged.dig("designOauth", "accessToken")
+      assert merged["awsBedrock"].present?
+      assert_nil merged["claudeAiOauth"]
+    end
+
+    # A working session chooses nothing. Applying the exclusivity rule to its read-back would
+    # delete the connection simply because the container never held it.
+    test "a working session read-back never drops a stored credential" do
+      current = {
+        "awsBedrock" => { "region" => "us-east-1", "identity_center" => { "account_id" => "1" } },
+        "designOauth" => { "accessToken" => "sk-ant-design" }
+      }
+      incoming = { "awsBedrock" => { "region" => "us-east-1", "profile" => "aixle-bedrock" } }
+
+      merged = @adapter.merge_refreshed_credentials(current, incoming)
+
+      assert_equal "1", merged.dig("awsBedrock", "identity_center", "account_id")
+      assert_equal "sk-ant-design", merged.dig("designOauth", "accessToken")
+    end
+
+    test "only the active inference credential is rendered into the container" do
+      files = @adapter.config_files({
+        "awsBedrock" => bedrock_block,
+        "primaryApiKey" => "sk-ant-should-not-ship",
+        "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-should-not-ship" },
+        "designOauth" => { "accessToken" => "sk-ant-design" }
+      })
+
+      assert_not_includes files.fetch("/home/claude/.claude.json"), "sk-ant-should-not-ship"
+      creds = files["/home/claude/.claude/.credentials.json"]
+      assert_not_includes creds.to_s, "oat01-should-not-ship"
+      assert_includes creds.to_s, "sk-ant-design", "design ships alongside any provider"
+    end
+
+    # == Conflicting env ==
+
+    test "no env is declared conflicting without a bedrock connection" do
+      assert_empty @adapter.conflicting_env_keys({ "primaryApiKey" => "sk-ant-x" })
+    end
+
+    # A leftover ANTHROPIC_API_KEY shadows Bedrock, and Claude Code hides Bedrock errors,
+    # so the symptom is an agent that simply never answers.
+    test "a bedrock connection declares the env that would shadow it" do
+      keys = @adapter.conflicting_env_keys({ "awsBedrock" => bedrock_block })
+
+      assert_includes keys, "ANTHROPIC_API_KEY"
+      assert_includes keys, "ANTHROPIC_AUTH_TOKEN"
+      assert_includes keys, "ANTHROPIC_BASE_URL"
+      assert_includes keys, "CLAUDE_CODE_USE_VERTEX"
+      assert_includes keys, "CLAUDE_CODE_USE_FOUNDRY"
+    end
+
+    # The Bedrock gateway override must survive — it is how a customer points Claude Code
+    # at their own LLM gateway in front of Bedrock.
+    test "the bedrock gateway override is not treated as conflicting" do
+      assert_not_includes @adapter.conflicting_env_keys({ "awsBedrock" => bedrock_block }),
+                          "ANTHROPIC_BEDROCK_BASE_URL"
+    end
+
+    # == Vending key in process env ==
+
+    test "no vending key is injected for a working session without a cloud connection" do
+      env = @adapter.default_env_vars(agent_session)
+
+      assert_not_includes env.keys, "AIXLE_CLOUD_KEY"
+      assert_not_includes env.keys, "AIXLE_CLOUD_CREDENTIALS_URL"
+    end
+
+    # An auth container is where the user picks Bedrock in Claude Code's own wizard. The
+    # helper has to be able to answer "no connection yet" from there — that answer is the
+    # signal that opens the connect step in the browser.
+    test "an auth session gets the vending env even with no connection at all" do
+      env = @adapter.default_env_vars(@session)
+
+      assert_equal "auth_setup", @session.session_type
+      assert_equal CloudAuth::SessionKey.generate(@session), env["AIXLE_CLOUD_KEY"]
+      assert_equal Settings.cloud.credentials_url, env["AIXLE_CLOUD_CREDENTIALS_URL"]
+    end
+
+    test "a credential_process connection injects the vending url and a per-session key" do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "awsBedrock" => bedrock_block })
+      session = agent_session
+
+      env = @adapter.default_env_vars(session)
+
+      assert_equal Settings.cloud.credentials_url, env["AIXLE_CLOUD_CREDENTIALS_URL"]
+      assert_equal CloudAuth::SessionKey.generate(session), env["AIXLE_CLOUD_KEY"]
+    end
+
+    test "a bearer-token connection needs no vending key" do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code",
+                                     { "awsBedrock" => { "region" => "us-east-1", "bearer_token" => "x" } })
+
+      assert_not_includes @adapter.default_env_vars(agent_session).keys, "AIXLE_CLOUD_KEY"
+    end
+
+    test "sso_region falls back to the bedrock region when not given separately" do
+      block = {
+        "region" => "eu-central-1",
+        "profile" => "aixle",
+        "sso_session" => { "start_url" => "https://example.awsapps.com/start" }
+      }
+      config = @adapter.config_files({ "awsBedrock" => block })["/home/claude/.aws/config"]
+
+      assert_includes config, "sso_region = eu-central-1"
+    end
+
     private
+
+    def connect_bedrock
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
+        "awsBedrock" => {
+          "region" => "us-east-1", "profile" => "aixle-bedrock",
+          "credential_process" => "/usr/local/bin/aixle-aws-creds",
+          "identity_center" => {
+            "sso_region" => "us-west-2", "account_id" => "111122223333", "role_name" => "BedrockUser",
+            "registration" => { "client_id" => "c", "expires_at" => 60.days.from_now.iso8601 },
+            "token" => { "access_token" => "t", "refresh_token" => "r", "expires_at" => 1.hour.from_now.iso8601 }
+          }
+        }
+      })
+    end
+
+    # `credential:` is pinned deliberately. A bare `.stubs(:new)` accepts any arguments, so it
+    # answered a call site that had drifted to a signature the real vendor no longer has —
+    # the failure only showed up as a silently static model list in the browser.
+    def stub_catalog(profiles, credential: nil)
+      vended = CloudAuth::AwsCredentialVendor::Vended.new(
+        access_key_id: "ASIAFAKE", secret_access_key: "s", session_token: "t", expiration: 1.hour.from_now
+      )
+      vendor = mock("vendor")
+      vendor.stubs(:call).returns(vended)
+      expectation = CloudAuth::AwsCredentialVendor.stubs(:new)
+      expectation = expectation.with(credential: credential) if credential
+      expectation.returns(vendor)
+
+      catalog = FakeAwsModelCatalog.new(region: "us-east-1", access_key_id: "ASIAFAKE",
+                                       secret_access_key: "s", session_token: "t")
+      catalog.profiles = profiles
+      CloudAuth::AwsModelCatalog.stubs(:new).returns(catalog)
+      catalog
+    end
+
+    def agent_session
+      create(:terminal_session, :agent_session, :running, user: @user, project: @project)
+    end
+
+    def bedrock_block
+      {
+        "region" => "us-east-1",
+        "profile" => "aixle",
+        "credential_process" => "/usr/local/bin/aixle-aws-creds",
+        "auth_refresh_command" => "/usr/local/bin/aixle-aws-connect",
+        "available_models" => %w[opus sonnet haiku],
+        "models" => {
+          "sonnet" => "us.anthropic.claude-sonnet-4-6",
+          "haiku" => "us.anthropic.claude-haiku-4-5"
+        },
+        "guardrail" => { "identifier" => "gr-123", "version" => 2 }
+      }
+    end
+
+    def settings_hash(files)
+      JSON.parse(files.fetch("/home/claude/.claude/settings.json"))
+    end
+
+    def settings_env(files)
+      settings_hash(files).fetch("env")
+    end
 
     # Epoch-ms `offset_ms` into the future (matches the adapter's now_ms basis).
     def ms_from_now(offset_ms)

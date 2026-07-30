@@ -230,13 +230,14 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
     credential = create(:agent_credential,
       user: @user,
+      company: @company,
       agent_type: "claude_code",
       config_data: { api_key: "existing-key", account_id: "user-123" }
     )
 
     runtime_mock.stubs(:write_file).returns(true)
 
-    service.load_credentials_to_container(@user, "container123")
+    service.load_credentials_to_container(@user, @company, "container123")
 
     credential.reload
     assert credential.last_used_at.present?
@@ -246,7 +247,20 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     service = AgentCredentialsService.new("claude_code")
 
     assert_raises(RuntimeError, "No credentials found for claude_code") do
-      service.load_credentials_to_container(@user, "container123")
+      service.load_credentials_to_container(@user, @company, "container123")
+    end
+  end
+
+  # Credentials are per (user, company): writing another company's tokens into a
+  # container would run the session on — and bill — the wrong tenant.
+  test "load_credentials_to_container refuses a credential from another company" do
+    service = AgentCredentialsService.new("claude_code")
+    other_company = create(:company)
+    create(:company_membership, user: @user, company: other_company)
+    create(:agent_credential, user: @user, company: other_company, agent_type: "claude_code")
+
+    assert_raises(RuntimeError, "No credentials found for claude_code") do
+      service.load_credentials_to_container(@user, @company, "container123")
     end
   end
 end

@@ -66,6 +66,12 @@ mcp:
   # docker network.
   public_server_url: <%= ENV['MCP_PUBLIC_SERVER_URL'] || "http://#{ENV['DOMAIN'] || 'localhost:4000'}/mcp" %>
 
+cloud:
+  # Where the in-container credential_process helper asks for short-lived cloud
+  # credentials. Reached over the docker network, like mcp.server_url — never a public
+  # host, since the request carries a per-session vending key.
+  credentials_url: <%= ENV['CLOUD_CREDENTIALS_URL'] || 'http://web:4002/cloud/aws/credentials' %>
+
 otel:
   endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>
   metrics_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/metrics' %>
