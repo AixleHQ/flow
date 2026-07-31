@@ -1,6 +1,6 @@
-import { buildIntegration } from './integration';
-
 import type Repository from '@/types/generated/Repository';
+
+import { buildIntegration } from './integration';
 
 // The `: Repository` return annotation is the compile-time drift contract: if Typelizer
 // regenerates Repository with a changed/added required field, this factory stops compiling.
