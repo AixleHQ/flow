@@ -199,7 +199,7 @@ function HeatmapPanel() {
   if (!activityHeatmap) return null;
 
   return (
-    <Paper withBorder p="md" radius="md" mb="xl">
+    <Paper withBorder px={20} py={18} radius="md" bg="var(--app-bg-card)" mb="xl">
       <ContributionHeatmap days={activityHeatmap.days} />
     </Paper>
   );

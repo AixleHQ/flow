@@ -17,7 +17,9 @@ class Web::Company::Projects::AnalyticsController < Web::Company::Projects::Appl
       participant_id: participant_id,
       participants: current_project.member_users.map { |u| { id: u.id, name: u.name, email: u.email } },
       activity_heatmap: InertiaRails.defer(group: "analytics") {
-        heatmap_scope = participant_id ? current_project.terminal_sessions.where(user_id: participant_id) : current_project.terminal_sessions
+        heatmap_scope = current_project.terminal_sessions
+        heatmap_scope = heatmap_scope.where(user_id: participant_id) if participant_id
+        heatmap_scope = heatmap_scope.where(user_id: current_user.id) if scope == "user" && participant_id.blank?
         { days: ActivityHeatmapService.new(scope: heatmap_scope).call.map { |d| { date: d.date, count: d.count } } }
       },
       summary: InertiaRails.defer(group: "analytics") {

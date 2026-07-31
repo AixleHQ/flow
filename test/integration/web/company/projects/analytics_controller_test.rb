@@ -76,6 +76,23 @@ class Web::Company::Projects::AnalyticsControllerTest < ActionDispatch::Integrat
     end
   end
 
+  test "user scope narrows the heatmap to the current user's sessions" do
+    collaborator = create(:user, :employee, company: @company)
+    create(:project_collaborator, project: @project, user: collaborator)
+    [ @user, collaborator ].each do |u|
+      s = build(:terminal_session, project: @project, user: u, session_type: "agent_session", agent_type: "claude_code")
+      s.save!(validate: false)
+    end
+
+    get company_project_analytics_path(@project, scope: "user")
+    inertia_load_deferred_props("analytics")
+
+    assert_inertia_props do |props|
+      props[:activityHeatmap][:days].sum { |d| d[:count] } == 1 &&
+        props[:summary][:totalSessions] == 1
+    end
+  end
+
   test "deferred props resolve after partial reload" do
     get company_project_analytics_path(@project)
     assert_inertia_page "Projects/Analytics/AnalyticsPage"
