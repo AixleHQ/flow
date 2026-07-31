@@ -39,7 +39,7 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
   test "index declares all analytics props as deferred" do
     get company_analytics_path
 
-    assert_inertia_deferred_props :summary, :agent_activity, :sources, :cost_token,
+    assert_inertia_deferred_props :summary, :agent_activity, :sources, :cost_token, :workflow_costs,
                                   group: "analytics"
   end
 
@@ -79,7 +79,35 @@ class Web::Company::AnalyticsControllerTest < ActionDispatch::IntegrationTest
         props[:summary][:totalCostCents] == 150 &&
         props[:summary][:totalTokens] == 1500 &&
         props[:summary][:projectBreakdowns].length == 1 &&
-        props[:summary][:projectBreakdowns].first[:projectName] == @project.name
+        props[:summary][:projectBreakdowns].first[:projectName] == @project.name &&
+        props[:costToken][:totals][:totalCostCents] == 150 &&
+        props[:workflowCosts][:timeSeries].empty?
+    end
+  end
+
+  test "workflow_costs deferred prop resolves with workflow run data" do
+    workflow = create(:workflow, :with_project_scope, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
+    step = create(:step, workflow: workflow)
+    create(:step_run, workflow_run: run, step: step, terminal_session: session)
+    UsageStatistic.create!(
+      terminal_session: session,
+      cost_cents: 250,
+      input_tokens: 800, output_tokens: 400,
+      cache_write_tokens: 0, cache_read_tokens: 0,
+      tokens: 1200
+    )
+
+    get company_analytics_path
+    inertia_load_deferred_props("analytics")
+
+    assert_inertia_props do |props|
+      series = props[:workflowCosts][:timeSeries]
+      series.length == 1 &&
+        series.first[:costCents] == 250 &&
+        series.first[:totalTokens] == 1200 &&
+        series.first[:date].match?(/\A\d{4}-\d{2}-\d{2}\z/)
     end
   end
 end
