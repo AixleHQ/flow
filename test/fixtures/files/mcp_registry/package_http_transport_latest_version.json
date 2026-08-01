@@ -1,0 +1,98 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "isLatest": true,
+      "publishedAt": "2025-09-09T06:16:36.369748Z",
+      "status": "active",
+      "statusChangedAt": "2025-09-09T06:16:36.369748Z",
+      "updatedAt": "2025-09-09T06:16:36.369748Z"
+    }
+  },
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "description": "MCP server for filesystem access",
+    "name": "io.github.bytedance/mcp-server-filesystem",
+    "packages": [
+      {
+        "identifier": "@agent-infra/mcp-server-filesystem",
+        "packageArguments": [
+          {
+            "description": "Comma-separated list of allowed directories for file operations",
+            "format": "string",
+            "isRequired": true,
+            "name": "allowed-directories",
+            "type": "named"
+          }
+        ],
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "registryType": "npm",
+        "transport": {
+          "type": "stdio"
+        },
+        "version": "latest"
+      },
+      {
+        "identifier": "@agent-infra/mcp-server-filesystem",
+        "packageArguments": [
+          {
+            "description": "Comma-separated list of allowed directories for file operations",
+            "format": "string",
+            "isRequired": true,
+            "name": "allowed-directories",
+            "type": "named"
+          },
+          {
+            "default": "8089",
+            "description": "Server port number",
+            "format": "number",
+            "isRequired": true,
+            "name": "port",
+            "type": "named"
+          }
+        ],
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "registryType": "npm",
+        "runtimeHint": "npx",
+        "transport": {
+          "type": "sse",
+          "url": "http://127.0.0.1:{port}/sse"
+        },
+        "version": "latest"
+      },
+      {
+        "identifier": "@agent-infra/mcp-server-filesystem",
+        "packageArguments": [
+          {
+            "description": "Comma-separated list of allowed directories for file operations",
+            "format": "string",
+            "isRequired": true,
+            "name": "allowed-directories",
+            "type": "named"
+          },
+          {
+            "default": "8089",
+            "description": "Server port number",
+            "format": "number",
+            "isRequired": true,
+            "name": "port",
+            "type": "named"
+          }
+        ],
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "registryType": "npm",
+        "runtimeHint": "npx",
+        "transport": {
+          "type": "streamable-http",
+          "url": "http://127.0.0.1:{port}/mcp"
+        },
+        "version": "latest"
+      }
+    ],
+    "repository": {
+      "source": "github",
+      "subfolder": "packages/agent-infra/mcp-servers/filesystem",
+      "url": "https://github.com/bytedance/UI-TARS-desktop"
+    },
+    "version": "1.0.0"
+  }
+}

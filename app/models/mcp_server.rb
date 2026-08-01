@@ -88,6 +88,53 @@ class MCPServer < ApplicationRecord
     parsed_command.drop(1)
   end
 
+  # ----- Connector catalog provenance -----
+  # Null for hand-authored servers; set when installed from the public catalog.
+
+  def from_connector?
+    connector_name.present?
+  end
+
+  # The target (remote endpoint / package) actually chosen at install time.
+  # A connector usually offers several, so the snapshot records the one used.
+  def installed_connector_target
+    connector_manifest["installed_target"] if from_connector?
+  end
+
+  # Whether the launched package is locked to an immutable version.
+  #
+  # False means the registry itself published an unpinnable version (`latest`
+  # occurs in real payloads), so the package runner may resolve a different
+  # release at any session start. Installing these is allowed on purpose — the
+  # catalog does not gatekeep — but the state must stay visible, since an
+  # unpinned install is exactly the one a rug pull can move under us.
+  # Remote connectors have no package to pin, so the question does not apply.
+  def connector_version_pinned?
+    target = installed_connector_target
+    return true if target.blank? || target["kind"] != "package"
+
+    target["version_pinned"] == true
+  end
+
+  # ----- Tool baseline / drift -----
+
+  # Whether this server's declared tools have been recorded at all. stdio
+  # servers never have one (they are not probed here), so absence is normal
+  # rather than a failure — the UI must not read it as "verified".
+  def tool_baseline?
+    tool_snapshot_at.present?
+  end
+
+  def tool_drift?
+    tool_drift.present?
+  end
+
+  # Names of tools whose description or schema moved after approval — the
+  # rug-pull shape, and the part of drift that warrants the loudest warning.
+  def drifted_tool_names
+    Array(tool_drift["changed"])
+  end
+
   def picker_name
     name
   end

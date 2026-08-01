@@ -32,6 +32,67 @@ class MCPServerResource < ApplicationResource
     server.scope_indicator
   end
 
+  # --- Connector provenance and tool-baseline health ---
+  # Null/false for hand-authored servers, which is the honest answer: nobody
+  # promised anything about a server someone typed in themselves.
+
+  typelize :string?
+  attribute :connector_name do |server|
+    server.connector_name
+  end
+
+  typelize :string?
+  attribute :connector_version do |server|
+    server.connector_version
+  end
+
+  # The catalog entry's CURRENT registry status, resolved from a preloaded map
+  # (params[:connector_statuses]) so a list of servers costs one query, not one
+  # per row. "deleted" means the registry pulled the entry — possible spam,
+  # malware, or illegal content — and the install keeps running with a warning
+  # rather than being cut off underneath the user (decision, 2026-08-01).
+  typelize :string?
+  attribute :connector_status do |server|
+    next nil if server.connector_name.blank?
+
+    (params[:connector_statuses] || {})[server.connector_name]
+  end
+
+  # False only when the registry itself published an unpinnable version, so the
+  # package runner may resolve a different release at any session start.
+  typelize :boolean
+  attribute :connector_version_pinned do |server|
+    server.connector_version_pinned?
+  end
+
+  # The version the catalog now carries, when it differs from the installed one.
+  # Null when they match, when the catalog entry is gone, or when either version
+  # is unknown — offering an update on a guess is worse than staying quiet.
+  typelize :string?
+  attribute :connector_update_version do |server|
+    next nil if server.connector_name.blank?
+
+    catalog_version = (params[:connector_versions] || {})[server.connector_name]
+    next nil if catalog_version.blank? || server.connector_version.blank?
+
+    catalog_version == server.connector_version ? nil : catalog_version
+  end
+
+  # Whether the tools this server declares were ever recorded. stdio servers
+  # are never probed (that would mean executing their package here), so the UI
+  # must present absence as "not checked", never as "verified".
+  typelize :boolean
+  attribute :tool_baseline do |server|
+    server.tool_baseline?
+  end
+
+  # Tools whose declarations changed after the install was approved — the
+  # rug-pull shape. Empty when nothing changed.
+  typelize tool_drift: "{ added?: string[]; removed?: string[]; changed?: string[]; detected_at?: string } | null"
+  attribute :tool_drift do |server|
+    server.tool_drift.presence
+  end
+
   # --- OAuth (oauth-unification §4.4 / §5) ---
   typelize %w[none static oauth]
   attribute :auth_type do |server|

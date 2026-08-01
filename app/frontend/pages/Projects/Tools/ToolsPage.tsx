@@ -20,13 +20,13 @@ const ToolsPage = () => {
 
   return (
     <>
-      <Head title={`Tools — ${project.name}`} />
+      <Head title={`Wrappers — ${project.name}`} />
       <ToolsContent
         tools={tools}
         configItemNames={configItemNames}
         basePath={`/company/projects/${project.id}/tools`}
-        title="Project Tools"
-        subtitle="Manage project-specific tools."
+        title="Wrappers"
+        subtitle="No MCP server for a service you use? Write a wrapper for it — any language, any runtime — and agents get it as a tool."
         editableScopeIndicator="project"
       />
     </>

@@ -125,7 +125,7 @@ export function ToolsContent({
         </Box>
         {canExecute && (
           <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-            Add Tool
+            Add wrapper
           </Button>
         )}
       </Group>
@@ -162,11 +162,17 @@ export function ToolsContent({
         >
           <Text fz={48}>🔧</Text>
           <Text fz={16} c="dimmed" mt="sm">
-            {hasFilters ? 'No tools match your filters' : 'No tools yet'}
+            {hasFilters ? 'No wrappers match your filters' : 'No wrappers yet'}
           </Text>
+          {!hasFilters && (
+            <Text fz={13} c="dimmed" mt={4} ta="center" maw={420}>
+              A wrapper turns any script or API call into a tool an agent can use — for the services that ship no MCP
+              server of their own.
+            </Text>
+          )}
           {!hasFilters && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
-              Add your first tool
+              Write your first wrapper
             </Button>
           )}
         </Center>

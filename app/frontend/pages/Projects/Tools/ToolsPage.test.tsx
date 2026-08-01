@@ -47,8 +47,8 @@ describe('Projects/Tools/ToolsPage', () => {
   it('renders the title and primary controls with seeded props', () => {
     renderAuthedPage(<ToolsPage />, { props: { project, tools, configItemNames: [] } });
 
-    expect(screen.getByText('Project Tools')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add Tool' })).toBeInTheDocument();
+    expect(screen.getByText('Wrappers')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add wrapper' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search by name...')).toBeInTheDocument();
   });
 
@@ -68,8 +68,8 @@ describe('Projects/Tools/ToolsPage', () => {
     // anything; the empty state therefore shows the filtered message.
     renderAuthedPage(<ToolsPage />, { props: { project, tools: [], configItemNames: [] } });
 
-    expect(screen.getByText('No tools match your filters')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add your first tool' })).not.toBeInTheDocument();
+    expect(screen.getByText('No wrappers match your filters')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Write your first wrapper' })).not.toBeInTheDocument();
   });
 
   it('filters tools by the search query (name match)', async () => {
@@ -80,7 +80,7 @@ describe('Projects/Tools/ToolsPage', () => {
     expect(screen.getByText('Image Resizer')).toBeInTheDocument();
     expect(screen.queryByText('PDF Extractor')).not.toBeInTheDocument();
     // filtered empty-state message differs from the no-tools message
-    expect(screen.queryByText('No tools yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('No wrappers yet')).not.toBeInTheDocument();
   });
 
   it('deletes an editable project tool via the row action after confirmation', async () => {

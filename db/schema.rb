@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_29_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_01_000007) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -264,6 +264,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_29_000001) do
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
 
+  create_table "connectors", force: :cascade do |t|
+    t.boolean "bulk_publisher", default: false, null: false
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.boolean "featured", default: false, null: false
+    t.integer "install_count", default: 0, null: false
+    t.boolean "is_latest", default: true, null: false
+    t.jsonb "manifest", default: {}, null: false
+    t.string "name", null: false
+    t.string "normalizer_version"
+    t.datetime "registry_updated_at"
+    t.string "repository_url"
+    t.virtual "search_vector", type: :tsvector, as: "((setweight(to_tsvector('simple'::regconfig, (COALESCE(name, ''::character varying))::text), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text), 'A'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(description, ''::text)), 'B'::\"char\"))", stored: true
+    t.string "status", default: "active", null: false
+    t.string "title"
+    t.datetime "updated_at", null: false
+    t.string "version"
+    t.index ["bulk_publisher"], name: "index_connectors_on_bulk_publisher"
+    t.index ["install_count", "featured", "registry_updated_at"], name: "index_connectors_on_ranking"
+    t.index ["name"], name: "index_connectors_on_name", unique: true
+    t.index ["normalizer_version"], name: "index_connectors_on_normalizer_version"
+    t.index ["registry_updated_at"], name: "index_connectors_on_registry_updated_at"
+    t.index ["search_vector"], name: "index_connectors_on_search_vector", using: :gin
+    t.index ["status"], name: "index_connectors_on_status"
+  end
+
   create_table "gates", force: :cascade do |t|
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -318,6 +344,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_29_000001) do
     t.jsonb "args", default: []
     t.string "auth_type", default: "none", null: false
     t.string "command"
+    t.jsonb "connector_manifest", default: {}, null: false
+    t.string "connector_name"
+    t.string "connector_version"
     t.datetime "created_at", null: false
     t.string "credential_scope", default: "shared", null: false
     t.text "description"
@@ -328,9 +357,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_29_000001) do
     t.string "name", null: false
     t.bigint "scope_id"
     t.string "scope_type"
+    t.jsonb "tool_drift", default: {}, null: false
+    t.jsonb "tool_snapshot", default: {}, null: false
+    t.datetime "tool_snapshot_at"
     t.string "transport", default: "sse"
     t.datetime "updated_at", null: false
     t.string "url"
+    t.index ["connector_name"], name: "index_mcp_servers_on_connector_name"
+    t.index ["id"], name: "index_mcp_servers_with_tool_drift", where: "(tool_drift <> '{}'::jsonb)"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
   end

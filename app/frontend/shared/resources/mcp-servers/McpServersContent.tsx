@@ -1,5 +1,6 @@
 import {
   ActionIcon,
+  Alert,
   Badge,
   Box,
   Button,
@@ -11,13 +12,20 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconAlertTriangle, IconEdit, IconPlugConnected, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 
+import { ConnectorCatalogModal } from '../connectors/ConnectorCatalogModal';
+import type { Connector } from '../connectors/types';
+
+import { ConnectorUpdateModal } from './ConnectorUpdateModal';
 import { DeleteMcpServerModal } from './DeleteMcpServerModal';
 import { McpServerFormModal } from './McpServerFormModal';
+import { driftedServers } from './serverHealth';
+import { ServerHealthIcons } from './ServerHealthIcons';
+import { ToolDriftModal } from './ToolDriftModal';
 
 type McpServerKind = 'internal' | 'custom';
 type Transport = 'http' | 'sse' | 'stdio';
@@ -41,6 +49,16 @@ export interface McpServer {
   authType?: 'none' | 'static' | 'oauth';
   credentialScope?: 'shared' | 'per_user';
   oauthStatus?: 'pending' | 'active' | 'expiring' | 'error' | null;
+  // Connector provenance and tool-baseline health. Null/false on hand-authored
+  // servers — nobody promised anything about a server someone typed in.
+  connectorName?: string | null;
+  connectorVersion?: string | null;
+  connectorStatus?: 'active' | 'deprecated' | 'deleted' | null;
+  connectorVersionPinned?: boolean;
+  toolBaseline?: boolean;
+  toolDrift?: { added?: string[]; removed?: string[]; changed?: string[]; detected_at?: string } | null;
+  /** Version the catalog now carries, when it differs from the installed one. */
+  connectorUpdateVersion?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,27 +72,33 @@ const OAUTH_STATUS_BADGE: Record<string, { color: string; label: string }> = {
   error: { color: 'red', label: 'Reconnect' },
 };
 
-type EditableScope = 'company' | 'project';
-
 interface McpServersContentProps {
   mcpServers: McpServer[];
   configItemNames: string[];
   basePath: string;
   title: string;
   subtitle: string;
-  editableScope?: EditableScope;
+  /**
+   * Public connector catalog, when this screen offers it. A connector installs
+   * as an ordinary MCP server — the catalog is a second way to fill in the same
+   * form, not a separate kind of thing — so it lives here rather than in its own
+   * section. Omitted on screens that do not offer one.
+   */
+  connectors?: Connector[];
+  connectorQuery?: string;
+  connectorsPath?: string;
+  catalogSyncedAt?: string | null;
 }
 
-function canEditServer(server: McpServer, editableScope?: EditableScope): boolean {
-  if (server.kind !== 'custom') return false;
-  if (!editableScope) return true;
-  return server.scopeIndicator === editableScope;
+// Connectors are project-scoped; the only other kind is a system connector the
+// platform provides, which nobody edits. There is no company scope to consider —
+// MCPServer refuses any scope but Project.
+function canEditServer(server: McpServer): boolean {
+  return server.kind === 'custom';
 }
 
-function readOnlyLabel(server: McpServer, editableScope?: EditableScope): string {
-  if (server.internal) return 'System';
-  if (editableScope === 'project' && server.scopeIndicator === 'company') return 'Company';
-  return 'Read-only';
+function readOnlyLabel(server: McpServer): string {
+  return server.internal ? 'System' : 'Read-only';
 }
 
 export function McpServersContent({
@@ -83,7 +107,10 @@ export function McpServersContent({
   basePath,
   title,
   subtitle,
-  editableScope,
+  connectors,
+  connectorQuery = '',
+  connectorsPath,
+  catalogSyncedAt = null,
 }: McpServersContentProps) {
   const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
@@ -91,6 +118,16 @@ export function McpServersContent({
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editServer, setEditServer] = useState<McpServer | null>(null);
   const [deleteServer, setDeleteServer] = useState<McpServer | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [driftServer, setDriftServer] = useState<McpServer | null>(null);
+  // Connecting leaves the app entirely, but not immediately: the server runs
+  // OAuth discovery (protected-resource metadata → authorization-server metadata
+  // → client registration) before it can redirect. That is seconds of a page
+  // that looks like it ignored the click. The state is never cleared on purpose
+  // — the browser navigating away is what ends it.
+  const [connectingId, setConnectingId] = useState<number | null>(null);
+  const [updateServer, setUpdateServer] = useState<McpServer | null>(null);
+  const catalogAvailable = !!connectorsPath && !!connectors;
 
   const filtered = useMemo(() => {
     let result = mcpServers;
@@ -118,6 +155,9 @@ export function McpServersContent({
   };
 
   const hasFilters = !!search.trim() || kindFilter !== 'all';
+  // The only condition that interrupts a scan: a server's declared tools moved
+  // after it was approved. Everything else stays a quiet per-row glyph.
+  const drifted = driftedServers(mcpServers);
 
   return (
     <Box>
@@ -131,11 +171,41 @@ export function McpServersContent({
           </Text>
         </Box>
         {canExecute && (
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-            Add MCP Server
-          </Button>
+          <Group gap="sm">
+            {catalogAvailable && (
+              <Button leftSection={<IconPlugConnected size={16} />} onClick={() => setCatalogOpen(true)}>
+                Browse connectors
+              </Button>
+            )}
+            <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+              Add manually
+            </Button>
+          </Group>
         )}
       </Group>
+
+      {drifted.length > 0 && (
+        <Alert
+          color="red"
+          variant="light"
+          icon={<IconAlertTriangle size={16} />}
+          mb="lg"
+          title={
+            drifted.length === 1
+              ? `${drifted[0].name} changed the tools it offers`
+              : `${drifted.length} servers changed the tools they offer`
+          }
+        >
+          <Group justify="space-between" align="center" wrap="nowrap">
+            <Text fz={13}>
+              Tool descriptions are instructions the agent reads. Review what changed before the next session runs.
+            </Text>
+            <Button size="xs" variant="light" color="red" onClick={() => setDriftServer(drifted[0])}>
+              Review
+            </Button>
+          </Group>
+        </Alert>
+      )}
 
       <Group gap="md" mb="lg">
         <TextInput
@@ -172,7 +242,7 @@ export function McpServersContent({
           </Text>
           {!hasFilters && canExecute && (
             <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
-              Add your first MCP server
+              Add one manually
             </Button>
           )}
         </Center>
@@ -221,13 +291,20 @@ export function McpServersContent({
             </Table.Thead>
             <Table.Tbody>
               {filtered.map((server) => {
-                const canEdit = canExecute && canEditServer(server, editableScope);
+                const canEdit = canExecute && canEditServer(server);
                 return (
                   <Table.Tr key={server.id}>
                     <Table.Td>
-                      <Text fz={14} fw={500} c="var(--app-text-primary)">
-                        {server.name}
-                      </Text>
+                      <Group gap={6} wrap="nowrap">
+                        <Text fz={14} fw={500} c="var(--app-text-primary)">
+                          {server.name}
+                        </Text>
+                        <ServerHealthIcons
+                          server={server}
+                          onReviewDrift={setDriftServer}
+                          onReviewUpdate={canEdit ? setUpdateServer : undefined}
+                        />
+                      </Group>
                     </Table.Td>
                     <Table.Td>
                       <Text
@@ -245,22 +322,8 @@ export function McpServersContent({
                       </Badge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge
-                        color={
-                          server.scopeIndicator === 'internal'
-                            ? 'violet'
-                            : server.scopeIndicator === 'project'
-                              ? 'teal'
-                              : 'blue'
-                        }
-                        size="sm"
-                        variant="light"
-                      >
-                        {server.scopeIndicator === 'internal'
-                          ? 'System'
-                          : server.scopeIndicator === 'project'
-                            ? 'Project'
-                            : 'Company'}
+                      <Badge color={server.scopeIndicator === 'internal' ? 'violet' : 'teal'} size="sm" variant="light">
+                        {server.scopeIndicator === 'internal' ? 'System' : 'Project'}
                       </Badge>
                     </Table.Td>
                     <Table.Td>
@@ -268,15 +331,30 @@ export function McpServersContent({
                         <Badge color={server.enabled ? 'green' : 'gray'} size="sm">
                           {server.enabled ? 'Enabled' : 'Disabled'}
                         </Badge>
-                        {server.authType === 'oauth' && (
-                          <Badge
-                            color={OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].color}
-                            variant="light"
-                            size="sm"
-                          >
-                            {OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].label}
-                          </Badge>
-                        )}
+                        {server.authType === 'oauth' &&
+                          (server.oauthStatus === 'active' ? (
+                            <Badge color={OAUTH_STATUS_BADGE.active.color} variant="light" size="sm">
+                              {OAUTH_STATUS_BADGE.active.label}
+                            </Badge>
+                          ) : (
+                            // The state and the fix for it live in the same place. OAuth needs a
+                            // top-level navigation (the authorize entry redirects off-site), so this
+                            // is window.location rather than an Inertia visit.
+                            <Button
+                              size="compact-xs"
+                              variant="light"
+                              color={OAUTH_STATUS_BADGE[server.oauthStatus ?? 'pending'].color}
+                              loading={connectingId === server.id}
+                              loaderProps={{ type: 'dots' }}
+                              disabled={connectingId !== null && connectingId !== server.id}
+                              onClick={() => {
+                                setConnectingId(server.id);
+                                window.location.href = `/oauth/mcp/${server.id}/connect?return_to=${encodeURIComponent(basePath)}`;
+                              }}
+                            >
+                              {server.oauthStatus === 'error' ? 'Reconnect' : 'Connect'}
+                            </Button>
+                          ))}
                       </Group>
                     </Table.Td>
                     <Table.Td>
@@ -300,18 +378,9 @@ export function McpServersContent({
                             </Tooltip>
                           </>
                         ) : (
-                          <Tooltip
-                            label={
-                              editableScope === 'project' && server.scopeIndicator === 'company'
-                                ? 'Edit in Company MCP Servers'
-                                : undefined
-                            }
-                            disabled={editableScope !== 'project' || server.scopeIndicator !== 'company'}
-                          >
-                            <Text fz={12} c="dimmed">
-                              {readOnlyLabel(server, editableScope)}
-                            </Text>
-                          </Tooltip>
+                          <Text fz={12} c="dimmed">
+                            {readOnlyLabel(server)}
+                          </Text>
                         )}
                       </Group>
                     </Table.Td>
@@ -336,6 +405,20 @@ export function McpServersContent({
         server={deleteServer}
         basePath={basePath}
       />
+      <ToolDriftModal server={driftServer} basePath={basePath} onClose={() => setDriftServer(null)} />
+      <ConnectorUpdateModal server={updateServer} basePath={basePath} onClose={() => setUpdateServer(null)} />
+      {catalogAvailable && (
+        <ConnectorCatalogModal
+          opened={catalogOpen}
+          onClose={() => setCatalogOpen(false)}
+          connectors={connectors ?? []}
+          query={connectorQuery}
+          pagePath={basePath}
+          installPath={connectorsPath ?? ''}
+          configItemNames={configItemNames}
+          catalogSyncedAt={catalogSyncedAt}
+        />
+      )}
     </Box>
   );
 }

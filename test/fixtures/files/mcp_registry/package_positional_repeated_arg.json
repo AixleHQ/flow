@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "isLatest": false,
+      "publishedAt": "2026-02-10T21:47:47.979776Z",
+      "status": "active",
+      "statusChangedAt": "2026-02-10T21:47:47.979776Z",
+      "updatedAt": "2026-02-10T21:47:47.979776Z"
+    }
+  },
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "description": "MCP Server that enables LLMs to interact with the local filesystem.",
+    "name": "io.github.j0hanz/filesystem-mcp",
+    "packages": [
+      {
+        "identifier": "@j0hanz/filesystem-mcp",
+        "packageArguments": [
+          {
+            "description": "Root directory path the MCP server is allowed to access.",
+            "format": "filepath",
+            "isRepeated": true,
+            "isRequired": true,
+            "type": "positional",
+            "valueHint": "directory"
+          }
+        ],
+        "registryType": "npm",
+        "transport": {
+          "type": "stdio"
+        },
+        "version": "1.0.0"
+      }
+    ],
+    "repository": {
+      "source": "github",
+      "url": "https://github.com/j0hanz/filesystem-mcp"
+    },
+    "title": "Filesystem MCP",
+    "version": "1.0.0",
+    "websiteUrl": "https://github.com/j0hanz/filesystem-mcp#readme"
+  }
+}

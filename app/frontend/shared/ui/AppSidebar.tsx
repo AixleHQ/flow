@@ -3,7 +3,6 @@ import { Drawer, Menu, Popover, ScrollArea, Tooltip, UnstyledButton } from '@man
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconAlertTriangle,
-  IconArrowsExchange,
   IconChartBar,
   IconCheck,
   IconCheckbox,
@@ -18,6 +17,7 @@ import {
   IconLogout,
   IconMenu2,
   IconPlayerPlay,
+  IconPlug,
   IconPlugConnected,
   IconRobot,
   IconSettings,
@@ -112,11 +112,11 @@ const buildProjectNavGroups = (projectId: string): NavGroup[] => [
     label: 'Resources',
     items: [
       { label: 'Agents', icon: <IconRobot size={18} />, path: companyProjectAgentsPath(projectId) },
-      { label: 'Tools', icon: <IconTool size={18} />, path: companyProjectToolsPath(projectId) },
+      { label: 'Wrappers', icon: <IconTool size={18} />, path: companyProjectToolsPath(projectId) },
       { label: 'Skills', icon: <IconSparkles size={18} />, path: companyProjectSkillsPath(projectId) },
-      { label: 'MCP Servers', icon: <IconArrowsExchange size={18} />, path: companyProjectMCPServersPath(projectId) },
+      { label: 'Connectors', icon: <IconPlugConnected size={18} />, path: companyProjectMCPServersPath(projectId) },
       { label: 'Repositories', icon: <IconGitBranch size={18} />, path: companyProjectRepositoriesPath(projectId) },
-      { label: 'Integrations', icon: <IconPlugConnected size={18} />, path: companyProjectIntegrationsPath(projectId) },
+      { label: 'Integrations', icon: <IconPlug size={18} />, path: companyProjectIntegrationsPath(projectId) },
     ],
   },
   {

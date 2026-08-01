@@ -60,7 +60,7 @@ describe('ToolsContent', () => {
     // filter active, which renders the "no tools match your filters" message.
     renderPage(<ToolsContent {...baseProps} tools={[makeTool({ source: 'code' })]} />);
 
-    expect(screen.getByText('No tools match your filters')).toBeInTheDocument();
+    expect(screen.getByText('No wrappers match your filters')).toBeInTheDocument();
   });
 
   it('shows platform tools when the Platform filter is selected', async () => {
@@ -99,12 +99,12 @@ describe('ToolsContent', () => {
     expect(screen.queryByText('PDF Reader')).not.toBeInTheDocument();
   });
 
-  it('opens the create modal when "Add Tool" is clicked', async () => {
+  it('opens the create modal when "Add wrapper" is clicked', async () => {
     renderPage(<ToolsContent {...baseProps} tools={[]} />);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /add tool/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add wrapper/i }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Create Tool')).toBeInTheDocument();

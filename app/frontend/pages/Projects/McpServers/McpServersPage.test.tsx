@@ -35,9 +35,9 @@ describe('Projects/McpServers/McpServersPage', () => {
       props: { project, mcpServers: [], configItemNames: [] },
     });
 
-    expect(screen.getByText('Project MCP Servers')).toBeInTheDocument();
+    expect(screen.getByText('Connectors')).toBeInTheDocument();
     expect(
-      screen.getByText('Manage project-specific MCP servers. Company servers are read-only here.'),
+      screen.getByText('MCP servers this project can use — installed from the public catalog or added by hand.'),
     ).toBeInTheDocument();
   });
 
@@ -75,7 +75,7 @@ describe('Projects/McpServers/McpServersPage', () => {
       props: { project, mcpServers: [], configItemNames: [] },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add MCP Server' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add manually' }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Add MCP Server')).toBeInTheDocument();

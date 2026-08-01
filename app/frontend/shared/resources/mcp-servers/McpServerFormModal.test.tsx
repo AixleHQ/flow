@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
@@ -346,19 +346,22 @@ describe('McpServerFormModal', () => {
       expect(scope).toHaveValue('shared');
     });
 
-    it('an unsaved OAuth server shows a "Save first" hint and no Connect button', async () => {
+    // Connecting moved to the server list: it is a top-level redirect off-site,
+    // not an edit, so it belongs next to the status rather than behind a form.
+    it('an unsaved OAuth server points at the list instead of offering Connect', async () => {
       renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
 
       await userEvent.selectOptions(screen.getByLabelText('Auth Type'), 'oauth');
 
-      expect(await screen.findByText('Save first, then Connect')).toBeInTheDocument();
+      expect(await screen.findByText('Save first, then connect from the list.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
     });
 
-    it('a saved OAuth server hides the Headers editor and shows a Connect button', async () => {
+    it('a saved OAuth server hides the Headers editor and never offers Connect', async () => {
       renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
 
-      expect(await screen.findByRole('button', { name: 'Connect' })).toBeInTheDocument();
+      expect(await screen.findByText('Connect from the server list.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Add Header/i })).not.toBeInTheDocument();
       // The Credential Scope select is prefilled from the server's per_user scope.
       expect(screen.getByLabelText('Credential Scope')).toHaveValue('per_user');
@@ -380,40 +383,6 @@ describe('McpServerFormModal', () => {
       );
 
       expect(await screen.findByText(label)).toBeInTheDocument();
-    });
-
-    describe('Connect navigation', () => {
-      // window.location is read-only in jsdom; swap it for a plain object so we can observe
-      // handleConnect's assignment to location.href (OAuth needs a top-level navigation).
-      const originalLocation = window.location;
-
-      beforeEach(() => {
-        Object.defineProperty(window, 'location', {
-          configurable: true,
-          writable: true,
-          value: { href: '' },
-        });
-      });
-
-      afterEach(() => {
-        Object.defineProperty(window, 'location', {
-          configurable: true,
-          writable: true,
-          value: originalLocation,
-        });
-      });
-
-      it('Connect performs a top-level navigation to the connect entry, not an Inertia visit', async () => {
-        renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
-
-        await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
-
-        expect(window.location.href).toBe(
-          `/oauth/mcp/12/connect?return_to=${encodeURIComponent('/projects/1/mcp_servers')}`,
-        );
-        expect(router.get).not.toHaveBeenCalled();
-        expect(router.visit).not.toHaveBeenCalled();
-      });
     });
   });
 });

@@ -1,3 +1,9 @@
+# uv / uvx (Astral), pulled in as a stage so the version stays a single pinned
+# ARG. `COPY --from=<image>` does NOT expand build args — BuildKit rejects it
+# outright — so a named stage is the only way to keep the tag in one place.
+ARG UV_VERSION=0.9.29
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # =============================================================================
 # ttyd builder — build from main (pinned SHA), NOT the 1.7.7 release.
 #
@@ -40,7 +46,7 @@ RUN cd /ttyd-src && corepack enable && \
 #   - ttyd (web terminal)
 #   - OpenVSCode Server (browser IDE)
 #   - MITM proxy for request/response logging
-#   - Common development tools (pipx for Python MCP servers, e.g. pipx run analytics-mcp)
+#   - Common development tools (uv/uvx and pipx for Python MCP servers)
 # =============================================================================
 FROM node:22-slim
 
@@ -85,6 +91,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libuv1 \
     libwebsockets17 \
     libwebsockets-evlib-uv
+
+# -----------------------------------------------------------------------------
+# uv / uvx (Astral)
+# -----------------------------------------------------------------------------
+# `uvx` is what the MCP ecosystem actually publishes against: the registry's
+# `runtimeHint` for pypi packages is overwhelmingly "uvx", not "pipx". Without it
+# a catalog install of a Python connector would emit a command the image cannot
+# run, and fail at session start after appearing to install cleanly.
+#
+# Copied from Astral's published image rather than curl|sh so the version is
+# pinned and the layer is reproducible. The version lives in the global
+# UV_VERSION arg at the top of this file.
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 # -----------------------------------------------------------------------------
 # GitHub CLI (gh)
