@@ -1,11 +1,5 @@
 # Individual Contributor License Agreement
 
-> **TODO (remove before the repository goes public):** counsel-prepared text (Nita
-> Northington, 31 July 2026), adapted from the Aixle Insights draft by changing only the
-> product name — § 2's "Project" definition is already product-neutral. Two items still
-> need counsel's confirmation: (a) that the Aixle Flow adaptation is approved, and (b) § 1,
-> which cross-references a Terms of Service that does not exist for a source-only release.
-
 Thank you for your interest in contributing to Aixle Flow (the "Project"), maintained by
 Dualboot Partners, LLC ("Dualboot," "Project Owner," "we," "us," or "our"). This
 Individual Contributor License Agreement ("Agreement") sets out the terms under which you
@@ -21,8 +15,8 @@ present, and future Contribution submitted by you to the Project.
 No Contribution submitted by you will be reviewed, merged, incorporated into, or otherwise
 accepted as part of the Project unless and until you have executed this Agreement. A pull
 request, patch, or other submission made prior to execution of this Agreement is not a
-"Contribution" for purposes of the Project's Terms of Service and may be closed, rejected,
-or ignored at Dualboot's sole discretion, regardless of its licensing terms.
+"Contribution" for purposes of this Agreement and may be closed, rejected, or ignored at
+Dualboot's sole discretion, regardless of its licensing terms.
 
 ## 2. Definitions
 

@@ -1,10 +1,5 @@
 # Corporate Contributor License Agreement
 
-> **TODO (remove before the repository goes public):** counsel-prepared text (Nita
-> Northington, 31 July 2026), used verbatim — the operative "Project" definition in § 1
-> is already product-neutral, so no adaptation was required for Aixle Flow. Awaiting
-> counsel's final confirmation.
-
 **Project Owner:** Dualboot Partners, LLC, a limited liability company organized under
 the laws of North Carolina (the "Project Owner"), notice address 5540 Centerview Dr.,
 Ste. 204, #24754, Raleigh, NC 27606.
