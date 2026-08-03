@@ -22,6 +22,40 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  # A session can outlive its memberships (revoked, pushed back to `invited`,
+  # company deleted). The sign-in gates only run at sign-in, so #new has to break
+  # the cycle itself: it used to send such a session to onboarding, whose
+  # require_membership sent it straight back — ERR_TOO_MANY_REDIRECTS.
+  test "new signs out and explains when a live session has no active membership" do
+    sign_in_as(@user)
+    @user.company_memberships.each { |m| m.update_columns(state: "revoked") }
+
+    get login_path
+    assert_redirected_to login_path(error: "no_workspace")
+
+    # Signed out, so the next request renders the form instead of bouncing.
+    get login_path
+    assert_inertia_page "Auth/LoginPage"
+  end
+
+  test "onboarding does not bounce a membership-less session back to login" do
+    sign_in_as(@user)
+    @user.company_memberships.each { |m| m.update_columns(state: "revoked") }
+
+    get onboarding_path
+    assert_redirected_to login_path(error: "no_active_membership")
+
+    # The loop was /onboarding → /login → /onboarding → … Now the chain
+    # terminates: the login hop signs the dead session out, and the hop after
+    # that renders the form.
+    follow_redirect!
+    assert_redirected_to login_path(error: "no_workspace")
+
+    follow_redirect!
+    assert_response :success
+    assert_inertia_page "Auth/LoginPage"
+  end
+
   test "create signs in and redirects on valid credentials" do
     post login_path, params: {
       user: { email: @user.email, password: AuthHelper::TEST_PASSWORD }

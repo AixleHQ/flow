@@ -8,6 +8,18 @@ class Web::SessionsController < Web::ApplicationController
 
   def new
     if signed_in?
+      # A session outlives its memberships: revocation, a membership pushed back
+      # to `invited`, a deleted company, or a User row that never had one. The
+      # sign-in gates below only run at sign-in, so without this the session
+      # survives with nothing to sign in TO — and #new sends it to onboarding
+      # while Onboarding#require_membership sends it straight back here, which
+      # the browser reports as ERR_TOO_MANY_REDIRECTS rather than as a refusal.
+      if no_active_membership?(current_user)
+        sign_out
+        redirect_to login_path(error: "no_workspace")
+        return
+      end
+
       target = onboarding_done?(current_user) ? company_projects_path : onboarding_path
       redirect_to target
       return

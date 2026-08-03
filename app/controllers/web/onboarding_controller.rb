@@ -57,7 +57,12 @@ class Web::OnboardingController < Web::ApplicationController
   def require_membership
     return if current_membership
 
-    redirect_to current_user&.super_admin? ? admin_root_path : login_path
+    return redirect_to(admin_root_path) if current_user&.super_admin?
+
+    # Say why, the way the company-scoped controllers already do. A bare
+    # login_path lands on an empty form that gives no reason — and, for a session
+    # that still exists, bounced straight back here.
+    redirect_to login_path(error: "no_active_membership")
   end
 
   def onboarding_params
