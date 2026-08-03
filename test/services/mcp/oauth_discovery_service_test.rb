@@ -127,6 +127,29 @@ module MCP
       assert_requested :get, PRM_URL
     end
 
+    test "discovers a path-carrying issuer by inserting the well-known segment (RFC 8414 3.1)" do
+      # Airtable's issuer is https://airtable.com/oauth2/v1. RFC 8414 puts the
+      # well-known segment BEFORE the path; only appending it 404s, and the 404
+      # body is a ~300 KB HTML page, so the request used to die on MAX_BYTES.
+      path_issuer = "https://auth.example.com/oauth2/v1"
+      inserted    = "https://auth.example.com/.well-known/oauth-authorization-server/oauth2/v1"
+      appended    = "https://auth.example.com/oauth2/v1/.well-known/oauth-authorization-server"
+
+      stub_probe
+      stub_prm(body: default_prm_body.merge(authorization_servers: [ path_issuer ]))
+      stub_request(:get, inserted).to_return(
+        status: 200, headers: json_headers,
+        body: default_asm_body.merge("issuer" => path_issuer).to_json
+      )
+      stub_registration(body: { client_id: "dcr-client-id" })
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal path_issuer, result.oauth_client.issuer
+      assert_requested :get, inserted
+      assert_not_requested :get, appended
+    end
+
     test "discovers via openid-configuration when oauth-authorization-server 404s" do
       stub_probe
       stub_prm
@@ -480,6 +503,33 @@ module MCP
       stub_prm
       stub_asm
       stub_registration(body: { client_id: "dcr-client-id", redirect_uris: [ "https://169.254.169.254/cb" ] })
+
+      assert_raises(MCP::UnsafeUrlError) do
+        MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+      end
+    end
+
+    test "accepts a DCR response that echoes back our own redirect_uri" do
+      # A conforming AS echoes the redirect_uri we sent. That value is ours, so
+      # guarding it only ever rejects our own deployment — which is exactly what
+      # happened to Supabase in dev, where the callback host is localhost.
+      ours = "#{Settings.protocol}://#{Settings.domain}/oauth/callback"
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(body: { client_id: "dcr-client-id", redirect_uris: [ ours ] })
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_equal "dcr-client-id", result.oauth_client.client_id
+    end
+
+    test "still rejects an extra internal redirect_uri alongside our own" do
+      ours = "#{Settings.protocol}://#{Settings.domain}/oauth/callback"
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(body: { client_id: "dcr-client-id", redirect_uris: [ ours, "http://169.254.169.254/cb" ] })
 
       assert_raises(MCP::UnsafeUrlError) do
         MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)

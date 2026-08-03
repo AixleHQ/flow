@@ -161,13 +161,7 @@ module MCP
     end
 
     def discover_metadata(issuer)
-      base = issuer.sub(%r{/\z}, "")
-      candidates = [
-        "#{base}/.well-known/oauth-authorization-server",
-        "#{base}/.well-known/openid-configuration"
-      ]
-
-      candidates.each do |candidate|
+      metadata_candidates(issuer).each do |candidate|
         guard!(candidate)
         response = safe_fetch(candidate, allow_statuses: :any)
         next unless response.success?
@@ -176,6 +170,37 @@ module MCP
         return parsed if parsed && parsed["authorization_endpoint"].present? && parsed["token_endpoint"].present?
       end
       nil
+    end
+
+    # Metadata URLs to try, in order, for an issuer that may carry a path.
+    #
+    # RFC 8414 §3.1 INSERTS the well-known segment between host and path
+    # ("https://as.example.com/.well-known/oauth-authorization-server/tenant1"),
+    # while OpenID Connect Discovery APPENDS it
+    # ("https://as.example.com/tenant1/.well-known/openid-configuration").
+    # Both are in the wild, so both are tried — spec order first.
+    #
+    # Only appending is how Airtable went undiscoverable: its issuer is
+    # https://airtable.com/oauth2/v1, the appended URL 404s, and the 404 body is
+    # a ~300 KB HTML app shell, so the request died on MAX_BYTES and the failure
+    # surfaced as "response body exceeds 262144 bytes" rather than "not found".
+    def metadata_candidates(issuer)
+      uri = URI.parse(issuer)
+      path = uri.path.to_s.sub(%r{/\z}, "")
+      root = "#{uri.scheme}://#{uri.host}#{":#{uri.port}" if uri.port && uri.port != uri.default_port}"
+
+      inserted =
+        if path.present?
+          [ "#{root}/.well-known/oauth-authorization-server#{path}",
+            "#{root}/.well-known/openid-configuration#{path}" ]
+        else
+          []
+        end
+
+      inserted + [ "#{root}#{path}/.well-known/oauth-authorization-server",
+                   "#{root}#{path}/.well-known/openid-configuration" ]
+    rescue URI::InvalidURIError
+      []
     end
 
     # ---- Step (c): RFC 7591 dynamic client registration ------------------------
@@ -273,8 +298,20 @@ module MCP
 
     # RFC 7591 responses may echo back redirect_uris / client_uri; a malicious AS
     # could echo an internal address, so guard any it returns.
+    #
+    # Except the one we sent. A conforming AS echoes our own redirect_uri back
+    # verbatim, and that value is ours — not attacker-derived — so running it
+    # through the SSRF guard only ever rejects our own deployment. It did:
+    # Supabase (DCR, no CIMD) echoed `https://localhost:4000/oauth/callback` in
+    # dev and the whole connect failed with "unsafe url (host=localhost)". The
+    # same would happen on any self-hosted install whose domain is a private or
+    # loopback host — which, for a self-hostable product, is not an edge case.
+    #
+    # Anything the AS adds of its own is still guarded, so an echo containing an
+    # extra internal URI is still refused.
     def guard_echoed_uris!(registration)
-      Array(registration["redirect_uris"]).each { |uri| guard!(uri) }
+      ours = redirect_uri
+      Array(registration["redirect_uris"]).each { |uri| guard!(uri) unless uri == ours }
       guard!(registration["client_uri"]) if registration["client_uri"].present?
     end
 
