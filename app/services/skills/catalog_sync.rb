@@ -57,12 +57,16 @@ module Skills
     # description is what tells an agent when to use a skill — so an undescribed row
     # is a card nobody can judge.
     #
-    # Sized against what is actually visible rather than arbitrarily: the default
-    # view renders CATALOG_PAGE_SIZE (60) entries after per-source dedup, so a run
-    # has to cover that page with room for the tail behind it. At ~30 KB per
-    # download and 150 ms pacing this is a few minutes and a few hundred MB per
-    # WEEK — cheap next to shipping a grid of nameless cards.
-    BACKFILL_LIMIT = 400
+    # How many undescribed rows a run considers. Generous, because most are answered
+    # from GitHub raw, which costs nothing from any budget we care about.
+    BACKFILL_LIMIT = 150
+    # How many of those may fall through to the registry's download endpoint, which is
+    # capped at a MEASURED 60 requests per hour for the whole deployment
+    # (`RegistryClient::DOWNLOAD_HOURLY_LIMIT`) — a budget every user install also
+    # spends. A bulk pass that ate it would make installing a skill fail while the
+    # catalog prettied itself up, so a run takes a quarter and leaves the rest to
+    # people. Enforced by counting, not by waiting for the 429.
+    DOWNLOAD_BUDGET = 15
     # Audits are batched per repository, so the cost is one request per source
     # rather than per skill. Bounded because the catalog is much larger than the
     # part of it anyone browses.
@@ -90,19 +94,22 @@ module Skills
     # mirrors the slice of the registry users are about to install from — the part the
     # guessed-at topic seeds cannot know about. Owner sweeps are skipped: they are
     # broad coverage, which is the weekly run's job.
-    def self.demand(client: RegistryClient, delay: REQUEST_DELAY, budget: TIME_BUDGET)
+    def self.demand(client: RegistryClient, github: GithubSkillMd, delay: REQUEST_DELAY, budget: TIME_BUDGET)
       terms = CatalogSearchQuery.top_terms
-      new(client: client, delay: delay, budget: budget, queries: terms, owners: []).call.tap do
+      new(client: client, github: github, delay: delay, budget: budget, queries: terms, owners: []).call.tap do
         CatalogSearchQuery.prune!
       end
     end
 
     # `client` is injected rather than referenced directly so tests drive the sweep
     # through FakeSkillsRegistry instead of stubbing HTTP or the collaborator class.
-    def initialize(client: RegistryClient, delay: REQUEST_DELAY, budget: TIME_BUDGET,
-                   queries: SEED_QUERIES, owners: SEED_OWNERS)
+    def initialize(client: RegistryClient, github: GithubSkillMd, delay: REQUEST_DELAY,
+                   budget: TIME_BUDGET, queries: SEED_QUERIES, owners: SEED_OWNERS,
+                   download_budget: DOWNLOAD_BUDGET)
       @client = client
+      @github = github
       @delay = delay
+      @download_budget = download_budget
       @queries = queries
       @owners = owners
       @deadline = budget && Time.current + budget
@@ -245,16 +252,26 @@ module Skills
     def refresh_audits
       candidates = CatalogSkill.order(featured: :desc, installs: :desc).limit(AUDIT_ROW_LIMIT).to_a
 
-      candidates.group_by(&:source).first(AUDIT_SOURCE_LIMIT).each do |source, rows|
-        break unless budget_left?
+      # `catch`/`throw` so a throttle abandons the whole pass, not just the batch
+      # inside one repository — the next repository would hit the same limit.
+      catch(:audits_rate_limited) do
+        candidates.group_by(&:source).first(AUDIT_SOURCE_LIMIT).each do |source, rows|
+          break unless budget_left?
 
-        audit_source(source, rows)
+          audit_source(source, rows)
+        end
       end
     end
 
     def audit_source(source, rows)
       rows.each_slice(AUDIT_BATCH_SIZE) do |batch|
-        data = @client.audits(source, batch.map(&:slug))
+        begin
+          data = @client.audits(source, batch.map(&:slug))
+        rescue RegistryClient::RateLimited => e
+          Rails.logger.warn("[Skills::CatalogSync] Audits stopped — #{e.message}")
+          throw :audits_rate_limited
+        end
+
         sleep(@delay) if @delay.positive?
         # Unreachable or unparseable: leave existing verdicts alone rather than
         # blanking them because a lookup failed.
@@ -305,16 +322,41 @@ module Skills
       rows = CatalogSkill.where(description: nil)
                          .order(Arel.sql("#{CatalogSkill::RANKING}, updated_at ASC"))
                          .limit(BACKFILL_LIMIT)
+      downloads_used = 0
 
       rows.each do |row|
         break unless budget_left?
 
-        bundle = @client.download(row.source, row.slug)
-        sleep(@delay) if @delay.positive?
-        content = bundle&.skill_md
+        # GitHub raw first, because it costs nothing from the 60-per-hour download
+        # budget that user installs also draw on. Only rows whose layout raw does not
+        # cover fall through to the registry.
+        content = @github.fetch(row.source, row.slug)
+        bundle = nil
 
         if content.blank?
-          drop_unresolvable_seed(row)
+          # Stop DOWNLOADING, not scanning: the budget (and a 429) only applies to the
+          # registry endpoint, while raw keeps answering for free. Aborting the whole
+          # pass on the first refused download meant one early miss cost every row
+          # behind it — which is exactly what happened on the first live run.
+          if downloads_used < @download_budget && !@downloads_exhausted
+            downloads_used += 1
+            begin
+              bundle = @client.download(row.source, row.slug)
+              content = bundle&.skill_md
+            rescue RegistryClient::RateLimited => e
+              Rails.logger.warn("[Skills::CatalogSync] Download budget closed — #{e.message}")
+              @downloads_exhausted = true
+            end
+          end
+        end
+
+        sleep(@delay) if @delay.positive?
+
+        if content.blank?
+          # A row we never actually asked about (budget closed) must not be judged:
+          # marking it attempted would rotate it back for nothing, and dropping it
+          # would delete a real entry because WE ran out of requests.
+          drop_unresolvable_seed(row) unless @downloads_exhausted && bundle.nil?
           next
         end
 
@@ -322,7 +364,9 @@ module Skills
         row.update_columns(
           description: description,
           title: row.title.presence || SkillMarkdown.name(content),
-          content_hash: bundle.content_hash,
+          # Only the registry's own bundle carries a hash; a raw read has none, and
+          # inventing one would break "has upstream changed since we looked".
+          content_hash: bundle&.content_hash || row.content_hash,
           registry_synced_at: Time.current,
           updated_at: Time.current
         )

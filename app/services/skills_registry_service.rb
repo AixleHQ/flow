@@ -102,12 +102,29 @@ class SkillsRegistryService
     source = parsed[:source]
     slug = parsed[:slug]
 
-    bundle = Skills::RegistryClient.download(source, slug) if source.include?("/")
+    bundle = nil
+    throttled = false
+
+    if source.include?("/")
+      begin
+        bundle = Skills::RegistryClient.download(source, slug)
+      rescue Skills::RegistryClient::RateLimited
+        # 60 downloads per hour for the whole deployment. Being throttled is not the
+        # same as the skill not existing, so the free fallbacks still get their turn
+        # and the user is told the truth if none of them resolve it.
+        throttled = true
+      end
+    end
+
     content = bundle&.skill_md
     content ||= Skills::WellKnownResolver.fetch_skill_md(source, slug) if Skills::WellKnownResolver.resolvable?(source)
     content ||= fetch_skill_md_from_github(source, slug) if github_source?(source)
 
-    return nil if content.blank?
+    if content.blank?
+      raise RegistryError, "The skills registry is rate-limiting this deployment — try again in a few minutes" if throttled
+
+      return nil
+    end
 
     {
       "source" => source,
@@ -116,6 +133,8 @@ class SkillsRegistryService
       "content" => content,
       "content_hash" => bundle&.content_hash
     }
+  rescue RegistryError
+    raise
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Detail fetch failed for #{skill_id}: #{e.message}")
     nil
@@ -149,20 +168,13 @@ class SkillsRegistryService
     source.match?(%r{\A[\w.-]+/[\w.-]+\z})
   end
 
-  def self.github_skill_path_guesses(slug)
-    guesses = [ slug ]
-    guesses << slug.sub(/\Avercel-/, "") if slug.start_with?("vercel-")
-    guesses.uniq
-  end
-
-  # Direct guesses first, then one shallow pass over `skills/` — bounded by
-  # MAX_GITHUB_DIRS. The previous version also walked each directory's children,
-  # which multiplied request count by the tree's width.
+  # Conventional raw paths first (Skills::GithubSkillMd — shared with the catalog
+  # backfill, and free of any rate budget), then one shallow pass over the repo's
+  # `skills/` directory listing, bounded by MAX_GITHUB_DIRS. The earlier version also
+  # walked each directory's children, multiplying request count by the tree's width.
   def self.fetch_skill_md_from_github(source, slug)
-    github_skill_path_guesses(slug).each do |dir|
-      content = fetch_raw_skill_md(source, "skills/#{dir}/SKILL.md", slug: slug)
-      return content if content.present?
-    end
+    content = Skills::GithubSkillMd.fetch(source, slug)
+    return content if content.present?
 
     list_github_skill_directories(source).first(MAX_GITHUB_DIRS).each do |dir|
       content = fetch_raw_skill_md(source, "skills/#{dir}/SKILL.md", slug: slug)
@@ -176,25 +188,14 @@ class SkillsRegistryService
   end
 
   def self.fetch_raw_skill_md(source, path, slug:)
-    content = fetch_github_raw(source, path)
-    return nil if content.blank?
-    return content if skill_md_matches_slug?(content, slug)
-
-    nil
-  end
-
-  def self.skill_md_matches_slug?(content, slug)
-    Skills::SkillMarkdown.name(content) == slug
-  end
-
-  def self.fetch_github_raw(source, path)
-    response = http_get(URI("#{GITHUB_RAW_BASE}/#{source}/HEAD/#{path}"))
+    response = http_get(URI("#{GITHUB_RAW_BASE}/#{source}/#{path.start_with?('HEAD/') ? path : "HEAD/#{path}"}"))
     return nil unless response.is_a?(Net::HTTPSuccess)
 
     body = response.body
     return nil if body.blank? || body.start_with?("<!DOCTYPE", "<html")
+    return body if Skills::SkillMarkdown.name(body) == slug
 
-    body
+    nil
   end
 
   def self.list_github_skill_directories(source)
@@ -237,9 +238,8 @@ class SkillsRegistryService
     http.request(request)
   end
 
-  private_class_method :parse_skill_id, :github_source?, :github_skill_path_guesses,
+  private_class_method :parse_skill_id, :github_source?,
                        :fetch_skill_md_from_github, :fetch_raw_skill_md,
-                       :skill_md_matches_slug?, :fetch_github_raw,
                        :list_github_skill_directories, :source_url_for, :http_get,
                        :unresolved_message
 end

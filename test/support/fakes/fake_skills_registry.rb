@@ -66,8 +66,13 @@ class FakeSkillsRegistry
     matches.first(limit)
   end
 
+  # Set to make every download raise, mirroring the endpoint's 60-per-hour ceiling.
+  attr_accessor :rate_limited
+
   def download(source, slug)
     @downloads << "#{source}/#{slug}"
+    raise Skills::RegistryClient::RateLimited, "download rate limit exceeded" if @rate_limited
+
     @bundles["#{source}/#{slug}"]
   end
 

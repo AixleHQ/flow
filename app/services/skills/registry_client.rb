@@ -41,6 +41,18 @@ module Skills
     MAX_LIMIT = 200
     MIN_QUERY_LENGTH = 2
 
+    # MEASURED, not documented: the download endpoint answers
+    # `429 {"error":"rate_limit_exceeded","message":"Maximum 60 requests per hour."}`.
+    # Sixty per hour is the whole deployment's budget, and a user installing a skill
+    # spends one — so anything bulk (the metadata backfill) has to yield to it.
+    #
+    # This is raised rather than folded into a nil return, because "upstream is
+    # throttling us" and "this skill does not exist" call for opposite reactions:
+    # stop, versus move on to the next row.
+    class RateLimited < StandardError; end
+
+    DOWNLOAD_HOURLY_LIMIT = 60
+
     # `Entry`, not `Skill`: inside `module Skills` a constant named `Skill` would
     # shadow the model for every reader of this file.
     Entry = Struct.new(:id, :slug, :name, :source, :installs, keyword_init: true)
@@ -88,10 +100,12 @@ module Skills
       # @param source [String] "owner/repo"
       # @param slug [String] skill name within the repo
       # @return [Bundle, nil] nil when the registry does not carry it
+      # @raise [RateLimited] when upstream is throttling this deployment
       def download(source, slug)
         return nil if source.blank? || slug.blank?
 
         response = get(URI("#{BASE}/download/#{source}/#{slug}"), timeout: DOWNLOAD_TIMEOUT)
+        raise RateLimited, "download rate limit exceeded" if response.is_a?(Net::HTTPTooManyRequests)
         return nil unless response.is_a?(Net::HTTPSuccess)
 
         body = JSON.parse(response.body)
@@ -99,6 +113,8 @@ module Skills
         return nil if files.blank?
 
         Bundle.new(files: files, content_hash: body["hash"])
+      rescue RateLimited
+        raise
       rescue StandardError => e
         Rails.logger.warn("[Skills::RegistryClient] Download failed for #{source}/#{slug}: #{e.message}")
         nil
@@ -124,10 +140,15 @@ module Skills
         uri.query = URI.encode_www_form(source: source, skills: slugs.join(","))
 
         response = get(uri, timeout: AUDIT_TIMEOUT)
+        # A different host with its own budget, but the same reasoning: being
+        # throttled is not the same as "no audits exist for this repository".
+        raise RateLimited, "audit rate limit exceeded" if response.is_a?(Net::HTTPTooManyRequests)
         return {} unless response.is_a?(Net::HTTPSuccess)
 
         parsed = JSON.parse(response.body)
         parsed.is_a?(Hash) ? parsed : {}
+      rescue RateLimited
+        raise
       rescue StandardError => e
         Rails.logger.warn("[Skills::RegistryClient] Audit lookup failed for #{source}: #{e.message}")
         {}

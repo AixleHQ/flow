@@ -166,6 +166,10 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     stub_request(:get, "https://www.skills.sh/api/download/vercel-labs/agent-skills/vercel-react-best-practices")
       .to_return(status: 404, body: { error: "not_found" }.to_json, headers: { "Content-Type" => "application/json" })
 
+    # Skills::GithubSkillMd tries the conventional layouts first; none of them hold this
+    # skill, so resolution falls through to the repo's `skills/` listing below.
+    stub_request(:get, %r{raw\.githubusercontent\.com/vercel-labs/agent-skills/HEAD/(skills/)?(vercel-)?react-best-practices/SKILL\.md})
+      .to_return(status: 404, body: "")
     stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/vercel-react-best-practices/SKILL.md")
       .to_return(status: 404, body: "")
 
@@ -228,7 +232,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     stub_request(:get, "https://www.skills.sh/api/download/missing-org/skills/nope")
       .to_return(status: 404, body: { error: "not_found" }.to_json, headers: { "Content-Type" => "application/json" })
 
-    stub_request(:get, "https://raw.githubusercontent.com/missing-org/skills/HEAD/skills/nope/SKILL.md")
+    stub_request(:get, %r{raw\.githubusercontent\.com/missing-org/skills/HEAD/.*SKILL\.md})
       .to_return(status: 404, body: "")
 
     stub_request(:get, "https://api.github.com/repos/missing-org/skills/contents/skills")

@@ -8,10 +8,18 @@ require "test_helper"
 class Skills::CatalogSyncTest < ActiveSupport::TestCase
   setup do
     @registry = FakeSkillsRegistry.new
+    # Empty by default: most repositories do not lay skills out at a guessable raw
+    # path, so the backfill falls through to the registry — the common case.
+    @github = FakeGithubSkillMd.new
   end
 
-  def sync(client: @registry)
-    Skills::CatalogSync.new(client: client, delay: 0).call
+  # `download_budget` is raised here on purpose: production keeps a quarter of the
+  # registry's 60-per-hour ceiling and leaves the rest to people installing skills, but
+  # a test asserting backfill behaviour should not be fighting that quota. The cap
+  # itself is covered by its own test below.
+  def sync(client: @registry, github: @github, download_budget: 200)
+    Skills::CatalogSync.new(client: client, github: github, delay: 0,
+                            download_budget: download_budget).call
   end
 
   test "mirrors swept entries" do
@@ -340,7 +348,7 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     CatalogSearchQuery.record("svelte")
     @registry.add("microsoft/playwright-cli/playwright-cli", installs: 12_000)
 
-    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
 
     queries = @registry.searches.map { |s| s[:query] }
     assert_equal %w[playwright svelte], queries
@@ -351,15 +359,66 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
   test "the demand sweep prunes the term table afterwards" do
     CatalogSearchQuery.create!(term: "forgotten", search_count: 99, last_searched_at: 40.days.ago)
 
-    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
 
     assert_nil CatalogSearchQuery.find_by(term: "forgotten")
   end
 
   test "the demand sweep does nothing upstream when nobody has searched yet" do
-    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
 
     assert_empty @registry.searches
+  end
+
+  # The registry allows 60 downloads per hour for the WHOLE deployment, and a user
+  # installing a skill spends one. A bulk pass must stop rather than keep spending
+  # requests that are already refused.
+  test "the backfill stops at the first throttled download" do
+    3.times { |i| @registry.add("org/skills/needs-desc-#{i}", installs: 10 - i) }
+    @registry.rate_limited = true
+
+    result = sync
+
+    assert_equal 1, @registry.downloads.size, "one refused request is enough to stop"
+    assert_equal 0, result.backfilled
+  end
+
+  # GitHub raw costs nothing from the registry's 60-per-hour budget, so it is tried
+  # first and a row it answers never spends a download at all.
+  test "prefers GitHub raw over the rate-limited download endpoint" do
+    @registry.add("obra/superpowers/brainstorming", installs: 300_000)
+    @github.stub("obra/superpowers", "brainstorming",
+                 skill_md: "---\nname: brainstorming\ndescription: Refines an idea first\n---\n\nbody")
+
+    sync
+
+    row = CatalogSkill.find_by(registry_id: "obra/superpowers/brainstorming")
+    assert_equal "Refines an idea first", row.description
+    assert_includes @github.requests, "obra/superpowers/brainstorming"
+    assert_not_includes @registry.downloads, "obra/superpowers/brainstorming",
+                        "a row answered by raw must not spend a download request"
+  end
+
+  # The cap exists so a bulk pass cannot make installing a skill fail while the catalog
+  # prettied itself up.
+  test "spends no more than its download budget on rows raw cannot answer" do
+    5.times { |i| @registry.add("org/skills/undescribed-#{i}", installs: 100 - i) }
+
+    sync(download_budget: 2)
+
+    assert_equal 2, @registry.downloads.size
+  end
+
+  # Rows are not marked as attempted on a throttle: rotating them to the back of the
+  # queue would punish them for our rate limit.
+  test "a throttled backfill leaves the queue untouched" do
+    row = create(:catalog_skill, registry_id: "org/skills/pending", source: "org/skills", slug: "pending",
+                 description: nil, registry_synced_at: 1.week.ago, updated_at: 1.week.ago)
+    @registry.rate_limited = true
+
+    sync
+
+    assert_equal 1.week.ago.to_i, row.reload.updated_at.to_i
   end
 
   test "sweeps every seed query and owner" do
