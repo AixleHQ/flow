@@ -1,6 +1,6 @@
-# Contributing to Aixle App
+# Contributing to Aixle Flow
 
-Thank you for your interest in contributing to Aixle App!
+Thank you for your interest in contributing to Aixle Flow!
 
 ## Getting Started
 
@@ -39,11 +39,12 @@ Auto-fix options are available via `make rubocop-fix` and `make eslint-fix`.
 Aixle Flow is released under the [Apache License 2.0](LICENSE). Your
 contributions are accepted under that same license (inbound = outbound).
 
-### Developer Certificate of Origin (DCO)
+To accept a contribution we require **two** things on every pull request:
 
-To accept a contribution we require a DCO sign-off on every commit. This
-certifies that you wrote the code or otherwise have the right to submit it under
-the project's license. The sign-off is the
+### 1. Developer Certificate of Origin (DCO)
+
+Every commit must be signed off, certifying that you wrote the code or otherwise
+have the right to submit it under the project's license. The sign-off is the
 [Developer Certificate of Origin 1.1](DCO) — add it with the `-s` flag:
 
 ```bash
@@ -54,7 +55,22 @@ This appends a `Signed-off-by: Your Name <you@example.com>` line to the commit
 message. The name and email must match your real identity. A DCO check runs on
 every PR and will fail if any commit is missing the sign-off.
 
-> A Contributor License Agreement (CLA) may be introduced later. If and when it
-> is, contributors will be asked to sign it via a bot on their pull requests.
-> For now, the DCO sign-off is the only contributor requirement — see
-> [`CLA.md`](CLA.md) for the draft being held for future use.
+### 2. Contributor License Agreement (CLA)
+
+Before your first contribution can be merged, you must sign the project's
+Contributor License Agreement. A bot will comment on your PR with a one-time
+signing link; once signed, it covers all your future contributions. The CLA
+grants the maintainers the rights needed to distribute, sublicense, and — if
+ever necessary — relicense the project, which a DCO sign-off alone does not
+provide. You keep full ownership of your contributions either way.
+
+- Contributing on your own behalf → [`CLA.md`](CLA.md) (individual)
+- Contributing on behalf of an employer or other organization → your
+  organization executes [`CLA-CORPORATE.md`](CLA-CORPORATE.md); see its § 7 for
+  how the two interact, and note that its Schedule A is an administrative
+  convenience, not a condition of the license grant
+
+> The DCO certifies the **origin** of your contribution; the CLA grants the
+> project the **rights** to it. Both are required.
+
+Questions about contribution rights: `legal.flow@aixle.com`.

@@ -27,7 +27,8 @@ Keep PRs focused on a single concern. See CONTRIBUTING.md.
 
 - [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md).
 - [ ] All my commits are signed off for the [DCO](../DCO) (`git commit -s`).
-- [ ] I have signed (or will sign) the [CLA](../CLA.md) when the bot prompts me.
+- [ ] I have signed (or will sign) the [CLA](../CLA.md) when the bot prompts me — or my
+      organization has executed the [Corporate CLA](../CLA-CORPORATE.md).
 - [ ] `make check_all` passes locally (tests, rubocop, brakeman, eslint, typescript).
 - [ ] I added/updated tests where it makes sense.
 - [ ] I updated documentation where it makes sense.

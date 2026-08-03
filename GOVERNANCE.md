@@ -26,7 +26,8 @@ discussions, and helping others.
 
 Anyone who contributes to the project — code, documentation, reviews, triage,
 or design. No formal process: open a pull request or issue. All contributions
-are subject to review and to the [Code of Conduct](CODE_OF_CONDUCT.md).
+are subject to review, to the [Code of Conduct](CODE_OF_CONDUCT.md), and to the
+contribution requirements in [CONTRIBUTING.md](CONTRIBUTING.md) (CLA and DCO).
 
 ### Maintainers
 
@@ -73,6 +74,29 @@ contributor; the maintainer group confirms by consensus.
 Maintainers who become inactive for an extended period may move to emeritus
 status (no write access, gratefully acknowledged) and can be reinstated on
 return.
+
+## Licensing and contributions
+
+Aixle Flow is licensed under the [Apache License, Version 2.0](LICENSE) (see also
+[NOTICE](NOTICE)). Contributions are accepted under the same license
+(inbound = outbound).
+
+Inbound contributions require **both**:
+
+- a **Contributor License Agreement** — one-time and bot-mediated. Individuals sign
+  the [iCLA](CLA.md); organizations execute the [cCLA](CLA-CORPORATE.md). The CLA
+  secures the downstream relicensing rights the Apache 2.0 inbound license does not
+  grant, while leaving contributors as the copyright owners of their work.
+- a **Developer Certificate of Origin** sign-off on every commit (`git commit -s`),
+  certifying the contributor has the right to submit the code under the project
+  license.
+
+Both are enforced on every pull request — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The project's trademarks are **not** licensed by Apache 2.0; see
+[TRADEMARK.md](TRADEMARK.md). Third-party dependency licenses and the obligations
+they carry are recorded in [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) and
+[NOTICES.md](NOTICES.md).
 
 ## Changing this document
 
