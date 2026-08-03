@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Badge, Box, Button, Card, Divider, Group, Menu, Stack, Text, ThemeIcon, Title } from '@mantine/core';
+import { Badge, Box, Button, Card, Divider, Group, Menu, Stack, Text, ThemeIcon } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
@@ -15,6 +15,7 @@ import {
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { AddRepositoryModal } from './AddRepositoryModal';
 import { EditRepositoryModal } from './EditRepositoryModal';
@@ -183,19 +184,17 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Title order={2}>{title}</Title>
-          <Text size="sm" c="dimmed" mt={2}>
-            Repositories available for agent sessions and code context
-          </Text>
-        </Box>
-        {canExecute && (
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
-            Add Repository
-          </Button>
-        )}
-      </Group>
+      <PageHeader
+        title={title}
+        subtitle="Repositories available for agent sessions and code context"
+        actions={
+          canExecute && (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
+              Add Repository
+            </Button>
+          )
+        }
+      />
 
       {repositories.length === 0 ? (
         <Card p="xl" withBorder radius="md">

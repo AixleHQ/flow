@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import SessionShowPage from './Show';
@@ -57,8 +57,8 @@ describe('Company/Sessions/Show', () => {
     });
 
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
-    // The raw state string can surface in both the header badge and the waiting panel.
-    expect(screen.getAllByText('running').length).toBeGreaterThan(0);
+    // The state can surface in both the header badge and the waiting panel.
+    expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
     expect(screen.getByText('#4242')).toBeInTheDocument();
     // An active, non-finishing session exposes the Finish action.
     expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument();
@@ -116,8 +116,8 @@ describe('Company/Sessions/Show', () => {
       },
     });
 
-    const card = screen.getByText('Failed').closest('div') as HTMLElement;
-    expect(within(card).getByText('Failed')).toBeInTheDocument();
+    // The state now reads the same in the header badge and the completion card.
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByText('Container exited unexpectedly')).toBeInTheDocument();
   });
 });

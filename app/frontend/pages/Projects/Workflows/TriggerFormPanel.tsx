@@ -989,7 +989,7 @@ export function TriggerFormPanel({
               padding: '8px 16px',
               fontSize: 13,
               fontWeight: 600,
-              color: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-muted)' : '#fff',
+              color: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-muted)' : 'var(--app-on-primary)',
               cursor: saving || (kind === 'schedule' && !cronDesc.ok) ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
               transition: 'all 0.12s',

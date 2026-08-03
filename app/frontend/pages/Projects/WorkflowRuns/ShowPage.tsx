@@ -41,6 +41,7 @@ import {
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -480,21 +481,20 @@ const WorkflowRunShowPage = () => {
           {step.subStepRuns.length > 0 && (
             <Group gap={4} mt={6} ml={36} wrap="wrap">
               {step.subStepRuns.map((ss) => (
-                <Badge
+                <StatusBadge
                   key={ss.id}
                   size="xs"
-                  color={STATE_COLORS[ss.state] ?? 'gray'}
-                  variant={ss.state === 'completed' ? 'filled' : ss.state === 'in_progress' ? 'light' : 'outline'}
+                  state={ss.state}
                   className={ss.state === 'in_progress' ? classes.pulse : undefined}
                 >
                   {subStepLabel(ss, `#${ss.id}`)}
-                </Badge>
+                </StatusBadge>
               ))}
             </Group>
           )}
 
           {step.errorMessage && (
-            <Text size="xs" c="red" mt={4} ml={36} lineClamp={2}>
+            <Text size="xs" c="var(--app-danger-fg)" mt={4} ml={36} lineClamp={2}>
               {step.errorMessage}
             </Text>
           )}
@@ -712,12 +712,12 @@ const WorkflowRunShowPage = () => {
               {/* Past failures */}
               {(selectedStep.pastFailures?.length ?? 0) > 0 && (
                 <Box>
-                  <Text size="xs" fw={600} c="red" className={classes.sectionLabel} mb={4}>
+                  <Text size="xs" fw={600} c="var(--app-danger-fg)" className={classes.sectionLabel} mb={4}>
                     Past Failures ({selectedStep.pastFailures!.length})
                   </Text>
                   <Stack gap={4}>
                     {selectedStep.pastFailures!.map((f, i) => (
-                      <Text key={i} size="xs" c="red">
+                      <Text key={i} size="xs" c="var(--app-danger-fg)">
                         {f.errorMessage ?? 'Unknown error'}
                       </Text>
                     ))}
@@ -728,10 +728,10 @@ const WorkflowRunShowPage = () => {
               {/* Error */}
               {selectedStep.errorMessage && selectedStep.state === 'failed' && (
                 <Card withBorder p="sm" bg="var(--mantine-color-red-light)">
-                  <Text size="xs" fw={600} c="red" mb={4}>
+                  <Text size="xs" fw={600} c="var(--app-danger-fg)" mb={4}>
                     Step Failed
                   </Text>
-                  <Text size="sm" c="red" style={{ whiteSpace: 'pre-wrap' }}>
+                  <Text size="sm" c="var(--app-danger-fg)" style={{ whiteSpace: 'pre-wrap' }}>
                     {selectedStep.errorMessage}
                   </Text>
                 </Card>
@@ -754,35 +754,46 @@ const WorkflowRunShowPage = () => {
         {isActive &&
           (canFinishSession || selectedStep.state === 'waiting_input' || selectedStep.state === 'failed') && (
             <div className={classes.actionBar}>
-              <Group gap="sm">
-                {canFinishSession && (
-                  <Button
-                    color="teal"
-                    size="xs"
-                    onClick={() => handleFinishSession(selectedStep.terminalSessionId!)}
-                    loading={actionLoading}
-                  >
-                    Finish Agent Session
-                  </Button>
-                )}
-                {selectedStep.state === 'waiting_input' && (
-                  <>
-                    <Button size="xs" onClick={handleApprove} loading={actionLoading}>
-                      Approve & Continue
+              {/* Approving a gate is the one irreversible human decision in a
+                  run. It used to be an `xs` button in a row of four equally
+                  weighted `xs` buttons, with Skip as easy to hit as Approve.
+                  Approve is now the only filled, full-size action; the escape
+                  hatches are subtle and pushed to the right. */}
+              <Group gap="sm" justify="space-between" wrap="wrap">
+                <Group gap="sm">
+                  {selectedStep.state === 'waiting_input' && (
+                    <Button size="sm" onClick={handleApprove} loading={actionLoading}>
+                      Approve &amp; Continue
                     </Button>
-                    <Button size="xs" variant="outline" onClick={() => setSkipOpen(true)}>
-                      Skip
+                  )}
+                  {canFinishSession && (
+                    <Button
+                      size="sm"
+                      variant={selectedStep.state === 'waiting_input' ? 'default' : 'filled'}
+                      onClick={() => handleFinishSession(selectedStep.terminalSessionId!)}
+                      loading={actionLoading}
+                    >
+                      Finish Agent Session
                     </Button>
-                    <Button size="xs" variant="outline" color="yellow" onClick={handleRetry} loading={actionLoading}>
-                      Retry
+                  )}
+                </Group>
+                <Group gap={4}>
+                  {selectedStep.state === 'waiting_input' && (
+                    <>
+                      <Button size="xs" variant="subtle" color="gray" onClick={() => setSkipOpen(true)}>
+                        Skip
+                      </Button>
+                      <Button size="xs" variant="subtle" color="gray" onClick={handleRetry} loading={actionLoading}>
+                        Retry
+                      </Button>
+                    </>
+                  )}
+                  {selectedStep.state === 'failed' && (
+                    <Button size="sm" variant="default" onClick={handleRetry} loading={actionLoading}>
+                      Retry Step
                     </Button>
-                  </>
-                )}
-                {selectedStep.state === 'failed' && (
-                  <Button size="xs" variant="outline" color="yellow" onClick={handleRetry} loading={actionLoading}>
-                    Retry Step
-                  </Button>
-                )}
+                  )}
+                </Group>
               </Group>
             </div>
           )}
@@ -876,17 +887,10 @@ const WorkflowRunShowPage = () => {
             <ActionIcon variant="subtle" size="sm" onClick={() => router.visit(`${basePath}/workflow_runs`)}>
               <IconArrowLeft size={16} />
             </ActionIcon>
-            <Text fw={600} size="sm">
+            <Text fw={600} size="sm" truncate style={{ minWidth: 0 }}>
               {run.workflowName}
             </Text>
-            <Badge
-              color={STATE_COLORS[run.state] ?? 'gray'}
-              size="sm"
-              variant={isActive ? 'filled' : 'outline'}
-              className={run.state === 'running' ? classes.pulse : undefined}
-            >
-              {run.state}
-            </Badge>
+            <StatusBadge state={run.state} size="sm" className={run.state === 'running' ? classes.pulse : undefined} />
             <Text size="xs" c="dimmed" ff="monospace">
               #{run.id}
             </Text>
@@ -908,7 +912,7 @@ const WorkflowRunShowPage = () => {
                 </Text>
               )}
               {run.costCents > 0 && (
-                <Text size="xs" c="green" ff="monospace" fw={600}>
+                <Text size="xs" c="var(--app-success-fg)" ff="monospace" fw={600}>
                   {formatCost(run.costCents)}
                 </Text>
               )}

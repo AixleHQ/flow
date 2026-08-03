@@ -37,7 +37,12 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
       assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
-      agent_models: current_project_membership&.agent_models_for_props || []
+      agent_models: current_project_membership&.agent_models_for_props || [],
+      # Cost is shown on every screen AFTER a session runs and nowhere on the
+      # screen where the spend is actually committed. These two numbers put the
+      # decision in context: what a session on this runtime has typically cost,
+      # and what has already been spent this month.
+      cost_hint: session_cost_hint
     }
   end
 
@@ -50,6 +55,26 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       project: project_props,
       session: TerminalSessionResource.new(session).to_h,
       cable_stream: inertia_cable_stream(session)
+    }
+  end
+  private
+
+  # Average cost per finished session, per agent runtime, over the last 30 days
+  # in this project — plus this user's month-to-date spend across the company.
+  def session_cost_hint
+    finished = current_project.terminal_sessions
+                              .where(state: "finished")
+                              .where("terminal_sessions.created_at > ?", 30.days.ago)
+                              .where("cost_cents > 0")
+
+    averages = finished.group(:agent_type).average(:cost_cents).transform_values { |c| c.to_f.round }
+
+    {
+      avg_cost_cents_by_runtime: averages,
+      month_to_date_cents: current_project.terminal_sessions
+                                          .where(user_id: current_user.id)
+                                          .where("terminal_sessions.created_at >= ?", Time.current.beginning_of_month)
+                                          .sum(:cost_cents)
     }
   end
 end

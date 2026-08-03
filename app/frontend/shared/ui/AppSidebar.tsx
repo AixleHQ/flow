@@ -254,33 +254,9 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
 
   if (collapsed) {
     return (
-      <div
-        style={{
-          margin: '8px 0 4px',
-          padding: '0',
-          display: 'flex',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
+      <div className={classes.aiBannerCollapsed}>
         <Tooltip label="AI Builder" position="right" withArrow>
-          <UnstyledButton
-            onClick={handleClick}
-            aria-label="AI Builder"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 7,
-              background: 'var(--accent-dim, rgba(207,107,74,0.12))',
-              border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: '#cf6b4a',
-              transition: 'background 0.12s, border-color 0.12s',
-            }}
-          >
+          <UnstyledButton onClick={handleClick} aria-label="AI Builder" className={classes.aiBannerIcon}>
             <IconWand size={16} />
           </UnstyledButton>
         </Tooltip>
@@ -289,70 +265,14 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
   }
 
   return (
-    <div
-      style={{
-        margin: '8px 10px 4px',
-        padding: '13px',
-        border: '1px solid var(--app-border-default)',
-        borderRadius: 8,
-        background: 'var(--app-bg-paper, #121110)',
-        flexShrink: 0,
-      }}
-    >
-      <div
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: 7,
-          background: 'var(--accent-dim, rgba(207,107,74,0.12))',
-          border: '1px solid var(--accent-muted, rgba(207,107,74,0.30))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#cf6b4a',
-          marginBottom: 10,
-        }}
-      >
+    <div className={classes.aiBanner}>
+      <div className={`${classes.aiBannerIcon} ${classes.aiBannerIconStacked}`}>
         <IconWand size={16} />
       </div>
-      <div
-        style={{
-          fontSize: 14,
-          fontWeight: 700,
-          color: 'var(--app-text-primary)',
-          letterSpacing: '-0.01em',
-          marginBottom: 4,
-        }}
-      >
-        AI Builder
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--app-text-secondary)', lineHeight: 1.45, marginBottom: 12 }}>
-        Tasks, boards, and workflows — connected, from one prompt.
-      </div>
-      <button
-        type="button"
-        onClick={handleClick}
-        style={{
-          background: '#d1cfcd',
-          color: '#0a0908',
-          borderRadius: 5,
-          width: '100%',
-          border: '1px solid transparent',
-          cursor: 'pointer',
-          padding: '8px 12px',
-          fontSize: 12,
-          fontWeight: 600,
-          fontFamily: 'inherit',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 5,
-          transition: 'background 0.12s',
-        }}
-        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#e3e1df')}
-        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = '#d1cfcd')}
-      >
-        <IconSparkles size={13} color="#0a0908" />✦ Build with AI
+      <div className={classes.aiBannerTitle}>AI Builder</div>
+      <div className={classes.aiBannerBody}>Tasks, boards, and workflows — connected, from one prompt.</div>
+      <button type="button" onClick={handleClick} className={classes.aiBannerCta}>
+        <IconSparkles size={13} />✦ Build with AI
       </button>
     </div>
   );
@@ -368,7 +288,11 @@ interface SidebarNavProps {
 }
 
 function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps) {
-  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+  // Read the path from Inertia, not `window.location`. AuthLayout is a
+  // persistent layout for project pages, so the sidebar can survive a visit
+  // without re-rendering — reading `window.location.pathname` at render time
+  // left the active highlight pointing at the previous page.
+  const currentPath = usePage().url.split('?')[0];
 
   return (
     <>
@@ -394,6 +318,8 @@ function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps)
                     <Link
                       href={item.path}
                       onClick={onNavigate}
+                      aria-label={item.label}
+                      aria-current={isActive ? 'page' : undefined}
                       className={[
                         isOverview ? classes.navOverview : classes.navItem,
                         isOverview ? classes.navOverviewCollapsed : classes.navItemCollapsed,
@@ -411,6 +337,7 @@ function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps)
                   key={item.path}
                   href={item.path}
                   onClick={onNavigate}
+                  aria-current={isActive ? 'page' : undefined}
                   className={[
                     isOverview ? classes.navOverview : classes.navItem,
                     isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
@@ -722,6 +649,7 @@ export const AppSidebar = ({
   // The rail is the only tenancy chrome a single-company user must never see.
   const memberships = currentUser?.memberships ?? [];
   const currentCompanyId = currentUser?.currentCompany?.id ?? null;
+  const currentCompanyName = currentUser?.currentCompany?.name ?? '';
   const multiCompany = memberships.length > 1;
 
   const projects = propProjects ?? pageProjects;
@@ -764,9 +692,12 @@ export const AppSidebar = ({
   if (isMobile) {
     return (
       <>
-        <UnstyledButton onClick={openDrawer} className={classes.mobileToggle} aria-label="Open navigation">
-          <IconMenu2 size={20} />
-        </UnstyledButton>
+        <div className={classes.mobileBar}>
+          <UnstyledButton onClick={openDrawer} className={classes.mobileToggle} aria-label="Open navigation">
+            <IconMenu2 size={20} />
+          </UnstyledButton>
+          <span className={classes.mobileBarTitle}>{currentCompanyName}</span>
+        </div>
         <Drawer
           opened={drawerOpened}
           onClose={closeDrawer}
@@ -802,7 +733,11 @@ export const AppSidebar = ({
   return (
     <div className={classes.shell}>
       {multiCompany && <CompanyRail memberships={memberships} currentCompanyId={currentCompanyId} />}
-      <nav className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`} style={{ width, minWidth: width }}>
+      <nav
+        className={`${classes.root} ${collapsed ? classes.rootCollapsed : ''}`}
+        style={{ width, minWidth: width }}
+        aria-label={context === 'project' ? 'Project navigation' : 'Workspace navigation'}
+      >
         <SidebarContent
           projectId={projectId}
           context={context}

@@ -74,11 +74,11 @@ export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
         styles={{ input: { fontFamily: 'monospace' } }}
         style={{ flex: 1 }}
       />
-      <Tooltip label="Use value from Config Items">
+      <Tooltip label="Use value from Secrets & Variables">
         <ActionIcon
           variant="subtle"
           size="sm"
-          aria-label="Use value from Config Items"
+          aria-label="Use value from Secrets & Variables"
           onClick={handleToggle}
           mt={label ? 24 : 0}
         >

@@ -11,9 +11,9 @@ import {
   Table,
   Text,
   TextInput,
-  Title,
   Tooltip,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import {
   IconDotsVertical,
   IconMailForward,
@@ -26,6 +26,8 @@ import {
 import { useMemo, useState } from 'react';
 
 import type { UserRole } from 'shared/ui';
+import { PageHeader } from 'shared/ui/PageHeader';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { InviteUserModal } from './InviteUserModal';
 
@@ -52,12 +54,6 @@ interface MembersContentProps {
 }
 
 // Revoked members are never rendered (the index excludes them).
-const STATE_COLORS: Record<string, string> = {
-  active: 'green',
-  invited: 'blue',
-  suspended: 'orange',
-};
-
 const ROLE_COLORS: Record<UserRole, string> = {
   super_admin: 'grape',
   admin: 'blue',
@@ -137,23 +133,34 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
   };
 
   const handleDelete = (userId: number, name: string) => {
-    if (confirm(`Are you sure you want to remove ${name} from this company?`)) {
-      router.delete(`${basePath}/${userId}`, { preserveScroll: true });
-    }
+    modals.openConfirmModal({
+      title: 'Remove member',
+      children: (
+        <Text size="sm">
+          Remove <b>{name}</b> from this company? They lose access to every project in it. This action cannot be undone.
+        </Text>
+      ),
+      labels: { confirm: 'Remove', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => router.delete(`${basePath}/${userId}`, { preserveScroll: true }),
+    });
   };
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Title order={2}>{title}</Title>
-        <Button leftSection={<IconPlus size={16} />} onClick={() => setInviteOpen(true)}>
-          Invite Member
-        </Button>
-      </Group>
+      <PageHeader
+        title={title}
+        actions={
+          <Button leftSection={<IconPlus size={16} />} onClick={() => setInviteOpen(true)}>
+            Invite Member
+          </Button>
+        }
+      />
 
       <Group mb="lg" gap="sm">
         <TextInput
           placeholder="Search by name or email..."
+          aria-label="Search members"
           leftSection={<IconSearch size={16} />}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
@@ -161,6 +168,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
         />
         <Select
           placeholder="All Roles"
+          aria-label="Filter by role"
           data={ROLE_FILTER_OPTIONS}
           value={roleFilter}
           onChange={setRoleFilter}
@@ -169,6 +177,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
         />
         <Select
           placeholder="All Statuses"
+          aria-label="Filter by status"
           data={STATUS_FILTER_OPTIONS}
           value={statusFilter}
           onChange={setStatusFilter}
@@ -180,7 +189,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
         </Text>
       </Group>
 
-      <Table striped highlightOnHover>
+      <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>User</Table.Th>
@@ -214,9 +223,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
                 </Badge>
               </Table.Td>
               <Table.Td>
-                <Badge color={STATE_COLORS[user.state] ?? 'gray'} size="sm" variant="light">
-                  {user.state}
-                </Badge>
+                <StatusBadge state={user.state} size="sm" />
               </Table.Td>
               <Table.Td>
                 <Text size="sm">{formatDate(user.invitedAt ?? user.createdAt)}</Text>
@@ -234,7 +241,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
               <Table.Td>
                 <Menu position="bottom-end" withArrow>
                   <Menu.Target>
-                    <ActionIcon variant="subtle" size="sm">
+                    <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
                       <IconDotsVertical size={16} />
                     </ActionIcon>
                   </Menu.Target>

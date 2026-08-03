@@ -73,7 +73,7 @@
   transition: color 0.15s;
 }
 
-.navLogo:hover .navBrandFlow { color: var(--mantine-color-brand-4); }
+.navLogo:hover .navBrandFlow { color: var(--app-primary-strong); }
 
 .navLinks {
   display: flex;
@@ -171,7 +171,7 @@
 
 .githubStars {
   font-size: 11px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   margin-left: 2px;
 }
 
@@ -203,7 +203,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   padding: 8px 16px 4px;
   display: block;
   margin: 0;
@@ -247,14 +247,14 @@
 }
 
 .sbItemActive {
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   font-weight: 500;
   background: rgba(224, 88, 46, 0.08);
   box-shadow: inset 2px 0 0 var(--mantine-color-brand-4);
 }
 
 .sbItemActive:hover {
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   background: rgba(224, 88, 46, 0.1);
 }
 
@@ -299,7 +299,7 @@
   margin-left: auto;
   flex-shrink: 0;
   transition: transform 0.15s;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
 }
 
 .sbToggleIconOpen {
@@ -311,7 +311,7 @@
   font-weight: 600;
   text-transform: uppercase;
   background: rgba(224, 88, 46, 0.15);
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   border-radius: 4px;
   padding: 1px 5px;
   margin-left: 4px;
@@ -332,7 +332,7 @@
 .sbSubItem:hover { color: var(--app-text-primary); }
 
 .sbSubItemActive {
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   font-weight: 500;
 }
 
@@ -366,7 +366,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   margin-bottom: 20px;
 }
 
@@ -376,16 +376,16 @@
 }
 
 .breadcrumbLink {
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   text-decoration: none;
   cursor: pointer;
   transition: color 0.12s;
 }
 
-.breadcrumbLink:hover { color: var(--mantine-color-brand-4); }
+.breadcrumbLink:hover { color: var(--app-primary-strong); }
 
 .breadcrumbSection {
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   cursor: pointer;
 }
 
@@ -409,7 +409,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   margin-bottom: 12px;
   display: block;
   margin: 0 0 12px;
@@ -442,7 +442,7 @@
 .tocLinkIndented { padding-left: 20px; }
 
 .tocLinkActive {
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   border-left-color: var(--mantine-color-brand-4);
 }
 
@@ -502,7 +502,7 @@
 }
 
 .mdLink {
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   text-decoration: none;
   border-bottom: 1px solid rgba(224, 88, 46, 0.35);
   transition: border-color 0.15s;
@@ -543,7 +543,7 @@
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   padding: 8px 12px;
   border-bottom: 1px solid var(--app-border-default);
   text-align: left;
@@ -563,7 +563,7 @@
 .mdTable th code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11.5px;
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   background: rgba(224, 88, 46, 0.1);
   border: 1px solid rgba(224, 88, 46, 0.18);
   padding: 1px 5px;
@@ -620,7 +620,7 @@
 .inlineCode {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12px;
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   background: rgba(224, 88, 46, 0.1);
   border: 1px solid rgba(224, 88, 46, 0.18);
   padding: 1px 5px;
@@ -657,7 +657,9 @@
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--app-text-tertiary);
+  /* primary: this is an action sitting on the code-block header tint, where
+     even the secondary tone only reaches 4.07:1. */
+  color: var(--app-text-primary);
   cursor: pointer;
   padding: 3px 7px;
   border-radius: 4px;
@@ -673,8 +675,8 @@
   background: var(--app-action-hover);
 }
 
-.copyButtonCopied { color: #6ac99a; }
-.copyButtonCopied:hover { color: #6ac99a; background: transparent; }
+.copyButtonCopied { color: var(--app-success-fg); }
+.copyButtonCopied:hover { color: var(--app-success-fg); background: transparent; }
 
 /* ─── Hero block (chips + concept cards) ────────────────────────────────────── */
 
@@ -687,7 +689,7 @@
 .heroTag {
   font-size: 11px;
   font-weight: 500;
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   background: rgba(224, 88, 46, 0.1);
   border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
@@ -707,9 +709,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: #fff;
-  background: var(--mantine-color-brand-5);
-  border: 1px solid var(--mantine-color-brand-5);
+  color: var(--app-on-primary);
+  background: var(--app-primary);
+  border: 1px solid var(--app-primary);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -784,7 +786,7 @@
   align-items: center;
   justify-content: center;
   margin-bottom: 10px;
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   flex-shrink: 0;
 }
 
@@ -812,7 +814,7 @@
 :global(.docsTag) {
   font-size: 11px;
   font-weight: 500;
-  color: var(--mantine-color-brand-4);
+  color: var(--app-primary-strong);
   background: rgba(224, 88, 46, 0.1);
   border: 1px solid rgba(224, 88, 46, 0.2);
   border-radius: var(--mantine-radius-sm);
@@ -834,9 +836,9 @@
   gap: 7px;
   font-size: 13px;
   font-weight: 500;
-  color: #fff;
-  background: var(--mantine-color-brand-5);
-  border: 1px solid var(--mantine-color-brand-5);
+  color: var(--app-on-primary);
+  background: var(--app-primary);
+  border: 1px solid var(--app-primary);
   border-radius: var(--mantine-radius-sm);
   padding: 7px 15px;
   cursor: pointer;
@@ -961,32 +963,32 @@
   border-color: var(--callout-info-border);
   color: var(--app-text-secondary);
 }
-.calloutInfo .calloutIcon { color: var(--callout-info-icon, #4e7494); }
-.calloutInfo strong { color: var(--callout-info-strong, #6a8faa); }
+.calloutInfo .calloutIcon { color: var(--callout-info-icon); }
+.calloutInfo strong { color: var(--callout-info-strong); }
 
 .calloutWarning {
   background: var(--callout-warning-bg);
   border-color: var(--callout-warning-border);
   color: var(--app-text-secondary);
 }
-.calloutWarning .calloutIcon { color: var(--callout-warning-icon, #7a6430); }
-.calloutWarning strong { color: var(--callout-warning-strong, #8a7440); }
+.calloutWarning .calloutIcon { color: var(--callout-warning-icon); }
+.calloutWarning strong { color: var(--callout-warning-strong); }
 
 .calloutDanger {
   background: var(--callout-danger-bg);
   border-color: var(--callout-danger-border);
   color: var(--app-text-secondary);
 }
-.calloutDanger .calloutIcon { color: var(--callout-danger-icon, #7a3838); }
-.calloutDanger strong { color: var(--callout-danger-strong, #8a4848); }
+.calloutDanger .calloutIcon { color: var(--callout-danger-icon); }
+.calloutDanger strong { color: var(--callout-danger-strong); }
 
 .calloutTip {
   background: var(--callout-tip-bg);
   border-color: var(--callout-tip-border);
   color: var(--app-text-secondary);
 }
-.calloutTip .calloutIcon { color: var(--callout-tip-icon, #5a4880); }
-.calloutTip strong { color: var(--callout-tip-strong, #6a5890); }
+.calloutTip .calloutIcon { color: var(--callout-tip-icon); }
+.calloutTip strong { color: var(--callout-tip-strong); }
 
 /* ─── Page Navigation ─────────────────────────────────────────────────────── */
 
@@ -1022,7 +1024,7 @@
 
 .pageNavLabel {
   font-size: 10.5px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   margin-bottom: 4px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -1064,7 +1066,7 @@
 
 .searchInputIcon {
   font-size: 17px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -1079,7 +1081,7 @@
   padding: 0;
 }
 
-.searchInput::placeholder { color: var(--app-border-strong); }
+.searchInput::placeholder { color: var(--app-text-tertiary); }
 
 .searchResults {
   max-height: 360px;
@@ -1121,7 +1123,7 @@
 .searchResultSection {
   display: block;
   font-size: 10px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 2px;
@@ -1137,7 +1139,7 @@
   padding: 32px 16px;
   text-align: center;
   font-size: 14px;
-  color: var(--app-border-strong);
+  color: var(--app-text-tertiary);
   margin: 0;
 }
 

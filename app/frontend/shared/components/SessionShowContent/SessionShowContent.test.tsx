@@ -74,7 +74,7 @@ describe('SessionShowContent', () => {
     );
 
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
-    expect(screen.getByText('ready')).toBeInTheDocument();
+    expect(screen.getByText('Ready')).toBeInTheDocument();
     expect(screen.getByText('#42')).toBeInTheDocument();
     // Active session also shows the "New Session" action in the header.
     expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
@@ -175,7 +175,7 @@ describe('SessionShowContent', () => {
       />,
     );
 
-    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByText('Container exploded')).toBeInTheDocument();
     // A failed/finished session is terminal: no Finish button.
     expect(screen.queryByRole('button', { name: /^finish$/i })).not.toBeInTheDocument();
@@ -191,8 +191,8 @@ describe('SessionShowContent', () => {
     );
 
     expect(screen.getByText('Starting session...')).toBeInTheDocument();
-    // The header state badge plus the waiting badge both read the raw state.
-    expect(screen.getAllByText('not_started').length).toBeGreaterThan(0);
+    // Header badge plus waiting badge both render the humanized state.
+    expect(screen.getAllByText('Not started').length).toBeGreaterThan(0);
   });
 
   it('renders the finishing overlay while the session is finishing', () => {

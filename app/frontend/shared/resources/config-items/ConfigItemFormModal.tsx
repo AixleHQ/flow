@@ -88,7 +88,7 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit Config Item' : 'Add Config Item'} centered>
+    <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit secret' : 'Add secret'} centered>
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <TextInput

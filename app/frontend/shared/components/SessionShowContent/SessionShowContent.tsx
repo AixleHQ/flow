@@ -12,6 +12,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';
@@ -42,15 +43,6 @@ const AGENT_COLORS: Record<string, string> = {
   cursor_cli: 'violet',
   codex: 'teal',
   gemini_cli: 'blue',
-};
-
-const STATE_COLORS: Record<string, string> = {
-  not_started: 'gray',
-  running: 'blue',
-  ready: 'green',
-  finishing: 'yellow',
-  finished: 'gray',
-  failed: 'red',
 };
 
 function formatTokens(n: number): string {
@@ -89,7 +81,6 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
   const { canExecute } = useProjectPermissions();
   const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
   const agentColor = AGENT_COLORS[s.agentType ?? ''] ?? 'gray';
-  const stateColor = STATE_COLORS[s.state] ?? 'gray';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
   const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
@@ -167,9 +158,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         <Text fw={600} size="sm">
           {agentLabel}
         </Text>
-        <Badge color={stateColor} size="sm" variant="outline">
-          {s.state}
-        </Badge>
+        <StatusBadge state={s.state} size="sm" />
         <Text size="xs" c="dimmed" ff="monospace">
           #{s.id}
         </Text>
@@ -180,13 +169,13 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         )}
         {s.errorMessage && !isTerminal && (
           <Tooltip label={s.errorMessage} maw={400} multiline>
-            <Text size="xs" c="red" className={classes.errorTruncated}>
+            <Text size="xs" c="var(--app-danger-fg)" className={classes.errorTruncated}>
               {s.errorMessage}
             </Text>
           </Tooltip>
         )}
         <Tooltip label="Copy session link">
-          <ActionIcon variant="subtle" size="xs" onClick={handleCopyLink}>
+          <ActionIcon aria-label="Copy session link" variant="subtle" size="xs" onClick={handleCopyLink}>
             <IconCopy size={14} />
           </ActionIcon>
         </Tooltip>
@@ -219,13 +208,13 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             <Badge color={agentColor} size="lg" variant="filled">
               {agentLabel}
             </Badge>
-            <Badge color={stateColor} size="lg" variant="outline">
+            <StatusBadge state={s.state} size="lg">
               {s.state === 'failed' ? 'Failed' : 'Completed'}
-            </Badge>
+            </StatusBadge>
           </Group>
 
           {s.errorMessage && (
-            <Text c="red" size="sm" ta="center">
+            <Text c="var(--app-danger-fg)" size="sm" ta="center">
               {s.errorMessage}
             </Text>
           )}
@@ -364,9 +353,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
           <Text size="lg" fw={500}>
             Starting session...
           </Text>
-          <Badge color={stateColor} size="sm" variant="light">
-            {s.state}
-          </Badge>
+          <StatusBadge state={s.state} size="sm" />
         </Stack>
       </Center>
     </Box>
@@ -398,7 +385,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
           {editorCollapsed && hasIde && (
             <div className={classes.collapseStrip}>
               <Tooltip label="Show editor (⌘B)">
-                <ActionIcon variant="subtle" size="sm" onClick={toggleEditor}>
+                <ActionIcon aria-label="Show editor (⌘B)" variant="subtle" size="sm" onClick={toggleEditor}>
                   <IconChevronRight size={14} />
                 </ActionIcon>
               </Tooltip>

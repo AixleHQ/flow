@@ -1,0 +1,33 @@
+/*
+ * Base styles for every Mantine input (TextInput, Select, Textarea, …).
+ *
+ * These used to live in `mantineTheme.ts` as an `Input.extend({ styles })`
+ * block. Mantine compiles `styles` to an inline `style` attribute, which
+ * outranks its own `:focus` border-color rule — and because Mantine inputs
+ * signal focus through `border-color` (not `outline`), that silently removed
+ * the focus indicator from every form field in the app. Keeping this in a CSS
+ * module means the focus state can win on specificity.
+ */
+.input {
+  background-color: var(--app-bg-default);
+  border-color: var(--app-border-strong);
+  color: var(--app-text-primary);
+}
+
+.input:focus,
+.input:focus-within,
+.input[data-focus] {
+  border-color: var(--app-border-active);
+  outline: 2px solid var(--app-primary);
+  outline-offset: 1px;
+}
+
+.input[data-error],
+.input[aria-invalid='true'] {
+  border-color: var(--app-danger-fg);
+}
+
+.input[data-error]:focus,
+.input[aria-invalid='true']:focus {
+  outline-color: var(--app-danger-fg);
+}

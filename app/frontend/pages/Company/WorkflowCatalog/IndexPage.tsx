@@ -6,6 +6,8 @@ import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { PageHeader } from 'shared/ui/PageHeader';
+
 interface CatalogWorkflow {
   id: number;
   name: string;
@@ -65,16 +67,11 @@ const IndexPage = () => {
     <AuthLayout>
       <Head title="Workflow Catalog" />
       <Box mih="100vh" bg="var(--app-bg-default)">
-        <Group justify="space-between" align="flex-start" mb={24}>
-          <Box>
-            <Text fz={32} fw={600} c="var(--app-text-primary)" mb={8}>
-              Workflow Catalog
-            </Text>
-            <Text c="dimmed" size="sm">
-              Published workflows your team can duplicate into their projects.
-            </Text>
-          </Box>
-        </Group>
+        <PageHeader
+          title="Workflow Catalog"
+          subtitle="Published workflows your team can duplicate into their projects."
+          mb={24}
+        />
 
         <TextInput
           placeholder="Search workflows..."

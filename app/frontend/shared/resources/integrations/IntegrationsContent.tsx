@@ -15,7 +15,6 @@ import {
   Text,
   TextInput,
   ThemeIcon,
-  Title,
   UnstyledButton,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
@@ -36,6 +35,8 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
+import { PageHeader } from 'shared/ui/PageHeader';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 export interface Integration {
   id: number;
@@ -59,12 +60,6 @@ interface IntegrationsContentProps {
   basePath: string;
   title: string;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  active: 'green',
-  inactive: 'yellow',
-  error: 'red',
-};
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
 const CoderIcon = ({ size = 20 }: { size?: number } = {}) => (
@@ -113,9 +108,7 @@ const IntegrationCard = ({
             <Text fw={600} size="sm">
               {integration.name}
             </Text>
-            <Badge color={STATUS_COLORS[integration.status] ?? 'gray'} size="sm" variant="light">
-              {integration.status}
-            </Badge>
+            <StatusBadge state={integration.status} size="sm" />
             {readOnly && (
               <Badge size="xs" variant="outline" color="gray">
                 company
@@ -380,39 +373,39 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Title order={2}>{title}</Title>
-          <Text size="sm" c="dimmed" mt={2}>
-            {isProjectContext
-              ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
-              : 'Connect external services to your company'}
-          </Text>
-        </Box>
-        {canExecute && (
-          <Menu position="bottom-end" withArrow>
-            <Menu.Target>
-              <Button leftSection={<IconPlus size={16} />}>Connect</Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-                GitHub
-              </Menu.Item>
-              <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-                GitLab
-              </Menu.Item>
-              <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
-                Coder
-              </Menu.Item>
-              {isProjectContext && (
-                <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
-                  Slack
+      <PageHeader
+        title={title}
+        subtitle={
+          isProjectContext
+            ? 'Connect GitHub, GitLab, Coder or Slack for this project, or use company-wide integrations'
+            : 'Connect external services to your company'
+        }
+        actions={
+          canExecute && (
+            <Menu position="bottom-end" withArrow>
+              <Menu.Target>
+                <Button leftSection={<IconPlus size={16} />}>Connect</Button>
+              </Menu.Target>
+              <Menu.Dropdown>
+                <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                  GitHub
                 </Menu.Item>
-              )}
-            </Menu.Dropdown>
-          </Menu>
-        )}
-      </Group>
+                <Menu.Item leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                  GitLab
+                </Menu.Item>
+                <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                  Coder
+                </Menu.Item>
+                {isProjectContext && (
+                  <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                    Slack
+                  </Menu.Item>
+                )}
+              </Menu.Dropdown>
+            </Menu>
+          )
+        }
+      />
 
       {integrations.length === 0 ? (
         <Card p="xl" withBorder radius="md">
@@ -567,7 +560,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
           )}
 
           {coderError && (
-            <Text size="sm" c="red">
+            <Text size="sm" c="var(--app-danger-fg)">
               {coderError}
             </Text>
           )}

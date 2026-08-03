@@ -10,3 +10,79 @@
   color: var(--app-text-tertiary) !important;
   opacity: 1; /* Firefox reduces opacity by default */
 }
+
+/*
+ * Keyboard focus. Mantine's own ring only covers Mantine components, so bare
+ * anchors — every Inertia <Link>, including all 16 sidebar nav items — used to
+ * fall back to Chrome's 1px system-blue outline. One ring, one color, app-wide.
+ */
+:focus-visible {
+  outline: 2px solid var(--app-primary);
+  outline-offset: 2px;
+}
+
+/* Skip link: rendered first in AuthLayout, off-screen until focused. */
+.app-skip-link {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  z-index: 1000;
+  padding: 8px 14px;
+  border-radius: var(--mantine-radius-md);
+  background: var(--app-bg-paper);
+  border: 1px solid var(--app-border-strong);
+  color: var(--app-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.app-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* Screen-reader-only text that still participates in the accessibility tree. */
+.app-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Touch targets. Every icon control in the app is sized for a mouse — the
+ * dominant row action is a 22x22 ActionIcon, the board checkbox is 16x16 — and
+ * those sizes carried over unchanged to 390px, where 100% of the interactive
+ * elements on some pages were under 44x44. Rather than resize the glyphs, grow
+ * the hit area on coarse pointers only.
+ */
+@media (pointer: coarse) {
+  .mantine-ActionIcon-root,
+  .mantine-Checkbox-input,
+  .mantine-Radio-radio,
+  .mantine-Switch-track,
+  button.wf-icon-btn,
+  button.wf-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mantine-Checkbox-input,
+  .mantine-Radio-radio {
+    /* The box itself stays small; the padding around it is what grows. */
+    background-clip: content-box;
+    padding: 12px;
+  }
+
+  .mantine-Button-root[data-size='compact-xs'],
+  .mantine-Button-root[data-size='compact-sm'],
+  .mantine-Button-root[data-size='xs'] {
+    min-height: 44px;
+  }
+}

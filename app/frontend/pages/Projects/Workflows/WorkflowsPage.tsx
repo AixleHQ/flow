@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -46,6 +47,7 @@ interface Workflow {
   scopeId: number;
   scopeIndicator: 'company' | 'project' | 'overrides_company';
   stepsCount: number;
+  runsCount: number;
   lastRunAt: string | null;
   lastRunStatus: string | null;
   hasActiveRuns: boolean;
@@ -217,40 +219,29 @@ const WorkflowsPage = () => {
         .wf-meta-item { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--app-text-secondary); }
         .wf-status-label { font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; border: 1px solid transparent; white-space: nowrap; flex-shrink: 0; margin-top: 1px; }
         .wf-status-label-active { background: rgba(209,207,205,0.05); color: var(--app-text-primary); border-color: rgba(209,207,205,0.12); }
-        .wf-status-label-draft { background: rgba(209,207,205,0.03); color: var(--app-text-tertiary); border-color: var(--app-border-default); }
+        .wf-status-label-draft { background: var(--app-action-hover); color: var(--app-text-secondary); border-color: var(--app-border-default); }
         .wf-card-foot { display: flex; align-items: center; gap: 6px; padding: 11px 18px; border-top: 1px solid var(--app-border-default); }
         .wf-foot-left { display: flex; align-items: center; gap: 6px; flex: 1; }
         .wf-foot-right { display: flex; gap: 2px; }
         .wf-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 5px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s, color 0.12s; border: 1px solid var(--app-border-default); background: transparent; color: var(--app-text-secondary); white-space: nowrap; }
         .wf-btn:hover { background: var(--app-bg-hover, rgba(255,255,255,0.04)); color: var(--app-text-primary); border-color: var(--app-border-active); }
-        .wf-btn-run { background: rgba(207,107,74,0.12); color: #cf6b4a; border-color: rgba(207,107,74,0.30); font-weight: 600; }
-        .wf-btn-run:hover { background: rgba(207,107,74,0.18); color: #cf6b4a; border-color: #cf6b4a; }
+        .wf-btn-run { background: var(--app-action-selected); color: var(--app-primary-strong); border-color: var(--app-accent-muted); font-weight: 600; }
+        .wf-btn-run:hover { background: var(--app-action-selected); color: var(--app-primary-strong); border-color: var(--app-primary); }
         .wf-icon-btn { width: 28px; height: 28px; border-radius: 4px; border: none; background: transparent; color: var(--app-text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.12s, color 0.12s; }
         .wf-icon-btn:hover { background: var(--app-bg-hover, rgba(255,255,255,0.04)); color: var(--app-text-secondary); }
-        .wf-icon-btn-danger:hover { background: rgba(200,90,90,0.1); color: #c85a5a; }
+        .wf-icon-btn-danger:hover { background: var(--app-danger-bg); color: var(--app-danger-fg); }
         .run-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; background: var(--app-text-tertiary); }
         .run-dot-ok { background: var(--app-text-tertiary); }
         .run-dot-idle { background: var(--app-text-tertiary); }
       `}</style>
 
       {/* Page heading */}
-      <div style={{ marginBottom: 18, maxWidth: 680 }}>
-        <div
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: 'var(--app-text-primary)',
-            letterSpacing: '-0.02em',
-            marginBottom: 4,
-          }}
-        >
-          Workflows
-        </div>
-        <div style={{ fontSize: 13, color: 'var(--app-text-secondary)', lineHeight: 1.6 }}>
-          Reusable automations your agents run end-to-end — a sequence of sessions with instructions, tools, and
-          resources, triggered on a schedule or event. Create one manually, or describe what you want and let AI build
-          it for you.
-        </div>
+      <div style={{ maxWidth: 680 }}>
+        <PageHeader
+          title="Workflows"
+          subtitle="Reusable automations your agents run end-to-end — a sequence of sessions with instructions, tools, and resources, triggered on a schedule or event. Create one manually, or describe what you want and let AI build it for you."
+          mb={18}
+        />
       </div>
 
       {/* Toolbar */}
@@ -313,8 +304,8 @@ const WorkflowsPage = () => {
                 fontWeight: 600,
                 cursor: 'pointer',
                 border: '1px solid transparent',
-                background: 'var(--app-primary, #cf6b4a)',
-                color: '#0a0908',
+                background: 'var(--app-primary)',
+                color: 'var(--app-on-primary)',
                 transition: 'background 0.12s',
               }}
               onClick={() => setCreateOpen(true)}
@@ -342,7 +333,7 @@ const WorkflowsPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, alignContent: 'start' }}>
           {filtered.map((wf) => {
             const isInherited = wf.scopeIndicator === 'company';
-            const isActive = !!wf.publishedAt;
+            const isPublished = !!wf.publishedAt;
             const lastRunDot = wf.lastRunStatus
               ? (() => {
                   const s = wf.lastRunStatus.toLowerCase();
@@ -379,11 +370,12 @@ const WorkflowsPage = () => {
                     <div className="wf-card-name">{wf.name}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginTop: 1 }}>
                       {isInherited && <span className="wf-status-label wf-status-label-draft">company</span>}
-                      <span
-                        className={`wf-status-label ${isActive ? 'wf-status-label-active' : 'wf-status-label-draft'}`}
-                      >
-                        {isActive ? 'Active' : 'Draft'}
-                      </span>
+                      {/* published_at only means "shared to the company
+                          catalog so other projects can duplicate it". It says
+                          nothing about whether the workflow is finished or
+                          runnable, so labelling its absence "Draft" was wrong.
+                          Only the shared state is worth a badge. */}
+                      {isPublished && <span className="wf-status-label wf-status-label-active">In catalog</span>}
                     </div>
                   </div>
                   {/* Description */}
@@ -404,7 +396,9 @@ const WorkflowsPage = () => {
                     </div>
                     <div className="wf-meta-item">
                       <IconPlayerPlay size={13} style={{ color: 'var(--app-text-tertiary)' }} />
-                      <span>0 runs</span>
+                      <span>
+                        {wf.runsCount} {wf.runsCount === 1 ? 'run' : 'runs'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -431,7 +425,12 @@ const WorkflowsPage = () => {
                     {canExecute &&
                       (isInherited ? (
                         <Tooltip label="Copy & Configure">
-                          <button type="button" className="wf-icon-btn" onClick={() => handleCopyAndConfigure(wf)}>
+                          <button
+                            type="button"
+                            className="wf-icon-btn"
+                            aria-label="Copy & Configure"
+                            onClick={() => handleCopyAndConfigure(wf)}
+                          >
                             <IconCopy size={14} />
                           </button>
                         </Tooltip>
@@ -441,7 +440,8 @@ const WorkflowsPage = () => {
                             <button
                               type="button"
                               className="wf-icon-btn"
-                              style={wf.publishedAt ? { color: 'var(--mantine-color-green-6)' } : {}}
+                              aria-label={wf.publishedAt ? 'Unpublish from catalog' : 'Publish to catalog'}
+                              style={wf.publishedAt ? { color: 'var(--app-success-fg)' } : {}}
                               onClick={() =>
                                 router.post(
                                   `${basePath}/${wf.id}/${wf.publishedAt ? 'unpublish' : 'publish'}`,
@@ -459,7 +459,12 @@ const WorkflowsPage = () => {
                             </button>
                           </Tooltip>
                           <Tooltip label="Edit name & description">
-                            <button type="button" className="wf-icon-btn" onClick={() => openEdit(wf)}>
+                            <button
+                              type="button"
+                              className="wf-icon-btn"
+                              aria-label="Edit name & description"
+                              onClick={() => openEdit(wf)}
+                            >
                               <IconEdit size={14} />
                             </button>
                           </Tooltip>
@@ -467,6 +472,7 @@ const WorkflowsPage = () => {
                             <button
                               type="button"
                               className="wf-icon-btn wf-icon-btn-danger"
+                              aria-label="Delete workflow"
                               onClick={() => setDeleteWorkflow(wf)}
                             >
                               <IconTrash size={14} />
@@ -523,7 +529,7 @@ const WorkflowsPage = () => {
         <Text size="sm" mb="md">
           Are you sure you want to delete <strong>{deleteWorkflow?.name}</strong>?
           {deleteWorkflow?.hasActiveRuns && (
-            <Text c="red" size="sm" mt="xs">
+            <Text c="var(--app-danger-fg)" size="sm" mt="xs">
               This workflow has active runs. Stop them first.
             </Text>
           )}

@@ -184,13 +184,13 @@ export function SessionTerminalReplay({ logUrl }: Props) {
               No terminal output was captured for this session.
             </Text>
           ) : status === 'error' ? (
-            <Text size="xs" c="red" ta="center">
+            <Text size="xs" c="var(--app-danger-fg)" ta="center">
               Could not load the session terminal log.
             </Text>
           ) : (
             <>
               {truncated && (
-                <Text size="xs" c="yellow" mb={4}>
+                <Text size="xs" c="var(--app-warning-fg)" mb={4}>
                   Log truncated — showing the most recent output.
                 </Text>
               )}

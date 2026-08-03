@@ -98,8 +98,10 @@ describe('Projects/Settings/SettingsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
-    // Confirm modal renders with its own title and confirm action.
-    expect(await screen.findByRole('button', { name: 'Delete Project' })).toBeInTheDocument();
+    // Confirm modal renders with its own title and a confirm action that stays
+    // disabled until the project name is typed back.
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Delete project' })).toBeDisabled();
   });
 
   it('renders the existing description and selected language in the General form', () => {
@@ -232,9 +234,10 @@ describe('Projects/Settings/SettingsPage', () => {
     // "cannot be undone" appears in both the Danger Zone blurb and the modal, so scope to the dialog.
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
-    const confirm = within(dialog).getByRole('button', { name: 'Delete Project' });
 
-    await userEvent.click(confirm);
+    // Type-to-confirm: the button only arms once the name matches exactly.
+    await userEvent.type(within(dialog).getByLabelText(/type "gateway service" to confirm/i), 'Gateway Service');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete project' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/7',
@@ -359,7 +362,8 @@ describe('Projects/Settings/SettingsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete Project' }));
+    await userEvent.type(within(dialog).getByLabelText(/type "gateway service" to confirm/i), 'Gateway Service');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete project' }));
 
     // router.delete(url, options) — the callbacks live in the second argument.
     const options = (router.delete as ReturnType<typeof vi.fn>).mock.calls[0][1];
@@ -375,7 +379,8 @@ describe('Projects/Settings/SettingsPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete Project' }));
+    await userEvent.type(within(dialog).getByLabelText(/type "gateway service" to confirm/i), 'Gateway Service');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete project' }));
 
     const options = (router.delete as ReturnType<typeof vi.fn>).mock.calls[0][1];
     act(() => options.onError?.());

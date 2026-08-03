@@ -26,6 +26,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
+import { EmptyState } from 'shared/ui/EmptyState';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
 
@@ -311,21 +313,18 @@ export function AssetsContent({
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Text fz={24} fw={600} c="var(--app-text-primary)">
-            {title}
-          </Text>
-          <Text fz={14} c="dimmed" mt={4}>
-            {subtitle}
-          </Text>
-        </Box>
-        {canExecute && createEndpoint && (
-          <Button leftSection={<IconUpload size={16} />} onClick={() => setUploadOpen(true)}>
-            Upload
-          </Button>
-        )}
-      </Group>
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          canExecute &&
+          createEndpoint && (
+            <Button leftSection={<IconUpload size={16} />} onClick={() => setUploadOpen(true)}>
+              Upload
+            </Button>
+          )
+        }
+      />
 
       <Group gap="sm" mb="lg">
         <TextInput
@@ -349,25 +348,33 @@ export function AssetsContent({
       </Group>
 
       {filtered.length === 0 ? (
-        <Center
-          mih={300}
+        <Box
           style={{
             border: '1px solid var(--app-border-default)',
             borderRadius: 'var(--mantine-radius-md)',
             backgroundColor: 'var(--app-bg-paper)',
-            flexDirection: 'column',
           }}
         >
-          <Text fz={48}>📁</Text>
-          <Text fz={16} c="dimmed" mt="sm">
-            {search || folderFilter ? 'No assets match your filters' : 'No assets yet'}
-          </Text>
-          {!search && !folderFilter && canExecute && createEndpoint && (
-            <Button variant="outline" mt="sm" onClick={() => setUploadOpen(true)}>
-              Upload your first file
-            </Button>
-          )}
-        </Center>
+          <EmptyState
+            icon={<IconFolder size={22} />}
+            title={search || folderFilter ? 'No assets match your filters' : 'No assets yet'}
+            description={
+              search || folderFilter
+                ? undefined
+                : 'Assets are files your agents can read during a session and write results back to.'
+            }
+            action={
+              !search &&
+              !folderFilter &&
+              canExecute &&
+              createEndpoint && (
+                <Button variant="outline" onClick={() => setUploadOpen(true)}>
+                  Upload your first file
+                </Button>
+              )
+            }
+          />
+        </Box>
       ) : (
         <Box
           style={{
@@ -474,7 +481,12 @@ export function AssetsContent({
                     <Group gap={4} justify="flex-end">
                       {asset.latestVersion?.fileUrl && (
                         <Tooltip label="Preview">
-                          <ActionIcon variant="subtle" size="sm" onClick={() => setPreviewAsset(asset)}>
+                          <ActionIcon
+                            aria-label="Preview"
+                            variant="subtle"
+                            size="sm"
+                            onClick={() => setPreviewAsset(asset)}
+                          >
                             <IconEye size={16} />
                           </ActionIcon>
                         </Tooltip>
@@ -482,6 +494,7 @@ export function AssetsContent({
                       {asset.latestVersion && (
                         <Tooltip label="Download">
                           <ActionIcon
+                            aria-label="Preview"
                             variant="subtle"
                             size="sm"
                             component="a"
@@ -494,19 +507,25 @@ export function AssetsContent({
                         </Tooltip>
                       )}
                       <Tooltip label="Version history">
-                        <ActionIcon variant="subtle" size="sm" onClick={() => openHistory(asset)}>
+                        <ActionIcon aria-label="Download" variant="subtle" size="sm" onClick={() => openHistory(asset)}>
                           <IconHistory size={16} />
                         </ActionIcon>
                       </Tooltip>
                       {canExecute && canDelete(asset) ? (
                         <Tooltip label="Delete">
-                          <ActionIcon variant="subtle" size="sm" color="red" onClick={() => handleSoftDelete(asset)}>
+                          <ActionIcon
+                            aria-label="Version history"
+                            variant="subtle"
+                            size="sm"
+                            color="red"
+                            onClick={() => handleSoftDelete(asset)}
+                          >
                             <IconTrash size={16} />
                           </ActionIcon>
                         </Tooltip>
                       ) : (
                         <Tooltip label="Company-managed">
-                          <ActionIcon variant="subtle" size="sm" color="red" disabled>
+                          <ActionIcon aria-label="Delete" variant="subtle" size="sm" color="red" disabled>
                             <IconTrash size={16} />
                           </ActionIcon>
                         </Tooltip>

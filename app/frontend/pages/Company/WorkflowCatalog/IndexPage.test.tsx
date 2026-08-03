@@ -22,7 +22,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, { props: { workflows: [], projects: [] } });
 
     // 'Workflow Catalog' also appears as a sidebar nav label, so scope to the page heading.
-    expect(screen.getByText('Workflow Catalog', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Workflow Catalog' })).toBeInTheDocument();
     expect(screen.getByText('No workflows published yet')).toBeInTheDocument();
   });
 

@@ -53,10 +53,7 @@ describe('McpServersContent', () => {
   it('shows the empty state with an "add your first" CTA when there are no servers and no active filters', async () => {
     renderPage(<McpServersContent {...baseProps} mcpServers={[]} />);
 
-    // Default kind filter is "custom", which counts as an active filter, so first
-    // switch to "All" to reach the unfiltered empty state.
-    await userEvent.click(screen.getByText('All'));
-
+    // The kind filter defaults to "All", so this is the unfiltered empty state.
     expect(screen.getByText('No MCP servers configured')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add one manually/i })).toBeInTheDocument();
   });
@@ -149,13 +146,15 @@ describe('McpServersContent', () => {
       />,
     );
 
-    // Default filter is "custom", so the internal row is hidden initially.
-    expect(screen.queryByText('System One')).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('All'));
-
+    // The filter defaults to "All", so both rows are visible without touching it.
     expect(screen.getByText('Custom One')).toBeInTheDocument();
     expect(screen.getByText('System One')).toBeInTheDocument();
+
+    // Narrowing to Custom hides the internal row.
+    await userEvent.click(screen.getByText('Custom'));
+
+    expect(screen.getByText('Custom One')).toBeInTheDocument();
+    expect(screen.queryByText('System One')).not.toBeInTheDocument();
   });
 
   it('renders the server name, URL, transport, scope, and status cells in the row', () => {
@@ -193,7 +192,10 @@ describe('McpServersContent', () => {
       />,
     );
 
-    expect(screen.getByText('—')).toBeInTheDocument();
+    // The Connection column also renders an em dash for a non-OAuth server, so
+    // scope the assertion to the row's URL cell.
+    const row = screen.getByText('Stdio Server').closest('tr') as HTMLElement;
+    expect(within(row).getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.getByText('STDIO')).toBeInTheDocument();
   });
 

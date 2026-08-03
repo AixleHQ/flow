@@ -13,18 +13,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* wrap, not nowrap: with a fixed-width right group and a long workflow name,
+     the two sides used to draw on top of each other at narrow widths. */
+  flex-wrap: wrap;
   padding: 10px 16px;
   border-bottom: 1px solid var(--app-border-default);
   background: var(--app-bg-paper);
   flex-shrink: 0;
-  gap: 12px;
+  gap: 8px 12px;
 }
 
 .headerLeft {
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
   min-width: 0;
+  flex: 1 1 240px;
 }
 
 .headerRight {
@@ -37,7 +42,18 @@
 .headerMeta {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+@media (max-width: 640px) {
+  .header {
+    align-items: flex-start;
+  }
+
+  .headerRight {
+    flex-basis: 100%;
+  }
 }
 
 /* ── Content Area ──────────────────────────────── */
@@ -111,7 +127,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--app-on-primary);
   flex-shrink: 0;
   font-size: 12px;
 }
@@ -129,7 +145,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--app-on-primary);
   font-size: 9px;
   flex-shrink: 0;
 }
@@ -185,7 +201,7 @@
 
 .parallelTabActive {
   background: var(--app-bg-paper);
-  border-bottom-color: var(--mantine-color-brand-5);
+  border-bottom-color: var(--app-primary);
 }
 
 /* ── Step Info Bar ─────────────────────────────── */
@@ -202,7 +218,8 @@
 .terminalArea {
   flex: 1;
   position: relative;
-  background: #000;
+  /* xterm canvas: black by contract, not a themed surface. */
+  background: var(--app-terminal-bg);
   overflow: hidden;
 }
 
@@ -292,7 +309,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--mantine-color-brand-5);
+  background: var(--app-primary);
   animation: liveBlink 1.5s ease-in-out infinite;
   flex-shrink: 0;
 }

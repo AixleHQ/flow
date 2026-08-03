@@ -19,11 +19,11 @@ const ConfigPage = () => {
 
   return (
     <>
-      <Head title={`Config — ${project.name}`} />
+      <Head title={`Secrets & Variables — ${project.name}`} />
       <ConfigItemsContent
         configItems={configItems}
         basePath={`/company/projects/${project.id}/config_items`}
-        title="Project Config Items"
+        title="Secrets & Variables"
       />
     </>
   );

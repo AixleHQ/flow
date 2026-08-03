@@ -65,7 +65,7 @@ export const DeleteAgentModal: FC<DeleteAgentModalProps> = ({ opened, onClose, a
         </Box>
       </Box>
 
-      <Text fz={13} c="yellow" mb="md">
+      <Text fz={13} c="var(--app-warning-fg)" mb="md">
         This action cannot be undone. Any sessions or workflows using this agent may be affected.
       </Text>
 

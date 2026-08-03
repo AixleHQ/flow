@@ -59,13 +59,16 @@ describe('Projects/Members/MembersPage', () => {
   });
 
   it('removes a member via router.delete after confirmation', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
     await userEvent.click(screen.getByRole('button', { name: /Remove/ }));
 
-    expect(confirmSpy).toHaveBeenCalled();
-    expect(router.delete).toHaveBeenCalledWith('/company/projects/7/members/2', { preserveScroll: true });
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/7/members/2', { preserveScroll: true }),
+    );
   });
 
   it('opens the Add Collaborator modal listing only users not already in the project', async () => {
@@ -79,12 +82,13 @@ describe('Projects/Members/MembersPage', () => {
   });
 
   it('does not delete a member when the confirmation is declined', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
     await userEvent.click(screen.getByRole('button', { name: /Remove/ }));
 
-    expect(confirmSpy).toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
     expect(router.delete).not.toHaveBeenCalled();
   });
 

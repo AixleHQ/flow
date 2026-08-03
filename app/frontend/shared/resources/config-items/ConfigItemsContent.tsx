@@ -11,11 +11,13 @@ import {
   Table,
   Text,
   TextInput,
-  Title,
   Tooltip,
 } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { IconCheck, IconCopy, IconDotsVertical, IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { ConfigItemFormModal } from './ConfigItemFormModal';
 
@@ -60,9 +62,18 @@ export const ConfigItemsContent = ({ configItems, basePath, title }: ConfigItems
   }, [configItems, search, typeFilter]);
 
   const handleDelete = (item: ConfigItem) => {
-    if (confirm(`Delete ${item.name}?`)) {
-      router.delete(`${basePath}/${item.id}`, { preserveScroll: true });
-    }
+    modals.openConfirmModal({
+      title: 'Delete secret',
+      children: (
+        <Text size="sm">
+          Delete <b>{item.name}</b>? Anything injecting it — tools, MCP servers, running workflows — stops resolving it
+          immediately. This action cannot be undone.
+        </Text>
+      ),
+      labels: { confirm: 'Delete', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => router.delete(`${basePath}/${item.id}`, { preserveScroll: true }),
+    });
   };
 
   const handleEdit = (item: ConfigItem) => {
@@ -77,18 +88,20 @@ export const ConfigItemsContent = ({ configItems, basePath, title }: ConfigItems
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Title order={2}>{title}</Title>
-        <Button
-          leftSection={<IconPlus size={16} />}
-          onClick={() => {
-            setEditItem(null);
-            setModalOpen(true);
-          }}
-        >
-          Add Config Item
-        </Button>
-      </Group>
+      <PageHeader
+        title={title}
+        actions={
+          <Button
+            leftSection={<IconPlus size={16} />}
+            onClick={() => {
+              setEditItem(null);
+              setModalOpen(true);
+            }}
+          >
+            Add secret
+          </Button>
+        }
+      />
 
       <Group mb="lg">
         <TextInput
@@ -111,7 +124,7 @@ export const ConfigItemsContent = ({ configItems, basePath, title }: ConfigItems
         />
       </Group>
 
-      <Table striped highlightOnHover>
+      <Table highlightOnHover>
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Name</Table.Th>

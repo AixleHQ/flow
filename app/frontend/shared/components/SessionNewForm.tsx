@@ -22,9 +22,17 @@ import { useCallback, useMemo, useState } from 'react';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
+import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
 import classes from './SessionNewForm.module.css';
+
+/** Cost context for the commit moment — see sessions_controller#session_cost_hint. */
+export interface SessionCostHint {
+  avgCostCentsByRuntime: Record<string, number>;
+  monthToDateCents: number;
+}
 
 export interface NamedItem {
   id: number;
@@ -47,13 +55,15 @@ export interface SessionNewFormProps {
   fallbackPath: string;
   /** Pre-selected project for company-level form */
   preSelectedProjectId?: number | null;
+  /** Typical spend for this runtime + what has already gone this month. */
+  costHint?: SessionCostHint;
 }
 
 const AVAILABLE_AGENTS = [
-  { type: 'claude_code', label: 'Claude Code', color: '#D97706' },
-  { type: 'cursor_cli', label: 'Cursor CLI', color: '#7C3AED' },
-  { type: 'codex', label: 'Codex', color: '#10A37F' },
-  { type: 'gemini_cli', label: 'Gemini CLI', color: '#3B82F6' },
+  { type: 'claude_code', label: 'Claude Code', color: AGENT_BRAND_COLORS.claude_code },
+  { type: 'cursor_cli', label: 'Cursor CLI', color: AGENT_BRAND_COLORS.cursor_cli },
+  { type: 'codex', label: 'Codex', color: AGENT_BRAND_COLORS.codex },
+  { type: 'gemini_cli', label: 'Gemini CLI', color: AGENT_BRAND_COLORS.gemini_cli },
 ];
 
 const AGENT_MANTINE_COLORS: Record<string, string> = {
@@ -62,6 +72,8 @@ const AGENT_MANTINE_COLORS: Record<string, string> = {
   codex: 'teal',
   gemini_cli: 'blue',
 };
+
+const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 
 interface AgentModel {
   modelId: string;
@@ -86,6 +98,7 @@ export const SessionNewForm = ({
   onCreatedPath,
   fallbackPath,
   preSelectedProjectId,
+  costHint,
 }: SessionNewFormProps) => {
   const { currentUser } = usePage().props as unknown as SharedProps;
   const { canExecute } = useProjectPermissions();
@@ -124,6 +137,8 @@ export const SessionNewForm = ({
   }, [agentModels]);
 
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
+
+  const avgCostCents = agentType ? (costHint?.avgCostCentsByRuntime?.[agentType] ?? null) : null;
 
   const canSubmit =
     !!agentType &&
@@ -255,6 +270,7 @@ export const SessionNewForm = ({
               return (
                 <Tooltip key={a.type} label="Not configured — complete Onboarding first" disabled={isConfigured}>
                   <UnstyledButton
+                    aria-label="Not configured — complete Onboarding first"
                     className={`${classes.agentCard} ${isSelected ? classes.agentSelected : ''} ${!isConfigured ? classes.agentDisabled : ''}`}
                     onClick={() => {
                       if (isConfigured) {
@@ -274,9 +290,9 @@ export const SessionNewForm = ({
                       {a.label}
                     </Text>
                     {!isConfigured && (
-                      <Badge size="xs" color="yellow" variant="light">
+                      <StatusBadge size="xs" tone="warning">
                         Setup needed
-                      </Badge>
+                      </StatusBadge>
                     )}
                   </UnstyledButton>
                 </Tooltip>
@@ -427,6 +443,19 @@ export const SessionNewForm = ({
               <Text size="xs" fw={600} c="dimmed" tt="uppercase">
                 Session Summary
               </Text>
+              {/* The one number that belongs on this screen. Everything else in
+                  the product reports cost after the fact. */}
+              {costHint && (
+                <Text size="xs" c="var(--app-text-secondary)">
+                  {avgCostCents != null ? (
+                    <>
+                      Typically <strong>{formatCents(avgCostCents)}</strong> per session on this runtime
+                      {' · '}
+                    </>
+                  ) : null}
+                  <strong>{formatCents(costHint.monthToDateCents)}</strong> spent by you in this project this month
+                </Text>
+              )}
               <div className={classes.summaryRow}>
                 {agentConfig && (
                   <Badge color={AGENT_MANTINE_COLORS[agentType] ?? 'gray'} size="sm" variant="filled">
@@ -482,7 +511,7 @@ export const SessionNewForm = ({
         )}
 
         {error && (
-          <Text c="red" size="sm">
+          <Text c="var(--app-danger-fg)" size="sm">
             {error}
           </Text>
         )}
@@ -524,13 +553,17 @@ export const SessionNewForm = ({
         {canExecute && (
           <Group>
             <Button
-              size="lg"
-              leftSection={<IconPlayerPlay size={20} />}
+              size="md"
+              leftSection={<IconPlayerPlay size={18} />}
               onClick={handleStart}
               loading={loading}
               disabled={!canSubmit}
               flex={1}
-              color={agentType ? (AGENT_MANTINE_COLORS[agentType] ?? undefined) : undefined}
+              /* No `color` override: the primary action keeps the brand accent
+                 whichever runtime is selected. Coloring it per vendor meant the
+                 most expensive button in the app changed color as you picked,
+                 and its default (Mantine orange) measured 2.57:1. Runtime
+                 identity stays on the runtime picker above. */
             >
               Start Session
             </Button>

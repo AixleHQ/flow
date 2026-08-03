@@ -147,7 +147,7 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
         style={{
           flex: 1,
           fontSize: 13,
-          color: isSelected ? 'var(--accent)' : 'var(--text-2)',
+          color: isSelected ? 'var(--accent-text)' : 'var(--text-2)',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -256,7 +256,7 @@ function SortableSessionRow({
             style={{
               fontSize: 14,
               fontWeight: 500,
-              color: isSessionActive ? 'var(--accent)' : 'var(--text-1)',
+              color: isSessionActive ? 'var(--accent-text)' : 'var(--text-1)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -409,6 +409,7 @@ function AddSessionGhost({ onAdd }: AddSessionGhostProps) {
           ref={inputRef}
           className={classes.ghostInput}
           placeholder="Session name…"
+          aria-label="Session name"
           value={value}
           onChange={(e) => setValue(e.currentTarget.value)}
           onKeyDown={handleKeyDown}

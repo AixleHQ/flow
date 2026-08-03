@@ -108,7 +108,7 @@ export const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
         style={{ flexDirection: 'column', alignItems: 'flex-start', flex: 1, borderRadius: 12 }}
       >
         <Group gap={12} align="center" w="100%" wrap="nowrap" mb={12}>
-          <Avatar color={avatarColor} radius="xl" size="md">
+          <Avatar color={avatarColor} variant="filled" radius="xl" size="md">
             {project.name.charAt(0).toUpperCase()}
           </Avatar>
           <Group gap={8} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
@@ -151,7 +151,7 @@ export const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
             >
               Last activity {formatRelativeTime(project.lastActivityAt)}
             </Text>
-            <Badge variant="light" size="xs">
+            <Badge variant="default" size="xs" styles={{ root: { color: 'var(--app-text-secondary)' } }}>
               {project.membersCount} {pluralize(project.membersCount, 'member')}
             </Badge>
           </Group>

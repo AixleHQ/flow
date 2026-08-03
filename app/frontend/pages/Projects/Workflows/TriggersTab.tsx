@@ -531,7 +531,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                   fontFamily: 'inherit',
                 }}
                 onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.color = 'var(--accent)';
+                  (e.currentTarget as HTMLElement).style.color = 'var(--accent-text)';
                   (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent-muted)';
                   (e.currentTarget as HTMLElement).style.background = 'var(--bg-hover)';
                 }}

@@ -1,8 +1,10 @@
 import { ActionIcon, Badge, Box, Button, Center, Group, Table, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconCopy, IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconCopy, IconEdit, IconPlus, IconRobot, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { EmptyState } from 'shared/ui/EmptyState';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { AgentFormModal } from './AgentFormModal';
 import { DeleteAgentModal } from './DeleteAgentModal';
@@ -73,21 +75,17 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Text fz={24} fw={600} c="var(--app-text-primary)">
-            {title}
-          </Text>
-          <Text fz={14} c="dimmed" mt={4}>
-            {subtitle}
-          </Text>
-        </Box>
-        {canExecute && (
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-            Add Agent
-          </Button>
-        )}
-      </Group>
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          canExecute && (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+              Add Agent
+            </Button>
+          )
+        }
+      />
 
       <TextInput
         placeholder="Search by name or title..."
@@ -99,25 +97,31 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
       />
 
       {filtered.length === 0 ? (
-        <Center
-          mih={300}
+        <Box
           style={{
             border: '1px solid var(--app-border-default)',
             borderRadius: 'var(--mantine-radius-md)',
             backgroundColor: 'var(--app-bg-paper)',
-            flexDirection: 'column',
           }}
         >
-          <Text fz={48}>🤖</Text>
-          <Text fz={16} c="dimmed" mt="sm">
-            {search ? 'No agents match your search' : 'No agents yet'}
-          </Text>
-          {!search && canExecute && (
-            <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
-              Add your first agent
-            </Button>
-          )}
-        </Center>
+          <EmptyState
+            icon={<IconRobot size={22} />}
+            title={search ? 'No agents match your search' : 'No agents yet'}
+            description={
+              search
+                ? undefined
+                : 'An agent is a reusable persona — who it is, how it communicates, what principles it follows.'
+            }
+            action={
+              !search &&
+              canExecute && (
+                <Button variant="outline" onClick={() => setFormModalOpen(true)}>
+                  Add your first agent
+                </Button>
+              )
+            }
+          />
+        </Box>
       ) : (
         <Box
           style={{
@@ -206,12 +210,18 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                     {canExecute && (
                       <Group gap={4} justify="flex-end">
                         <Tooltip label="Duplicate">
-                          <ActionIcon variant="subtle" size="sm" onClick={() => handleDuplicate(agent)}>
+                          <ActionIcon
+                            aria-label="Duplicate"
+                            variant="subtle"
+                            size="sm"
+                            onClick={() => handleDuplicate(agent)}
+                          >
                             <IconCopy size={16} />
                           </ActionIcon>
                         </Tooltip>
                         <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
                           <ActionIcon
+                            aria-label="Duplicate"
                             variant="subtle"
                             size="sm"
                             disabled={isReadOnly(agent)}
@@ -222,6 +232,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                         </Tooltip>
                         <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
                           <ActionIcon
+                            aria-label="Duplicate"
                             variant="subtle"
                             size="sm"
                             color="red"

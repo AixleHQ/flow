@@ -1,6 +1,15 @@
 .root {
   display: flex;
-  height: 100vh;
+  /* dvh, not vh — 100vh is taller than the visible area on mobile browsers
+     with dynamic toolbars, which pushed the shell under the URL bar. */
+  height: 100dvh;
+}
+
+/* Under 768px the sidebar becomes a sticky top bar, so the shell stacks. */
+@media (max-width: 768px) {
+  .root {
+    flex-direction: column;
+  }
 }
 
 .contentColumn {
@@ -17,6 +26,12 @@
   padding: 28px 24px;
 }
 
+@media (max-width: 768px) {
+  .main {
+    padding: 16px 14px;
+  }
+}
+
 .mainNoPadding {
   flex-grow: 1;
   display: flex;
@@ -30,14 +45,18 @@
   justify-content: center;
   gap: 6px;
   padding: 16px 0;
-  opacity: 0.5;
-  transition: opacity 0.2s;
+  /* Was opacity: 0.5 over an already-dimmed token, which landed at 2.16:1 in
+     light and 2.60:1 in dark on every page. The mark itself keeps the opacity;
+     the text uses a real token. */
+  color: var(--app-text-tertiary);
 }
 
 .footer img {
   display: block;
+  opacity: 0.6;
+  transition: opacity 0.2s;
 }
 
-.footer:hover {
-  opacity: 0.8;
+.footer:hover img {
+  opacity: 1;
 }

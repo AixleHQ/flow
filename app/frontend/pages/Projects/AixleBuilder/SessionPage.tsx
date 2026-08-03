@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -50,15 +51,6 @@ interface Props {
 }
 
 // ── Constants ──────────────────────────────────────
-
-const STATE_COLORS: Record<string, string> = {
-  not_started: 'gray',
-  running: 'blue',
-  ready: 'green',
-  finishing: 'yellow',
-  finished: 'gray',
-  failed: 'red',
-};
 
 const AGENT_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
@@ -201,7 +193,7 @@ const SessionPage = () => {
               <>
                 <Text fw={500}>Session {s.state}</Text>
                 {s.errorMessage && (
-                  <Text size="sm" c="red">
+                  <Text size="sm" c="var(--app-danger-fg)">
                     {s.errorMessage}
                   </Text>
                 )}
@@ -360,7 +352,7 @@ const SessionPage = () => {
           Session {s.state}
         </Text>
         {s.errorMessage && (
-          <Text size="sm" c="red" ta="center">
+          <Text size="sm" c="var(--app-danger-fg)" ta="center">
             {s.errorMessage}
           </Text>
         )}
@@ -406,9 +398,7 @@ const SessionPage = () => {
             <Text fw={600} size="sm">
               Aixle Builder
             </Text>
-            <Badge color={STATE_COLORS[s.state] ?? 'gray'} size="sm" variant="outline">
-              {s.state}
-            </Badge>
+            <StatusBadge state={s.state} size="sm" />
             <Text size="xs" c="dimmed" ff="monospace">
               #{s.id}
             </Text>

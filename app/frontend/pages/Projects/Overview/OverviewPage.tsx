@@ -2,7 +2,9 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Box, Progress, Text } from '@mantine/core';
 import { IconCoin, IconLayoutKanban, IconPlayerPlay, IconRoute } from '@tabler/icons-react';
 import type { CSSProperties } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
+
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -68,27 +70,29 @@ function formatRelativeTime(iso: string): string {
   return `${Math.floor(diffHr / 24)} d ago`;
 }
 
+// The activity feed encodes outcome, not category: created/moved/updated are
+// neutral, completions are success, failures are danger.
 const ACTIVITY_EVENT_COLORS: Record<string, string> = {
-  task_created: '#00bcd4',
-  task_moved: '#ff9800',
-  task_updated: '#607d8b',
-  task_deleted: '#f44336',
-  comment_added: '#9c27b0',
-  asset_attached: '#795548',
-  workflow_triggered: '#2196f3',
-  workflow_completed: '#4caf50',
-  workflow_failed: '#f44336',
-  workflow_cancelled: '#9e9e9e',
-  session_started: '#2196f3',
-  session_completed: '#4caf50',
-  session_failed: '#f44336',
+  task_created: 'var(--app-chart-6)',
+  task_moved: 'var(--app-chart-4)',
+  task_updated: 'var(--app-text-tertiary)',
+  task_deleted: 'var(--app-text-tertiary)',
+  comment_added: 'var(--app-chart-5)',
+  asset_attached: 'var(--app-chart-7)',
+  workflow_triggered: 'var(--app-chart-2)',
+  workflow_completed: 'var(--app-success-fg)',
+  workflow_failed: 'var(--app-danger-fg)',
+  workflow_cancelled: 'var(--app-text-tertiary)',
+  session_started: 'var(--app-chart-2)',
+  session_completed: 'var(--app-success-fg)',
+  session_failed: 'var(--app-danger-fg)',
 };
 
 const WORKFLOW_STATUS_COLORS: Record<string, string> = {
-  Completed: '#4caf50',
-  'In Progress': '#2196f3',
-  Failed: '#f44336',
-  Queued: '#ff9800',
+  Completed: 'var(--app-success-fg)',
+  'In Progress': 'var(--app-chart-2)',
+  Failed: 'var(--app-danger-fg)',
+  Queued: 'var(--app-warning-fg)',
 };
 
 const s: Record<string, CSSProperties> = {
@@ -244,12 +248,38 @@ const s: Record<string, CSSProperties> = {
   },
 };
 
+// One muted tone for all four. These were four unrelated hues (blue, green,
+// indigo, yellow) on values that share no scale — decoration reading as
+// encoding. The number is the signal; the icon just names the metric.
 const STAT_ICONS = [
-  { Icon: IconPlayerPlay, color: 'var(--mantine-color-blue-5)' },
-  { Icon: IconCoin, color: 'var(--mantine-color-green-5)' },
-  { Icon: IconRoute, color: 'var(--mantine-color-indigo-5)' },
-  { Icon: IconLayoutKanban, color: 'var(--mantine-color-yellow-5)' },
+  { Icon: IconPlayerPlay, color: 'var(--app-text-tertiary)' },
+  { Icon: IconCoin, color: 'var(--app-text-tertiary)' },
+  { Icon: IconRoute, color: 'var(--app-text-tertiary)' },
+  { Icon: IconLayoutKanban, color: 'var(--app-text-tertiary)' },
 ];
+
+/**
+ * Fold consecutive identical events into one row.
+ *
+ * The feed is ordered by time, and agent work produces runs of the same event —
+ * ten rows of "Session completed with claude_code" told you nothing that one row
+ * with a count would not. Only *consecutive* duplicates collapse, so the
+ * chronology stays intact.
+ */
+function groupActivity<T extends { eventType: string; description: string; actorName: string; occurredAt: string }>(
+  items: T[],
+): (T & { count: number })[] {
+  const out: (T & { count: number })[] = [];
+  for (const item of items) {
+    const prev = out[out.length - 1];
+    if (prev && prev.description === item.description && prev.actorName === item.actorName) {
+      prev.count += 1;
+      continue;
+    }
+    out.push({ ...item, count: 1 });
+  }
+  return out;
+}
 
 const OverviewPage = () => {
   const { project, summary, workflowRunStats, boardTaskDistribution, recentActivity } = usePage<{ props: Props }>()
@@ -264,6 +294,8 @@ const OverviewPage = () => {
     }, 60_000);
     return () => clearInterval(interval);
   }, []);
+
+  const groupedActivity = useMemo(() => groupActivity(recentActivity ?? []), [recentActivity]);
 
   const projectStats = [
     { label: 'Sessions Launched', value: (summary.sessionsLaunched ?? 0).toLocaleString() },
@@ -303,10 +335,7 @@ const OverviewPage = () => {
     <>
       <Head title={`Overview — ${project.name}`} />
       <Box>
-        <Box style={s.pageHeader}>
-          <Text style={s.pageTitle}>Project Overview</Text>
-          <Text style={s.pageSubtitle}>Project activity at a glance</Text>
-        </Box>
+        <PageHeader title="Project Overview" subtitle="Project activity at a glance" />
 
         <Text style={s.sectionTitle}>Project Summary</Text>
         <Box style={s.statsGrid}>
@@ -327,21 +356,29 @@ const OverviewPage = () => {
         <Box style={s.twoCol}>
           <Box style={s.card}>
             <Text style={s.sectionTitle}>Recent Activity</Text>
-            {recentActivity.length === 0 ? (
+            {groupedActivity.length === 0 ? (
               <Text style={{ fontSize: 13, color: 'var(--mantine-color-dimmed)', padding: '10px 0' }}>
                 No recent activity found.
               </Text>
             ) : (
-              recentActivity.map((item, idx) => (
-                <Box key={idx} style={idx < recentActivity.length - 1 ? s.activityItem : s.activityItemLast}>
+              groupedActivity.map((item, idx) => (
+                <Box key={idx} style={idx < groupedActivity.length - 1 ? s.activityItem : s.activityItemLast}>
                   <Box
                     style={{
                       ...s.activityDot,
-                      backgroundColor: ACTIVITY_EVENT_COLORS[item.eventType] ?? '#9e9e9e',
+                      backgroundColor: ACTIVITY_EVENT_COLORS[item.eventType] ?? 'var(--app-text-tertiary)',
                     }}
                   />
                   <Box>
-                    <Text style={s.activityText}>{item.description}</Text>
+                    <Text style={s.activityText}>
+                      {item.description}
+                      {item.count > 1 && (
+                        <Text span style={{ color: 'var(--app-text-tertiary)', fontWeight: 600 }}>
+                          {' '}
+                          &times;{item.count}
+                        </Text>
+                      )}
+                    </Text>
                     <Text style={s.activityTime}>
                       {item.actorName} · {formatRelativeTime(item.occurredAt)}
                     </Text>

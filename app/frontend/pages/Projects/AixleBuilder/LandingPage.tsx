@@ -20,6 +20,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -66,14 +67,6 @@ const AGENT_OPTIONS = [
   { value: 'codex', label: 'Codex', color: 'teal' },
   { value: 'gemini_cli', label: 'Gemini CLI', color: 'blue' },
 ];
-
-const STATE_COLORS: Record<string, string> = {
-  not_started: 'gray',
-  running: 'blue',
-  ready: 'green',
-  finished: 'gray',
-  failed: 'red',
-};
 
 const LandingPage = () => {
   const {
@@ -150,7 +143,7 @@ const LandingPage = () => {
             {configuredAgents.length === 0 && (
               <Alert icon={<IconAlertCircle size={16} />} color="orange" variant="light">
                 No agent runtimes configured. Go to{' '}
-                <Text component="a" href="/profile" size="sm" c="orange" td="underline" span>
+                <Text component="a" href="/profile" size="sm" c="var(--app-warning-fg)" td="underline" span>
                   Profile
                 </Text>{' '}
                 to set up an agent credential.
@@ -244,9 +237,7 @@ const LandingPage = () => {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={STATE_COLORS[s.state] ?? 'gray'} size="sm" variant="outline">
-                        {s.state}
-                      </Badge>
+                      <StatusBadge state={s.state} size="sm" />
                     </Table.Td>
                     <Table.Td>
                       {agent && (
@@ -265,6 +256,7 @@ const LandingPage = () => {
                     <Table.Td>
                       <Tooltip label="Open session">
                         <ActionIcon
+                          aria-label="Open session"
                           variant="subtle"
                           size="sm"
                           onClick={() => router.visit(`/company/projects/${project.id}/aixle_builder/${s.id}/session`)}

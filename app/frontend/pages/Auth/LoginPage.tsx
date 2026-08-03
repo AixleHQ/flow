@@ -1,4 +1,4 @@
-import { useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import { Button, Center, Checkbox, Divider, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useRef, useState } from 'react';
@@ -30,7 +30,9 @@ function NoWorkspaceScreen() {
     <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
       <Center mb={32}>
         <span className={classes.brand}>
-          <Logo width={96} colorScheme="dark" />
+          {/* No colorScheme override: pinning it to "dark" inverts the mark to
+                  white, which disappears on the light-scheme login card. */}
+          <Logo width={96} />
           <span className={classes.brandFlow}>Flow</span>
         </span>
       </Center>
@@ -96,6 +98,7 @@ const LoginPage = () => {
 
   return (
     <PageShell variant="centered">
+      <Head title="Sign in — Aixle Flow" />
       {error === 'no_workspace' ? (
         <NoWorkspaceScreen />
       ) : error ? (
@@ -109,7 +112,9 @@ const LoginPage = () => {
         >
           <Center mb={32}>
             <span className={classes.brand}>
-              <Logo width={96} colorScheme="dark" />
+              {/* No colorScheme override: pinning it to "dark" inverts the mark to
+                  white, which disappears on the light-scheme login card. */}
+              <Logo width={96} />
               <span className={classes.brandFlow}>Flow</span>
             </span>
           </Center>
@@ -186,7 +191,9 @@ const LoginPage = () => {
         >
           <Center mb={32}>
             <span className={classes.brand}>
-              <Logo width={96} colorScheme="dark" />
+              {/* No colorScheme override: pinning it to "dark" inverts the mark to
+                  white, which disappears on the light-scheme login card. */}
+              <Logo width={96} />
               <span className={classes.brandFlow}>Flow</span>
             </span>
           </Center>

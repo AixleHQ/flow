@@ -1,6 +1,7 @@
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   closestCorners,
   pointerWithin,
@@ -16,6 +17,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   horizontalListSortingStrategy,
+  sortableKeyboardCoordinates,
   useSortable,
   arrayMove,
 } from '@dnd-kit/sortable';
@@ -48,6 +50,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { modals } from '@mantine/modals';
 import {
   IconActivity,
   IconAdjustmentsHorizontal,
@@ -136,6 +139,8 @@ import {
   apiV1ProjectViewPresetsPath,
   apiV1ProjectViewPresetPath,
 } from 'shared/routes';
+import { CHART_SERIES } from 'shared/theme/chartPalette';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -251,42 +256,33 @@ interface Props {
   taskStatistics?: TaskStatistics | null;
 }
 
+// Categorical, so these read from the chart ramp rather than Material hexes;
+// priority is a severity scale, so it reads from the status tokens.
 const TASK_TYPE_COLORS: Record<string, string> = {
-  epic: '#9c27b0',
-  story: '#2196f3',
-  bug: '#f44336',
-  not_specified: '#9e9e9e',
+  epic: 'var(--app-chart-5)',
+  story: 'var(--app-chart-2)',
+  bug: 'var(--app-danger-fg)',
+  not_specified: 'var(--app-text-tertiary)',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  critical: '#f44336',
-  high: '#ff9800',
-  medium: '#ffc107',
-  low: '#4caf50',
+  critical: 'var(--app-danger-fg)',
+  high: 'var(--app-warning-fg)',
+  medium: 'var(--app-chart-4)',
+  low: 'var(--app-success-fg)',
 };
 
 const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
 
 // Helper to get workflow status indicator color
 const workflowStatusColor = (state: string): string => {
-  if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--mantine-color-yellow-5)';
-  if (state === 'failed') return 'var(--mantine-color-red-5)';
-  if (state === 'completed' || state === 'succeeded') return 'var(--mantine-color-green-5)';
-  return 'var(--mantine-color-gray-5)';
+  if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--app-warning-fg)';
+  if (state === 'failed') return 'var(--app-danger-fg)';
+  if (state === 'completed' || state === 'succeeded') return 'var(--app-success-fg)';
+  return 'var(--app-text-tertiary)';
 };
 
-const CHART_COLORS = [
-  '#2196f3',
-  '#9c27b0',
-  '#4caf50',
-  '#ff9800',
-  '#e91e63',
-  '#00bcd4',
-  '#ff5722',
-  '#3f51b5',
-  '#8bc34a',
-  '#ffc107',
-];
+const CHART_COLORS = CHART_SERIES;
 const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   backgroundColor: 'var(--app-bg-default)',
   border: '1px solid rgba(255,255,255,0.12)',
@@ -449,13 +445,13 @@ function TaskCardUI({
   let dotColor: string | undefined;
   let runLabel: string | undefined;
   if (isRunning && latestRun) {
-    dotColor = 'var(--mantine-color-yellow-5)';
+    dotColor = 'var(--app-warning-fg)';
     runLabel = latestRun.state;
   } else if (isFailed) {
-    dotColor = 'var(--mantine-color-red-5)';
+    dotColor = 'var(--app-danger-fg)';
     runLabel = 'failed';
   } else if (isSuccess && latestRun) {
-    dotColor = 'var(--mantine-color-green-5)';
+    dotColor = 'var(--app-success-fg)';
     runLabel = latestRun.state;
   }
 
@@ -511,7 +507,7 @@ function TaskCardUI({
               mt={4}
               style={{
                 borderRadius: '50%',
-                backgroundColor: PRIORITY_COLORS[task.priority] ?? '#9e9e9e',
+                backgroundColor: PRIORITY_COLORS[task.priority] ?? 'var(--app-text-tertiary)',
                 flexShrink: 0,
               }}
             />
@@ -559,8 +555,8 @@ function TaskCardUI({
             size="xs"
             variant="filled"
             style={{
-              backgroundColor: TASK_TYPE_COLORS[task.taskType] ?? '#9e9e9e',
-              color: '#fff',
+              backgroundColor: TASK_TYPE_COLORS[task.taskType] ?? 'var(--app-text-tertiary)',
+              color: 'var(--app-on-primary)',
               fontWeight: 600,
               fontSize: 10,
             }}
@@ -628,7 +624,14 @@ function TaskCardUI({
         <Group gap={6}>
           {task.assigneeName && (
             <Tooltip label={task.assigneeName}>
-              <Avatar size={20} radius="xl" color="brand" style={{ fontSize: 10 }}>
+              <Avatar
+                size={20}
+                radius="xl"
+                color="brand"
+                variant="filled"
+                /* styles, not style: Mantine's placeholder span sets its own color. */
+                styles={{ placeholder: { fontSize: 10, color: 'var(--app-on-primary)' } }}
+              >
                 {avatarInitials(task.assigneeName)}
               </Avatar>
             </Tooltip>
@@ -980,6 +983,7 @@ function BoardColumn({
                 <ActionIcon
                   size="sm"
                   variant="subtle"
+                  aria-label={`Column actions for ${column.name}`}
                   onClick={(e) => e.stopPropagation()}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
@@ -1001,11 +1005,7 @@ function BoardColumn({
                         lineHeight: 1.45,
                       }}
                     >
-                      <IconBolt
-                        size={13}
-                        color="var(--mantine-color-brand-5)"
-                        style={{ marginTop: 1, flexShrink: 0 }}
-                      />
+                      <IconBolt size={13} color="var(--app-primary-strong)" style={{ marginTop: 1, flexShrink: 0 }} />
                       <span>
                         Runs{' '}
                         <strong style={{ color: 'var(--mantine-color-text)' }}>
@@ -1069,6 +1069,7 @@ function BoardColumn({
             <ActionIcon
               size="sm"
               variant="subtle"
+              aria-label={`Add task to ${column.name}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onAddTask(column.id);
@@ -1265,9 +1266,9 @@ function NeutralStatusChip({ state, size = 'xs' }: { state: string; size?: strin
   const isSuccess = state === 'completed' || state === 'succeeded';
   const isFailed = state === 'failed';
   let dotColor = 'var(--mantine-color-gray-5)';
-  if (isRunning) dotColor = 'var(--mantine-color-yellow-5)';
-  else if (isSuccess) dotColor = 'var(--mantine-color-green-5)';
-  else if (isFailed) dotColor = 'var(--mantine-color-red-5)';
+  if (isRunning) dotColor = 'var(--app-warning-fg)';
+  else if (isSuccess) dotColor = 'var(--app-success-fg)';
+  else if (isFailed) dotColor = 'var(--app-danger-fg)';
 
   return (
     <Badge
@@ -1363,7 +1364,7 @@ function InlineTagsEditor({
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-                (e.currentTarget as HTMLButtonElement).style.color = 'var(--mantine-color-red-5)';
+                (e.currentTarget as HTMLButtonElement).style.color = 'var(--app-danger-fg)';
                 (e.currentTarget as HTMLButtonElement).style.background = 'rgba(200,90,90,0.12)';
               }}
               onMouseLeave={(e) => {
@@ -1430,7 +1431,7 @@ function InlineTagsEditor({
           style={{
             width: 120,
             background: 'var(--app-bg-paper)',
-            border: '1px solid var(--mantine-color-brand-5)',
+            border: '1px solid var(--app-primary)',
             borderRadius: 5,
             fontFamily: 'inherit',
             fontSize: 12,
@@ -1700,8 +1701,8 @@ function TaskDetailSidebar({
             loading={triggeringWorkflow}
             styles={{
               root: {
-                background: 'var(--mantine-color-brand-5)',
-                color: '#0a0908',
+                background: 'var(--app-primary)',
+                color: 'var(--app-on-primary)',
                 border: 'none',
                 fontWeight: 600,
                 fontSize: 13,
@@ -1853,7 +1854,7 @@ function TaskDetailSidebar({
                     borderRadius: 4,
                     border: '1px solid var(--mantine-color-brand-light-hover)',
                     background: 'var(--mantine-color-brand-light)',
-                    color: 'var(--mantine-color-brand-5)',
+                    color: 'var(--app-primary-strong)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 5,
@@ -1934,7 +1935,7 @@ function TaskDetailSidebar({
                       marginBottom: 14,
                     }}
                   >
-                    <IconBolt size={14} color="var(--mantine-color-brand-5)" />
+                    <IconBolt size={14} color="var(--app-primary-strong)" />
                     Latest run
                   </Box>
                   {/* run-summary card */}
@@ -2003,7 +2004,7 @@ function TaskDetailSidebar({
                         marginLeft: 'auto',
                         background: 'none',
                         border: 'none',
-                        color: 'var(--mantine-color-brand-5)',
+                        color: 'var(--app-primary-strong)',
                         fontSize: 12,
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -2038,7 +2039,7 @@ function TaskDetailSidebar({
                 marginBottom: 14,
               }}
             >
-              <IconListDetails size={14} color="var(--mantine-color-brand-5)" />
+              <IconListDetails size={14} color="var(--app-primary-strong)" />
               Properties
             </Box>
 
@@ -2192,8 +2193,8 @@ function TaskDetailSidebar({
                         size="xs"
                         variant="filled"
                         style={{
-                          backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? '#9e9e9e',
-                          color: '#fff',
+                          backgroundColor: TASK_TYPE_COLORS[child.taskType] ?? 'var(--app-text-tertiary)',
+                          color: 'var(--app-on-primary)',
                           fontSize: 10,
                           fontWeight: 600,
                           flexShrink: 0,
@@ -2419,11 +2420,11 @@ function TaskDetailSidebar({
                                       flexShrink: 0,
                                       backgroundColor:
                                         step.state === 'done'
-                                          ? 'var(--mantine-color-green-5)'
+                                          ? 'var(--app-success-fg)'
                                           : step.state === 'running'
-                                            ? 'var(--mantine-color-yellow-5)'
+                                            ? 'var(--app-warning-fg)'
                                             : step.state === 'failed'
-                                              ? 'var(--mantine-color-red-5)'
+                                              ? 'var(--app-danger-fg)'
                                               : 'var(--mantine-color-gray-5)',
                                     }}
                                   />
@@ -2521,7 +2522,7 @@ function TaskDetailSidebar({
                         borderRadius: 5,
                         border: `1px solid ${active ? 'var(--mantine-color-brand-light-hover)' : 'rgba(209,207,205,0.14)'}`,
                         background: active ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.05)',
-                        color: active ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+                        color: active ? 'var(--app-primary)' : 'var(--mantine-color-dimmed)',
                         cursor: 'pointer',
                         lineHeight: 1,
                         transition: 'all .12s',
@@ -2547,8 +2548,8 @@ function TaskDetailSidebar({
                   disabled={!commentBody.trim()}
                   styles={{
                     root: {
-                      background: commentBody.trim() ? 'var(--mantine-color-brand-5)' : undefined,
-                      color: commentBody.trim() ? '#0a0908' : undefined,
+                      background: commentBody.trim() ? 'var(--app-primary)' : undefined,
+                      color: commentBody.trim() ? 'var(--app-on-primary)' : undefined,
                       border: 'none',
                       fontWeight: 600,
                     },
@@ -2660,7 +2661,7 @@ function TaskDetailSidebar({
                         fontWeight: 700,
                         background: isAgent ? 'var(--mantine-color-brand-light)' : 'var(--mantine-color-brand-light)',
                         border: '1px solid var(--mantine-color-brand-light-hover)',
-                        color: 'var(--mantine-color-brand-5)',
+                        color: 'var(--app-primary-strong)',
                       }}
                     >
                       {initials}
@@ -2678,7 +2679,7 @@ function TaskDetailSidebar({
                           borderRadius: 4,
                           background: isAgent ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.05)',
                           border: `1px solid ${isAgent ? 'var(--mantine-color-brand-light-hover)' : 'rgba(209,207,205,0.14)'}`,
-                          color: isAgent ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+                          color: isAgent ? 'var(--app-primary)' : 'var(--mantine-color-dimmed)',
                           textTransform: 'uppercase',
                         }}
                       >
@@ -2799,7 +2800,7 @@ function TaskDetailSidebar({
                 gap: 8,
               }}
             >
-              <IconCloudUpload size={14} color="var(--mantine-color-brand-5)" />
+              <IconCloudUpload size={14} color="var(--app-primary-strong)" />
               Assets
             </Box>
             {canExecute && (
@@ -2812,8 +2813,8 @@ function TaskDetailSidebar({
                   styles={{
                     root: {
                       background: 'transparent',
-                      border: '1px solid var(--mantine-color-brand-5)',
-                      color: 'var(--mantine-color-brand-5)',
+                      border: '1px solid var(--app-primary)',
+                      color: 'var(--app-primary-strong)',
                       fontWeight: 600,
                       fontSize: 13,
                     },
@@ -3029,7 +3030,7 @@ function TaskDetailSidebar({
                           />
                           <Bar dataKey="costCents" radius={[0, 4, 4, 0]}>
                             {stats.workflowBreakdowns.map((_, i) => (
-                              <Cell key={i} fill="var(--mantine-color-brand-5)" />
+                              <Cell key={i} fill="var(--app-primary)" />
                             ))}
                           </Bar>
                         </BarChart>
@@ -3515,7 +3516,7 @@ function ActivityAvatar({ actorType, actorName }: { actorType: string; actorName
         fontWeight: 600,
         background: isAgent ? 'var(--mantine-color-brand-light)' : 'rgba(209,207,205,0.07)',
         border: `1px solid ${isAgent ? 'var(--mantine-color-brand-light-hover)' : 'var(--app-border-default)'}`,
-        color: isAgent ? 'var(--mantine-color-brand-5)' : 'var(--mantine-color-dimmed)',
+        color: isAgent ? 'var(--app-primary)' : 'var(--mantine-color-dimmed)',
       }}
     >
       {isAgent ? (
@@ -4054,8 +4055,12 @@ const BoardPage = () => {
   }, [boardUrl]);
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
+  // Dropping a card into an automated column is how a workflow gets started, so
+  // a pointer-only board meant keyboard and screen-reader users could not run
+  // one at all. Space/Enter picks a card up, arrows move it, Space drops it.
+  const keyboardSensor = useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates });
   // Viewers cannot reorder/move tasks: register no sensors so drag never activates.
-  const sensors = useSensors(...(canExecute ? [pointerSensor] : []));
+  const sensors = useSensors(...(canExecute ? [pointerSensor, keyboardSensor] : []));
 
   const collisionDetection = useCallback<CollisionDetection>((args) => {
     const pw = pointerWithin(args);
@@ -4381,10 +4386,17 @@ const BoardPage = () => {
   );
 
   const handleDeleteColumn = useCallback(
-    async (columnId: number) => {
-      if (!window.confirm('Delete this column? Tasks inside will be moved to the first column.')) return;
-      await apiFetch(apiV1ProjectColumnPath(project.id, columnId), { method: 'DELETE' });
-      router.reload({ only: ['columns', 'tasks'] });
+    (columnId: number) => {
+      modals.openConfirmModal({
+        title: 'Delete column',
+        children: <Text size="sm">Tasks inside will be moved to the first column. This action cannot be undone.</Text>,
+        labels: { confirm: 'Delete', cancel: 'Cancel' },
+        confirmProps: { color: 'red' },
+        onConfirm: async () => {
+          await apiFetch(apiV1ProjectColumnPath(project.id, columnId), { method: 'DELETE' });
+          router.reload({ only: ['columns', 'tasks'] });
+        },
+      });
     },
     [project.id],
   );
@@ -4435,22 +4447,20 @@ const BoardPage = () => {
       <Head title={`Board — ${project.name}`} />
       <Box className={styles.boardRoot}>
         {/* Page header */}
-        <Box mb="md">
-          <Text fw={700} size="xl" lh={1.2}>
-            Tasks
-          </Text>
-          <Text size="sm" c="dimmed" mt={4}>
-            Plan manual and agent work side by side — drop a task into an automated column to run its workflow, and
-            track every run&apos;s progress, status, and cost right on the card.
-          </Text>
-        </Box>
+        <PageHeader
+          title="Tasks"
+          subtitle="Plan manual and agent work side by side — drop a task into an automated column to run its workflow, and track every run's progress, status, and cost right on the card."
+          mb={16}
+        />
 
-        {/* Filter toolbar */}
-        <Group gap={6} mb="sm" wrap="nowrap" align="center">
+        {/* Filter toolbar. `wrap` matters: with nowrap, nine controls squeezed
+            into 390px and every button label got clipped to an empty pill. */}
+        <Group gap={6} mb="sm" wrap="wrap" align="center">
           {/* Search */}
           <TextInput
             ref={searchInputRef}
             placeholder="Search tasks"
+            aria-label="Search tasks"
             leftSection={<IconSearch size={12} />}
             value={filters.search}
             onChange={(e) => {
@@ -4459,7 +4469,7 @@ const BoardPage = () => {
               setFilters((f) => ({ ...f, search }));
             }}
             size="xs"
-            w={180}
+            w={{ base: '100%', xs: 180 }}
           />
 
           {/* Presets */}
@@ -4885,7 +4895,7 @@ const BoardPage = () => {
                 variant="unstyled"
               />
               {form.errors.title && (
-                <Text size="xs" c="red" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Text size="xs" c="var(--app-danger-fg)" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                   <IconAlertCircle size={13} /> {form.errors.title}
                 </Text>
               )}
@@ -4930,7 +4940,7 @@ const BoardPage = () => {
                   marginBottom: 14,
                 }}
               >
-                <IconListDetails size={14} color="var(--mantine-color-brand-5)" />
+                <IconListDetails size={14} color="var(--app-primary-strong)" />
                 Properties
               </Box>
 
@@ -5017,14 +5027,14 @@ const BoardPage = () => {
                       gap: 8,
                       marginTop: 4,
                       padding: '10px 12px',
-                      borderLeft: '2px solid var(--mantine-color-brand-5)',
+                      borderLeft: '2px solid var(--app-primary)',
                       background: 'var(--mantine-color-brand-light)',
                       borderRadius: '0 5px 5px 0',
                       fontSize: 12,
                       color: 'var(--mantine-color-dimmed)',
                     }}
                   >
-                    <IconBolt size={14} color="var(--mantine-color-brand-5)" style={{ marginTop: 1, flexShrink: 0 }} />
+                    <IconBolt size={14} color="var(--app-primary-strong)" style={{ marginTop: 1, flexShrink: 0 }} />
                     <Text size="xs">
                       Placing this in <strong style={{ color: 'var(--mantine-color-text)' }}>{selCol.name}</strong> will
                       run the{' '}

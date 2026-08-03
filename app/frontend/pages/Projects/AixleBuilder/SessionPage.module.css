@@ -71,7 +71,8 @@
 }
 
 .terminalFrame {
-  background-color: #000;
+  /* xterm canvas: black by contract, not a themed surface. */
+  background-color: var(--app-terminal-bg);
 }
 
 .editorFrame {

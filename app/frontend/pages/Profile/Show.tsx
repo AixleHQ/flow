@@ -1,5 +1,6 @@
-import { router, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import {
+  CopyButton,
   Alert,
   Badge,
   Box,
@@ -21,9 +22,10 @@ import {
   Tooltip,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
+import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { type Subscription } from '@rails/actioncable';
-import { IconCheck, IconLock, IconTrash } from '@tabler/icons-react';
+import { IconCheck, IconCopy, IconLock, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
@@ -44,7 +46,9 @@ import {
   regenerateMCPTokenProfilePath,
   usageProfilePath,
 } from 'shared/routes';
+import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
 import { type AgentCredential, type AgentType, type SharedMembership, type SharedUser, type UserRole } from 'shared/ui';
+import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import classes from './Show.module.css';
 
@@ -67,25 +71,25 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     type: 'claude_code',
     name: 'Claude Code',
     description: "Anthropic's AI coding assistant with deep reasoning capabilities",
-    color: '#d97706',
+    color: AGENT_BRAND_COLORS.claude_code,
   },
   {
     type: 'cursor_cli',
     name: 'Cursor CLI',
     description: 'AI-powered code editor with context-aware suggestions',
-    color: '#7c3aed',
+    color: AGENT_BRAND_COLORS.cursor_cli,
   },
   {
     type: 'codex',
     name: 'OpenAI Codex',
     description: "OpenAI's code generation model optimized for multiple languages",
-    color: '#10a37f',
+    color: AGENT_BRAND_COLORS.codex,
   },
   {
     type: 'gemini_cli',
     name: 'Gemini CLI',
     description: "Google's multimodal AI for code and documentation tasks",
-    color: '#3b82f6',
+    color: AGENT_BRAND_COLORS.gemini_cli,
   },
 ];
 
@@ -111,10 +115,10 @@ type AuthKind = 'agent' | 'design';
 // error state). Functional labels + colour so it reads without relying on hue.
 // A badge states what IS, never what to do — the action next to it is already a button
 // labelled "Re-authenticate", and having both say the same thing reads as a duplicate.
-const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { color: string; label: string }> = {
-  active: { color: 'green', label: 'Connected' },
-  expiring: { color: 'yellow', label: 'Expiring soon' },
-  expired: { color: 'red', label: 'Expired' },
+const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { tone: StatusTone; label: string }> = {
+  active: { tone: 'success', label: 'Connected' },
+  expiring: { tone: 'warning', label: 'Expiring soon' },
+  expired: { tone: 'danger', label: 'Expired' },
 };
 
 const formatDate = (d: string | null) => {
@@ -647,7 +651,7 @@ function AgentAuthModal({
     if (sessionState === 'failed') {
       return (
         <Stack align="center" justify="center" h={500} gap="sm">
-          <Text c="red">Authentication session failed to start.</Text>
+          <Text c="var(--app-danger-fg)">Authentication session failed to start.</Text>
           <Button size="xs" variant="outline" onClick={startAuth}>
             Retry
           </Button>
@@ -686,13 +690,13 @@ function AgentAuthModal({
               src={ttydUrl}
               title={`Authenticate ${agentInfo.name}`}
               allow="clipboard-read; clipboard-write"
-              style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: '#000' }}
+              style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: TERMINAL_BG }}
             />
           </Box>
           <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--app-border-default)' }}>
             {authDetected && finishError ? (
               <>
-                <Text size="xs" c="red">
+                <Text size="xs" c="var(--app-danger-fg)">
                   Couldn&apos;t save credentials.
                 </Text>
                 <Button color="green" size="xs" onClick={handleFinish}>
@@ -702,7 +706,7 @@ function AgentAuthModal({
             ) : authDetected ? (
               <Group gap="xs">
                 <Loader size="xs" color="green" />
-                <Text size="xs" c="green" fw={500}>
+                <Text size="xs" c="var(--app-success-fg)" fw={500}>
                   Credentials detected — saving…
                 </Text>
               </Group>
@@ -846,8 +850,20 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
 
   const handleDisconnect = (credential: AgentCredential) => {
     const agentName = getAgentInfo(credential.agentType as AgentType).name;
-    if (!window.confirm(`Remove ${agentName} credentials? You will need to re-authenticate to use this agent.`)) return;
+    modals.openConfirmModal({
+      title: `Remove ${agentName} credentials`,
+      children: (
+        <Text size="sm">
+          You will need to re-authenticate before this agent can run again. Sessions already running are unaffected.
+        </Text>
+      ),
+      labels: { confirm: 'Remove', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => doDisconnect(credential, agentName),
+    });
+  };
 
+  const doDisconnect = (credential: AgentCredential, agentName: string) => {
     setDisconnecting(credential.agentType as AgentType);
     router.delete('/profile/destroy_credential', {
       data: { agentCredentialId: credential.id },
@@ -899,7 +915,7 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                       to answer is "will it work". */}
                   {agent.type === 'claude_code' && hasAwsConnection && (
                     <Group gap={6} mt={6} wrap="wrap">
-                      <Text size="xs" c={awsConnected ? 'green.6' : 'red.6'} fw={500}>
+                      <Text size="xs" c={awsConnected ? 'var(--app-success-fg)' : 'var(--app-danger-fg)'} fw={500}>
                         {awsConnected ? 'Billing to your AWS' : 'AWS needs reconnecting'}
                       </Text>
                       {awsState?.accountId && (
@@ -929,9 +945,9 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
 
                 <Box className={classes.agentActions}>
                   {isConfigured && credential && (
-                    <Badge variant="outline" color={AGENT_STATUS_BADGE[credential.connectionStatus].color} size="sm">
+                    <StatusBadge tone={AGENT_STATUS_BADGE[credential.connectionStatus].tone} size="sm">
                       {AGENT_STATUS_BADGE[credential.connectionStatus].label}
-                    </Badge>
+                    </StatusBadge>
                   )}
                   <Button
                     variant={isConfigured ? 'outline' : 'filled'}
@@ -999,15 +1015,45 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
 
       {mcp.token && (
         <Box mb="md">
-          <Text fz={14} fw={600} c="var(--app-text-primary)">
-            Your token — copy it now, it will not be shown again:
-          </Text>
+          <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
+            <Text fz={14} fw={600} c="var(--app-text-primary)">
+              Your token — copy it now, it will not be shown again:
+            </Text>
+            {/* This is the only moment the token exists in the UI, so it needs a
+                copy affordance, not a select-the-text-yourself code block. */}
+            <CopyButton value={mcp.token}>
+              {({ copied, copy }) => (
+                <Button
+                  variant={copied ? 'light' : 'filled'}
+                  size="compact-sm"
+                  onClick={copy}
+                  leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                >
+                  {copied ? 'Copied' : 'Copy token'}
+                </Button>
+              )}
+            </CopyButton>
+          </Group>
           <Code block my={8} data-testid="mcp-token">
             {mcp.token}
           </Code>
-          <Text fz={13} c="dimmed" mb={4}>
-            Add to Claude Code:
-          </Text>
+          <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
+            <Text fz={13} c="dimmed" mb={4}>
+              Add to Claude Code:
+            </Text>
+            <CopyButton value={claudeCommand ?? ''}>
+              {({ copied, copy }) => (
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  onClick={copy}
+                  leftSection={copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                >
+                  {copied ? 'Copied' : 'Copy command'}
+                </Button>
+              )}
+            </CopyButton>
+          </Group>
           <Code block data-testid="mcp-claude-command">
             {claudeCommand}
           </Code>
@@ -1086,8 +1132,9 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
 
   return (
     <AuthLayout>
+      <Head title="My Profile" />
       <Box maw={600} mx="auto">
-        <Title order={2} fz={32} fw={600} c="var(--app-text-primary)" mb={4}>
+        <Title order={1} fz={28} fw={600} c="var(--app-text-primary)" mb={4}>
           My Profile
         </Title>
         {/* Agents, the agent language and usage are all PER COMPANY — a separate
