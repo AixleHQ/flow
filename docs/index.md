@@ -41,6 +41,7 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 - **[specs/](./specs/)** — Feature specs: frontmatter (`type`, `created`, `baseline_commit`, `status`, `context`) + Intent / Boundaries / I/O matrix / Tasks / Verification
 - **[planning-artifacts/research/](./planning-artifacts/research/)** — BMAD-workflow research reports (same pipeline role as `research/`, produced by the `bmad-technical-research` skill)
   - **[planning-artifacts/research/technical-mcp-connector-catalog-research-2026-08-01.md](./planning-artifacts/research/technical-mcp-connector-catalog-research-2026-08-01.md)** — Registry-backed MCP connector catalog: Official MCP Registry integration, `server.json` → `MCPServer` mapping, mirror-vs-proxy decision, security posture without an allowlist, phased roadmap
+  - **[planning-artifacts/research/technical-skills-catalog-featured-and-manual-add-research-2026-08-03.md](./planning-artifacts/research/technical-skills-catalog-featured-and-manual-add-research-2026-08-03.md)** — Skills page parity with the connector catalog: skills.sh API reachability (v1 is OIDC-only), mirror-for-browse vs live-search inversion, install-count ranking with measured bulk-publisher inflation, manual `SKILL.md` authoring, CLI-telemetry egress finding, phased roadmap
 
 ## Strategy
 

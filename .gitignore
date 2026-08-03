@@ -64,6 +64,7 @@ coverage
 .cursorignore
 .cursorindexingignore
 .byebug_history
+.impeccable/
 
 .ruby-lsp/
 
