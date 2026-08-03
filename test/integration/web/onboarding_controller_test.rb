@@ -66,13 +66,14 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
     assert_redirected_to onboarding_path
-    assert_equal "step4", viewer.reload.onboarding_state
+    assert_equal "step4", viewer.company_memberships.sole.reload.onboarding_state
   end
 
   test "non-viewer cannot use viewer_advance event" do
-    @user.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
+    membership = @user.company_memberships.sole
+    membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
 
     patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
-    assert_equal "step2", @user.reload.onboarding_state
+    assert_equal "step2", membership.reload.onboarding_state
   end
 end

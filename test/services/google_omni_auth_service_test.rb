@@ -49,12 +49,12 @@ class GoogleOmniAuthServiceTest < ActiveSupport::TestCase
     assert_not user.company_memberships.exists?(company_id: domain_company.id)
   end
 
-  test "unknown email domain creates the user with no memberships at all" do
-    user = GoogleOmniAuthService.new(auth_hash(email: "solo@nowhere-known.dev")).authenticate
+  test "unknown email domain raises NoWorkspaceError without persisting a user" do
+    assert_raises(GoogleOmniAuthService::NoWorkspaceError) do
+      GoogleOmniAuthService.new(auth_hash(email: "solo@nowhere-known.dev")).authenticate
+    end
 
-    assert user.persisted?
-    assert_equal "google", user.provider
-    assert user.company_memberships.none?
+    assert_nil User.find_by(email: "solo@nowhere-known.dev")
   end
 
   test "existing user identity is updated (uid/avatar), never duplicated" do

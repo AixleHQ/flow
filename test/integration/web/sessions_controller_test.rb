@@ -89,13 +89,14 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path
   end
 
-  test "omniauth: fresh user with an unknown domain gets no membership and is gated" do
-    with_mocked_google_auth(email: "solo@nowhere-known.dev") do
-      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+  test "omniauth: fresh user with an unknown domain is rejected with no_workspace" do
+    assert_no_difference "User.count" do
+      with_mocked_google_auth(email: "solo@nowhere-known.dev") do
+        get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+      end
     end
 
-    assert_redirected_to login_path(error: "pending_approval")
-    assert User.find_by!(email: "solo@nowhere-known.dev").company_memberships.none?
+    assert_redirected_to login_path(error: "no_workspace")
   end
 
   test "omniauth: an existing member is signed in without any new membership" do

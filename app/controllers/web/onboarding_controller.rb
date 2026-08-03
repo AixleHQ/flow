@@ -26,7 +26,7 @@ class Web::OnboardingController < Web::ApplicationController
                                        .active
                                        .where(company_id: current_membership.company_id)
 
-    viewer_preview = build_viewer_workflow_preview(current_user.company) if current_user.viewer?
+    viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?
 
     render inertia: "Onboarding/OnboardingPage", props: {
       auth_sessions: -> { active_auth_sessions.map { |s| TerminalSessionResource.new(s).to_h } },
