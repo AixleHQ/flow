@@ -66,6 +66,7 @@ export function StepEditorPanel({ step, readOnly, onFieldChange }: StepEditorPan
           <textarea
             className={classes.instrTa}
             placeholder="Enter instructions… Use {{artifact_name}} for variable references."
+            aria-label="Step instructions"
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
             disabled={readOnly}

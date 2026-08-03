@@ -7,6 +7,8 @@
   background-color: var(--app-bg-paper);
   overflow: hidden;
   flex-shrink: 0;
+  /* The rail's own width IS the collapse interaction, so it stays animated —
+     but only here, and only while it is actually collapsing. */
   transition: width 0.2s cubic-bezier(0.2, 0, 0, 1),
               min-width 0.2s cubic-bezier(0.2, 0, 0, 1);
   z-index: 20;
@@ -42,7 +44,7 @@
   margin: 12px 0 4px;
   white-space: nowrap;
   overflow: hidden;
-  transition: opacity 0.15s, height 0.15s;
+  transition: opacity 0.15s;
   display: block;
 }
 
@@ -80,7 +82,7 @@
 
 .navOverviewActive {
   background: var(--app-action-selected);
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
 }
 
 /* ── Nav items ───────────────────────────────────────────────────────────── */
@@ -109,7 +111,7 @@
 
 .navItemActive {
   background: var(--app-action-selected);
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
 }
 
 .navItemIcon {
@@ -123,7 +125,7 @@
 
 .navItemLabel {
   flex: 1;
-  transition: opacity 0.15s, width 0.15s;
+  transition: opacity 0.15s;
   overflow: hidden;
 }
 
@@ -257,14 +259,14 @@
 .swIcoLetter {
   font-size: 14px;
   font-weight: 700;
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
 }
 
 .swText {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  transition: opacity 0.15s, width 0.15s;
+  transition: opacity 0.15s;
 }
 
 .swTextCollapsed {
@@ -407,7 +409,7 @@
 .dpIcoLetter {
   font-size: 10px;
   font-weight: 700;
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
 }
 
 .dpName {
@@ -420,7 +422,7 @@
 }
 
 .dpCheck {
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
   flex-shrink: 0;
 }
 
@@ -538,7 +540,7 @@
 .userAvatarInitials {
   font-size: 14px;
   font-weight: 700;
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
 }
 
 .userName {
@@ -548,7 +550,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: opacity 0.15s, width 0.15s;
+  transition: opacity 0.15s;
 }
 
 .userNameCollapsed {
@@ -561,7 +563,7 @@
 .userCaret {
   color: var(--app-text-tertiary);
   flex-shrink: 0;
-  transition: opacity 0.15s, width 0.15s;
+  transition: opacity 0.15s;
 }
 
 .userCaretCollapsed {
@@ -573,25 +575,43 @@
 
 /* ── Mobile toggle ───────────────────────────────────────────────────────── */
 
-.mobileToggle {
-  position: fixed;
-  bottom: 16px;
-  left: 16px;
+/* Mobile chrome. This used to be a 40x40 button with `position: fixed;
+   bottom: 16px; left: 16px`, which sat on top of table rows and the page
+   footer. It is now a real sticky top bar: it takes layout space instead of
+   covering content, and the hit area clears 44x44. */
+.mobileBar {
+  position: sticky;
+  top: 0;
   z-index: 100;
-  width: 40px;
-  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background-color: var(--app-bg-paper);
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.mobileToggle {
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--app-bg-paper);
-  border: 1px solid var(--app-border-default);
   border-radius: 8px;
   color: var(--app-text-secondary);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .mobileToggle:hover {
   background-color: var(--app-action-hover);
+}
+
+.mobileBarTitle {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  letter-spacing: -0.01em;
 }
 
 /* "Connect an agent" nudge — shown when onboarding skipped the agent step but
@@ -709,7 +729,7 @@
   width: 3px;
   height: 22px;
   border-radius: 0 2px 2px 0;
-  background: var(--app-accent, #cf6b4a);
+  background: var(--app-accent);
 }
 
 .railTile {
@@ -735,5 +755,91 @@
 
 .railItemActive .railTile {
   color: var(--app-text-primary);
-  border-color: var(--app-accent, #cf6b4a);
+  border-color: var(--app-accent);
+}
+
+/* ─── AI Builder banner ──────────────────────────────────────────────────────
+   Previously inline styles hardcoded to dark-scheme literals (#d1cfcd on
+   #0a0908), which rendered the app's most prominent CTA as grey-on-white — read
+   as disabled — in light mode. Now on the --app-cta-invert-* token pair. */
+
+.aiBannerCollapsed {
+  margin: 8px 0 4px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.aiBanner {
+  margin: 8px 10px 4px;
+  padding: 13px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-paper);
+  flex-shrink: 0;
+}
+
+.aiBannerIcon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: var(--app-action-selected);
+  border: 1px solid var(--app-border-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-primary-strong);
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.aiBannerIconStacked {
+  margin-bottom: 10px;
+}
+
+.aiBannerTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.aiBannerBody {
+  font-size: 11px;
+  color: var(--app-text-secondary);
+  line-height: 1.45;
+  margin-bottom: 12px;
+}
+
+.aiBannerCta {
+  background: var(--app-cta-invert-bg);
+  color: var(--app-cta-invert-fg);
+  border-radius: 5px;
+  width: 100%;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: background 0.12s;
+}
+
+.aiBannerCta:hover {
+  background: var(--app-cta-invert-bg-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root,
+  .navGroupLabel,
+  .navItemLabel,
+  .swText,
+  .userName,
+  .userCaret {
+    transition: none;
+  }
 }

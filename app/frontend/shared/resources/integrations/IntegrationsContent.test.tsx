@@ -183,7 +183,7 @@ describe('IntegrationsContent', () => {
       { props: settingsProps },
     );
 
-    expect(screen.getByText('error')).toBeInTheDocument();
+    expect(screen.getByText('Error')).toBeInTheDocument();
   });
 
   it('renders a Settings link to the github management URL when present', () => {

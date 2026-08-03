@@ -236,7 +236,7 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
 
       // The field starts in plain-text mode; the toggle switches it to picking a
       // stored secret, the same affordance the manual MCP form has.
-      await userEvent.click(within(modal).getByRole('button', { name: 'Use value from Config Items' }));
+      await userEvent.click(within(modal).getByRole('button', { name: 'Use value from Secrets & Variables' }));
 
       expect(within(modal).getByPlaceholderText('Select config item...')).toBeInTheDocument();
     });

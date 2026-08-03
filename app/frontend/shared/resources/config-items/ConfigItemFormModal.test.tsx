@@ -12,7 +12,7 @@ describe('ConfigItemFormModal', () => {
   it('renders the create-mode title and fields when no item is given', () => {
     renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} />);
 
-    expect(screen.getByRole('heading', { name: 'Add Config Item' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add secret' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('API_KEY')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
@@ -21,7 +21,7 @@ describe('ConfigItemFormModal', () => {
     const item = { id: 7, name: 'API_KEY', value: 'secret', description: 'A key', itemType: 'variable' };
     renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={item} />);
 
-    expect(screen.getByRole('heading', { name: 'Edit Config Item' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Edit secret' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Update' })).toBeInTheDocument();
     expect(screen.getByDisplayValue('API_KEY')).toBeInTheDocument();
   });

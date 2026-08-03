@@ -40,6 +40,7 @@ import type TerminalSession from 'types/generated/TerminalSession';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
+import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 
 import classes from './OnboardingPage.module.css';
@@ -93,12 +94,7 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; ic
   },
 ];
 
-const AGENT_COLORS: Record<string, string> = {
-  claude_code: '#d97706',
-  cursor_cli: '#7c3aed',
-  codex: '#10a37f',
-  gemini_cli: '#3b82f6',
-};
+const AGENT_COLORS = AGENT_BRAND_COLORS;
 
 interface ViewerWorkflowPreview {
   workflowName: string;
@@ -252,7 +248,7 @@ function AgentAuthTerminal({
             src={ttydUrl}
             title="Agent Authentication Terminal"
             allow="clipboard-read; clipboard-write"
-            style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#000' }}
+            style={{ width: '100%', height: '100%', border: 'none', backgroundColor: TERMINAL_BG }}
           />
         </Box>
         <Group
@@ -361,7 +357,10 @@ function ConnectAgentsStep({
               <Box key={agent.type} className={classes.authRow}>
                 <Group justify="space-between" wrap="nowrap">
                   <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                    <Box className={classes.agentLogo} style={{ backgroundColor: AGENT_COLORS[agent.type] ?? '#666' }}>
+                    <Box
+                      className={classes.agentLogo}
+                      style={{ backgroundColor: AGENT_COLORS[agent.type] ?? 'var(--app-text-tertiary)' }}
+                    >
                       <agent.icon size={12} color="white" />
                     </Box>
                     <Box style={{ minWidth: 0 }}>

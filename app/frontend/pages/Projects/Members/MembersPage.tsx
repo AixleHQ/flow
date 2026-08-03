@@ -1,5 +1,6 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Avatar, Badge, Box, Button, Group, List, Modal, Select, Text, TextInput, Title } from '@mantine/core';
+import { modals } from '@mantine/modals';
 import { IconPlus, IconSearch, IconTrash, IconCrown } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
@@ -73,13 +74,18 @@ const MembersPage = () => {
   };
 
   const handleRemove = (user: User) => {
-    if (
-      confirm(
-        `Are you sure you want to remove ${user.name} from this project? They will lose access to all project resources.`,
-      )
-    ) {
-      router.delete(`${basePath}/${user.id}`, { preserveScroll: true });
-    }
+    modals.openConfirmModal({
+      title: 'Remove collaborator',
+      children: (
+        <Text size="sm">
+          Remove <b>{user.name}</b> from this project? They lose access to all project resources. This action cannot be
+          undone.
+        </Text>
+      ),
+      labels: { confirm: 'Remove', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => router.delete(`${basePath}/${user.id}`, { preserveScroll: true }),
+    });
   };
 
   return (

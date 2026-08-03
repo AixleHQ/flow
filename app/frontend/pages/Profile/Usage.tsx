@@ -31,6 +31,7 @@ import {
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
 
@@ -102,19 +103,8 @@ interface Props {
   sessions?: Session[];
 }
 
-const AGENT_COLORS = ['#2196f3', '#9c27b0', '#4caf50', '#ff9800', '#00bcd4', '#f44336', '#795548'];
-const PROJECT_COLORS = [
-  '#2196f3',
-  '#9c27b0',
-  '#4caf50',
-  '#ff9800',
-  '#e91e63',
-  '#00bcd4',
-  '#ff5722',
-  '#3f51b5',
-  '#8bc34a',
-  '#ffc107',
-];
+const AGENT_COLORS = CHART_SERIES;
+const PROJECT_COLORS = CHART_SERIES;
 const getAgentColor = (i: number) => AGENT_COLORS[i % AGENT_COLORS.length];
 
 const PERIOD_OPTIONS = [
@@ -391,8 +381,8 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
             <AreaChart data={costToken.timeSeries} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
               <defs>
                 <linearGradient id="usage-grad-cost" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ff9800" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#ff9800" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--app-chart-1)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--app-chart-1)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
@@ -406,7 +396,7 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
                 type="monotone"
                 dataKey="costCents"
                 name="Cost"
-                stroke="#ff9800"
+                stroke="var(--app-chart-1)"
                 fill="url(#usage-grad-cost)"
                 strokeWidth={2}
                 dot={false}
@@ -424,8 +414,8 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
             <AreaChart data={costToken.timeSeries} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="usage-grad-tokens" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#00bcd4" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#00bcd4" stopOpacity={0} />
+                  <stop offset="5%" stopColor="var(--app-chart-6)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--app-chart-6)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--app-border-subtle)" />
@@ -439,7 +429,7 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
                 type="monotone"
                 dataKey="totalTokens"
                 name="Tokens"
-                stroke="#00bcd4"
+                stroke="var(--app-chart-6)"
                 fill="url(#usage-grad-tokens)"
                 strokeWidth={2}
                 dot={false}

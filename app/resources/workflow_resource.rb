@@ -14,6 +14,11 @@ class WorkflowResource < ApplicationResource
     workflow.steps.select { |s| s.deleted_at.nil? }.size
   end
 
+  typelize :number
+  attribute :runs_count do |workflow|
+    workflow.runs.size
+  end
+
   typelize :string?
   attribute :last_run_at do |workflow|
     workflow.runs.max_by(&:created_at)&.created_at

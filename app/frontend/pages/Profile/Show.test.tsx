@@ -129,8 +129,6 @@ describe('Profile/Show', () => {
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     // The connected agent card shows a Connected badge, a Re-authenticate button, and an
     // icon-only remove button. Locate the card via its unique Re-authenticate action.
     expect(screen.getByText('Connected')).toBeInTheDocument();
@@ -140,10 +138,14 @@ describe('Profile/Show', () => {
     // The remove-credentials icon button is the last action in the card.
     await userEvent.click(buttons[buttons.length - 1]);
 
-    expect(window.confirm).toHaveBeenCalled();
-    expect(router.delete).toHaveBeenCalledWith(
-      '/profile/destroy_credential',
-      expect.objectContaining({ data: { agentCredentialId: 777 } }),
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith(
+        '/profile/destroy_credential',
+        expect.objectContaining({ data: { agentCredentialId: 777 } }),
+      ),
     );
   });
 
@@ -194,14 +196,14 @@ describe('Profile/Show', () => {
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
-
     const reauth = screen.getByRole('button', { name: 'Re-authenticate' });
     const card = reauth.closest('.mantine-Card-root') as HTMLElement;
     const buttons = within(card).getAllByRole('button');
     await userEvent.click(buttons[buttons.length - 1]);
 
-    expect(window.confirm).toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
     expect(router.delete).not.toHaveBeenCalled();
   });
 

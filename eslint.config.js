@@ -86,6 +86,30 @@ export default typescriptEslint.config(
       },
     },
   },
+  // The --app-* token contract. Raw hex outside mantineTheme.ts is how the app
+  // ended up with four competing color systems (Aixle tokens, Material 500,
+  // GitHub greens, a stray Tailwind set) and a light theme that did not match
+  // its dark one. Vendor brand marks are the one legitimate exception; keep
+  // them in a named constant with an eslint-disable-next-line and a reason.
+  {
+    files: ['app/frontend/**/*.{ts,tsx}'],
+    ignores: ['app/frontend/shared/theme/**', 'app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Literal[value=/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]",
+          message:
+            'Hardcoded color. Use an --app-* token from shared/theme/mantineTheme.ts (or CHART_SERIES from shared/theme/chartPalette.ts for series colors).',
+        },
+        {
+          selector: "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b/]",
+          message:
+            'Hardcoded color in a template literal. Use an --app-* token from shared/theme/mantineTheme.ts.',
+        },
+      ],
+    },
+  },
   // Testing doctrine for component/page tests (docs/testing.md, rule R8):
   // query by role/label through Testing Library, never reach into the DOM or
   // snapshot Mantine's hashed markup.

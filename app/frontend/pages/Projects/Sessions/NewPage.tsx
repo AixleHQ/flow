@@ -2,7 +2,8 @@ import { Head, usePage } from '@inertiajs/react';
 import { Box } from '@mantine/core';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
-import type { NamedItem } from 'shared/components/SessionNewForm';
+import type { NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -30,6 +31,7 @@ interface Props {
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
   assets?: NamedItem[];
+  costHint?: SessionCostHint;
 }
 
 const ProjectSessionNewPage = () => {
@@ -42,12 +44,14 @@ const ProjectSessionNewPage = () => {
     mcpServers = [],
     repositories = [],
     assets = [],
+    costHint,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <>
       <Head title={`New Session — ${project.name}`} />
       <Box maw={720} mx="auto">
+        <PageHeader title="New Session" subtitle="Pick a runtime and what the agent can reach, then start it." />
         <SessionNewForm
           projectId={project.id}
           agentModels={agentModels}
@@ -56,6 +60,7 @@ const ProjectSessionNewPage = () => {
           skills={skills}
           mcpServers={mcpServers}
           repositories={repositories}
+          costHint={costHint}
           assets={assets}
           onCreatedPath={(sessionId) => `/company/projects/${project.id}/sessions/${sessionId}`}
           fallbackPath={`/company/projects/${project.id}/sessions`}

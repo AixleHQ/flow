@@ -144,7 +144,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     ).toBeInTheDocument();
 
     // Name renders as static text (not an editable input) and there is no Run affordance (no project).
-    expect(screen.getByText('Company onboarding')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Company onboarding' })).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Company onboarding')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
   });

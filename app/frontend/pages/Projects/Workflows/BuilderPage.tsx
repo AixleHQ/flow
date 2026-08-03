@@ -474,6 +474,9 @@ const BuilderPage = () => {
       <div className={classes.builderLayout}>
         {/* ===== HEADER (AC3) ===== */}
         <div className={classes.builderHeader}>
+          {/* The visible title is an editable input, so the document outline
+              needs its own h1 — without it the builder has no heading at all. */}
+          <h1 className="app-visually-hidden">{workflow.name || 'Untitled workflow'}</h1>
           {/* Row 1: back link | spacer | save chip | run button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <button
@@ -528,7 +531,7 @@ const BuilderPage = () => {
                     cursor: canRun ? 'pointer' : 'not-allowed',
                     border: canRun ? '1px solid var(--accent-muted)' : '1px solid var(--border)',
                     background: canRun ? 'var(--accent-dim)' : 'var(--bg-card)',
-                    color: canRun ? 'var(--accent)' : 'var(--text-3)',
+                    color: canRun ? 'var(--accent-text)' : 'var(--text-3)',
                     marginLeft: 8,
                     transition: 'background 0.12s, border-color 0.12s',
                   }}
@@ -561,6 +564,7 @@ const BuilderPage = () => {
                     variant="unstyled"
                     classNames={{ input: classes.headerNameInput }}
                     placeholder="Workflow name…"
+                    aria-label="Workflow name"
                   />
                 )}
                 <span
@@ -594,6 +598,7 @@ const BuilderPage = () => {
                   value={workflow.description ?? ''}
                   onChange={(e) => updateWorkflowField('description', e.currentTarget.value)}
                   placeholder="Add a description…"
+                  aria-label="Workflow description"
                   rows={1}
                   className={classes.headerDescInput}
                 />

@@ -295,7 +295,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
           <Tabs.List>
             <Tabs.Tab value="basic">Basic Info</Tabs.Tab>
             <Tabs.Tab value="files">Files ({visibleFiles.length})</Tabs.Tab>
-            <Tabs.Tab value="config">Config Items</Tabs.Tab>
+            <Tabs.Tab value="config">Secrets</Tabs.Tab>
           </Tabs.List>
 
           <Tabs.Panel value="basic" pt="md">
@@ -550,13 +550,13 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
               }}
             >
               <Text fz={14} c="dimmed" mb="md">
-                Select config items to inject as environment variables
+                Select secrets to inject as environment variables
               </Text>
               <MultiSelect
                 data={configItemNames}
                 value={form.values.requiredConfigItems}
                 onChange={(val) => form.setFieldValue('requiredConfigItems', val)}
-                placeholder="Select config items..."
+                placeholder="Select secrets..."
                 searchable
                 clearable
                 description="These will be injected as environment variables into the container"

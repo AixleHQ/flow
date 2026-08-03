@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { ConfigItem } from 'shared/resources/config-items/ConfigItemsContent';
 
@@ -31,8 +31,8 @@ describe('Projects/Config/ConfigPage', () => {
   it('renders the title and primary controls with seeded props', () => {
     renderAuthedPage(<ConfigPage />, { props: { project, configItems } });
 
-    expect(screen.getByRole('heading', { name: 'Project Config Items' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add Config Item' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Secrets & Variables' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add secret' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Search by name...')).toBeInTheDocument();
   });
 
@@ -66,7 +66,6 @@ describe('Projects/Config/ConfigPage', () => {
   });
 
   it('deletes an item via the row menu after confirmation', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderAuthedPage(<ConfigPage />, { props: { project, configItems } });
 
     // Use the secret row (id 2): a secret has no Copy button, so its only button is the
@@ -76,12 +75,15 @@ describe('Projects/Config/ConfigPage', () => {
 
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
 
-    expect(confirmSpy).toHaveBeenCalledWith('Delete STRIPE_KEY?');
-    expect(router.delete).toHaveBeenCalledWith(
-      '/company/projects/7/config_items/2',
-      expect.objectContaining({ preserveScroll: true }),
-    );
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('STRIPE_KEY')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
-    confirmSpy.mockRestore();
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith(
+        '/company/projects/7/config_items/2',
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
   });
 });

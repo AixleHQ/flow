@@ -30,11 +30,13 @@ import {
   YAxis,
 } from 'recharts';
 
+import { LOGO_TILE_BG } from 'shared/theme/vendorColors';
 import claudeLogo from 'shared/ui/agent-logos/claude.png';
 import codexLogo from 'shared/ui/agent-logos/codex.png';
 import cursorLogo from 'shared/ui/agent-logos/cursor.png';
 import geminiLogo from 'shared/ui/agent-logos/gemini.png';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -154,23 +156,23 @@ interface Props {
 // Falls back to the always-defined semantic token when `--accent` hasn't been set by
 // the current page (it's only ever defined by the Workflow Builder's stylesheet).
 const CHART_ACCENT = 'var(--accent, var(--app-primary))';
-const CHART_TAUPE = '#8a8078';
+const CHART_TAUPE = 'var(--app-chart-warm-1)';
 const CHART_NEUTRAL = 'var(--app-text-tertiary)';
 
 const AGENT_COLOR: Record<string, string> = {
   claude_code: CHART_ACCENT,
-  cursor: '#d2a878',
-  cursor_cli: '#d2a878',
-  codex: '#8a8078',
-  gemini: '#6f5a4e',
-  gemini_cli: '#6f5a4e',
+  cursor: 'var(--app-chart-warm-2)',
+  cursor_cli: 'var(--app-chart-warm-2)',
+  codex: 'var(--app-chart-warm-1)',
+  gemini: 'var(--app-chart-warm-3)',
+  gemini_cli: 'var(--app-chart-warm-3)',
 };
 
 const getAgentColor = (agentType: string): string => AGENT_COLOR[agentType] ?? CHART_NEUTRAL;
 
 // Same warm rota as AGENT_COLOR, applied by rank (highest-cost workflow first) so the
 // per-workflow dot/bar/progress-bar color stays consistent across the table and both charts.
-const WORKFLOW_PALETTE = [CHART_ACCENT, CHART_TAUPE, '#d2a878', '#6f5a4e'];
+const WORKFLOW_PALETTE = [CHART_ACCENT, CHART_TAUPE, 'var(--app-chart-warm-2)', 'var(--app-chart-warm-3)'];
 const getWorkflowColor = (index: number): string => WORKFLOW_PALETTE[index % WORKFLOW_PALETTE.length];
 
 const AGENT_LOGO_SRC: Record<string, string> = {
@@ -194,10 +196,10 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
   };
 
   if (agentType === 'codex') {
-    return { ...base, backgroundColor: '#ffffff' };
+    return { ...base, backgroundColor: LOGO_TILE_BG.light };
   }
   if (agentType === 'gemini' || agentType === 'gemini_cli') {
-    return { ...base, backgroundColor: '#14100e', border: '1px solid var(--app-border-default)' };
+    return { ...base, backgroundColor: LOGO_TILE_BG.dark, border: '1px solid var(--app-border-default)' };
   }
   return base;
 }
@@ -1133,14 +1135,7 @@ const AnalyticsPage = () => {
       <Head title={`Analytics — ${project.name}`} />
 
       {/* Row 1: title only */}
-      <Box mb="md">
-        <Text size="xl" fw={700}>
-          Analytics
-        </Text>
-        <Text size="sm" c="dimmed">
-          Agent activity, costs, and session insights
-        </Text>
-      </Box>
+      <PageHeader title="Analytics" subtitle="Agent activity, costs, and session insights" mb={16} />
 
       {/* Row 2: toolbar — tabs left, filters right */}
       <Group mb="xl" gap="sm" wrap="wrap">

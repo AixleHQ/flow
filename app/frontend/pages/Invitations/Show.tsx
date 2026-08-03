@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Button, Center, Divider, Group, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -121,6 +121,7 @@ function InvitationShow(props: Props) {
 
   return (
     <PageShell variant="centered">
+      <Head title="Invitation" />
       <Paper p="xl" radius="md" w="100%" maw={440} withBorder>
         <Center mb={24}>
           <Logo width={96} />

@@ -3,7 +3,6 @@ import {
   Badge,
   Box,
   Button,
-  Center,
   Group,
   SegmentedControl,
   Table,
@@ -11,10 +10,12 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconEdit, IconPlus, IconSearch, IconTool, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { EmptyState } from 'shared/ui/EmptyState';
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { DeleteToolModal } from './DeleteToolModal';
 import { ToolFormModal } from './ToolFormModal';
@@ -114,21 +115,17 @@ export function ToolsContent({
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Text fz={24} fw={600} c="var(--app-text-primary)">
-            {title}
-          </Text>
-          <Text fz={14} c="dimmed" mt={4}>
-            {subtitle}
-          </Text>
-        </Box>
-        {canExecute && (
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-            Add wrapper
-          </Button>
-        )}
-      </Group>
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          canExecute && (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+              Add wrapper
+            </Button>
+          )
+        }
+      />
 
       <Group gap="md" mb="lg">
         <TextInput
@@ -151,31 +148,31 @@ export function ToolsContent({
       </Group>
 
       {filtered.length === 0 ? (
-        <Center
-          mih={300}
+        <Box
           style={{
             border: '1px solid var(--app-border-default)',
             borderRadius: 'var(--mantine-radius-md)',
             backgroundColor: 'var(--app-bg-paper)',
-            flexDirection: 'column',
           }}
         >
-          <Text fz={48}>🔧</Text>
-          <Text fz={16} c="dimmed" mt="sm">
-            {hasFilters ? 'No wrappers match your filters' : 'No wrappers yet'}
-          </Text>
-          {!hasFilters && (
-            <Text fz={13} c="dimmed" mt={4} ta="center" maw={420}>
-              A wrapper turns any script or API call into a tool an agent can use — for the services that ship no MCP
-              server of their own.
-            </Text>
-          )}
-          {!hasFilters && canExecute && (
-            <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
-              Write your first wrapper
-            </Button>
-          )}
-        </Center>
+          <EmptyState
+            icon={<IconTool size={22} />}
+            title={hasFilters ? 'No wrappers match your filters' : 'No wrappers yet'}
+            description={
+              hasFilters
+                ? undefined
+                : 'A wrapper turns any script or API call into a tool an agent can use — for the services that ship no MCP server of their own.'
+            }
+            action={
+              !hasFilters &&
+              canExecute && (
+                <Button variant="outline" onClick={() => setFormModalOpen(true)}>
+                  Write your first wrapper
+                </Button>
+              )
+            }
+          />
+        </Box>
       ) : (
         <Box
           style={{
@@ -260,14 +257,20 @@ export function ToolsContent({
                       <Group gap={4} justify="flex-end">
                         {canExecute && canEdit(tool) && (
                           <Tooltip label="Edit">
-                            <ActionIcon variant="subtle" size="sm" onClick={() => handleEdit(tool)}>
+                            <ActionIcon aria-label="Edit" variant="subtle" size="sm" onClick={() => handleEdit(tool)}>
                               <IconEdit size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}
                         {canExecute && canDelete(tool) && (
                           <Tooltip label="Delete">
-                            <ActionIcon variant="subtle" size="sm" color="red" onClick={() => setDeleteTool(tool)}>
+                            <ActionIcon
+                              aria-label="Edit"
+                              variant="subtle"
+                              size="sm"
+                              color="red"
+                              onClick={() => setDeleteTool(tool)}
+                            >
                               <IconTrash size={16} />
                             </ActionIcon>
                           </Tooltip>

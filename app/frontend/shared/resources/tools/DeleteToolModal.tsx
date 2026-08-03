@@ -58,7 +58,7 @@ export const DeleteToolModal: FC<DeleteToolModalProps> = ({ opened, onClose, too
         </Text>
       </Box>
 
-      <Text fz={13} c="yellow" mb="md">
+      <Text fz={13} c="var(--app-warning-fg)" mb="md">
         This action cannot be undone. Any workflows using this tool may be affected.
       </Text>
 

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -77,7 +77,6 @@ describe('MembersContent', () => {
   });
 
   it('confirming Remove in the row menu fires router.delete', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     // Two active admins so neither is the "last admin" (which would disable Remove).
     renderPage(
       <MembersContent
@@ -95,6 +94,10 @@ describe('MembersContent', () => {
     // The menu actions render in a dropdown; click the Remove item once visible.
     const remove = await screen.findByRole('menuitem', { name: /remove/i });
     await userEvent.click(remove);
+
+    // Removal is guarded by a styled confirm modal, not window.confirm.
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
       expect(router.delete).toHaveBeenCalledWith(

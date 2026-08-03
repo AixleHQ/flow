@@ -142,7 +142,7 @@ function AssetRows({ specs, onChange, showNamePattern, disabled, kind }: AssetRo
             display: 'inline-flex',
             alignItems: 'center',
             gap: 4,
-            color: 'var(--accent)',
+            color: 'var(--accent-text)',
             fontSize: 12,
           }}
         >
@@ -244,6 +244,7 @@ export function SessionEditorPanel({
         <input
           className={classes.stepNameInp}
           placeholder="Session name…"
+          aria-label="Session name"
           value={step.name}
           onChange={(e) => onFieldChange('name', e.currentTarget.value)}
           disabled={readOnly}
@@ -270,6 +271,7 @@ export function SessionEditorPanel({
             className={classes.instrTa}
             style={instructionsExpanded ? { minHeight: 400 } : undefined}
             placeholder="Enter instructions… Use {{artifact_name}} for variable references."
+            aria-label="Session instructions"
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
             disabled={readOnly}
@@ -302,6 +304,7 @@ export function SessionEditorPanel({
               disabled={readOnly}
               clearable
               placeholder="No agent"
+              aria-label="Agent"
               styles={{
                 input: {
                   background: 'transparent',
@@ -336,6 +339,7 @@ export function SessionEditorPanel({
               disabled={readOnly}
               clearable
               placeholder="None (default)"
+              aria-label="Required agent runtime"
               styles={{
                 input: {
                   background: 'transparent',
@@ -354,7 +358,7 @@ export function SessionEditorPanel({
       <div className={classes.edSection}>
         <SectionLabel label="Resources" icon={<IconLayersIntersect size={14} />} />
         <div className={classes.infoNote}>
-          <IconInfoCircle size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+          <IconInfoCircle size={13} style={{ color: 'var(--accent-text)', flexShrink: 0 }} />
           Session-level additions — stacked on top of Base Resources
         </div>
 
@@ -369,6 +373,7 @@ export function SessionEditorPanel({
             disabled={readOnly}
             searchable
             placeholder="None added"
+            aria-label="Tools"
             styles={{
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}
@@ -386,6 +391,7 @@ export function SessionEditorPanel({
             disabled={readOnly}
             searchable
             placeholder="None added"
+            aria-label="MCP servers"
             styles={{
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}
@@ -403,6 +409,7 @@ export function SessionEditorPanel({
             disabled={readOnly}
             searchable
             placeholder="None added"
+            aria-label="Skills"
             styles={{
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}
@@ -414,7 +421,9 @@ export function SessionEditorPanel({
       <div className={classes.edSection}>
         <SectionLabel label="Dependencies" icon={<IconListTree size={14} />} />
         <div className={classes.depNote}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ok, #34d399)', flexShrink: 0 }} />
+          <span
+            style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--app-success-fg)', flexShrink: 0 }}
+          />
           {depNote}
         </div>
         <label className={classes.fieldLabel}>
@@ -430,6 +439,7 @@ export function SessionEditorPanel({
           disabled={readOnly}
           searchable
           placeholder="Select sessions this session depends on…"
+          aria-label="Depends on sessions"
           styles={{
             input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
           }}
@@ -572,7 +582,7 @@ export function SessionEditorPanel({
               <div className={classes.togLbl}>BMAD Method</div>
               <div className={classes.togDesc}>
                 Enable the BMAD methodology for this session.{' '}
-                <a href="#" style={{ color: 'var(--accent)' }} onClick={(e) => e.preventDefault()}>
+                <a href="#" style={{ color: 'var(--accent-text)' }} onClick={(e) => e.preventDefault()}>
                   Learn more ↗
                 </a>
               </div>

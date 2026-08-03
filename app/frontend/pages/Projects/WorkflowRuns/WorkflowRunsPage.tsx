@@ -1,8 +1,11 @@
 import { Head, InfiniteScroll, router, usePage, usePoll } from '@inertiajs/react';
-import { Badge, Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
+import { Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo } from 'react';
+
+import { PageHeader } from 'shared/ui/PageHeader';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -27,13 +30,15 @@ type Props = {
   perPage: number;
 };
 
-const STATE_CONFIG: Record<string, { label: string; color: string }> = {
-  completed: { label: 'Completed', color: 'green' },
-  running: { label: 'Running', color: 'blue' },
-  paused: { label: 'Paused', color: 'yellow' },
-  failed: { label: 'Failed', color: 'red' },
-  cancelled: { label: 'Cancelled', color: 'gray' },
-  pending: { label: 'Pending', color: 'gray' },
+// Labels only — the color now comes from the shared tone map in StatusBadge, so
+// `running` cannot be blue here and yellow somewhere else.
+const STATE_LABELS: Record<string, string> = {
+  completed: 'Completed',
+  running: 'Running',
+  paused: 'Paused',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+  pending: 'Pending',
 };
 
 const MODE_LABELS: Record<string, string> = {
@@ -52,8 +57,13 @@ const STATE_OPTIONS = [
 
 const PER_PAGE_OPTIONS = ['20', '50', '100'];
 
-function formatDuration(start: string | null, end: string | null): string {
+const ACTIVE_STATES = new Set(['running', 'paused', 'pending']);
+
+function formatDuration(start: string | null, end: string | null, state: string): string {
   if (!start) return '—';
+  // Only tick against "now" while the run is actually still going. A cancelled
+  // run has a start and no end, and counting to now rendered "8487m 25s".
+  if (!end && !ACTIVE_STATES.has(state)) return '—';
   const s = new Date(start).getTime();
   const e = end ? new Date(end).getTime() : Date.now();
   const sec = Math.floor((e - s) / 1000);
@@ -61,8 +71,6 @@ function formatDuration(start: string | null, end: string | null): string {
   const min = Math.floor(sec / 60);
   return `${min}m ${sec % 60}s`;
 }
-
-const ACTIVE_STATES = new Set(['running', 'paused', 'pending']);
 
 const pulseKeyframes = `
 @keyframes wfRunPulse {
@@ -117,10 +125,12 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
     <>
       <Head title={`Workflow Runs — ${project.name}`} />
       <style dangerouslySetInnerHTML={{ __html: pulseKeyframes }} />
+      <PageHeader title="Runs" subtitle="Workflow executions for this project, newest first." />
       <Group justify="space-between" mb="md">
         <Group gap="sm">
           <Select
             placeholder="Status"
+            aria-label="Filter by status"
             data={STATE_OPTIONS}
             value={filters.state_eq ?? null}
             onChange={(v) => onFilterChange('state_eq', v)}
@@ -130,6 +140,7 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
           />
           <Select
             data={PER_PAGE_OPTIONS}
+            aria-label="Rows per page"
             value={String(perPage)}
             onChange={onPerPageChange}
             size="sm"
@@ -179,20 +190,18 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
 };
 
 function RunRow({ run, projectId }: { run: WorkflowRun; projectId: number }) {
-  const cfg = STATE_CONFIG[run.state] ?? { label: run.state, color: 'gray' };
+  const label = STATE_LABELS[run.state] ?? run.state;
   const runUrl = `/company/projects/${projectId}/workflow_runs/${run.id}`;
 
   return (
     <Table.Tr style={{ cursor: 'pointer' }} onClick={() => router.visit(runUrl)}>
       <Table.Td>
-        <Badge
-          color={cfg.color}
-          size="sm"
-          variant="outline"
+        <StatusBadge
+          state={run.state}
           style={run.state === 'running' ? { animation: 'wfRunPulse 2s ease-in-out infinite' } : undefined}
         >
-          {cfg.label}
-        </Badge>
+          {label}
+        </StatusBadge>
       </Table.Td>
       <Table.Td>
         <Text size="sm" fw={500}>
@@ -212,7 +221,7 @@ function RunRow({ run, projectId }: { run: WorkflowRun; projectId: number }) {
       </Table.Td>
       <Table.Td>
         <Text size="xs" ff="monospace" c="dimmed">
-          {formatDuration(run.startedAt, run.completedAt)}
+          {formatDuration(run.startedAt, run.completedAt, run.state)}
         </Text>
       </Table.Td>
       <Table.Td>

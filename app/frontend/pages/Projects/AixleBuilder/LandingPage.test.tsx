@@ -128,7 +128,7 @@ describe('Projects/AixleBuilder/LandingPage', () => {
     expect(screen.getByText('Previous Sessions')).toBeInTheDocument();
     const table = screen.getByRole('table');
     expect(within(table).getByText('#101')).toBeInTheDocument();
-    expect(within(table).getByText('finished')).toBeInTheDocument();
+    expect(within(table).getByText('Finished')).toBeInTheDocument();
 
     await userEvent.click(within(table).getByRole('button'));
 

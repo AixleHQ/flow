@@ -41,15 +41,15 @@ describe('Projects/McpServers/McpServersPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the filtered empty state when no servers match the default Custom filter', () => {
-    // The default kindFilter is "custom" (not "all"), so an empty list reads as a filtered
-    // empty state and the inline "add your first" CTA is hidden.
+  it('shows the unfiltered empty state with its CTA when there are no servers', () => {
+    // The kind filter defaults to "all", so an empty list is genuinely empty rather
+    // than filtered, and the inline CTA is offered.
     renderAuthedPage(<McpServersPage />, {
       props: { project, mcpServers: [], configItemNames: [] },
     });
 
-    expect(screen.getByText('No MCP servers match your filters')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Add your first MCP server' })).not.toBeInTheDocument();
+    expect(screen.getByText('No MCP servers configured')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add one manually' })).toBeInTheDocument();
   });
 
   it('lists custom servers and filters them by the search query', async () => {

@@ -75,7 +75,7 @@
 }
 
 .commentMd a {
-  color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
   text-decoration: underline;
 }
 
@@ -175,7 +175,7 @@
 }
 
 .ptTitle:focus {
-  border-color: var(--mantine-color-brand-5);
+  border-color: var(--app-primary);
   background: var(--app-bg-paper);
 }
 
@@ -204,7 +204,7 @@
 }
 
 .ptDesc:focus {
-  border-color: var(--mantine-color-brand-5);
+  border-color: var(--app-primary);
   background: var(--app-bg-paper);
   color: var(--mantine-color-text);
 }
@@ -245,7 +245,7 @@
 }
 
 .detailTab[data-active] {
-  color: var(--mantine-color-brand-5);
-  border-bottom-color: var(--mantine-color-brand-5);
+  color: var(--app-primary-strong);
+  border-bottom-color: var(--app-primary);
   font-weight: 500;
 }

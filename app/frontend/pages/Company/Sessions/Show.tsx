@@ -1,4 +1,4 @@
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -15,6 +15,7 @@ const SessionShowPage = () => {
 
   return (
     <AuthLayout noPadding>
+      <Head title="Session" />
       <SessionShowContent
         session={session}
         cableStream={cableStream}

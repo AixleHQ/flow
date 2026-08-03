@@ -9,6 +9,7 @@ import {
   CopyButton,
   Divider,
   Group,
+  Modal,
   Select,
   SimpleGrid,
   Stack,
@@ -36,6 +37,7 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
+import { useState } from 'react';
 import { z } from 'zod';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -174,27 +176,22 @@ const SettingsPage = () => {
     });
   };
 
-  const handleDelete = () => {
-    modals.openConfirmModal({
-      title: 'Delete Project',
-      children: (
-        <Text size="sm">
-          Are you sure you want to permanently delete <b>{project.name}</b>? This action cannot be undone and all
-          project data — including sessions, assets, and workflow runs — will be lost.
-        </Text>
-      ),
-      labels: { confirm: 'Delete Project', cancel: 'Cancel' },
-      confirmProps: { color: 'red' },
-      onConfirm: () => {
-        router.delete(`/company/projects/${project.id}`, {
-          onSuccess: () => {
-            notifications.show({ message: 'Project deleted', color: 'red' });
-            router.visit('/company/projects');
-          },
-          onError: () => {
-            notifications.show({ message: 'Failed to delete project', color: 'red' });
-          },
-        });
+  // Permanently destroying a project used to be one click on a red button in a
+  // modal — the same friction as removing a tag. Typing the name is the
+  // difference between "I meant this project" and "I clicked the red one".
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
+  const handleDelete = () => setDeleteOpen(true);
+
+  const confirmDelete = () => {
+    router.delete(`/company/projects/${project.id}`, {
+      onSuccess: () => {
+        notifications.show({ message: 'Project deleted', color: 'red' });
+        router.visit('/company/projects');
+      },
+      onError: () => {
+        notifications.show({ message: 'Failed to delete project', color: 'red' });
       },
     });
   };
@@ -441,7 +438,7 @@ const SettingsPage = () => {
 
         {/* Danger Zone */}
         <Card p={24} className={classes.dangerCard} mb="lg">
-          <Title order={4} mb={4} c="red">
+          <Title order={4} mb={4} c="var(--app-danger-fg)">
             Danger Zone
           </Title>
           <Divider mb="md" color="red.9" />
@@ -497,6 +494,47 @@ const SettingsPage = () => {
           </Stack>
         </Card>
       </Box>
+      <Modal
+        opened={deleteOpen}
+        onClose={() => {
+          setDeleteOpen(false);
+          setDeleteConfirmText('');
+        }}
+        title={
+          <Text fw={600} c="var(--app-danger-fg)">
+            Delete project
+          </Text>
+        }
+        centered
+      >
+        <Stack gap="md">
+          <Text size="sm">
+            This permanently deletes <b>{project.name}</b> and everything in it — sessions, assets, workflows and
+            workflow runs. It cannot be undone.
+          </Text>
+          <TextInput
+            label={`Type "${project.name}" to confirm`}
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.currentTarget.value)}
+            placeholder={project.name}
+            autoComplete="off"
+          />
+          <Group justify="flex-end" gap="sm">
+            <Button
+              variant="default"
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeleteConfirmText('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button color="red" disabled={deleteConfirmText !== project.name} onClick={confirmDelete}>
+              Delete project
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </>
   );
 };

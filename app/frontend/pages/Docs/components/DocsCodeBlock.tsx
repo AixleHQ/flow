@@ -1,8 +1,9 @@
+import { useComputedColorScheme } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconCheck, IconCopy } from '@tabler/icons-react';
 import { useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight, vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 import classes from '../DocsPage.module.css';
 
@@ -34,6 +35,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
 };
 
 export function DocsCodeBlock({ inline, className, children }: Props) {
+  // The syntax theme has to follow the scheme: a dark Prism theme on the light
+  // canvas rendered #d4d4d4 code text at 1.4:1.
+  const scheme = useComputedColorScheme('dark');
   const [copied, setCopied] = useState(false);
 
   const match = /language-(\w+)/.exec(className || '');
@@ -79,7 +83,7 @@ export function DocsCodeBlock({ inline, className, children }: Props) {
       </div>
       <SyntaxHighlighter
         language={language}
-        style={vscDarkPlus}
+        style={scheme === 'dark' ? vscDarkPlus : oneLight}
         customStyle={{
           margin: 0,
           borderRadius: 0,

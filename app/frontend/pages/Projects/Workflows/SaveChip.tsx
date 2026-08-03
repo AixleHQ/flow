@@ -16,15 +16,15 @@ export const SaveChip = memo(function SaveChip({ saving }: SaveChipProps) {
     >
       {saving ? (
         <>
-          <Loader size={12} color="var(--accent, #cf6b4a)" />
-          <Text size="xs" style={{ color: 'var(--text-2, #9f9d9c)' }}>
+          <Loader size={12} color="var(--app-primary)" />
+          <Text size="xs" style={{ color: 'var(--app-text-secondary)' }}>
             Saving…
           </Text>
         </>
       ) : (
         <>
-          <IconCheck size={12} color="var(--accent, #cf6b4a)" />
-          <Text size="xs" style={{ color: 'var(--text-2, #9f9d9c)' }}>
+          <IconCheck size={12} color="var(--app-primary)" />
+          <Text size="xs" style={{ color: 'var(--app-text-secondary)' }}>
             Saved
           </Text>
         </>

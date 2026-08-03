@@ -19,7 +19,11 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'agents', label: 'Agents' },
       { slug: 'runtimes', label: 'Runtimes' },
       { slug: 'tools', label: 'Tools' },
-      { slug: 'mcp', label: 'MCP servers' },
+      // The app nav calls this page's subject "Connectors"; same thing, and
+      // naming both is what lets a docs reader find it in the product. NOT done
+      // for Tools above: "Wrappers" in the nav is only the tools you author
+      // yourself, so the two are not interchangeable.
+      { slug: 'mcp', label: 'MCP servers (Connectors)' },
       { slug: 'board', label: 'Board' },
       { slug: 'workflows', label: 'Workflows' },
       { slug: 'triggers-and-gates', label: 'Triggers and gates' },

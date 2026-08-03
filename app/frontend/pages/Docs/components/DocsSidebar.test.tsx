@@ -23,7 +23,7 @@ describe('Docs/components/DocsSidebar', () => {
     expect(agents).toHaveAttribute('href', '/docs/agents');
 
     expect(screen.getByRole('link', { name: 'Quick start' })).toHaveAttribute('href', '/docs/quick-start');
-    expect(screen.getByRole('link', { name: 'MCP servers' })).toHaveAttribute('href', '/docs/mcp');
+    expect(screen.getByRole('link', { name: 'MCP servers (Connectors)' })).toHaveAttribute('href', '/docs/mcp');
     expect(screen.getByRole('link', { name: 'CLI reference' })).toHaveAttribute('href', '/docs/cli-ref');
     expect(screen.getByRole('link', { name: 'API' })).toHaveAttribute('href', '/docs/api-guide');
   });

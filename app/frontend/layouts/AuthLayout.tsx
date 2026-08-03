@@ -73,12 +73,17 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
         />
       )}
       <Box className={classes.contentColumn}>
-        <Box component="main" className={noPadding ? classes.mainNoPadding : classes.main}>
+        {/* First tab stop: without it, reaching page content costs ~21 Tab
+            presses past the sidebar's nav links, switcher and user menu. */}
+        <a href="#app-main" className="app-skip-link">
+          Skip to content
+        </a>
+        <Box component="main" id="app-main" tabIndex={-1} className={noPadding ? classes.mainNoPadding : classes.main}>
           {children}
         </Box>
         {showChrome && (
           <Box component="footer" className={classes.footer}>
-            <Text component="span" size="xs" c="dimmed" lh={1}>
+            <Text component="span" size="xs" lh={1}>
               Powered by
             </Text>
             <Logo width={50} />

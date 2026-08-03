@@ -1,9 +1,11 @@
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Box, Button, Center, Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
+
+import { PageHeader } from 'shared/ui/PageHeader';
 
 import { CreateProjectModal } from './CreateProjectModal';
 import { ProjectCard } from './ProjectCard';
@@ -73,20 +75,18 @@ const IndexPage = () => {
 
   return (
     <AuthLayout>
+      <Head title="Projects" />
       <Box>
-        <Group justify="space-between" align="flex-start" mb={24}>
-          <Box>
-            <Text fz={32} fw={600} c="var(--app-text-primary)" mb={8}>
-              Projects
-            </Text>
-            <Text fz={16} c="dimmed">
-              Select a project to view workflows, assets, and tasks
-            </Text>
-          </Box>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpened(true)}>
-            Create Project
-          </Button>
-        </Group>
+        <PageHeader
+          title="Projects"
+          subtitle="Select a project to view workflows, assets, and tasks"
+          mb={24}
+          actions={
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpened(true)}>
+              Create Project
+            </Button>
+          }
+        />
 
         {projects.length > 0 && (
           <Group gap={16} mb={24}>

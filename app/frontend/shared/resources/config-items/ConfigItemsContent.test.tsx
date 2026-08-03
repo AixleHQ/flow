@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { renderPage, screen, userEvent, within } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { ConfigItemsContent, type ConfigItem } from './ConfigItemsContent';
 
@@ -67,10 +67,10 @@ describe('ConfigItemsContent', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /add config item/i }));
+    await userEvent.click(screen.getByRole('button', { name: /add secret/i }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Add Config Item')).toBeInTheDocument();
+    expect(within(dialog).getByText('Add secret')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
 
@@ -82,19 +82,23 @@ describe('ConfigItemsContent', () => {
     await userEvent.click(await screen.findByRole('menuitem', { name: /edit/i }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Edit Config Item')).toBeInTheDocument();
+    expect(within(dialog).getByText('Edit secret')).toBeInTheDocument();
   });
 
   it('fires router.delete after confirming a row delete', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const { container } = renderContent();
 
     await userEvent.click(rowMenuTriggers(container)[0]);
     await userEvent.click(await screen.findByRole('menuitem', { name: /delete/i }));
 
-    expect(router.delete).toHaveBeenCalledWith(
-      '/projects/1/config_items/1',
-      expect.objectContaining({ preserveScroll: true }),
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith(
+        '/projects/1/config_items/1',
+        expect.objectContaining({ preserveScroll: true }),
+      ),
     );
   });
 });

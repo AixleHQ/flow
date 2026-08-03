@@ -6,6 +6,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
+import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
+import { PageHeader } from 'shared/ui/PageHeader';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -41,20 +44,24 @@ type Props = {
   perPage: number;
 };
 
-const AGENT_LABELS: Record<string, { label: string; color: string }> = {
-  claude_code: { label: 'Claude Code', color: 'orange' },
-  cursor_cli: { label: 'Cursor CLI', color: 'violet' },
-  codex: { label: 'Codex', color: 'teal' },
-  gemini_cli: { label: 'Gemini CLI', color: 'blue' },
+// Labels only — the vendor dot next to them reads from AGENT_BRAND_COLORS.
+const AGENT_LABELS: Record<string, { label: string }> = {
+  claude_code: { label: 'Claude Code' },
+  cursor_cli: { label: 'Cursor CLI' },
+  codex: { label: 'Codex' },
+  gemini_cli: { label: 'Gemini CLI' },
 };
 
-const STATE_CONFIG: Record<string, { label: string; color: string }> = {
-  not_started: { label: 'Pending', color: 'gray' },
-  running: { label: 'Starting', color: 'blue' },
-  ready: { label: 'Running', color: 'green' },
-  finishing: { label: 'Finishing', color: 'yellow' },
-  finished: { label: 'Finished', color: 'gray' },
-  failed: { label: 'Failed', color: 'red' },
+// Session lifecycle labels are domain-specific ("running" means the container
+// is starting; "ready" means the agent is working), so the labels stay local —
+// only the color comes from the shared tone map.
+const STATE_CONFIG: Record<string, { label: string }> = {
+  not_started: { label: 'Pending' },
+  running: { label: 'Starting' },
+  ready: { label: 'Running' },
+  finishing: { label: 'Finishing' },
+  finished: { label: 'Finished' },
+  failed: { label: 'Failed' },
 };
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -63,6 +70,22 @@ const SESSION_TYPE_LABELS: Record<string, string> = {
   auth_setup: 'Auth setup',
   tool_setup: 'Tool setup',
 };
+
+/**
+ * Model identifiers arrive as full inference-profile ARNs or region-prefixed
+ * ids. Printed raw they filled the column with
+ * `arn:aws:bedrock:us-east-1:541894707537:application-inference-profi…` — all
+ * prefix, no model. Keep the part that identifies the model; the full string
+ * stays in the tooltip.
+ */
+function shortModelName(id: string): string {
+  let name = id.includes('/') ? (id.split('/').pop() ?? id) : id;
+  name = name.replace(/^(us|eu|apac|global)\./i, '');
+  name = name.replace(/^(anthropic|openai|google|meta)\./i, '');
+  name = name.replace(/-v\d+:\d+$/, '');
+  name = name.replace(/-(\d{8})$/, '');
+  return name;
+}
 
 function formatTokens(n: number): string {
   if (!n || n === 0) return '—';
@@ -76,11 +99,14 @@ function formatCost(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// Mantine's raw green/yellow/red at shade 5 measure 1.6-2.4:1 on a light
+// canvas, and cost is 12px monospace — the --app-*-fg tokens are AA in both
+// schemes.
 function costColor(cents: number): string | undefined {
   if (!cents || cents === 0) return undefined;
-  if (cents <= 100) return 'var(--mantine-color-green-5)';
-  if (cents <= 500) return 'var(--mantine-color-yellow-5)';
-  return 'var(--mantine-color-red-5)';
+  if (cents <= 100) return 'var(--app-success-fg)';
+  if (cents <= 500) return 'var(--app-warning-fg)';
+  return 'var(--app-danger-fg)';
 }
 
 function formatDuration(startedAt: string | null, finishedAt: string | null, state: string): string {
@@ -191,10 +217,22 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
   return (
     <>
       <Head title={`Sessions — ${project.name}`} />
+      <PageHeader
+        title="Sessions"
+        subtitle="Every agent run in this project, with the tokens and cost it spent."
+        actions={
+          canExecute && (
+            <Button size="sm" leftSection={<IconPlus size={16} />} component="a" href={`${sessionsUrl}/new`}>
+              New Session
+            </Button>
+          )
+        }
+      />
       <Group justify="space-between" mb="md">
         <Group gap="sm">
           <Select
             placeholder="Agent"
+            aria-label="Filter by agent"
             data={AGENT_FILTER_OPTIONS}
             value={filters.agent_type_eq ?? null}
             onChange={(v) => onFilterChange('agent_type_eq', v)}
@@ -204,6 +242,7 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
           />
           <Select
             placeholder="Status"
+            aria-label="Filter by status"
             data={STATE_FILTER_OPTIONS}
             value={filters.state_eq ?? null}
             onChange={(v) => onFilterChange('state_eq', v)}
@@ -213,6 +252,7 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
           />
           <Select
             data={PER_PAGE_OPTIONS}
+            aria-label="Rows per page"
             value={String(perPage)}
             onChange={onPerPageChange}
             size="sm"
@@ -220,11 +260,6 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
             allowDeselect={true}
           />
         </Group>
-        {canExecute && (
-          <Button size="sm" leftSection={<IconPlus size={16} />} component="a" href={`${sessionsUrl}/new`}>
-            New Session
-          </Button>
-        )}
       </Group>
 
       {sessions.length === 0 ? (
@@ -245,7 +280,7 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>ID</Table.Th>
-                  <Table.Th>Agent</Table.Th>
+                  <Table.Th miw={110}>Agent</Table.Th>
                   <Table.Th>Type</Table.Th>
                   <Table.Th>Status</Table.Th>
                   <Table.Th>User</Table.Th>
@@ -271,8 +306,8 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
 };
 
 function SessionRow({ session: s, projectId }: { session: Session; projectId: number }) {
-  const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
-  const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
+  const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—' };
+  const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state };
   const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
 
   const tokenBreakdown = [
@@ -298,9 +333,22 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
         </Text>
       </Table.Td>
       <Table.Td>
-        <Badge color={agent.color} size="sm" variant="filled">
-          {agent.label}
-        </Badge>
+        {/* A vendor dot plus the plain label: the filled badge truncated to
+            "CLAUD…" at 1440px, so the column said nothing. */}
+        <Group gap={6} wrap="nowrap">
+          <Box
+            w={7}
+            h={7}
+            style={{
+              borderRadius: '50%',
+              backgroundColor: AGENT_BRAND_COLORS[s.agentType ?? ''] ?? 'var(--app-text-tertiary)',
+              flexShrink: 0,
+            }}
+          />
+          <Text size="xs" style={{ whiteSpace: 'nowrap' }}>
+            {agent.label}
+          </Text>
+        </Group>
       </Table.Td>
       <Table.Td>
         <Text size="xs" c="dimmed">
@@ -309,13 +357,13 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
       </Table.Td>
       <Table.Td>
         <Group gap={4}>
-          <Badge color={stateConfig.color} size="sm" variant="outline">
+          <StatusBadge state={s.state} size="sm">
             {stateConfig.label}
-          </Badge>
+          </StatusBadge>
           {s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0 && (
-            <Badge color="yellow" size="xs">
+            <StatusBadge tone="warning" size="xs">
               {s.pendingArtifactsCount} pending
-            </Badge>
+            </StatusBadge>
           )}
         </Group>
       </Table.Td>
@@ -341,9 +389,11 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
       <Table.Td>
         <Group gap={4} wrap="wrap">
           {(s.models ?? []).map((m) => (
-            <Badge key={m} size="xs" variant="outline">
-              {m}
-            </Badge>
+            <Tooltip key={m} label={m} multiline maw={420}>
+              <Badge size="xs" variant="outline" style={{ textTransform: 'none' }}>
+                {shortModelName(m)}
+              </Badge>
+            </Tooltip>
           ))}
         </Group>
       </Table.Td>
@@ -362,7 +412,7 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
       <Table.Td>
         {isClickable && (
           <Tooltip label="Open session">
-            <a href={sessionUrl} onClick={(e) => e.stopPropagation()}>
+            <a href={sessionUrl} aria-label={`Open session #${s.id}`} onClick={(e) => e.stopPropagation()}>
               <IconExternalLink size={16} />
             </a>
           </Tooltip>

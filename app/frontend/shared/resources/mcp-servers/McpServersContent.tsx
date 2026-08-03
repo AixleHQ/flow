@@ -4,7 +4,6 @@ import {
   Badge,
   Box,
   Button,
-  Center,
   Group,
   SegmentedControl,
   Table,
@@ -12,10 +11,21 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconAlertTriangle, IconEdit, IconPlugConnected, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconEdit,
+  IconPlug,
+  IconPlugConnected,
+  IconPlus,
+  IconSearch,
+  IconTrash,
+} from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { EmptyState } from 'shared/ui/EmptyState';
+import { PageHeader } from 'shared/ui/PageHeader';
+import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ConnectorCatalogModal } from '../connectors/ConnectorCatalogModal';
 import type { Connector } from '../connectors/types';
@@ -65,11 +75,11 @@ export interface McpServer {
 
 // Maps a server's per-user oauth_status to a connection badge (functional labels,
 // not colour alone, so the state reads without relying on hue).
-const OAUTH_STATUS_BADGE: Record<string, { color: string; label: string }> = {
-  active: { color: 'green', label: 'Connected' },
-  expiring: { color: 'yellow', label: 'Expiring' },
-  pending: { color: 'gray', label: 'Not connected' },
-  error: { color: 'red', label: 'Reconnect' },
+const OAUTH_STATUS_BADGE: Record<string, { tone: StatusTone; color: string; label: string }> = {
+  active: { tone: 'success', color: 'green', label: 'Connected' },
+  expiring: { tone: 'warning', color: 'yellow', label: 'Expiring' },
+  pending: { tone: 'neutral', color: 'gray', label: 'Not connected' },
+  error: { tone: 'danger', color: 'red', label: 'Reconnect' },
 };
 
 interface McpServersContentProps {
@@ -114,7 +124,9 @@ export function McpServersContent({
 }: McpServersContentProps) {
   const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState('custom');
+  // Defaults to 'all'. It used to default to 'custom', which silently hid every
+  // system server on first paint — the list looked empty when it was not.
+  const [kindFilter, setKindFilter] = useState('all');
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editServer, setEditServer] = useState<McpServer | null>(null);
   const [deleteServer, setDeleteServer] = useState<McpServer | null>(null);
@@ -161,28 +173,24 @@ export function McpServersContent({
 
   return (
     <Box>
-      <Group justify="space-between" mb="lg">
-        <Box>
-          <Text fz={24} fw={600} c="var(--app-text-primary)">
-            {title}
-          </Text>
-          <Text fz={14} c="dimmed" mt={4}>
-            {subtitle}
-          </Text>
-        </Box>
-        {canExecute && (
-          <Group gap="sm">
-            {catalogAvailable && (
-              <Button leftSection={<IconPlugConnected size={16} />} onClick={() => setCatalogOpen(true)}>
-                Browse connectors
+      <PageHeader
+        title={title}
+        subtitle={subtitle}
+        actions={
+          canExecute && (
+            <>
+              {catalogAvailable && (
+                <Button leftSection={<IconPlugConnected size={16} />} onClick={() => setCatalogOpen(true)}>
+                  Browse connectors
+                </Button>
+              )}
+              <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+                Add manually
               </Button>
-            )}
-            <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-              Add manually
-            </Button>
-          </Group>
-        )}
-      </Group>
+            </>
+          )
+        }
+      />
 
       {drifted.length > 0 && (
         <Alert
@@ -217,6 +225,7 @@ export function McpServersContent({
         />
         <SegmentedControl
           value={kindFilter}
+          aria-label="Filter by kind"
           onChange={setKindFilter}
           data={[
             { label: 'All', value: 'all' },
@@ -227,25 +236,27 @@ export function McpServersContent({
       </Group>
 
       {filtered.length === 0 ? (
-        <Center
-          mih={300}
+        <Box
           style={{
             border: '1px solid var(--app-border-default)',
             borderRadius: 'var(--mantine-radius-md)',
             backgroundColor: 'var(--app-bg-paper)',
-            flexDirection: 'column',
           }}
         >
-          <Text fz={48}>🔌</Text>
-          <Text fz={16} c="dimmed" mt="sm">
-            {hasFilters ? 'No MCP servers match your filters' : 'No MCP servers configured'}
-          </Text>
-          {!hasFilters && canExecute && (
-            <Button variant="outline" mt="sm" onClick={() => setFormModalOpen(true)}>
-              Add one manually
-            </Button>
-          )}
-        </Center>
+          <EmptyState
+            icon={<IconPlug size={22} />}
+            title={hasFilters ? 'No MCP servers match your filters' : 'No MCP servers configured'}
+            description={hasFilters ? undefined : 'An MCP server exposes a set of tools your agents can call.'}
+            action={
+              !hasFilters &&
+              canExecute && (
+                <Button variant="outline" onClick={() => setFormModalOpen(true)}>
+                  Add one manually
+                </Button>
+              )
+            }
+          />
+        </Box>
       ) : (
         <Box
           style={{
@@ -280,6 +291,11 @@ export function McpServersContent({
                 <Table.Th>
                   <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
                     Status
+                  </Text>
+                </Table.Th>
+                <Table.Th>
+                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                    Connection
                   </Text>
                 </Table.Th>
                 <Table.Th w={100}>
@@ -326,16 +342,20 @@ export function McpServersContent({
                         {server.scopeIndicator === 'internal' ? 'System' : 'Project'}
                       </Badge>
                     </Table.Td>
+                    {/* Status is what the server IS; Connection is what YOU
+                        still have to do about it. They used to share one column,
+                        so an "Enabled" green sat next to a "Connected" green
+                        meaning two different things. */}
+                    <Table.Td>
+                      <StatusBadge state={server.enabled ? 'enabled' : 'disabled'} size="sm" />
+                    </Table.Td>
                     <Table.Td>
                       <Group gap={4}>
-                        <Badge color={server.enabled ? 'green' : 'gray'} size="sm">
-                          {server.enabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                        {server.authType === 'oauth' &&
-                          (server.oauthStatus === 'active' ? (
-                            <Badge color={OAUTH_STATUS_BADGE.active.color} variant="light" size="sm">
+                        {server.authType === 'oauth' ? (
+                          server.oauthStatus === 'active' ? (
+                            <StatusBadge tone={OAUTH_STATUS_BADGE.active.tone} size="sm">
                               {OAUTH_STATUS_BADGE.active.label}
-                            </Badge>
+                            </StatusBadge>
                           ) : (
                             // The state and the fix for it live in the same place. OAuth needs a
                             // top-level navigation (the authorize entry redirects off-site), so this
@@ -354,7 +374,12 @@ export function McpServersContent({
                             >
                               {server.oauthStatus === 'error' ? 'Reconnect' : 'Connect'}
                             </Button>
-                          ))}
+                          )
+                        ) : (
+                          <Text size="xs" c="dimmed">
+                            —
+                          </Text>
+                        )}
                       </Group>
                     </Table.Td>
                     <Table.Td>
@@ -362,12 +387,18 @@ export function McpServersContent({
                         {canEdit ? (
                           <>
                             <Tooltip label="Edit">
-                              <ActionIcon variant="subtle" size="sm" onClick={() => handleEdit(server)}>
+                              <ActionIcon
+                                aria-label="Edit"
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => handleEdit(server)}
+                              >
                                 <IconEdit size={16} />
                               </ActionIcon>
                             </Tooltip>
                             <Tooltip label="Delete">
                               <ActionIcon
+                                aria-label="Edit"
                                 variant="subtle"
                                 size="sm"
                                 color="red"

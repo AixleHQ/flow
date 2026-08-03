@@ -246,7 +246,7 @@ describe('ToolFormModal', () => {
     expect(router.patch).not.toHaveBeenCalled();
   });
 
-  it('renders the config MultiSelect options on the Config Items tab', async () => {
+  it('renders the config MultiSelect options on the Secrets tab', async () => {
     renderPage(
       <ToolFormModal
         opened
@@ -256,12 +256,12 @@ describe('ToolFormModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: /config items/i }));
+    await userEvent.click(screen.getByRole('tab', { name: /secrets/i }));
 
-    expect(screen.getByText(/select config items to inject as environment variables/i)).toBeInTheDocument();
+    expect(screen.getByText(/select secrets to inject as environment variables/i)).toBeInTheDocument();
 
     // Open the searchable MultiSelect dropdown and assert the seeded options appear.
-    await userEvent.click(screen.getByPlaceholderText(/select config items\.\.\./i));
+    await userEvent.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
     expect(await screen.findByText('OPENAI_API_KEY')).toBeInTheDocument();
     expect(screen.getByText('DATABASE_URL')).toBeInTheDocument();
   });
@@ -454,8 +454,8 @@ describe('ToolFormModal', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /display name/i }), 'Web Scraper');
     await userEvent.type(screen.getByRole('textbox', { name: /docker image/i }), 'node:20');
 
-    await userEvent.click(screen.getByRole('tab', { name: /config items/i }));
-    await userEvent.click(screen.getByPlaceholderText(/select config items\.\.\./i));
+    await userEvent.click(screen.getByRole('tab', { name: /secrets/i }));
+    await userEvent.click(screen.getByPlaceholderText(/select secrets\.\.\./i));
     await userEvent.click(await screen.findByRole('option', { name: 'OPENAI_API_KEY' }));
 
     await userEvent.click(screen.getByRole('button', { name: 'Create' }));

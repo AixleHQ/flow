@@ -101,43 +101,36 @@
   align-items: center;
 }
 
-/* ── New design tokens (AC8) ─────────────────────────────────────────────── */
-/* Scoped per Mantine's color-scheme attribute so they switch with the theme.  */
+/* ── Local aliases onto the --app-* contract ─────────────────────────────── */
+/* This block used to declare a full parallel palette (--bg, --text-1, --accent,
+   …) with its own hardcoded hex values under [data-mantine-color-scheme]
+   selectors — a second token namespace that leaked globally and that the app
+   shell (AppSidebar) had started reading. The short names stay so the ~250 rules
+   below don't have to change, but every value now derives from the one
+   contract in mantineTheme.ts, so the two can no longer disagree. Declared on
+   :root rather than the builder wrapper because Mantine modals portal to
+   <body> and would otherwise lose the aliases. Inline the long names and delete
+   this block when the builder's ~250 rules get swept. */
 
-[data-mantine-color-scheme='dark'] {
-  --bg: #0a0908;
-  --bg-raised: #191817;
-  --bg-card: #121110;
-  --bg-hover: rgba(209, 207, 205, 0.05);
-  --border: #292726;
-  --border-mid: #393837;
-  --text-1: #d1cfcd;
-  --text-2: #9f9d9c;
-  --text-3: #5d5b5a;
-  --accent: #cf6b4a;
-  --accent-dim: rgba(207, 107, 74, 0.12);
-  --accent-muted: rgba(207, 107, 74, 0.30);
-  --err: #ff6b6b;
-  --ok: #34d399;
-  --ph: #5d5b5a;
-}
-
-[data-mantine-color-scheme='light'] {
-  --bg: #ffffff;
-  --bg-raised: #ffffff;
-  --bg-card: #ffffff;
-  --bg-hover: rgba(208, 215, 222, 0.32);
-  --border: #d1d9e0;
-  --border-mid: #afb8c1;
-  --text-1: #1f2328;
-  --text-2: #59636e;
-  --text-3: #818b98;
-  --accent: #b95331;
-  --accent-dim: rgba(185, 83, 49, 0.10);
-  --accent-muted: rgba(185, 83, 49, 0.25);
-  --err: #cf222e;
-  --ok: #1a7f37;
-  --ph: #818b98;
+:root {
+  --bg: var(--app-bg-default);
+  --bg-raised: var(--app-bg-paper);
+  --bg-card: var(--app-bg-paper);
+  --bg-hover: var(--app-bg-hover);
+  --border: var(--app-border-default);
+  --border-mid: var(--app-border-strong);
+  --text-1: var(--app-text-primary);
+  --text-2: var(--app-text-secondary);
+  --text-3: var(--app-text-tertiary);
+  --accent: var(--app-primary);
+  /* Accent used as TEXT on a tinted background needs the stronger tone;
+     --accent stays for fills and borders. */
+  --accent-text: var(--app-primary-strong);
+  --accent-dim: var(--app-action-selected);
+  --accent-muted: var(--app-accent-muted);
+  --err: var(--app-danger-fg);
+  --ok: var(--app-success-fg);
+  --ph: var(--app-text-tertiary);
 }
 
 /* ── Three-tab layout (AC4) ──────────────────────────────────────────────── */
@@ -187,7 +180,7 @@
 }
 
 .builderTabActive {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
   font-weight: 500;
 }
@@ -272,7 +265,7 @@
 .sessionBadgeActive {
   background: var(--accent-dim);
   border-color: var(--accent-muted);
-  color: var(--accent);
+  color: var(--app-primary-strong);
 }
 
 /* Nested step rows */
@@ -329,7 +322,7 @@
 }
 
 .stepBadgeActive {
-  color: var(--accent);
+  color: var(--accent-text);
   border-color: var(--accent-muted);
 }
 
@@ -397,14 +390,14 @@
 }
 
 .tagAuto {
-  background: rgba(207, 107, 74, 0.16);
-  color: var(--accent);
-  border-color: rgba(207, 107, 74, 0.4);
+  background: var(--app-action-selected);
+  color: var(--app-primary-strong);
+  border-color: var(--app-accent-muted);
 }
 
 .tagNeutral {
-  background: rgba(209, 207, 205, 0.05);
-  border-color: rgba(209, 207, 205, 0.12);
+  background: var(--app-action-hover);
+  border-color: var(--app-border-default);
   color: var(--text-2);
 }
 
@@ -425,9 +418,9 @@
 }
 
 .ghostRow:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-dim);
-  border-color: rgba(207, 107, 74, 0.3);
+  border-color: var(--app-accent-muted);
 }
 
 /* Step add ghost — indented under session */
@@ -453,7 +446,7 @@
 }
 
 .ghostRowSession:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-dim);
   border-color: var(--accent-muted);
 }
@@ -511,7 +504,7 @@
 
 .secLabelIcon {
   font-size: 14px;
-  color: var(--accent);
+  color: var(--accent-text);
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -601,7 +594,7 @@
 }
 
 .fieldHelp a {
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
 }
 
@@ -734,7 +727,7 @@
   font-size: 13px;
   color: var(--text-2);
   padding: 5px 12px;
-  border-left: 2px solid var(--ok, #34d399);
+  border-left: 2px solid var(--ok);
   line-height: 1.5;
   margin-bottom: 12px;
 }
