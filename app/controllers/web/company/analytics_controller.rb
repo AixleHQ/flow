@@ -54,6 +54,10 @@ class Web::Company::AnalyticsController < Web::Company::ApplicationController
             avgCostCentsPerSession: result.totals.avg_cost_cents_per_session
           }
         }
+      },
+      workflow_costs: InertiaRails.defer(group: "analytics") {
+        result = CompanyWorkflowCostAnalyticsService.new(**filter_opts).call
+        { timeSeries: result.time_series.map { |p| { date: p.date, costCents: p.cost_cents, totalTokens: p.total_tokens } } }
       }
     }
   end

@@ -98,9 +98,9 @@ describe('Projects/Analytics/AnalyticsPage', () => {
     // The page title is a styled Text, not a semantic heading; the subtitle is unique copy.
     expect(screen.getByText('Analytics')).toBeInTheDocument();
     expect(screen.getByText('Agent activity, costs, and session insights')).toBeInTheDocument();
-    expect(screen.getByText('Agent Activity')).toBeInTheDocument();
-    expect(screen.getByText('Cost & Token Usage')).toBeInTheDocument();
-    expect(screen.getByText('Workflow Costs')).toBeInTheDocument();
+    expect(screen.getByText('Agent activity')).toBeInTheDocument();
+    expect(screen.getByText('Cost & token usage')).toBeInTheDocument();
+    expect(screen.getByText('Workflow costs')).toBeInTheDocument();
   });
 
   it('renders the summary stat values once the deferred summary prop is present', () => {
@@ -204,35 +204,68 @@ describe('Projects/Analytics/AnalyticsPage', () => {
       props: { project, scope: 'project' as const, period: '30d' as const, agentActivity },
     });
 
-    expect(screen.getByText('Sessions per Agent — Trend')).toBeInTheDocument();
-    expect(screen.getByText('Usage Breakdown by Agent Type')).toBeInTheDocument();
-    expect(screen.getByText('planner')).toBeInTheDocument();
-    expect(screen.getByText('coder')).toBeInTheDocument();
-    expect(screen.getByText('120 sessions')).toBeInTheDocument();
-    expect(screen.getByText('80 sessions')).toBeInTheDocument();
+    expect(screen.getByText('Sessions per agent — trend')).toBeInTheDocument();
+    expect(screen.getByText('Usage breakdown by agent type')).toBeInTheDocument();
+    // "planner"/"coder" render in both the trend-chart legend and the breakdown legend.
+    expect(screen.getAllByText('planner')).toHaveLength(2);
+    expect(screen.getAllByText('coder')).toHaveLength(2);
+    // 120 of 200 total -> 60%; 80 of 200 -> 40%.
+    expect(screen.getByText('120 sessions · 60%')).toBeInTheDocument();
+    expect(screen.getByText('80 sessions · 40%')).toBeInTheDocument();
     // costCents 3400 -> $34.00
     expect(screen.getByText('$34.00')).toBeInTheDocument();
+    // Donut center shows the total across all agents.
+    expect(screen.getByText('200')).toBeInTheDocument();
+    expect(screen.getByText('sessions')).toBeInTheDocument();
   });
 
-  it('renders the cost & token usage panel headings when costToken data is present', () => {
+  it('renders the cost & token usage panel headings and default scope badges when costToken data is present', () => {
     renderAuthedPage(<AnalyticsPage />, {
-      props: { project, scope: 'project' as const, period: '90d' as const, costToken },
+      props: {
+        project,
+        scope: 'project' as const,
+        period: '90d' as const,
+        costToken,
+        workflowCosts: emptyWorkflowCosts,
+      },
     });
 
-    expect(screen.getByText('Daily Cost')).toBeInTheDocument();
-    expect(screen.getByText('Daily Token Consumption')).toBeInTheDocument();
+    expect(screen.getByText('Daily cost')).toBeInTheDocument();
+    expect(screen.getByText('Daily token consumption')).toBeInTheDocument();
+    // Segmented control option + two card corner badges default to "All sessions".
+    expect(screen.getAllByText('All sessions').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId('daily-cost-panel')).toHaveAttribute('data-first-cost-cents', '1200');
   });
 
-  it('renders the sources panel with per-origin labels and counts', () => {
+  it('switches the cost & token charts and corner badges to workflows-only when toggled', async () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: '90d' as const, costToken, workflowCosts },
+    });
+
+    expect(screen.getByTestId('daily-cost-panel')).toHaveAttribute('data-first-cost-cents', '1200');
+
+    await userEvent.click(screen.getByText('Workflows only'));
+
+    // Segmented control keeps both option labels mounted for its animated indicator,
+    // so only the two card corner badges are new "Workflows only" occurrences.
+    expect(screen.getAllByText('Workflows only').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByTestId('daily-cost-panel')).toHaveAttribute('data-first-cost-cents', '4500');
+  });
+
+  it('renders the sources panel as a donut with a center share, per-origin labels/counts, and percentages', () => {
     renderAuthedPage(<AnalyticsPage />, {
       props: { project, scope: 'project' as const, period: '30d' as const, sources },
     });
 
-    expect(screen.getByText('Sessions by Origin')).toBeInTheDocument();
-    expect(screen.getByText('Command Line')).toBeInTheDocument();
+    expect(screen.getByText('Sessions by origin')).toBeInTheDocument();
+    // "Command Line" is the dominant source, so it renders both as the donut center label and the legend row name.
+    expect(screen.getAllByText('Command Line')).toHaveLength(2);
     expect(screen.getByText('Web Dashboard')).toBeInTheDocument();
     expect(screen.getByText('300 sessions')).toBeInTheDocument();
     expect(screen.getByText('150 sessions')).toBeInTheDocument();
+    // 300 of 450 -> 67% (donut center + legend row); 150 of 450 -> 33% (legend row only).
+    expect(screen.getAllByText('67%')).toHaveLength(2);
+    expect(screen.getByText('33%')).toBeInTheDocument();
   });
 
   it('renders the session duration histogram heading when duration data is present', () => {
@@ -240,7 +273,7 @@ describe('Projects/Analytics/AnalyticsPage', () => {
       props: { project, scope: 'project' as const, period: '30d' as const, duration },
     });
 
-    expect(screen.getByText('Session Duration Histogram')).toBeInTheDocument();
+    expect(screen.getByText('Session duration distribution')).toBeInTheDocument();
   });
 
   it('renders workflow stat blocks and formats duration with an hours component', () => {
@@ -293,7 +326,7 @@ describe('Projects/Analytics/AnalyticsPage', () => {
     });
 
     // Section heading is always present, but the deferred panel body (and its breakdown) is not.
-    expect(screen.getByText('Workflow Costs')).toBeInTheDocument();
+    expect(screen.getByText('Workflow costs')).toBeInTheDocument();
     expect(screen.queryByText('Workflow Breakdown')).not.toBeInTheDocument();
   });
 
@@ -338,5 +371,50 @@ describe('Projects/Analytics/AnalyticsPage', () => {
       { scope: 'project', period: '30d', participant_id: '3' },
       expect.objectContaining({ preserveState: true, preserveScroll: true }),
     );
+  });
+
+  it('renders the merged Session insights section with both origin and duration panels', () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: '30d' as const, sources, duration },
+    });
+
+    expect(screen.getByText('Session insights')).toBeInTheDocument();
+    expect(screen.getByText('Sessions by origin')).toBeInTheDocument();
+    expect(screen.getByText('Session duration distribution')).toBeInTheDocument();
+  });
+
+  it('renders an agent logo chip alongside each agent label in the legend', () => {
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: '30d' as const, agentActivity },
+    });
+
+    // One chip per agent in the trend-chart legend, plus one per agent in the breakdown legend.
+    expect(screen.getAllByTestId('agent-logo')).toHaveLength(
+      agentActivity.agentTypes.length + agentActivity.sessionsByAgent.length,
+    );
+    expect(screen.getAllByText('planner')).toHaveLength(2);
+    expect(screen.getAllByText('coder')).toHaveLength(2);
+  });
+
+  it('renders agent logos for known production agent types', () => {
+    const productionAgents = {
+      agentTypes: ['claude_code', 'codex', 'gemini_cli'],
+      sessionsByAgent: [
+        { agentType: 'claude_code', sessions: 10, costCents: 500, tokens: 20_000 },
+        { agentType: 'codex', sessions: 5, costCents: 250, tokens: 10_000 },
+        { agentType: 'gemini_cli', sessions: 2, costCents: 100, tokens: 4_000 },
+      ],
+      activityOverTime: [{ date: '2026-06-01', agentType: 'claude_code', sessions: 10 }],
+    };
+
+    renderAuthedPage(<AnalyticsPage />, {
+      props: { project, scope: 'project' as const, period: '30d' as const, agentActivity: productionAgents },
+    });
+
+    expect(screen.getAllByTestId('agent-logo').length).toBeGreaterThanOrEqual(3);
+    const breakdownPanel = screen.getByText('Usage breakdown by agent type').closest('div') as HTMLElement;
+    expect(breakdownPanel).toHaveTextContent('claude_code');
+    expect(breakdownPanel).toHaveTextContent('codex');
+    expect(breakdownPanel).toHaveTextContent('gemini_cli');
   });
 });
