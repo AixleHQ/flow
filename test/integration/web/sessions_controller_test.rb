@@ -89,13 +89,14 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path
   end
 
-  test "omniauth: fresh user with an unknown domain gets no membership and is gated" do
-    with_mocked_google_auth(email: "solo@nowhere-known.dev") do
-      get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+  test "omniauth: fresh user with an unknown domain is rejected with no_workspace" do
+    assert_no_difference "User.count" do
+      with_mocked_google_auth(email: "solo@nowhere-known.dev") do
+        get OmniAuthHelper::GOOGLE_CALLBACK_PATH
+      end
     end
 
-    assert_redirected_to login_path(error: "pending_approval")
-    assert User.find_by!(email: "solo@nowhere-known.dev").company_memberships.none?
+    assert_redirected_to login_path(error: "no_workspace")
   end
 
   test "omniauth: an existing member is signed in without any new membership" do
@@ -115,6 +116,28 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
   test "failure redirects to login with error" do
     get auth_failure_path(message: "invalid_credentials")
     assert_redirected_to login_path(error: "invalid_credentials")
+  end
+
+  test "omniauth with unrecognized domain redirects to login with no_workspace error and creates no user" do
+    unknown_domain = "unknowndomain#{SecureRandom.hex(4)}.xyz"
+    unknown_email = "test@#{unknown_domain}"
+
+    # No company exists with this domain — GoogleOmniAuthService will raise NoWorkspaceError
+    assert_nil Company.find_by(email_domain: unknown_domain)
+
+    auth_hash = OmniAuth::AuthHash.new(
+      provider: "google_oauth2",
+      uid: "google-uid-unknown",
+      info: { email: unknown_email, name: "Ghost User" }
+    )
+
+    assert_no_difference "User.count" do
+      get auth_callback_path(provider: "google_oauth2"),
+        env: { "omniauth.auth" => auth_hash }
+    end
+
+    assert_redirected_to login_path(error: "no_workspace")
+    assert_nil User.find_by(email: unknown_email)
   end
 
   test "inertia visit by a super admin is sent to the admin panel with a full-page visit" do

@@ -11,7 +11,7 @@ class CompanyMembership < ApplicationRecord
   # agent credential per company so vendor spend is billed to the company that
   # incurred it.
   AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
-  POSITIONS = %w[qa pm_po_ba dev designer cto].freeze
+  POSITIONS = %w[qa pm_po_ba dev designer cto other].freeze
   AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli].freeze
 
   # Associations
@@ -109,9 +109,9 @@ class CompanyMembership < ApplicationRecord
     credentials.map(&:agent_type)
   end
 
-  # Deliberately LIVE, unlike #credentials: this gates the onboarding state
-  # transition (can_advance_to_authenticated?), and a credential created earlier
-  # in the same request must not be answered from a stale list.
+  # Deliberately LIVE, unlike #credentials: this gates the onboarding `complete`
+  # transition (can_complete_onboarding?), and a credential created earlier in
+  # the same request must not be answered from a stale list.
   def has_configured_agents?
     credentials_scope.exists?
   end
@@ -126,10 +126,6 @@ class CompanyMembership < ApplicationRecord
   # demand one. Per-company now: viewer in one company, employee in another.
   def onboarding_requires_agent?
     !viewer?
-  end
-
-  def can_advance_to_authenticated?
-    onboarding_requires_agent? ? has_configured_agents? : true
   end
 
   def can_complete_onboarding?

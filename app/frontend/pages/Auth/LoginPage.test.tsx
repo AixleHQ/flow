@@ -104,6 +104,18 @@ describe('LoginPage', () => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
 
+    it('renders the no_workspace error screen when error is no_workspace', () => {
+      renderPage(<LoginPage />, { props: { error: 'no_workspace' } });
+
+      expect(screen.getByText('No workspace for your domain')).toBeInTheDocument();
+      expect(
+        screen.getByText("Your email domain isn't linked to a workspace. Contact your admin or use your work email."),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Back to login/ })).toBeInTheDocument();
+      // The main sign-in form is not shown
+      expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+    });
+
     it('shows a "Welcome back!" notification after a successful login', async () => {
       const form = makeFormStub({ email: 'a@b.com', password: 'secret', rememberMe: false });
       renderPage(<LoginPage />, { form });

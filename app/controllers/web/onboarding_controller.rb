@@ -26,9 +26,12 @@ class Web::OnboardingController < Web::ApplicationController
                                        .active
                                        .where(company_id: current_membership.company_id)
 
+    viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?
+
     render inertia: "Onboarding/OnboardingPage", props: {
-      auth_sessions: active_auth_sessions.map { |s| TerminalSessionResource.new(s).to_h },
-      cable_stream: inertia_cable_stream(current_user)
+      auth_sessions: -> { active_auth_sessions.map { |s| TerminalSessionResource.new(s).to_h } },
+      cable_stream: -> { inertia_cable_stream(current_user) },
+      viewer_workflow_preview: -> { viewer_preview }
     }
   end
 
@@ -66,5 +69,24 @@ class Web::OnboardingController < Web::ApplicationController
     event = params.dig(:onboarding, :onboarding_state_event)
     permitted[:onboarding_state_event] = event if event.present? && ALLOWED_ONBOARDING_EVENTS.include?(event)
     permitted
+  end
+
+  def build_viewer_workflow_preview(company)
+    return nil if company.nil?
+
+    workflow = company.projects.flat_map(&:workflows).first
+    return nil if workflow.nil?
+
+    steps_assoc = workflow.respond_to?(:steps) ? workflow.steps : []
+    limited_steps = steps_assoc.respond_to?(:limit) ? steps_assoc.limit(4) : steps_assoc.first(4)
+
+    {
+      workflow_name: workflow.name,
+      workflow_description: workflow.description.presence || "An automated workflow",
+      steps: limited_steps.map { |s| { name: s.name, description: s.description } }
+    }
+  rescue ActiveRecord::ActiveRecordError, NoMethodError => e
+    Rails.logger.warn("viewer workflow preview failed: #{e.message}")
+    nil
   end
 end

@@ -108,3 +108,10 @@
   background-color: var(--app-bg-elevated);
   border-color: var(--app-border-strong);
 }
+
+/* ── No Workspace Screen ────────────────────────── */
+
+.noWorkspaceHeading {
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  color: var(--app-text-primary);
+}

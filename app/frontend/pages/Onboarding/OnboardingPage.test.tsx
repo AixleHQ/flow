@@ -53,8 +53,9 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
 });
 
 // Build a currentUser pinned to a specific onboarding step. The page derives the active step
-// from currentUser.onboardingState (step1 → Profile, step2 → Agents, step4 → Complete) and seeds
-// its local position/language/selectedAgents state from the same user object.
+// from currentUser.onboardingState (step1 → Profile, step2 → Connect Agents / See the platform)
+// and seeds its local position/language/selectedAgents state from the same user object. There is
+// no separate summary/"Complete" state — step2's "Get started" fires `complete` directly.
 const userAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
   buildSharedUser({
     name: 'Riley Onboarder',
@@ -71,7 +72,7 @@ describe('Onboarding/OnboardingPage', () => {
     renderAuthedPage(<OnboardingPage />, { props: { currentUser: userAt(), authSessions: [] } });
 
     expect(screen.getByText('Tell us about yourself')).toBeInTheDocument();
-    expect(screen.getByText("Let's set up your profile and AI agents to get started")).toBeInTheDocument();
+    expect(screen.getByText('Set up your workspace')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Continue/ })).toBeInTheDocument();
   });
 
@@ -80,10 +81,8 @@ describe('Onboarding/OnboardingPage', () => {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
-
-    expect(screen.getByText(/Please fill in all required fields to continue/)).toBeInTheDocument();
-    expect(router.patch).not.toHaveBeenCalled();
+    // Continue is disabled when no position is selected and no language chosen
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
   });
 
   it('submits the profile step to the backend when position and language are set', async () => {
@@ -105,69 +104,26 @@ describe('Onboarding/OnboardingPage', () => {
     );
   });
 
-  it('renders the agent selection step and toggling an agent auto-saves to the backend', async () => {
+  it('renders the agent connection step when at step2', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ onboardingState: 'step2' }), authSessions: [] },
     });
 
-    expect(screen.getByText('Select your AI agents')).toBeInTheDocument();
+    expect(screen.getByText('Connect your agents')).toBeInTheDocument();
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Cursor CLI')).toBeInTheDocument();
-
-    await userEvent.click(screen.getByText('Claude Code'));
-
-    // autoSave is debounced (~300ms) before it calls router.patch.
-    await waitFor(() =>
-      expect(router.patch).toHaveBeenCalledWith(
-        '/onboarding',
-        expect.objectContaining({
-          onboarding: expect.objectContaining({ selectedAgents: ['claude_code'] as AgentType[] }),
-        }),
-        expect.anything(),
-      ),
-    );
   });
 
-  it('renders the completion step and fires the complete event on Get Started', async () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: {
-        currentUser: userAt({
-          onboardingState: 'step4',
-          position: 'dev',
-          preferredAgentLanguage: 'en',
-          selectedAgents: ['claude_code'] as AgentType[],
-          configuredAgents: ['claude_code'] as AgentType[],
-        }),
-        authSessions: [],
-      },
-    });
-
-    expect(screen.getByText("You're all set!")).toBeInTheDocument();
-    const getStarted = screen.getByRole('button', { name: /Get Started/ });
-
-    await userEvent.click(getStarted);
-
-    await waitFor(() =>
-      expect(router.patch).toHaveBeenCalledWith(
-        '/onboarding',
-        expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'complete' }) }),
-        expect.anything(),
-      ),
-    );
-  });
-
-  it('renders the welcome card with the company name and the four stepper labels', () => {
+  it('renders the welcome card with the company name and the two stepper labels for contributors', () => {
     renderAuthedPage(<OnboardingPage />, { props: { currentUser: userAt(), authSessions: [] } });
 
-    // SharedProps default seeds company 'Test Company'.
-    expect(screen.getByText('Welcome to Test Company!')).toBeInTheDocument();
-    expect(screen.getByText('Your Profile')).toBeInTheDocument();
-    expect(screen.getByText('Select Agents')).toBeInTheDocument();
-    expect(screen.getByText('Authenticate')).toBeInTheDocument();
-    expect(screen.getByText('Complete')).toBeInTheDocument();
+    expect(screen.getByText('Set up your workspace')).toBeInTheDocument();
+    expect(screen.getByText('Profile')).toBeInTheDocument();
+    expect(screen.getByText('Agents')).toBeInTheDocument();
+    expect(screen.queryByText('Complete')).not.toBeInTheDocument();
   });
 
-  it('renders all four agent cards with their descriptions on the agent selection step', () => {
+  it('renders all four agent cards with their descriptions on the agent connection step', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ onboardingState: 'step2' }), authSessions: [] },
     });
@@ -175,46 +131,46 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.getByText('OpenAI Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
     expect(screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities")).toBeInTheDocument();
-    expect(screen.getByText('Choose at least one agent to work with. You can change this later.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Connect at least one agent to continue. You can add the rest later in Settings.'),
+    ).toBeInTheDocument();
   });
 
-  it('blocks advancing from the agent step when no agent is selected', async () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: { currentUser: userAt({ onboardingState: 'step2', selectedAgents: [] }), authSessions: [] },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
-
-    expect(screen.getByText(/Select at least one agent to continue/)).toBeInTheDocument();
-    expect(router.patch).not.toHaveBeenCalled();
-  });
-
-  it('advances the agent step to the backend with go_next when an agent is pre-selected', async () => {
+  it('blocks finishing from the connect agents step when no agent is configured', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
-        currentUser: userAt({ onboardingState: 'step2', selectedAgents: ['codex'] as AgentType[] }),
+        currentUser: userAt({ onboardingState: 'step2', selectedAgents: [], configuredAgents: [] }),
         authSessions: [],
       },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
+    expect(router.patch).not.toHaveBeenCalled();
+  });
+
+  it('fires the complete event when Get started is clicked with an agent configured', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: {
+        currentUser: userAt({ onboardingState: 'step2', configuredAgents: ['codex'] as AgentType[] }),
+        authSessions: [],
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Get started/ }));
 
     expect(router.patch).toHaveBeenCalledWith(
       '/onboarding',
       expect.objectContaining({
-        onboarding: expect.objectContaining({
-          selectedAgents: ['codex'] as AgentType[],
-          onboardingStateEvent: 'go_next',
-        }),
+        onboarding: expect.objectContaining({ onboardingStateEvent: 'complete' }),
       }),
       expect.anything(),
     );
   });
 
-  it('fires go_previous when the Back button is clicked on the agent step', async () => {
+  it('fires go_previous when the Back button is clicked on the connect agents step', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
-        currentUser: userAt({ onboardingState: 'step2', selectedAgents: ['claude_code'] as AgentType[] }),
+        currentUser: userAt({ onboardingState: 'step2', configuredAgents: ['claude_code'] as AgentType[] }),
         authSessions: [],
       },
     });
@@ -228,11 +184,11 @@ describe('Onboarding/OnboardingPage', () => {
     );
   });
 
-  it('renders the authenticate step sidebar and the placeholder until an agent is picked', () => {
+  it('renders the connect agents step with all agents and NOT CONNECTED badge by default', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code', 'codex'] as AgentType[],
           configuredAgents: [],
         }),
@@ -240,19 +196,15 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    expect(screen.getByText('Authenticate Your Agents')).toBeInTheDocument();
-    expect(screen.getByText('Select an agent to authenticate')).toBeInTheDocument();
-    // No agent configured yet → summary text shows the "none" branch.
-    expect(screen.getByText('No agents authenticated yet.')).toBeInTheDocument();
-    // Unconfigured agents with no active session show the "Click to authenticate" badge.
-    expect(screen.getAllByText('Click to authenticate')).toHaveLength(2);
+    expect(screen.getByText('Connect your agents')).toBeInTheDocument();
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(4);
   });
 
-  it('shows the authenticated badge, configured count, and an enabled Continue when an agent is configured', () => {
+  it('shows the Connected badge and an enabled Get started when an agent is configured', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code', 'codex'] as AgentType[],
           configuredAgents: ['claude_code'] as AgentType[],
         }),
@@ -260,18 +212,16 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    expect(screen.getByText('Authenticated')).toBeInTheDocument();
-    expect(screen.getByText('1 of 2 authenticated.')).toBeInTheDocument();
-
-    const continueBtn = screen.getByRole('button', { name: /Continue \(1\/2\)/ });
-    expect(continueBtn).toBeEnabled();
+    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 4 connected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 
-  it('disables Continue on the authenticate step when no agent is configured', () => {
+  it('disables Get started on the connect agents step when no agent is configured', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code'] as AgentType[],
           configuredAgents: [],
         }),
@@ -279,10 +229,10 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    expect(screen.getByRole('button', { name: /Continue \(0\/1\)/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Get started/ })).toBeDisabled();
   });
 
-  it('shows the "in progress" badge when an agent has an active auth session but is not configured', () => {
+  it('shows the "Connecting" badge when an agent has an active auth session but is not configured', () => {
     const session: TerminalSession = {
       ...buildTerminalSession(),
       agentType: 'claude_code',
@@ -291,7 +241,7 @@ describe('Onboarding/OnboardingPage', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code'] as AgentType[],
           configuredAgents: [],
         }),
@@ -299,83 +249,36 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    expect(screen.getByText('In progress')).toBeInTheDocument();
+    expect(screen.getByText('Connecting')).toBeInTheDocument();
   });
 
-  it('clicking a configured agent in the sidebar reveals the "Authentication complete" panel', async () => {
+  it('clicking Connect for an agent expands the terminal inline', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code'] as AgentType[],
-          configuredAgents: ['claude_code'] as AgentType[],
+          configuredAgents: [],
         }),
         authSessions: [],
       },
     });
 
-    // The sidebar tile for the configured agent (its name appears once in the sidebar).
-    await userEvent.click(screen.getByText('Claude Code'));
-
-    expect(await screen.findByText('Authentication complete')).toBeInTheDocument();
+    // Connect button appears for unconfigured agents
+    const connectButtons = screen.getAllByRole('button', { name: /Connect/ });
+    expect(connectButtons.length).toBeGreaterThan(0);
   });
 
-  it('renders the completion summary with resolved position/language labels and per-agent auth badges', () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: {
-        currentUser: userAt({
-          onboardingState: 'step4',
-          position: 'qa',
-          preferredAgentLanguage: 'ru',
-          selectedAgents: ['claude_code', 'codex'] as AgentType[],
-          configuredAgents: ['claude_code'] as AgentType[],
-        }),
-        authSessions: [],
-      },
-    });
-
-    // Position/language values are resolved through the option-label lookups.
-    expect(screen.getByText('QA Engineer')).toBeInTheDocument();
-    expect(screen.getByText('Russian')).toBeInTheDocument();
-    // One configured agent → authenticated badge; one not → not-authenticated badge.
-    expect(screen.getByText('✓ Authenticated')).toBeInTheDocument();
-    expect(screen.getByText('⚠ Not authenticated')).toBeInTheDocument();
-  });
-
-  it('fires go_previous from the Back button on the completion step', async () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: {
-        currentUser: userAt({
-          onboardingState: 'step4',
-          position: 'dev',
-          preferredAgentLanguage: 'en',
-          selectedAgents: ['claude_code'] as AgentType[],
-          configuredAgents: ['claude_code'] as AgentType[],
-        }),
-        authSessions: [],
-      },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: /Back/ }));
-
-    expect(router.patch).toHaveBeenCalledWith(
-      '/onboarding',
-      expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'go_previous' }) }),
-      expect.anything(),
-    );
-  });
-
-  it('advances from the profile step after choosing a position and language in the selects', async () => {
+  it('advances from the profile step after clicking a role card and choosing a language', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
     });
 
-    // Open the (empty) Position select and pick an option — drives handlePositionChange.
-    await userEvent.click(screen.getByRole('combobox', { name: /Your Position/i }));
-    await userEvent.click(await screen.findByRole('option', { name: 'Developer' }));
+    // Click the Developer role card
+    await userEvent.click(screen.getByRole('button', { name: /Developer/ }));
 
     // Open the searchable Language select and pick an option — drives handleLanguageChange.
-    await userEvent.click(screen.getByRole('combobox', { name: /Preferred Agent Language/i }));
+    await userEvent.click(screen.getByRole('combobox', { name: /Agent response language/i }));
     await userEvent.click(await screen.findByRole('option', { name: 'English' }));
 
     // Both fields now satisfy canAdvanceStep1, so Continue submits the chosen values.
@@ -396,69 +299,31 @@ describe('Onboarding/OnboardingPage', () => {
     );
   });
 
-  it('clears the validation warning once a required field is chosen', async () => {
+  it('Continue becomes enabled once a role card is clicked and language is chosen', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
     });
 
-    // Submitting empty surfaces the warning...
-    await userEvent.click(screen.getByRole('button', { name: /Continue/ }));
-    expect(screen.getByText(/Please fill in all required fields to continue/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
 
-    // ...and picking a field clears it via setValidationWarning(null) in the change handler.
-    await userEvent.click(screen.getByRole('combobox', { name: /Your Position/i }));
-    await userEvent.click(await screen.findByRole('option', { name: 'QA Engineer' }));
+    // Clicking a role card sets the position.
+    await userEvent.click(screen.getByRole('button', { name: /QA Engineer/ }));
 
-    expect(screen.queryByText(/Please fill in all required fields to continue/)).not.toBeInTheDocument();
-  });
+    // Still disabled until language is chosen
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
 
-  it('deselecting a pre-selected agent auto-saves the emptied selection', async () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: {
-        currentUser: userAt({ onboardingState: 'step2', selectedAgents: ['claude_code'] as AgentType[] }),
-        authSessions: [],
-      },
-    });
+    // Pick a language
+    await userEvent.click(screen.getByRole('combobox', { name: /Agent response language/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'English' }));
 
-    // The agent starts selected; clicking its card toggles it off (the untested filter branch).
-    await userEvent.click(screen.getByText('Claude Code'));
-
-    await waitFor(() =>
-      expect(router.patch).toHaveBeenCalledWith(
-        '/onboarding',
-        expect.objectContaining({ onboarding: expect.objectContaining({ selectedAgents: [] as AgentType[] }) }),
-        expect.anything(),
-      ),
-    );
-  });
-
-  it('advances the authenticate step with go_next when Continue is clicked', async () => {
-    renderAuthedPage(<OnboardingPage />, {
-      props: {
-        currentUser: userAt({
-          onboardingState: 'step3',
-          selectedAgents: ['claude_code'] as AgentType[],
-          configuredAgents: ['claude_code'] as AgentType[],
-        }),
-        authSessions: [],
-      },
-    });
-
-    // Continue is enabled once at least one agent is configured; it walks the state machine forward.
-    await userEvent.click(screen.getByRole('button', { name: /Continue \(1\/1\)/ }));
-
-    expect(router.patch).toHaveBeenCalledWith(
-      '/onboarding',
-      expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'go_next' }) }),
-      expect.anything(),
-    );
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeEnabled();
   });
 
   it('shows the failure panel and retries session creation when an auth session failed', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code'] as AgentType[],
           configuredAgents: [],
         }),
@@ -466,8 +331,8 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    // Selecting the failed agent mounts its terminal, which renders the failed branch.
-    await userEvent.click(screen.getByText('Claude Code'));
+    // All unconfigured agents have Connect buttons. Click the first one (Claude Code row).
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
     expect(await screen.findByText('Authentication session failed to start.')).toBeInTheDocument();
 
     // Retry POSTs a fresh session (apiFetch → mocked fetch resolves 200) then reloads authSessions.
@@ -476,11 +341,11 @@ describe('Onboarding/OnboardingPage', () => {
     await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['authSessions'] }));
   });
 
-  it('renders the ttyd terminal iframe for a ready auth session', async () => {
+  it('renders the ttyd terminal iframe for a ready auth session after clicking Connect', async () => {
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
-          onboardingState: 'step3',
+          onboardingState: 'step2',
           selectedAgents: ['claude_code'] as AgentType[],
           configuredAgents: [],
         }),
@@ -490,26 +355,53 @@ describe('Onboarding/OnboardingPage', () => {
       },
     });
 
-    // A ready session with a websocket URL renders the embedded ttyd terminal iframe.
-    await userEvent.click(screen.getByText('Claude Code'));
+    // Expand terminal by clicking Connect button
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
 
     expect(await screen.findByTitle('Agent Authentication Terminal')).toBeInTheDocument();
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
+  });
+
+  it('renders role radio cards on profile step', () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
+    });
+
+    expect(screen.getByRole('button', { name: /Developer/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /QA Engineer/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Product Manager/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Designer/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /CTO/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Other/ })).toBeInTheDocument();
+    // 6 role buttons (Developer, QA Engineer, PM/BA, Designer, CTO, Other)
+    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(6);
+  });
+
+  it('enables Continue only after a role card is clicked and language selected', async () => {
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ position: null, preferredAgentLanguage: '' }), authSessions: [] },
+    });
+
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /Developer/ }));
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole('combobox', { name: /Agent response language/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'English' }));
+    expect(screen.getByRole('button', { name: /Continue/ })).toBeEnabled();
   });
 
   describe('viewer (read-only client) onboarding', () => {
     const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
       userAt({ currentRole: 'viewer', ...overrides });
 
-    it('hides the Select Agents and Authenticate steps for a viewer', () => {
+    it('hides the Connect Agents step and shows See the platform step for a viewer', () => {
       renderAuthedPage(<OnboardingPage />, {
         props: { currentUser: viewerAt(), authSessions: [] },
       });
 
-      expect(screen.getByText('Your Profile')).toBeInTheDocument();
-      expect(screen.getByText('Complete')).toBeInTheDocument();
-      expect(screen.queryByText('Select Agents')).not.toBeInTheDocument();
-      expect(screen.queryByText('Authenticate')).not.toBeInTheDocument();
+      expect(screen.getByText('Profile')).toBeInTheDocument();
+      expect(screen.getByText('Platform')).toBeInTheDocument();
+      expect(screen.queryByText('Agents')).not.toBeInTheDocument();
     });
 
     it('advances a viewer from the profile step with go_next (no agent selection)', async () => {
@@ -526,18 +418,72 @@ describe('Onboarding/OnboardingPage', () => {
       );
     });
 
-    it('shows the completion screen for a viewer whose server state reached step4', () => {
+    it('viewer at step2 renders "See the platform" heading', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
+      });
+
+      expect(screen.getByText('See the platform in action')).toBeInTheDocument();
+    });
+
+    it('viewer platform step Get started sends the complete event directly', async () => {
       renderAuthedPage(<OnboardingPage />, {
         props: {
-          currentUser: viewerAt({ onboardingState: 'step4', position: 'dev', preferredAgentLanguage: 'en' }),
+          currentUser: viewerAt({ onboardingState: 'step2', position: 'dev', preferredAgentLanguage: 'en' }),
           authSessions: [],
         },
       });
 
-      expect(screen.getByText("You're all set!")).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Get Started/ })).toBeInTheDocument();
-      // No Back button for viewers (avoids bouncing through hidden states).
-      expect(screen.queryByRole('button', { name: /Back/ })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /Get started/ }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/onboarding',
+        expect.objectContaining({ onboarding: expect.objectContaining({ onboardingStateEvent: 'complete' }) }),
+        expect.anything(),
+      );
+    });
+
+    it('viewer platform step also shows a Back button', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
+      });
+
+      expect(screen.getByRole('button', { name: /Back/ })).toBeInTheDocument();
+    });
+
+    it('viewer does NOT see the agent connect step', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [] },
+      });
+
+      expect(screen.queryByText('Connect your agents')).not.toBeInTheDocument();
+    });
+
+    it('renders viewer workflow preview when viewerWorkflowPreview prop is provided', () => {
+      const preview = {
+        workflowName: 'CI Pipeline',
+        workflowDescription: 'Automated CI workflow',
+        steps: [{ name: 'Lint', description: 'Run linter' }],
+      };
+      renderAuthedPage(<OnboardingPage />, {
+        props: {
+          currentUser: viewerAt({ onboardingState: 'step2' }),
+          authSessions: [],
+          viewerWorkflowPreview: preview,
+        },
+      });
+
+      expect(screen.getByText("Here's what a workflow looks like in action")).toBeInTheDocument();
+      expect(screen.getByText('CI Pipeline')).toBeInTheDocument();
+      expect(screen.getByText(/Lint/)).toBeInTheDocument();
+    });
+
+    it('renders static fallback when viewerWorkflowPreview is null', () => {
+      renderAuthedPage(<OnboardingPage />, {
+        props: { currentUser: viewerAt({ onboardingState: 'step2' }), authSessions: [], viewerWorkflowPreview: null },
+      });
+
+      expect(screen.getByText('See the platform in action')).toBeInTheDocument();
     });
   });
 });

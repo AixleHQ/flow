@@ -3,6 +3,8 @@
 # Service to handle Google OAuth authentication (global identity) with a
 # domain-based company auto-join policy for membershipless users
 class GoogleOmniAuthService
+  class NoWorkspaceError < StandardError; end
+
   attr_reader :auth_hash, :user
 
   # Initialize with the OAuth auth hash from OmniAuth
@@ -26,6 +28,8 @@ class GoogleOmniAuthService
     user = User.find_or_initialize_by(email: email)
 
     if user.new_record?
+      company = Company.find_by_email_domain(email)
+      raise NoWorkspaceError if company.nil?
     end
 
     # Update OAuth-related identity attributes. We deliberately do NOT persist the
