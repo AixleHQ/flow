@@ -53,6 +53,18 @@ workflows:
       - name: mcp_sync_connector_catalog_activity
         task_queue: aixle_ruby
 
+  - name: skills_catalog_sync_workflow
+    owner: aixle_ruby
+    activities:
+      - name: skills_sync_catalog_activity
+        task_queue: aixle_ruby
+
+  - name: skills_demand_sync_workflow
+    owner: aixle_ruby
+    activities:
+      - name: skills_sync_catalog_activity
+        task_queue: aixle_ruby
+
   - name: mcp_tool_drift_scan_workflow
     owner: aixle_ruby
     activities:

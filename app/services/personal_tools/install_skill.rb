@@ -14,7 +14,10 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::SkillsPolicy, project: project)
-      skill = SkillsRegistryService.install(params[:skill_id], scope: project)
+      # Same install count the UI records, so the figure does not depend on which
+      # path installed the skill.
+      installs = CatalogSkill.find_by(registry_id: params[:skill_id].to_s)&.installs
+      skill = SkillsRegistryService.install(params[:skill_id], scope: project, installs: installs)
       success(id: skill.id, name: skill.name, title: skill.title)
     rescue SkillsRegistryService::RegistryError => e
       error("Install failed: #{e.message}")

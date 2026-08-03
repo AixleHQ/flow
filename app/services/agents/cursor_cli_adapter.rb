@@ -102,6 +102,12 @@ module Agents
       "cursor"
     end
 
+    # Where `skills add -g -a cursor` puts a skill: the CLI installs into the
+    # agent's own config directory, the same one holding cli-config.json.
+    def skills_install_path
+      "#{home_dir}/.cursor/skills"
+    end
+
     # MCP config: /workspace/.cursor/mcp.json + pre-approved mcp-approvals.json
     def mcp_config(servers)
       workspace = "/workspace"

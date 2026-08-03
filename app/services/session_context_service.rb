@@ -212,6 +212,17 @@ class SessionContextService
     # Install skills into container via `npx skills add`.
     # Each skill is installed globally (`-g`) for the target agent runtime,
     # so skill files land in the agent's home dir (not /workspace).
+    #
+    # TELEMETRY IS OFF, DELIBERATELY. Every `skills add` otherwise POSTs an install
+    # event to add-skill.vercel.sh carrying the source, the skill slugs, the agent,
+    # and `skillFiles` — a map of skill name to the relative path it was installed
+    # to (paths, not contents; see vercel-labs/skills src/telemetry.ts). Two reasons
+    # to switch it off: it publishes what every session here installs and where, and
+    # it makes this platform a contributor to the very leaderboard the catalog is
+    # ranked by.
+    #
+    # `env VAR=1 cmd` rather than an exec option because neither container runtime
+    # accepts an env hash in `exec` opts.
     def inject_skills(container_id, session)
       skills = resolve_skills(session)
       return {} if skills.empty?
@@ -219,29 +230,78 @@ class SessionContextService
       adapter = adapter_for(session)
       return {} if adapter.includes_skills_in_context?
 
-      agent_name = adapter.skills_agent_name
+      manual, registry = skills.partition(&:manual?)
       installed = {}
 
-      skills.each do |skill|
-        cmd = [
-          "npx", "-y", "skills", "add", skill.source,
-          "--skill", skill.name,
-          "-a", agent_name,
-          "-g", "--copy", "-y"
-        ]
-
-        stdout, stderr, status = runtime.exec(container_id, cmd, timeout: 30)
-
-        if status.zero?
-          Rails.logger.info("[SessionContext] Installed skill via npx: #{skill.package} -> #{agent_name}")
-          installed[skill.package] = "ok"
-        else
-          Rails.logger.warn("[SessionContext] Failed to install skill #{skill.package}: #{stderr}")
-          installed[skill.package] = "error: #{stderr.to_s.truncate(200)}"
-        end
-      end
+      # `skills_agent_name` is only resolved when there is something for the CLI to
+      # do — a runtime that never implemented it can still receive manual skills.
+      registry.each { |skill| installed[skill_key(skill)] = install_registry_skill(container_id, adapter, skill) }
+      manual.each { |skill| installed[skill_key(skill)] = write_manual_skill(container_id, adapter, skill) }
 
       installed
+    end
+
+    def install_registry_skill(container_id, adapter, skill)
+      agent_name = adapter.skills_agent_name
+      cmd = [
+        "env", "DISABLE_TELEMETRY=1",
+        "npx", "-y", "skills", "add", skill.source,
+        # The slug as upstream published it, taken from `package` ("source@slug")
+        # rather than from `name`, which the model downcases. `--skill` matches
+        # upstream's own directory name, so a normalised value would simply miss.
+        "--skill", registry_slug(skill),
+        "-a", agent_name,
+        "-g", "--copy", "-y"
+      ]
+
+      _stdout, stderr, status = runtime.exec(container_id, cmd, timeout: 30)
+
+      if status.zero?
+        Rails.logger.info("[SessionContext] Installed skill via npx: #{skill.package} -> #{agent_name}")
+        "ok"
+      else
+        Rails.logger.warn("[SessionContext] Failed to install skill #{skill.package}: #{stderr}")
+        "error: #{stderr.to_s.truncate(200)}"
+      end
+    end
+
+    # A hand-written skill is written straight into the directory the CLI would have
+    # used, and never handed to the CLI itself — an install event naming a private
+    # skill has no business leaving this deployment. The path matches the CLI's own
+    # `globalSkillsDir` per agent (vercel-labs/skills src/agents.ts), so a manual
+    # skill lands exactly where an installed one does.
+    def write_manual_skill(container_id, adapter, skill)
+      dir = adapter.skills_install_path
+      if dir.blank?
+        Rails.logger.warn("[SessionContext] #{adapter.class} has no skills directory; skipping #{skill.name}")
+        return "error: runtime has no skills directory"
+      end
+
+      # The Agent Skills spec requires the directory name to equal the skill's
+      # `name`, which is why the manual form validates that name so strictly.
+      #
+      # Written through the service's own helper so it lands with the agent's uid:
+      # writing as root would create ~/.claude and ~/.claude/skills owned by root
+      # before the agent (uid 1001) ever touches them, and every later write by the
+      # agent into that tree would fail with EACCES.
+      path = "#{dir}/#{skill.name}/SKILL.md"
+      if write_file(container_id, path, skill.content.to_s, adapter.container_uid)
+        Rails.logger.info("[SessionContext] Wrote manual skill: #{path}")
+        "ok"
+      else
+        Rails.logger.warn("[SessionContext] Failed to write manual skill: #{path}")
+        "error: write failed"
+      end
+    end
+
+    # Manual skills have no registry package, so they report under their name.
+    def skill_key(skill)
+      skill.package.presence || skill.name
+    end
+
+    # "owner/repo@slug" → "slug", falling back to the stored name.
+    def registry_slug(skill)
+      skill.package.to_s.split("@").last.presence || skill.name
     end
 
     # == Story 9.7 → 25.7: Context File Injection (via Constructor) ==

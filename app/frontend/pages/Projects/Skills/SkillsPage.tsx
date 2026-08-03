@@ -1,6 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { SkillsContent, type Skill, type RegistrySkill } from 'shared/resources/skills/SkillsContent';
+import { SkillsContent, type CatalogSkill, type Skill } from 'shared/resources/skills/SkillsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -12,12 +12,14 @@ interface Project {
 interface Props {
   project: Project;
   skills: Skill[];
-  registryQuery: string;
-  registryResults: RegistrySkill[];
+  catalogQuery: string;
+  catalogSkills: CatalogSkill[];
+  catalogSyncedAt: string | null;
 }
 
 const SkillsPage = () => {
-  const { project, skills, registryQuery, registryResults } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, skills, catalogQuery, catalogSkills, catalogSyncedAt } = usePage<{ props: Props }>()
+    .props as unknown as Props;
 
   return (
     <>
@@ -26,9 +28,10 @@ const SkillsPage = () => {
         skills={skills}
         basePath={`/company/projects/${project.id}/skills`}
         title="Project Skills"
-        subtitle="Skills from skills.sh registry installed for this project."
-        registryQuery={registryQuery}
-        registryResults={registryResults}
+        subtitle="Skills this project can use — installed from the public catalog or written by hand."
+        catalogQuery={catalogQuery}
+        catalogSkills={catalogSkills}
+        catalogSyncedAt={catalogSyncedAt}
       />
     </>
   );

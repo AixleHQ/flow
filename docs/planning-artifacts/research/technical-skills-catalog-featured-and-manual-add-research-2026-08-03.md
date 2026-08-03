@@ -442,6 +442,10 @@ storage one (below).
 `GET /api/v1/skills/audit/{source}/{skill}` (provider, status, summary, `riskLevel`)
 and a public `/audits` page — but the v1 endpoint is OIDC-gated (*verified 401*) and
 the page is client-rendered. So a "security-audited" badge cannot be sourced today.
+
+> **SUPERSEDED — see the Addendum at the end of this report.** Reading the CLI's own
+> source later the same day turned up a second, *public* audit host that the CLI
+> queries before every install. A risk badge is available after all.
 Worth re-checking if keys ever open up, because it maps exactly onto the trust
 badges the connector catalog already shows.
 
@@ -674,8 +678,8 @@ unauthenticated 60/hour (*verified*) stays reserved for install-time rescue only
 - **No verification tier is obtainable** (step 3): the registry id is a GitHub
   coordinate with no ownership proof. The honest badges are "official"/"picks"
   membership, org-vs-user, and install counts shown as what they are.
-- **Audit data is behind OIDC** (*verified 401*), so no risk-level badge today.
-  Option C would unlock it.
+- **Audit data is behind OIDC** (*verified 401*) on the documented endpoint — but a
+  public audit host exists and is usable; see the Addendum.
 - **A skill is prompt content by design.** Manual add widens an existing surface
   rather than opening a new one, but it removes the "at least a third party published
   it" filter. Server-side spec validation, an angle-bracket ban in frontmatter,
@@ -1154,3 +1158,78 @@ question that materially shapes phase 2.
 _Sources (synthesis section):_
 - All sources cited in sections 2–5 above
 - https://agentman.ai/blog/agent-skills-ecosystem-report-2026, https://www.agensi.io/learn/best-ai-agent-skills-marketplaces-2026, https://www.buildmvpfast.com/blog/agent-skills-npm-ai-package-manager-2026 (ecosystem framing, secondary)
+
+---
+
+## Addendum: Reading the CLI's Source (2026-08-03, during implementation)
+
+The report above was researched from the outside — endpoints, docs, terms, sitemaps.
+Reading `vercel-labs/skills` (the CLI itself, MIT) settled four questions the black-box
+approach could only guess at, and overturned one conclusion.
+
+**1. There is nothing to parse from the repository, and that is itself an answer.**
+The CLI's search calls `${SKILLS_API_URL || 'https://skills.sh'}/api/search`
+(`src/find.ts`) — the same public endpoint this report already uses. The repo bundles
+no catalog, no index, and no list endpoint. That independently confirms the central
+finding: the only reachable discovery surface is search, so a browsable default view
+has to be assembled locally.
+
+**2. `/api/download` is the CLI's own install path, not a legacy accident.**
+`src/blob.ts` documents the flow: *"GitHub Trees API → discover SKILL.md locations;
+raw.githubusercontent.com → fetch frontmatter to get skill names; skills.sh/api/download
+→ fetch full file contents from cached blob"*, and types the response as
+`{ files: SkillSnapshotFile[]; hash: string }`. Building installs on it is following
+the vendor's own mechanism rather than depending on an undocumented edge.
+
+**3. Correction — the telemetry payload is paths, not contents.** `src/telemetry.ts`
+posts install events to `https://add-skill.vercel.sh/t` with `source`, `skills`,
+`agents`, `global`, and `skillFiles` — annotated in the source as
+*"JSON stringified { skillName: relativePath }"*. The skills.sh docs' phrasing ("the
+skill name, skill files, and a timestamp") reads as content egress; it is not. What
+leaks is the install event, the skill name, and the path it landed at. The design
+decision does not change — a hand-written, possibly proprietary skill should not
+announce itself upstream, so manual skills bypass the CLI and `DISABLE_TELEMETRY=1`
+is set for registry installs — but the earlier wording overstated the exposure and has
+been corrected in the code comments, UI copy, and spec.
+
+**4. The per-agent install directories are knowable, not guesswork.**
+`src/agents.ts` defines `globalSkillsDir` per agent: claude-code
+`$CLAUDE_CONFIG_DIR || ~/.claude` + `/skills`, gemini-cli `~/.gemini/skills`, cursor
+`~/.cursor/skills`, codex `$CODEX_HOME || ~/.codex` + `/skills` (plus a universal
+`.agents/skills` for project-local installs). Manual skills are written to exactly
+these paths, so a hand-written skill lands where an installed one does.
+
+**5. OVERTURNED — security audits are publicly available.** `src/telemetry.ts` also
+carries `AUDIT_URL = 'https://add-skill.vercel.sh/audit'`, queried as
+`GET /audit?source=<owner/repo>&skills=<slug,slug,…>` with no authentication, batched
+per repository. *Verified live:*
+
+```
+GET https://add-skill.vercel.sh/audit?source=anthropics/skills&skills=pdf,frontend-design
+200 {"pdf":{"ath":{"risk":"safe",…},"socket":{"risk":"safe","alerts":0,"score":90,…},
+     "snyk":{"risk":"high",…},"zeroleaks":{"risk":"safe","score":93,…}}, …}
+```
+
+Four providers (ath, socket, snyk, zeroleaks), each with `risk`
+(`safe|low|medium|high|critical|unknown`), optional `score` and `alerts`, and
+`analyzedAt`. **They disagree**: snyk rates `anthropics/skills/pdf` "high" while the
+other three call it "safe".
+
+This replaces the report's conclusion that a risk badge "cannot be sourced today" and
+that only a Vercel OIDC proxy could unlock audit data. Consequences for the design:
+
+- It is the *only* external judgement available for this catalog, which has no
+  ownership proof of any kind (a skills.sh id is a GitHub coordinate, unlike the MCP
+  registry's DNS-challenged namespaces). For a feature whose whole purpose is loading
+  third-party instructions into an agent's context, that makes it the most valuable
+  signal found in this entire research effort.
+- Store the **whole per-provider map**, not a verdict. Collapsing four disagreeing
+  providers into one badge would hide the disagreement, which is the informative part.
+- **Absence of an audit is not a pass.** An unaudited skill must render no badge at
+  all rather than anything reassuring.
+- It is the CLI's endpoint, so it is exactly as stable as the CLI — undocumented in the
+  API reference, and worth re-checking if installs start failing.
+
+_Sources:_ https://github.com/vercel-labs/skills — `src/find.ts`, `src/blob.ts`,
+`src/telemetry.ts`, `src/agents.ts` (read at HEAD, 2026-08-03); live probes of
+`https://add-skill.vercel.sh/audit`.

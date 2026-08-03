@@ -3,24 +3,14 @@
 require "test_helper"
 
 class InternalTools::MetaSearchSkillsTest < ActiveSupport::TestCase
-  setup do
-    @api_key = "sk_live_test_key"
-    Settings.skills_sh.api_key = @api_key
-  end
-
-  teardown do
-    Settings.skills_sh.api_key = nil
-  end
-
+  # The public search endpoint is the only one reachable: /api/v1 authenticates
+  # with a Vercel OIDC token and 401s for everyone else.
   def stub_search_endpoint(query:, data:)
-    stub_request(:get, "https://skills.sh/api/v1/skills/search")
-      .with(
-        query: { "q" => query, "limit" => "50" },
-        headers: { "Authorization" => "Bearer #{@api_key}" }
-      )
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { "q" => query, "limit" => "100" })
       .to_return(
         status: 200,
-        body: { data: data }.to_json,
+        body: { query: query, searchType: "fuzzy", skills: data }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
   end

@@ -383,6 +383,75 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal({}, result)
   end
 
+  # Every `skills add` otherwise POSTs an install event upstream (source, skill
+  # slugs, agent, and the path each skill landed at), which publishes what sessions
+  # here install and inflates the leaderboard the catalog is ranked by.
+  test "inject_skills disables skills.sh telemetry" do
+    skill = create(:skill, scope: @project, name: "mantine-form",
+                   source: "mantinedev/skills", package: "mantinedev/skills@mantine-form")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.skills << skill
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    runtime_mock.expects(:exec).with do |ctr, cmd, _opts|
+      ctr == "abc123" &&
+        cmd.first(2) == [ "env", "DISABLE_TELEMETRY=1" ] &&
+        # The slug as upstream published it, taken from `package` — `name` is
+        # downcased by the model and `--skill` matches upstream's own directory.
+        cmd[cmd.index("--skill") + 1] == "mantine-form"
+    end.returns([ [], [], 0 ])
+
+    result = SessionContextService.inject_skills("abc123", session)
+
+    assert_equal "ok", result["mantinedev/skills@mantine-form"]
+  end
+
+  # A hand-written skill goes nowhere near the CLI, so no install event about it
+  # ever leaves this deployment.
+  test "inject_skills writes manual skills into the container without invoking the CLI" do
+    skill = create(:skill, scope: @project, origin: :manual, name: "house-style",
+                   source: nil, package: nil, content: "---\nname: house-style\n---\n\n# House style\n")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.skills << skill
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    # The path is the one `skills add -g -a claude-code` would have used, the
+    # directory name equals the skill name as the Agent Skills spec requires, and it
+    # is written with the agent's uid — writing as root would leave ~/.claude owned by
+    # root and every later agent write would fail with EACCES.
+    runtime_mock.expects(:write_file)
+                .with("abc123", "/home/claude/.claude/skills/house-style/SKILL.md", skill.content,
+                      uid: 1001, gid: 1001)
+                .returns(true)
+    runtime_mock.expects(:exec).never
+
+    result = SessionContextService.inject_skills("abc123", session)
+
+    assert_equal "ok", result["house-style"]
+  end
+
+  test "inject_skills reports a failed manual write instead of raising" do
+    skill = create(:skill, scope: @project, origin: :manual, name: "house-style",
+                   source: nil, package: nil, content: "---\nname: house-style\n---\n\nbody\n")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.skills << skill
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:write_file).returns(false)
+
+    result = SessionContextService.inject_skills("abc123", session)
+
+    assert_match(/error/, result["house-style"])
+  end
+
   # ====================================================================
   # Story 9.7: Adapter context_file_path
   # ====================================================================

@@ -1,0 +1,33 @@
+<%#
+# Navigation
+
+Administrate's stock navigation, plus links to admin pages that are not Administrate
+resources — the gem builds this list from `Administrate::Namespace`, so a plain
+controller (e.g. catalog syncs) would otherwise be unreachable without knowing its URL.
+%>
+
+<nav class="navigation">
+  <%= link_to(t("administrate.navigation.back_to_app"), root_url, class: "button button--alt button--nav") if defined?(root_url) %>
+
+  <% Administrate::Namespace.new(namespace).resources_with_index_route.each do |resource| %>
+    <%#
+      `resources_with_index_route` reads the admin ROUTES, so it also returns plain
+      controllers with no dashboard or model behind them. Asking Administrate to
+      describe one of those raises `uninitialized constant …Dashboard`, which would
+      take down EVERY admin page — so anything without a dashboard is skipped here and
+      linked explicitly below.
+    %>
+    <% next unless Object.const_defined?("#{resource.to_s.classify}Dashboard") %>
+    <%= link_to(
+      display_resource_name(resource),
+      resource_index_route(resource),
+      class: "navigation__link navigation__link--#{nav_link_state(resource)}"
+    ) if accessible_action?(model_from_resource(resource), :index) %>
+  <% end %>
+
+  <%= link_to(
+    "Catalog syncs",
+    admin_catalog_syncs_path,
+    class: "navigation__link navigation__link--#{current_page?(admin_catalog_syncs_path) ? 'active' : 'inactive'}"
+  ) %>
+</nav>

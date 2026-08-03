@@ -24,7 +24,7 @@ module InternalTools
     def execute
       query = params[:query].to_s.strip
       return error("query is required") if query.blank?
-      return error("query must be at least 2 characters") if query.length < SkillsRegistryService::MIN_QUERY_LENGTH
+      return error("query must be at least 2 characters") if query.length < Skills::RegistryClient::MIN_QUERY_LENGTH
 
       results = SkillsRegistryService.search(query)
 

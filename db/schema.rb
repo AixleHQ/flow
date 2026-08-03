@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_01_000007) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_03_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -177,6 +177,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_01_000007) do
     t.bigint "project_id", null: false
     t.datetime "updated_at", null: false
     t.index ["project_id"], name: "index_boards_on_project_id", unique: true
+  end
+
+  create_table "catalog_search_queries", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "last_searched_at"
+    t.integer "search_count", default: 0, null: false
+    t.string "term", null: false
+    t.datetime "updated_at", null: false
+    t.index ["search_count", "last_searched_at"], name: "index_catalog_search_queries_on_demand"
+    t.index ["term"], name: "index_catalog_search_queries_on_term", unique: true
+  end
+
+  create_table "catalog_skills", force: :cascade do |t|
+    t.jsonb "audit", default: {}, null: false
+    t.string "audit_risk"
+    t.datetime "audited_at"
+    t.boolean "bulk_publisher", default: false, null: false
+    t.string "content_hash"
+    t.datetime "created_at", null: false
+    t.text "description"
+    t.boolean "featured", default: false, null: false
+    t.integer "install_count", default: 0, null: false
+    t.integer "installs", default: 0, null: false
+    t.string "registry_id", null: false
+    t.datetime "registry_synced_at"
+    t.virtual "search_vector", type: :tsvector, as: "(((setweight(to_tsvector('simple'::regconfig, (COALESCE(slug, ''::character varying))::text), 'A'::\"char\") || setweight(to_tsvector('simple'::regconfig, (COALESCE(title, ''::character varying))::text), 'A'::\"char\")) || setweight(to_tsvector('simple'::regconfig, (COALESCE(source, ''::character varying))::text), 'B'::\"char\")) || setweight(to_tsvector('simple'::regconfig, COALESCE(description, ''::text)), 'C'::\"char\"))", stored: true
+    t.string "slug", null: false
+    t.string "source", null: false
+    t.string "title"
+    t.datetime "updated_at", null: false
+    t.index ["audit_risk"], name: "index_catalog_skills_on_audit_risk"
+    t.index ["featured", "bulk_publisher", "installs"], name: "index_catalog_skills_on_ranking"
+    t.index ["registry_id"], name: "index_catalog_skills_on_registry_id", unique: true
+    t.index ["search_vector"], name: "index_catalog_skills_on_search_vector", using: :gin
+    t.index ["source"], name: "index_catalog_skills_on_source"
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -529,10 +564,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_01_000007) do
 
   create_table "skills", force: :cascade do |t|
     t.text "content"
+    t.string "content_hash"
     t.datetime "created_at", null: false
     t.text "description"
     t.integer "install_count", default: 0
     t.string "name", null: false
+    t.string "origin", default: "registry", null: false
     t.string "package"
     t.jsonb "references_data", default: {}
     t.bigint "scope_id"
@@ -541,6 +578,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_01_000007) do
     t.string "source_url"
     t.string "title"
     t.datetime "updated_at", null: false
+    t.index ["origin"], name: "index_skills_on_origin"
     t.index ["package"], name: "index_skills_on_package"
     t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"

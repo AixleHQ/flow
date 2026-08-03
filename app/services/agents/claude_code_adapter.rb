@@ -613,6 +613,11 @@ module Agents
       "claude-code"
     end
 
+    # Where `skills add -g -a claude-code` puts a skill.
+    def skills_install_path
+      "#{home_dir}/.claude/skills"
+    end
+
     # MCP config: /workspace/.mcp.json
     # Claude Code supports: "http" (streamable-http), "sse" (deprecated), "stdio"
     # See: https://code.claude.com/docs/en/mcp

@@ -39,7 +39,10 @@ module InternalTools
       scope_id = params[:scope_id] || target_project&.id
       scope_record = Project.find(scope_id)
 
-      skill = SkillsRegistryService.install(skill_id, scope: scope_record)
+      # Same install count the UI records, so the number does not depend on which
+      # path installed the skill.
+      installs = CatalogSkill.find_by(registry_id: skill_id.to_s)&.installs
+      skill = SkillsRegistryService.install(skill_id, scope: scope_record, installs: installs)
 
       broadcast_meta_activity(
         action: "installed_skill",

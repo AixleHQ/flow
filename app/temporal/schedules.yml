@@ -45,6 +45,27 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Rebuilds the skills catalog mirror. skills.sh publishes no list endpoint and no
+  # change feed, so this is a seeded sweep of the public search endpoint rather than
+  # a walk — coverage comes from the seeds, freshness from re-running. Weekly for
+  # the same reason as the connector sync: only browse goes stale, since typed
+  # searches query upstream live. SKIP overlap: two sweeps would duplicate every
+  # request and write the same natural keys.
+  - workflow: skills_catalog_sync_workflow
+    cron: "45 5 * * 1"
+    overlap: skip
+    enabled: true
+
+  # Follows demand rather than the static seed list: sweeps the terms users actually
+  # searched for (CatalogSearchQuery, unattributed), then the same bounded description
+  # backfill and audit passes. Daily is affordable because it is narrow — a few dozen
+  # requests against the terms people are about to install from, versus the ~110-request
+  # weekly full sweep. SKIP overlap: two runs would duplicate every request.
+  - workflow: skills_demand_sync_workflow
+    cron: "20 4 * * *"
+    overlap: skip
+    enabled: true
+
   # Re-probes catalog-installed MCP servers for tools whose declarations changed
   # after approval (rug pull, OWASP MCP03:2025). Daily: the change is durable,
   # and each scan makes one outbound request per installed server. SKIP overlap:
