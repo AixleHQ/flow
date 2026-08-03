@@ -231,6 +231,45 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     assert_not_nil CatalogSkill.find_by(registry_id: seeded)
   end
 
+  # A failed download is not evidence that a row is a phantom: rate limiting, a
+  # timeout, or an entry the blob API has not built all return nil. Deleting on that
+  # signal erased 398 real rows on the first live backfill, and would erase most of
+  # the catalog under a demand-seeded sweep that only touches a few dozen queries.
+  test "never deletes a row upstream has confirmed, even when no sweep touched it now" do
+    confirmed = create(:catalog_skill, registry_id: "org/skills/untouched", source: "org/skills",
+                       slug: "untouched", description: nil, registry_synced_at: 1.week.ago,
+                       updated_at: 1.week.ago)
+
+    # This run's seeds match nothing, and the row has no downloadable bundle.
+    sync
+
+    assert_not_nil CatalogSkill.find_by(registry_id: "org/skills/untouched"),
+                   "a previously mirrored row must survive a failed download"
+    assert_operator confirmed.reload.updated_at, :>, 1.day.ago,
+                    "the attempt should be stamped so the queue rotates"
+    assert_equal 1.week.ago.to_i, confirmed.registry_synced_at.to_i,
+                 "a failed download confirms nothing, so registry_synced_at must not move"
+  end
+
+  # Descriptions are what tell an agent when to use a skill, so the rows a user can
+  # actually see must be described before the tail.
+  test "backfills in the order the grid renders" do
+    create(:catalog_skill, registry_id: "org/skills/tail", source: "org/skills", slug: "tail",
+           description: nil, installs: 1, registry_synced_at: 1.week.ago)
+    create(:catalog_skill, registry_id: "org/top/front", source: "org/top", slug: "front",
+           description: nil, installs: 900_000, registry_synced_at: 1.week.ago)
+    @registry.bundle("org/top", "front", skill_md: "---\nname: front\ndescription: Front of the grid\n---\n\nb")
+    @registry.bundle("org/skills", "tail", skill_md: "---\nname: tail\ndescription: Tail\n---\n\nb")
+
+    sync
+
+    assert_equal "Front of the grid", CatalogSkill.find_by(registry_id: "org/top/front").description
+    # Curated seeds lead the grid, so they are fetched first; between the rest, the
+    # entry a user would actually see comes before the tail.
+    ordered = @registry.downloads.select { |d| d.start_with?("org/") }
+    assert_equal %w[org/top/front org/skills/tail], ordered
+  end
+
   # Without rotation, rows whose SKILL.md legitimately has no description hold the
   # whole backfill budget on every run and nothing else is ever reached.
   test "backfill rotates rather than re-fetching the same descriptionless rows" do
@@ -291,6 +330,36 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     assert_includes requested["anthropics/skills"], "docx"
     assert_includes requested["obra/superpowers"], "tdd"
     assert_equal 1, @registry.audit_requests.count { |req| req[:source] == "anthropics/skills" }
+  end
+
+  # The daily run follows what users searched for; the weekly one follows the guessed
+  # topic list. People search for what they are about to install, which is the better
+  # signal for which slice of a 600k-skill registry to mirror.
+  test "the demand sweep follows recorded search terms instead of the static seeds" do
+    3.times { CatalogSearchQuery.record("playwright") }
+    CatalogSearchQuery.record("svelte")
+    @registry.add("microsoft/playwright-cli/playwright-cli", installs: 12_000)
+
+    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+
+    queries = @registry.searches.map { |s| s[:query] }
+    assert_equal %w[playwright svelte], queries
+    assert_empty @registry.searches.select { |s| s[:owner] }, "owner sweeps belong to the weekly run"
+    assert_not_nil CatalogSkill.find_by(registry_id: "microsoft/playwright-cli/playwright-cli")
+  end
+
+  test "the demand sweep prunes the term table afterwards" do
+    CatalogSearchQuery.create!(term: "forgotten", search_count: 99, last_searched_at: 40.days.ago)
+
+    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+
+    assert_nil CatalogSearchQuery.find_by(term: "forgotten")
+  end
+
+  test "the demand sweep does nothing upstream when nobody has searched yet" do
+    Skills::CatalogSync.demand(client: @registry, delay: 0, budget: nil)
+
+    assert_empty @registry.searches
   end
 
   test "sweeps every seed query and owner" do

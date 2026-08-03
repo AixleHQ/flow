@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_03_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_03_000004) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -177,6 +177,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_03_000003) do
     t.bigint "project_id", null: false
     t.datetime "updated_at", null: false
     t.index ["project_id"], name: "index_boards_on_project_id", unique: true
+  end
+
+  create_table "catalog_search_queries", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "last_searched_at"
+    t.integer "search_count", default: 0, null: false
+    t.string "term", null: false
+    t.datetime "updated_at", null: false
+    t.index ["search_count", "last_searched_at"], name: "index_catalog_search_queries_on_demand"
+    t.index ["term"], name: "index_catalog_search_queries_on_term", unique: true
   end
 
   create_table "catalog_skills", force: :cascade do |t|

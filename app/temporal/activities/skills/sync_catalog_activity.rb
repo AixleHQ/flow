@@ -13,10 +13,15 @@
 module Activities
   module Skills
     class SyncCatalogActivity < ::Activities::Base
-      def run(_input = nil)
-        result = ::Skills::CatalogSync.call
+      # Two cadences, one activity:
+      #   full   — weekly, the static topic + owner seeds (broad coverage)
+      #   demand — daily, the terms users actually searched for (what they are about
+      #            to install), plus the same bounded backfill and audit passes
+      def run(input = nil)
+        mode = input.is_a?(Hash) ? (input["mode"] || input[:mode]).to_s : "full"
+        result = mode == "demand" ? ::Skills::CatalogSync.demand : ::Skills::CatalogSync.call
 
-        log(:info, "skills catalog sync #{result}")
+        log(:info, "skills catalog sync (#{mode}) #{result}")
         # Every counter the Result carries: workflow history is the only durable
         # record of a weekly run, so a dropped counter makes that coverage
         # unobservable after the fact.

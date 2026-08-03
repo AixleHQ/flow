@@ -53,10 +53,16 @@ module Skills
     # bypasses the rate limit" while encouraging caching. This sweep is ~200
     # sequential requests once a week.
     REQUEST_DELAY = 0.15
-    # Metadata backfill is demand-driven: the search response carries no
-    # description, and a description is what tells an agent when to use a skill.
-    # Only rows that still lack one are fetched, so this shrinks to zero over time.
-    BACKFILL_LIMIT = 60
+    # Metadata backfill: the search response carries no description at all, and a
+    # description is what tells an agent when to use a skill — so an undescribed row
+    # is a card nobody can judge.
+    #
+    # Sized against what is actually visible rather than arbitrarily: the default
+    # view renders CATALOG_PAGE_SIZE (60) entries after per-source dedup, so a run
+    # has to cover that page with room for the tail behind it. At ~30 KB per
+    # download and 150 ms pacing this is a few minutes and a few hundred MB per
+    # WEEK — cheap next to shipping a grid of nameless cards.
+    BACKFILL_LIMIT = 400
     # Audits are batched per repository, so the cost is one request per source
     # rather than per skill. Bounded because the catalog is much larger than the
     # part of it anyone browses.
@@ -79,22 +85,36 @@ module Skills
 
     def self.call(...) = new(...).call
 
+    # Follows what people actually searched for instead of the static seed list. The
+    # terms come from CatalogSearchQuery (unattributed, normalised), so a daily run
+    # mirrors the slice of the registry users are about to install from — the part the
+    # guessed-at topic seeds cannot know about. Owner sweeps are skipped: they are
+    # broad coverage, which is the weekly run's job.
+    def self.demand(client: RegistryClient, delay: REQUEST_DELAY, budget: TIME_BUDGET)
+      terms = CatalogSearchQuery.top_terms
+      new(client: client, delay: delay, budget: budget, queries: terms, owners: []).call.tap do
+        CatalogSearchQuery.prune!
+      end
+    end
+
     # `client` is injected rather than referenced directly so tests drive the sweep
     # through FakeSkillsRegistry instead of stubbing HTTP or the collaborator class.
-    def initialize(client: RegistryClient, delay: REQUEST_DELAY, budget: TIME_BUDGET)
+    def initialize(client: RegistryClient, delay: REQUEST_DELAY, budget: TIME_BUDGET,
+                   queries: SEED_QUERIES, owners: SEED_OWNERS)
       @client = client
       @delay = delay
-      @started_at = Time.current
-      @deadline = budget && @started_at + budget
+      @queries = queries
+      @owners = owners
+      @deadline = budget && Time.current + budget
       @result = Result.new(fetched: 0, upserted: 0, failed: 0, backfilled: 0, audited: 0)
     end
 
     def call
       Rails.logger.info("[Skills::CatalogSync] Starting " \
-                        "(#{SEED_QUERIES.size} queries, #{SEED_OWNERS.size} owners)")
+                        "(#{@queries.size} queries, #{@owners.size} owners)")
 
-      SEED_QUERIES.each { |query| sweep(query) }
-      SEED_OWNERS.each { |owner| sweep(owner, owner: owner) }
+      @queries.each { |query| sweep(query) }
+      @owners.each { |owner| sweep(owner, owner: owner) }
 
       seed_featured
       refresh_ranking
@@ -277,8 +297,13 @@ module Skills
     # `registry_synced_at` and stamping it on every ATTEMPT (not just successes) makes
     # the queue rotate.
     def backfill_metadata
+      # Ordered by the SAME ranking the grid uses, so the rows a user can actually
+      # see are described first — `featured DESC` alone left most of the visible page
+      # blank while spending the budget on entries nobody was looking at.
+      # `updated_at` breaks ties, and since every attempt stamps it, rows that will
+      # never yield a description rotate to the back instead of holding the budget.
       rows = CatalogSkill.where(description: nil)
-                         .order(Arel.sql("featured DESC, registry_synced_at ASC NULLS FIRST"))
+                         .order(Arel.sql("#{CatalogSkill::RANKING}, updated_at ASC"))
                          .limit(BACKFILL_LIMIT)
 
       rows.each do |row|
@@ -308,23 +333,30 @@ module Skills
     end
 
     # A curated seed the registry cannot resolve is not a catalog entry — it is a card
-    # that fails on click, at the top of every project's default view.
+    # that fails on click, at the top of every project's default view. But a failed
+    # download is NOT evidence that a row is a phantom: rate limiting, a timeout, or
+    # an entry the blob API simply has not built will all return nil.
     #
-    # The discriminator is whether THIS run's sweep saw the row upstream:
-    # `registry_synced_at` is stamped by every upsert, so a row still carrying a
-    # pre-run timestamp exists only because `seed_featured` inserted it. A row the
-    # sweep did see is kept even when its download failed — that is a transient miss,
-    # not a phantom — and just has its attempt stamped so the backfill queue rotates.
+    # So the discriminator is provenance, not recency: `seed_featured` inserts without
+    # `registry_synced_at`, while `CatalogUpsert` always sets it. A NULL there means
+    # no sweep has EVER seen this row upstream — it exists only because the curated
+    # list named it. Anything upstream has confirmed is kept and just has its attempt
+    # stamped so the backfill queue rotates.
+    #
+    # An earlier version compared `registry_synced_at` against this run's start, which
+    # deleted any row the current run's seeds happened not to match — 398 rows on the
+    # first real backfill, and it would erase most of the catalog under a
+    # demand-seeded daily sweep.
     def drop_unresolvable_seed(row)
-      seen_this_run = row.registry_synced_at.present? && row.registry_synced_at >= @started_at
-
-      unless seen_this_run
-        Rails.logger.warn("[Skills::CatalogSync] Dropping unresolvable seed #{row.registry_id}")
+      if row.registry_synced_at.nil?
+        Rails.logger.warn("[Skills::CatalogSync] Dropping never-confirmed seed #{row.registry_id}")
         row.destroy
         return
       end
 
-      row.update_columns(registry_synced_at: Time.current, updated_at: Time.current)
+      # `updated_at`, not `registry_synced_at`: the latter means "upstream confirmed
+      # this row", and a failed download confirms nothing.
+      row.update_columns(updated_at: Time.current)
     end
   end
 end

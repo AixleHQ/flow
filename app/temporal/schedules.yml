@@ -56,6 +56,16 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Follows demand rather than the static seed list: sweeps the terms users actually
+  # searched for (CatalogSearchQuery, unattributed), then the same bounded description
+  # backfill and audit passes. Daily is affordable because it is narrow — a few dozen
+  # requests against the terms people are about to install from, versus the ~110-request
+  # weekly full sweep. SKIP overlap: two runs would duplicate every request.
+  - workflow: skills_demand_sync_workflow
+    cron: "20 4 * * *"
+    overlap: skip
+    enabled: true
+
   # Re-probes catalog-installed MCP servers for tools whose declarations changed
   # after approval (rug pull, OWASP MCP03:2025). Daily: the change is durable,
   # and each scan makes one outbound request per installed server. SKIP overlap:

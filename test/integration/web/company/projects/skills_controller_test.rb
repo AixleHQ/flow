@@ -101,6 +101,25 @@ class Web::Company::Projects::SkillsControllerTest < ActionDispatch::Integration
     end
   end
 
+  # Demand steers the daily sweep. Recorded inside the cache-miss block, so a debounced
+  # field cannot write once per keystroke.
+  test "index records the search term that reached upstream" do
+    Skills::RegistryClient.stubs(:search).returns([])
+
+    assert_difference -> { CatalogSearchQuery.count }, 1 do
+      get company_project_skills_path(@project, catalog_q: "playwright")
+    end
+
+    assert_equal "playwright", CatalogSearchQuery.sole.term
+  end
+
+  test "index records nothing for a query too short to reach upstream" do
+    assert_no_difference -> { CatalogSearchQuery.count } do
+      get company_project_skills_path(@project, catalog_q: "a")
+      get company_project_skills_path(@project)
+    end
+  end
+
   test "create installs skill and redirects" do
     skill = create(:skill, :with_project_scope, scope: @project)
     SkillsRegistryService.stubs(:install).returns(skill)

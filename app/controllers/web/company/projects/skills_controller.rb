@@ -112,8 +112,13 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
     CatalogSkill.one_per_source.popular.limit(CATALOG_PAGE_SIZE)
   end
 
+  # Recording happens inside the cache-miss block on purpose: a debounced field would
+  # otherwise write once per keystroke, and with the 5-minute cache a term is recorded
+  # at most once per window no matter how many people are typing it. The term steers a
+  # later sweep and is stored unattributed — see CatalogSearchQuery.
   def cached_search(query)
     Rails.cache.fetch([ "skills-catalog-search", query ], expires_in: SEARCH_CACHE_TTL) do
+      CatalogSearchQuery.record(query)
       Skills::RegistryClient.search(query, limit: CATALOG_PAGE_SIZE)
     end
   end
