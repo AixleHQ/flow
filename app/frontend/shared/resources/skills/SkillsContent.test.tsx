@@ -17,6 +17,7 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
     sourceUrl: 'https://github.com/acme/skills',
     installCount: 0,
     origin: 'registry',
+    content: null,
     scopeType: 'Project',
     scopeId: 1,
     scopeIndicator: 'project',
@@ -117,6 +118,50 @@ describe('SkillsContent — installed skills', () => {
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/1/skills/7',
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  // Editing reuses the authoring form — a skill IS a SKILL.md, so there is one editor.
+  it('opens the editor on a hand-written skill with its file loaded', async () => {
+    const content = '---\nname: house-style\ndescription: Our conventions\n---\n\n# House style\n';
+    renderPage(
+      <SkillsContent
+        {...baseProps}
+        skills={[makeSkill({ id: 4, name: 'house-style', origin: 'manual', source: null, package: null, content })]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit house-style' }));
+
+    const textarea = screen.getByLabelText('SKILL.md content') as HTMLTextAreaElement;
+    expect(textarea.value).toBe(content);
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeInTheDocument();
+  });
+
+  // A registry skill's content belongs to the source it names, and the next install
+  // would clobber an edit — so there is no edit affordance at all.
+  it('offers no editor for a registry skill', () => {
+    renderPage(<SkillsContent {...baseProps} skills={[makeSkill({ name: 'eslint-config' })]} />);
+
+    expect(screen.queryByRole('button', { name: 'Edit eslint-config' })).not.toBeInTheDocument();
+  });
+
+  it('saving an edit patches the skill', async () => {
+    const content = '---\nname: house-style\ndescription: Our conventions\n---\n\nbody\n';
+    renderPage(
+      <SkillsContent
+        {...baseProps}
+        skills={[makeSkill({ id: 4, name: 'house-style', origin: 'manual', source: null, package: null, content })]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Edit house-style' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/1/skills/4',
+      { content },
       expect.objectContaining({ preserveScroll: true }),
     );
   });

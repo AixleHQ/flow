@@ -57,9 +57,12 @@ module Skills
     # description is what tells an agent when to use a skill — so an undescribed row
     # is a card nobody can judge.
     #
-    # How many undescribed rows a run considers. Generous, because most are answered
-    # from GitHub raw, which costs nothing from any budget we care about.
-    BACKFILL_LIMIT = 150
+    # How many undescribed rows a run considers. Generous, because roughly two thirds
+    # are answered from GitHub raw (measured), which spends no skills.sh quota — 600
+    # rows is ~400 CDN reads and well under a minute of the run's 20-minute budget,
+    # while the registry endpoint is still capped at DOWNLOAD_BUDGET below. At eight
+    # runs a week this describes the catalog in weeks rather than months.
+    BACKFILL_LIMIT = 600
     # How many of those may fall through to the registry's download endpoint, which is
     # capped at a MEASURED 60 requests per hour for the whole deployment
     # (`RegistryClient::DOWNLOAD_HOURLY_LIMIT`) — a budget every user install also

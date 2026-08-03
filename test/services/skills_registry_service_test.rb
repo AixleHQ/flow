@@ -245,6 +245,24 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_match(/not found/, error.message)
   end
 
+  # All of this runs inside a POST, and Puma's liveness timeout kills the WORKER, not
+  # the request — so an install that keeps trying fallbacks would take other in-flight
+  # requests down with it.
+  test "install gives up rather than exhausting every fallback past its deadline" do
+    stub_request(:get, "https://www.skills.sh/api/download/slow-org/skills/nope")
+      .to_return(status: 404, body: { error: "not_found" }.to_json, headers: { "Content-Type" => "application/json" })
+    # Everything after the first attempt is out of time.
+    SkillsRegistryService.stubs(:time_left?).returns(false)
+
+    error = assert_raises(SkillsRegistryService::RegistryError) do
+      SkillsRegistryService.install("slow-org/skills/nope", scope: @project)
+    end
+
+    assert_match(/Took too long/, error.message)
+    assert_not_requested :get, %r{raw\.githubusercontent\.com}
+    assert_not_requested :get, %r{api\.github\.com}
+  end
+
   test "install updates an existing skill by package" do
     existing = create(
       :skill,

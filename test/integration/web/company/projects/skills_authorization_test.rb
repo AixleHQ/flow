@@ -45,6 +45,15 @@ class Web::Company::Projects::SkillsAuthorizationTest < ActionDispatch::Integrat
     assert_project_write(allowed: :redirect) { post manual_company_project_skills_path(@project) }
   end
 
+  # Editing rewrites the instructions every session loads, so it carries the same
+  # authority as authoring. An empty body fails validation before anything is written.
+  test "update is a project write" do
+    assert_project_write(allowed: :redirect) do
+      skill = create(:skill, scope: @project, origin: :manual, source: nil, package: nil)
+      patch company_project_skill_path(@project, skill)
+    end
+  end
+
   # destroy mutates, so build a throwaway project-scoped skill per role iteration;
   # an allowed role deletes it cleanly (302 + notice, no alert).
   test "destroy is a project write" do

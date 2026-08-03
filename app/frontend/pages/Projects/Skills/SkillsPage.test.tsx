@@ -25,6 +25,7 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
+  content: overrides.content ?? null,
 });
 
 const catalogSkill = (overrides: Partial<CatalogSkill> = {}): CatalogSkill => ({

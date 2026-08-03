@@ -1,0 +1,95 @@
+<%#
+# Catalog syncs
+
+Manual triggers for the mirrored catalogs. Both fill on a schedule, so this page
+exists for the case the schedule has not fired yet — a fresh deployment otherwise
+shows an empty catalog until the first run.
+
+Each button starts the same Temporal workflow the schedule starts, under a stable
+workflow id, so a second click while one is running is refused by Temporal rather
+than duplicating a few hundred rate-limited requests.
+%>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Catalog syncs</h1>
+</header>
+
+<section class="main-content__body">
+  <table>
+    <thead>
+      <tr>
+        <th>Catalog</th>
+        <th>Mirrored</th>
+        <th>Last synced</th>
+        <th>Schedule</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Skills</td>
+        <td>
+          <%= number_with_delimiter(@skills_count) %> entries,
+          <%= number_with_delimiter(@skills_described) %> described
+        </td>
+        <td><%= @skills_synced_at ? l(@skills_synced_at, format: :short) : "never" %></td>
+        <td>weekly, Monday 05:45 UTC</td>
+        <td>
+          <%= button_to "Sync full catalog",
+                        admin_catalog_syncs_path(catalog: "skills"),
+                        method: :post,
+                        class: "button" %>
+        </td>
+      </tr>
+      <tr>
+        <td>Skills — searched terms</td>
+        <td><%= @search_terms.size %> terms recorded</td>
+        <td>—</td>
+        <td>daily, 04:20 UTC</td>
+        <td>
+          <%= button_to "Sync searched terms",
+                        admin_catalog_syncs_path(catalog: "skills_demand"),
+                        method: :post,
+                        class: "button" %>
+        </td>
+      </tr>
+      <tr>
+        <td>MCP connectors</td>
+        <td><%= number_with_delimiter(@connectors_count) %> entries</td>
+        <td><%= @connectors_synced_at ? l(@connectors_synced_at, format: :short) : "never" %></td>
+        <td>weekly, Monday 05:15 UTC</td>
+        <td>
+          <%= button_to "Sync connector catalog",
+                        admin_catalog_syncs_path(catalog: "connectors"),
+                        method: :post,
+                        class: "button" %>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    A sweep runs in the background and takes minutes. Skills descriptions are read from
+    GitHub raw where possible; the registry's own download endpoint allows 60 requests
+    per hour for the whole deployment, and installs share that budget, so a run
+    deliberately fills only part of the catalog at a time.
+  </p>
+
+  <% if @search_terms.any? %>
+    <h2>Most searched terms</h2>
+    <table>
+      <thead>
+        <tr><th>Term</th><th>Searches</th><th>Last searched</th></tr>
+      </thead>
+      <tbody>
+        <% @search_terms.each do |term| %>
+          <tr>
+            <td><%= term.term %></td>
+            <td><%= term.search_count %></td>
+            <td><%= term.last_searched_at ? l(term.last_searched_at, format: :short) : "—" %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>

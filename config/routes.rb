@@ -201,6 +201,9 @@ Rails.application.routes.draw do
     resources :task_assets, only: %i[index show]
     resources :usage_statistics, only: %i[index show]
     resources :namespace_resource_quotas
+    # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
+    # fresh deployment does not sit on an empty catalog until the first scheduled run.
+    resources :catalog_syncs, only: %i[index create]
   end
 
   scope module: :web, defaults: { format: :html } do
@@ -317,7 +320,9 @@ Rails.application.routes.draw do
             end
           end
           resources :connectors, only: %i[create]
-          resources :skills, only: %i[index create destroy] do
+          # `update` edits a hand-written skill only; a registry skill is upstream's
+          # content and editing it would silently diverge from the source it names.
+          resources :skills, only: %i[index create update destroy] do
             collection do
               # Registering a hand-written SKILL.md, as opposed to installing a
               # registry entry by id — different input, different validation.

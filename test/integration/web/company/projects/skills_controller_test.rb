@@ -177,6 +177,43 @@ class Web::Company::Projects::SkillsControllerTest < ActionDispatch::Integration
     assert_response :redirect
   end
 
+  test "update rewrites a hand-written skill" do
+    skill = create(:skill, scope: @project, origin: :manual, source: nil, package: nil, name: "house-style",
+                   content: "---\nname: house-style\ndescription: Old\n---\n\nold\n")
+
+    patch company_project_skill_path(@project, skill),
+          params: { content: "---\nname: house-rules\ndescription: New conventions\n---\n\nnew\n" }
+
+    assert_redirected_to company_project_skills_path(@project)
+    skill.reload
+    assert_equal "house-rules", skill.name
+    assert_equal "New conventions", skill.description
+    assert_includes skill.content, "new"
+  end
+
+  # A registry skill's content belongs to the source it names: an edit would silently
+  # diverge from it, and the next install would clobber the edit anyway.
+  test "update refuses a registry skill" do
+    skill = create(:skill, :with_project_scope, scope: @project, content: "---\nname: x\n---\n\nold\n")
+
+    patch company_project_skill_path(@project, skill),
+          params: { content: "---\nname: mine\ndescription: Hijacked\n---\n\nnew\n" }
+
+    assert_redirected_to company_project_skills_path(@project)
+    assert_match(/cannot be edited/, flash[:alert])
+    assert_includes skill.reload.content, "old"
+  end
+
+  test "update rejects an invalid SKILL.md without touching the record" do
+    skill = create(:skill, scope: @project, origin: :manual, source: nil, package: nil, name: "house-style",
+                   content: "---\nname: house-style\ndescription: Old\n---\n\nold\n")
+
+    patch company_project_skill_path(@project, skill), params: { content: "---\nname: Bad_Name\n---\n\nbody\n" }
+
+    assert_match(/name/, session["inertia_errors"][:content])
+    assert_equal "house-style", skill.reload.name
+  end
+
   test "destroy removes skill and redirects" do
     skill = create(:skill, :with_project_scope, scope: @project)
 

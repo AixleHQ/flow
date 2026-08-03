@@ -22,4 +22,12 @@ class SkillResource < ApplicationResource
   attribute :registry_url do |skill|
     skill.registry_url
   end
+
+  # Only for hand-written skills, which the UI can edit. A registry skill's SKILL.md
+  # can be tens of kilobytes and is not editable here, so shipping it to the browser
+  # for every installed skill would be pure weight.
+  typelize :string?
+  attribute :content do |skill|
+    skill.content if skill.manual?
+  end
 end

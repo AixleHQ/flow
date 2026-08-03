@@ -27,6 +27,16 @@ class SkillsRegistryService
   # uncapped, nested walk over a large `skills/` tree could hold a Puma worker for
   # minutes and exhaust the hourly budget for everyone.
   MAX_GITHUB_DIRS = 15
+  # Hard ceiling on ONE install's resolution, because all of this happens inside a
+  # POST. Per-request timeouts alone are not a bound: download (10s) + well-known
+  # (3 × 5s) + raw guesses (3 × 8s) + the contents API (10s) + up to 15 raw reads
+  # (10s each) is ~200s in the worst case. Puma's default `worker_timeout` is 60s and
+  # it kills the WORKER, not the request — so an unlucky install would take every
+  # other request on that worker down with it. Fifteen seconds is generous for a
+  # resolution that normally takes one round trip.
+  RESOLVE_DEADLINE = 15.seconds
+
+  class ResolveTimeout < StandardError; end
 
   class RegistryError < StandardError; end
 
@@ -52,10 +62,14 @@ class SkillsRegistryService
     skill_id = skill_id.to_s.strip
     raise RegistryError, "skill_id is required" if skill_id.blank?
 
-    detail = fetch_skill_detail(skill_id)
-    if detail.blank?
-      raise RegistryError, unresolved_message(skill_id)
+    detail = begin
+      fetch_skill_detail(skill_id)
+    rescue ResolveTimeout
+      # Deliberately not "not found": we ran out of time, which is our problem, and a
+      # retry may well succeed.
+      raise RegistryError, "Took too long to resolve #{skill_id} — try again"
     end
+    raise RegistryError, unresolved_message(skill_id) if detail.blank?
 
     source = detail["source"]
     slug = detail["slug"]
@@ -94,8 +108,11 @@ class SkillsRegistryService
     )
   end
 
+  # @param deadline [Time] hard stop for the whole resolution; each source is only
+  #   consulted while there is time left, so the total cannot grow with the number of
+  #   fallbacks (see RESOLVE_DEADLINE)
   # @return [Hash, nil] { source:, slug:, name:, content:, content_hash: }
-  def self.fetch_skill_detail(skill_id)
+  def self.fetch_skill_detail(skill_id, deadline: RESOLVE_DEADLINE.from_now)
     parsed = parse_skill_id(skill_id)
     return nil if parsed.blank?
 
@@ -117,11 +134,16 @@ class SkillsRegistryService
     end
 
     content = bundle&.skill_md
-    content ||= Skills::WellKnownResolver.fetch_skill_md(source, slug) if Skills::WellKnownResolver.resolvable?(source)
-    content ||= fetch_skill_md_from_github(source, slug) if github_source?(source)
+    if content.blank? && time_left?(deadline) && Skills::WellKnownResolver.resolvable?(source)
+      content = Skills::WellKnownResolver.fetch_skill_md(source, slug)
+    end
+    if content.blank? && time_left?(deadline) && github_source?(source)
+      content = fetch_skill_md_from_github(source, slug, deadline: deadline)
+    end
 
     if content.blank?
       raise RegistryError, "The skills registry is rate-limiting this deployment — try again in a few minutes" if throttled
+      raise ResolveTimeout unless time_left?(deadline)
 
       return nil
     end
@@ -133,7 +155,7 @@ class SkillsRegistryService
       "content" => content,
       "content_hash" => bundle&.content_hash
     }
-  rescue RegistryError
+  rescue RegistryError, ResolveTimeout
     raise
   rescue StandardError => e
     Rails.logger.error("[SkillsRegistry] Detail fetch failed for #{skill_id}: #{e.message}")
@@ -151,6 +173,12 @@ class SkillsRegistryService
     else
       "Skill not found: #{skill_id}"
     end
+  end
+
+  # Monotonic where it matters: `Time.current` is fine for a 15-second window, and a
+  # clock step during one install is not worth a Process.clock_gettime dance.
+  def self.time_left?(deadline)
+    Time.current < deadline
   end
 
   def self.parse_skill_id(skill_id)
@@ -172,11 +200,16 @@ class SkillsRegistryService
   # backfill, and free of any rate budget), then one shallow pass over the repo's
   # `skills/` directory listing, bounded by MAX_GITHUB_DIRS. The earlier version also
   # walked each directory's children, multiplying request count by the tree's width.
-  def self.fetch_skill_md_from_github(source, slug)
+  def self.fetch_skill_md_from_github(source, slug, deadline: RESOLVE_DEADLINE.from_now)
     content = Skills::GithubSkillMd.fetch(source, slug)
     return content if content.present?
+    return nil unless time_left?(deadline)
 
     list_github_skill_directories(source).first(MAX_GITHUB_DIRS).each do |dir|
+      # Checked every iteration: fifteen directories at up to 10s each is the exact
+      # shape that would otherwise hold a Puma worker past its liveness timeout.
+      break unless time_left?(deadline)
+
       content = fetch_raw_skill_md(source, "skills/#{dir}/SKILL.md", slug: slug)
       return content if content.present?
     end
@@ -238,7 +271,7 @@ class SkillsRegistryService
     http.request(request)
   end
 
-  private_class_method :parse_skill_id, :github_source?,
+  private_class_method :time_left?, :parse_skill_id, :github_source?,
                        :fetch_skill_md_from_github, :fetch_raw_skill_md,
                        :list_github_skill_directories, :source_url_for, :http_get,
                        :unresolved_message

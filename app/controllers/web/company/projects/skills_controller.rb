@@ -71,6 +71,50 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
                 inertia: { errors: { content: "A skill with that name already exists in this project" } }
   end
 
+  # Edit a hand-written skill. Registry skills are excluded on purpose: their content
+  # belongs to the source they name, an edit would silently diverge from it, and the
+  # next install would clobber the edit anyway.
+  #
+  # A rename is allowed — the name comes from the frontmatter, as on create — but note
+  # that a session already running keeps the old directory; the next session gets the
+  # new one.
+  def update
+    skill = Skill.visible_for_project(current_project).find_by(id: params[:id])
+
+    unless skill
+      redirect_to company_project_skills_path(current_project), alert: "Skill not found"
+      return
+    end
+
+    unless skill.manual?
+      redirect_to company_project_skills_path(current_project),
+                  alert: "Registry skills cannot be edited — remove it and add your own instead"
+      return
+    end
+
+    result = Skills::SkillMarkdown.parse(params[:content])
+
+    unless result.valid?
+      redirect_to company_project_skills_path(current_project),
+                  inertia: { errors: { content: result.error_sentence } }
+      return
+    end
+
+    skill.update!(
+      name: result.name,
+      title: result.frontmatter["title"].presence || result.name,
+      description: result.description,
+      content: result.content
+    )
+    redirect_to company_project_skills_path(current_project), notice: "Skill '#{skill.name}' updated"
+  rescue ActiveRecord::RecordInvalid => e
+    redirect_to company_project_skills_path(current_project),
+                inertia: { errors: { content: e.record.errors.full_messages.join(", ") } }
+  rescue ActiveRecord::RecordNotUnique
+    redirect_to company_project_skills_path(current_project),
+                inertia: { errors: { content: "A skill with that name already exists in this project" } }
+  end
+
   def destroy
     skill = Skill.visible_for_project(current_project).find_by(id: params[:id])
 

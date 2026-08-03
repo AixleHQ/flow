@@ -11,7 +11,7 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconExternalLink, IconPencilPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconExternalLink, IconPencil, IconPencilPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -33,6 +33,8 @@ export interface Skill {
   sourceUrl: string | null;
   installCount: number;
   origin: 'registry' | 'manual';
+  /** Present only for hand-written skills — the file the edit form loads. */
+  content: string | null;
   scopeType: string | null;
   scopeId: number | null;
   scopeIndicator: string;
@@ -72,6 +74,8 @@ export function SkillsContent({
   const [deleteSkill, setDeleteSkill] = useState<Skill | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  // Editing reuses the authoring form: a skill IS a SKILL.md, so there is one editor.
+  const [editSkill, setEditSkill] = useState<Skill | null>(null);
 
   const filtered = useMemo(() => {
     if (!filterSearch.trim()) return skills;
@@ -180,18 +184,34 @@ export function SkillsContent({
                   )}
                 </Group>
                 {canExecute && (
-                  <Tooltip label="Remove">
-                    <ActionIcon
-                      aria-label={`Remove ${skill.name}`}
-                      variant="subtle"
-                      size="sm"
-                      color="red"
-                      onClick={() => setDeleteSkill(skill)}
-                      style={{ flexShrink: 0 }}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Tooltip>
+                  <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
+                    {/* Only hand-written skills: a registry skill's content belongs to
+                        the source it names, and the next install would clobber an edit. */}
+                    {skill.origin === 'manual' && (
+                      <Tooltip label="Edit">
+                        <ActionIcon
+                          aria-label={`Edit ${skill.name}`}
+                          variant="subtle"
+                          size="sm"
+                          color="gray"
+                          onClick={() => setEditSkill(skill)}
+                        >
+                          <IconPencil size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    )}
+                    <Tooltip label="Remove">
+                      <ActionIcon
+                        aria-label={`Remove ${skill.name}`}
+                        variant="subtle"
+                        size="sm"
+                        color="red"
+                        onClick={() => setDeleteSkill(skill)}
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
                 )}
               </Group>
 
@@ -252,6 +272,7 @@ export function SkillsContent({
         installedPackages={installedPackages}
       />
       <ManualSkillModal opened={manualOpen} onClose={() => setManualOpen(false)} basePath={basePath} />
+      <ManualSkillModal opened={!!editSkill} onClose={() => setEditSkill(null)} basePath={basePath} skill={editSkill} />
       <DeleteSkillModal
         opened={!!deleteSkill}
         onClose={() => setDeleteSkill(null)}
