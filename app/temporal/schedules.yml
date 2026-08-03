@@ -27,6 +27,33 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Mirrors the Official MCP Registry into the local connector catalog.
+  #
+  # Weekly, not the hourly cadence the registry suggests to aggregators. What
+  # goes stale is DISCOVERY only: an install re-fetches the manifest live, so a
+  # week-old mirror can never produce a week-old configuration. The cost is that
+  # a newly published connector takes up to a week to become searchable, which
+  # is an acceptable trade for a catalog measured in thousands of entries that
+  # change slowly.
+  #
+  # SKIP overlap: a first run walks the whole registry and must not race a second
+  # walk writing the same natural keys. Correctness does not depend on the
+  # cadence — the sync resumes from the newest mirrored change, so a missed or
+  # doubled run both converge.
+  - workflow: mcp_connector_catalog_sync_workflow
+    cron: "15 5 * * 1"
+    overlap: skip
+    enabled: true
+
+  # Re-probes catalog-installed MCP servers for tools whose declarations changed
+  # after approval (rug pull, OWASP MCP03:2025). Daily: the change is durable,
+  # and each scan makes one outbound request per installed server. SKIP overlap:
+  # a slow sweep must not be joined by the next one probing the same servers.
+  - workflow: mcp_tool_drift_scan_workflow
+    cron: "40 4 * * *"
+    overlap: skip
+    enabled: true
+
   # Proactive server-side OAuth token refresh for agent-CLI credentials nearing
   # expiry. SKIP overlap: each sweep does read-merge-write under a row lock, so
   # two batches must never run concurrently (mirrors outbox_relay_workflow).

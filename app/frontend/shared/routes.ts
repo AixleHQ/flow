@@ -1197,6 +1197,16 @@ export function companyProjectToolPath(project_id: ScalarType, id: ScalarType, o
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "tools" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
+/** /company/projects/:project_id/mcp_servers/:id/accept_tool_drift(.:format) */
+export function acceptToolDriftCompanyProjectMCPServerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "mcp_servers" + "/" + id + "/" + "accept_tool_drift" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/mcp_servers/:id/update_connector(.:format) */
+export function updateConnectorCompanyProjectMCPServerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "mcp_servers" + "/" + id + "/" + "update_connector" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
 /** /company/projects/:project_id/mcp_servers(.:format) */
 export function companyProjectMCPServersPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "mcp_servers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
@@ -1205,6 +1215,11 @@ export function companyProjectMCPServersPath(project_id: ScalarType, options?: o
 /** /company/projects/:project_id/mcp_servers/:id(.:format) */
 export function companyProjectMCPServerPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "mcp_servers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /company/projects/:project_id/connectors(.:format) */
+export function companyProjectConnectorsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "connectors" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/skills(.:format) */

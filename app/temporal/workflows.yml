@@ -47,6 +47,18 @@ workflows:
       - name: coder_sweep_expired_locks_activity
         task_queue: aixle_ruby
 
+  - name: mcp_connector_catalog_sync_workflow
+    owner: aixle_ruby
+    activities:
+      - name: mcp_sync_connector_catalog_activity
+        task_queue: aixle_ruby
+
+  - name: mcp_tool_drift_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: mcp_scan_tool_drift_activity
+        task_queue: aixle_ruby
+
   - name: agent_token_refresh_workflow
     owner: aixle_ruby
     activities:

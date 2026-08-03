@@ -106,4 +106,57 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     delete company_project_mcp_server_path(@project, server)
     assert_response :redirect
   end
+
+  # ---------------------------------------------- connector catalog (same page)
+  # The catalog is a second way to add an MCP server, not a separate screen, so
+  # it is served with this page and browsed from it.
+
+  test "index serves the connector catalog alongside installed servers" do
+    manifest = MCP::ConnectorManifest.normalize(JSON.parse(file_fixture("mcp_registry/remote_http_secret_header.json").read))
+    create(:connector, name: manifest["name"], title: manifest["title"], manifest: manifest, featured: true)
+
+    get company_project_mcp_servers_path(@project)
+
+    assert_inertia_props do |props|
+      connector = props[:connectors].sole
+
+      assert_equal "ai.adadvisor/mcp-server", connector[:name]
+      assert connector[:installable]
+      assert_equal [ "Authorization" ], connector[:targets].first[:inputs].map { |i| i[:key] }
+    end
+  end
+
+  test "index searches the catalog by description, which the registry API cannot do" do
+    create(:connector, title: "Acme Tracker", description: "Manage issues and bug tracking")
+    create(:connector, title: "Unrelated", description: "Sends email")
+
+    get company_project_mcp_servers_path(@project, connector_q: "bug tracking")
+
+    assert_inertia_props do |props|
+      assert_equal [ "Acme Tracker" ], props[:connectors].map { |c| c[:title] }
+      assert_equal "bug tracking", props[:connectorQuery]
+    end
+  end
+
+  test "index hides catalog entries the registry deleted" do
+    create(:connector, :deleted, title: "Pulled")
+
+    get company_project_mcp_servers_path(@project)
+
+    assert_inertia_props { |props| assert_empty props[:connectors] }
+  end
+
+  test "index sends input declarations but never values" do
+    manifest = MCP::ConnectorManifest.normalize(JSON.parse(file_fixture("mcp_registry/remote_http_secret_header.json").read))
+    create(:connector, name: manifest["name"], manifest: manifest, featured: true)
+
+    get company_project_mcp_servers_path(@project)
+
+    assert_inertia_props do |props|
+      input = props[:connectors].sole[:targets].first[:inputs].sole
+
+      assert input[:secret]
+      assert_not input.key?(:value), "declarations only — no values travel to the browser"
+    end
+  end
 end

@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "isLatest": true,
+      "publishedAt": "2025-09-18T15:51:15.598862Z",
+      "status": "active",
+      "statusChangedAt": "2025-09-18T15:51:15.598862Z",
+      "updatedAt": "2025-09-18T15:51:15.598862Z"
+    }
+  },
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "description": "MCP server for Linear project management and issue tracking",
+    "name": "app.linear/linear",
+    "remotes": [
+      {
+        "type": "sse",
+        "url": "https://mcp.linear.app/sse"
+      },
+      {
+        "type": "streamable-http",
+        "url": "https://mcp.linear.app/mcp"
+      }
+    ],
+    "repository": {},
+    "version": "1.0.0"
+  }
+}

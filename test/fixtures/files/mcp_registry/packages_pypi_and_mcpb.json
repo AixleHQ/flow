@@ -1,0 +1,57 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "isLatest": true,
+      "publishedAt": "2026-05-24T15:01:25.946011Z",
+      "status": "active",
+      "statusChangedAt": "2026-05-24T15:01:25.946011Z",
+      "updatedAt": "2026-05-24T15:01:25.946011Z"
+    }
+  },
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "description": "Multi-workspace Linear MCP \u2014 PAT auth, 57 tools + 3 prompts, substrate enforcement, drop-in.",
+    "name": "io.github.adelaidasofia/linear-mcp",
+    "packages": [
+      {
+        "environmentVariables": [
+          {
+            "description": "Personal API Key from linear.app/settings/account/security",
+            "isRequired": true,
+            "isSecret": true,
+            "name": "LINEAR_PAT"
+          }
+        ],
+        "identifier": "adelaidasofia-linear-mcp",
+        "registryType": "pypi",
+        "transport": {
+          "type": "stdio"
+        },
+        "version": "0.3.2"
+      },
+      {
+        "environmentVariables": [
+          {
+            "description": "Personal API Key from linear.app/settings/account/security",
+            "isRequired": true,
+            "isSecret": true,
+            "name": "LINEAR_PAT"
+          }
+        ],
+        "fileSha256": "bd6c92b5ecb35a585679d43f2b2259e4ee03fa6d6f6e3eb6b54eed17289db372",
+        "identifier": "https://github.com/adelaidasofia/linear-mcp/releases/download/v0.3.2/linear-mcp.mcpb",
+        "registryType": "mcpb",
+        "transport": {
+          "type": "stdio"
+        },
+        "version": "0.3.2"
+      }
+    ],
+    "repository": {
+      "source": "github",
+      "url": "https://github.com/adelaidasofia/linear-mcp"
+    },
+    "title": "Linear MCP (multi-workspace, PAT auth)",
+    "version": "0.3.2"
+  }
+}

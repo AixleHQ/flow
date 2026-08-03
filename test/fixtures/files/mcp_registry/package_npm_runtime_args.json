@@ -1,0 +1,77 @@
+{
+  "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+      "isLatest": false,
+      "publishedAt": "2026-05-18T13:28:59.991989Z",
+      "status": "active",
+      "statusChangedAt": "2026-05-18T13:28:59.991989Z",
+      "updatedAt": "2026-05-18T13:28:59.991989Z"
+    }
+  },
+  "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "description": "MCP server for remote filesystem operations on cloud storage (Google Cloud Storage).",
+    "name": "com.pulsemcp/remote-filesystem",
+    "packages": [
+      {
+        "environmentVariables": [
+          {
+            "description": "Google Cloud Storage bucket name.",
+            "isRequired": true,
+            "name": "GCS_BUCKET"
+          },
+          {
+            "description": "Google Cloud project ID.",
+            "name": "GCS_PROJECT_ID"
+          },
+          {
+            "description": "Service account email for inline credentials.",
+            "name": "GCS_CLIENT_EMAIL"
+          },
+          {
+            "description": "Service account private key for inline credentials.",
+            "isSecret": true,
+            "name": "GCS_PRIVATE_KEY"
+          },
+          {
+            "description": "Path to Google Cloud service account key file.",
+            "name": "GOOGLE_APPLICATION_CREDENTIALS"
+          },
+          {
+            "description": "Root path prefix to restrict access within bucket.",
+            "name": "GCS_ROOT_PATH"
+          },
+          {
+            "default": "false",
+            "description": "Make uploaded files publicly accessible.",
+            "name": "GCS_MAKE_PUBLIC"
+          },
+          {
+            "description": "Comma-separated tool groups: readonly or readwrite.",
+            "name": "ENABLED_TOOLGROUPS"
+          }
+        ],
+        "identifier": "remote-filesystem-mcp-server",
+        "registryBaseUrl": "https://registry.npmjs.org",
+        "registryType": "npm",
+        "runtimeArguments": [
+          {
+            "type": "positional",
+            "value": "-y"
+          }
+        ],
+        "runtimeHint": "npx",
+        "transport": {
+          "type": "stdio"
+        },
+        "version": "0.1.2"
+      }
+    ],
+    "repository": {
+      "source": "github",
+      "subfolder": "experimental/remote-filesystem",
+      "url": "https://github.com/pulsemcp/mcp-servers"
+    },
+    "version": "0.1.2"
+  }
+}

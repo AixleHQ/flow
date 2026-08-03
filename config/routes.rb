@@ -310,7 +310,13 @@ Rails.application.routes.draw do
           end
           resources :agents, only: %i[index create update destroy]
           resources :tools, only: %i[index create update destroy]
-          resources :mcp_servers, only: %i[index create update destroy]
+          resources :mcp_servers, only: %i[index create update destroy] do
+            member do
+              post :accept_tool_drift
+              post :update_connector
+            end
+          end
+          resources :connectors, only: %i[create]
           resources :skills, only: %i[index create destroy]
           resources :config_items, only: %i[index create update destroy]
           resources :members, only: %i[index create destroy]

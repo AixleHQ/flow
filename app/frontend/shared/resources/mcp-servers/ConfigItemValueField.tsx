@@ -47,7 +47,15 @@ export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
           style={{ flex: 1 }}
         />
         <Tooltip label="Switch to plain text">
-          <ActionIcon variant="subtle" size="sm" onClick={handleToggle} mt={label ? 24 : 0}>
+          {/* Icon-only, so the tooltip is not enough: a tooltip is not an
+              accessible name and never reaches a screen reader. */}
+          <ActionIcon
+            variant="subtle"
+            size="sm"
+            aria-label="Switch to plain text"
+            onClick={handleToggle}
+            mt={label ? 24 : 0}
+          >
             <IconLetterCase size={16} />
           </ActionIcon>
         </Tooltip>
@@ -67,7 +75,13 @@ export const ConfigItemValueField: FC<ConfigItemValueFieldProps> = ({
         style={{ flex: 1 }}
       />
       <Tooltip label="Use value from Config Items">
-        <ActionIcon variant="subtle" size="sm" onClick={handleToggle} mt={label ? 24 : 0}>
+        <ActionIcon
+          variant="subtle"
+          size="sm"
+          aria-label="Use value from Config Items"
+          onClick={handleToggle}
+          mt={label ? 24 : 0}
+        >
           <IconKey size={16} />
         </ActionIcon>
       </Tooltip>

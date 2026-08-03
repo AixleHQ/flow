@@ -140,13 +140,6 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   const oauthStatus: OauthStatus = editServer?.oauthStatus ?? 'pending';
   const statusMeta = OAUTH_STATUS_META[oauthStatus] ?? OAUTH_STATUS_META.pending;
 
-  // OAuth requires a top-level browser navigation (the authorize entry redirects off-site), so this
-  // is window.location, NOT an Inertia router visit. Connect needs a persisted mcp_server_id.
-  const handleConnect = () => {
-    if (!editServer) return;
-    window.location.href = `/oauth/mcp/${editServer.id}/connect?return_to=${encodeURIComponent(basePath)}`;
-  };
-
   useEffect(() => {
     if (opened) {
       if (editServer) {
@@ -306,20 +299,17 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
                   <Text fz={14} fw={500} c="dimmed" mb={4}>
                     Connection
                   </Text>
-                  {isEdit && editServer ? (
-                    <Group gap="sm" align="center">
-                      <Button variant="light" onClick={handleConnect}>
-                        Connect
-                      </Button>
-                      <Badge color={statusMeta.color} variant="light" size="lg">
-                        {statusMeta.label}
-                      </Badge>
-                    </Group>
-                  ) : (
-                    <Text fz={13} c="dimmed" fs="italic">
-                      Save first, then Connect
+                  {/* Connecting is not an edit — it is a top-level redirect off-site and back.
+                      It belongs in the list, next to the status it changes, so nobody has to
+                      open a settings form to sign in. */}
+                  <Group gap="sm" align="center">
+                    <Badge color={statusMeta.color} variant="light" size="lg">
+                      {statusMeta.label}
+                    </Badge>
+                    <Text fz={13} c="dimmed">
+                      {isEdit ? 'Connect from the server list.' : 'Save first, then connect from the list.'}
                     </Text>
-                  )}
+                  </Group>
                 </Box>
               )}
 
